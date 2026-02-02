@@ -1,154 +1,335 @@
-# __NVIDIA_OSS__ Standard Repo Template
+# Nemo Safe Synthesizer
 
-This README file is from the NVIDIA_OSS standard repo template of [PLC-OSS-Template](https://github.com/NVIDIA-GitHub-Management/PLC-OSS-Template?tab=readme-ov-file). It provides a list of files in the PLC-OSS-Template and guidelines on how to use (clone and customize) them.
+This package makes synthetic data, safely.
 
-**Upon completing the customization for the project repo, the repo admin should replace this README template with the project specific README file.**
+## Installation from NMP
 
-- Files (org-wide templates in the NVIDIA .github org repo; per-repo overrides allowed) in [PLC-OSS-Template](https://github.com/NVIDIA-GitHub-Management/PLC-OSS-Template?tab=readme-ov-file)
-
-   - Root 
-     - README.md skeleton (CTA + Quickstart + Support/Security/Governance links) 
-     - LICENSE (Apache 2.0 by default)
-        - For other licenses, see the [Confluence page](https://confluence.nvidia.com/pages/viewpage.action?pageId=788418816) for other licenses
-        - CLA.md file (delete if not using MIT or BSD licenses)
-     - CODE_OF_CONDUCT.md 
-     - SECURITY.md (vuln reporting path) 
-     - CONTRIBUTING.md (base; repo can add specifics)
-     - SUPPORT.md (Support levels/channels)
-     - GOVERNANCE.md (baseline; repo may extend)
-     - CITATION.md (for projects that need citation)
-
-   - .github/ 
-     - ISSUE_TEMPLATE/ (<https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository>)
-       - bug.yml, feature.yml, task.yml, config.yml 
-     - PULL_REQUEST_TEMPLATE.md (<https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository>)
-     - workflows/
-     - Note: workflow-templates/ for starter workflows should live in the org-level .github repo, not per-repo
-
-   - Repo-specific (not org-template, maintained by the team)
-     - CODEOWNERS (place at .github/CODEOWNERS or repo root)
-     - CHANGELOG.md (or RELEASE.md) 
-     - ROADMAP.md 
-     - MAINTAINERS.md 
-     - NOTICE or THIRD_PARTY_NOTICES / THIRD_PARTY_LICENSES (dependency specific)
-     - Build/package files (CMake, pyproject, Dockerfile, etc.)
-
-   - Recommended structure and hygiene
-     - docs/
-     - examples/
-     - tests/
-     - scripts/
-     - Container/dev env: Dockerfile, docker/, .devcontainer/ (optional)
-     - Build/package (language-specific):
-       - Python: pyproject.toml, setup.cfg/setup.py, requirements.txt, environment.yml
-       - C++: CMakeLists.txt, cmake/, vcpkg.json
-     - Repo hygiene: .gitignore, .gitattributes, .editorconfig, .pre-commit-config.yaml, .clang-format
-
-
-## Usage of [PLC-OSS-Template](https://github.com/NVIDIA-GitHub-Management/PLC-OSS-Template?tab=readme-ov-file) for NEW NVIDIA OSS repos
-
-1. Clone the [PLC-OSS-Template](https://github.com/NVIDIA-GitHub-Management/PLC-OSS-Template?tab=readme-ov-file)
-2. Find/replace all in the clone of `___PROJECT___` and `__PROJECT_NAME__` with the name of the specific project.
-3. Inspect all files to make sure all replacements work and update text as needed
-
-
-**What you can reuse immediately**
-- CODE_OF_CONDUCT.md
-- SECURITY.md
-- CONTRIBUTING.md (base)
-- .github/ISSUE_TEMPLATE/.yml (bug/feature/task + config.yml)
-- .github/PULL_REQUEST_TEMPLATE.md
-- Reusable workflows 
-
-**What you must customize per repo**
-- README.md: copy the skeleton and fill in product-specific details (Quickstart, Requirements, Usage, Support level, links)
-- LICENSE: check file is correct, update year, consult Confluence for alternatives https://confluence.nvidia.com/pages/viewpage.action?pageId=788418816, add CLA.md only if your license/process requires it
-- CODEOWNERS: replace <TEAM> with your GitHub team handle(s). Place at .github/CODEOWNERS (or repo root)
-- MAINTAINERS.md: list maintainers names/roles, escalation path
-- CHANGELOG.md (or RELEASE.md): track releases/changes
-- SUPPORT.md: Update for your project
-- ROADMAP.md (optional): upcoming milestones
-- NOTICE / THIRD_PARTY_NOTICES (if you ship third‑party content)
-- Build/package files (CMake/pyproject/Dockerfile/etc.), tests/, docs/, examples/, scripts/ as appropriate
-- Workflows: Edit if you need custom behavior 
-
-
-4. Change git origin to point to new repo and push
-5. Remove the line break below and everything above it
-
-## Usage for existing NVIDIA OSS repos
-
-1. Follow the steps above, but add the files to your existing repo and merge
-
-<!-- REMOVE THE LINE BELOW AND EVERYTHING ABOVE -->
------------------------------------------
-# [Project Title]
-One-sentence value proposition for users. Who is it for, and why it matters. 
-
-# Overview
-What the project does? Why the project is useful?
-Provide a brief overview, highlighting key features or problem-solving capabilities.
-
-# Getting Started
-Guide users on how they can get started with the project. This should include basic installation step, quick-start examples 
 ```bash
-# Option A: Package manager (pip/conda/npm/etc.)
-<copy-paste install>
-
-# Option B: Container
-docker run <image> <args>
-
-# Verify (hello world)
-<one-liner or ~10-line example>
+uv sync --package nemo_safe_synthesizer --extra [engine|cpu|cu128]
 ```
-# Requirements
-Include a list of pre-requisites. 
-- OS/Arch: <summary or link to full matrix>
-- Runtime/Compiler: <versions>
-- GPU/Drivers (if applicable): CUDA <ver>, driver <ver>, etc.
 
-# Usage
+## Running
+
+Run the CLI using `safe-synthesizer`:
+
 ```bash
-# Minimal runnable snippet (≤20 lines)
-<code>
+> safe-synthesizer --help
+Usage: safe-synthesizer [OPTIONS] COMMAND [ARGS]...
+
+  NeMo Safe Synthesizer command-line interface. This application is used to
+  run the Safe Synthesizer pipeline. It can be used to train a model, generate
+  synthetic data, and evaluate the synthetic data. It can also be used to
+  modify a config file.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  artifacts  Artifacts management commands.
+  config     Manage Safe Synthesizer configurations.
+  run        Run the Safe Synthesizer end-to-end pipeline.
 ```
-- More examples/tutorials: <link>
-- API reference: <link>
 
-# Performance (Optional)
-Summary of benchmarks; link to detailed results and hardware used.
+## Running the Pipeline
 
-## Releases & Roadmap 
-- Releases/Changelog: <link>
-- (Optional) Next milestones or link to `ROADMAP.md`.
-  
-# Contribution Guidelines
-- Start here: `CONTRIBUTING.md`
-- Code of Conduct: `CODE_OF_CONDUCT.md`
-- Development quickstart (build/test):
+The `run` command executes the Safe Synthesizer pipeline. Without a subcommand, it runs the full end-to-end pipeline:
+
 ```bash
-<clone> && <deps> && <build/test>
+> uv run safe-synthesizer run --help
+Usage: safe-synthesizer run [OPTIONS] COMMAND [ARGS]...
+
+  Run the Safe Synthesizer end-to-end pipeline.
+
+  Without a subcommand, runs the full end-to-end pipeline. Use 'run train' or
+  'run generate' for individual stages.
+
+Options:
+  --config TEXT                   path to a yaml config file
+  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+                                  For 'run generate', this is optional if a
+                                  cached dataset exists in the workdir.
+  --artifact-path DIRECTORY       Base directory for all runs. Runs are
+                                  created as <artifact-
+                                  path>/<config>---<dataset>/<timestamp>/. Can
+                                  also be set via NSS_ARTIFACTS_PATH env var.
+                                  [default: ./safe-synthesizer-artifacts]
+  --run-path DIRECTORY            Explicit path for this run's output
+                                  directory. When specified, outputs go
+                                  directly to this path. Overrides --artifact-
+                                  path.
+  --output-file PATH              Path to output CSV file. Overrides the
+                                  default workdir output location.
+  --log-format [json|plain]       Log format for console output. File logging
+                                  will always be JSON. Can also be set via
+                                  NSS_LOG_FORMAT env var. [default: plain]
+  --log-color / --no-log-color    Whether to colorize the log output on the
+                                  console. [default: --log-color]
+  --log-file PATH                 Path to log file. Defaults to a file nested
+                                  under the run directory. Can also be set via
+                                  NSS_LOG_FILE env var.
+  --wandb-mode [online|offline|disabled]
+                                  Wandb mode. 'online' will upload logs to
+                                  wandb, 'offline' will save logs to a local
+                                  file, 'disabled' will not upload logs to
+                                  wandb. Can also be set via WANDB_MODE env
+                                  var. [default: disabled]
+  --wandb-project TEXT            Wandb project. Can also be set via
+                                  WANDB_PROJECT env var.
+  -v                              Verbose logging. 'v' shows debug info from
+                                  main program, 'vv' shows debug from
+                                  dependencies too
+  --dataset-registry TEXT         URL or path of a dataset registry YAML file.
+                                  If provided, datasets in the registry may be
+                                  referenced by name in --url. Can also be set
+                                  via NSS_DATASET_REGISTRY env var. If both
+                                  env var and CLI option are provided, the CLI
+                                  option takes precedence.
+  --help                          Show this message and exit.
+
+Commands:
+  generate  Run the generation stage only.
+  train     Run the training stage only.
 ```
-## Governance & Maintainers
-- Governance: `GOVERNANCE.md`
-- Maintainers: <team/handles>
-- Labeling/triage policy: <link>
 
-## Security
-- Vulnerability disclosure: `SECURITY.md`
-- Do not file public issues for security reports.
+### Subcommands
 
-## Support
-- Level: <Experimental | Maintained | Stable>
-- How to get help: Issues/Discussions/<channel link>
-- Response expectations (if any).
+- `safe-synthesizer run train` - Run only the training stage, saving the adapter to the run directory.
+- `safe-synthesizer run generate` - Run only the generation stage using a saved adapter.
 
-# Community
-Provide the channel for community communications.
+```bash
+> uv run safe-synthesizer run generate --help
+Usage: safe-synthesizer run generate [OPTIONS]
 
-# References
-Provide a list of related references
+  Run the generation stage only.
 
-# License
-This project is licensed under the [NAME HERE] License - see the LICENSE.md file for details
-- License: <link>
+  This command loads a trained adapter and generates synthetic data. Requires
+  'run train' to have been executed first.
+
+  Use --run-path to specify the exact run directory containing the trained
+  model, or use --auto-discover-adapter with --artifact-path to automatically
+  find the latest trained run.
+
+Options:
+  --config TEXT                   path to a yaml config file
+  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+                                  [required]
+  --artifact-path DIRECTORY       Base directory for all runs. Runs are
+                                  created as <artifact-path>/<config>-
+                                  <dataset>/<timestamp>/. [default: ./safe-
+                                  synthesizer-artifacts]
+  --run-path DIRECTORY            Explicit path for this run's output
+                                  directory. When specified, outputs go
+                                  directly to this path. Overrides --artifact-
+                                  path.
+  --output-file PATH              Path to output CSV file. Overrides the
+                                  default workdir output location.
+  --log-format [json|plain]       Log format for console output. File logging
+                                  will always be JSON.
+  --log-color / --no-log-color    Whether to colorize the log output on the
+                                  console
+  --log-file PATH                 Path to log file. Defaults to a file nested
+                                  under the run directory.
+  -v                              Verbose logging. 'v' shows debug info from
+                                  main program, 'vv' shows debug from
+                                  dependencies too
+  --wandb-mode [online|offline|disabled]
+                                  Wandb mode. 'online' will upload logs to
+                                  wandb, 'offline' will save logs to a local
+                                  file, 'disabled' will not upload logs to
+                                  wandb.
+  --wandb-project TEXT            Wandb project. If not specified, the project
+                                  will be taken from the environment variable
+                                  WANDB_PROJECT.
+  --auto-discover-adapter         Automatically find the latest trained
+                                  adapter in --artifact-path. Without this
+                                  flag, --run-path must point to a specific
+                                  trained run.
+  --help                          Show this message and exit.
+```
+
+
+## Managing Configurations
+
+The `config` command provides tools to validate and modify configuration files:
+
+```bash
+> uv run safe-synthesizer config --help
+Usage: safe-synthesizer config [OPTIONS] COMMAND [ARGS]...
+
+  Manage Safe Synthesizer configurations.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  modify    Modify a Safe Synthesizer configuration.
+  validate  Validate a Safe Synthesizer configuration.
+```
+
+## Artifacts and Workdirs
+
+Safe Synthesizer uses a structured directory format to manage artifacts (trained models, synthetic data, logs).
+
+### Directory Layout
+
+By default, runs are nested under `--artifact-path` using the project name (`<config>---<dataset>`) and a unique run name.
+
+```text
+<artifact-path>/<config>---<dataset>/<run_name>/
+├── safe-synthesizer-config.json  # Root config for the run
+├── train/
+│   ├── safe-synthesizer-config.json
+│   └── adapter/                  # Trained PEFT adapter
+│       ├── adapter_config.json
+│       ├── metadata_v2.json
+│       └── dataset_schema.json
+├── generate/
+│   ├── safe-synthesizer-config.json
+│   ├── logs.jsonl               # Generation logs
+│   ├── synthetic_data.csv       # Default output location
+│   └── evaluation_report.html   # HTML evaluation report
+└── dataset/                      # Processed dataset splits
+    ├── training.csv
+    ├── test.csv
+    └── validation.csv
+```
+
+### Run Names
+
+If not provided with `--run-path`, run names are automatically generated using the current `<timestamp>`.
+
+### Overriding Paths
+
+- Use `--run-path` to specify an explicit directory for the run, bypassing the `<project>/<timestamp>` nesting.
+- Use `--output-file` to specify an explicit path for the final synthetic CSV, overriding the default location in the `generate/` directory.
+
+## WandB Logging
+
+Safe Synthesizer supports Weights & Biases (WandB) for experiment tracking.
+
+### Configuration
+
+You can enable WandB logging using CLI options or environment variables:
+
+- `--wandb-mode [online|offline|disabled]`: Set the WandB mode. Default is `disabled`.
+- `--wandb-project <name>`: Specify the WandB project name.
+- `WANDB_API_KEY`: Ensure your API key is set in your environment.
+
+### Logged Data
+
+The following information is logged to WandB:
+
+- Configuration parameters
+- Training metrics (if supported by the backend)
+- Generation statistics
+- Evaluation results
+- Timing information
+
+## Dataset Registry
+
+Safe Synthesizer supports a *dataset registry* to simplify working with a standard set of datasets.
+Datasets in the registry may be referenced by name, rather than repeatedly specifying long URLS or file paths on the command line.
+Additionally, the registry supports custom config overrides or args that are specific to individual datasets.
+
+### Providing a Dataset Registry
+
+You can supply a dataset registry (YAML file) via either the CLI or an environment variable:
+
+- **CLI Option**:
+  `--dataset-registry <path_or_url>`
+
+- **Environment Variable**:
+  Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
+
+If both are provided, the CLI option takes precedence.
+
+### Referencing Datasets
+
+When a dataset registry is provided, you can use dataset names defined in the registry with the `--url` argument.
+For example:
+
+```bash
+nemo-safe-synthesizer run --dataset-registry my_registry.yaml --url my_dataset
+```
+
+This will load the dataset from the url plus apply any overrides for `my_dataset` from the registry YAML.
+
+### Dataset Registry YAML Format
+
+The registry file should conform to the pydantic model defined by `DatasetRegistry` in `cli/datasets.py`. For example,
+
+```yaml
+# registry.yaml
+base_url: /root/data/location
+datasets:
+- name: dataset1
+  url: dataset1.csv
+- name: dataset2
+  url: dataset2.jsonl
+  overrides:
+    data:
+      group_training_examples_by: id
+- name: dataset3
+  url: /absolute/path/to/dataset.csv
+- name: dataset4
+  url: https://myhost.com/path/to/dataset.json
+  load_args:
+    keyword: custom_arg_for_data_reader
+```
+
+- Minimal requirements for each entry in the `datasets:` list are a `name` and a `url`.
+  `url` may be a URL or a file path, anything that data readers like `pd.read_csv` will accept.
+- `base_url` - Any relative urls or paths will be prepended with the `base_url` before attempting to load the dataset.
+  This only applies to the named datasets in the registry which have a relative url.
+  Passing a relative `--url` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
+  `base_url` is optional, if not provided, it is recommended to use absolute urls or file paths for all entries.
+- `overrides` - Dataset specific config overrides, such as a dataset that should always be run with `group_training_examples_by`.
+  Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.
+- `load_args` - Extra arguments needed by the data reader for a specific dataset.
+  For example, changing the separator used by `pd.read_csv` for a `.csv` file with a different delimiter.
+
+## Slurm Jobs
+
+For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts in `script/slurm/`.
+
+These scripts support:
+- **Matrix runs**: Launching jobs across multiple configurations and datasets.
+- **Two-stage pipelines**: Running training and generation as separate jobs with dependencies.
+- **Containerized execution**: Running jobs inside enroot containers.
+
+See [script/slurm/README.md](script/slurm/README.md) for detailed instructions on cluster setup and job submission.
+
+## Testing
+
+We have pytest set up for unit and end-to-end tests.
+
+### Running Tests
+
+You can run tests using `pytest` or `make`.
+
+From the project's root directory:
+
+```bash
+# Run all tests
+make test
+
+# Run end-to-end tests (executes small sample jobs)
+make test-e2e
+```
+
+From the package directory (`packages/nemo_safe_synthesizer`):
+
+```bash
+# Run tests using the local Makefile
+make test
+
+# Run specific test files
+pytest tests/cli/test_run.py
+```
+
+## Development
+
+`make bootstrap-python` from the NMP root.
+Assumes you have a working NMP development environment. See the root makefile / contributing guide for more info.
+
+Use the `nmptool` to provision a dev machine with GPUs.

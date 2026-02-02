@@ -1,0 +1,85 @@
+<div class="component" id="reference-columns">
+    <div class="header">
+        Reference Columns
+        <span data-toggle data-for="reference-columns-info" class="info"></span>
+    </div>
+    <table>
+        <tr>
+            <th class="first">Column name</th>
+            <th class="tnum">Unique</th>
+            <th class="tnum">Missing</th>
+            <th class="tnum">Avg. Length</th>
+            <th>Type</th>
+            {% if ctx.with_synthesizer %}
+                <th class={{ "last" if not ctx.with_transform }}>Distribution</th>
+            {% endif %}
+
+            {% if ctx.with_transform %}
+                <th>Entities (count)</th>
+                <th>Transformed</th>
+                <th class="last">Transform function</th>
+            {% endif %}
+        </tr>
+        {% for column in ctx.column_distribution_stability.evaluation_fields %}
+        <tr>
+            {% if column.distribution_stability %}
+                <td class="first"><a class="column-name-link" href="#{{ column.name | urlencode }}">
+                    {{ column.name }}
+                </a></td>
+            {% else %}
+                <td class="first">{{ column.name }}</td>
+            {% endif %}
+            <td class="tnum">{{ column.reference_field_features.unique_count }}</td>
+            <td class="tnum">{{ column.reference_field_features.missing_count }}</td>
+            <td class="tnum">{{ column.reference_field_features.avg_str_length | round(2) }}</td>
+            <td>{{ column.output_field_features.type | capitalize }}</td>
+            {% if ctx.with_synthesizer %}
+                {% if column.distribution_stability %}
+                    <td class={{ "last" if not ctx.with_transform }}>
+                        <span class="score-label">
+                            {{ column.distribution_stability.grade }}
+                        </span>
+                    </td>
+                {% else %}
+                    <td class={{ "last" if not ctx.with_transform }}>N/A</td>
+                {% endif %}
+            {% endif %}
+
+            {% if ctx.with_transform %}
+                <td>
+                    {% if column.column_statistics and column.column_statistics.detected_entity_counts %}
+                    {% for entity, count in column.column_statistics.detected_entity_counts.items() %}
+                    <div class="entity_count">
+                        <span class="score-label">
+                            {{ entity }}
+                        </span>
+                        ({{ count }})
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if column.column_statistics %}
+                        {{ column.column_statistics.is_transformed }}
+                    {% else %}
+                        False
+                    {% endif %}
+                </td>
+                <td class="last">
+                    {% for transform_function in column.column_statistics.transform_functions %}
+                    {{ transform_function + ", " if not loop.last else transform_function }}
+                    {% endfor%}
+                </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </table>
+    <div class="footer">
+        <div class="footer-main">
+            <button data-toggle data-for="reference-columns-info">What do these values mean</button>
+        </div>
+        <div class="tooltips" id="reference-columns-info" hidden>
+            {{ ctx.tooltips.reference_columns_info }}
+        </div>
+    </div>
+</div>

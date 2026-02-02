@@ -1,0 +1,195 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from typing import Annotated, Literal
+
+import pytest
+from nemo_safe_synthesizer.config import (
+    DataParameters,
+    DifferentialPrivacyHyperparams,
+    PiiReplacerConfig,
+    SafeSynthesizerParameters,
+)
+from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
+from nemo_safe_synthesizer.configurator.parameters import Parameters
+from nemo_safe_synthesizer.configurator.validators import ValueValidator
+from pydantic import Field, ValidationError
+
+
+class SubGroup(Parameters):
+    basic_int_param: Annotated[int, Field(default=10)]
+
+    basic_int_autoparam: Annotated[str | int, Field(default="auto")]
+
+    basic_auto_with_valid_none: Annotated[
+        int | Literal["auto"] | None,
+        Field(default=None, description="valid none param"),
+    ]
+
+    basic_str_param: Annotated[
+        str | None,
+        Field(default=None, title="basic string"),
+    ]
+
+    basic_union_basic_input: Annotated[
+        str | float | list[int] | None,
+        Field(default=None, title="basic union input"),
+    ]
+
+
+class ParentGroup(Parameters):
+    list_subgroup_param: Annotated[list[SubGroup], Field(title="list of subgroups")]
+
+    autoparam_with_auto: Annotated[float | Literal["auto"], Field(default="auto", title="autoparam with auto")]
+
+
+@pytest.fixture
+def parent_fixture() -> ParentGroup:
+    return ParentGroup(
+        list_subgroup_param=[
+            SubGroup(
+                basic_int_param=10,
+                basic_int_autoparam="auto",
+                basic_auto_with_valid_none=None,
+                basic_str_param=None,
+                basic_union_basic_input=None,
+            )
+        ]
+    )
+
+
+@pytest.fixture
+def subgroup_fixture() -> SubGroup:
+    return SubGroup(
+        basic_int_param=10,
+        basic_int_autoparam="auto",
+        basic_auto_with_valid_none=None,
+        basic_str_param=None,
+        basic_union_basic_input=None,
+    )
+
+
+class TestParameterClasses:
+    def test_parameter_equality(self, basic_parameter):
+        assert basic_parameter == 10
+        assert Parameter(value=10) == 10
+        assert AutoParam(value=10) == 10
+
+    def test_parameter_pattern_matching(self):
+        param = Parameter(name=None, value=1)
+
+        match param:
+            case UnsetParam():
+                result = "UnsetParam"
+            case Parameter():
+                result = "Parameter"
+            case _:
+                result = "Other"
+
+        assert result == "Parameter"
+
+    def test_auto_param_is_parameter_instance(self):
+        assert isinstance(AutoParam(), Parameter)
+
+    def test_parameter_naming(self):
+        param = Parameter(name="test_name", value=42)
+        assert param.name == "test_name"
+        assert param == 42
+
+
+class TestValueValidation:
+    def test_value_validator_success(self):
+        class TestParams(Parameters):
+            validation_ratio: Annotated[
+                str | float,
+                ValueValidator(value_func=lambda v: 0 <= v <= 1),
+                Field(default=0.0),
+            ]
+
+        # These should succeed
+        assert TestParams().validation_ratio == 0.0
+        assert TestParams(validation_ratio=0.5).validation_ratio == 0.5
+
+    def test_value_validator_failure(self):
+        class TestParams(Parameters):
+            validation_ratio: Annotated[
+                str | float,
+                ValueValidator(value_func=lambda v: 0 <= v <= 1),
+                Field(default=0.0),
+            ]
+
+        # This should fail validation
+        with pytest.raises(ValidationError):
+            TestParams(validation_ratio=1.2)
+
+
+class TestParametersClass:
+    def test_parameters_get_method(self, simple_safe_synthesizer_parameters):
+        assert simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
+
+    def test_parameters_nesting(self, simple_safe_synthesizer_parameters):
+        assert simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
+
+    def test_nested_auto_param_round_trip(self, subgroup_fixture, parent_fixture):
+        subgroup_py = subgroup_fixture.model_dump()
+        parent_py = parent_fixture.model_dump()
+        subgroup_json = subgroup_fixture.model_dump_json()
+        parent_json = parent_fixture.model_dump_json()
+        assert ParentGroup.model_validate_json(parent_json) == parent_fixture
+        assert SubGroup.model_validate_json(subgroup_json) == subgroup_fixture
+        assert ParentGroup.model_validate(parent_py) == parent_fixture
+        assert SubGroup.model_validate(subgroup_py) == subgroup_fixture
+
+
+class TestPiiParameters:
+    def test_pii_parameters_create_without_steps(self):
+        with pytest.raises(ValidationError):
+            _ = PiiReplacerConfig()
+
+    def test_create_default(self):
+        params = PiiReplacerConfig.get_default_config()
+        assert params.globals.ner.ner_threshold == 0.3
+
+
+class TestSafeSynthesizerParameters:
+    @pytest.mark.parametrize(
+        "value, expected",
+        [(1, 1), (None, 1), ("auto", 1)],
+        ids=["1", "None", "auto"],
+    )
+    def test_max_sequences_dp_setting(self, value, expected):
+        # When DP is enabled, max_sequences_per_example must be set to 1 or aut
+        print(f"value: {value}, expected: {expected}")
+        if value is None:
+            data = DataParameters()
+        else:
+            data = DataParameters(max_sequences_per_example=value)
+
+        dp = DifferentialPrivacyHyperparams(dp_enabled=True)
+        params = SafeSynthesizerParameters(
+            data=data,
+            privacy=dp,
+        )
+        assert params.get("max_sequences_per_example") == expected
+
+    def test_parameter_values(self, simple_safe_synthesizer_parameters):
+        params = simple_safe_synthesizer_parameters
+        assert params.get("num_input_records_to_sample") == 100
+        assert params.get("batch_size") == 10
+        print(params.training)
+        assert params.get("group_training_examples_by") == "my_col"
+
+    @pytest.mark.parametrize(
+        "enabled_pii, expected_enabled_pii, expected_pii_config",
+        [(True, True, True), (False, False, None)],
+        ids=["enabled", "disabled"],
+    )
+    def test_enabled_pii(self, enabled_pii, expected_enabled_pii, expected_pii_config):
+        params = SafeSynthesizerParameters.from_params(enable_replace_pii=enabled_pii)
+        assert params.enable_replace_pii == expected_enabled_pii
+        val = True if params.replace_pii is not None else None
+        assert val == expected_pii_config
+
+    def test_read_from_yaml(self, yaml_config_str):
+        p = SafeSynthesizerParameters.from_yaml_str(yaml_config_str)
+        assert p.get("gradient_accumulation_steps") == 8

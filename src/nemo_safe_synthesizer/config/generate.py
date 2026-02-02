@@ -1,0 +1,127 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import (
+    BaseModel,
+    Field,
+)
+
+from ..configurator.parameters import (
+    Parameters,
+)
+from ..configurator.validators import (
+    ValueValidator,
+    range_validator,
+)
+
+__all__ = ["GenerateParameters"]
+
+
+class GenerateParameters(Parameters, BaseModel):
+    """Configuration parameters for synthetic data generation.
+
+    These parameters control how synthetic data is generated after the model is trained.
+    They affect the quality, diversity, and validity of the generated synthetic records.
+
+    Attributes:
+        num_records: Number of synthetic records to generate. Maximum is 130,000 records.
+        temperature: Sampling temperature for controlling randomness (higher = more random).
+        repetition_penalty: Penalty for token repetition (≥1.0, higher = less repetition).
+        top_p: Nucleus sampling probability for token selection (0 < value ≤ 1).
+        patience: Number of invalid records fraction before stopping.
+        invalid_fraction_threshold: "The fraction of invalid records that will stop generation after the `patience` limit is reached."
+        use_structured_generation: Whether to use structured generation for better format control.
+
+    """
+
+    num_records: Annotated[
+        int,
+        Field(
+            title="num_records",
+            description="Number of records to generate.",
+        ),
+    ] = 1000
+
+    temperature: Annotated[
+        float,
+        Field(
+            title="temperature",
+            description="Sampling temperature.",
+        ),
+    ] = 0.9
+
+    repetition_penalty: Annotated[
+        float,
+        ValueValidator(value_func=lambda v: v > 0),
+        Field(
+            title="repetition_penalty",
+            description="The value used to control the likelihood of the model repeating the same token.",
+        ),
+    ] = 1.0
+
+    top_p: Annotated[
+        float,
+        ValueValidator(value_func=lambda v: 0 < v <= 1),
+        Field(
+            title="top_p",
+            description="Nucleus sampling probability.",
+        ),
+    ] = 1.0
+
+    patience: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 1),
+        Field(
+            title="patience",
+            description=(
+                "Number of consecutive generations where the `invalid_fraction_threshold` "
+                "is reached before stopping generation."
+            ),
+        ),
+    ] = 3
+
+    invalid_fraction_threshold: Annotated[
+        float,
+        ValueValidator(lambda p: range_validator(p, lambda v: 0 <= v <= 1)),
+        Field(
+            title="invalid_fraction_threshold",
+            description=(
+                "The fraction of invalid records that will stop generation after the `patience` limit is reached."
+            ),
+        ),
+    ] = 0.8
+
+    use_structured_generation: Annotated[
+        bool,
+        Field(
+            title="use_structured_generation",
+            description="Use structured generation.",
+        ),
+    ] = False
+
+    structured_generation_backend: Annotated[
+        Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"],
+        Field(
+            title="structured_generation_backend",
+            description=(
+                "The backend used by VLLM when use_structured_generation=True. "
+                "Supported backends (from vllm) are 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. 'auto' will allow vllm to choose the backend."
+            ),
+        ),
+    ] = "auto"
+
+    structured_generation_schema_method: Annotated[
+        Literal["regex", "json_schema"],
+        Field(
+            title="structured_generation_schema_method",
+            description=(
+                "The method used to generate the schema from your dataset and pass it to the generation backend. "
+                "auto will usually default to 'json_schema'. Use 'regex to use our custom regex construction method, which "
+                "tends to be more comprehensive  than 'json_schema' at the cost of speed."
+            ),
+        ),
+    ] = "regex"

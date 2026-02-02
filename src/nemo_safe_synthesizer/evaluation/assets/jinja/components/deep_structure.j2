@@ -1,0 +1,21 @@
+<div class="component" id="structure-stability">
+    <div class="header">
+        Deep Structure Stability
+        <span data-toggle data-for="deep-structure-stability-info" class="info"></span>
+    </div>
+    <div class="figure-desc">
+        <span class="h4">Breakdown using Principal Component Analysis</span>
+        <br>
+        <span><b>Overall Score:</b> {{ ctx.deep_structure_stability.score.score }}</span>
+        <br>
+        <span><b>Overall Grade:</b> {{ ctx.deep_structure_stability.score.grade }}</span>
+    </div>
+    <figure class="figure">
+        {{ ctx.deep_structure_stability.figure }}
+    </figure>
+    <div class="footer">
+        <div class="tooltips" id="deep-structure-stability-info" hidden>
+            {{ ctx.tooltips.deep_structure_stability_info }}
+        </div>
+    </div>
+</div>

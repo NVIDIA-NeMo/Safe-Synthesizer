@@ -1,0 +1,26 @@
+<div class="score-container">
+    <div class="score">
+        <a href="#synthetic-quality">
+            <div class="score-chart">
+                {{ ctx.synthetic_quality_score.figure_overview }}
+            </div>
+        </a>
+        <span class="score-label">
+            {{ ctx.synthetic_quality_score.score.grade }}
+        </span>
+        <span class="score-title">Synthetic Quality Score</span>
+    </div>
+    <div class="score">
+        {% if ctx.data_privacy_score %}
+            <a href="#data-privacy">
+                <div class="score-chart">
+                    {{ ctx.data_privacy_score.figure_overview }}
+                </div>
+            </a>
+            <span class="score-label">
+                {{ ctx.data_privacy_score.score.grade }}
+            </span>
+            <span class="score-title">Data Privacy Score</span>
+        {% endif %}
+    </div>
+</div>

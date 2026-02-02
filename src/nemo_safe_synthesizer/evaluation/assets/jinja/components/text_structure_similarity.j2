@@ -1,0 +1,23 @@
+<div class="component" id="structure-similarity">
+    <div class="header">
+        Text Structure Similarity
+        <span data-toggle data-for="text-structure-similarity-info" class="info"></span>
+    </div>
+    <div class="figure-desc">
+        <span class="h4">Breakdown of the structure of the text columns</span>
+        <br>
+        <span><b>Overall Score:</b> {{ ctx.text_structure_similarity.score.score }}</span>
+        <br>
+        <span><b>Overall Grade:</b> {{ ctx.text_structure_similarity.score.grade }}</span>
+    </div>
+    {% for row in ctx.text_structure_similarity.figures %}
+    <figure>
+        {{ row }}
+    </figure>
+    {% endfor %}
+    <div class="footer">
+        <div class="tooltips" id="text-structure-similarity-info" hidden>
+            {{ ctx.tooltips.text_structure_similarity_info }}
+        </div>
+    </div>
+</div>

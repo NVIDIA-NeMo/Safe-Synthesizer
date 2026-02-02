@@ -1,0 +1,278 @@
+[project]
+name = "nemo-safe-synthesizer"
+version = "0.0.0"
+description = "Safe synthesizer"
+readme = "README.md"
+authors = [{ name = "NVIDIA", email = "nemo@nvidia.com" }]
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Human Machine Interfaces",
+  "Topic :: Software Development",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+]
+
+
+dependencies = [
+  # "unsloth[cu128-torch290]==2025.12.4 requires datasets==4.3.0"
+  # it only has a runtime error of course
+  # so we need to pin it here
+  "datasets==4.3.0",
+  "faker>=20.0",
+  "huggingface-hub>=0.34.4,<1",
+  "pandas>=2.1.3",
+  "pydantic[email]>=2.12.5",
+  "pydantic-settings>=2.6.1",
+  "pyyaml>=6.0.1",
+  "jsonschema>=4.22.0",
+  "rich>=14.1.0",
+  "structlog>=25.4.0",
+  "colorama>=0.4.6",
+  "tqdm>=4.67.1",
+]
+
+[dependency-groups]
+dev = [
+  "ipywidgets",
+  "jsonpath-ng==1.5.3",
+  "jupyterlab-widgets",
+  "pytest>=8.3.3",
+  "pytest-asyncio>=0.24.0",
+  "pytest-cov>=6.0.0",
+  "pandas-stubs>=2.1.3",
+  "types-click",
+  "nemo-microservices",
+  "types-colorama>=0.4.6",
+]
+
+[project.optional-dependencies]
+
+engine = [
+    "anyascii",
+    "pycountry",
+    "betterproto",
+    "flashtext",
+    "cached-property",
+    "category-encoders",
+    "dython",
+    "dateparser",
+    "faker",
+    "huggingface-hub>=0.34.4,<1",
+    "langchain-core",
+    "json-repair",
+    "matplotlib",
+    "outlines_core==0.2.13",
+    "outlines>=1.0.0",
+    "prv-accountant",
+    "smart-open==7.0.5",
+    "python-stdnum",
+    "pandas>=2.1.3",
+    "plotly",
+    "ratelimit",
+    "sqlfluff==3.2.0",
+    "range_regex>=0.1.0",
+    "tenacity==9.1.2",
+    "tiktoken>=0.7.0,<1.0",
+    "tldextract",
+    "tqdm>=4.67.1",
+    "urllib3>=2.6.1",
+    "wandb==0.23.1",
+]
+# these are set up to provide a working mac and linux environment. we only use cuda on linux
+# it's a little annoying to have to split them up like this with redundant bits, but
+# uv requires this to work correctly. it allows us to have a cpu and a cuda version of torch+deps
+# and allow explicit installation of the cpu depset on linux.
+
+# also, this should be the set of dependencies that pull in torch as a transitive dependency.
+cpu = [
+  "accelerate",
+  "bitsandbytes==0.42.0; sys_platform=='darwin'",
+  "bitsandbytes==0.46.1; sys_platform=='linux'",
+  "flashinfer-python==0.5.3; sys_platform!='darwin'",
+  "faiss-cpu==1.9.0",
+  "gliner",
+  "peft",
+  "opacus",
+  "sentence-transformers",
+  "torch==2.9.0; sys_platform == 'darwin'",
+  "torch==2.9.0+cpu; sys_platform == 'linux'",
+  "torchvision==0.24.0+cpu; sys_platform == 'linux'",
+  "torchao==0.14.1; sys_platform == 'linux'",
+  "triton>=2.0.0; sys_platform=='linux'",
+  "trl>=0.14.0",
+  "unsloth[cu128-torch290]==2025.12.4; sys_platform == 'linux'",
+  "unsloth_zoo; sys_platform == 'linux'",
+  "vllm==0.11.1",
+  "xformers==0.0.33.post1; sys_platform == 'linux'",
+]
+cu128 = [
+  "accelerate",
+  "bitsandbytes==0.46.1; sys_platform=='linux'",
+  "faiss-gpu-cu12==1.9.0; sys_platform=='linux'",
+  "flash_attn==2.8.3+cu128.nss.pytorch29; sys_platform=='linux'",
+  "flashinfer-python==0.5.3; sys_platform=='linux'",
+  "flashinfer-cubin==0.5.3; sys_platform=='linux'",
+  "gliner; sys_platform=='linux'",
+  "nvidia-ml-py; sys_platform=='linux'",
+  "opacus; sys_platform=='linux'",
+  "peft; sys_platform=='linux'",
+  "sentence-transformers; sys_platform=='linux'",
+  "torch==2.9.0+cu128; sys_platform == 'linux'",
+  "torchvision==0.24.0+cu128; sys_platform == 'linux'",
+  "torchao==0.14.1; sys_platform == 'linux'",
+  "transformers==4.57.3; sys_platform=='linux'",
+  "triton>=2.0.0; sys_platform=='linux'",
+  "trl>=0.14.0; sys_platform=='linux'",
+  "unsloth[cu128-torch290]==2025.12.4; sys_platform == 'linux'",
+  "unsloth_zoo; sys_platform == 'linux'",
+  "vllm==0.11.1; sys_platform=='linux'",
+  "xformers==0.0.33.post1; sys_platform == 'linux'",
+]
+
+
+# at some point, do per-subpackage dependencies
+
+[tool.uv]
+required-version = ">=0.9.14,<0.10.0"
+cache-keys = [{ file = "pyproject.toml" }]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu128" },
+  ],
+]
+# xformers requires torch and more to be built.
+no-build-isolation-package = ["xformers"]
+dependency-metadata = [
+      { name = "xformers", requires-dist = ["setuptools", "torch", "wheel"]},
+
+  ]
+
+
+override-dependencies = [
+    # unsloth requires a later version but will never be used on macos. mostly useful for dev
+    "bitsandbytes==0.42.0; sys_platform=='darwin'",
+    "bitsandbytes==0.46.1; sys_platform=='linux'",
+    "datasets>=3.3.1, <=4.3.0",
+    "jsonpath-ng>=1.6.1",
+    "outlines_core==0.2.13",                        # there's a conflict with vllm's (nss) pin on outlines_core==0.2.10 but this version works.
+    "protobuf>=5.26.1,<6.0.dev0",
+    "grpcio>=1.71.0",
+    # transformers <v5 requires huggingface-hub <1
+    "huggingface-hub>=0.30.0, <1",
+    "pydantic[email]>=2.9.2",                             # openai-harmony depends on a later pydantic, but that causes the stainless gen to hit an infinite loop
+    "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
+    "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
+    "ray; sys_platform == 'never'",                       # ray has an unfixed critical CVE, as for why we're removing it this way see https://github.com/astral-sh/uv/issues/9174
+    "botocore>=1.37.0",                                   # ngcsdk requires botocore>=1.37, override data-designer's boto3 constraint
+    "langchain-core>=0.3.80,<1.0.0",                      # CVE in versions <=0.3.79: https://nvd.nist.gov/vuln/detail/CVE-2025-65106
+
+    # todo(dn-v2): unpin these. this was originally causing tests to fail.
+    "aiodns==3.5.0",
+    "pycares==4.11.0",
+]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # we have to add the following to make the right python packages for linux
+    # for downstream use in our linux/arm64 docker images.
+    # there's subtle differences in the naming convention on the python side
+    # even though they are the same architecture, so we use aarch64
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+]
+
+constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34"]
+
+
+
+[tool.uv.sources]
+  # here we specifiy the dep's source from which UV should attempt to resolve
+  triton = { index = "pytorch-cu128", extra = "cu128" }
+  xformers = { index = "pytorch-cu128", extra = "cu128" }
+# for torch - we have a "cpu" dep set and "cu128" dep set, specified in the optional dependencies above
+  torch = [
+    { index = "pytorch-cpu", extra="cpu", marker = "sys_platform=='linux'"},
+    { index = "pytorch-cu128", extra="cu128"},
+  ]
+  torchvision = [
+    { index = "pytorch-cpu", extra="cpu" },
+    { index = "pytorch-cu128", extra="cu128"},
+  ]
+  flash-attn = [
+    { index = "nv-shared-pypi-local", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
+  flashinfer-python = [
+      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
+  flashinfer-cubin = [
+      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
+#  flashinfer-jit-cache = [
+#      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
+#  ]
+
+
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# required for linux cpu - it's got a `+cpu` on the version
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "nv-shared-pypi-local"
+url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
+explicit = true
+
+[[tool.uv.index]]
+name = "flashinfer-cuda"
+url = "https://flashinfer.ai/whl/cu128"
+explicit = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+
+packages = ["src/nemo_safe_synthesizer"]
+# Include license files in wheel distribution
+artifacts = [
+  "LICENSE",
+  "THIRD_PARTY.md",
+]
+
+
+[project.scripts]
+safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
+
+
+[tool.ty.src]
+# Below is a list of excluded directories from ty typechecks.
+# Each directory corresponds to a CODEOWNER group who has a shared responsibility
+# for the ensuring type safety of the code in that directory.
+# No directories should be added to the exclusion group, unless is results in more
+# code being typechecked (for example, excluding a set of subdirectories once one of
+# their parent has been removed to the exclusion group).
+# For more details, see the [Rollout Epic](https://gitlab-master.nvidia.com/groups/aire/microservices/-/epics/156) in GitLab.
+exclude = [
+    ".uv_cache", # Cache Dir in CI
+
+    #[safe-synthesizer package] @aagonzales @kendrickb @mkornfield @aire/teams/dl-groups/rleary-staff @aire/teams/dl-groups/jomyers-staff
+    "./src/nemo_safe_synthesizer/artifacts/",
+    "./src/nemo_safe_synthesizer/pii_replacer/",
+    "./tests/",
+    "./tools/",
+]

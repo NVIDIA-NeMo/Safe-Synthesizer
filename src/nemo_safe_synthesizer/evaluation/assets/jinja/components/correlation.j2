@@ -1,0 +1,25 @@
+<div class="component" id="correlation-stability">
+    <div class="header">
+        Column Correlation Stability
+        <span data-toggle data-for="column-correlation-stability-info" class="info"></span>
+    </div>
+    <div class="figure-desc">
+        <span class="h4">Breakdown of correlation between columns</span>
+        <br>
+        <span><b>Overall Score:</b> {{ ctx.column_correlation_stability.score.score }}</span>
+        <br>
+        <span><b>Overall Grade:</b> {{ ctx.column_correlation_stability.score.grade }}</span>
+    </div>
+    <figure class="figure">
+        {{ ctx.column_correlation_stability.figure }}
+    </figure>
+    <div class="footer">
+        <div class="footer-main">
+            <button data-toggle data-for="column-correlation-stability-info">What do these values
+                mean</button>
+        </div>
+        <div class="tooltips" id="column-correlation-stability-info" hidden>
+            {{ ctx.tooltips.column_correlation_stability_info }}
+        </div>
+    </div>
+</div>
