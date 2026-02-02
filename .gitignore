@@ -1,0 +1,75 @@
+AGENTS.local.md
+.idea
+.cursor/rules/personal/
+CLAUDE.local.md
+.claude/settings.local.json
+ai/tmp/
+venv*
+env*
+.env*
+temp
+__pycache__
+*.pyc
+*.pyo
+.DS_Store
+.cache
+.coverage*
+coverage.xml
+coverage.json
+integration-coverage*
+integration-report.xml
+.pytest_cache
+.eggs
+*.egg-info
+build
+dist
+.mypy_cache
+.python-version
+.history
+.venv
+.ruff_cache
+report.xml
+e2e-report.xml
+test_db.sqlite
+# E2E merged config files (temporary files created during test runs)
+e2e/configs/.*.merged.yaml
+.files_storage/
+.data_designer_assets/
+logs/*
+*.log
+*.log.jsonl
+# Visual Studio Code config
+.vscode/
+# PyCharm config
+.idea/
+.scratch/
+# automatically generated folders
+docs/_build/
+docs/_repo/
+docs/pysdk/reference/
+# artifacts from running ./scripts/build_docs.sh
+docs/_build
+docs/conf.py
+!docs/**/_snippets/**/*.log
+docs/**/_snippets/**/*.tgz
+docs/audit/_snippets/output/basic-job-report.jsonl
+openapicheck/
+# third party licenses
+third_party/licenses*ci.jsonl
+
+# artifacts from running Jupyter notebooks
+.ipynb_checkpoints/
+
+# TLS certs and keys
+*.crt
+*.key
+*.pem
+*.enc
+*.csr
+
+
+*-artifacts/
+# this is sometimes used by wandb as a local path.
+wandb/
+# output from unsloth defaults to the local path
+unsloth_compiled_cache/
