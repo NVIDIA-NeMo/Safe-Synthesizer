@@ -33,6 +33,12 @@ help:
 	@echo "Makefile commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
+
+.PHONY: bootstrap-tools
+bootstrap-tools: ## Bootstrap tools
+	bash tools/binaries/bootstrap_tools.sh
+	@echo "tools bootstrapped successfully"
+
 .PHONY: install-uv
 install-uv: ## Install uv tool
 	bash tools/install_uv.sh

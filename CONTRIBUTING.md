@@ -41,6 +41,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 3. Set up the development environment:
 
    ```bash
+   make bootstrap-tools
    make bootstrap-python
    ```
 

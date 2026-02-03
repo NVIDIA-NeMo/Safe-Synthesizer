@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
+DIRENV_VERSION="2.37.1"
 REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
 source "${REPO_ROOT}/tools/binaries/defs.sh"
 
@@ -40,16 +41,14 @@ install_direnv() {
                 brew install direnv
             else
                 echo "Homebrew not found. Installing direnv binary..."
-                direnv_version="2.35.0"
                 mkdir -p "$HOME/.local/bin"
-                wget -q "https://github.com/direnv/direnv/releases/download/v${direnv_version}/direnv.darwin-arm64" -O direnv
+                wget -q "https://github.com/direnv/direnv/releases/download/v${DIRENV_VERSION}/direnv.darwin-arm64" -O direnv
                 chmod +x direnv
                 mv direnv "$HOME/.local/bin/direnv"
                 echo "direnv installed to $HOME/.local/bin/direnv"
             fi
         elif [ "$OS" == "linux" ]; then
             echo "apt-get not found. Installing direnv binary..."
-            direnv_version="2.35.0"
             mkdir -p "$HOME/.local/bin"
             direnv_arch=$(uname -m)
             if [ "$direnv_arch" == "x86_64" ]; then
@@ -57,7 +56,7 @@ install_direnv() {
             elif [ "$direnv_arch" == "aarch64" ]; then
                 direnv_arch="arm64"
             fi
-            wget -q "https://github.com/direnv/direnv/releases/download/v${direnv_version}/direnv.linux-${direnv_arch}" -O direnv
+            wget -q "https://github.com/direnv/direnv/releases/download/v${DIRENV_VERSION}/direnv.linux-${direnv_arch}" -O direnv
             chmod +x direnv
             mv direnv "$HOME/.local/bin/direnv"
             echo "direnv installed to $HOME/.local/bin/direnv"
