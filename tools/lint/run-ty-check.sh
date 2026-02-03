@@ -18,4 +18,5 @@ if [ -z "$filtered_files" ]; then
 fi
 
 # Run ty check on the filtered files
-uv run ty check $filtered_files
+# shellcheck disable=SC2086
+uv run ty check $filtered_files # no quotes around $filtered_files to preserve newlines

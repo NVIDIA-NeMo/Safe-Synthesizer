@@ -64,7 +64,7 @@ bootstrap-python: .venv ## Bootstrap Python dependencies with optional Pytorch c
 	@echo "installing python dependencies ${PYTORCH_DEPS} version of torch"
 	@echo "cpu/cuda version is set with the env variable 'PYTORCH_DEPS=cpu|cu128'"
 	@echo "PYTORCH_DEPS=cu128 make bootstrap-python"
-	uv sync --frozen --all-packages --extra ${PYTORCH_DEPS}
+	uv sync --frozen --extra ${PYTORCH_DEPS} --all-groups --group dev --extra engine
 
 .PHONY: format
 format: ## Format the code
