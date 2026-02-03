@@ -8,7 +8,7 @@ venv*
 env*
 .env*
 temp
-__pycache__
+__pycache__/*
 *.pyc
 *.pyo
 .DS_Store
@@ -34,7 +34,6 @@ test_db.sqlite
 # E2E merged config files (temporary files created during test runs)
 e2e/configs/.*.merged.yaml
 .files_storage/
-.data_designer_assets/
 logs/*
 *.log
 *.log.jsonl
