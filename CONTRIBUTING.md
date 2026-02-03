@@ -59,19 +59,16 @@ This repository uses GitHub Rulesets to enforce consistent contribution standard
 All branches (except `main`) must follow this naming pattern:
 
 ```
+<author>/<description>
 <author>/<issue-id>-<description>
-```
-
-or with an optional type:
-
-```
+<author>/<type>/<description>
 <author>/<type>/<issue-id>-<description>
 ```
 
 Rules:
 
 - `<author>`: Your GitHub username (lowercase, alphanumeric, hyphens allowed)
-- `<issue-id>`: The GitHub issue number (required)
+- `<issue-id>`: Optional GitHub issue number prefix (e.g., `123-`)
 - `<description>`: Brief description (lowercase, alphanumeric, hyphens)
 - `<type>`: Optional category prefix
 
@@ -81,12 +78,12 @@ Examples:
 
 | Branch Name | Valid |
 |-------------|-------|
+| `jsmith/add-login-feature` | ✅ |
 | `jsmith/123-add-login-feature` | ✅ |
 | `jsmith/feature/123-add-login` | ✅ |
 | `aagonzales/bugfix/456-fix-crash` | ✅ |
-| `dev-team/docs/789-update-readme` | ✅ |
+| `dev-team/docs/update-readme` | ✅ |
 | `feature/add-login` | ❌ Missing author |
-| `jsmith/add-login` | ❌ Missing issue ID |
 | `JSmith/123-Add-Login` | ❌ Must be lowercase |
 
 ### Conventional Commits
