@@ -5,7 +5,7 @@ ARCH := $(shell uname -m)
 EXTRA ?= cpu
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
 NSS_ROOT_PATH := $(shell pwd)
-PYTEST_ADDOPTS := -c $(NSS_ROOT_PATH)/pytest.ini -n auto --dist loadscope --maxprocesses=8 -vv
+PYTEST_ADDOPTS := -n auto --dist loadscope --maxprocesses=8 -vv
 PYTEST_CI_OPTS := --cov --cov-report json:coverage.json --cov-report xml:coverage.xml
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
 PYTORCH_DEPS ?= cpu
@@ -77,7 +77,7 @@ lint: ## Lint the code
 
 .PHONY: install-safe-synthesizer
 install-safe-synthesizer: ## Install the safe-synthesizer package into the sdk
-	cd ${NSS_ROOT_PATH} && uv sync --frozen --package nemo-safe-synthesizer --extra cu128 --dev --extra engine
+	cd ${NSS_ROOT_PATH} && uv sync --frozen --extra ${PYTORCH_DEPS} --dev --extra engine
 
 
 test-sdk-related: install-safe-synthesizer ## Run all pytest tests
@@ -87,9 +87,8 @@ test-sdk-related: install-safe-synthesizer ## Run all pytest tests
 		$(NSS_ROOT_PATH)/tests/cli  \
 		$(NSS_ROOT_PATH)/tests/api
 
-test: install-safe-synthesizer ## Run all pytest tests for the nemo_safe_synthesizer package
-	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e"
+test: bootstrap-python ## Run all pytest tests for the nemo_safe_synthesizer package
+	$(PYTEST_CMD) -m "not e2e"
 
 test-slow: install-safe-synthesizer ## Run all pytest tests for the nemo_safe_synthesizer package
 	pushd $(NSS_ROOT_PATH) && \
