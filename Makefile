@@ -5,7 +5,7 @@ ARCH := $(shell uname -m)
 EXTRA ?= cpu
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
 NSS_ROOT_PATH := $(shell pwd)
-PYTEST_ADDOPTS := -c $(NSS_ROOT_PATH)/pytest.ini -n auto --dist loadscope --maxprocesses=8 -vv
+PYTEST_ADDOPTS := -n auto --dist loadscope --maxprocesses=8 -vv
 PYTEST_CI_OPTS := --cov --cov-report json:coverage.json --cov-report xml:coverage.xml
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
 PYTORCH_DEPS ?= cpu
@@ -77,7 +77,7 @@ lint: ## Lint the code
 
 .PHONY: install-safe-synthesizer
 install-safe-synthesizer: ## Install the safe-synthesizer package into the sdk
-	cd ${NSS_ROOT_PATH} && uv sync --frozen --package nemo-safe-synthesizer --extra cu128 --dev --extra engine
+	cd ${NSS_ROOT_PATH} && uv sync --frozen --extra ${PYTORCH_DEPS} --dev --extra engine
 
 
 test-sdk-related: install-safe-synthesizer ## Run all pytest tests
@@ -87,9 +87,8 @@ test-sdk-related: install-safe-synthesizer ## Run all pytest tests
 		$(NSS_ROOT_PATH)/tests/cli  \
 		$(NSS_ROOT_PATH)/tests/api
 
-test: install-safe-synthesizer ## Run all pytest tests for the nemo_safe_synthesizer package
-	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e"
+test: bootstrap-python ## Run all pytest tests for the nemo_safe_synthesizer package
+	$(PYTEST_CMD) -m "not e2e"
 
 test-slow: install-safe-synthesizer ## Run all pytest tests for the nemo_safe_synthesizer package
 	pushd $(NSS_ROOT_PATH) && \
@@ -107,10 +106,54 @@ test-e2e: install-safe-synthesizer ## Run all e2e tests for the nemo_safe_synthe
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k default && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k dp
 
-synchronize-to-nmp: ## Synchronize the nemo_safe_synthesizer package with the nmp package
-	@echo "~~~~~~"
-	@echo "synchronizing the nemo_safe_synthesizer package with the nmp package"
 
+
+
+
+RSYNC_EXCLUDES := 
+--exclude='.git' \
+--exclude='.github' \
+--exclude='.vscode' \
+--exclude='.gitignore' \
+--exclude='.agent' \
+--exclude='__pycache__' \
+--exclude='*.pyc' \
+--exclude='.pytest_cache' \
+--exclude='.envrc' \
+--exclude='.venv' \
+--exclude='.ruff_cache' \
+
+RSYNC_METAFILES_EXCLUDES :=
+--exclude='Makefile' \
+--exclude='pytest.ini' \
+--exclude='pyproject.toml' \
+--exclude='README.md' \
+--exclude='LICENSE' \
+--exclude='THIRD_PARTY.md' \
+--exclude='CODE_OF_CONDUCT.md' \
+--exclude='CONTRIBUTING.md' \
+--exclude='SECURITY.md' \
+--exclude='uv.lock' \
+--exclude='tools' \
+--exclude='script' \
+--exclude='__init__.py' \
+--exclude='ruff.toml' \
+--exclude='.pre-commit-config.yaml' \
+--exclude='.markdownlint.json'
+
+RSYNC_CMD := rsync -av $(RSYNC_EXCLUDES)
+RSYNC_METAFILES_CMD := rsync -av $(RSYNC_METAFILES_EXCLUDES)
+
+
+synchronize-from-nmp-mr: ## Sync from NMP MR. Usage: make synchronize-from-nmp-mr MR=<number>
+ifndef MR
+	$(error MR is required. Usage: make synchronize-from-nmp-mr MR=5603)
+endif
+	bash script/sync-from-mr.sh $(MR)
+
+synchronize-py-files-to-nmp: ## Synchronize the python files with the nmp package
+	@echo "~~~~~~"
+	@echo "synchronizing the python files with the nmp package"
 ifeq ($(NMP_REPO_PATH),)
 	@echo "~~~~~~"
 	@echo "NMP_REPO_PATH is not set"
@@ -118,35 +161,27 @@ ifeq ($(NMP_REPO_PATH),)
 	@echo "NMP_REPO_PATH is the root path of the nmp package"
 	@exit 1
 endif
-	rsync -av --delete \
-	--exclude='.git' \
-		--exclude='.github' \
-		--exclude='.vscode' \
-		--exclude='.gitignore' \
-		--exclude='.agent' \
-		--exclude='__pycache__' \
-		--exclude='*.pyc' \
-		--exclude='.pytest_cache' \
-		--exclude='.envrc' \
-		--exclude='.venv' \
-		--exclude='.ruff_cache' \
-		--exclude='Makefile' \
-		--exclude='pytest.ini' \
-		--exclude='pyproject.toml' \
-		--exclude='README.md' \
-		--exclude='LICENSE' \
-		--exclude='THIRD_PARTY.md' \
-		--exclude='CODE_OF_CONDUCT.md' \
-		--exclude='CONTRIBUTING.md' \
-		--exclude='SECURITY.md' \
-		--exclude='uv.lock' \
-		--exclude='tools' \
-		--exclude='script' \
-		--exclude='__init__.py' \
-		--exclude='ruff.toml' \
-		--exclude='.pre-commit-config.yaml' \
-		--exclude='.markdownlint.json' \
-		$(NSS_ROOT_PATH)/ $(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/
+	@echo "~~~~~~"
+	$(RSYNC_CMD) \
+		$(NSS_ROOT_PATH)/src/ $(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/src/
+	$(RSYNC_CMD) \
+		$(NSS_ROOT_PATH)/tests/ $(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/tests/
+
+synchronize-metafiles-from-nmp: ## Synchronize the metafiles with the nmp package
+ifeq ($(NMP_REPO_PATH),)
+	@echo "~~~~~~"
+	@echo "NMP_REPO_PATH is not set"
+	@echo "please set the NMP_REPO_PATH environment variable"
+	@echo "NMP_REPO_PATH is the root path of the nmp package"
+	@exit 1
+endif
+	@echo "~~~~~~"
+	@echo "synchronizing the metafiles with the nmp package"
+	$(RSYNC_METAFILES_CMD) \
+		$(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/ $(NSS_ROOT_PATH)/
+
+
+synchronize-to-nmp: synchronize-metafiles-to-nmp
 
 
 synchronize-from-nmp: ## Synchronize the nemo_safe_synthesizer package with the nmp package
@@ -161,32 +196,5 @@ ifeq ($(NMP_REPO_PATH),)
 	@exit 1
 endif
 	# this is annoying but it will work for now. we can remove as soon as we fully migrate. 
-	rsync -av --delete \
-		--exclude='.git' \
-		--exclude='.github' \
-		--exclude='.vscode' \
-		--exclude='.gitignore' \
-		--exclude='.agent' \
-		--exclude='__pycache__' \
-		--exclude='*.pyc' \
-		--exclude='.pytest_cache' \
-		--exclude='.envrc' \
-		--exclude='.venv' \
-		--exclude='.ruff_cache' \
-		--exclude='Makefile' \
-		--exclude='pytest.ini' \
-		--exclude='pyproject.toml' \
-		--exclude='README.md' \
-		--exclude='LICENSE' \
-		--exclude='THIRD_PARTY.md' \
-		--exclude='CODE_OF_CONDUCT.md' \
-		--exclude='CONTRIBUTING.md' \
-		--exclude='SECURITY.md' \
-		--exclude='uv.lock' \
-		--exclude='tools' \
-		--exclude='script' \
-		--exclude='__init__.py' \
-		--exclude='ruff.toml' \
-		--exclude='.pre-commit-config.yaml' \
-		--exclude='.markdownlint.json' \
+	$(RSYNC_CMD) \
 		$(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/ $(NSS_ROOT_PATH)/
