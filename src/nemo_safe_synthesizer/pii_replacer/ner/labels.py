@@ -6,9 +6,9 @@ from __future__ import annotations
 import re
 from typing import Iterator, List, Pattern, Set
 
-from nemo_safe_synthesizer.data_processing.records.base import normalize_label, normalize_labels
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity
+from ...data_processing.records.base import normalize_label, normalize_labels
+from ...observability import get_logger
+from .entity import Entity
 
 logger = get_logger(__name__)
 

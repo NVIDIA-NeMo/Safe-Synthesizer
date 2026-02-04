@@ -272,7 +272,7 @@ def common_setup(
     config = merge_overrides(settings.config_path, synthesis_overrides)
 
     # 6. Initialize wandb (uses workdir for run ID files)
-    initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id)
+    initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
 
     return run_logger, config, df, workdir
 

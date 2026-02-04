@@ -36,12 +36,13 @@ from pydantic import (
     model_validator,
 )
 
-from nemo_safe_synthesizer import utils
-from nemo_safe_synthesizer.data_processing.actions.distributions import (
+from ... import utils
+from ...observability import get_logger
+from .distributions import (
     DatetimeDistributionT,
     DistributionT,
 )
-from nemo_safe_synthesizer.data_processing.actions.utils import (
+from .utils import (
     ActionCtx,
     DataSourceT,
     MetadataColumns,
@@ -51,7 +52,6 @@ from nemo_safe_synthesizer.data_processing.actions.utils import (
     guess_datetime_format,
     type_alias_fn,
 )
-from nemo_safe_synthesizer.observability import get_logger
 
 logger = get_logger(__name__)
 

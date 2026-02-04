@@ -3,9 +3,9 @@
 
 import re
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import ContextSpan
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity, Score
+from ..predictor import ContextSpan
+from ..regex import Pattern, RegexPredictor
 
 GIT_TOKEN = re.compile(r"(?:^|\b|_)git(?:\b|_|$)")
 COMMIT_URL = r"https://github.com/.*?/.*?/commit/{}"

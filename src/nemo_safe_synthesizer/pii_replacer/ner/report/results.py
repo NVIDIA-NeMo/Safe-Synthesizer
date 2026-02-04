@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from nemo_safe_synthesizer.data_processing.records.value_path import value_path_to_json_path
+from ....data_processing.records.value_path import value_path_to_json_path
 
 Prediction = Dict[str, Any]
 

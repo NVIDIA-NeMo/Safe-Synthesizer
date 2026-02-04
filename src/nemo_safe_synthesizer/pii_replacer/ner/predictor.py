@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from re import Pattern
 from typing import List, Optional, Tuple, Union
 
-from nemo_safe_synthesizer.data_processing.records.base import KVPair
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
+from ...data_processing.records.base import KVPair
+from ...data_processing.records.json_record import JSONRecord
+from .ner import NERPrediction
 
 DEFAULT_CONTEXT_SPAN_SIZE = 16
 

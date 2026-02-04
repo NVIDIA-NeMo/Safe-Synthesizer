@@ -5,19 +5,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.base import (
+from ...base.data_checks import (
+    DataCheckResult,
+    DataCheckWarning,
+)
+from .base import (
     DataCheck,
     plural_verb,
     warning_explain_prefix,
 )
-from nemo_safe_synthesizer.artifacts.base.data_checks import (
-    DataCheckResult,
-    DataCheckWarning,
-)
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.artifacts.base.analyzer import AnalyzerContext
-    from nemo_safe_synthesizer.artifacts.base.fields import FieldFeatures
+    from ...base.analyzer import AnalyzerContext
+    from ...base.fields import FieldFeatures
 
 _MISSING_PERCENTAGE_LIMIT = 50
 

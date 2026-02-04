@@ -20,8 +20,8 @@ try:
 except ImportError:
     import regex as re
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity, Score
+from ..regex import Pattern, RegexPredictor
 
 IBAN_GENERIC_REGEX = r"\b[A-Z]{2}[0-9]{2}[ ]?([a-zA-Z0-9][ ]?){11,28}\b"
 

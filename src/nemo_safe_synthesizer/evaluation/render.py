@@ -9,13 +9,11 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FunctionLoader, select_autoescape
 
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_report import (
-    EvaluationReport,
-)
-from nemo_safe_synthesizer.observability import get_logger
+from ..observability import get_logger
+from .data_model.evaluation_report import EvaluationReport
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.cli.artifact_structure import Workdir
+    from ..cli.artifact_structure import Workdir
 
 logger = get_logger(__name__)
 

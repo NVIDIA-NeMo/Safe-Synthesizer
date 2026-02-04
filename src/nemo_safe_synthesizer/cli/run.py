@@ -30,7 +30,7 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer
 
 
 def common_run_options(f):
@@ -216,7 +216,7 @@ def run(
     run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
     with traced_user("SafeSynthesizer"):
-        from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+        from ..sdk.library_builder import SafeSynthesizer
 
         ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
         ss.run()
@@ -270,7 +270,7 @@ def run_train(
         settings=settings,
         phase="train",
     )
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer
 
     with traced_user("SafeSynthesizer"):
         SafeSynthesizer(config, workdir=workdir).with_data_source(df).process_data().train()
@@ -347,7 +347,7 @@ def run_generate(
         auto_discover_adapter=auto_discover_adapter,
         wandb_resume_job_id=wandb_resume_job_id,
     )
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):

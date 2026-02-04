@@ -6,14 +6,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from nemo_safe_synthesizer.artifacts.base.analyzer import (
+from ...base.analyzer import (
     AnalyzerContext,
     ArtifactAnalyzer,
 )
-from nemo_safe_synthesizer.artifacts.base.data_checks import (
+from ...base.data_checks import (
     DataCheckResult,
 )
-from nemo_safe_synthesizer.artifacts.base.metrics import timed
+from ...base.metrics import timed
 
 
 class DataChecksAnalyzer(ArtifactAnalyzer):

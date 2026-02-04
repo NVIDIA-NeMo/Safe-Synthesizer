@@ -32,19 +32,19 @@ from transformers import (
 )
 from transformers.trainer import TRAINING_ARGS_NAME
 
-import nemo_safe_synthesizer.privacy.dp_transformers.linear  # imported for side effects  # noqa
-from nemo_safe_synthesizer.privacy.dp_transformers.privacy_args import (
+from . import linear  # imported for side effects  # noqa
+from .privacy_args import (
     PrivacyArguments,
     SafeSynthesizerAccountant,
 )
-from nemo_safe_synthesizer.privacy.dp_transformers.sampler import (
+from .sampler import (
     PoissonEntitySampler,
     ShuffledEntitySampler,
 )
 
 if utils.is_safetensors_available():
     import safetensors.torch
-from nemo_safe_synthesizer.observability import get_logger
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 

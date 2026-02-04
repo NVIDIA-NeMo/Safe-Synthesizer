@@ -7,13 +7,14 @@ from typing import cast
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
+from numpy import cos, pi, sin
+from plotly.subplots import make_subplots
+
+from ...evaluation.data_model.evaluation_score import (
     EvaluationScore,
     PrivacyGrade,
 )
-from nemo_safe_synthesizer.evaluation.statistics.stats import get_numeric_distribution_bins
-from numpy import cos, pi, sin
-from plotly.subplots import make_subplots
+from ...evaluation.statistics.stats import get_numeric_distribution_bins
 
 _REPORT_PALETTE = ["#3C2ED1", "#1AA2E6"]
 _GRAPH_BARGAP = 0.2  # gap between bars of adjacent location coordinates

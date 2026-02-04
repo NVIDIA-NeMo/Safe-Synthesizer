@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from nemo_safe_synthesizer.cli.artifact_structure import BoundDir, PathT, Workdir
+from .artifact_structure import BoundDir, PathT, Workdir
 
 
 @click.group(invoke_without_command=True)

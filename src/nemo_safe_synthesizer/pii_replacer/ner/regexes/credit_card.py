@@ -5,9 +5,9 @@ import re
 
 from stdnum import luhn
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import ContextSpan
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity
+from ..predictor import ContextSpan
+from ..regex import Pattern, RegexPredictor
 
 CC_REGEX = (
     r"^(?:4[0-9]{12}(?:[0-9]{3})?|[25][1-7][0-9]{14}|6(?:011|5[0-9][0-9])[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]"

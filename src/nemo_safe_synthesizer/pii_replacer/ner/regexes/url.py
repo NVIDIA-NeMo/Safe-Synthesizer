@@ -4,9 +4,9 @@
 
 import tldextract
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import ContextSpan
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity, Score
+from ..predictor import ContextSpan
+from ..regex import Pattern, RegexPredictor
 
 URL_REGEX = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)"  # noqa
 

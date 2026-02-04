@@ -5,16 +5,13 @@ from __future__ import annotations
 
 from functools import cached_property
 
-import nemo_safe_synthesizer.evaluation.statistics.stats as stats
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
 from pydantic import Field
+
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...evaluation.statistics import stats
 
 
 class DatasetStatistics(Component):

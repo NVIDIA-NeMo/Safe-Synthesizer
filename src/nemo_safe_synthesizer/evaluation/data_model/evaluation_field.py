@@ -8,17 +8,18 @@ from typing import Callable
 
 import numpy as np
 import pandas as pd
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
+from pandas.api.types import is_integer_dtype
+from pydantic import BaseModel, Field
+
+from ...artifacts.analyzers.field_features import (
     FieldFeatures,
     FieldType,
     describe_field,
 )
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore
-from nemo_safe_synthesizer.evaluation.statistics import stats
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
-from pandas.api.types import is_integer_dtype
-from pydantic import BaseModel, Field
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...evaluation.statistics import stats
+from ...observability import get_logger
+from ...pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
 

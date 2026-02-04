@@ -17,9 +17,9 @@ import yaml
 from jinja2 import Template
 from jinja2.exceptions import TemplateError, TemplateSyntaxError
 
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.data_editor.detect import DEFAULT_ENTITIES, EntityExtractor
-from nemo_safe_synthesizer.pii_replacer.data_editor.environment import (
+from ...observability import get_logger
+from .detect import DEFAULT_ENTITIES, EntityExtractor
+from .environment import (
     Environment,
     SafeSynthesizerFakerMethodNotFound,
 )

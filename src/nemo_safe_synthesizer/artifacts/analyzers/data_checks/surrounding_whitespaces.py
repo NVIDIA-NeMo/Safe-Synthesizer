@@ -8,18 +8,18 @@ from typing import TYPE_CHECKING
 from pandas import Series
 from pandas.core.dtypes.common import is_string_or_object_np_dtype
 
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.base import (
+from ...base.data_checks import (
+    DataCheckResult,
+    DataCheckWarning,
+)
+from .base import (
     DataCheck,
     plural_verb,
     warning_explain_prefix,
 )
-from nemo_safe_synthesizer.artifacts.base.data_checks import (
-    DataCheckResult,
-    DataCheckWarning,
-)
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.artifacts.base.analyzer import AnalyzerContext
+    from ...base.analyzer import AnalyzerContext
 
 _VALUES_WITH_WHITESPACE_PERCENTAGE_LIMIT = 20
 

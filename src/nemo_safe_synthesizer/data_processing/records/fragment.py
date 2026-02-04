@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Tuple, Union
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Score
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import NERPrediction
+from ...pii_replacer.ner.entity import Score
+from ...pii_replacer.ner.predictor import NERPrediction
 
 
 class MetadataError(Exception):

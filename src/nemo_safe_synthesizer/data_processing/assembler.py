@@ -20,27 +20,27 @@ from datasets.exceptions import DatasetGenerationError
 from tqdm.auto import tqdm
 from transformers import PreTrainedTokenizer
 
-from nemo_safe_synthesizer import utils
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.data_processing.record_utils import (
+from .. import utils
+from ..config.parameters import SafeSynthesizerParameters
+from ..data_processing.record_utils import (
     extract_records_from_jsonl_string,
     records_to_jsonl,
 )
-from nemo_safe_synthesizer.data_processing.stats import (
+from ..data_processing.stats import (
     RunningStatistics,
     Statistics,
 )
-from nemo_safe_synthesizer.defaults import (
+from ..defaults import (
     DEFAULT_CACHE_PREFIX,
     TRAIN_SET_SIZE_BUFFER,
 )
-from nemo_safe_synthesizer.errors import (
+from ..errors import (
     GenerationError,
     ParameterError,
 )
-from nemo_safe_synthesizer.holdout.holdout import grouped_train_test_split, naive_train_test_split
-from nemo_safe_synthesizer.llm.metadata import ModelMetadata
-from nemo_safe_synthesizer.observability import get_logger
+from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
+from ..llm.metadata import ModelMetadata
+from ..observability import get_logger
 
 logger = get_logger(__name__)
 

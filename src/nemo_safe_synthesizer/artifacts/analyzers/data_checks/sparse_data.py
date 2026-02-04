@@ -7,24 +7,24 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.base import (
+from ...base.data_checks import (
+    DataCheckResult,
+    DataCheckWarning,
+)
+from ...base.fields import (
+    FieldType,
+)
+from .base import (
     DataCheck,
     plural_verb,
     warning_explain_prefix,
 )
-from nemo_safe_synthesizer.artifacts.base.data_checks import (
-    DataCheckResult,
-    DataCheckWarning,
-)
-from nemo_safe_synthesizer.artifacts.base.fields import (
-    FieldType,
-)
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.artifacts.base.analyzer import (
+    from ...base.analyzer import (
         AnalyzerContext,
     )
-    from nemo_safe_synthesizer.artifacts.base.fields import (
+    from ...base.fields import (
         FieldFeatures,
     )
 

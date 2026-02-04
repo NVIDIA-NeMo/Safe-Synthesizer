@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Union
 
-from nemo_safe_synthesizer.pii_replacer.ner.models import (
+from .models import (
     ModelManifest,
     ObjectRef,
     Visibility,

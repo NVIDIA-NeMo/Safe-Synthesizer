@@ -6,28 +6,9 @@ from __future__ import annotations
 import logging
 from functools import cached_property
 
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
-    FieldType,
-)
-from nemo_safe_synthesizer.config.evaluate import DEFAULT_RECORD_COUNT
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.constants import (
-    MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS,
-    MIN_RECORDS_FOR_TEXT_METRICS_WITHOUT_WARNING,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
-from nemo_safe_synthesizer.evaluation.statistics import stats
-from nemo_safe_synthesizer.observability import get_logger
 from numpy.linalg import norm
 from pydantic import BaseModel, ConfigDict, Field
 from scipy.stats import ks_2samp
@@ -39,6 +20,20 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+
+from ...artifacts.analyzers.field_features import FieldType
+from ...config.evaluate import DEFAULT_RECORD_COUNT
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.components.component import Component
+from ...evaluation.constants import (
+    MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS,
+    MIN_RECORDS_FOR_TEXT_METRICS_WITHOUT_WARNING,
+)
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...evaluation.statistics import stats
+from ...observability import get_logger
+from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 

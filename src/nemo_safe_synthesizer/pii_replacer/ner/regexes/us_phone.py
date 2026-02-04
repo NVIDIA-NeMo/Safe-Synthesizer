@@ -4,9 +4,9 @@
 
 import re
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import ContextSpan
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity
+from ..predictor import ContextSpan
+from ..regex import Pattern, RegexPredictor
 
 US_PHONE_REGEX = r"((\+?1)|(001))?-?\(?[0-9]{3}\)?[-.*\s]?[0-9]{3}[-.*\s]?[0-9]{4}(x\d+)?"
 

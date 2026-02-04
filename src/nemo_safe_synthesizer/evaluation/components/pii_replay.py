@@ -6,13 +6,12 @@ from __future__ import annotations
 import math
 from functools import cached_property
 
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
-from nemo_safe_synthesizer.observability import get_logger
 from pydantic import BaseModel, Field
+
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 

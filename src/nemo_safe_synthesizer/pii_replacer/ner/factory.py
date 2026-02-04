@@ -10,15 +10,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import List, Optional, Set, Union
 
-from nemo_safe_synthesizer.data_processing.records.base import normalize_labels
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner.metadata import FieldLabelCondition
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NER
-from nemo_safe_synthesizer.pii_replacer.ner.ner_mp import NERParallel
-from nemo_safe_synthesizer.pii_replacer.ner.nlp import SpacyPredictor
-from nemo_safe_synthesizer.pii_replacer.ner.pipeline import Pipeline, regex_pipeline
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import Predictor
-from nemo_safe_synthesizer.pii_replacer.ner.regex import RegexPredictor
+from ...data_processing.records.base import normalize_labels
+from ...observability import get_logger
+from .metadata import FieldLabelCondition
+from .ner import NER
+from .ner_mp import NERParallel
+from .nlp import SpacyPredictor
+from .pipeline import Pipeline, regex_pipeline
+from .predictor import Predictor
+from .regex import RegexPredictor
 
 logger = get_logger(__name__)
 

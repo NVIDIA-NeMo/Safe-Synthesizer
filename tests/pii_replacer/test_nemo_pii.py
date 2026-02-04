@@ -80,6 +80,48 @@ def test_nemo_pii_classify_df_no_column_classifier(_build_entity_extractor):
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
+def test_nemo_pii_classify_disabled(_build_entity_extractor):
+    """Test that when enable_classify is False, no external API calls are made."""
+    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+
+    # Create a config with classify disabled
+    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+
+    config = PiiReplacerConfig.get_default_config()
+    config.globals.classify.enable_classify = False
+
+    mock_column_classifier = MagicMock()
+    mock_column_classifier.detect_types.return_value = {
+        "fname": "first_name",
+        "lname": "last_name",
+    }
+
+    with patch(
+        "nemo_safe_synthesizer.pii_replacer.nemo_pii.get_column_classifier", return_value=mock_column_classifier
+    ) as mock_get_classifier:
+        nemo_pii = NemoPII(config=config)
+        result = nemo_pii.classify_df(df)
+
+        # Verify the classifier was never instantiated (no API call made)
+        mock_get_classifier.assert_not_called()
+
+        # Verify we still get a valid result with text columns detected via local field detection
+        expected = {
+            "columns": {
+                "fname": None,
+                "lname": None,
+                "email": None,
+                "full address": "text",
+                "height": None,
+                "date of birth": None,
+                "notes": "text",
+            },
+            "entities": {},
+        }
+        assert result == expected
+
+
+@patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
 def test_nemo_pii_default_config_national_id(_build_entity_extractor):
     # Added to confirm a typo fix works in the condition for national_id
     # and tax_id entities in the default config.

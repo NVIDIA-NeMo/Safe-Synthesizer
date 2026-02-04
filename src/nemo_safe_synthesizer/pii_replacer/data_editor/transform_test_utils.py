@@ -8,13 +8,13 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
+from ..ner.ner import NERPrediction
+from .detect import (
     UNKNOWN_ENTITY,
     ColumnClassifier,
     EntityExtractorGliner,
     IAPIClassifierConfig,
 )
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
 
 
 class EntityExtractorMock(EntityExtractorGliner):

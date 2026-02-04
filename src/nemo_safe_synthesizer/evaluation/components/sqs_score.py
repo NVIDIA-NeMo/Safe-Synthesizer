@@ -3,17 +3,16 @@
 
 from __future__ import annotations
 
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
+from pydantic import Field
+
+from ...artifacts.analyzers.field_features import (
     FieldType,
 )
-from nemo_safe_synthesizer.evaluation.components.column_distribution import ColumnDistribution
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.components.composite_score import CompositeScore
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
-from nemo_safe_synthesizer.observability import get_logger
-from pydantic import Field
+from ...evaluation.components.column_distribution import ColumnDistribution
+from ...evaluation.components.component import Component
+from ...evaluation.components.composite_score import CompositeScore
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 

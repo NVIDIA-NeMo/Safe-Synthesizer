@@ -6,15 +6,13 @@ import time
 
 import pandas as pd
 
-from nemo_safe_synthesizer.cli.artifact_structure import Workdir
-from nemo_safe_synthesizer.config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
-from nemo_safe_synthesizer.config.parameters import (
-    SafeSynthesizerParameters,
-)
-from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
-from nemo_safe_synthesizer.generation.results import GenerateJobResults
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
+from ..cli.artifact_structure import Workdir
+from ..config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
+from ..config.parameters import SafeSynthesizerParameters
+from ..generation.results import GenerateJobResults
+from ..observability import get_logger
+from ..pii_replacer.transform_result import ColumnStatistics
+from .reports.multimodal.multimodal_report import MultimodalReport
 
 logger = get_logger(__name__)
 

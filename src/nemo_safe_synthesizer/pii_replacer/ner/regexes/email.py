@@ -3,8 +3,8 @@
 
 import tldextract
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity, Score
+from ..regex import Pattern, RegexPredictor
 
 
 class Email(RegexPredictor):

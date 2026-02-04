@@ -11,11 +11,11 @@ from typing import Any, Callable, Iterator, List, Optional, Union
 
 import joblib.externals.loky as loky
 
-import nemo_safe_synthesizer.pii_replacer.ner.pipeline as pipeline
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner import NER, PipelineResult, Timings
-from nemo_safe_synthesizer.pii_replacer.ner.utils import InData
+from ...data_processing.records.json_record import JSONRecord
+from ...observability import get_logger
+from . import pipeline
+from .ner import NER, PipelineResult, Timings
+from .utils import InData
 
 logger = get_logger(__name__)
 

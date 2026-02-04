@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.components.composite_score import CompositeScore
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
-from nemo_safe_synthesizer.observability import get_logger
 from pydantic import Field
+
+from ...observability import get_logger
+from ..data_model.evaluation_score import (
+    EvaluationScore,
+    PrivacyGrade,
+)
+from .component import Component
+from .composite_score import CompositeScore
 
 logger = get_logger(__name__)
 

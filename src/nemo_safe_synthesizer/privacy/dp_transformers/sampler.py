@@ -11,7 +11,7 @@ import torch
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler
 from torch.utils.data.sampler import BatchSampler, RandomSampler, Sampler
 
-from nemo_safe_synthesizer.observability import get_logger
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 

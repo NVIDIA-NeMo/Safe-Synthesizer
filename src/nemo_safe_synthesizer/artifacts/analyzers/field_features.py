@@ -12,19 +12,19 @@ from typing import TYPE_CHECKING, Any
 from pandas import Series
 from pandas.core.dtypes.common import is_float_dtype, is_numeric_dtype
 
-from nemo_safe_synthesizer.artifacts.base.analyzer import (
+from ..base.analyzer import (
     AnalyzerContext,
     ArtifactAnalyzer,
 )
-from nemo_safe_synthesizer.artifacts.base.fields import (
+from ..base.fields import (
     FieldFeatures,
     FieldFeaturesInfo,
     FieldType,
 )
-from nemo_safe_synthesizer.artifacts.base.metrics import timed
+from ..base.metrics import timed
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.artifacts.base.metadata import (
+    from ..base.metadata import (
         DatasetMetadata,
     )
 

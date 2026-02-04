@@ -7,16 +7,13 @@ from abc import ABC
 from functools import cached_property
 from typing import Any
 
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
 import pandas as pd
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
 from pydantic import BaseModel, Field
+
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from . import multi_modal_figures as figures
 
 
 class Component(ABC, BaseModel):

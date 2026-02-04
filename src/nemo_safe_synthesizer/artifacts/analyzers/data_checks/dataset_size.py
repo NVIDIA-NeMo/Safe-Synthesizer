@@ -5,14 +5,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.base import DataCheck
-from nemo_safe_synthesizer.artifacts.base.data_checks import (
+from ...base.data_checks import (
     DataCheckResult,
     DataCheckWarning,
 )
+from .base import DataCheck
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.artifacts.base.analyzer import AnalyzerContext
+    from ...base.analyzer import AnalyzerContext
 
 _RECORD_COUNT_LIMIT = 50_000
 _FIELD_COUNT_LIMIT = 30

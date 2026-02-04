@@ -17,11 +17,11 @@ try:
 except ImportError:
     from typing import Pattern as RePattern
 
-from nemo_safe_synthesizer.data_processing.records.base import KVPair
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERError, NERPrediction
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import ContextSpan, Predictor, is_context_matched
+from ...data_processing.records.base import KVPair
+from ...data_processing.records.json_record import JSONRecord
+from .entity import Entity, Score
+from .ner import NERError, NERPrediction
+from .predictor import ContextSpan, Predictor, is_context_matched
 
 
 def split_header_contexts(

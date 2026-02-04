@@ -5,10 +5,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from nemo_safe_synthesizer.observability import get_logger
-
-# from types import TracebackType
 from pydantic import BaseModel, Field
+
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 
