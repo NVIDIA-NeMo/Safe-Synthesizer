@@ -149,7 +149,7 @@ synchronize-from-nmp-mr: ## Sync from NMP MR. Usage: make synchronize-from-nmp-m
 ifndef MR
 	$(error MR is required. Usage: make synchronize-from-nmp-mr MR=5603)
 endif
-	bash script/sync-from-mr.sh $(MR)
+	bash tools/sync-from-mr.sh $(MR)
 
 synchronize-py-files-to-nmp: ## Synchronize the python files with the nmp package
 	@echo "~~~~~~"
