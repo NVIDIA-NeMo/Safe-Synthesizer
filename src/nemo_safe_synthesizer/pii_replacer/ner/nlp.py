@@ -9,21 +9,21 @@ from numbers import Number
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
-from nemo_safe_synthesizer.data_processing.records.base import KVPair
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.data_processing.records.value_path import ValuePath
-from nemo_safe_synthesizer.pii_replacer.ner.const import const
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.fasttext import FTEntityMatcher
-from nemo_safe_synthesizer.pii_replacer.ner.models import (
+from ...data_processing.records.base import KVPair
+from ...data_processing.records.json_record import JSONRecord
+from ...data_processing.records.value_path import ValuePath
+from .const import const
+from .entity import Entity, Score
+from .fasttext import FTEntityMatcher
+from .models import (
     ModelManifest,
     ObjectRef,
     Visibility,
     get_cache_manager,
 )
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import Predictor
-from nemo_safe_synthesizer.pii_replacer.ner.utils import is_string_a_number
+from .ner import NERPrediction
+from .predictor import Predictor
+from .utils import is_string_a_number
 
 spacy = None
 Doc = None

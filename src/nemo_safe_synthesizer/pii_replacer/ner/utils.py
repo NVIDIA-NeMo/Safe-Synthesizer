@@ -3,7 +3,7 @@
 
 from typing import List, Union
 
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
+from ...data_processing.records.json_record import JSONRecord
 
 """Valid input data includes a str, tuple or dict"""
 InData = Union[str, list, dict, JSONRecord]

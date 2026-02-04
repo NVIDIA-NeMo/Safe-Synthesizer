@@ -8,55 +8,44 @@ from functools import cached_property
 from typing import Any
 
 import pandas as pd
-from nemo_safe_synthesizer.config.evaluate import (
+from pydantic import Field
+
+from ....config.evaluate import (
     DEFAULT_RECORD_COUNT,
     DEFAULT_SQS_REPORT_COLUMNS,
 )
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.assets.text.multi_modal_tooltips import tooltips
-from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection import (
-    AttributeInferenceProtection,
-)
-from nemo_safe_synthesizer.evaluation.components.column_distribution import (
+from ....config.parameters import SafeSynthesizerParameters
+from ....evaluation.assets.text.multi_modal_tooltips import tooltips
+from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
+from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
 )
-from nemo_safe_synthesizer.evaluation.components.correlation import (
+from ....evaluation.components.correlation import (
     Correlation,
 )
-from nemo_safe_synthesizer.evaluation.components.data_privacy_score import DataPrivacyScore
-from nemo_safe_synthesizer.evaluation.components.dataset_statistics import (
+from ....evaluation.components.data_privacy_score import DataPrivacyScore
+from ....evaluation.components.dataset_statistics import (
     DatasetStatistics,
 )
-from nemo_safe_synthesizer.evaluation.components.deep_structure import (
+from ....evaluation.components.deep_structure import (
     DeepStructure,
 )
-from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import (
+from ....evaluation.components.membership_inference_protection import (
     MembershipInferenceProtection,
 )
-from nemo_safe_synthesizer.evaluation.components.pii_replay import PIIReplay
-from nemo_safe_synthesizer.evaluation.components.sqs_score import (
-    SQSScore,
-)
-from nemo_safe_synthesizer.evaluation.components.text_semantic_similarity import (
-    TextSemanticSimilarity,
-)
-from nemo_safe_synthesizer.evaluation.components.text_structure_similarity import (
-    TextStructureSimilarity,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_report import (
-    EvaluationReport,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
+from ....evaluation.components.pii_replay import PIIReplay
+from ....evaluation.components.sqs_score import SQSScore
+from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
+from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
+from ....evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ....evaluation.data_model.evaluation_report import EvaluationReport
+from ....evaluation.data_model.evaluation_score import (
     EvaluationScore,
     PrivacyGrade,
 )
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
-from pydantic import Field
+from ....observability import get_logger
+from ....pii_replacer.transform_result import ColumnStatistics
 
 logger = get_logger(__name__)
 

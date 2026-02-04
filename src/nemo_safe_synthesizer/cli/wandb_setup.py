@@ -132,6 +132,9 @@ def update_wandb_config(
         cfg: SafeSynthesizerParameters to log
         additional_configs: Additional key-value pairs to log
     """
+    if wandb.run is None:
+        return
+
     if additional_configs is None:
         additional_configs = {}
 
@@ -141,7 +144,11 @@ def update_wandb_config(
         wandb.config.update(config_dict, allow_val_change=True)
 
 
-def initialize_wandb_run(workdir: Workdir, resume_job_id: str | None = None) -> None:
+def initialize_wandb_run(
+    workdir: Workdir,
+    resume_job_id: str | None = None,
+    cfg: SafeSynthesizerParameters | None = None,
+) -> None:
     """Initialize or resume a wandb run with consistent configuration.
 
     This function handles four cases (in priority order):
@@ -153,6 +160,7 @@ def initialize_wandb_run(workdir: Workdir, resume_job_id: str | None = None) -> 
     Args:
         workdir: Workdir structure containing paths for run ID files
         resume_job_id: Optional wandb run ID or path to file containing the ID
+        cfg: Optional SafeSynthesizerParameters to log to wandb config
     """
     settings = WandbSettings()
 
@@ -187,7 +195,6 @@ def initialize_wandb_run(workdir: Workdir, resume_job_id: str | None = None) -> 
     if wandb.run is not None:
         run_id_file.parent.mkdir(parents=True, exist_ok=True)
         run_id_file.write_text(wandb.run.id, encoding="utf-8")
-        update_wandb_config(additional_configs=additional_configs)
 
     # Case 2: Explicit resume_job_id provided (ID or file path)
     elif resume_job_id is not None:
@@ -224,7 +231,6 @@ def initialize_wandb_run(workdir: Workdir, resume_job_id: str | None = None) -> 
     else:
         logger.info(f"Creating new wandb run: {workdir.run_name}")
         run_id_file.parent.mkdir(parents=True, exist_ok=True)
-        update_wandb_config(additional_configs=additional_configs)
         wandb.init(
             project=wandb_project,
             name=workdir.run_name,
@@ -235,6 +241,9 @@ def initialize_wandb_run(workdir: Workdir, resume_job_id: str | None = None) -> 
         if wandb.run is not None:
             run_id_file.write_text(wandb.run.id, encoding="utf-8")
         logger.info(f"Saved wandb run ID to {workdir.wandb_run_id_file}")
+
+        # Log config to wandb (only for new runs - resumed runs already have config)
+        update_wandb_config(cfg, additional_configs=additional_configs)
 
     # Log run info
     logger.info(f"Wandb run name: {wandb.run.name if wandb.run else 'None'}")

@@ -11,7 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from nemo_safe_synthesizer.observability import get_logger
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 

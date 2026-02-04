@@ -4,8 +4,8 @@
 
 import re
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity
-from nemo_safe_synthesizer.pii_replacer.ner.regex import (
+from ..entity import Entity
+from ..regex import (
     Pattern,
     RegexPredictor,
     create_exact_field_matcher,

@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from pydantic import Field
 
-from nemo_safe_synthesizer.config.base import NSSBaseModel
+from ...config.base import NSSBaseModel
 
 
 class FieldAttribute(StrEnum):

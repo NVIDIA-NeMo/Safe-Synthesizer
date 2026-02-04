@@ -7,28 +7,22 @@ from functools import cached_property
 from statistics import mean
 
 import category_encoders as ce
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
-    describe_field,
-)
-from nemo_safe_synthesizer.config.evaluate import DEFAULT_RECORD_COUNT
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-    PrivacyGrade,
-)
-from nemo_safe_synthesizer.observability import get_logger
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics import accuracy_score, precision_score
 from sklearn.preprocessing import QuantileTransformer
+
+from ...artifacts.analyzers.field_features import describe_field
+from ...config.evaluate import DEFAULT_RECORD_COUNT
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
+from ...observability import get_logger
+from . import multi_modal_figures as figures
 
 faiss_available = False
 try:

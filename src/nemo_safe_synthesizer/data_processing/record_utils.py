@@ -11,7 +11,7 @@ from io import StringIO
 import jsonschema
 import pandas as pd
 
-from nemo_safe_synthesizer.observability import get_logger
+from ..observability import get_logger
 
 RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
 RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"

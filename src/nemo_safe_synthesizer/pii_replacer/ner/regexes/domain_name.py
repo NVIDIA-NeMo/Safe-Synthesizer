@@ -5,9 +5,9 @@ import re
 
 import tldextract
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import ContextSpan
-from nemo_safe_synthesizer.pii_replacer.ner.regex import (
+from ..entity import Entity
+from ..predictor import ContextSpan
+from ..regex import (
     Pattern,
     RegexPredictor,
     create_exact_field_matcher,

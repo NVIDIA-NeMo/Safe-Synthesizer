@@ -5,25 +5,15 @@ import time
 
 from pandas import DataFrame
 
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks import (
+from ..observability import get_logger
+from .analyzers.data_checks import (
     create_all_checks,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.base import (
-    DataChecksAnalyzer,
-)
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
-    FieldFeaturesAnalyzer,
-)
-from nemo_safe_synthesizer.artifacts.base.analyzer import (
-    AnalyzerContext,
-    ArtifactAnalyzer,
-    DataFrameBasicAnalyzer,
-)
-from nemo_safe_synthesizer.artifacts.base.data_checks import (
-    DataCheckResults,
-)
-from nemo_safe_synthesizer.artifacts.base.name_anonymizer import NoopNameAnonymizer
-from nemo_safe_synthesizer.observability import get_logger
+from .analyzers.data_checks.base import DataChecksAnalyzer
+from .analyzers.field_features import FieldFeaturesAnalyzer
+from .base.analyzer import AnalyzerContext, ArtifactAnalyzer, DataFrameBasicAnalyzer
+from .base.data_checks import DataCheckResults
+from .base.name_anonymizer import NoopNameAnonymizer
 
 logger = get_logger(__name__)
 

@@ -2,25 +2,25 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Make all checks available to import from `data_checks` module.
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.base import (
+from .base import (
     DataCheck,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.dataset_size import (
+from .dataset_size import (
     DatasetSizeCheck,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.high_float_precision import (
+from .high_float_precision import (
     HighFloatPrecisionCheck,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.missing_data import (
+from .missing_data import (
     MissingDataCheck,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.sparse_data import (
+from .sparse_data import (
     SparseDataCheck,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.surrounding_whitespaces import (
+from .surrounding_whitespaces import (
     SurroundingWhitespacesCheck,
 )
-from nemo_safe_synthesizer.artifacts.analyzers.data_checks.text_data import (
+from .text_data import (
     TextDataCheck,
 )
 

@@ -8,10 +8,12 @@ import time
 import pandas as pd
 from openai import OpenAI
 
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import describe_field
-from nemo_safe_synthesizer.artifacts.base.fields import FieldType
-from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
+from ..artifacts.analyzers.field_features import describe_field
+from ..artifacts.base.fields import FieldType
+from ..config.replace_pii import PiiReplacerConfig
+from ..pii_replacer.data_editor.edit import Editor, TransformFnAccounting
+from ..pii_replacer.transform_result import ColumnStatistics, TransformResult
+from .data_editor.detect import (
     DEFAULT_ENTITIES,
     UNKNOWN_ENTITY,
     ClassifyConfig,
@@ -22,8 +24,6 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     EntityExtractorRegexp,
     NerReport,
 )
-from nemo_safe_synthesizer.pii_replacer.data_editor.edit import Editor, TransformFnAccounting
-from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics, TransformResult
 
 
 def classify_config_from_params(
@@ -197,27 +197,49 @@ class NemoPII(object):
             type as values. The "entities" key maps to a dictionary with column
             names as keys and entity names as values.
         """
+        # Pre-initialize with defaults
+        entities = {}
+        columns = {item: None for item in df.columns}
+
         try:
-            column_classifier = get_column_classifier()
-            columns = column_classifier.detect_types(df, self.classify_config.valid_entities)
+            # Only attempt classification if enabled
+            if self.pii_replacer_config.globals.classify.enable_classify is not False:
+                column_classifier = None
 
-            entities = {
-                name: (entity if entity != UNKNOWN_ENTITY and entity in self.classify_config.valid_entities else None)
-                for (name, entity) in columns.items()
-            }
-        except Exception:
-            logging.error("Could not perform classify, falling back to default entities.", exc_info=False)
-            entities = {}
-            columns = {item: None for item in df.columns}
+                # Try to initialize the column classifier
+                try:
+                    column_classifier = get_column_classifier()
+                except Exception:
+                    logging.error(
+                        "Could not initialize column classifier, falling back to default entities.", exc_info=False
+                    )
 
-        # Use field type detection to identify text columns if not already
-        # assigned an entity. These text columns are where NER is used if
-        # enabled during transform_df.
-        fields = [describe_field(field_name, df[field_name]) for field_name in df.columns]
-        for field in fields:
-            existing_type = columns.get(field.name, None)
-            if (existing_type is None or existing_type.lower() == "none") and field.type == FieldType.TEXT:
-                columns[field.name] = "text"
+                # Try to perform classification if we successfully got a classifier
+                if column_classifier is not None:
+                    try:
+                        columns = column_classifier.detect_types(df, self.classify_config.valid_entities)
+
+                        entities = {
+                            name: (
+                                entity
+                                if entity != UNKNOWN_ENTITY and entity in self.classify_config.valid_entities
+                                else None
+                            )
+                            for (name, entity) in columns.items()
+                        }
+                    except Exception:
+                        logging.error("Could not perform classify, falling back to default entities.", exc_info=False)
+            else:
+                logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")
+        finally:
+            # Use field type detection to identify text columns if not already
+            # assigned an entity. These text columns are where NER is used if
+            # enabled during transform_df.
+            fields = [describe_field(field_name, df[field_name]) for field_name in df.columns]
+            for field in fields:
+                existing_type = columns.get(field.name, None)
+                if (existing_type is None or existing_type.lower() == "none") and field.type == FieldType.TEXT:
+                    columns[field.name] = "text"
 
         return {
             "columns": columns,

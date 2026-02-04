@@ -9,9 +9,9 @@ from enum import StrEnum
 from math import ceil
 from typing import List, Optional, Set, Union
 
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NER, PipelineResult
-from nemo_safe_synthesizer.pii_replacer.ner.ner_mp import NERParallel
+from ...data_processing.records.json_record import JSONRecord
+from .ner import NER, PipelineResult
+from .ner_mp import NERParallel
 
 
 class FieldAttribute(StrEnum):

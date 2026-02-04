@@ -11,14 +11,14 @@ from dateparser import parse
 from dateparser.date import get_date_from_timestamp
 from dateparser.search import search_dates
 
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.pii_replacer.ner.entity import (
+from ...data_processing.records.json_record import JSONRecord
+from .entity import (
     Entity,
     Score,
 )
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import Predictor, PredictorContext
-from nemo_safe_synthesizer.pii_replacer.ner.regex import (
+from .ner import NERPrediction
+from .predictor import Predictor, PredictorContext
+from .regex import (
     create_exact_field_matcher,
     split_header_contexts,
 )

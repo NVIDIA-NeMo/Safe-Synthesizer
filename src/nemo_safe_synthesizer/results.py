@@ -3,10 +3,10 @@
 
 import pandas as pd
 
-from nemo_safe_synthesizer.config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
-from nemo_safe_synthesizer.evaluation.render import render_report
-from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
-from nemo_safe_synthesizer.generation.results import GenerateJobResults
+from .config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
+from .evaluation.render import render_report
+from .evaluation.reports.multimodal.multimodal_report import MultimodalReport
+from .generation.results import GenerateJobResults
 
 
 def make_nss_summary(

@@ -17,17 +17,17 @@ try:
 except ImportError:
     from typing import Pattern
 
-from nemo_safe_synthesizer.data_processing.records.base import KVPair, tokenize_header
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.models import (
+from ...data_processing.records.base import KVPair, tokenize_header
+from ...data_processing.records.json_record import JSONRecord
+from .entity import Entity, Score
+from .models import (
     ModelManifest,
     ObjectRef,
     Visibility,
     get_cache_manager,
 )
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import Predictor
+from .ner import NERPrediction
+from .predictor import Predictor
 
 DEFAULT_MANIFEST = ModelManifest(
     model="person_name_wordlist",

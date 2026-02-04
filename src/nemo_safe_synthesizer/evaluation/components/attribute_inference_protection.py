@@ -13,27 +13,21 @@ from math import e
 from typing import cast
 
 import category_encoders as ce
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
 import numpy as np
 import pandas as pd
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
-    describe_field,
-)
-from nemo_safe_synthesizer.config.evaluate import QUASI_IDENTIFIER_COUNT
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-    PrivacyGrade,
-)
-from nemo_safe_synthesizer.observability import get_logger
 from pandas.api.types import is_float_dtype
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.preprocessing import QuantileTransformer
+
+from ...artifacts.analyzers.field_features import describe_field
+from ...config.evaluate import QUASI_IDENTIFIER_COUNT
+from ...config.parameters import SafeSynthesizerParameters
+from ...observability import get_logger
+from ..components.component import Component
+from ..data_model.evaluation_dataset import EvaluationDataset
+from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
+from . import multi_modal_figures as figures
 
 faiss_available = False
 try:

@@ -7,12 +7,12 @@ from typing import List
 
 from pydantic.v1 import Field
 
-from nemo_safe_synthesizer.pii_replacer.ner.metadata import (
+from ..metadata import (
     DatasetMetadata,
     EntityMetadata,
     FieldMetadata,
 )
-from nemo_safe_synthesizer.pii_replacer.ner.report.base import ReportBaseModel
+from .base import ReportBaseModel
 
 
 def convert_to_report(metadata: DatasetMetadata) -> DatasetMetadataReport:

@@ -9,20 +9,20 @@ from typing import TYPE_CHECKING
 from pandas import DataFrame
 from pydantic import BaseModel, ConfigDict, Field
 
-from nemo_safe_synthesizer.artifacts.base.name_anonymizer import NoopNameAnonymizer
+from .name_anonymizer import NoopNameAnonymizer
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.artifacts.base.data_checks import (
+    from .data_checks import (
         DataCheckResult,
     )
-    from nemo_safe_synthesizer.artifacts.base.fields import (
+    from .fields import (
         FieldFeatures,
         FieldFeaturesInfo,
     )
-    from nemo_safe_synthesizer.artifacts.base.metadata import (
+    from .metadata import (
         DatasetMetadata,
     )
-    from nemo_safe_synthesizer.artifacts.base.name_anonymizer import NameAnonymizer
+    from .name_anonymizer import NameAnonymizer
 
 
 class AnalyzerContext(BaseModel):

@@ -20,11 +20,11 @@ from langchain_core.prompts import PromptTemplate
 from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner import ner_mp
-from nemo_safe_synthesizer.pii_replacer.ner.factory import LabelSetPredictorFilter, NERFactory
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from nemo_safe_synthesizer.pii_replacer.ner.pipeline import Pipeline
+from ...observability import get_logger
+from ..ner import ner_mp
+from ..ner.factory import LabelSetPredictorFilter, NERFactory
+from ..ner.ner import NERPrediction
+from ..ner.pipeline import Pipeline
 
 logger = get_logger(__name__)
 

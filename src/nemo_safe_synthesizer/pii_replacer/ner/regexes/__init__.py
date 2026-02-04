@@ -3,7 +3,7 @@
 
 from typing import Sequence, Type
 
-from nemo_safe_synthesizer.pii_replacer.ner.regex import RegexPredictor
+from ..regex import RegexPredictor
 
 # TODO: are relative imports acceptable in nmp repo?
 from .aba_routing_number import AbaRoutingNumber

@@ -5,12 +5,9 @@ from __future__ import annotations
 
 from functools import cached_property
 
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-    PrivacyGrade,
-)
+from ..components.component import Component
+from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
+from . import multi_modal_figures as figures
 
 
 class CompositeScore(Component):

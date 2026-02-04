@@ -5,26 +5,19 @@ from __future__ import annotations
 
 from functools import cached_property
 
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
 import pandas as pd
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
-    FieldType,
-)
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_field import (
-    EvaluationField,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
 from plotly.graph_objects import Figure
 from pydantic import BaseModel, Field
+
+from ...artifacts.analyzers.field_features import FieldType
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_field import EvaluationField
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...observability import get_logger
+from ...pii_replacer.transform_result import ColumnStatistics
+from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 

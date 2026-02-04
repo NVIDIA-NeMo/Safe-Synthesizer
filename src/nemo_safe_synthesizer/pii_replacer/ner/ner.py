@@ -14,16 +14,16 @@ from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
 from typing import TYPE_CHECKING, List, Optional, Set, Tuple, Union
 
-from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
-from nemo_safe_synthesizer.data_processing.records.value_path import (
+from ...data_processing.records.json_record import JSONRecord
+from ...data_processing.records.value_path import (
     ValuePath,
     value_path_to_json_path,
 )
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner.utils import InData, input_to_json_records
+from ...observability import get_logger
+from .utils import InData, input_to_json_records
 
 if TYPE_CHECKING:
-    from nemo_safe_synthesizer.pii_replacer.ner.pipeline import Pipeline
+    from .pipeline import Pipeline
 else:
     Pipeline = None
 

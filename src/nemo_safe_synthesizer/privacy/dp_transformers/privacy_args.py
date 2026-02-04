@@ -16,7 +16,7 @@ from opacus.accountants.utils import get_noise_multiplier as opacus_get_noise_mu
 from prv_accountant import Accountant as PRVAccountant
 from scipy import optimize
 
-from nemo_safe_synthesizer.observability import get_logger
+from ...observability import get_logger
 
 logger = get_logger()
 

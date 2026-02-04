@@ -5,28 +5,23 @@ from __future__ import annotations
 
 from functools import cached_property
 
-import nemo_safe_synthesizer.evaluation.components.multi_modal_figures as figures
 import numpy as np
 import pandas as pd
 from category_encoders.count import CountEncoder
-from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
+from pydantic import ConfigDict, Field
+
+from ...artifacts.analyzers.field_features import (
     FieldType,
     describe_field,
 )
-from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_field import (
-    EvaluationField,
-)
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import (
-    EvaluationScore,
-)
-from nemo_safe_synthesizer.evaluation.statistics import stats
-from nemo_safe_synthesizer.observability import get_logger
-from pydantic import ConfigDict, Field
+from ...config.parameters import SafeSynthesizerParameters
+from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_field import EvaluationField
+from ...evaluation.data_model.evaluation_score import EvaluationScore
+from ...evaluation.statistics import stats
+from ...observability import get_logger
+from . import multi_modal_figures as figures
 
 logger = get_logger(__name__)
 

@@ -8,14 +8,14 @@ from numbers import Number
 from pathlib import Path
 from typing import Dict, Iterator, List, Sequence, Type, Union
 
-import nemo_safe_synthesizer.pii_replacer.ner.person_name as person_name
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner.custom import get_predictors_from_yaml
-from nemo_safe_synthesizer.pii_replacer.ner.datetime import BirthDateTime, DateTime
-from nemo_safe_synthesizer.pii_replacer.ner.ner import NER
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import Predictor
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
-from nemo_safe_synthesizer.pii_replacer.ner.regexes import rules
+from ...observability import get_logger
+from . import person_name
+from .custom import get_predictors_from_yaml
+from .datetime import BirthDateTime, DateTime
+from .ner import NER
+from .predictor import Predictor
+from .regex import Pattern, RegexPredictor
+from .regexes import rules
 
 logger = get_logger(__name__)
 

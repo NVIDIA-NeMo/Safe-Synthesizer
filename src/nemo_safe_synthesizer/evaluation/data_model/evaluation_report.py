@@ -6,12 +6,13 @@ import json
 import re
 from functools import cached_property
 
-from nemo_safe_synthesizer.evaluation.components.component import Component
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import (
+from pydantic import BaseModel, Field
+
+from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_dataset import (
     EvaluationDataset,
 )
-from nemo_safe_synthesizer.observability import get_logger
-from pydantic import BaseModel, Field
+from ...observability import get_logger
 
 logger = get_logger(__name__)
 

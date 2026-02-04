@@ -4,9 +4,9 @@
 
 import re
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
-from nemo_safe_synthesizer.pii_replacer.ner.regexes.iban import regex_per_country
+from ..entity import Entity
+from ..regex import Pattern, RegexPredictor
+from .iban import regex_per_country
 
 # NOTE that https://docs.microsoft.com/en-us/exchange/policy-and-compliance/data-loss-prevention/sensitive-information-types?view=exchserver-2019#swift-code  # noqa
 # and https://en.wikipedia.org/wiki/ISO_9362 specify different specs.  Using ISO_9362 spec.

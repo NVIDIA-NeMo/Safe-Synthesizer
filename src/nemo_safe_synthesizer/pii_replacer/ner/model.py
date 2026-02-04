@@ -7,11 +7,11 @@
 import re
 from typing import Pattern, Tuple
 
-import nemo_safe_synthesizer.pii_replacer.ner.ner as ner
-import nemo_safe_synthesizer.pii_replacer.ner.pipeline as pipeline
-import nemo_safe_synthesizer.pii_replacer.ner.regex as regex
-from nemo_safe_synthesizer.data_processing.records.fragment import create_ner_api_response
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Score
+from ...data_processing.records.fragment import create_ner_api_response
+from ...pii_replacer.ner.entity import Score
+from ...pii_replacer.ner.ner import ner
+from ...pii_replacer.ner.pipeline import pipeline
+from ...pii_replacer.ner.regex import regex
 
 InputData = str | dict | list[str] | list[dict]
 

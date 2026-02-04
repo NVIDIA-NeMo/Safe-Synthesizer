@@ -8,8 +8,8 @@ Detection for Slack webhooks and tokens
 We set both score values to 1.0 here because these are such precise matches.
 """
 
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Entity, Score
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern, RegexPredictor
+from ..entity import Entity, Score
+from ..regex import Pattern, RegexPredictor
 
 
 class SlackSecrets(RegexPredictor):

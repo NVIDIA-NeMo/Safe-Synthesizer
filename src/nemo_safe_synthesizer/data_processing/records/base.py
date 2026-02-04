@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from numbers import Number
 from typing import Iterable, List, Union
 
-from nemo_safe_synthesizer.data_processing.records.value_path import (
+from .value_path import (
     ValuePath,
     value_path_to_json_path,
 )

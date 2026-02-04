@@ -28,8 +28,6 @@ from transformers import (
 )
 from transformers.trainer_pt_utils import get_model_param_count
 
-from nemo_safe_synthesizer.utils import write_json
-
 from .. import utils
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
@@ -63,6 +61,7 @@ from ..training.callbacks import (
     ProgressBarCallback,
     SafeSynthesizerWorkerCallback,
 )
+from ..utils import write_json
 
 logger = get_logger(__name__)
 

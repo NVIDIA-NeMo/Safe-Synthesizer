@@ -11,8 +11,8 @@ of automatic processing and field-level tracking done
 from itertools import chain, starmap
 from typing import Optional, Tuple
 
-import nemo_safe_synthesizer.data_processing.records.base as base
-from nemo_safe_synthesizer.data_processing.records.value_path import (
+from . import base
+from .value_path import (
     value_path,
     value_path_to_field_name,
 )

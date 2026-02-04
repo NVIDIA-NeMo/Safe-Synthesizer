@@ -22,10 +22,15 @@ from typing import (
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+)
 from typing_extensions import Self
 
-from nemo_safe_synthesizer.data_processing.actions.dates import parse_date
+from .dates import parse_date
 
 T = TypeVar("T")
 
@@ -86,14 +91,14 @@ class TransformsUtil:
     """
 
     def __init__(self, seed: Optional[int] = None) -> None:
-        from nemo_safe_synthesizer.pii_replacer.data_editor.edit import (
+        from ...pii_replacer.data_editor.edit import (
             Environment,
         )
 
         self.env = Environment(locales=None, seed=seed, globals_config={}, entity_extractor=None)
 
     def execute_col_updates(self, col: str, df: pd.DataFrame, updates: list[str]) -> pd.DataFrame:
-        from nemo_safe_synthesizer.pii_replacer.data_editor.edit import (
+        from ...pii_replacer.data_editor.edit import (
             ProgressLog,
             Step,
         )
@@ -111,7 +116,7 @@ class TransformsUtil:
         return Step.execute(df, {}, {}, step, self.env, ProgressLog(30), None)
 
     def execute_updates(self, df: pd.DataFrame, updates: list[TransformsUpdate]) -> pd.DataFrame:
-        from nemo_safe_synthesizer.pii_replacer.data_editor.edit import (
+        from ...pii_replacer.data_editor.edit import (
             ProgressLog,
             Step,
         )
@@ -133,7 +138,7 @@ class TransformsUtil:
         return Step.execute(df, {}, {}, step, self.env, ProgressLog(30), None)
 
     def execute_drop_condition(self, batch: pd.DataFrame, conditions: list) -> pd.DataFrame:
-        from nemo_safe_synthesizer.pii_replacer.data_editor.edit import (
+        from ...pii_replacer.data_editor.edit import (
             ProgressLog,
             Step,
         )

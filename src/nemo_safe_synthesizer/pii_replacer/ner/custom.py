@@ -34,11 +34,11 @@ from typing import List, Optional, Union
 
 import yaml
 
-from nemo_safe_synthesizer.observability import get_logger
-from nemo_safe_synthesizer.pii_replacer.ner.entity import Score
-from nemo_safe_synthesizer.pii_replacer.ner.predictor import Predictor
-from nemo_safe_synthesizer.pii_replacer.ner.regex import Pattern as RegexPattern
-from nemo_safe_synthesizer.pii_replacer.ner.regex import PhraseMatcherBuilder, RegexPredictor
+from ...observability import get_logger
+from .entity import Score
+from .predictor import Predictor
+from .regex import Pattern as RegexPattern
+from .regex import PhraseMatcherBuilder, RegexPredictor
 
 logger = get_logger(__name__)
 
