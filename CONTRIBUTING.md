@@ -98,6 +98,7 @@ All commits merged to `main` must follow the [Conventional Commits](https://www.
 or without scope:
 
 ```.text
+
 <type>: <description>
 ```
 
