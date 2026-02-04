@@ -118,7 +118,7 @@ ifeq ($(NMP_REPO_PATH),)
 	@echo "NMP_REPO_PATH is the root path of the nmp package"
 	@exit 1
 endif
-	rsync -av --delete \
+	rsync -av \
 	--exclude='.git' \
 		--exclude='.github' \
 		--exclude='.vscode' \
@@ -161,7 +161,7 @@ ifeq ($(NMP_REPO_PATH),)
 	@exit 1
 endif
 	# this is annoying but it will work for now. we can remove as soon as we fully migrate. 
-	rsync -av --delete \
+	rsync -av \
 		--exclude='.git' \
 		--exclude='.github' \
 		--exclude='.vscode' \
