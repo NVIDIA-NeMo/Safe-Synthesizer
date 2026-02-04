@@ -50,6 +50,7 @@ dev = [
   "types-click",
   "types-colorama>=0.4.6",
   "prek>=0.3.1",
+  "packaging>=26.0.0",
 ]
 
 [project.optional-dependencies]
@@ -170,7 +171,7 @@ override-dependencies = [
     "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
     "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
     "ray; sys_platform == 'never'",                       # ray has an unfixed critical CVE, as for why we're removing it this way see https://github.com/astral-sh/uv/issues/9174
-    "langchain-core>=0.3.80,<1.0.0",                      # CVE in versions <=0.3.79: https://nvd.nist.gov/vuln/detail/CVE-2025-65106
+    "langchain-core>=1.2.8",                      # CVE in versions <=0.3.79: https://nvd.nist.gov/vuln/detail/CVE-2025-65106
 ]
 environments = [
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
