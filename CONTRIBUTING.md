@@ -97,7 +97,7 @@ All commits merged to `main` must follow the [Conventional Commits](https://www.
 
 or without scope:
 
-```
+```.text
 <type>: <description>
 ```
 
@@ -111,7 +111,7 @@ Rules:
 Valid types:
 
 | Type | Description |
-|------|-------------|
+| ------ | ------------- |
 | `feat` | New feature |
 | `fix` | Bug fix |
 | `docs` | Documentation changes |
@@ -127,7 +127,7 @@ Valid types:
 Examples:
 
 | Commit Message | Valid |
-|----------------|-------|
+| ---------------- | ------- |
 | `feat: add user authentication` | ✅ |
 | `fix(auth): resolve token expiration bug` | ✅ |
 | `docs: update API documentation` | ✅ |
@@ -136,13 +136,13 @@ Examples:
 | `fix - resolve bug` | ❌ Wrong format |
 | `FIX: resolve bug` | ❌ Type must be lowercase |
 
-> **Note:** Since we use squash merging, your PR title should follow this format as it becomes the commit message.
+> Since we use squash merging, your PR title should follow this format as it becomes the commit message.
 
 ### Semantic Versioning for Tags
 
 Release tags must follow [Semantic Versioning](https://semver.org/):
 
-```
+```.text
 MAJOR.MINOR.PATCH[-prerelease][+build]
 ```
 
@@ -234,7 +234,7 @@ git commit -s -m "feat: add new feature"
 
 This adds a line like:
 
-```
+```text
 Signed-off-by: Your Name <your.email@example.com>
 ```
 
@@ -275,19 +275,21 @@ Before submitting a PR:
 
 ### Linting
 
-We use [Ruff](https://docs.astral.sh/ruff/) for linting and formatting:
+We use [Ruff](https://docs.astral.sh/ruff/) for linting and formatting.
 
 ```bash
 # Check for issues
-make lint
-
-# Auto-fix issues
-make lint-fix
+make format
 ```
 
 ### Type Checking
 
 We use type hints throughout the codebase and use Ty for checking.
+
+```.bash
+# Auto-fix issues
+make lint
+```
 
 
 ### Pre-commit Hooks
@@ -295,7 +297,7 @@ We use type hints throughout the codebase and use Ty for checking.
 Consider setting up pre-commit hooks to catch issues early:
 
 ```bash
-pre-commit install
+prek install
 ```
 
 ---
