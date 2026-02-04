@@ -8,11 +8,12 @@ NSS_ROOT_PATH := $(shell pwd)
 PYTEST_ADDOPTS := -c $(NSS_ROOT_PATH)/pytest.ini -n auto --dist loadscope --maxprocesses=8 -vv
 PYTEST_CI_OPTS := --cov --cov-report json:coverage.json --cov-report xml:coverage.xml
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
+PYTORCH_DEPS ?= cpu
 
 # Normalize architecture names
 ifeq ($(ARCH),x86_64)
 	ARCH := amd64
-	EXTRA := cu128
+	PYTORCH_DEPS := cu128
 	export BUILD_ARCH ?= linux/amd64
 endif
 ifeq ($(ARCH),aarch64)
@@ -22,7 +23,6 @@ ifeq ($(ARCH),arm64)
 	export BUILD_ARCH ?= linux/arm64
 endif
 # CLI configurable environment variable for Python extras (defaults to cpu)
-PYTORCH_DEPS ?= cpu
 
 # Display platform info
 $(info local system architecture: $(PLATFORM)/$(ARCH))
@@ -64,11 +64,11 @@ bootstrap-python: .venv ## Bootstrap Python dependencies with optional Pytorch c
 	@echo "installing python dependencies ${PYTORCH_DEPS} version of torch"
 	@echo "cpu/cuda version is set with the env variable 'PYTORCH_DEPS=cpu|cu128'"
 	@echo "PYTORCH_DEPS=cu128 make bootstrap-python"
-	uv sync --frozen --extra ${PYTORCH_DEPS} --all-groups --group dev --extra engine
+	uv sync --frozen --extra ${PYTORCH_DEPS} --extra engine --group dev
 
 .PHONY: format
 format: ## Format the code
-	uv run --frozen ruff format  && uv run --frozen ruff check --select I --fix  && uv run --frozen ruff check .
+	uv run --frozen ruff format  && uv run --frozen ruff check --select I --fix
 
 .PHONY: lint
 lint: ## Lint the code
@@ -77,7 +77,7 @@ lint: ## Lint the code
 
 .PHONY: install-safe-synthesizer
 install-safe-synthesizer: ## Install the safe-synthesizer package into the sdk
-	cd ${NMP_ROOT_PATH} && uv sync --frozen --package nemo-safe-synthesizer --extra cu128 --dev --extra engine
+	cd ${NSS_ROOT_PATH} && uv sync --frozen --package nemo-safe-synthesizer --extra cu128 --dev --extra engine
 
 
 test-sdk-related: install-safe-synthesizer ## Run all pytest tests
@@ -111,11 +111,11 @@ synchronize-to-nmp: ## Synchronize the nemo_safe_synthesizer package with the nm
 	@echo "~~~~~~"
 	@echo "synchronizing the nemo_safe_synthesizer package with the nmp package"
 
-ifeq ($(NMP_ROOT_PATH),)
+ifeq ($(NMP_REPO_PATH),)
 	@echo "~~~~~~"
-	@echo "NMP_ROOT_PATH is not set"
-	@echo "please set the NMP_ROOT_PATH environment variable"
-	@echo "NMP_ROOT_PATH is the root path of the nmp package"
+	@echo "NMP_REPO_PATH is not set"
+	@echo "please set the NMP_REPO_PATH environment variable"
+	@echo "NMP_REPO_PATH is the root path of the nmp package"
 	@exit 1
 endif
 	rsync -av --delete \
@@ -146,18 +146,18 @@ endif
 		--exclude='ruff.toml' \
 		--exclude='.pre-commit-config.yaml' \
 		--exclude='.markdownlint.json' \
-		$(NSS_ROOT_PATH)/ $(NMP_ROOT_PATH)/packages/nemo_safe_synthesizer/
+		$(NSS_ROOT_PATH)/ $(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/
 
 
 synchronize-from-nmp: ## Synchronize the nemo_safe_synthesizer package with the nmp package
 	@echo "~~~~~~"
 	@echo "synchronizing the nss package with the nmp package"
 
-ifeq ($(NMP_ROOT_PATH),)
+ifeq ($(NMP_REPO_PATH),)
 	@echo "~~~~~~"
-	@echo "NMP_ROOT_PATH is not set"
-	@echo "please set the NMP_ROOT_PATH environment variable"
-	@echo "NMP_ROOT_PATH is the root path of the nmp package"
+	@echo "NMP_REPO_PATH is not set"
+	@echo "please set the NMP_REPO_PATH environment variable"
+	@echo "NMP_REPO_PATH is the root path of the nmp package"
 	@exit 1
 endif
 	rsync -av --delete \
@@ -188,4 +188,4 @@ endif
 		--exclude='ruff.toml' \
 		--exclude='.pre-commit-config.yaml' \
 		--exclude='.markdownlint.json' \
-		$(NMP_ROOT_PATH)/packages/nemo_safe_synthesizer/ $(NSS_ROOT_PATH)/
+		$(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/ $(NSS_ROOT_PATH)/
