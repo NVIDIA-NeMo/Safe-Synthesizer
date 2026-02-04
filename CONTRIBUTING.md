@@ -291,7 +291,6 @@ We use type hints throughout the codebase and use Ty for checking.
 make lint
 ```
 
-
 ### Pre-commit Hooks
 
 Consider setting up pre-commit hooks to catch issues early:
