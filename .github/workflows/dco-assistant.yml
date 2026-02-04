@@ -30,35 +30,20 @@ jobs:
     if: github.repository_owner == 'NVIDIA-NeMo'
     runs-on: ubuntu-latest
     steps:
-      - name: DCO Assistant
-        uses: contributor-assistant/github-action@v2.6.1
+      - name: "DCO Assistant"
+        if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the Contributor Agreement including DCO and I hereby sign the Contributor Agreement and DCO') || github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.DCO_ASSISTANT_TOKEN }}
         with:
-          # Path to store DCO signatures
           path-to-signatures: "dco-signatures.json"
-          # Branch to store signatures
+          path-to-document: "https://github.com/NVIDIA-NeMo/safe-synthesizer/blob/main/DCO"
           branch: "signatures"
-          # Users/bots that can bypass DCO
-          allowlist: dependabot[bot],github-actions[bot]
-          # Custom message for unsigned commits
-          custom-notsigned-prcomment: |
-            Thank you for your contribution! Before we can merge this PR, we need you to sign the Developer Certificate of Origin (DCO).
-
-            To sign, please add a "Signed-off-by" line to your commit messages:
-            ```
-            Signed-off-by: Your Name <your.email@example.com>
-            ```
-
-            You can do this by:
-            1. Amending your commits: `git commit --amend -s`
-            2. Or by commenting on this PR with: `I have read the DCO Document and I hereby sign the DCO`
-
-            For more information, see our [DCO documentation](DCO).
-          # Custom message for signed commits
-          custom-allsigned-prcomment: |
-            All commits are signed! Thank you for signing the DCO.
-          # Allow re-checking DCO status
-          allowRecheck: true
-          # Command to trigger recheck
-          recheckCommand: "recheck"
+          allowlist: dependabot
+          create-file-commit-message: "chore: create file to store dco signatures"
+          signed-commit-message: "chore: $contributorName has signed the dco in #$pullRequestNo"
+          custom-notsigned-prcomment: "Thank you for your submission! We ask that $you sign our [Developer Certificate of Origin](https://github.com/NVIDIA-NeMo/safe-synthesizer/blob/main/DCO) before we can accept your contribution. You can sign the DCO by adding a comment below using this text:"
+          custom-pr-sign-comment: "I have read the DCO document and I hereby sign the DCO."
+          lock-pullrequest-aftermerge: false
+          use-dco-flag: true

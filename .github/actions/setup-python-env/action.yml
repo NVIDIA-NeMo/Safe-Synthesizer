@@ -1,0 +1,69 @@
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Setup Python Environment"
+description: "Common setup for Python projects: checkout, uv, Python, and dependencies"
+
+inputs:
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+  fetch-depth:
+    description: "Number of commits to fetch (0 for all history)"
+    required: false
+    default: "1"
+  bootstrap-tools:
+    description: "Whether to run make bootstrap-tools"
+    required: false
+    default: "true"
+
+outputs:
+  merge-base:
+    description: "The merge base SHA (only available when fetch-depth is 0)"
+    value: ${{ steps.get_merge_base.outputs.merge_base }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+
+    - name: Get the merge base SHA
+      id: get_merge_base
+      if: inputs.fetch-depth == '0'
+      shell: bash
+      run: |
+        # Use git merge-base to find the common ancestor
+        MERGE_BASE_SHA=$(git merge-base origin/${{ github.base_ref }} ${{ github.sha }})
+        echo "Merge Base SHA: $MERGE_BASE_SHA"
+        # Set the merge base as a step output for use in subsequent steps
+        echo "merge_base=$MERGE_BASE_SHA" >> $GITHUB_OUTPUT
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        version: "0.9.14"
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install tools
+      if: inputs.bootstrap-tools == 'true'
+      shell: bash
+      run: make bootstrap-tools-ci

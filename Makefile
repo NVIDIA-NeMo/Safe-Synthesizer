@@ -28,6 +28,7 @@ endif
 $(info local system architecture: $(PLATFORM)/$(ARCH))
 
 
+.PHONY: help
 help:
     # taken from https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 	@echo "Makefile commands:"
@@ -39,6 +40,11 @@ bootstrap-tools: ## Bootstrap tools
 	bash tools/binaries/bootstrap_tools.sh
 	@echo "tools bootstrapped successfully"
 
+
+.PHONY: bootstrap-tools-ci
+bootstrap-tools-ci: ## Bootstrap tools for CI
+	bash tools/binaries/bootstrap_tools.sh --bootstrap-only
+
 .PHONY: install-uv
 install-uv: ## Install uv tool
 	bash tools/install_uv.sh
@@ -48,66 +54,84 @@ install-uv: ## Install uv tool
 clean-python: ## remove python virtual environment
 	rm -rf .venv/
 
+.PHONY: verify-python-version
 verify-python-version: ## Verify Python version and install if necessary
-	@echo "~~~~~~"
-	@echo "verifying python version"
-	uv python find 3.11 || uv python install 3.11
+	@uv python find 3.11 || uv python install 3.11
 
 .venv: verify-python-version ## Create a Python virtual environment
-	@echo "~~~"
-	@echo "setting up a venv wit uv"
 	uv venv --seed --allow-existing
 
 .PHONY: bootstrap-python
 bootstrap-python: .venv ## Bootstrap Python dependencies with optional Pytorch cuda/cpu version. set PYTORCH_DEPS to 'cpu|cu128'.
-	@echo "~~~~~~"
-	@echo "installing python dependencies ${PYTORCH_DEPS} version of torch"
-	@echo "cpu/cuda version is set with the env variable 'PYTORCH_DEPS=cpu|cu128'"
-	@echo "PYTORCH_DEPS=cu128 make bootstrap-python"
+	# @echo "~~~~~~"
+	# @echo "installing python dependencies ${PYTORCH_DEPS} version of torch"
+	# @echo "cpu/cuda version is set with the env variable 'PYTORCH_DEPS=cpu|cu128'"
+	# @echo "PYTORCH_DEPS=cu128 make bootstrap-python"
+	# uv sync --frozen --extra ${PYTORCH_DEPS} --extra engine --group dev
 	uv sync --frozen --extra ${PYTORCH_DEPS} --extra engine --group dev
+
+
+# Dynamic targets for bootstrap-nss
+# Usage: make bootstrap-nss {dev,engine,cpu,cuda}
+BOOTSTRAP_EXTRAS := dev engine cpu cuda
+$(BOOTSTRAP_EXTRAS):
+	@:
+
+.PHONY: bootstrap-nss
+bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss {dev,engine,cpu,cuda}
+	$(eval EXTRA := $(filter-out $@, $(MAKECMDGOALS)))
+	@echo "~~~~~~"
+	@echo "attempting to install nss package with primary extra: $(EXTRA)"
+	@if [ "$(EXTRA)" = "cuda" ]; then \
+		uv sync --frozen --extra cu128 --extra engine --group dev; \
+	elif [ "$(EXTRA)" = "cpu" ]; then \
+		uv sync --frozen --extra cpu --extra engine --group dev; \
+	elif [ "$(EXTRA)" = "engine" ]; then \
+		uv sync --frozen --extra engine --group dev; \
+	elif [ "$(EXTRA)" = "dev" ]; then \
+		uv sync --frozen --group dev; \
+	else \
+		echo "Error: Invalid extra '$(EXTRA)'. Use one of: $(BOOTSTRAP_EXTRAS)"; \
+		exit 1; \
+	fi
 
 .PHONY: format
 format: ## Format the code
-	uv run --frozen ruff format  && uv run --frozen ruff check --select I --fix
+	bash tools/format/format.sh
 
 .PHONY: lint
 lint: ## Lint the code
-	uv run --frozen ruff check .
+	bash tools/lint/ruff-lint.sh
 	bash tools/lint/run-ty-check.sh
 
-.PHONY: install-safe-synthesizer
-install-safe-synthesizer: ## Install the safe-synthesizer package into the sdk
-	cd ${NSS_ROOT_PATH} && uv sync --frozen --extra ${PYTORCH_DEPS} --dev --extra engine
-
-
-test-sdk-related: install-safe-synthesizer ## Run all pytest tests
+.PHONY: test-sdk-related
+test-sdk-related: ## Run all pytest tests
 		$(PYTEST_CMD) \
 		$(NSS_ROOT_PATH)/tests/config  \
 		$(NSS_ROOT_PATH)/tests/sdk  \
 		$(NSS_ROOT_PATH)/tests/cli  \
 		$(NSS_ROOT_PATH)/tests/api
 
-test: bootstrap-python ## Run all pytest tests for the nemo_safe_synthesizer package
+.PHONY: test
+test: ## Run all pytest tests for the nemo_safe_synthesizer package
 	$(PYTEST_CMD) -m "not e2e"
 
-test-slow: install-safe-synthesizer ## Run all pytest tests for the nemo_safe_synthesizer package
+.PHONY: test-slow
+test-slow: ## Run all pytest tests for the nemo_safe_synthesizer package
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
 
-test-ci: install-safe-synthesizer ## Run all pytest tests for the nemo_safe_synthesizer package in CI
+.PHONY: test-ci
+test-ci: ## Run all pytest tests for the nemo_safe_synthesizer package in CI
 	pushd $(NSS_ROOT_PATH) && \
-	uv sync --extra cu128 --dev && \
 	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e"
 
 # please modify these based on updating the e2e tests for nmp ci
-test-e2e: install-safe-synthesizer ## Run all e2e tests for the nemo_safe_synthesizer package (requires cuda)
+.PHONY: test-e2e
+test-e2e: ## Run all e2e tests for the nemo_safe_synthesizer package (requires cuda)
 	pushd $(NSS_ROOT_PATH) && \
-	uv sync --extra cu128 --dev  && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k default && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k dp
-
-
-
 
 
 RSYNC_EXCLUDES := 

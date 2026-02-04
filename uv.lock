@@ -1408,18 +1408,6 @@ wheels = [
 ]
 
 [[package]]
-name = "flash-attn"
-version = "2.8.3+cu128.nss.pytorch29"
-source = { registry = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple" }
-dependencies = [
-    { name = "einops", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "torch", version = "2.9.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-]
-wheels = [
-    { url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/flash-attn/2.8.3+cu128.nss.pytorch29/flash_attn-2.8.3+cu128.nss.pytorch29-cp311-cp311-linux_x86_64.whl", hash = "sha256:e1520c3ae3004cbe702503c4fffa75e220ea0412d3d7b51b57e89e4f734dfc29" },
-]
-
-[[package]]
 name = "flashinfer-cubin"
 version = "0.5.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2915,7 +2903,6 @@ cu128 = [
     { name = "bitsandbytes", version = "0.42.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine != 'arm64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "bitsandbytes", version = "0.46.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "faiss-gpu-cu12", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "flash-attn", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-cubin", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-python", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "gliner", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -3002,7 +2989,6 @@ requires-dist = [
     { name = "faiss-gpu-cu12", marker = "sys_platform == 'linux' and extra == 'cu128'", specifier = "==1.9.0" },
     { name = "faker", specifier = ">=20.0" },
     { name = "faker", marker = "extra == 'engine'" },
-    { name = "flash-attn", marker = "sys_platform == 'linux' and extra == 'cu128'", specifier = "==2.8.3+cu128.nss.pytorch29", index = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple", conflict = { package = "nemo-safe-synthesizer", extra = "cu128" } },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu128'", specifier = "==0.5.3", index = "https://flashinfer.ai/whl/cu128", conflict = { package = "nemo-safe-synthesizer", extra = "cu128" } },
     { name = "flashinfer-python", marker = "sys_platform != 'darwin' and extra == 'cpu'", specifier = "==0.5.3" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu128'", specifier = "==0.5.3", index = "https://flashinfer.ai/whl/cu128", conflict = { package = "nemo-safe-synthesizer", extra = "cu128" } },

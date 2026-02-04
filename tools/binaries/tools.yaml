@@ -35,6 +35,32 @@ tools:
     url: "https://github.com/mikefarah/yq/releases/download/{version}/yq_{os}_{arch}"
     bootstrap: true
 
+  ruff:
+    version: "0.15.0"
+    check_command: "ruff --version"
+    url: "https://github.com/astral-sh/ruff/releases/download/{version}/ruff-{arch}-{os}.tar.gz"
+    extract: "ruff-{arch}-{os}/ruff"
+    os_map:
+      darwin: "apple-darwin"
+      linux: "unknown-linux-gnu"
+    arch_map:
+      arm64: "aarch64"
+      amd64: "x86_64"
+    bootstrap: true
+
+  ty:
+    version: "0.0.1-alpha.21"
+    check_command: "ty --version"
+    url: "https://github.com/astral-sh/ty/releases/download/{version}/ty-{arch}-{os}.tar.gz"
+    extract: "ty-{arch}-{os}/ty"
+    os_map:
+      darwin: "apple-darwin"
+      linux: "unknown-linux-gnu"
+    arch_map:
+      arm64: "aarch64"
+      amd64: "x86_64"
+    bootstrap: true
+
 # Tools with custom install scripts (complex logic)
 custom_scripts:
   - name: direnv

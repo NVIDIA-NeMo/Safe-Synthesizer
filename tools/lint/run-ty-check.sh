@@ -2,7 +2,17 @@
 set -e
 
 # Get the list of changed Python files
-files=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.py$' || true)
+MERGE_BASE_SHA="${1:-}"
+
+if [ -z "$MERGE_BASE_SHA" ]; then
+    if git branch -l | grep "main" > /dev/null; then
+        MERGE_BASE_SHA="main"
+    else
+        echo "Merge Base SHA is required"
+        exit 1
+    fi
+fi
+files=$(git diff "$MERGE_BASE_SHA" --cached --name-only --diff-filter=ACMR | grep '\.py$' || true)
 
 if [ -z "$files" ]; then
 	echo "No Python files to check"
@@ -18,5 +28,12 @@ if [ -z "$filtered_files" ]; then
 fi
 
 # Run ty check on the filtered files
+if ! which ty > /dev/null; then
+    echo "ty not found"
+    TY="uvx ty"
+else
+    TY="ty"
+fi
+
 # shellcheck disable=SC2086
-uv run ty check $filtered_files # no quotes around $filtered_files to preserve newlines
+$TY check $filtered_files # no quotes around $filtered_files to preserve newlines
