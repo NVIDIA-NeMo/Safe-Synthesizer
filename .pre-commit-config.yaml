@@ -3,15 +3,18 @@ default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.12.0
+    rev: v0.15.0
     hooks:
-      # Run the linter.
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
+        exclude: ".*\\.ipynb$"
+      - id: ruff-check
+        args: [--select I, --fix]
         exclude: ".*\\.ipynb$"
       # Run the formatter.
       - id: ruff-format
         exclude: ".*\\.ipynb$"
+
   - repo: local
     hooks:
       - id: ty
@@ -20,7 +23,6 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
-  
 
   - repo: local
     hooks:
@@ -45,5 +47,3 @@ repos:
       - id: check-merge-conflict
         args:
           - --assume-in-merge
-
-  

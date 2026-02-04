@@ -1,0 +1,44 @@
+# Tool definitions for bootstrap_tools.sh
+# Supported platforms: darwin (arm64, amd64), linux (arm64, amd64)
+#
+# URL placeholders:
+#   {version} - tool version
+#   {os}      - operating system (darwin, linux) - can be remapped via os_map
+#   {arch}    - architecture (amd64, arm64) - can be remapped via arch_map
+
+tools:
+  jq:
+    version: "1.8.1"
+    check_command: "jq --version"
+    url: "https://github.com/jqlang/jq/releases/download/jq-{version}/jq-{os}-{arch}"
+    os_map:
+      darwin: "macos"
+
+  osv-scanner:
+    version: "v2.2.3"
+    check_command: "osv-scanner --version"
+    url: "https://github.com/google/osv-scanner/releases/download/{version}/osv-scanner_{os}_{arch}"
+
+  buildctl:
+    version: "0.27.1"
+    check_command: "buildctl --version"
+    url: "https://github.com/moby/buildkit/releases/download/v{version}/buildkit-v{version}.{os}-{arch}.tar.gz"
+    extract: "bin/buildctl"
+    darwin_brew: "buildkit"
+    post_install: |
+      echo "To use buildkit, create a builder:"
+      echo "  docker buildx create --bootstrap --use --name local-docker"
+
+  yq:
+    version: "v4.44.1"
+    check_command: "yq --version"
+    url: "https://github.com/mikefarah/yq/releases/download/{version}/yq_{os}_{arch}"
+    bootstrap: true
+
+# Tools with custom install scripts (complex logic)
+custom_scripts:
+  - name: direnv
+    script: install_direnv.sh
+  - name: uv
+    script: install_uv.sh
+    bootstrap: true

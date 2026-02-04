@@ -16,23 +16,24 @@ test_tools_linux() {
         --rm \
         --interactive \
         --name test_tool_install \
-        --volume $REPO_ROOT:/nmp \
-        -e SETUP_KUBE_AUTH=false \
+        --volume $REPO_ROOT:/safe-synthesizer \
         -e DEBIAN_FRONTEND=noninteractive \
         --platform linux/amd64 \
         $test_image \
         bash -c "
             apt-get update &&
             apt-get install -y git curl build-essential &&
-            git config --global --add safe.directory /nmp &&
-            cd /nmp &&
+            git config --global --add safe.directory /safe-synthesizer &&
+            cd /safe-synthesizer &&
             make bootstrap-tools &&
-            export KREW_ROOT=\$HOME/.krew &&
-            export PATH=\${KREW_ROOT}/bin:\$HOME/.local/bin:\${PATH:+\${PATH}:} &&
-            kubectl krew version &&
-            uv --version &&
+            export PATH=\$HOME/.local/bin:\${PATH:+\${PATH}:} &&
+            echo '=== Verifying installed tools ===' &&
+            yq --version &&
             jq --version &&
-            k9s version
+            osv-scanner --version &&
+            buildctl --version &&
+            direnv --version &&
+            uv --version
             " || {
         echo "Failed to test tool installation"
         exit 1
