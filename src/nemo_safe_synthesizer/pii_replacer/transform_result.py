@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ColumnStatistics(BaseModel):
@@ -12,13 +12,13 @@ class ColumnStatistics(BaseModel):
     """Type assigned to the column, usually from column classification."""
     assigned_entity: str | None
     """Entity assigned to the column, usually from column classification."""
-    detected_entity_counts: dict[str, int]
+    detected_entity_counts: dict[str, int] = Field(default_factory=dict)
     """Dictionary of entity to count of how many times NER detected it in the column."""
-    detected_entity_values: dict[str, set]
+    detected_entity_values: dict[str, set] = Field(default_factory=dict)
     """Dictionary of entity to set of detected values."""
-    is_transformed: bool
+    is_transformed: bool = False
     """Whether the column was transformed."""
-    transform_functions: set[str]
+    transform_functions: set[str] = Field(default_factory=set)
     """Functions that were used to transform the column."""
 
 

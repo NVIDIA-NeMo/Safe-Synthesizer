@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import cached_property
-from typing import Union
+from typing import Any, Union
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,11 @@ class FieldFeatures(BaseModel):
     count: int
     """
     Number of non-empty values.
+    """
+
+    unique_values_list: list[Any]
+    """
+    List of unique values.
     """
 
     unique_count: int

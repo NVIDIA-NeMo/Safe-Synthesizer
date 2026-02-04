@@ -4,9 +4,11 @@
 import logging
 import os
 import time
+from typing import Any
 
 import pandas as pd
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 from ..artifacts.analyzers.field_features import describe_field
 from ..artifacts.base.fields import FieldType
@@ -24,6 +26,25 @@ from .data_editor.detect import (
     EntityExtractorRegexp,
     NerReport,
 )
+
+
+class ColumnClassification(BaseModel):
+    """classification info and detected entities in a column prior to transform. entity_count is None and entity_values an empty list if entity is None for non-text fields."""
+
+    field_name: str
+    """The name of the field/column."""
+
+    column_type: str | None
+    """The detected column type (e.g., 'text', 'numeric', etc.)."""
+
+    entity: str | None
+    """The detected entity type (e.g., 'email', 'phone', etc.), or None if no entity detected."""
+
+    entity_count: int | None = None
+    """Number of non-empty values in this field. None if no entity detected."""
+
+    entity_values: list[Any] = Field(default_factory=list)
+    """List of all unique values for this field. Empty list if no entity detected."""
 
 
 def classify_config_from_params(
@@ -120,31 +141,44 @@ ACCOUNTING_FUNCTIONS = [
 
 
 def _build_column_statistics(
-    classifications: dict | dict[str, dict[str, str]],
+    classifications: list[ColumnClassification],
     transform_fn_accounting: TransformFnAccounting,
     column_report: NerReport,
 ) -> dict[str, ColumnStatistics]:
     """Build statistics for each column from various objects used by Editor."""
 
-    columns = set(transform_fn_accounting.column_fns.keys()) | set(column_report.keys())
+    result = {}
+    for field in classifications:
+        column_name = field.field_name
 
-    return {
-        column_name: ColumnStatistics(
-            assigned_type=classifications["columns"].get(column_name, None),
-            assigned_entity=classifications["entities"].get(column_name, None),
-            detected_entity_counts={
-                entity_name: entity_report.count
-                for entity_name, entity_report in column_report.get(column_name, {}).items()
-            },
-            detected_entity_values={
-                entity_name: entity_report.values
-                for entity_name, entity_report in column_report.get(column_name, {}).items()
-            },
-            is_transformed=len(transform_fn_accounting.column_fns.get(column_name, set())) > 0,
-            transform_functions=transform_fn_accounting.column_fns.get(column_name, set()),
+        # Prepare entity detection data based on column type
+        # column_report only includes the entities detected in text columns.
+        # ColumnClassification object includes entities for non text fields.
+        detected_counts = {}
+        detected_values = {}
+        # Assigning detected_entity_counts and detected_entity_values only for text columns or fields with PII entities.
+        if field.column_type == "text":
+            column_entities = column_report.get(column_name, {})
+            for entity_name, entity_report in column_entities.items():
+                detected_counts[entity_name] = entity_report.count
+                detected_values[entity_name] = entity_report.values
+        elif field.entity is not None:
+            # Non-text column with detected entity
+            detected_counts[field.entity] = field.entity_count
+            detected_values[field.entity] = set(field.entity_values)
+
+        # Get transform functions for this column
+        transform_fns = transform_fn_accounting.column_fns.get(column_name, set())
+        # Create ColumnStatistics for this column and add to result
+        result[column_name] = ColumnStatistics(
+            assigned_type=field.column_type,
+            assigned_entity=field.entity,
+            detected_entity_counts=detected_counts,
+            detected_entity_values=detected_values,
+            is_transformed=bool(transform_fns),
+            transform_functions=transform_fns,
         )
-        for column_name in columns
-    }
+    return result
 
 
 class NemoPII(object):
@@ -154,7 +188,8 @@ class NemoPII(object):
 
     ```python
     nemo_pii = NemoPII()
-    result = nemo_pii.transform_df(df)
+    nemo_pii.transform_df(df)
+    result = nemo_pii.result
     print(result.transformed_df)
     print(result.column_statistics)
     ```
@@ -183,7 +218,7 @@ class NemoPII(object):
         self.editor = Editor(self.data_editor_config, self.entity_extractor)
         self.elapsed_time = 0.0
 
-    def classify_df(self, df: pd.DataFrame) -> dict[str, dict[str, str]]:
+    def classify_df(self, df: pd.DataFrame) -> list[ColumnClassification]:
         """Classify the columns of a dataframe.
 
         Identifies both a column type and entity name for each column.
@@ -192,10 +227,9 @@ class NemoPII(object):
             df: The dataframe to classify.
 
         Returns:
-            A dictionary with two keys: "columns" and "entities". The "columns"
-            key maps to a dictionary with column names as keys and detected
-            type as values. The "entities" key maps to a dictionary with column
-            names as keys and entity names as values.
+            A list of ColumnClassification objects containing classification info for each field,
+            including field name, column type, entity, entity counts, and a list of unique entity values.
+
         """
         # Pre-initialize with defaults
         entities = {}
@@ -235,18 +269,35 @@ class NemoPII(object):
             # Use field type detection to identify text columns if not already
             # assigned an entity. These text columns are where NER is used if
             # enabled during transform_df.
+            field_results = []
             fields = [describe_field(field_name, df[field_name]) for field_name in df.columns]
             for field in fields:
+                entity_count = field.count
+                entity_values = field.unique_values_list
+                entity = entities.get(field.name, None)
                 existing_type = columns.get(field.name, None)
-                if (existing_type is None or existing_type.lower() == "none") and field.type == FieldType.TEXT:
-                    columns[field.name] = "text"
+                # Determine column type
+                is_text_without_type = (
+                    existing_type is None or existing_type.lower() == "none"
+                ) and field.type == FieldType.TEXT
+                column_type = "text" if is_text_without_type else existing_type
 
-        return {
-            "columns": columns,
-            "entities": entities,
-        }
+                # Missing entities, are not expected to have entity_count and entity_values.
+                if entity is None:
+                    entity_count = None
+                    entity_values = []
+                field_results.append(
+                    ColumnClassification(
+                        field_name=field.name,
+                        column_type=column_type,
+                        entity=entity,  # currently this is None for text fields.
+                        entity_count=entity_count,
+                        entity_values=entity_values,
+                    )
+                )
+        return field_results
 
-    def transform_df(self, df: pd.DataFrame, classifications: dict | None = None) -> None:
+    def transform_df(self, df: pd.DataFrame, classifications: list[ColumnClassification] | None = None) -> None:
         """Transform the dataframe by replacing PII.
 
         Args:
@@ -255,19 +306,21 @@ class NemoPII(object):
                 provided, column classification will be performed.
 
         Returns:
-            A TransformResult object containing the transformed dataframe and column statistics.
+            None
         """
         pii_replacer_start = time.monotonic()
         try:
             if not classifications:
                 classifications = self.classify_df(df)
 
+            # Convert classification result to entities and column types dicts for editor
+            column_types_dict = {field.field_name: field.column_type for field in classifications}
+            entities_dict = {field.field_name: field.entity for field in classifications}
             transform_fn_accounting = TransformFnAccounting(ACCOUNTING_FUNCTIONS)
 
             transformed_df = self.editor.process_df(
-                df, classifications["entities"], classifications["columns"], fnreport=transform_fn_accounting
+                df, entities_dict, column_types_dict, fnreport=transform_fn_accounting
             )
-
             self.result = TransformResult(
                 transformed_df=transformed_df,
                 column_statistics=_build_column_statistics(
