@@ -16,13 +16,11 @@ from ..config import (
 )
 from ..config.autoconfig import AutoConfigResolver
 from ..evaluation.evaluator import Evaluator
-from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
 from ..observability import LogCategory, get_logger, traced
 from ..pii_replacer.nemo_pii import NemoPII
 from ..results import SafeSynthesizerResults, make_nss_results
-from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
@@ -62,11 +60,25 @@ def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) 
     )
 
 
+def _get_vllm_backend_class() -> type[GeneratorBackend]:
+    """Get the Vllm generator backend class."""
+    from ..generation.vllm_backend import VllmBackend
+
+    return VllmBackend
+
+
 def _get_unsloth_backend_class() -> type[TrainingBackend]:
     """Get the Unsloth training backend class."""
     from ..training.unsloth_backend import UnslothTrainer
 
     return UnslothTrainer
+
+
+def _get_huggingface_backend_class() -> type[TrainingBackend]:
+    """Get the HuggingFace training backend class."""
+    from ..training.huggingface_backend import HuggingFaceBackend
+
+    return HuggingFaceBackend
 
 
 def get_training_backend_class(config: SafeSynthesizerParameters) -> type[TrainingBackend]:
@@ -78,10 +90,9 @@ def get_training_backend_class(config: SafeSynthesizerParameters) -> type[Traini
         The training backend class.
     """
     class_map = {
-        "huggingface": HuggingFaceBackend,
+        "huggingface": _get_huggingface_backend_class(),
         "unsloth": _get_unsloth_backend_class(),
     }
-    logger.user.info(f"Unsloth enabled: {config.training.use_unsloth}")
     cls = "unsloth" if config.training.use_unsloth is True else "huggingface"
     cls = class_map.get(cls)
     if cls is None:
@@ -326,6 +337,8 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._llm_metadata is not None
         if self._total_start is None:
             self._total_start = time.monotonic()
+        from ..generation.vllm_backend import VllmBackend
+
         self.generator = VllmBackend(config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir)
         self.generator.initialize()
         self.generator.generate(keep_llm_state=False)

@@ -26,27 +26,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
-# Skip all tests in this module if sentence_transformers is not available
-pytest.importorskip(
-    "sentence_transformers",
-    reason="sentence_transformers and a GPU are required for these tests (install with: uv sync --extra cu128)",
-)
-
-# Skip all tests in this module if vllm is not properly available.
-vllm = pytest.importorskip(
-    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
-)
-
-try:
-    from vllm import LLM  # noqa: F401
-except ImportError:
-    pytest.skip(
-        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
-        allow_module_level=True,
-    )
-
-
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
@@ -67,6 +46,7 @@ def fixture_financial_transactions_dataset():
 
 
 @pytest.mark.e2e
+@pytest.mark.gpu_integration
 @pytest.mark.timeout(500)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_save_path):
@@ -95,6 +75,7 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 
 
 @pytest.mark.e2e
+@pytest.mark.gpu_integration
 @pytest.mark.timeout(500)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):

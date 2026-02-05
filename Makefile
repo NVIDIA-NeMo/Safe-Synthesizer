@@ -114,7 +114,7 @@ test-sdk-related: ## Run all pytest tests
 
 .PHONY: test
 test: ## Run all pytest tests for the nemo_safe_synthesizer package
-	$(PYTEST_CMD) -m "not e2e"
+	$(PYTEST_CMD) -m "unit and not slow"
 
 .PHONY: test-slow
 test-slow: ## Run all pytest tests for the nemo_safe_synthesizer package
@@ -124,7 +124,12 @@ test-slow: ## Run all pytest tests for the nemo_safe_synthesizer package
 .PHONY: test-ci
 test-ci: ## Run all pytest tests for the nemo_safe_synthesizer package in CI
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e"
+	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not gpu_integration" 
+
+.PHONY: test-ci
+test-gpu-integration: ## Run all pytest tests for the nemo_safe_synthesizer package in CI
+	pushd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "gpu_integration" 
 
 # please modify these based on updating the e2e tests for nmp ci
 .PHONY: test-e2e

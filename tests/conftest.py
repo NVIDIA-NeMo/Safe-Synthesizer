@@ -1,59 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import re
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from datasets import Dataset, load_dataset
-
-# Cache for file content checks to avoid re-reading
-_importorskip_cache: dict[Path, bool] = {}
-_IMPORTORSKIP_PATTERN = re.compile(r"pytest\.importorskip\s*\(")
-
-
-def _file_has_importorskip(filepath: Path) -> bool:
-    """Check if a file contains a pytest.importorskip call."""
-    if filepath in _importorskip_cache:
-        return _importorskip_cache[filepath]
-
-    try:
-        content = filepath.read_text()
-        has_importorskip = bool(_IMPORTORSKIP_PATTERN.search(content))
-    except (OSError, UnicodeDecodeError):
-        has_importorskip = False
-
-    _importorskip_cache[filepath] = has_importorskip
-    return has_importorskip
-
-
-def _test_uses_importorskip(item) -> bool:
-    """
-    Check if a test item uses pytest.importorskip, either:
-    - Directly in its test file
-    - In a conftest.py in its directory hierarchy
-    """
-    test_file = Path(item.fspath)
-
-    # Check the test file itself
-    if _file_has_importorskip(test_file):
-        return True
-
-    # Check conftest.py files in the directory hierarchy
-    # (up to the tests root)
-    tests_root = Path(__file__).parent
-    current_dir = test_file.parent
-
-    while current_dir >= tests_root:
-        conftest = current_dir / "conftest.py"
-        if conftest.exists() and _file_has_importorskip(conftest):
-            return True
-        if current_dir == tests_root:
-            break
-        current_dir = current_dir.parent
-
-    return False
 
 
 def pytest_collection_modifyitems(config, items):
@@ -64,7 +16,6 @@ def pytest_collection_modifyitems(config, items):
     - Tests in gpu_integration/ get the 'gpu_integration' marker
     - Tests in e2e/ directories get the 'e2e' marker
     - Tests in integration/ directories get the 'integration' marker
-    - Tests with pytest.importorskip get the 'gpu_integration' marker
     - Tests without category markers get the 'unit' marker
     """
     category_markers = {
@@ -84,15 +35,11 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(pytest.mark.gpu_integration)
                 marker_names.add("gpu_integration")
 
-        # Auto-mark tests that use pytest.importorskip
-        if "gpu_integration" not in marker_names and _test_uses_importorskip(item):
-            item.add_marker(pytest.mark.gpu_integration)
-            marker_names.add("gpu_integration")
-
         if "/e2e/" in path_str:
             if "e2e" not in marker_names:
                 item.add_marker(pytest.mark.e2e)
                 marker_names.add("e2e")
+
         elif "/integration/" in path_str:
             if "integration" not in marker_names:
                 item.add_marker(pytest.mark.integration)
