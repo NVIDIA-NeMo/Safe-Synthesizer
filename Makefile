@@ -90,6 +90,8 @@ bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss
 		uv sync --frozen --extra engine --group dev; \
 	elif [ "$(EXTRA)" = "dev" ]; then \
 		uv sync --frozen --group dev; \
+	elif [ "$(EXTRA)" = "microservice" ]; then \
+		uv sync --frozen --extra microservice --group dev; \
 	else \
 		echo "Error: Invalid extra '$(EXTRA)'. Use one of: $(BOOTSTRAP_EXTRAS)"; \
 		exit 1; \
@@ -117,14 +119,19 @@ test: ## Run all pytest tests for the nemo_safe_synthesizer package
 	$(PYTEST_CMD) -m "unit and not slow"
 
 .PHONY: test-slow
-test-slow: ## Run all pytest tests for the nemo_safe_synthesizer package
+test-slow: ## Run all pytest tests for the nemo_safe_synthesizer package including slow tests
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
 
 .PHONY: test-ci
-test-ci: ## Run all pytest tests for the nemo_safe_synthesizer package in CI
+test-ci: ## Run all pytest tests for the nemo_safe_synthesizer package in CI excluding slow tests
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not gpu_integration" 
+	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not gpu_integration and not slow" 
+
+.PHONY: test-ci
+test-ci-slow: ## Run all pytest tests for the nemo_safe_synthesizer package in CI
+	pushd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "slow" 
 
 .PHONY: test-ci
 test-gpu-integration: ## Run all pytest tests for the nemo_safe_synthesizer package in CI
@@ -150,7 +157,8 @@ RSYNC_EXCLUDES :=
 --exclude='.pytest_cache' \
 --exclude='.envrc' \
 --exclude='.venv' \
---exclude='.ruff_cache' \
+--exclude='*.pycache.*' \
+--exclude='.cursor'
 
 RSYNC_METAFILES_EXCLUDES :=
 --exclude='Makefile' \
@@ -179,6 +187,23 @@ ifndef MR
 	$(error MR is required. Usage: make synchronize-from-nmp-mr MR=5603)
 endif
 	bash tools/sync-from-mr.sh $(MR)
+
+synchronize-py-files-from-nmp: ## Synchronize the python files with the nmp package
+	@echo "~~~~~~"
+	@echo "synchronizing the python files with the nmp package"
+ifeq ($(NMP_REPO_PATH),)
+	@echo "~~~~~~"
+	@echo "NMP_REPO_PATH is not set"
+	@echo "please set the NMP_REPO_PATH environment variable"
+	@echo "NMP_REPO_PATH is the root path of the nmp package"
+	@exit 1
+endif
+	@echo "~~~~~~"
+	$(RSYNC_CMD) \
+		$(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/src/ $(NSS_ROOT_PATH)/src/
+	$(RSYNC_CMD) \
+		$(NMP_REPO_PATH)/packages/nemo_safe_synthesizer/tests/ $(NSS_ROOT_PATH)/tests/
+
 
 synchronize-py-files-to-nmp: ## Synchronize the python files with the nmp package
 	@echo "~~~~~~"

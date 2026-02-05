@@ -36,7 +36,6 @@ dependencies = [
   "structlog>=25.4.0",
   "colorama>=0.4.6",
   "tqdm>=4.67.1",
-  "nemo-microservices",
 ]
 
 [dependency-groups]
@@ -56,7 +55,6 @@ dev = [
   "pytest-xdist>=3.5.0",
   "types-click",
   "types-colorama>=0.4.6",
-  "nemo-microservices",
 ]
 
 [project.optional-dependencies]
@@ -226,8 +224,8 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
 # it's not used in production.
 # it assumes the nmp repo path is ../aire/microservices/nmp
 nemo-microservices = [
-  { path = "../aire/microservices/nmp/sdk/python/nemo-microservices" , group = "dev"},
-  { index = "nvidia-pypi-public", extra = "microservices"}
+  { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
+  # { index = "nvidia-pypi-public", extra = "microservices"}
 ]
 #  flashinfer-jit-cache = [
 #      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
