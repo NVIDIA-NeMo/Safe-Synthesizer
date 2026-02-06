@@ -262,19 +262,19 @@ class Environment:
         self._env.filters["redact_entities"] = partial(
             self.entity_extractor.extract_and_replace_entities, redact_entities_fn
         )
-        self._env.filters["label_entities"] = (
-            lambda text, entities=None, extended=False: self.entity_extractor.extract_and_replace_entities(
+        self._env.filters["label_entities"] = lambda text, entities=None, extended=False: (
+            self.entity_extractor.extract_and_replace_entities(
                 partial(label_entities_fn, extended=extended), text, entities
             )
         )
 
-        self._env.filters["hash_entities"] = (
-            lambda text, entities=None, salt=None: self.entity_extractor.extract_and_replace_entities(
+        self._env.filters["hash_entities"] = lambda text, entities=None, salt=None: (
+            self.entity_extractor.extract_and_replace_entities(
                 partial(hash_entities_fn, str(seed), salt=salt), text, entities
             )
         )
-        self._env.filters["fake_entities"] = (
-            lambda text, entities=None, on_error=None, extended=False: entity_extractor.extract_and_replace_entities(
+        self._env.filters["fake_entities"] = lambda text, entities=None, on_error=None, extended=False: (
+            entity_extractor.extract_and_replace_entities(
                 partial(
                     fake_entities_fn,
                     str(seed),
