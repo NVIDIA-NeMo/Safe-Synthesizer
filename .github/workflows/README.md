@@ -194,5 +194,3 @@ All compliance and release workflows reuse templates from [NVIDIA-NeMo/FW-CI-tem
 | `config/.secrets.baseline`                        | False positives for secrets detector |
 | `../../.python-version`                           | Python version for uv packaging      |
 | `../../src/nemo_safe_synthesizer/package_info.py` | Version information                  |
-
-
