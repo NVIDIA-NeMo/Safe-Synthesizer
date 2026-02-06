@@ -23,33 +23,34 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 ### Prerequisites
 
 - Python 3.11+
-- [uv](https://docs.astral.sh/uv/) - Python package manager
-- [gh](https://cli.github.com/) - GitHub CLI (for running setup scripts)
 - Git
+- [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
+
+> **Note:** Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
 
 ### Setup
 
 1. Fork the repository on GitHub
-
 2. Clone your fork:
-
-   ```bash
+  ```bash
    git clone https://github.com/<your-username>/safe-synthesizer.git
    cd safe-synthesizer
-   ```
-
+  ```
 3. Set up the development environment:
-
-   ```bash
+  ```bash
+   # Install development tools (uv, ruff, ty, yq, etc.)
    make bootstrap-tools
-   make bootstrap-python
-   ```
 
+   # Install Python dependencies (choose one)
+   make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
+   make bootstrap-nss cuda   # CUDA 12.8 (Linux with NVIDIA GPU)
+   make bootstrap-nss engine # Engine dependencies only
+   make bootstrap-nss dev    # Minimal dev dependencies only
+  ```
 4. Add the upstream remote:
-
-   ```bash
+  ```bash
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
-   ```
+  ```
 
 ## Repository Settings
 
@@ -77,15 +78,17 @@ Valid types: `feature`, `bugfix`, `hotfix`, `release`, `docs`, `chore`, `test`
 
 Examples:
 
-| Branch Name | Valid |
-|-------------|-------|
-| `jsmith/add-login-feature` | ✅ |
-| `jsmith/123-add-login-feature` | ✅ |
-| `jsmith/feature/123-add-login` | ✅ |
-| `aagonzales/bugfix/456-fix-crash` | ✅ |
-| `dev-team/docs/update-readme` | ✅ |
-| `feature/add-login` | ❌ Missing author |
-| `JSmith/123-Add-Login` | ❌ Must be lowercase |
+
+| Branch Name                       | Valid               |
+| --------------------------------- | ------------------- |
+| `jsmith/add-login-feature`        | ✅                   |
+| `jsmith/123-add-login-feature`    | ✅                   |
+| `jsmith/feature/123-add-login`    | ✅                   |
+| `aagonzales/bugfix/456-fix-crash` | ✅                   |
+| `dev-team/docs/update-readme`     | ✅                   |
+| `feature/add-login`               | ❌ Missing author    |
+| `JSmith/123-Add-Login`            | ❌ Must be lowercase |
+
 
 ### Conventional Commits
 
@@ -97,8 +100,7 @@ All commits merged to `main` must follow the [Conventional Commits](https://www.
 
 or without scope:
 
-```.text
-
+```text
 <type>: <description>
 ```
 
@@ -111,31 +113,35 @@ Rules:
 
 Valid types:
 
-| Type | Description |
-| ------ | ------------- |
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation changes |
-| `style` | Code style changes (formatting, no logic change) |
-| `refactor` | Code refactoring (no feature or fix) |
-| `perf` | Performance improvements |
-| `test` | Adding or updating tests |
-| `build` | Build system or dependencies |
-| `ci` | CI/CD configuration |
-| `chore` | Maintenance tasks |
-| `revert` | Reverting previous commits |
+
+| Type       | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `feat`     | New feature                                      |
+| `fix`      | Bug fix                                          |
+| `docs`     | Documentation changes                            |
+| `style`    | Code style changes (formatting, no logic change) |
+| `refactor` | Code refactoring (no feature or fix)             |
+| `perf`     | Performance improvements                         |
+| `test`     | Adding or updating tests                         |
+| `build`    | Build system or dependencies                     |
+| `ci`       | CI/CD configuration                              |
+| `chore`    | Maintenance tasks                                |
+| `revert`   | Reverting previous commits                       |
+
 
 Examples:
 
-| Commit Message | Valid |
-| ---------------- | ------- |
-| `feat: add user authentication` | ✅ |
-| `fix(auth): resolve token expiration bug` | ✅ |
-| `docs: update API documentation` | ✅ |
-| `chore(deps)!: bump major dependencies` | ✅ Breaking change |
-| `Added new feature` | ❌ Missing type |
-| `fix - resolve bug` | ❌ Wrong format |
-| `FIX: resolve bug` | ❌ Type must be lowercase |
+
+| Commit Message                            | Valid                    |
+| ----------------------------------------- | ------------------------ |
+| `feat: add user authentication`           | ✅                        |
+| `fix(auth): resolve token expiration bug` | ✅                        |
+| `docs: update API documentation`          | ✅                        |
+| `chore(deps)!: bump major dependencies`   | ✅ Breaking change        |
+| `Added new feature`                       | ❌ Missing type           |
+| `fix - resolve bug`                       | ❌ Wrong format           |
+| `FIX: resolve bug`                        | ❌ Type must be lowercase |
+
 
 > Since we use squash merging, your PR title should follow this format as it becomes the commit message.
 
@@ -143,71 +149,65 @@ Examples:
 
 Release tags must follow [Semantic Versioning](https://semver.org/):
 
-```.text
+```text
 MAJOR.MINOR.PATCH[-prerelease][+build]
 ```
 
 Examples:
 
-| Tag | Valid |
-|-----|-------|
-| `1.0.0` | ✅ |
-| `2.1.3` | ✅ |
-| `1.0.0-alpha` | ✅ |
-| `1.0.0-beta.1` | ✅ |
-| `1.0.0-rc.1+build.123` | ✅ |
-| `v1.0.0` | ❌ No `v` prefix |
-| `release-1.0` | ❌ Wrong format |
+
+| Tag                    | Valid           |
+| ---------------------- | --------------- |
+| `1.0.0`                | ✅               |
+| `2.1.3`                | ✅               |
+| `1.0.0-alpha`          | ✅               |
+| `1.0.0-beta.1`         | ✅               |
+| `1.0.0-rc.1+build.123` | ✅               |
+| `v1.0.0`               | ❌ No `v` prefix |
+| `release-1.0`          | ❌ Wrong format  |
+
 
 ### Branch Protection
 
 The `main` branch has the following protections:
 
-| Rule | Setting |
-|------|---------|
-| Required approvals | 1 |
-| Code owner review | Required |
-| Dismiss stale reviews | No |
-| Require conversation resolution | Yes |
-| Linear history | Required |
-| Force pushes | Blocked |
-| Deletions | Blocked |
-| Merge strategy | Squash only |
+
+| Rule                            | Setting     |
+| ------------------------------- | ----------- |
+| Required approvals              | 1           |
+| Code owner review               | Required    |
+| Dismiss stale reviews           | No          |
+| Require conversation resolution | Yes         |
+| Linear history                  | Required    |
+| Force pushes                    | Blocked     |
+| Deletions                       | Blocked     |
+| Merge strategy                  | Squash only |
+
 
 ## Pull Request Process
 
 1. Create an issue first (if one doesn't exist) to discuss the change
-
 2. Create a branch following the [naming convention](#branch-naming-convention):
-
-   ```bash
+  ```bash
    git checkout -b <username>/<issue-id>-<description>
-   ```
-
+  ```
 3. Make your changes and commit using [conventional commits](#conventional-commits)
-
 4. Run tests locally:
-
-   ```bash
+  ```bash
    make test
-   ```
-
+  ```
 5. Push your branch:
-
-   ```bash
+  ```bash
    git push origin <your-branch>
-   ```
-
+  ```
 6. Open a Pull Request using the [PR template](.github/PULL_REQUEST_TEMPLATE.md)
-
 7. Address review feedback — reviewers from [CODEOWNERS](.github/CODEOWNERS) will be automatically assigned
-
 8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted
 
 ### CODEOWNERS
 
-- All files: `@NVIDIA-NeMo/safe-synthesizer-reviewers`
-- Critical files (`pyproject.toml`, `uv.lock`, `SECURITY.md`, `LICENSE`, `.github/`): `@NVIDIA-NeMo/safe-synthesizer-maintainers`
+- All `src` and `test` files: `@NVIDIA-NeMo/safe-synthesizer-reviewers` 
+- all remaining files: (`pyproject.toml`, `uv.lock`, `SECURITY.md`, `LICENSE`, `.github/, etc.`): `@NVIDIA-NeMo/safe-synthesizer-maintainers`
 
 ## Issues and Discussions
 
@@ -254,51 +254,65 @@ See the full [DCO](DCO) file for details.
 ### Running Tests
 
 ```bash
-# Run all unit tests
+# Run unit tests (excludes slow and e2e)
 make test
 
-# Run end-to-end tests (requires GPU)
+# Run all tests including slow tests (excludes e2e)
+make test-slow
+
+# Run SDK-related tests (config, sdk, cli, api)
+make test-sdk-related
+
+# Run GPU integration tests (requires CUDA)
+make test-gpu-integration
+
+# Run end-to-end tests (requires CUDA)
 make test-e2e
 
-# Run specific test files
-pytest tests/cli/test_run.py
+# Run CI tests locally in a Linux container (Docker/Podman)
+make test-ci-container
+
+# Run specific test files directly
+uv run pytest tests/cli/test_run.py
 ```
 
 ### Test Requirements
 
 Before submitting a PR:
 
-- [ ] All existing tests pass
-- [ ] New features include tests
-- [ ] Bug fixes include regression tests
+- All existing tests pass (`make test`)
+- New features include tests
+- Bug fixes include regression tests
 
 ## Code Style
 
-### Linting
+### Formatting
 
-We use [Ruff](https://docs.astral.sh/ruff/) for linting and formatting.
+We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and import sorting. The formatter runs on changed files against the `main` branch.
 
 ```bash
-# Check for issues
+# Format code and sort imports
 make format
 ```
 
-### Type Checking
+### Linting and Type Checking
 
-We use type hints throughout the codebase and use Ty for checking.
+We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. Both run on changed files against `main`.
 
-```.bash
-# Auto-fix issues
+```bash
+# Run ruff linter (with auto-fix) and ty type checker
 make lint
 ```
 
 ### Pre-commit Hooks
 
-Consider setting up pre-commit hooks to catch issues early:
+We recommend setting up pre-commit hooks to catch formatting, linting, and type issues before committing:
 
 ```bash
 prek install
 ```
+
+This installs hooks that run Ruff (format + lint), ty type checking, and uv lock verification on each commit.
 
 ---
 

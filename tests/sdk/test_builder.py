@@ -1,31 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# ruff: noqa: E402
-import pytest
-
-# Skip all tests in this module if sentence_transformers is not available
-pytest.importorskip(
-    "sentence_transformers",
-    reason="sentence_transformers is required for these tests (install with: uv sync --extra cpu)",
-)
-
-# Skip all tests in this module if vllm is not properly available. In theory
-# these tests should be runnable without vllm, but getting that to work in
-# pytest requires more invasive changes.
-vllm = pytest.importorskip(
-    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
-)
-
-try:
-    from vllm import LLM  # noqa: F401
-except ImportError:
-    pytest.skip(
-        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
-        allow_module_level=True,
-    )
-
 import pandas as pd
+import pytest
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,

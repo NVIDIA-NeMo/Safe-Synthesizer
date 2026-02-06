@@ -1,7 +1,12 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+#
+# ruff-lint.sh - Lint the code with ruff
+#
+# Usage: ./ruff-lint.sh <MERGE_BASE_SHA>
+#
 
-# Get the list of changed Python files
+set -euo pipefail
+
 MERGE_BASE_SHA="${1:-}"
 
 if [ -z "$MERGE_BASE_SHA" ]; then
@@ -12,6 +17,8 @@ if [ -z "$MERGE_BASE_SHA" ]; then
         exit 1
     fi
 fi
+
+# Get the list of changed Python files
 files=$(git diff "$MERGE_BASE_SHA" --cached --name-only --diff-filter=ACMR | grep '\.py$' || true)
 
 if [ -z "$files" ]; then
@@ -27,13 +34,13 @@ if [ -z "$filtered_files" ]; then
 	exit 0
 fi
 
-# Run ty check on the filtered files
-if ! which ty > /dev/null; then
-    echo "ty not found"
-    TY="uvx ty"
+# Run ruff check on the filtered files
+if ! which ruff > /dev/null; then
+    echo "ruff not found"
+    RUFF="uvx ruff"
 else
-    TY="ty"
+    RUFF="ruff"
 fi
 
 # shellcheck disable=SC2086
-$TY check $filtered_files # no quotes around $filtered_files to preserve newlines
+$RUFF check --fix $filtered_files # no quotes around $filtered_files to preserve newlines

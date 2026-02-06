@@ -3,31 +3,9 @@
 
 """Unit tests for the VllmBackend class private methods."""
 
-# ruff: noqa: E402
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Skip all tests in this module if vllm is not properly available. In theory
-# these tests should be runnable without vllm, as we're testing our code
-# for making configuration for vllm and are mocking
-# vllm_backend.create_processor. But getting that to work in pytest requires
-# more invasive changes to code under test so vllm_backend is importable to
-# have something to mock. If nmp is installed with --extra cpu, then we
-# can't even find the nemo-safe_synthesizer.generation.vllm_backend module to patch
-# anything.
-vllm = pytest.importorskip(
-    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
-)
-
-try:
-    from vllm import LLM  # noqa: F401
-except ImportError:
-    pytest.skip(
-        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
-        allow_module_level=True,
-    )
-
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
     DataParameters,

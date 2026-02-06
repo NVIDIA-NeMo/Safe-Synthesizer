@@ -4,8 +4,8 @@ AGENTS.local.md
 CLAUDE.local.md
 .claude/settings.local.json
 ai/tmp/
-venv*
-env*
+venv*/
+env*/
 .env*
 temp
 __pycache__/*

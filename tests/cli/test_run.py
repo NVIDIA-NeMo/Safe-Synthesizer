@@ -3,32 +3,10 @@
 
 """Tests for the CLI run command and its options."""
 
-# ruff: noqa: E402
-
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Skip all tests in this module if vllm is not properly available. In theory
-# these tests should be runnable without vllm, as we're testing CLI code and
-# are mocking SafeSynthesizer. But getting that to work in pytest requires
-# more invasive changes to code under test so library_builder is importable to
-# have something to mock. If nmp is installed without --extra cu128, then we
-# can't even find the nemo_safe_synthesizer.sdk.library_builder module to patch
-# anything.
-vllm = pytest.importorskip(
-    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
-)
-
-try:
-    from vllm import LLM  # noqa: F401
-except ImportError:
-    pytest.skip(
-        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
-        allow_module_level=True,
-    )
-
 from click.testing import CliRunner
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings

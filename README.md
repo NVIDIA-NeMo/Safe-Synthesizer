@@ -2,10 +2,36 @@
 
 This package makes synthetic data, safely.
 
-## Installation from NMP
+## Installation
+
+### Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.10.0)
+- Git
+
+### Quick Start
+
+Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
 
 ```bash
-uv sync --package nemo_safe_synthesizer --extra [engine|cpu|cu128]
+make bootstrap-tools
+```
+
+Then bootstrap the project package with your desired extras - likely `cpu|cuda` .
+
+```bash
+# CPU-only (for development on Linux without GPU, or macOS)
+make bootstrap-nss cpu
+
+# CUDA 12.8 (for Linux with NVIDIA GPU)
+make bootstrap-nss cuda
+
+# Engine only (synthesis engine dependencies, no torch/training)
+make bootstrap-nss engine
+
+# Dev only (minimal dev dependencies, no engine or torch)
+make bootstrap-nss dev
 ```
 
 ## Running
@@ -147,7 +173,6 @@ Options:
   --help                          Show this message and exit.
 ```
 
-
 ## Managing Configurations
 
 The `config` command provides tools to validate and modify configuration files:
@@ -236,10 +261,9 @@ Additionally, the registry supports custom config overrides or args that are spe
 You can supply a dataset registry (YAML file) via either the CLI or an environment variable:
 
 - **CLI Option**:
-  `--dataset-registry <path_or_url>`
-
+`--dataset-registry <path_or_url>`
 - **Environment Variable**:
-  Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
+Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
 
 If both are provided, the CLI option takes precedence.
 
@@ -278,21 +302,22 @@ datasets:
 ```
 
 - Minimal requirements for each entry in the `datasets:` list are a `name` and a `url`.
-  `url` may be a URL or a file path, anything that data readers like `pd.read_csv` will accept.
+`url` may be a URL or a file path, anything that data readers like `pd.read_csv` will accept.
 - `base_url` - Any relative urls or paths will be prepended with the `base_url` before attempting to load the dataset.
-  This only applies to the named datasets in the registry which have a relative url.
-  Passing a relative `--url` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
-  `base_url` is optional, if not provided, it is recommended to use absolute urls or file paths for all entries.
+This only applies to the named datasets in the registry which have a relative url.
+Passing a relative `--url` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
+`base_url` is optional, if not provided, it is recommended to use absolute urls or file paths for all entries.
 - `overrides` - Dataset specific config overrides, such as a dataset that should always be run with `group_training_examples_by`.
-  Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.
+Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.
 - `load_args` - Extra arguments needed by the data reader for a specific dataset.
-  For example, changing the separator used by `pd.read_csv` for a `.csv` file with a different delimiter.
+For example, changing the separator used by `pd.read_csv` for a `.csv` file with a different delimiter.
 
 ## Slurm Jobs
 
 For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts in `script/slurm/`.
 
 These scripts support:
+
 - **Matrix runs**: Launching jobs across multiple configurations and datasets.
 - **Two-stage pipelines**: Running training and generation as separate jobs with dependencies.
 - **Containerized execution**: Running jobs inside enroot containers.
@@ -301,35 +326,60 @@ See [script/slurm/README.md](script/slurm/README.md) for detailed instructions o
 
 ## Testing
 
-We have pytest set up for unit and end-to-end tests.
+We have pytest set up for unit, integration, and end-to-end tests.
 
 ### Running Tests
 
-You can run tests using `pytest` or `make`.
-
-From the project's root directory:
+You can run tests using `make` targets or `pytest` directly.
 
 ```bash
-# Run all tests
+# Run unit tests (excludes slow and e2e tests)
 make test
 
-# Run end-to-end tests (executes small sample jobs)
+# Run all tests including slow tests (excludes e2e)
+make test-slow
+
+# Run SDK-related tests (config, sdk, cli, api)
+make test-sdk-related
+
+# Run GPU integration tests (requires CUDA)
+make test-gpu-integration
+
+# Run end-to-end tests (requires CUDA)
 make test-e2e
+
+# Run specific test files directly
+uv run pytest tests/cli/test_run.py
 ```
 
-From the package directory (`packages/nemo_safe_synthesizer`):
+### Container-Based Testing
+
+You can run the CI test suite locally in a Linux container using Docker or Podman:
 
 ```bash
-# Run tests using the local Makefile
-make test
-
-# Run specific test files
-pytest tests/cli/test_run.py
+# Build the test container and run CI tests
+make test-ci-container
 ```
+
+This builds a container image from `containers/Dockerfile.test_ci` and runs `make test-ci` inside it. This is useful for verifying tests pass in a Linux environment when developing on macOS.
 
 ## Development
 
-`make bootstrap-python` from the NMP root.
-Assumes you have a working NMP development environment. See the root makefile / contributing guide for more info.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribution guidelines.
 
-Use the `nmptool` to provision a dev machine with GPUs.
+```bash
+# 1. Bootstrap development tools
+make bootstrap-tools
+
+# 2. Install Python dependencies and package
+make bootstrap-nss cpu    # or: cuda, engine, dev
+
+# 3. Run tests
+make test
+
+# 4. Format and lint
+make format
+make lint
+```
+
+Run `make help` to see all available Makefile targets.

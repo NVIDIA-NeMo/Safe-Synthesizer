@@ -8,6 +8,30 @@ source "${TOOL_BASE}/common_functions.sh"
 
 TOOLS_YAML="${TOOL_BASE}/tools.yaml"
 
+# Parse command line arguments
+BOOTSTRAP_ONLY=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --bootstrap-only)
+            BOOTSTRAP_ONLY=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --bootstrap-only  Install only bootstrap tools (yq, ruff, ty, uv)"
+            echo "  -h, --help        Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 # Validate supported platforms (darwin/linux, amd64/arm64 only)
 validate_platform() {
     if [[ "$OS" != "darwin" && "$OS" != "linux" ]]; then
@@ -98,8 +122,17 @@ install_binary_tool() {
 
     if [[ -n "$extract" ]]; then
         # Download and extract from tarball
-        local workdir
+        local workdir os_val arch_val
         workdir=$(mktemp -d)
+
+        # Get mapped OS/arch values for extract path substitution
+        os_val=$(yq -r ".tools.${name}.os_map.${OS} // \"${OS}\"" "$TOOLS_YAML")
+        arch_val=$(yq -r ".tools.${name}.arch_map.${ARCH} // \"${ARCH}\"" "$TOOLS_YAML")
+
+        # Substitute placeholders in extract path
+        extract="${extract//\{os\}/$os_val}"
+        extract="${extract//\{arch\}/$arch_val}"
+
         (
             cd "$workdir"
             curl -sSL "$url" -o archive.tar.gz
@@ -113,15 +146,17 @@ install_binary_tool() {
     fi
 
     chmod +x "$install_path"
-    echo "$name installed successfully to $install_path"
 
     # Verify installation
     if eval "$check_command" >/dev/null 2>&1; then
         eval "$check_command" || true
     else
         echo "Warning: $name installed but check command failed"
+        echo "installed from url: $url"
         echo "Make sure $HOME/.local/bin is in your PATH"
+        exit 1
     fi
+    echo "$name installed successfully to $install_path"
 
     # Run post_install if present
     post_install=$(yq -r ".tools.${name}.post_install // \"\"" "$TOOLS_YAML")
@@ -154,36 +189,43 @@ bootstrap_tools() {
     ensure_yq
 
     # Get list of tools marked as bootstrap (install first)
-    local bootstrap_tools
-    bootstrap_tools=$(yq -r '.tools | to_entries | .[] | select(.value.bootstrap == true) | .key' "$TOOLS_YAML")
+    local bootstrap_tool_list
+    bootstrap_tool_list=$(yq -r '.tools | to_entries | .[] | select(.value.bootstrap == true) | .key' "$TOOLS_YAML")
+
+    # Install bootstrap tools first (like yq, ruff, ty)
+    for tool in $bootstrap_tool_list; do
+        install_binary_tool "$tool" || echo "Failed to install $tool - continuing with other tools"
+    done
+
+    # Get custom scripts marked as bootstrap
+    local bootstrap_custom_scripts
+    bootstrap_custom_scripts=$(yq -r '.custom_scripts[] | select(.bootstrap == true) | .name' "$TOOLS_YAML")
+
+    for name in $bootstrap_custom_scripts; do
+        install_custom_script "$name"
+    done
+
+    # If --bootstrap-only flag is set, stop here
+    if [[ "$BOOTSTRAP_ONLY" == "true" ]]; then
+        echo "----------------------------------------"
+        echo "Bootstrap tools installed (--bootstrap-only mode)"
+        return 0
+    fi
 
     # Get list of regular tools (not bootstrap)
     local regular_tools
     regular_tools=$(yq -r '.tools | to_entries | .[] | select(.value.bootstrap != true) | .key' "$TOOLS_YAML")
-
-    # Install bootstrap tools first (like yq)
-    for tool in $bootstrap_tools; do
-        install_binary_tool "$tool" || echo "Failed to install $tool - continuing with other tools"
-    done
 
     # Install regular binary tools from YAML
     for tool in $regular_tools; do
         install_binary_tool "$tool" || echo "Failed to install $tool - continuing with other tools"
     done
 
-    # Get custom scripts that are NOT bootstrap (run now)
+    # Get custom scripts that are NOT bootstrap
     local regular_custom_scripts
     regular_custom_scripts=$(yq -r '.custom_scripts[] | select(.bootstrap != true) | .name' "$TOOLS_YAML")
 
     for name in $regular_custom_scripts; do
-        install_custom_script "$name"
-    done
-
-    # Get custom scripts marked as bootstrap (run last)
-    local bootstrap_custom_scripts
-    bootstrap_custom_scripts=$(yq -r '.custom_scripts[] | select(.bootstrap == true) | .name' "$TOOLS_YAML")
-
-    for name in $bootstrap_custom_scripts; do
         install_custom_script "$name"
     done
 
