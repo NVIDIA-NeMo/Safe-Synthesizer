@@ -199,8 +199,8 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
 
     non_na_data = data.dropna()
     non_na_count = int(non_na_data.count())
-
-    unique_count = int(non_na_data.nunique())
+    unique_values_list = non_na_data.unique().tolist()
+    unique_count = len(unique_values_list)
     missing_count = total_count - non_na_count
 
     lengths = [len(str(entry)) for entry in non_na_data]
@@ -208,6 +208,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
         name=field_name,
         type=FieldType.OTHER,
         count=non_na_count,
+        unique_values_list=unique_values_list,
         unique_count=unique_count,
         unique_percent=(round(unique_count / non_na_count * 100, 4) if non_na_count > 0 else 0),
         missing_count=missing_count,

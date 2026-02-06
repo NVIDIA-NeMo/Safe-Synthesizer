@@ -161,6 +161,11 @@ class MultimodalReport(EvaluationReport):
                 ),
                 config=config,
             )
+        # drop columns with assigned type "text" from pii_replay.
+        # TODO: This will be removed once text entities is added to the PII Replay section of the evaluation report.
+        pii_replay.pii_replay_data = [
+            datum for datum in pii_replay.pii_replay_data if datum.column_assigned_type != "text"
+        ]
         components.append(pii_replay)
 
         dataset_statistics = DatasetStatistics.from_evaluation_dataset(evaluation_dataset)

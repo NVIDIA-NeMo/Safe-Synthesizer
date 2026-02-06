@@ -19,7 +19,23 @@ UNKNOWN_ENTITY: str = "none"
 
 
 class PIIReplayData(BaseModel):
+    """
+    Contains data for each PII column, listed in the PII Replay section of the SQS report.
+
+    Args:
+        column_name: The name of the column with PII data.
+        column_assigned_type: The assigned type for the column, whether it's text, unique identifier, date, email, etc.
+        pii_type: Type of the PII data in the column. For non-text fields, this is the same as column_assigned_type. For text fields, it is the PII entities detected within the text such as race, SSN, address, etc.
+        total_ref_data: Total number of rows in the reference data that contain PII values.
+        unique_ref_data: Total number of rows in the reference data that contain unique PII values.
+        total_synth_data: Total number of output rows that contain PII present in the reference data.
+        unique_synth_data: Total number of output rows that contain unique PII present in the reference data.
+        unique_synth_data_percentage: Percentage of unique PII in the output data that matches unique entity data in the reference dataset.
+
+    """
+
     column_name: str = Field()
+    column_assigned_type: str = Field()
     pii_type: str = Field(default=UNKNOWN_ENTITY)
     total_ref_data: int = Field(default=0)
     unique_ref_data: int = Field(default=0)
@@ -56,10 +72,11 @@ class PIIReplay(Component):
         classified_entities = []
         for col, column_statistics in evaluation_dataset.column_statistics.items():
             entity_names = column_statistics.detected_entity_counts.keys()
+            entity_assigned_type = column_statistics.assigned_type
             # Scope down to user supplied set of entities if there is one
             if pii_replay_entities:
                 entity_names = set(entity_names).intersection(set(pii_replay_entities))
-            classified_entities += [(col, entity_name) for entity_name in entity_names]
+            classified_entities += [(col, entity_name, entity_assigned_type) for entity_name in entity_names]
             # But add user specified set of columns as needed if there is one
             if pii_replay_columns:
                 for user_specified_col in set(pii_replay_columns).difference(
@@ -68,9 +85,7 @@ class PIIReplay(Component):
                     classified_entities.append((user_specified_col, UNKNOWN_ENTITY))
 
         pii_replay_data = []
-        for ce in classified_entities:
-            col, entity_name = ce[0], ce[1]
-
+        for col, entity_name, entity_assigned_type in classified_entities:
             # UNKNOWN_ENTITY case, use the entire column
             ref_entity_count = len(evaluation_dataset.reference[col])
             ref_entity_unique_values = evaluation_dataset.reference[col].unique()
@@ -94,6 +109,7 @@ class PIIReplay(Component):
             pii_replay_data.append(
                 PIIReplayData(
                     column_name=col,
+                    column_assigned_type=entity_assigned_type,
                     pii_type=entity_name,
                     total_ref_data=ref_entity_count,
                     unique_ref_data=ref_entity_unique_count,

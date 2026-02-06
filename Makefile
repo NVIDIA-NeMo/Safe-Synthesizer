@@ -225,6 +225,14 @@ synchronize-from-nmp-mr: ## Sync from NMP MR. Usage: make synchronize-from-nmp-m
 ifndef MR
 	$(error MR is required. Usage: make synchronize-from-nmp-mr MR=5603)
 endif
+ifeq ($(shell git rev-parse --abbrev-ref HEAD), main)
+	@echo "~~~~~~"
+	@echo "you are on the main branch"
+	@echo "creating a new branch from main"
+	git checkout -b $$USER/sync-$(MR)-from-nmp
+endif
+	@echo "~~~~~~"
+	@echo "synchronizing the changes from the NMP MR $(MR) to the nemo_safe_synthesizer package"
 	bash tools/sync-from-mr.sh $(MR)
 
 .PHONY: synchronize-py-files-from-nmp
