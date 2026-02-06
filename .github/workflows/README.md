@@ -4,14 +4,16 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 ## Workflows Overview
 
-| Workflow | Trigger | Description |
-|----------|---------|-------------|
-| [ci.yml](ci.yml) | Push to `main`, PRs | Lint, format check, and tests with coverage |
-| [conventional-commit.yml](conventional-commit.yml) | PRs | Validates PR titles follow conventional commit format |
-| [copyright-check.yml](copyright-check.yml) | PRs | Validates NVIDIA copyright headers on Python files |
-| [dco-assistant.yml](dco-assistant.yml) | PRs, Comments | Manages DCO signing via PR comments |
-| [release.yml](release.yml) | Manual dispatch | Builds and publishes package to PyPI |
-| [secrets-detector.yml](secrets-detector.yml) | PRs | Scans for accidentally committed secrets |
+
+| Workflow                                           | Trigger             | Description                                           |
+| -------------------------------------------------- | ------------------- | ----------------------------------------------------- |
+| [ci.yml](ci.yml)                                   | Push to `main`, PRs | Lint, format check, and tests with coverage           |
+| [conventional-commit.yml](conventional-commit.yml) | PRs                 | Validates PR titles follow conventional commit format |
+| [copyright-check.yml](copyright-check.yml)         | PRs                 | Validates NVIDIA copyright headers on Python files    |
+| [dco-assistant.yml](dco-assistant.yml)             | PRs, Comments       | Manages DCO signing via PR comments                   |
+| [release.yml](release.yml)                         | Manual dispatch     | Builds and publishes package to PyPI                  |
+| [secrets-detector.yml](secrets-detector.yml)       | PRs                 | Scans for accidentally committed secrets              |
+
 
 ## Workflow Diagram
 
@@ -67,7 +69,7 @@ The main CI workflow runs on every push to `main` and on pull requests:
 
 - **Lint**: Runs `ruff check` and `ty` type checks
 - **Format Check**: Verifies code formatting with `ruff format --check`
-- **Test**: Runs pytest with coverage across Python 3.11, 3.12, and 3.13
+- **Test**: Runs pytest with coverage across Python 3.11. more to come.
 
 ### Coverage
 
@@ -112,17 +114,19 @@ Validates that Python files have proper NVIDIA copyright headers.
 
 ## Release Workflow
 
-The release workflow uses the [FW-CI-templates `_release_library.yml`](https://github.com/NVIDIA-NeMo/FW-CI-templates) reusable workflow.
+The release workflow uses the [FW-CI-templates `_release_library.yml](https://github.com/NVIDIA-NeMo/FW-CI-templates)` reusable workflow.
 
 ### How to Release
+
+this is placeholder information until we do a real release. will update then.
 
 1. Go to **Actions** > **Release NeMo Safe Synthesizer**
 2. Click **Run workflow**
 3. Fill in the required inputs:
-   - `release-ref`: Full SHA or tag of the commit to release
-   - `dry-run`: Set to `false` for production release (publishes to PyPI)
-   - `create-gh-release`: Whether to create a GitHub release
-   - `version-bump-branch`: Branch to push the version bump PR (usually `main`)
+  - `release-ref`: Full SHA or tag of the commit to release
+  - `dry-run`: Set to `false` for production release (publishes to PyPI)
+  - `create-gh-release`: Whether to create a GitHub release
+  - `version-bump-branch`: Branch to push the version bump PR (usually `main`)
 
 ### Release Process
 
@@ -137,13 +141,15 @@ The workflow performs the following steps:
 
 ### Version Management
 
-Version is managed in [`src/nemo_safe_synthesizer/package_info.py`](../../src/nemo_safe_synthesizer/package_info.py):
+Version is managed in `[src/nemo_safe_synthesizer/package_info.py](../../src/nemo_safe_synthesizer/package_info.py)`:
 
 ```python
 MAJOR = 0
-MINOR = 0
+MINOR = 1
 PATCH = 0
 PRE_RELEASE = ""
+BUILD = 1
+DEV_RELEASE = False
 ```
 
 The release workflow automatically bumps the PATCH version (or PRE_RELEASE for release candidates).
@@ -152,20 +158,24 @@ The release workflow automatically bumps the PATCH version (or PRE_RELEASE for r
 
 The following secrets must be configured in GitHub repository settings:
 
-| Secret | Purpose |
-|--------|---------|
-| `TWINE_USERNAME` | PyPI username |
-| `TWINE_PASSWORD` | PyPI API token |
-| `SLACK_WEBHOOK_ADMIN` | Slack admin notifications |
-| `SLACK_RELEASE_ENDPOINT` | Slack release notifications |
-| `PAT` | GitHub Personal Access Token |
-| `SSH_KEY` | GPG signing key |
-| `SSH_PWD` | GPG key passphrase |
-| `BOT_KEY` | GitHub App private key |
 
-| Variable | Purpose |
-|----------|---------|
+| Secret                   | Purpose                      |
+| ------------------------ | ---------------------------- |
+| `TWINE_USERNAME`         | PyPI username                |
+| `TWINE_PASSWORD`         | PyPI API token               |
+| `SLACK_WEBHOOK_ADMIN`    | Slack admin notifications    |
+| `SLACK_RELEASE_ENDPOINT` | Slack release notifications  |
+| `PAT`                    | GitHub Personal Access Token |
+| `SSH_KEY`                | GPG signing key              |
+| `SSH_PWD`                | GPG key passphrase           |
+| `BOT_KEY`                | GitHub App private key       |
+
+
+
+| Variable | Purpose       |
+| -------- | ------------- |
 | `BOT_ID` | GitHub App ID |
+
 
 ## Reusable Workflows
 
@@ -178,8 +188,11 @@ All compliance and release workflows reuse templates from [NVIDIA-NeMo/FW-CI-tem
 
 ## Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `config/.secrets.baseline` | False positives for secrets detector |
-| `../../.python-version` | Python version for uv packaging |
-| `../../src/nemo_safe_synthesizer/package_info.py` | Version information |
+
+| File                                              | Purpose                              |
+| ------------------------------------------------- | ------------------------------------ |
+| `config/.secrets.baseline`                        | False positives for secrets detector |
+| `../../.python-version`                           | Python version for uv packaging      |
+| `../../src/nemo_safe_synthesizer/package_info.py` | Version information                  |
+
+

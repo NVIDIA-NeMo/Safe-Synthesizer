@@ -25,7 +25,6 @@ MAJOR = 0
 MINOR = 1
 PATCH = 0
 PRE_RELEASE = ""
-
 BUILD = 1
 DEV_RELEASE = False
 
