@@ -1,0 +1,132 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+site_name: NeMo Safe Synthesizer
+site_url: https://nvidia-nemo.github.io/Safe-Synthesizer/
+site_description: Generate synthetic data with privacy guarantees
+repo_url: https://github.com/NVIDIA-NeMo/Safe-Synthesizer
+repo_name: NVIDIA-NeMo/Safe-Synthesizer
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2024-2026 NVIDIA CORPORATION & AFFILIATES
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+
+strict: !ENV [MKDOCS_STRICT, false]
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            merge_init_into_class: true
+            allow_inspection: false
+            show_if_no_docstring: false
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - mkdocs-jupyter:
+      include_source: true
+      execute: false
+      ignore:
+        - "docs/gen_ref_pages.py"
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+  - User Guide:
+      - Pipeline Overview: user-guide/pipeline.md
+      - CLI Reference: user-guide/cli.md
+      - Configuration: user-guide/configuration.md
+      - Python SDK: user-guide/sdk.md
+      - Evaluation: user-guide/evaluation.md
+      - Privacy: user-guide/privacy.md
+  - Architecture:
+      - Design: architecture/design.md
+  - Tutorials:
+      - tutorials/index.md
+  - API Reference: reference/
+  - Contributing:
+      - contributing/index.md
+  - Security: security.md
+  - Third-Party Licenses: third-party.md

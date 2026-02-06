@@ -43,6 +43,7 @@ logs/*
 .idea/
 .scratch/
 # automatically generated folders
+site/
 docs/_build/
 docs/_repo/
 docs/pysdk/reference/

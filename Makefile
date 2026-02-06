@@ -96,6 +96,21 @@ bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss
 	fi
 
 
+### DOCUMENTATION ###
+
+.PHONY: docs-serve
+docs-serve: ## Serve the documentation site locally with live reload
+	uv run --group docs mkdocs serve
+
+.PHONY: docs-build
+docs-build: ## Build the documentation site
+	uv run --group docs mkdocs build
+
+.PHONY: docs-deploy
+docs-deploy: ## Deploy the documentation site to GitHub Pages
+	uv run --group docs mkdocs gh-deploy --force
+
+
 ### CODE QUALITY ###
 
 .PHONY: format

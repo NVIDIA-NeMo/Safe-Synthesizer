@@ -39,6 +39,13 @@ dependencies = [
 ]
 
 [dependency-groups]
+docs = [
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  "mkdocs-gen-files",
+  "mkdocs-literate-nav",
+  "mkdocs-jupyter",
+]
 dev = [
   "ipywidgets",
   "jsonpath-ng==1.5.3",
