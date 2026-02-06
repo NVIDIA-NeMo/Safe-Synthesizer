@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
 #
-# format.sh - Format the code for the whole repo, not just the changed files
+# format.sh - Format (or check formatting of) changed Python files
 #
-# Usage: ./format.sh
+# Usage:
+#   ./format.sh [MERGE_BASE_SHA]          # fix mode (default) — rewrites files
+#   ./format.sh --check [MERGE_BASE_SHA]  # check mode — exits 1 if unformatted
 #
 
 set -euo pipefail
 
 NSS_ROOT_PATH="${NSS_ROOT_PATH:-$(git rev-parse --show-toplevel)}"
 
-MERGE_BASE_SHA="${1:-}"
+# Parse --check flag
+CHECK_MODE=false
+MERGE_BASE_SHA=""
+for arg in "$@"; do
+    case "$arg" in
+        --check) CHECK_MODE=true ;;
+        *)       MERGE_BASE_SHA="$arg" ;;
+    esac
+done
 
 if [ -z "$MERGE_BASE_SHA" ]; then
     if git branch -l | grep "main" > /dev/null; then
@@ -36,16 +46,27 @@ if [ -z "$filtered_files" ]; then
 	exit 0
 fi
 
-# Run ruff check on the filtered files
+# Resolve ruff
 if ! which ruff > /dev/null; then
-    echo "ruff not found"
+    echo "ruff not found, falling back to uvx"
     RUFF="uvx ruff"
 else
     RUFF="ruff"
 fi
 
-# shellcheck disable=SC2086
-$RUFF format "$NSS_ROOT_PATH" $filtered_files && $RUFF check --select I --fix "$NSS_ROOT_PATH" $filtered_files # no quotes around $filtered_files to preserve newlines
-
-# shellcheck disable=SC2086
-uv run python tools/lint/copyright_fixer.py $filtered_files
+if [ "$CHECK_MODE" = true ]; then
+    echo "Running in check mode (no files will be modified)"
+    # shellcheck disable=SC2086
+    $RUFF format --check "$NSS_ROOT_PATH" $filtered_files
+    # shellcheck disable=SC2086
+    $RUFF check --select I "$NSS_ROOT_PATH" $filtered_files
+    # shellcheck disable=SC2086
+    uv run python tools/lint/copyright_fixer.py --check $filtered_files
+else
+    # shellcheck disable=SC2086
+    $RUFF format "$NSS_ROOT_PATH" $filtered_files
+    # shellcheck disable=SC2086
+    $RUFF check --select I --fix "$NSS_ROOT_PATH" $filtered_files
+    # shellcheck disable=SC2086
+    uv run python tools/lint/copyright_fixer.py $filtered_files
+fi
