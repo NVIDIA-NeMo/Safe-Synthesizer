@@ -19,10 +19,15 @@ The MAJOR, MINOR, PATCH, and PRE_RELEASE variables are automatically updated
 during the release process.
 """
 
+from packaging.version import Version
+
 MAJOR = 0
-MINOR = 0
+MINOR = 1
 PATCH = 0
 PRE_RELEASE = ""
+
+BUILD = 1
+DEV_RELEASE = False
 
 
 def get_version() -> str:
@@ -32,8 +37,14 @@ def get_version() -> str:
         Version string in the format MAJOR.MINOR.PATCH[PRE_RELEASE]
     """
     version = f"{MAJOR}.{MINOR}.{PATCH}"
+    if DEV_RELEASE:
+        version = f"{version}.dev{BUILD}"
     if PRE_RELEASE:
         version = f"{version}{PRE_RELEASE}"
+
+    version = Version(version)
+    version = str(version)
+
     return version
 
 
