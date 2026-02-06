@@ -1,6 +1,27 @@
 default_install_hook_types: [pre-commit, pre-push]
 
 repos:
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+        args:
+          - --assume-in-merge
+
+      # todo: re-enable after we're cleanly off of NMP since 
+      # this is more invasive there
+      # - id: end-of-file-fixer
+      #   files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
+
+      # - id: trailing-whitespace
+      #   files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
+
+      - id: check-merge-conflict
+        args:
+          - --assume-in-merge
+
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
     rev: v0.15.0
@@ -47,3 +68,21 @@ repos:
       - id: check-merge-conflict
         args:
           - --assume-in-merge
+
+  - repo: local
+    hooks:
+      - id: uv-lock
+        name: Run uv lock
+        entry: uv lock
+        language: system
+        files: 'pyproject\.toml$'
+        pass_filenames: false
+        verbose: true
+
+      - id: uv-lock-check
+        name: Check for uv.lock drift
+        entry: git diff --exit-code uv.lock
+        language: system
+        files: 'pyproject\.toml$'
+        pass_filenames: false
+        verbose: true
