@@ -11,27 +11,34 @@ copyright: Copyright &copy; 2024-2026 NVIDIA CORPORATION & AFFILIATES
 
 theme:
   name: material
+  custom_dir: docs/overrides
+  font:
+    text: Roboto
+    code: Fira Code
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: custom
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: custom
+      primary: black
       toggle:
-        icon: material/brightness-4
+        icon: material/lightbulb-outline
         name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      toggle:
+        icon: material/lightbulb
+        name: Switch to dark mode
   features:
     - content.code.copy
+    - content.code.select
     - content.code.annotate
     - content.tabs.link
     - navigation.tabs
     - navigation.sections
     - navigation.expand
+    - navigation.path
     - navigation.top
+    - navigation.footer
     - navigation.indexes
     - search.suggest
     - search.highlight
@@ -40,12 +47,28 @@ theme:
     repo: fontawesome/brands/github
 
 extra_css:
-  - stylesheets/extra.css
+  - css/style.css
+  - css/mkdocstrings.css
+
+extra_javascript:
+  - js/toc-toggle.js
+
+watch:
+  - src/nemo_safe_synthesizer
+  - docs/
 
 strict: !ENV [MKDOCS_STRICT, false]
 
 plugins:
   - search
+  - blog:
+      blog_dir: blog
+      blog_toc: true
+      post_date_format: long
+      post_url_format: "{slug}"
+      categories: false
+      archive: true
+      archive_toc: true
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -53,6 +76,7 @@ plugins:
           paths: [src]
           options:
             docstring_style: google
+            docstring_section_style: table
             show_source: true
             show_root_heading: true
             show_root_full_path: false
@@ -62,6 +86,8 @@ plugins:
             merge_init_into_class: true
             allow_inspection: false
             show_if_no_docstring: false
+            summary: true
+            filters: ["!^_"]
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py
@@ -69,6 +95,8 @@ plugins:
       nav_file: SUMMARY.md
   - mkdocs-jupyter:
       include_source: true
+      include_requirejs: true
+      ignore_h1_titles: true
       execute: false
       ignore:
         - "docs/gen_ref_pages.py"
@@ -97,6 +125,10 @@ markdown_extensions:
   - pymdownx.keys
   - pymdownx.mark
   - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      base_path:
+        - docs/
+        - .
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -128,5 +160,7 @@ nav:
   - API Reference: reference/
   - Contributing:
       - contributing/index.md
+  - Dev Notes:
+      - blog/index.md
   - Security: security.md
   - Third-Party Licenses: third-party.md
