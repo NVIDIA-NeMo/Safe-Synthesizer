@@ -43,32 +43,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
+    # Set job outputs to values from filter step
     outputs:
-      source: ${{ steps.filter.outputs.source }}
+      src: ${{ steps.filter.outputs.src }}
+      test: ${{ steps.filter.outputs.test }}
     steps:
-      - uses: actions/checkout@v4
-
+      # For pull requests it's not necessary to checkout the code
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            source:
+            src:
               - 'src/**'
-              - 'tests/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'Makefile'
-              - 'tools/**'
-              - 'ruff.toml'
-              - 'pytest.ini'
-              - 'containers/**'
-              - '.github/workflows/ci-checks.yml'
-              - '.github/actions/**'
+            test:
+              - 'test/**'
 
   format:
     name: Format
     needs: changes
-    if: needs.changes.outputs.source == 'true' || github.event_name == 'workflow_dispatch'
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -91,7 +84,7 @@ jobs:
   lint:
     name: Lint
     needs: changes
-    if: needs.changes.outputs.source == 'true' || github.event_name == 'workflow_dispatch'
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -114,7 +107,7 @@ jobs:
   typecheck:
     name: Typecheck
     needs: changes
-    if: needs.changes.outputs.source == 'true' || github.event_name == 'workflow_dispatch'
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -137,7 +130,7 @@ jobs:
   unit-test:
     name: Unit Tests - (Python ${{ matrix.python-version }})
     needs: changes
-    if: needs.changes.outputs.source == 'true' || github.event_name == 'workflow_dispatch'
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
