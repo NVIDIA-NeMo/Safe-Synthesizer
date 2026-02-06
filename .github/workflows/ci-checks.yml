@@ -32,8 +32,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Detect which files changed so downstream jobs can be skipped when only
+  # docs, config, or other non-source files are modified.  The "ci-status"
+  # summary job (below) is the single required check for branch protection,
+  # so skipped jobs won't block merge.
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+      test: ${{ steps.filter.outputs.test }}
+    steps:
+      # For pull requests it's not necessary to checkout the code
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'src/**'
+            test:
+              - 'test/**'
+
   format:
     name: Format
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -52,8 +80,11 @@ jobs:
         run: |
           make bootstrap-nss dev
           bash tools/format/format.sh ${{ steps.setup.outputs.merge-base }}
+
   lint:
     name: Lint
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -75,6 +106,8 @@ jobs:
 
   typecheck:
     name: Typecheck
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -96,6 +129,8 @@ jobs:
 
   unit-test:
     name: Unit Tests - (Python ${{ matrix.python-version }})
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
