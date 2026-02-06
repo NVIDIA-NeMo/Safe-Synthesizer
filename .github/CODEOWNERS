@@ -2,7 +2,10 @@
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Default reviewers for all files
-* @NVIDIA-NeMo/safe-synthesizer-reviewers
+* @NVIDIA-NeMo/safe-synthesizer-maintainers
+
+src/ @NVIDIA-NeMo/safe-synthesizer-reviewers
+tests/ @NVIDIA-NeMo/safe-synthesizer-reviewers
 
 # Critical files require maintainers
 pyproject.toml @NVIDIA-NeMo/safe-synthesizer-maintainers

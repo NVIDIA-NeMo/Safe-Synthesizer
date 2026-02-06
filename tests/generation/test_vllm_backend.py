@@ -124,10 +124,6 @@ def create_backend(config, model_metadata, schema, workdir):
             "nemo_safe_synthesizer.generation.vllm_backend.create_processor",
             return_value=MagicMock(),
         ),
-        # patch(
-        #     "nemo_safe_synthesizer.generation.vllm_backend._get_lora_request_class",
-        #     return_value=MagicMock(),
-        # ),
     ):
         from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend
 

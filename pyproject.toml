@@ -210,9 +210,7 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
     { index = "pytorch-cpu", extra="cpu" },
     { index = "pytorch-cu128", extra="cu128"},
   ]
-  # flash-attn = [
-    # { index = "nv-shared-pypi-local", marker = "sys_platform=='linux'", extra="cu128"},
-  # ]
+
   flashinfer-python = [
       { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
   ]

@@ -16,7 +16,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 ## Workflow Diagram
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph triggers [Triggers]
         push[Push to main]
         pr[Pull Request]
@@ -25,9 +25,11 @@ flowchart TD
     end
 
     subgraph ci [CI Workflow]
-        lint[Lint Job]
-        format[Format Check Job]
-        test[Test Job - Matrix]
+        lint[Lint]
+        format[Format Check]
+        typecheck[Typecheck]
+        test[Unit Tests]
+        test --> coverage[Coverage Report]
     end
 
     subgraph compliance [Compliance Workflows]
@@ -38,7 +40,6 @@ flowchart TD
     end
 
     subgraph release [Release Workflow]
-        releaseLib[_release_library.yml]
         buildWheel[Build Wheel]
         bumpVersion[Bump Version]
         publishPyPI[Publish to PyPI]
@@ -46,34 +47,18 @@ flowchart TD
         slackNotify[Slack Notification]
     end
 
-    subgraph templates [FW-CI-templates]
-        tpl_semantic[_semantic_pull_request.yml]
-        tpl_secrets[_secrets-detector.yml]
-        tpl_copyright[_copyright_check.yml]
-        tpl_release[_release_library.yml]
-    end
-
     push --> ci
     pr --> ci
-    pr --> conventional
-    pr --> secrets
-    pr --> copyright
-    pr --> dco
+    pr --> compliance
     comment --> dco
-    manual --> releaseLib
+    manual --> release
 
-    releaseLib --> buildWheel
-    releaseLib --> bumpVersion
-    buildWheel --> publishPyPI
-    publishPyPI --> ghRelease
-    ghRelease --> slackNotify
+    buildWheel --> publishPyPI --> ghRelease --> slackNotify
 
-    conventional -.->|reuses| tpl_semantic
-    secrets -.->|reuses| tpl_secrets
-    copyright -.->|reuses| tpl_copyright
-    releaseLib -.->|reuses| tpl_release
-
-    test --> coverage[Coverage Report]
+    conventional -.->|reuses| FW-CI-templates
+    secrets -.->|reuses| FW-CI-templates
+    copyright -.->|reuses| FW-CI-templates
+    release -.->|reuses| FW-CI-templates
 ```
 
 ## CI Workflow
@@ -84,9 +69,9 @@ The main CI workflow runs on every push to `main` and on pull requests:
 - **Format Check**: Verifies code formatting with `ruff format --check`
 - **Test**: Runs pytest with coverage across Python 3.11, 3.12, and 3.13
 
-### Coverage Requirements
+### Coverage
 
-Tests must maintain at least 80% code coverage. Coverage reports are uploaded as artifacts.
+Coverage reports are uploaded as artifacts.
 
 ## Compliance Workflows
 
