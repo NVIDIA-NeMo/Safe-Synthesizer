@@ -14,6 +14,8 @@
 
 name: Conventional Commit
 
+# No path filter: this check validates the PR title against the conventional
+# commit format, which is independent of which files changed.
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
