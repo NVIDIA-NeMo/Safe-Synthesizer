@@ -40,7 +40,7 @@ repos:
     hooks:
       - id: copyright-check
         name: Check copyright headers
-        entry: uv run python tools/lint/copyright_fixer.py --check .
+        entry: python tools/lint/copyright_fixer.py --check .
         language: system
         pass_filenames: false
         types: [python]

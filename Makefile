@@ -124,7 +124,7 @@ format: ## Format the code
 lint: ## Lint the code
 	bash tools/lint/ruff-lint.sh
 	bash tools/lint/run-ty-check.sh
-	uv run python tools/lint/copyright_fixer.py --check .
+	python tools/lint/copyright_fixer.py --check .
 
 
 ### TESTING ###
