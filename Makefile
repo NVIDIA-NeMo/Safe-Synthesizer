@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 ### CONFIGURATION ###
 
 SHELL := /bin/bash
@@ -121,6 +124,7 @@ format: ## Format the code
 lint: ## Lint the code
 	bash tools/lint/ruff-lint.sh
 	bash tools/lint/run-ty-check.sh
+	uv run python tools/lint/copyright_fixer.py --check .
 
 
 ### TESTING ###

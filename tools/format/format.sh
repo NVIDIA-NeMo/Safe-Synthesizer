@@ -46,3 +46,6 @@ fi
 
 # shellcheck disable=SC2086
 $RUFF format "$NSS_ROOT_PATH" $filtered_files && $RUFF check --select I --fix "$NSS_ROOT_PATH" $filtered_files # no quotes around $filtered_files to preserve newlines
+
+# shellcheck disable=SC2086
+uv run python tools/lint/copyright_fixer.py $filtered_files
