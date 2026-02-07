@@ -47,10 +47,14 @@ runs:
       if: inputs.fetch-depth == '0'
       shell: bash
       run: |
-        # Use git merge-base to find the common ancestor
-        MERGE_BASE_SHA=$(git merge-base origin/${{ github.base_ref }} ${{ github.sha }})
+        if [ -n "${{ github.base_ref }}" ]; then
+          # Pull request: diff against the merge base with the target branch
+          MERGE_BASE_SHA=$(git merge-base origin/${{ github.base_ref }} ${{ github.sha }})
+        else
+          # Push to branch: diff against the previous commit
+          MERGE_BASE_SHA=$(git rev-parse HEAD~1)
+        fi
         echo "Merge Base SHA: $MERGE_BASE_SHA"
-        # Set the merge base as a step output for use in subsequent steps
         echo "merge_base=$MERGE_BASE_SHA" >> $GITHUB_OUTPUT
 
     - name: Install uv
