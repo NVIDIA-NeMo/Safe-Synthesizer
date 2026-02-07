@@ -50,8 +50,11 @@ jobs:
           bootstrap-tools: "true"
           python-version: "3.11"
 
+      - name: Install docs dependencies
+        run: uv sync --group docs --no-install-project
+
       - name: Build documentation
-        run: uv run --group docs mkdocs build
+        run: uv run --no-project --group docs mkdocs build
         env:
           MKDOCS_STRICT: "true"
 
