@@ -1,8 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+#!/usr/bin/env -S uv run --script
+#
+# /// script
+# dependencies = [
+#   "typer",
+# ]
+# ///
+
 
 """
-Copyright header fixer for NeMo Safe Synthesizer.
+Copyright header fixer for Safe Synthesizer.
 
 Scans Python files and adds SPDX copyright headers where missing.
 """

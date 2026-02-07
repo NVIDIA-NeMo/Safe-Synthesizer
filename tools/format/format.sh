@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 #
 # format.sh - Format (or check formatting of) changed Python files
 #
@@ -61,12 +62,12 @@ if [ "$CHECK_MODE" = true ]; then
     # shellcheck disable=SC2086
     $RUFF check --select I "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
-    python tools/lint/copyright_fixer.py --check $filtered_files
+    uv run --script tools/lint/copyright_fixer.py --check $filtered_files
 else
     # shellcheck disable=SC2086
     $RUFF format "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
     $RUFF check --select I --fix "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
-    python tools/lint/copyright_fixer.py $filtered_files
+    uv run --script tools/lint/copyright_fixer.py $filtered_files
 fi
