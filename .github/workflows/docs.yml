@@ -42,16 +42,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python environment
+        id: setup
+        uses: ./.github/actions/setup-python-env
         with:
+          fetch-depth: 0
+          bootstrap-tools: "true"
           python-version: "3.11"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Install docs dependencies
-        run: uv sync --frozen --group docs --no-install-project
 
       - name: Build documentation
         run: uv run --group docs mkdocs build
