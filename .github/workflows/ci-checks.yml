@@ -79,7 +79,7 @@ jobs:
       - name: Check code formatting
         run: |
           make bootstrap-nss dev
-          bash tools/format/format.sh ${{ steps.setup.outputs.merge-base }}
+          bash tools/format/format.sh --check ${{ steps.setup.outputs.merge-base }}
 
   lint:
     name: Lint
