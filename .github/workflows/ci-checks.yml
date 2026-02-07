@@ -42,6 +42,7 @@ jobs:
     name: Detect changes
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     # Set job outputs to values from filter step
     outputs:
