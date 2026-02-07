@@ -51,10 +51,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install docs dependencies
-        run: uv sync --group docs --no-install-project
+        run: uv sync --group docs --no-install-project --no-sources
 
       - name: Build documentation
-        run: uv run --no-project --group docs mkdocs build
+        run: uv run --no-project --no-sources --group docs mkdocs build
         env:
           MKDOCS_STRICT: "true"
 
