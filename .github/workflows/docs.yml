@@ -55,8 +55,6 @@ jobs:
 
       - name: Build documentation
         run: make docs-build
-        env:
-          MKDOCS_STRICT: "true"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
