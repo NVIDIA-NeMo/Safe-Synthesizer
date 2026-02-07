@@ -107,11 +107,11 @@ docs-serve: ## Serve the documentation site locally with live reload
 
 .PHONY: docs-build
 docs-build: ## Build the documentation site
-	uv run --group docs mkdocs build
+	uv run --frozen --no-project --group docs mkdocs build
 
 .PHONY: docs-deploy
 docs-deploy: ## Deploy the documentation site to GitHub Pages
-	uv run --group docs mkdocs gh-deploy --force
+	uv run --frozen --no-project --group docs mkdocs gh-deploy --force
 
 
 ### CODE QUALITY ###

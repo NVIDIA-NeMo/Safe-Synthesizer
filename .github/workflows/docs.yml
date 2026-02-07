@@ -51,10 +51,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install docs dependencies
-        run: uv sync --group docs --no-install-project --no-sources
+        run: make bootstrap-nss dev
 
       - name: Build documentation
-        run: uv run --no-project --no-sources --group docs mkdocs build
+        run: make docs-build
         env:
           MKDOCS_STRICT: "true"
 
