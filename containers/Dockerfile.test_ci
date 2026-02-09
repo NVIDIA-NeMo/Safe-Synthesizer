@@ -12,20 +12,21 @@ WORKDIR /workspace
 
 # Install CLI tools including uv (cached until tools/ or Makefile change)
 COPY Makefile .
-COPY pyproject.toml .
-COPY ruff.toml .
-COPY pytest.ini .
 COPY tools/ tools/
-COPY uv.lock .
+COPY pyproject.toml .
 RUN REPO_ROOT=/workspace make bootstrap-tools-ci
 
 # bootstrap-tools-ci installs tools to ~/.local/bin
 ENV PATH="/root/.local/bin:${PATH}"
 
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
+COPY ruff.toml .
+COPY pytest.ini .
 COPY README.md .
+COPY uv.lock .
 COPY src/ src/
 COPY tests/ tests/
 RUN make bootstrap-nss cpu
+
 
 RUN git config --global --add safe.directory /workspace
