@@ -8,6 +8,7 @@ from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.generation.processors import (
     GroupedDataProcessor,
     TabularDataProcessor,
+    TimeSeriesDataProcessor,
     create_processor,
 )
 from nemo_safe_synthesizer.training.backend import ModelMetadata
@@ -197,3 +198,65 @@ def test_create_processor_grouped(fixture_metadata):
         ),
         GroupedDataProcessor,
     )
+
+
+@pytest.fixture
+def fixture_timeseries_schema():
+    """Schema for time-series data with a timestamp column and numeric values."""
+    return {
+        "type": "object",
+        "properties": {
+            "timestamp": {"type": "string"},
+            "value": {"type": "number"},
+            "metric": {"type": "string"},
+        },
+        "required": ["timestamp", "value", "metric"],
+    }
+
+
+@pytest.fixture
+def fixture_valid_timeseries_jsonl():
+    """Valid time-series JSONL with consistent 60-second intervals."""
+    return (
+        '{"timestamp": "2024-01-01 00:00:00", "value": 10.5, "metric": "cpu"}\n'
+        '{"timestamp": "2024-01-01 00:01:00", "value": 12.3, "metric": "cpu"}\n'
+        '{"timestamp": "2024-01-01 00:02:00", "value": 11.8, "metric": "cpu"}\n'
+    )
+
+
+# Purpose: TimeSeriesDataProcessor should parse valid JSONL rows with consistent time intervals.
+# Data: 3 time-series records with 60-second intervals.
+# Asserts: 3 valid records; 0 invalid/errors; correct prompt_number.
+def test_timeseries_data_processor_valid_records(fixture_timeseries_schema, fixture_valid_timeseries_jsonl):
+    processor = TimeSeriesDataProcessor(
+        schema=fixture_timeseries_schema,
+        time_column="timestamp",
+        interval_seconds=60,
+        time_format="%Y-%m-%d %H:%M:%S",
+    )
+    response = processor(1, fixture_valid_timeseries_jsonl)
+    assert len(response.valid_records) == 3
+    assert len(response.invalid_records) == 0
+    assert len(response.errors) == 0
+    assert response.prompt_number == 1
+
+
+# Purpose: TimeSeriesDataProcessor should reject records with inconsistent time intervals.
+# Data: Records with 60-second expected interval but 120-second actual interval.
+# Asserts: 1 valid record; 2 invalid records (current + remaining cascade).
+def test_timeseries_data_processor_invalid_interval(fixture_timeseries_schema):
+    jsonl_str = (
+        '{"timestamp": "2024-01-01 00:00:00", "value": 10.5, "metric": "cpu"}\n'
+        '{"timestamp": "2024-01-01 00:02:00", "value": 12.3, "metric": "cpu"}\n'  # 120s gap instead of 60s
+        '{"timestamp": "2024-01-01 00:03:00", "value": 11.8, "metric": "cpu"}\n'
+    )
+    processor = TimeSeriesDataProcessor(
+        schema=fixture_timeseries_schema,
+        time_column="timestamp",
+        interval_seconds=60,
+        time_format="%Y-%m-%d %H:%M:%S",
+    )
+    response = processor(1, jsonl_str)
+    assert len(response.valid_records) == 1
+    assert len(response.invalid_records) == 2
+    assert len(response.errors) == 2

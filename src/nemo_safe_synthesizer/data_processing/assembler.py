@@ -32,6 +32,7 @@ from ..data_processing.stats import (
 )
 from ..defaults import (
     DEFAULT_CACHE_PREFIX,
+    PSEUDO_GROUP_COLUMN,
     TRAIN_SET_SIZE_BUFFER,
 )
 from ..errors import (
@@ -75,6 +76,61 @@ def _get_max_tokens_action(rope_scaling_factor: int | None) -> str:
             "group_training_examples_by parameter."
         )
         return max_tokens_action
+
+
+def _maybe_add_row_indices(dataset: Dataset | None, column: str) -> Dataset | None:
+    """Add a row index column to the dataset if it doesn't already exist.
+
+    This function is idempotent - if the column already exists, the dataset
+    is returned unchanged to avoid overwriting existing indices.
+
+    Args:
+        dataset: The dataset to add indices to, or None.
+        column: The name of the column to add.
+
+    Returns:
+        The dataset with the index column added, or None if input was None.
+    """
+    if dataset is None:
+        return None
+    if column in dataset.column_names:
+        return dataset
+    return dataset.add_column(column, list(range(len(dataset))))
+
+
+def _should_flush_example(
+    prev_row_idx: int | None,
+    row_idx: int,
+    current_group_value: str | None,
+    record_group: str,
+    num_sequences: int,
+    max_sequences: int | float,
+    token_total: int,
+    record_len: int,
+    token_budget: int,
+) -> bool:
+    """Determine if the current example should be flushed.
+
+    Args:
+        prev_row_idx: Previous record's row index.
+        row_idx: Current record's row index.
+        current_group_value: Current example's group value.
+        record_group: Current record's group value.
+        num_sequences: Number of sequences in current example.
+        max_sequences: Maximum sequences allowed per example.
+        token_total: Current token count in example.
+        record_len: Token count of current record.
+        token_budget: Maximum tokens allowed for this example.
+
+    Returns:
+        True if example should be flushed before adding this record.
+    """
+    restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
+    group_boundary = current_group_value is not None and record_group != current_group_value
+    would_exceed_seq = num_sequences >= max_sequences
+    would_exceed_tokens = token_total + record_len > token_budget
+
+    return restart_boundary or group_boundary or would_exceed_seq or would_exceed_tokens
 
 
 class Example:
@@ -136,7 +192,6 @@ class Example:
         if self.num_tokens > self.metadata.max_seq_length:
             max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
             msg = f"The number of tokens in an example exceeds the available context length. {max_tokens_action}"
-            logger.error(msg)
             raise GenerationError(msg)
 
     def to_dict(self) -> dict[str, list]:
@@ -205,7 +260,6 @@ class TrainingExampleAssembler(ABC):
                 f"You gave `test_set_size = {test_size}` and `len(dataset) = {len(dataset)}`. "
                 "Please reduce the test set size or provide a larger dataset."
             )
-            logger.error(msg)
             raise ParameterError(msg)
 
         self.metadata = metadata
@@ -219,6 +273,7 @@ class TrainingExampleAssembler(ABC):
         self.test_size = test_size
         self.keep_columns = keep_columns or []
         self.seed = seed
+        self._window_rng = None
 
         self.schema_prompt = utils.create_schema_prompt(
             dataset.column_names,
@@ -278,7 +333,29 @@ class TrainingExampleAssembler(ABC):
         cache_file_path: str | Path | None = None,
         keep_columns: list[str] | None = None,
         **kwargs,
-    ) -> GroupedDataExampleAssembler | TabularDataExampleAssembler:
+    ) -> GroupedDataExampleAssembler | TabularDataExampleAssembler | SequentialExampleAssembler:
+        if config.time_series.is_timeseries:
+            # group_by and order_by should be set by timeseries preprocessing
+            # (adds pseudo-group if needed, sets order_by to timestamp column)
+            group_by = config.data.group_training_examples_by
+            order_by = config.data.order_training_examples_by
+            if group_by is None or order_by is None:  # for type checking
+                raise RuntimeError("Internal error: group_by and order_by should be set by timeseries preprocessing")
+
+            return SequentialExampleAssembler(
+                group_training_examples_by=group_by,
+                order_training_examples_by=order_by,
+                dataset=dataset,
+                tokenizer=tokenizer,
+                metadata=metadata,
+                config=config,
+                test_size=config.training.validation_ratio,
+                seed=seed,
+                cache_file_path=cache_file_path,
+                keep_columns=keep_columns,
+                **kwargs,
+            )
+
         if config.data.group_training_examples_by is not None:
             return GroupedDataExampleAssembler(
                 group_training_examples_by=config.data.group_training_examples_by,
@@ -305,8 +382,19 @@ class TrainingExampleAssembler(ABC):
             )
 
     @staticmethod
-    def _convert_records_to_jsonl(records: dict[str, list]) -> dict[str, list[str]]:
-        """Convert records to JSONL format and return as list of strings in a dict"""
+    def _convert_records_to_jsonl(
+        records: dict[str, list],
+        exclude_columns: list[str] | None = None,
+    ) -> dict[str, list[str]]:
+        """Convert records to JSONL format and return as list of strings in a dict.
+
+        Args:
+            records: Dictionary of column names to list of values.
+            exclude_columns: Optional list of column names to exclude from JSONL output.
+                This is used to exclude internal columns (like pseudo-group) from training data.
+        """
+        if exclude_columns:
+            records = {k: v for k, v in records.items() if k not in exclude_columns}
         jsonl = records_to_jsonl(records)
         return {"text": [f"{r}\n" for r in extract_records_from_jsonl_string(jsonl)]}
 
@@ -339,9 +427,12 @@ class TrainingExampleAssembler(ABC):
                 "This likely means that the table is too wide to be used with this model. "
                 f"{max_tokens_action}"
             )
-            logger.error(msg)
             raise GenerationError(msg)
-        record_jsonl = self._convert_records_to_jsonl(dict(records))
+        # Exclude pseudo-group column from JSONL so the model never sees it
+        record_jsonl = self._convert_records_to_jsonl(
+            dict(records),
+            exclude_columns=[PSEUDO_GROUP_COLUMN],
+        )
         tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
         max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
         # Both the prompt and the records are enclosed by special tokens.
@@ -356,7 +447,6 @@ class TrainingExampleAssembler(ABC):
                     "At least one record requires more tokens than fit in the "
                     f"available context length. {max_tokens_action}"
                 )
-                logger.error(msg)
                 raise GenerationError(msg)
             self.stats["tokens_per_record"].update(len(ids))
         tokenized.update({"text": record_jsonl["text"]})
@@ -560,6 +650,527 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
         utils.log_training_example_stats(examples.stats)
 
         return examples
+
+
+class SequentialExampleAssembler(TabularDataExampleAssembler):
+    """Assembler for sequential/time series data that preserves record ordering.
+
+    This assembler extends TabularDataExampleAssembler to handle time series and other
+    sequential data where record order is semantically meaningful. Unlike the base class
+    which shuffles records, this assembler maintains chronological order within groups
+    and ensures each training example contains records from only one group.
+
+    Key Concepts:
+        - **Order Preservation**: Records are never shuffled. Within each group, records
+          maintain their original order (typically chronological by timestamp).
+        - **Single-Group Examples**: Each training example contains records from exactly
+          one group. This ensures the model learns patterns within a group's sequence
+          without cross-group contamination.
+        - **Sequence Continuation**: When a group's records span multiple examples, the
+          sequence continues naturally across example boundaries. The model sees
+          (example1: records 0-99) then (example2: records 100-199) for the same group.
+        - **Pseudo-Group Handling**: When no group column is specified, preprocessing
+          adds a PSEUDO_GROUP_COLUMN so ungrouped time series is treated as a single
+          group. This unifies the grouped and ungrouped code paths.
+        - **Initial Prefill**: For each group, the first 3 records are stored in
+          `model_metadata.initial_prefill` as a dict mapping group_id -> prefill string.
+          This is used by TimeseriesBackend during generation to seed each group's
+          context.
+
+    Processing Flow:
+        1. **Initialization**:
+           a. Validate that group and order columns exist in dataset
+           b. Reorder columns: group_by first, order_by second, then rest
+           c. Build keep_columns list to preserve group/order through tokenization
+           d. Override schema_prompt to exclude PSEUDO_GROUP_COLUMN from visible schema
+
+        2. **Train/Test Split** (_apply_grouped_train_test_split):
+           a. Split along group boundaries using GroupShuffleSplit
+           b. Entire groups go to train OR validation, never split across
+           c. Re-sort after split (GroupShuffleSplit shuffles indices)
+           d. Add row indices column for detecting dataset restart boundaries
+
+        3. **Dataset Preparation** (_prepare_dataset_for_training):
+           a. For data_fraction > 1, concatenate multiple passes of the dataset
+              (no shuffling, just sequential duplication)
+           b. Run example generation via _fill_context_with_records_generator
+
+        4. **Example Generation** (_fill_context_with_records_generator):
+           a. Iterate through records sequentially
+           b. Track token budget per example (randomized between MIN/MAX_FILL_RATIO)
+           c. Flush example when any boundary condition is met:
+              - Group changes (record_group != current_group_value)
+              - Dataset restarts (row_idx < prev_row_idx, from duplication wrap)
+              - Token budget exceeded
+              - Max sequences per example reached
+           d. Each flushed example becomes one training sample
+
+    Attributes:
+        group_by_column (str): Column name used to group records. For time series,
+            this might be device_id, customer_id, etc. For ungrouped data, this is
+            PSEUDO_GROUP_COLUMN added during preprocessing.
+        order_by_column (str): Column name used to order records within groups.
+            Typically a timestamp column for time series data.
+        _ROW_INDEX_COLUMN (str): Internal column name ("__row_idx") added to track
+            original row positions. Used to detect dataset restart boundaries when
+            data_fraction > 1 causes dataset duplication.
+        _MIN_FILL_RATIO (float): Minimum token fill ratio for examples (0.7).
+            Examples are filled to between MIN and MAX ratio of max_new_tokens.
+        _MAX_FILL_RATIO (float): Maximum token fill ratio for examples (1.0).
+        _window_rng (np.random.Generator | None): Random generator for sampling
+            token budgets. None for validation datasets (always use max budget).
+
+    Example:
+        For a dataset with 2 groups (A, B) and records ordered by timestamp:
+        - Group A: records a1, a2, a3, a4, a5
+        - Group B: records b1, b2, b3, b4
+
+        With token budget fitting ~3 records per example, output might be:
+        - Example 1: [a1, a2, a3] (group A)
+        - Example 2: [a4, a5] (group A, continues sequence)
+        - Example 3: [b1, b2, b3] (group B)
+        - Example 4: [b4] (group B, continues sequence)
+
+        Note: Examples never mix groups (no [a1, a2, b1]).
+    """
+
+    _ROW_INDEX_COLUMN = "__row_idx"
+    _MIN_FILL_RATIO = 0.7
+    _MAX_FILL_RATIO = 1.0
+
+    def __init__(
+        self,
+        dataset: Dataset,
+        tokenizer: PreTrainedTokenizer,
+        metadata: ModelMetadata,
+        *,
+        group_training_examples_by: str,
+        order_training_examples_by: str,
+        keep_columns: list[str] | None = None,
+        **kwargs,
+    ):
+        """Initialize the sequential example assembler.
+
+        Args:
+            dataset: The dataset to assemble examples from.
+            tokenizer: The tokenizer to use for encoding.
+            metadata: Model metadata containing configuration.
+            group_training_examples_by: Column to group training examples by.
+                For time series without explicit grouping, this is set to PSEUDO_GROUP_COLUMN
+                by the preprocessing step.
+            order_training_examples_by: Column to order records within groups.
+            keep_columns: Optional list of columns to preserve through tokenization.
+            **kwargs: Additional arguments passed to parent class.
+        """
+        self.group_by_column = group_training_examples_by
+        self.order_by_column = order_training_examples_by
+
+        self._validate_columns(dataset)
+        dataset = self._reorder_columns(dataset)
+        keep_columns = self._build_keep_columns(keep_columns)
+
+        super().__init__(
+            dataset=dataset,
+            tokenizer=tokenizer,
+            metadata=metadata,
+            keep_columns=keep_columns,
+            **kwargs,
+        )
+
+        self._build_schema_prompt_excluding_pseudo_group(dataset, metadata, tokenizer)
+
+    def _validate_columns(self, dataset: Dataset) -> None:
+        """Validate that required columns exist in the dataset.
+
+        Args:
+            dataset: The dataset to validate.
+
+        Raises:
+            ParameterError: If group or order column is not found in dataset.
+        """
+        if self.group_by_column not in dataset.column_names:
+            raise ParameterError(f"Group by column '{self.group_by_column}' not found in dataset.")
+
+        if self.order_by_column not in dataset.column_names:
+            raise ParameterError(f"Order by column '{self.order_by_column}' not found in dataset.")
+
+    def _reorder_columns(self, dataset: Dataset) -> Dataset:
+        """Reorder columns: group_by first, order_by second, then the rest.
+
+        Args:
+            dataset: The dataset to reorder.
+
+        Returns:
+            Dataset with reordered columns.
+        """
+        current_columns = list(dataset.column_names)
+        reordered_columns = [self.group_by_column]
+        current_columns.remove(self.group_by_column)
+
+        if self.order_by_column in current_columns:
+            reordered_columns.append(self.order_by_column)
+            current_columns.remove(self.order_by_column)
+
+        reordered_columns.extend(current_columns)
+        return dataset.select_columns(reordered_columns)
+
+    def _build_keep_columns(self, keep_columns: list[str] | None) -> list[str]:
+        """Build list of columns to preserve through tokenization.
+
+        Args:
+            keep_columns: Optional list of columns to keep.
+
+        Returns:
+            List with group and order columns added if not present.
+        """
+        keep_columns = list(keep_columns or [])
+        if self.group_by_column not in keep_columns:
+            keep_columns.append(self.group_by_column)
+        if self.order_by_column not in keep_columns:
+            keep_columns.append(self.order_by_column)
+        return keep_columns
+
+    def _build_schema_prompt_excluding_pseudo_group(
+        self, dataset: Dataset, metadata: ModelMetadata, tokenizer: PreTrainedTokenizer
+    ) -> None:
+        """Override schema_prompt to exclude PSEUDO_GROUP_COLUMN from the schema.
+
+        Must be called after super().__init__ which sets the initial schema_prompt.
+
+        Args:
+            dataset: The dataset with column names.
+            metadata: Model metadata with instruction and prompt config.
+            tokenizer: Tokenizer for computing prompt IDs.
+        """
+        self.schema_prompt = utils.create_schema_prompt(
+            dataset.column_names,
+            instruction=metadata.instruction,
+            prompt_template=metadata.prompt_config.template,
+            exclude_columns=[PSEUDO_GROUP_COLUMN],
+        )
+        self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
+
+    def _preprocess_before_splitting(self, tokenized_records: Dataset) -> Dataset:
+        """No preprocessing needed - sorting is done after split in _apply_grouped_train_test_split."""
+        return tokenized_records
+
+    def _sort_dataset_by_group_and_order(self, dataset: Dataset) -> Dataset:
+        """Sort records by group and/or order column, preserving original columns."""
+        sort_columns = [col for col in (self.group_by_column, self.order_by_column) if col]
+        if not sort_columns or len(dataset) <= 1:
+            return dataset
+
+        df = dataset.select_columns(sort_columns).to_pandas().copy()
+        df["__record_idx__"] = range(len(df))
+        df_sorted = df.sort_values(sort_columns + ["__record_idx__"], kind="mergesort")
+        sorted_indices = df_sorted["__record_idx__"].to_list()
+        return dataset.select(sorted_indices)
+
+    def _count_groups(self, dataset: Dataset | None) -> int:
+        """Count unique groups in the dataset.
+
+        Args:
+            dataset: The dataset to count groups in, or None (e.g., validation_dataset
+                when no validation split is configured).
+
+        Returns:
+            Number of unique groups, or 0 if dataset is None.
+        """
+        if dataset is None:
+            return 0
+        return len(set(dataset[self.group_by_column]))
+
+    @property
+    def num_groups_train(self) -> int:
+        return self._count_groups(self.train_dataset)
+
+    @property
+    def num_groups_validation(self) -> int:
+        return self._count_groups(self.validation_dataset)
+
+    def _get_initial_prefill(self) -> dict[str, str]:
+        """Return sample records from the training dataset for each group.
+
+        Returns a dictionary mapping each group_id to its prefill string (first 3 samples per group).
+        For pseudo-grouped single sequences, returns a dict with one key.
+
+        Note:
+            This method assumes the dataset is already ordered by the timestamp/order column
+            within each group (done by _prepare_dataset_for_training).
+
+        Returns:
+            Dict mapping group values to prefill strings (first 3 samples per group).
+        """
+        if self.train_dataset is None or len(self.train_dataset) == 0:
+            return {}
+
+        if self.group_by_column not in self.train_dataset.column_names:
+            return {}
+
+        # Get first 3 samples from each group, return as dict
+        # Use the preserved 'text' column directly to avoid encode/decode roundtrip issues
+        seen_groups: dict[str, list[str]] = {}
+        for record in self.train_dataset:
+            group_value = record[self.group_by_column]
+            if group_value not in seen_groups:
+                seen_groups[group_value] = []
+            if len(seen_groups[group_value]) < 3:
+                seen_groups[group_value].append(record["text"])
+
+        # Convert lists to joined strings
+        return {group: " " + "\n".join(samples) for group, samples in seen_groups.items()}
+
+    def _apply_train_test_split(self, dataset: Dataset) -> None:
+        """Override split logic to preserve record order and split along group boundaries."""
+        self._apply_grouped_train_test_split(dataset)
+
+    def _apply_grouped_train_test_split(self, dataset: Dataset) -> None:
+        """Split datasets along group boundaries when grouping is enabled.
+
+        With only 1 group, all records go to train and validation is None.
+        """
+        if len(dataset) == 0:
+            self.train_dataset = _maybe_add_row_indices(dataset, self._ROW_INDEX_COLUMN)
+            self.validation_dataset = None
+            return
+
+        if self.test_size is None or self.test_size == 0:
+            sorted_dataset = self._sort_dataset_by_group_and_order(dataset)
+            self.train_dataset = _maybe_add_row_indices(sorted_dataset, self._ROW_INDEX_COLUMN)
+            self.validation_dataset = None
+            return
+
+        group_column = self.group_by_column
+        subset = dataset.select_columns([group_column]).to_pandas().copy()
+        subset["__record_idx__"] = range(len(subset))
+        train_df, test_df = grouped_train_test_split(
+            subset,
+            group_by=group_column,
+            test_size=self.test_size,
+            random_state=self.seed,
+        )
+
+        train_indices = train_df["__record_idx__"].tolist()
+        train_dataset = dataset.select(train_indices).flatten_indices()
+        # Re-sort needed: GroupShuffleSplit shuffles indices, losing chronological order
+        train_dataset = self._sort_dataset_by_group_and_order(train_dataset)
+        self.train_dataset = _maybe_add_row_indices(train_dataset, self._ROW_INDEX_COLUMN)
+
+        if test_df is None or len(test_df) == 0:
+            self.validation_dataset = None
+            return
+
+        test_indices = test_df["__record_idx__"].tolist()
+        validation_dataset = dataset.select(test_indices).flatten_indices()
+        # Re-sort needed: GroupShuffleSplit shuffles indices, losing chronological order
+        validation_dataset = self._sort_dataset_by_group_and_order(validation_dataset)
+        validation_dataset.info.description += "is_val"
+        self.validation_dataset = _maybe_add_row_indices(validation_dataset, self._ROW_INDEX_COLUMN)
+
+    def _prepare_dataset_for_training(
+        self, dataset: Dataset, data_fraction: float, rng: np.random.Generator
+    ) -> Dataset | None:
+        """Prepare a dataset for training by duplicating records sequentially.
+
+        Unlike the tabular assembler, this method never shuffles the records. When additional
+        data are required to satisfy ``data_fraction > 1``, it concatenates extra passes over the
+        dataset so examples consume the series from the start again.
+        """
+
+        self._window_rng = None
+
+        if dataset is None:
+            return None
+
+        is_val_dataset = "is_val" in dataset.info.description
+        if not is_val_dataset:
+            self._window_rng = rng
+
+        ds_list: list[Dataset] = []
+        decimal, integer = math.modf(data_fraction)
+
+        if "is_val" in dataset.info.description:
+            ds_list.append(dataset)
+        else:
+            for _ in range(int(integer)):
+                ds_list.append(dataset)
+
+            if decimal > 0:
+                num_records = math.ceil(decimal * len(dataset))
+                if num_records > 0:
+                    ds_list.append(dataset.select(range(num_records)))
+
+        if not ds_list:
+            # data_fraction could be < 1 with decimal == 0 if the dataset is empty; guard accordingly.
+            return None
+
+        if len(ds_list) == 1:
+            processed_dataset = ds_list[0].flatten_indices()
+        else:
+            processed_dataset = concatenate_datasets(ds_list).flatten_indices()
+
+        return self._run_example_generation(self._fill_context_with_records_generator, processed_dataset)
+
+    def assemble_training_examples(self, data_fraction: float = 1.0) -> TrainingExamples:
+        """Build examples preserving sequential order within groups.
+
+        Args:
+            data_fraction: Fraction of the dataset to use for example generation.
+
+        Returns:
+            TrainingExamples object containing train/test datasets and statistics
+            including examples_per_group distribution.
+        """
+        logger.info(
+            f"Assembling sequential examples from {data_fraction:.1%} of the input records",
+        )
+
+        rng = utils.get_random_number_generator(self.seed)
+        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+
+        examples = TrainingExamples(
+            train=training_dataset,
+            test=validation_dataset,
+            stats={
+                "tokens_per_record": self.stats["tokens_per_record"],
+                "tokens_per_example": self.stats["tokens_per_example"],
+                "records_per_example": self.stats["records_per_example"],
+                "examples_per_group": self.stats["examples_per_group"],
+            },
+        )
+
+        utils.log_training_example_stats(examples.stats)
+
+        return examples
+
+    def _next_token_budget(self, max_new_tokens: int, is_val: bool) -> int:
+        """Sample the per-example token budget."""
+        if is_val or self._window_rng is None:
+            return max_new_tokens
+        ratio = float(self._window_rng.uniform(self._MIN_FILL_RATIO, self._MAX_FILL_RATIO))
+        budget = int(max_new_tokens * ratio)
+        return max(1, min(max_new_tokens, budget))
+
+    def _flush_example(self, dataset: Dataset, start: int, end: int, stats_target: dict) -> dict | None:
+        """Create an Example from a range of records and update statistics.
+
+        Args:
+            dataset: The dataset containing records.
+            start: Start index (inclusive).
+            end: End index (exclusive).
+            stats_target: Dictionary to update with statistics.
+
+        Returns:
+            Example dictionary or None if range is empty.
+        """
+        if start == end:
+            return None
+        example = Example(
+            prompt=self.schema_prompt,
+            tokenizer=self.tokenizer,
+            metadata=self.metadata,
+        )
+        input_ids = dataset[start:end]["input_ids"]
+        attention_mask = dataset[start:end]["attention_mask"]
+        example.add_sequence(
+            {
+                "input_ids": list(chain(*input_ids)),
+                "attention_mask": list(chain(*attention_mask)),
+            }
+        )
+        stats_target["records_per_example"].update(len(input_ids))
+        stats_target["tokens_per_example"].update(example.num_tokens)
+        return example.to_dict()
+
+    def _fill_context_with_records_generator(self, dataset: Dataset) -> GeneratorType:
+        """Generate ordered examples while stopping at natural dataset boundaries."""
+        if len(dataset) == 0:
+            return
+
+        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids) - 2 * NUM_SPECIAL_TOKENS
+        is_val = "is_val" in dataset.info.description
+        stats_target = self.stats_val if is_val else self.stats
+        max_sequences = self.metadata.max_sequences_per_example or math.inf
+        token_budget = self._next_token_budget(max_new_tokens, is_val)
+        group_column = self.group_by_column
+
+        # Iteration indices (0-based positions in current dataset, for slicing):
+        #   example_start: start of current example being built
+        #   current_idx: current position in iteration
+        # Stored row indices (from _ROW_INDEX_COLUMN, persist through dataset duplication):
+        #   row_idx/prev_row_idx: original positions, used to detect dataset restart boundaries
+        #   when dataset is duplicated (0,1,2,0,1,2...), row_idx < prev_row_idx signals wrap-around
+        example_start = 0
+        current_idx = 0
+        num_sequences = 0
+        token_total = 0
+        prev_row_idx = None
+        current_group_value = None
+        num_examples = 0
+
+        # Track examples per group for statistics
+        examples_per_group: dict[str, int] = defaultdict(int)
+
+        with tqdm(total=len(dataset), desc="Assembling examples", unit="records") as pbar:
+            while current_idx < len(dataset):
+                pbar.update(1)
+                record = dataset[current_idx]
+                row_idx = record[self._ROW_INDEX_COLUMN]
+                record_len = len(record["input_ids"])
+                record_group = record[group_column]
+
+                # Expand budget if first record is larger than budget (ensures it always fits)
+                if token_total == 0 and record_len > token_budget:
+                    token_budget = record_len
+
+                # Set group value at start of new example
+                if token_total == 0:
+                    current_group_value = record_group
+
+                if _should_flush_example(
+                    prev_row_idx=prev_row_idx,
+                    row_idx=row_idx,
+                    current_group_value=current_group_value,
+                    record_group=record_group,
+                    num_sequences=num_sequences,
+                    max_sequences=max_sequences,
+                    token_total=token_total,
+                    record_len=record_len,
+                    token_budget=token_budget,
+                ):
+                    example_dict = self._flush_example(dataset, example_start, current_idx, stats_target)
+                    if example_dict is not None:
+                        num_examples += 1
+                        examples_per_group[current_group_value] += 1
+                        pbar.set_postfix({"num_examples": num_examples})
+                        yield example_dict
+                    # Reset state for next example
+                    example_start = current_idx
+                    num_sequences = 0
+                    token_total = 0
+                    prev_row_idx = None
+                    current_group_value = None
+                    token_budget = self._next_token_budget(max_new_tokens, is_val)
+                    continue
+
+                token_total += record_len
+                num_sequences += 1
+                prev_row_idx = row_idx
+                current_idx += 1
+
+            # Flush remaining records
+            example_dict = self._flush_example(dataset, example_start, len(dataset), stats_target)
+            if example_dict is not None:
+                num_examples += 1
+                if current_group_value is not None:
+                    examples_per_group[current_group_value] += 1
+                pbar.set_postfix({"num_examples": num_examples})
+                yield example_dict
+
+        # Update stats with examples per group
+        for count in examples_per_group.values():
+            stats_target["examples_per_group"].update(count)
 
 
 class GroupedDataExampleAssembler(TrainingExampleAssembler):

@@ -38,6 +38,8 @@ def create_schema_prompt(
     columns: list[str],
     instruction: str,
     prompt_template: str,
+    prefill: str = "",
+    exclude_columns: list[str] | None = None,
 ) -> str:
     """Create the schema prompt based on the given column names.
 
@@ -49,7 +51,12 @@ def create_schema_prompt(
     Returns:
         The schema prompt.
     """
-    return prompt_template.format(instruction=instruction, schema=",".join([f'"{c}":<unk>' for c in columns]))
+    exclude_set = set(exclude_columns or [])
+    return prompt_template.format(
+        instruction=instruction,
+        schema=",".join([f'"{c}":<unk>' for c in columns if c not in exclude_set]),
+        prefill=prefill,
+    )
 
 
 def get_random_number_generator(seed: int) -> np.random.Generator:

@@ -55,6 +55,13 @@ DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE = 16
 NUM_EVAL_BATCHES_TABULAR = 1
 NUM_EVAL_BATCHES_GROUPED = 1
 
+# timeseries
+
+# Pseudo-group column name for single-sequence time series
+# This column is added internally when no group column is specified,
+# allowing unified processing of grouped and ungrouped time series.
+# It is excluded from JSONL conversion so the model never sees it.
+PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 
 # training +  parameters
 DEFAULT_BASE_SEQ_LENGTH = 2048
@@ -62,7 +69,7 @@ MAX_ROPE_SCALING_FACTOR = 6
 DEFAULT_MAX_SEQ_LENGTH = DEFAULT_BASE_SEQ_LENGTH * MAX_ROPE_SCALING_FACTOR
 
 DEFAULT_PRETRAINED_MODEL_NAME = "TinyLlama-1.1B-Chat-v1.0"
-PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]"
+PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]{prefill}"
 DEFAULT_INSTRUCTION = "Generate a JSONL dataset with the following columns: "
 DEFAULT_SAMPLING_PARAMETERS = {
     "repetition_penalty": 1.0,

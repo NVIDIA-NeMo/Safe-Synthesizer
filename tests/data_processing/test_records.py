@@ -9,8 +9,11 @@ from io import BytesIO
 import numpy as np
 import pandas as pd
 from nemo_safe_synthesizer.data_processing.record_utils import (
+    _extract_timestamp_seconds,
+    _validate_time_interval,
     check_record_for_large_numbers,
     extract_and_validate_records,
+    extract_and_validate_timeseries_records,
     is_safe_for_float_conversion,
     normalize_dataframe,
 )
@@ -284,3 +287,222 @@ def test_normalize_dataframe_carriage_return_repro(
     # check for equality before and after. We just want to make sure the
     # DataFrame writes successfully.
     _run_csv_writer(normalized_df)
+
+
+def test_extract_timestamp_seconds():
+    """Test _extract_timestamp_seconds with datetime, elapsed, missing, and invalid cases."""
+    # Datetime format
+    record_dt = {"timestamp": "2024-01-01 12:00:00", "value": 1}
+    result, error = _extract_timestamp_seconds(record_dt, "timestamp", "%Y-%m-%d %H:%M:%S")
+    assert error is None
+    assert result is not None
+    assert isinstance(result, int)
+
+    # Elapsed seconds format
+    record_elapsed = {"elapsed_seconds": 3600, "value": 1}
+    result, error = _extract_timestamp_seconds(record_elapsed, "elapsed_seconds", "elapsed_seconds")
+    assert error is None
+    assert result == 3600
+
+    # Missing timestamp column
+    record_missing = {"value": 1}
+    result, error = _extract_timestamp_seconds(record_missing, "timestamp", "%Y-%m-%d %H:%M:%S")
+    assert result is None
+    assert error is not None
+    assert "Missing 'timestamp'" in error[0]
+    assert error[1] == "TimeSeries"
+
+    # Invalid timestamp value
+    record_invalid = {"timestamp": "not-a-timestamp", "value": 1}
+    result, error = _extract_timestamp_seconds(record_invalid, "timestamp", "%Y-%m-%d %H:%M:%S")
+    assert result is None
+    assert error is not None
+    assert "Invalid 'timestamp'" in error[0]
+    assert error[1] == "TimeSeries"
+
+
+def test_validate_time_interval_cases():
+    """Test _validate_time_interval in multiple cases: first record, valid, invalid, day rollover."""
+
+    # First record (no previous timestamp)
+    result_seconds, result_offset, error = _validate_time_interval(
+        timestamp_seconds=0,
+        last_absolute_seconds=None,
+        day_offset=0,
+        interval_seconds=3600,
+        time_column="timestamp",
+        allow_rollover=True,
+    )
+    assert error is None
+    assert result_seconds == 0
+    assert result_offset == 0
+
+    # Valid interval step
+    result_seconds, result_offset, error = _validate_time_interval(
+        timestamp_seconds=3600,
+        last_absolute_seconds=0,
+        day_offset=0,
+        interval_seconds=3600,
+        time_column="timestamp",
+        allow_rollover=True,
+    )
+    assert error is None
+    assert result_seconds == 3600
+
+    # Invalid interval step
+    result_seconds, result_offset, error = _validate_time_interval(
+        timestamp_seconds=7200,  # 2 hours, but expected 1 hour
+        last_absolute_seconds=0,
+        day_offset=0,
+        interval_seconds=3600,
+        time_column="timestamp",
+        allow_rollover=True,
+    )
+    assert error is not None
+    assert "must advance in 3600 seconds increments" in error[0]
+    assert error[1] == "TimeSeries"
+
+    # Day rollover (23:00 -> 00:00 transition)
+    # 23:00 = 82800 seconds, 00:00 = 0 seconds
+    result_seconds, result_offset, error = _validate_time_interval(
+        timestamp_seconds=0,  # 00:00
+        last_absolute_seconds=82800,  # 23:00
+        day_offset=0,
+        interval_seconds=3600,
+        time_column="timestamp",
+        allow_rollover=True,
+    )
+    assert error is None
+    assert result_offset == 86400
+    assert result_seconds == 86400  # 0 + 86400
+
+
+def test_extract_and_validate_timeseries_records_valid():
+    """Test extracting valid series records."""
+    schema = {
+        "type": "object",
+        "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
+        "required": ["timestamp", "value"],
+    }
+    jsonl = (
+        '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
+        '{"timestamp": "2024-01-01 01:00:00", "value": 2}\n'
+        '{"timestamp": "2024-01-01 02:00:00", "value": 3}\n'
+    )
+
+    valid, invalid, errors = extract_and_validate_timeseries_records(
+        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+    )
+
+    assert len(valid) == 3
+    assert len(invalid) == 0
+    assert len(errors) == 0
+
+
+def test_extract_and_validate_timeseries_records_no_interval_validation():
+    """Test that records pass when interval_seconds is None."""
+    schema = {
+        "type": "object",
+        "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
+        "required": ["timestamp", "value"],
+    }
+    # Irregular intervals - would fail with interval validation
+    jsonl = (
+        '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
+        '{"timestamp": "2024-01-01 02:30:00", "value": 2}\n'
+        '{"timestamp": "2024-01-01 05:00:00", "value": 3}\n'
+    )
+
+    valid, invalid, errors = extract_and_validate_timeseries_records(
+        jsonl, schema, time_column="timestamp", interval_seconds=None, time_format="%Y-%m-%d %H:%M:%S"
+    )
+
+    assert len(valid) == 3
+    assert len(invalid) == 0
+    assert len(errors) == 0
+
+
+def test_extract_and_validate_timeseries_records_invalid_interval():
+    """Test that invalid interval marks remaining records as invalid."""
+    schema = {
+        "type": "object",
+        "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
+        "required": ["timestamp", "value"],
+    }
+    # Second record skips an hour
+    jsonl = (
+        '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
+        '{"timestamp": "2024-01-01 02:00:00", "value": 2}\n'  # Should be 01:00:00
+        '{"timestamp": "2024-01-01 03:00:00", "value": 3}\n'
+    )
+
+    valid, invalid, errors = extract_and_validate_timeseries_records(
+        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+    )
+
+    assert len(valid) == 1  # Only first record is valid
+    assert len(invalid) == 2  # Second and third are invalid
+    assert len(errors) == 2
+
+
+def test_extract_and_validate_timeseries_records_invalid_json():
+    """Test that invalid JSON stops validation."""
+    schema = {
+        "type": "object",
+        "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
+    }
+    jsonl = (
+        '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
+        '{"timestamp": "2024-01-01 01:00:00", "value": invalid}\n'  # Invalid JSON
+        '{"timestamp": "2024-01-01 02:00:00", "value": 3}\n'
+    )
+
+    valid, invalid, errors = extract_and_validate_timeseries_records(
+        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+    )
+
+    assert len(valid) == 1
+    assert len(invalid) == 1
+    assert len(errors) == 1
+    assert "Invalid JSON" in errors[0][0]
+
+
+def test_extract_and_validate_timeseries_records_elapsed_time():
+    """Test with elapsed_seconds time format."""
+    schema = {
+        "type": "object",
+        "properties": {"elapsed_seconds": {"type": "integer"}, "value": {"type": "integer"}},
+        "required": ["elapsed_seconds", "value"],
+    }
+    jsonl = (
+        '{"elapsed_seconds": 0, "value": 1}\n'
+        '{"elapsed_seconds": 3600, "value": 2}\n'
+        '{"elapsed_seconds": 7200, "value": 3}\n'
+    )
+
+    valid, invalid, errors = extract_and_validate_timeseries_records(
+        jsonl, schema, time_column="elapsed_seconds", interval_seconds=3600, time_format="elapsed_seconds"
+    )
+
+    assert len(valid) == 3
+    assert len(invalid) == 0
+    assert len(errors) == 0
+
+
+def test_extract_and_validate_timeseries_records_missing_timestamp():
+    """Test that missing timestamp column stops validation."""
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": "integer"}},
+        "required": ["value"],
+    }
+    jsonl = '{"value": 1}\n{"value": 2}\n'
+
+    valid, invalid, errors = extract_and_validate_timeseries_records(
+        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+    )
+
+    assert len(valid) == 0
+    assert len(invalid) == 1
+    assert len(errors) == 1
+    assert "Missing 'timestamp'" in errors[0][0]

@@ -125,3 +125,12 @@ class GenerateParameters(Parameters, BaseModel):
             ),
         ),
     ] = "regex"
+
+    # TODO: We will merge this with `timestamp_validation_mode` described in the MR !5153
+    enforce_timeseries_fidelity: Annotated[
+        bool,
+        Field(
+            title="enforce_timeseries_fidelity",
+            description="Enforce timeseries fidelity by enforcing the time series order, intervals, start and end times of the records.",
+        ),
+    ] = False

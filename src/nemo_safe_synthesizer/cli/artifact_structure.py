@@ -368,7 +368,13 @@ class Workdir:
 
     @property
     def project_dir(self) -> Path:
-        """Get the project directory path ($base_path/<config>---<dataset>/)."""
+        """Get the project directory path ($base_path/<config>---<dataset>/).
+
+        If an explicit run path was provided, returns its parent directory.
+        Otherwise returns $base_path/<config>---<dataset>/.
+        """
+        if self._explicit_run_path is not None:
+            return self._explicit_run_path.parent
         return self.base_path / self.project_name
 
     @property

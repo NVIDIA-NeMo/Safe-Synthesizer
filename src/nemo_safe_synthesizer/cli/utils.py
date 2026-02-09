@@ -156,7 +156,10 @@ def _create_workdir(
                 "Run training first or specify a path with an existing trained adapter."
             )
 
-        # Start a new generation run for unique output files
+        # When --run-path is explicitly provided, use that path directly for generation
+        # (don't create a new timestamped run). Otherwise, create a new generation run.
+        if run_path is not None:
+            return parent_workdir
         workdir = parent_workdir.new_generation_run()
         return workdir
 

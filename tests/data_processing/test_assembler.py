@@ -1,19 +1,27 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from pathlib import Path
 from typing import cast
 
+import pandas as pd
 import pytest
 from datasets import Dataset
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.assembler import (
     Example,
     GroupedDataExampleAssembler,
+    SequentialExampleAssembler,
     TabularDataExampleAssembler,
     TrainingExampleAssembler,
+    _should_flush_example,
 )
-from nemo_safe_synthesizer.defaults import PROMPT_TEMPLATE
+from nemo_safe_synthesizer.data_processing.record_utils import (
+    check_if_records_are_ordered,
+    extract_records_from_jsonl_string,
+)
+from nemo_safe_synthesizer.defaults import PROMPT_TEMPLATE, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import DEFAULT_MAX_SEQ_LENGTH, LLMPromptConfig, ModelMetadata
 from transformers import PretrainedConfig, PreTrainedTokenizer
@@ -626,3 +634,447 @@ def test_create_group_example_assembler(
         ),
         GroupedDataExampleAssembler,
     )
+
+
+@pytest.fixture
+def fixture_sequential_metadata(
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_autoconfig: PretrainedConfig,
+) -> ModelMetadata:
+    """Create ModelMetadata for SequentialExampleAssembler tests."""
+    return ModelMetadata(
+        base_max_seq_length=2048,
+        prompt_config=LLMPromptConfig(
+            template=PROMPT_TEMPLATE,
+            add_bos_token_to_prompt=True,
+            add_eos_token_to_prompt=True,
+            bos_token="<s>",
+            bos_token_id=1,
+            eos_token="</s>",
+            eos_token_id=2,
+        ),
+        model_name_or_path=fixture_tokenizer.name_or_path,
+        autoconfig=fixture_autoconfig,
+        save_path=Path(fixture_session_cache_dir),
+    )
+
+
+def test_sequential_assembler_raises_for_missing_group_column(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler raises for missing group column."""
+    with pytest.raises(ParameterError, match="Group by column.*not found in dataset"):
+        SequentialExampleAssembler(
+            dataset=fixture_iris_dataset,
+            tokenizer=fixture_tokenizer,
+            metadata=fixture_sequential_metadata,
+            group_training_examples_by="nonexistent_column",
+            order_training_examples_by="sepal.length",
+            cache_file_path=fixture_session_cache_dir,
+            seed=1,
+        )
+
+
+def test_sequential_assembler_raises_for_missing_order_column(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler raises for missing order column."""
+    with pytest.raises(ParameterError, match="Order by column.*not found in dataset"):
+        SequentialExampleAssembler(
+            dataset=fixture_iris_dataset,
+            tokenizer=fixture_tokenizer,
+            metadata=fixture_sequential_metadata,
+            group_training_examples_by="variety",
+            order_training_examples_by="nonexistent_column",
+            cache_file_path=fixture_session_cache_dir,
+            seed=1,
+        )
+
+
+def test_sequential_assembler_reorders_columns(
+    fixture_chickweight_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler puts group and order columns first."""
+    assembler = SequentialExampleAssembler(
+        dataset=fixture_chickweight_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="Chick",
+        order_training_examples_by="Time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=1,
+    )
+    assert assembler.schema_prompt.index("Chick") < assembler.schema_prompt.index("Time")
+
+
+def test_sequential_assembler_excludes_pseudo_group_from_schema(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler excludes PSEUDO_GROUP_COLUMN from schema."""
+    df = fixture_iris_dataset.to_pandas()
+    df[PSEUDO_GROUP_COLUMN] = 0
+    dataset_with_pseudo = Dataset.from_pandas(df)
+
+    assembler = SequentialExampleAssembler(
+        dataset=dataset_with_pseudo,
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by=PSEUDO_GROUP_COLUMN,
+        order_training_examples_by="sepal.length",
+        cache_file_path=fixture_session_cache_dir,
+        seed=1,
+    )
+    assert PSEUDO_GROUP_COLUMN not in assembler.schema_prompt
+
+
+def test_sequential_assembler_sorts_records_by_group_and_order(
+    fixture_chickweight_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler sorts records correctly within groups."""
+    assembler = SequentialExampleAssembler(
+        dataset=fixture_chickweight_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="Chick",
+        order_training_examples_by="Time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+    )
+
+    train_df = assembler.train_dataset.to_pandas()
+    for chick_id, group_df in train_df.groupby("Chick"):
+        time_values = group_df["Time"].tolist()
+        assert time_values == sorted(time_values), f"Time values not sorted for Chick {chick_id}"
+
+
+def test_sequential_assembler_token_budget(
+    fixture_chickweight_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler token budget sampling works correctly."""
+    import numpy as np
+
+    assembler = SequentialExampleAssembler(
+        dataset=fixture_chickweight_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="Chick",
+        order_training_examples_by="Time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+    )
+
+    max_tokens = 1000
+    assembler._window_rng = np.random.default_rng(42)
+
+    budget_train = assembler._next_token_budget(max_tokens, is_val=False)
+    assert 700 <= budget_train <= 1000  # Training: 0.7-1.0 of max
+
+    budget_val = assembler._next_token_budget(max_tokens, is_val=True)
+    assert budget_val == max_tokens  # Validation: always max
+
+
+def test_sequential_assembler_initial_prefill(
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+):
+    """Test that SequentialExampleAssembler returns correct prefill for each group."""
+
+    # Create a small, controlled dataset with 2 groups and known values
+    df = pd.DataFrame(
+        {
+            "group": ["A", "A", "A", "B", "B"],
+            "time": [1, 2, 3, 1, 2],
+            "value": [10, 20, 30, 100, 200],
+        }
+    )
+    dataset = Dataset.from_pandas(df)
+
+    assembler = SequentialExampleAssembler(
+        dataset=dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=fixture_sequential_metadata,
+        group_training_examples_by="group",
+        order_training_examples_by="time",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+    )
+
+    prefill = assembler._get_initial_prefill()
+
+    # Should have exactly 2 groups
+    assert len(prefill) == 2
+    assert "A" in prefill
+    assert "B" in prefill
+
+    # Each prefill should contain up to 3 records as JSONL (newline-separated)
+    # Group A has 3 records, Group B has 2 records
+    # Filter out empty lines that may appear between records
+    prefill_a_lines = [line for line in prefill["A"].strip().split("\n") if line]
+    prefill_b_lines = [line for line in prefill["B"].strip().split("\n") if line]
+
+    assert len(prefill_a_lines) == 3  # All 3 records from group A
+    assert len(prefill_b_lines) == 2  # Both records from group B
+
+    # Verify the records contain expected values (order should be by time)
+    assert '"value": 10' in prefill_a_lines[0] or '"value":10' in prefill_a_lines[0]
+    assert '"value": 20' in prefill_a_lines[1] or '"value":20' in prefill_a_lines[1]
+    assert '"value": 30' in prefill_a_lines[2] or '"value":30' in prefill_a_lines[2]
+    assert '"value": 100' in prefill_b_lines[0] or '"value":100' in prefill_b_lines[0]
+    assert '"value": 200' in prefill_b_lines[1] or '"value":200' in prefill_b_lines[1]
+
+
+def test_should_flush_example_boundary_conditions():
+    """Test _should_flush_example returns correct values for boundary conditions.
+
+    This is a pure function with no side effects, so multiple test cases
+    in one method is appropriate.
+    """
+    # Group boundary triggers flush
+    assert (
+        _should_flush_example(
+            prev_row_idx=1,
+            row_idx=2,
+            current_group_value="A",
+            record_group="B",
+            num_sequences=1,
+            max_sequences=10,
+            token_total=50,
+            record_len=10,
+            token_budget=100,
+        )
+        is True
+    )
+
+    # Token budget triggers flush
+    assert (
+        _should_flush_example(
+            prev_row_idx=1,
+            row_idx=2,
+            current_group_value="A",
+            record_group="A",
+            num_sequences=1,
+            max_sequences=10,
+            token_total=95,
+            record_len=10,
+            token_budget=100,
+        )
+        is True
+    )
+
+    # Max sequences triggers flush
+    assert (
+        _should_flush_example(
+            prev_row_idx=1,
+            row_idx=2,
+            current_group_value="A",
+            record_group="A",
+            num_sequences=10,
+            max_sequences=10,
+            token_total=50,
+            record_len=10,
+            token_budget=100,
+        )
+        is True
+    )
+
+    # No flush when within limits
+    assert (
+        _should_flush_example(
+            prev_row_idx=1,
+            row_idx=2,
+            current_group_value="A",
+            record_group="A",
+            num_sequences=1,
+            max_sequences=10,
+            token_total=50,
+            record_len=10,
+            token_budget=100,
+        )
+        is False
+    )
+
+    # Row index restart boundary triggers flush
+    assert (
+        _should_flush_example(
+            prev_row_idx=5,
+            row_idx=0,  # Went backwards - dataset restart
+            current_group_value="A",
+            record_group="A",
+            num_sequences=1,
+            max_sequences=10,
+            token_total=50,
+            record_len=10,
+            token_budget=100,
+        )
+        is True
+    )
+
+
+def test_sequential_assembler_end_to_end(
+    fixture_chickweight_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_autoconfig: PretrainedConfig,
+):
+    """End-to-end test: SequentialExampleAssembler creates valid examples."""
+    config = SafeSynthesizerParameters.from_params(
+        group_training_examples_by="Chick",
+        order_training_examples_by="Time",
+        pretrained_model=fixture_tokenizer.name_or_path,
+        num_input_records_to_sample=5000,
+        use_unsloth=True,
+        rope_scaling_factor=1,
+    )
+    config.time_series.is_timeseries = True
+    max_seq_length = 256
+    llm_metadata = ModelMetadata(
+        base_max_seq_length=max_seq_length,
+        prompt_config=LLMPromptConfig(
+            template=PROMPT_TEMPLATE,
+            add_bos_token_to_prompt=True,
+            add_eos_token_to_prompt=True,
+            bos_token="<s>",
+            bos_token_id=1,
+            eos_token="</s>",
+            eos_token_id=2,
+        ),
+        model_name_or_path=fixture_tokenizer.name_or_path,
+        autoconfig=fixture_autoconfig,
+        save_path=Path(fixture_session_cache_dir),
+    )
+
+    assembler = TrainingExampleAssembler.from_data(
+        dataset=fixture_chickweight_dataset,
+        tokenizer=fixture_tokenizer,
+        metadata=llm_metadata,
+        config=config,
+        cache_file_path=fixture_session_cache_dir,
+        seed=1,
+    )
+
+    assert isinstance(assembler, SequentialExampleAssembler)
+    assert assembler.num_records_total == 578
+
+    examples = assembler.assemble_training_examples()
+    assert examples.train.num_rows > 0
+
+    # All examples should respect max sequence length
+    for i in range(examples.train.num_rows):
+        num_tokens = len(examples.train[i]["input_ids"])
+        assert num_tokens <= max_seq_length
+
+    # Verify each example has records from only one group and Time values are ordered
+    for i in range(examples.train.num_rows):
+        input_ids = examples.train[i]["input_ids"]
+        text = fixture_tokenizer.decode(input_ids, skip_special_tokens=True)
+        record_strings = extract_records_from_jsonl_string(text)
+        records = [json.loads(r) for r in record_strings]
+
+        if len(records) > 0:
+            # All records in an example should have the same Chick (group) value
+            chick_values = [r.get("Chick") for r in records if "Chick" in r]
+            if chick_values:
+                assert len(set(chick_values)) == 1, f"Example {i} has records from multiple groups: {set(chick_values)}"
+
+            # Time values should be in ascending order within each example
+            records_with_time = [r for r in records if "Time" in r]
+            if len(records_with_time) > 1:
+                assert check_if_records_are_ordered(records_with_time, "Time"), (
+                    f"Example {i} has Time values out of order"
+                )
+
+
+def test_sequential_assembler_single_group_with_pseudo_column(
+    fixture_iris_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_autoconfig: PretrainedConfig,
+):
+    """Test SequentialExampleAssembler with a single group using pseudo column."""
+
+    # Add pseudo group column to simulate ungrouped time series
+    # Adding pseudo group is already tested in test_timeseries_preprocessing.py
+    df = fixture_iris_dataset.to_pandas()
+    df[PSEUDO_GROUP_COLUMN] = 0  # All records in one group
+    df["timestamp"] = range(len(df))  # Add a synthetic timestamp column
+    dataset_with_pseudo = Dataset.from_pandas(df)
+
+    max_seq_length = 512
+    llm_metadata = ModelMetadata(
+        base_max_seq_length=max_seq_length,
+        prompt_config=LLMPromptConfig(
+            template=PROMPT_TEMPLATE,
+            add_bos_token_to_prompt=True,
+            add_eos_token_to_prompt=True,
+            bos_token="<s>",
+            bos_token_id=1,
+            eos_token="</s>",
+            eos_token_id=2,
+        ),
+        model_name_or_path=fixture_tokenizer.name_or_path,
+        autoconfig=fixture_autoconfig,
+        save_path=Path(fixture_session_cache_dir),
+    )
+
+    assembler = SequentialExampleAssembler(
+        dataset=dataset_with_pseudo,
+        tokenizer=fixture_tokenizer,
+        metadata=llm_metadata,
+        group_training_examples_by=PSEUDO_GROUP_COLUMN,
+        order_training_examples_by="timestamp",
+        cache_file_path=fixture_session_cache_dir,
+        seed=42,
+    )
+
+    # Verify pseudo group column is excluded from schema prompt
+    assert PSEUDO_GROUP_COLUMN not in assembler.schema_prompt
+
+    # Verify assembler processes all records
+    assert assembler.num_records_total == len(fixture_iris_dataset)
+
+    examples = assembler.assemble_training_examples()
+    assert examples.train.num_rows > 0
+
+    # All examples should respect max sequence length
+    for i in range(examples.train.num_rows):
+        num_tokens = len(examples.train[i]["input_ids"])
+        assert num_tokens <= max_seq_length
+
+    # Verify timestamp ordering is maintained within each example
+    for i in range(examples.train.num_rows):
+        input_ids = examples.train[i]["input_ids"]
+        text = fixture_tokenizer.decode(input_ids, skip_special_tokens=True)
+        record_strings = extract_records_from_jsonl_string(text)
+        records = [json.loads(r) for r in record_strings]
+
+        if len(records) > 1:
+            # Timestamp values should be in ascending order
+            records_with_timestamp = [r for r in records if "timestamp" in r]
+            if len(records_with_timestamp) > 1:
+                assert check_if_records_are_ordered(records_with_timestamp, "timestamp"), (
+                    f"Example {i} has timestamps out of order"
+                )
+
+            # Pseudo group column should not appear in the records (excluded from JSONL)
+            for record in records:
+                assert PSEUDO_GROUP_COLUMN not in record, f"Pseudo group column found in record: {record}"
