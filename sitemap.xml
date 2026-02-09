@@ -201,6 +201,10 @@
          <lastmod>2026-02-09</lastmod>
     </url>
     <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/config/time_series/</loc>
+         <lastmod>2026-02-09</lastmod>
+    </url>
+    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/config/training/</loc>
          <lastmod>2026-02-09</lastmod>
     </url>
@@ -390,6 +394,10 @@
     </url>
     <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/generation/stopping/</loc>
+         <lastmod>2026-02-09</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/generation/timeseries_backend/</loc>
          <lastmod>2026-02-09</lastmod>
     </url>
     <url>
@@ -690,6 +698,10 @@
     </url>
     <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/training/huggingface_backend/</loc>
+         <lastmod>2026-02-09</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/training/timeseries_preprocessing/</loc>
          <lastmod>2026-02-09</lastmod>
     </url>
     <url>
