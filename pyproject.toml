@@ -87,6 +87,7 @@ engine = [
     "huggingface-hub>=0.34.4,<1",
     "langchain-core",
     "json-repair",
+    "kernels>=0.12.1",
     "matplotlib",
     "numpy<2",
     "outlines_core==0.2.13",

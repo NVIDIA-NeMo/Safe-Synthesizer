@@ -34,6 +34,8 @@ from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
 from ..defaults import (
+    BACKUP_ATTN_IMPLEMENTATION,
+    DEFAULT_ATTN_IMPLEMENTATION,
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
     FIXED_RUNTIME_LORA_ARGS,
@@ -147,12 +149,21 @@ class HuggingFaceBackend(TrainingBackend):
             model_kwargs: Filtered model keyword arguments.
             max_seq_length: The maximum sequence length.
         """
+        import importlib
+
+        try:
+            importlib.import_module("kernels")
+            attn_implementation = DEFAULT_ATTN_IMPLEMENTATION
+        except ImportError:
+            attn_implementation = BACKUP_ATTN_IMPLEMENTATION
+            logger.warning(f"kernels module not found, using backup attn implementation: {BACKUP_ATTN_IMPLEMENTATION}")
+
         return dict(
             pretrained_model_name_or_path=self.params.training.pretrained_model,
             device_map=model_kwargs.pop(
                 "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
             ),
-            attn_implementation=model_kwargs.pop("attn_implementation", "flash_attention_2"),
+            attn_implementation=model_kwargs.pop("attn_implementation", attn_implementation),
             dtype=model_kwargs.pop("dtype", torch.bfloat16),
             **model_kwargs,
         )
