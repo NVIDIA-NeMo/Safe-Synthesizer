@@ -216,9 +216,12 @@ RSYNC_EXCLUDES := \
 	--exclude='.envrc' \
 	--exclude='.venv' \
 	--exclude='*.pycache.*' \
-	--exclude='.cursor'
+	--exclude='.cursor' \
+	--exclude='**/__pycache__/*' \
+	--exclude='.ruff_cache'
 
 RSYNC_METAFILES_EXCLUDES := \
+	--exclude='.agent' \
 	--exclude='__init__.py' \
 	--exclude='.pre-commit-config.yaml' \
 	--exclude='.markdownlint.json' \
@@ -234,10 +237,16 @@ RSYNC_METAFILES_EXCLUDES := \
 	--exclude='pytest.ini' \
 	--exclude='pyproject.toml' \
 	--exclude='tools' \
-	--exclude='uv.lock'
+	--exclude='.ruff_cache' \
+	--exclude='.venv' \
+	--exclude='htmlcov' \
+	--exclude='uv.lock' \
+	--exclude='coverage.json' \
+	--exclude='coverage.xml' \
 
 RSYNC_CMD := rsync -av $(RSYNC_EXCLUDES)
-RSYNC_METAFILES_CMD := rsync -av $(RSYNC_METAFILES_EXCLUDES)
+RSYNC_METAFILES_CMD := rsync -av $(RSYNC_EXCLUDES) \
+	$(RSYNC_METAFILES_EXCLUDES)
 
 .PHONY: synchronize-from-nmp-mr
 synchronize-from-nmp-mr: ## Sync from NMP MR. Usage: make synchronize-from-nmp-mr MR=<number>
