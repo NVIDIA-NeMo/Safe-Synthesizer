@@ -10,7 +10,6 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
-
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 
 from ..config import SafeSynthesizerParameters
