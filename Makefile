@@ -74,7 +74,7 @@ bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'c
 
 # Dynamic targets for bootstrap-nss
 # Usage: make bootstrap-nss {dev,engine,cpu,cuda}
-BOOTSTRAP_EXTRAS := dev engine cpu cuda
+BOOTSTRAP_EXTRAS := dev engine cpu cuda cu128
 $(BOOTSTRAP_EXTRAS):
 	@:
 
@@ -84,6 +84,8 @@ bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss
 	@echo "~~~~~~"
 	@echo "attempting to install nss package with primary extra: $(EXTRA)"
 	@if [ "$(EXTRA)" = "cuda" ]; then \
+		uv sync --frozen --extra cu128 --extra engine --group dev; \
+	elif [ "$(EXTRA)" = "cu128" ]; then \
 		uv sync --frozen --extra cu128 --extra engine --group dev; \
 	elif [ "$(EXTRA)" = "cpu" ]; then \
 		uv sync --frozen --extra cpu --extra engine --group dev; \
