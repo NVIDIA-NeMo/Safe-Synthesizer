@@ -16,11 +16,14 @@ from ..config import (
 )
 from ..config.autoconfig import AutoConfigResolver
 from ..evaluation.evaluator import Evaluator
+from ..generation.timeseries_backend import TimeseriesBackend
+from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
 from ..observability import LogCategory, get_logger, traced
 from ..pii_replacer.nemo_pii import NemoPII
 from ..results import SafeSynthesizerResults, make_nss_results
+from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
@@ -60,25 +63,11 @@ def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) 
     )
 
 
-def _get_vllm_backend_class() -> type[GeneratorBackend]:
-    """Get the Vllm generator backend class."""
-    from ..generation.vllm_backend import VllmBackend
-
-    return VllmBackend
-
-
 def _get_unsloth_backend_class() -> type[TrainingBackend]:
     """Get the Unsloth training backend class."""
     from ..training.unsloth_backend import UnslothTrainer
 
     return UnslothTrainer
-
-
-def _get_huggingface_backend_class() -> type[TrainingBackend]:
-    """Get the HuggingFace training backend class."""
-    from ..training.huggingface_backend import HuggingFaceBackend
-
-    return HuggingFaceBackend
 
 
 def get_training_backend_class(config: SafeSynthesizerParameters) -> type[TrainingBackend]:
@@ -90,9 +79,10 @@ def get_training_backend_class(config: SafeSynthesizerParameters) -> type[Traini
         The training backend class.
     """
     class_map = {
-        "huggingface": _get_huggingface_backend_class(),
+        "huggingface": HuggingFaceBackend,
         "unsloth": _get_unsloth_backend_class(),
     }
+    logger.user.info(f"Unsloth enabled: {config.training.use_unsloth}")
     cls = "unsloth" if config.training.use_unsloth is True else "huggingface"
     cls = class_map.get(cls)
     if cls is None:
@@ -197,6 +187,9 @@ class SafeSynthesizer(ConfigBuilder):
         When resuming from a trained model for generation, the source paths
         point to the parent workdir that contains the trained adapter.
 
+        If a data source was already provided via with_data_source(), the cached
+        dataset files are not loaded (process_data will use the provided source).
+
         Returns:
             Self for method chaining.
         """
@@ -204,9 +197,25 @@ class SafeSynthesizer(ConfigBuilder):
         config_file = self._workdir.source_config
 
         self._nss_config = SafeSynthesizerParameters.from_json(config_file)
-        self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
-        self._train_df = pd.read_csv(self._workdir.source_dataset.training)
-        self._test_df = pd.read_csv(self._workdir.source_dataset.test)
+
+        # Load model metadata from saved file (contains initial_prefill for timeseries)
+        # rather than creating new metadata from config
+        metadata_file = self._workdir.metadata_file
+        if not metadata_file.exists():
+            raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
+        logger.info(f"Loading model metadata from: {metadata_file}")
+        self._llm_metadata = ModelMetadata.from_metadata_json(metadata_file, workdir=self._workdir)
+
+        # Only load cached dataset if no data source was provided via with_data_source()
+        if self._data_source is None:
+            training_path = self._workdir.source_dataset.training
+            test_path = self._workdir.source_dataset.test
+            if not training_path.exists():
+                raise FileNotFoundError(f"Training dataset file not found: {training_path}")
+            if not test_path.exists():
+                raise FileNotFoundError(f"Test dataset file not found: {test_path}")
+            self._train_df = pd.read_csv(training_path)
+            self._test_df = pd.read_csv(test_path)
 
         # match run_dir:
         #     case Path() as p if p.exists():
@@ -266,7 +275,9 @@ class SafeSynthesizer(ConfigBuilder):
             # We explicitly do not replace PII in the test set so that the
             # privacy metrics are valid.
 
-        self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+        # Only create new metadata if not already loaded (e.g., from load_from_save_path)
+        if self._llm_metadata is None:
+            self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
         self._data_processed = True
         # Ensure dataset directory exists before writing CSV files
         self._workdir.ensure_directories()
@@ -316,6 +327,10 @@ class SafeSynthesizer(ConfigBuilder):
         )
         self.trainer.load_model()
         self.trainer.train()
+
+        # Propagate config changes from training (e.g., inferred timestamp_format) to generation
+        self._nss_config = self.trainer.params
+
         return self
 
     @traced("SafeSynthesizer.generate", category=LogCategory.RUNTIME)
@@ -337,9 +352,17 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._llm_metadata is not None
         if self._total_start is None:
             self._total_start = time.monotonic()
-        from ..generation.vllm_backend import VllmBackend
 
-        self.generator = VllmBackend(config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir)
+        # Select backend based on time_series configuration
+        if self._nss_config.time_series and self._nss_config.time_series.is_timeseries:
+            self.generator = TimeseriesBackend(
+                config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
+            )
+        else:
+            self.generator = VllmBackend(
+                config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
+            )
+
         self.generator.initialize()
         self.generator.generate(keep_llm_state=False)
         self._generated = True

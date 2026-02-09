@@ -9,6 +9,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 import torch
 import wandb
 from datasets import Dataset
@@ -36,6 +37,7 @@ from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
     FIXED_RUNTIME_LORA_ARGS,
+    PSEUDO_GROUP_COLUMN,
 )
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
@@ -61,6 +63,7 @@ from ..training.callbacks import (
     ProgressBarCallback,
     SafeSynthesizerWorkerCallback,
 )
+from ..training.timeseries_preprocessing import process_timeseries_data
 from ..utils import write_json
 
 logger = get_logger(__name__)
@@ -509,6 +512,12 @@ class HuggingFaceBackend(TrainingBackend):
             ParameterError: If the orderby column doesn't exist.
         """
         orderby_col = self.params.data.order_training_examples_by
+
+        ## For timeseries, if groupby is set without timestamp column, we will skip for now
+        ## timestamp column will be added later and orderby column will be the added timestamp column
+        if self.params.time_series.is_timeseries and self.params.time_series.timestamp_column is None:
+            return
+
         if orderby_col and orderby_col not in df.columns:
             msg = f"Order by column '{orderby_col}' not found in the input data."
             logger.error(msg)
@@ -532,6 +541,24 @@ class HuggingFaceBackend(TrainingBackend):
         logger.debug(f"After preprocess: {utils.debug_fmt(df)}")
         return df
 
+    def _process_timeseries(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process time series data if enabled.
+
+        Args:
+            df: The DataFrame to process.
+
+        Returns:
+            The processed DataFrame (potentially sorted and with timestamp column).
+        """
+        is_time_series = bool(self.params.time_series.is_timeseries)
+
+        if not is_time_series:
+            return df
+
+        logger.info("Processing time series data")
+        df, self.params = process_timeseries_data(df, self.params)
+        return df
+
     def _create_example_assembler(self, hf_dataset: Dataset):
         """Create the example assembler for training.
 
@@ -546,7 +573,9 @@ class HuggingFaceBackend(TrainingBackend):
             metadata=self.model_metadata,
             dataset=hf_dataset,
             tokenizer=self.tokenizer,
-            cache_file_path=self.workdir.train.cache.path,
+            cache_file_path=self.training_output_dir,
+            is_timeseries=self.params.time_series.is_timeseries,
+            timestamp_column=self.params.time_series.timestamp_column,
         )
 
     @traced_user("log_dataset_statistics")
@@ -581,11 +610,16 @@ class HuggingFaceBackend(TrainingBackend):
         self._validate_groupby_column(df_all)
         self._validate_orderby_column(df_all)
 
+        # Process time series data (sort by timestamp, infer intervals, etc.)
+        df_all = self._process_timeseries(df_all)
+
         df_train = self._apply_preprocessing(df_all)
         df_test = None
 
         hf_dataset = Dataset.from_pandas(df_train, preserve_index=False)
-        self.dataset_schema = make_json_schema(df_train)
+        # Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)
+        schema_df = df_train.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
+        self.dataset_schema = make_json_schema(schema_df)
         self.df_train = df_train
         self.df_test = df_test
 
@@ -605,6 +639,9 @@ class HuggingFaceBackend(TrainingBackend):
         # This info is needed inside the trainer for DP
         # Number of records, if group_training_examples_by is None, or else number of groups
         self.true_dataset_size = len(assembler.train_dataset)
+
+        if self.params.time_series.is_timeseries:
+            self.model_metadata.initial_prefill = assembler._get_initial_prefill()
 
     @utils.time_function
     def train(self, **training_args):

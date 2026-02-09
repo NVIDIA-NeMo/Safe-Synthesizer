@@ -19,6 +19,7 @@ from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
 from .replace_pii import PiiReplacerConfig
+from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import (
     AUTO_STR,
@@ -62,6 +63,10 @@ class SafeSynthesizerParameters(Parameters):
 
     privacy: DifferentialPrivacyHyperparams | None = Field(
         description="Privacy parameters. Optional.", default_factory=DifferentialPrivacyHyperparams
+    )
+
+    time_series: TimeSeriesParameters = Field(
+        description="Time series parameters.", default_factory=TimeSeriesParameters
     )
 
     replace_pii: PiiReplacerConfig | None = Field(description="PII replacement parameters. Optional.", default=None)
@@ -125,6 +130,7 @@ class SafeSynthesizerParameters(Parameters):
         ep = EvaluationParameters().model_copy(update=kwargs)
         pp = DifferentialPrivacyHyperparams().model_copy(update=kwargs)
         dp = DataParameters().model_copy(update=kwargs)
+        tsp = TimeSeriesParameters().model_copy(update=kwargs)
 
         enable_replace_pii = kwargs.pop("enable_replace_pii", False)
         replace_pii_config = kwargs.get("replace_pii", None)
@@ -149,6 +155,7 @@ class SafeSynthesizerParameters(Parameters):
             evaluation=ep,
             privacy=pp,
             data=dp,
+            time_series=tsp,
             replace_pii=replace_pii_config,
             enable_synthesis=enable_synthesis,
             enable_replace_pii=enable_replace_pii,

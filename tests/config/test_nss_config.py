@@ -9,6 +9,7 @@ from nemo_safe_synthesizer.config import (
     DifferentialPrivacyHyperparams,
     PiiReplacerConfig,
     SafeSynthesizerParameters,
+    TimeSeriesParameters,
 )
 from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
 from nemo_safe_synthesizer.configurator.parameters import Parameters
@@ -189,6 +190,20 @@ class TestSafeSynthesizerParameters:
         assert params.enable_replace_pii == expected_enabled_pii
         val = True if params.replace_pii is not None else None
         assert val == expected_pii_config
+
+    def test_timestamp_required_for_time_series(self):
+        """Test that is_timeseries=True requires timestamp_column or timestamp_interval_seconds."""
+        with pytest.raises(ValidationError):
+            TimeSeriesParameters(is_timeseries=True)
+
+    def test_timestamp_only_allowed_when_time_series_enabled(self):
+        """Test that timestamp_column can only be set when is_timeseries is True."""
+        with pytest.raises(ValidationError):
+            TimeSeriesParameters(timestamp_column="event_time")
+
+    def test_time_series_configuration_passes_validation(self):
+        params = TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time")
+        assert params.timestamp_column == "event_time"
 
     def test_read_from_yaml(self, yaml_config_str):
         p = SafeSynthesizerParameters.from_yaml_str(yaml_config_str)

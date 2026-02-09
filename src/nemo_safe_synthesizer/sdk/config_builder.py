@@ -15,6 +15,7 @@ from ..config import (
     GenerateParameters,
     PiiReplacerConfig,
     SafeSynthesizerParameters,
+    TimeSeriesParameters,
     TrainingHyperparams,
 )
 from ..observability import get_logger
@@ -30,6 +31,7 @@ NSSParameters = Union[
     EvaluationParameters,
     GenerateParameters,
     DifferentialPrivacyHyperparams,
+    TimeSeriesParameters,
     TrainingHyperparams,
     SafeSynthesizerParameters,
     PiiReplacerConfig,
@@ -40,6 +42,7 @@ NSSParametersT = Union[
     type[EvaluationParameters],
     type[GenerateParameters],
     type[DifferentialPrivacyHyperparams],
+    type[TimeSeriesParameters],
     type[TrainingHyperparams],
     type[SafeSynthesizerParameters],
     type[PiiReplacerConfig],
@@ -63,6 +66,7 @@ class ConfigBuilder(object):
             self._training_config = self._nss_config.training
             self._generation_config = self._nss_config.generation
             self._data_config = self._nss_config.data
+            self._time_series_config = self._nss_config.time_series
         else:
             self._enable_synthesis = None
             self._enable_replace_pii = None
@@ -72,6 +76,7 @@ class ConfigBuilder(object):
             self._replace_pii_config: PiiReplacerConfig | None = None
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
+            self._time_series_config: TimeSeriesParameters = TimeSeriesParameters()
 
         self._data_source: DataSource | None = None
         self._classify_model_provider: str | None = None
@@ -83,6 +88,7 @@ class ConfigBuilder(object):
             "_replace_pii_config",
             "_privacy_config",
             "_training_config",
+            "_time_series_config",
         ]
 
     def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
@@ -142,6 +148,13 @@ class ConfigBuilder(object):
             values=config, cls=GenerateParameters, **kwargs
         )
         self._enable_synthesis = True
+        return self
+
+    def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
+        """Configure time-series settings."""
+        self._time_series_config: TimeSeriesParameters | None = self._resolve_config(
+            values=config, cls=TimeSeriesParameters, **kwargs
+        )
         return self
 
     def with_differential_privacy(
@@ -220,6 +233,7 @@ class ConfigBuilder(object):
     def _resolve_nss_config(self) -> None:
         params_map: dict = {k: k.split("_")[1] for k in self._nss_inputs}
         params_map["_replace_pii_config"] = "replace_pii"
+        params_map["_time_series_config"] = "time_series"
         params_to_use: dict = {k: None for k in params_map.values()}
 
         for pg, name in params_map.items():

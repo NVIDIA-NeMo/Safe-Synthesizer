@@ -187,6 +187,7 @@ class ModelMetadata(BaseModel):
     is_adapter: bool = False
     instruction: str = DEFAULT_INSTRUCTION
     rope_parameters_location: Literal["autoconfig", "automodel"] = "automodel"
+    initial_prefill: dict[str, str] | str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -355,7 +356,7 @@ class Granite(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
-                template="user\n {instruction} {schema} \n assistant\n",
+                template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=True,
             ),
@@ -378,7 +379,7 @@ class Llama32(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
-                template="user\n {instruction} {schema} \n assistant\n",
+                template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 bos_token="<|im_start|>",
                 bos_token_id=151644,
                 add_bos_token_to_prompt=False,
@@ -406,7 +407,7 @@ class Mistral(ModelMetadata):
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
             )
 
-        template = "[INST] {instruction} \n\n {schema} [/INST]"
+        template = "[INST] {instruction} \n\n {schema} [/INST]{prefill}"
         super().__init__(
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
@@ -434,7 +435,7 @@ class Nemotron(ModelMetadata):
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
-                template="[INST] {instruction} \n\n {schema} [/INST]",
+                template="[INST] {instruction} \n\n {schema} [/INST]{prefill}",
                 add_bos_token_to_prompt=True,
                 add_eos_token_to_prompt=True,
                 tokenizer=tokenizer,
@@ -459,7 +460,7 @@ class Qwen(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             # Matched with vllm prompt 2024-12-18
             prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} \n assistant\n",
+                template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 add_bos_token_to_prompt=True,
                 add_eos_token_to_prompt=False,
                 tokenizer=tokenizer,
@@ -490,7 +491,7 @@ class SmolLM2(ModelMetadata):
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} \n assistant\n",
+                template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=False,
                 tokenizer=tokenizer,
@@ -527,7 +528,7 @@ class SmolLM3(ModelMetadata):
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} <|im_end|> \n <|im_start|>assistant\n",
+                template="user\n {instruction} {schema} <|im_end|> \n <|im_start|>assistant\n{prefill}",
                 add_bos_token_to_prompt=True,
                 add_eos_token_to_prompt=True,
                 tokenizer=tokenizer,
