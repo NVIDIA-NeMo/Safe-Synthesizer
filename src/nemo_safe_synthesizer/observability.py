@@ -245,7 +245,9 @@ def _render_table_data_for_console(logger: logging.Logger, method_name: str, eve
     """
     tables_to_render = []
     rendered_keys: list[str] = list()
-    ctx = event_dict.get("extra", {}).get("ctx", {})
+    # Check both locations: ExtraAdder flattens to event_dict["ctx"] for foreign loggers,
+    # but native structlog loggers may have it in event_dict["extra"]["ctx"]
+    ctx = event_dict.get("ctx") or event_dict.get("extra", {}).get("ctx", {})
 
     match ctx:
         case {"rich_table": rich_table, **__} if isinstance(rich_table, Table):
@@ -447,9 +449,8 @@ def _get_console_columns() -> list:
             prefix=dim_white + ": ",
         ),
     )
-    # Explicit column for "extra" that renders nothing - prevents default column from picking it up
-    # The actual extra content (minus table keys) is rendered via _extra_display above
-    extra_suppress_column = structlog.dev.Column(
+    # Suppress "ctx" - table data is rendered separately by _render_table_data_for_console
+    ctx_suppress_column = structlog.dev.Column(
         "ctx",
         structlog.dev.KeyValueColumnFormatter(
             key_style=None,
@@ -458,8 +459,7 @@ def _get_console_columns() -> list:
             value_repr=lambda _: "",  # Render nothing
         ),
     )
-    # Explicit column for "extra" that renders nothing - prevents default column from picking it up
-    # The actual extra content (minus table keys) is rendered via _extra_display above
+    # Suppress "extra" - the actual extra content is rendered via _extra_display above
     extra_suppress_column = structlog.dev.Column(
         "extra",
         structlog.dev.KeyValueColumnFormatter(
@@ -488,6 +488,7 @@ def _get_console_columns() -> list:
         lineno_column,
         message_column,
         extra_display_column,
+        ctx_suppress_column,
         extra_suppress_column,
         default_column,
     ]
