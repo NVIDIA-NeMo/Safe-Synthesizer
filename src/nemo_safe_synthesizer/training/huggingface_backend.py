@@ -149,10 +149,10 @@ class HuggingFaceBackend(TrainingBackend):
             model_kwargs: Filtered model keyword arguments.
             max_seq_length: The maximum sequence length.
         """
-        import importlib
 
         try:
-            importlib.import_module("kernels")
+            import kernels  # noqa: F401
+
             attn_implementation = DEFAULT_ATTN_IMPLEMENTATION
         except ImportError:
             attn_implementation = BACKUP_ATTN_IMPLEMENTATION

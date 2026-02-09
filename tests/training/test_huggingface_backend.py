@@ -18,7 +18,7 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.defaults import BACKUP_ATTN_IMPLEMENTATION, DEFAULT_ATTN_IMPLEMENTATION
+from nemo_safe_synthesizer.defaults import DEFAULT_ATTN_IMPLEMENTATION
 from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
@@ -289,7 +289,7 @@ class TestBuildBaseFrameworkParams:
 
         assert result["pretrained_model_name_or_path"] == "test-model"
         assert result["device_map"] == "auto"
-        assert result["attn_implementation"] == "kernels-community/vllm-flash-attn3"
+        assert result["attn_implementation"] == DEFAULT_ATTN_IMPLEMENTATION
         assert result["dtype"] == torch.bfloat16
         assert result["custom_key"] == "custom_value"
 
