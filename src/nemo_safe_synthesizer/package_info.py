@@ -36,10 +36,10 @@ def get_version() -> str:
         Version string in the format MAJOR.MINOR.PATCH[PRE_RELEASE]
     """
     version = f"{MAJOR}.{MINOR}.{PATCH}"
-    if DEV_RELEASE:
-        version = f"{version}.dev{BUILD}"
     if PRE_RELEASE:
         version = f"{version}{PRE_RELEASE}"
+    if DEV_RELEASE:
+        version = f"{version}.dev{BUILD}"
 
     version = Version(version)
     version = str(version)
