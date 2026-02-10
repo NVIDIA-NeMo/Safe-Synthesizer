@@ -96,7 +96,7 @@ engine = [
     "outlines_core==0.2.13",
     "outlines>=1.0.0",
     "prv-accountant",
-    "smart-open==7.0.5",
+    "smart-open==7.5.0",
     "python-stdnum",
     "pandas>=2.1.3, <3",
     "plotly",
