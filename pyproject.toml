@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Safe synthesizer"
 readme = "README.md"
 authors = [{ name = "NVIDIA", email = "nemo@nvidia.com" }]
-requires-python = ">=3.11"
+requires-python = ">=3.11, <3.14"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 
@@ -110,57 +110,64 @@ engine = [
     "urllib3>=2.6.1",
     "wandb==0.23.1",
 ]
-# these are set up to provide a working mac and linux environment. we only use cuda on linux
-# it's a little annoying to have to split them up like this with redundant bits, but
-# uv requires this to work correctly. it allows us to have a cpu and a cuda version of torch+deps
+
+
+# the following are deps that have Torch as a dep. We keep them separated out from the engine deps
+#
+# it's a little annoying to have to split them up like this with redundant bits.
+# it allows us to have a cpu and a cuda version of torch+deps
 # and allow explicit installation of the cpu depset on linux.
 
-# also, this should be the set of dependencies that pull in torch as a transitive dependency.
 cpu = [
   "accelerate",
   "bitsandbytes==0.42.0; sys_platform=='darwin'",
   "bitsandbytes==0.46.1; sys_platform=='linux'",
-  "flashinfer-python==0.5.3; sys_platform!='darwin'",
+  "flashinfer-python==0.5.3; sys_platform=='linux'",
+  "flashinfer-cubin==0.5.3; sys_platform=='linux'",
   "faiss-cpu==1.9.0",
   "gliner",
+  "kernels>=0.12.1",
   "peft",
   "opacus",
   "sentence-transformers",
   "torch==2.9.0; sys_platform == 'darwin'",
   "torch==2.9.0+cpu; sys_platform == 'linux'",
+  "torchvision==0.24.0; sys_platform == 'darwin'",
   "torchvision==0.24.0+cpu; sys_platform == 'linux'",
-  "torchao==0.14.1; sys_platform == 'linux'",
+  "torchao==0.14.1",
+  "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
-  "trl>=0.14.0",
-  "unsloth[cu128-torch290]==2025.12.4; sys_platform == 'linux'",
-  "unsloth_zoo; sys_platform == 'linux'",
+  "trl>=0.23.0",
+  "unsloth[cu128-torch290]==2025.12.4",
+  "unsloth_zoo==2025.12.4",
   "vllm==0.11.1",
-  "xformers==0.0.33.post1; sys_platform == 'linux'",
+  "xformers==0.0.33.post1",
 ]
+
 cu128 = [
   "accelerate",
   "bitsandbytes==0.46.1; sys_platform=='linux'",
-  "faiss-gpu-cu12==1.9.0; sys_platform=='linux'",
-  # "flash_attn==2.8.3+cu128.nss.pytorch29; sys_platform=='linux'",
-  "flashinfer-python==0.5.3; sys_platform=='linux'",
-  "flashinfer-cubin==0.5.3; sys_platform=='linux'",
-  "gliner; sys_platform=='linux'",
-  "nvidia-ml-py; sys_platform=='linux'",
-  "opacus; sys_platform=='linux'",
-  "peft; sys_platform=='linux'",
-  "sentence-transformers; sys_platform=='linux'",
+  "faiss-gpu-cu12==1.9.0",
+  "flashinfer-python==0.5.3",
+  "flashinfer-cubin==0.5.3",
+  "flashinfer-jit-cache==0.5.3+cu128; sys_platform == 'linux'",
+  "gliner",
+  "kernels>=0.12.1",
+  "nvidia-ml-py",
+  "opacus",
+  "peft",
+  "sentence-transformers",
   "torch==2.9.0+cu128; sys_platform == 'linux'",
   "torchvision==0.24.0+cu128; sys_platform == 'linux'",
   "torchao==0.14.1; sys_platform == 'linux'",
-  "transformers==4.57.3; sys_platform=='linux'",
-  "triton>=2.0.0; sys_platform=='linux'",
-  "trl>=0.14.0; sys_platform=='linux'",
-  "unsloth[cu128-torch290]==2025.12.4; sys_platform == 'linux'",
-  "unsloth_zoo; sys_platform == 'linux'",
-  "vllm==0.11.1; sys_platform=='linux'",
-  "xformers==0.0.33.post1; sys_platform == 'linux'",
+  "transformers==4.57.3",
+  "triton>=2.0.0",
+  "trl>=0.23.0",
+  "unsloth[cu128-torch290]==2025.12.4",
+  "unsloth_zoo==2025.12.4",
+  "vllm==0.11.1",
+  "xformers==0.0.33.post1",
 ]
-
 
 # at some point, do per-subpackage dependencies
 
@@ -182,22 +189,12 @@ dependency-metadata = [
 
 
 override-dependencies = [
-    # unsloth requires a later version but will never be used on macos. mostly useful for dev
-    "bitsandbytes==0.42.0; sys_platform=='darwin'",
-    "bitsandbytes==0.46.1; sys_platform=='linux'",
-    "datasets>=3.3.1, <=4.3.0",
-    "jsonpath-ng>=1.6.1",
     "outlines_core==0.2.13",                        # there's a conflict with vllm's (nss) pin on outlines_core==0.2.10 but this version works.
-    "protobuf>=5.26.1,<6.0.dev0",
-    "grpcio>=1.71.0",
-    # transformers <v5 requires huggingface-hub <1
-    "huggingface-hub>=0.30.0, <1",
     "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
     "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
-    "ray; sys_platform == 'never'",                       # ray has an unfixed critical CVE, as for why we're removing it this way see https://github.com/astral-sh/uv/issues/9174
-    "langchain-core>=0.3.80,<1.0.0",                      # CVE in versions <=0.3.79: https://nvd.nist.gov/vuln/detail/CVE-2025-65106
-
+    "bitsandbytes==0.42.0; sys_platform=='darwin'",
 ]
+
 environments = [
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
     "sys_platform == 'darwin' and platform_machine == 'arm64'",
@@ -221,28 +218,25 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
     { index = "pytorch-cpu", extra="cpu", marker = "sys_platform=='linux'"},
     { index = "pytorch-cu128", extra="cu128"},
   ]
+  torchao = [
+    { index = "pytorch-cu128", extra="cu128"},
+  ]
   torchvision = [
     { index = "pytorch-cpu", extra="cpu" },
     { index = "pytorch-cu128", extra="cu128"},
   ]
+  flashinfer-jit-cache = [
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
 
-  flashinfer-python = [
-      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
-  ]
-  flashinfer-cubin = [
-      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
-  ]
 # this is a local path to the nemo-microservices package
 # used for development purposes
 # it's not used in production.
 # it assumes the nmp repo path is ../aire/microservices/nmp
-nemo-microservices = [
-  { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
-  # { index = "nvidia-pypi-public", extra = "microservices"}
-]
-#  flashinfer-jit-cache = [
-#      { index = "flashinfer-cuda", marker = "sys_platform=='linux'", extra="cu128"},
-#  ]
+  nemo-microservices = [
+    { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
+    # { index = "nvidia-pypi-public", extra = "microservices"}
+  ]
 
 
 
@@ -263,7 +257,7 @@ url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
 explicit = true
 
 [[tool.uv.index]]
-name = "flashinfer-cuda"
+name = "flashinfer-jit-cache"
 url = "https://flashinfer.ai/whl/cu128"
 explicit = true
 
@@ -298,4 +292,38 @@ exclude = [
     "./src/nemo_safe_synthesizer/pii_replacer/",
     "./tests/",
     "./tools/",
+]
+
+[tool.vendor-package]
+package = "nemo_safe_synthesizer"
+target_sdk_module = "beta.safe_synthesizer"
+sdk_optional_dependencies_name = "safe-synthesizer"
+included_paths = [
+  "config/",
+  "configurator/",
+  "data_processing/record_utils.py",
+  "data_processing/dataset.py",
+  "data_processing/stats.py",
+  "holdout/",
+  "sdk/__init__.py",
+  "sdk/config_builder.py",
+  "sdk/job_builder.py",
+  "sdk/job.py",
+  "sdk/library_builder.py",
+  "sdk/datastore.py",
+  "__init__.py",
+  "errors.py",
+  "observability.py",
+  "defaults.py",
+  "utils.py",
+  "cli/settings.py",
+  "cli/artifact_structure.py",
+]
+vendor_tests = true
+tests_path = "tests"
+tests_included_paths = [
+    "config/",
+    "configurator/",
+    "__init__.py",
+    "conftest.py",
 ]
