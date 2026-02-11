@@ -543,7 +543,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             # the next record would exceed the max length, yield the
             # example.
             if (
-                j == len(dataset) - 1
+                j == len(dataset)
                 or num_sequences == self.metadata.max_sequences_per_example
                 or (sum(len(ids) for ids in dataset[i : j + 1]["input_ids"]) > max_new_tokens)
             ):
@@ -1340,7 +1340,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
         # The prompt is enclosed by special tokens.
         max_new_tokens -= NUM_SPECIAL_TOKENS
-        update_interval = min(100, num_groups // 10)
+        update_interval = max(min(100, num_groups // 10), 1)
         # Create example for the first group.
         num_records = 0
         example = Example(
