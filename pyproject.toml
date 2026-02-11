@@ -141,7 +141,7 @@ cpu = [
   "unsloth[cu128-torch290]==2025.12.4",
   "unsloth_zoo==2025.12.4",
   "vllm==0.11.1",
-  "xformers==0.0.33.post1",
+  "xformers==0.0.33.post1; sys_platform == 'linux'",
 ]
 
 cu128 = [
