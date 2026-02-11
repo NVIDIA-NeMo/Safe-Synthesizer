@@ -25,7 +25,7 @@ endif
 PYTORCH_DEPS ?= cpu
 
 # Pytest configuration
-PYTEST_ADDOPTS := -n auto --dist loadscope --maxprocesses=8 -vv
+PYTEST_ADDOPTS := -n auto --dist loadscope -vv
 PYTEST_CI_OPTS := --cov --cov-report json:coverage.json
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
 
@@ -61,6 +61,17 @@ install-uv: ## Install uv tool
 .PHONY: clean-python
 clean-python: ## Remove python virtual environment
 	rm -rf .venv/
+
+.PHONY: clean-uv
+clean-uv: ## Remove uv cache files
+	uv cache clear
+
+.PHONY: clean-unsloth
+clean-unsloth: ## Remove unsloth cache files
+	rm -rf unsloth_compiled_cache/
+
+.PHONY: clean-cache
+clean-cache: clean-unsloth clean-uv clean-python ## Remove cache files from unsloth, uv, and other tools
 
 .PHONY: verify-python-version
 verify-python-version: ## Verify Python version and install if necessary
@@ -167,11 +178,19 @@ test-gpu-integration: ## Run GPU integration tests
 
 # Please modify these based on updating the e2e tests for NMP CI
 .PHONY: test-e2e
-test-e2e: ## Run all e2e tests (requires CUDA)
-	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k default && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k dp
+test-e2e: test-e2e-default test-e2e-dp ## Run all e2e tests (requires CUDA)
 
+.PHONY: test-e2e-default
+test-e2e-default: ## Run default e2e tests (requires CUDA)
+# -n 0 is a workaround to run the tests in a single process.
+	pushd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k default
+
+.PHONY: test-e2e-dp
+test-e2e-dp: ## Run dp e2e tests (requires CUDA)
+# -n 0 is a workaround to run the tests in a single process.
+	pushd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k dp
 
 ### CONTAINER-BASED TESTING ###
 

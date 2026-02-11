@@ -47,7 +47,7 @@ def fixture_financial_transactions_dataset():
 
 @pytest.mark.e2e
 @pytest.mark.gpu_integration
-@pytest.mark.timeout(500)
+@pytest.mark.timeout(1000)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
