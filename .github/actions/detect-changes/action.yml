@@ -1,0 +1,45 @@
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Detect Changes"
+description: >
+  Detect which file categories changed using dorny/paths-filter.
+  Outputs boolean flags that downstream jobs use to decide whether to run.
+
+outputs:
+  src:
+    description: "'true' if any file under src/ changed"
+    value: ${{ steps.filter.outputs.src }}
+  test:
+    description: "'true' if any file under test/ changed"
+    value: ${{ steps.filter.outputs.test }}
+
+runs:
+  using: "composite"
+  steps:
+    # dorny/paths-filter uses the GitHub API for pull_request events,
+    # but needs a local checkout for push events.
+    - name: Checkout (push events only)
+      uses: actions/checkout@v4
+      if: github.event_name != 'pull_request'
+
+    - name: Detect changed paths
+      id: filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          src:
+            - 'src/**'
+          test:
+            - 'test/**'

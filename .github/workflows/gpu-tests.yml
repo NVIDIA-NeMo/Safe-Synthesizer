@@ -1,0 +1,117 @@
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ---------------------------------------------------------------------------
+# GPU tests run on NVIDIA on-prem self-hosted runners and use the copy-pr-bot
+# pattern: PRs are tested via push events to pull-request/* branches rather
+# than pull_request events.
+# See: https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/
+# ---------------------------------------------------------------------------
+
+name: GPU Tests
+
+on:
+  push:
+    branches:
+      - main
+      - "pull-request/[0-9]+"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash -x -e -u -o pipefail {0}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: linux-amd64-cpu4
+    permissions:
+      contents: read
+    outputs:
+      src: ${{ steps.changes.outputs.src }}
+      test: ${{ steps.changes.outputs.test }}
+    steps:
+      - name: Detect changes
+        id: changes
+        uses: ./.github/actions/detect-changes
+
+  gpu-e2e-test:
+    name: GPU E2E Tests - (Python ${{ matrix.python-version }})
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 60
+    runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python environment
+        id: setup
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: ${{ matrix.python-version }}
+          bootstrap-tools: "true"
+
+      - name: Run GPU E2E tests
+        timeout-minutes: 45
+        run: |
+          make bootstrap-nss cu128
+          make test-e2e
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.11'
+        with:
+          name: gpu-coverage-report
+          path: coverage.xml
+          retention-days: 30
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        if: matrix.python-version == '3.11'
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  # ---------------------------------------------------------------------------
+  # Single required status check for branch protection.
+  # ---------------------------------------------------------------------------
+  gpu-ci-status:
+    name: GPU CI Status
+    if: always() && !cancelled()
+    needs: [changes, gpu-e2e-test]
+    runs-on: linux-amd64-cpu4
+    steps:
+      - name: Check job results
+        run: |
+          echo "changes:      ${{ needs.changes.result }}"
+          echo "gpu-e2e-test: ${{ needs.gpu-e2e-test.result }}"
+
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "::error::GPU E2E tests failed"
+            exit 1
+          fi
+
+          echo "All GPU jobs passed (or were skipped)."

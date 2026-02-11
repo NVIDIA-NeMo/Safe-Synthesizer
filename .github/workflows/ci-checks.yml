@@ -40,31 +40,23 @@ jobs:
   # ---------------------------------------------------------------------------
   changes:
     name: Detect changes
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu8
     permissions:
       contents: read
       pull-requests: read
-    # Set job outputs to values from filter step
     outputs:
-      src: ${{ steps.filter.outputs.src }}
-      test: ${{ steps.filter.outputs.test }}
+      src: ${{ steps.changes.outputs.src }}
+      test: ${{ steps.changes.outputs.test }}
     steps:
-      - uses: actions/checkout@v4
-        if: github.event_name == 'push'
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            src:
-              - 'src/**'
-            test:
-              - 'test/**'
+      - name: Detect changes
+        id: changes
+        uses: ./.github/actions/detect-changes
 
   format:
     name: Format
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu8
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -87,7 +79,7 @@ jobs:
     name: Lint
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu8
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -110,7 +102,7 @@ jobs:
     name: Typecheck
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu8
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -133,7 +125,7 @@ jobs:
     name: Unit Tests - (Python ${{ matrix.python-version }})
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu8
     strategy:
       fail-fast: false
       matrix:
@@ -172,45 +164,28 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-  gpu-e2e-test:
-    name: GPU E2E Tests - (Python ${{ matrix.python-version }})
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linux-amd64-gpu-a100-latest-1
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11"]
+  # ---------------------------------------------------------------------------
+  # Single required status check for branch protection.
+  # Aggregates results from all upstream jobs so that skipped jobs (due to
+  # path filtering) don't block merge.
+  # ---------------------------------------------------------------------------
+  ci-status:
+    name: CI Status
+    if: always() && !cancelled()
+    needs: [changes, format, lint, typecheck, unit-test]
+    runs-on: linux-amd64-cpu4
     steps:
-      - name: checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python environment
-        id: setup
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: ${{ matrix.python-version }}
-          bootstrap-tools: "true"
-
-      - name: Run unit tests with coverage
+      - name: Check job results
         run: |
-          make bootstrap-nss cu128
-          make test-e2e
+          echo "changes:   ${{ needs.changes.result }}"
+          echo "format:    ${{ needs.format.result }}"
+          echo "lint:      ${{ needs.lint.result }}"
+          echo "typecheck: ${{ needs.typecheck.result }}"
+          echo "unit-test: ${{ needs.unit-test.result }}"
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.11'
-        with:
-          name: coverage-report
-          path: coverage.xml
-          retention-days: 30
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "::error::One or more CI jobs failed"
+            exit 1
+          fi
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        if: matrix.python-version == '3.11'
-        with:
-          files: coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          echo "All CI jobs passed (or were skipped)."
