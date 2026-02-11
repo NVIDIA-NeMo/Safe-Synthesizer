@@ -203,15 +203,16 @@ def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
 
 def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     # Done for legend ordering
-    df.Protection = df.Protection.astype("category")
-    df.Protection = df.Protection.cat.set_categories(
+    PROTECTION_COLUMN = "Protection"
+    df[PROTECTION_COLUMN] = df[PROTECTION_COLUMN].astype("category")
+    df[PROTECTION_COLUMN] = df[PROTECTION_COLUMN].cat.set_categories(
         [grade.value for grade in PrivacyGrade if grade.value != "Unavailable"], ordered=True
     )
-    df.sort_values(by="Protection", inplace=True, ascending=False)
+    df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
     fig = pie(
         # the cast done bc ty infers this as a list of bools instead of str.
-        labels=cast(list[str], df.Protection.dropna().astype(str).tolist()),
+        labels=cast(list[str], df[PROTECTION_COLUMN].dropna().astype(str).tolist()),
         values=df["Attack Percentage"].replace({0: np.nan}),
         sort=False,
     )
