@@ -121,7 +121,7 @@ engine = [
 cpu = [
   "accelerate",
   "bitsandbytes==0.42.0; sys_platform=='darwin'",
-  "bitsandbytes==0.46.1; sys_platform=='linux'",
+  "bitsandbytes==0.49.1; sys_platform=='linux'",
   "flashinfer-python==0.5.3; sys_platform=='linux'",
   "flashinfer-cubin==0.5.3; sys_platform=='linux'",
   "faiss-cpu==1.9.0",
@@ -146,7 +146,7 @@ cpu = [
 
 cu128 = [
   "accelerate",
-  "bitsandbytes==0.46.1; sys_platform=='linux'",
+  "bitsandbytes==0.49.1; sys_platform=='linux'",
   "faiss-gpu-cu12==1.9.0",
   "flashinfer-python==0.5.3",
   "flashinfer-cubin==0.5.3",
@@ -193,7 +193,7 @@ override-dependencies = [
     "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
     "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
     "bitsandbytes==0.42.0; sys_platform=='darwin'",
-    "bitsandbytes==0.46.1; sys_platform=='linux'",
+    "bitsandbytes==0.49.1; sys_platform=='linux'",
 ]
 
 environments = [
