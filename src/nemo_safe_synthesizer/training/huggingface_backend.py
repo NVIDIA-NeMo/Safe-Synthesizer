@@ -152,7 +152,7 @@ class HuggingFaceBackend(TrainingBackend):
             device_map=model_kwargs.pop(
                 "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
             ),
-            attn_implementation=model_kwargs.pop("attn_implementation", "flashinfer"),
+            attn_implementation=model_kwargs.pop("attn_implementation", "flash_attention_2"),
             dtype=model_kwargs.pop("dtype", torch.bfloat16),
             **model_kwargs,
         )

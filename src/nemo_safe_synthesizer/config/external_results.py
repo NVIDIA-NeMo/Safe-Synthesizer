@@ -78,9 +78,10 @@ class SafeSynthesizerSummary(NSSBaseModel):
             wandb.log(
                 {
                     "gen/generation_time_sec": self.timing.generation_time_sec,
-                    "gen/evaluation_time_sec": self.timing.evaluation_time_sec
-                    if self.timing.evaluation_time_sec
-                    else 0,
+                    "gen/evaluation_time_sec": self.timing.evaluation_time_sec,
+                    "eval/total_time_sec": self.timing.total_time_sec,
+                    "train/pii_replacer_time_sec": self.timing.pii_replacer_time_sec,
+                    "train/training_time_sec": self.timing.training_time_sec,
                     "gen/num_valid_records": self.num_valid_records,
                     "gen/num_invalid_records": self.num_invalid_records,
                     "gen/num_prompts": self.num_prompts,

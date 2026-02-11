@@ -139,7 +139,7 @@ class DPCallback(TrainerCallback):
     def _check_max_epsilon_exceeded(self, state: TrainerState, control: TrainerControl) -> TrainerControl:
         eps = self.accountant.compute_epsilon(steps=state.global_step + 1)
         if eps > self._max_epsilon:
-            logger.info("Max epsilon will be exceeded if trained for one more step. Stopping training.")
+            logger.info("Max epsilon exceeded. Stopping training.")
             control.should_training_stop = True
         return control
 

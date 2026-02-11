@@ -4,31 +4,61 @@
 import copy
 from pathlib import Path
 
+import pandas as pd
 import pytest
+from datasets import Dataset
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.generate import ValidationParameters
+from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
+from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
 from nemo_safe_synthesizer.generation.processors import (
     GroupedDataProcessor,
     TabularDataProcessor,
     TimeSeriesDataProcessor,
     create_processor,
 )
+from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.training.backend import ModelMetadata
 from transformers import AutoTokenizer, PreTrainedTokenizer
+
+logger = get_logger(__name__)
 
 BOS = "<s>"
 EOS = "</s>"
 
-
-# Purpose: Loads the stub tokenizer from disk for tests that require a tokenizer instance.
-@pytest.fixture
-def fixture_tokenizer(fixture_save_path) -> PreTrainedTokenizer:
-    return AutoTokenizer.from_pretrained(fixture_save_path)
+TOKENIZERS_DIR = Path(__file__).parent.parent / "test_data" / "tokenizers"
 
 
 @pytest.fixture(scope="session")
 def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
     return fixture_session_cache_dir / "processors"
+
+
+@pytest.fixture(
+    params=["TinyLlama/TinyLlama-1.1B-Chat-v1.0", "HuggingFaceTB/SmolLM3-3B", "mistralai/Mistral-7B-Instruct-v0.3"],
+    ids=["tinyllama", "smollm3", "mistral"],
+)
+def fixture_over_tokenizers(request) -> tuple[str, PreTrainedTokenizer]:
+    """Fixture parameterized over multiple tokenizers of interest."""
+    model_name = request.param
+
+    repo_name = model_name
+    local_files_only = False
+    if model_name == "TinyLlama/TinyLlama-1.1B-Chat-v1.0":
+        repo_name = str(TOKENIZERS_DIR / "tinyllama")
+        local_files_only = True
+    elif model_name == "HuggingFaceTB/SmolLM3-3B":
+        repo_name = str(TOKENIZERS_DIR / "smollm3b")
+        local_files_only = True
+    elif model_name == "mistralai/Mistral-7B-Instruct-v0.3":
+        repo_name = str(TOKENIZERS_DIR / "mistral7b")
+        local_files_only = True
+    else:
+        logger.warning(f"Tokenizer for {model_name} not stored in repo, loading from HF Hub")
+
+    tokenizer = AutoTokenizer.from_pretrained(repo_name, local_files_only=local_files_only)
+
+    return model_name, tokenizer
 
 
 # Purpose: Builds training metadata for tests, using the stub tokenizer and explicit params.
@@ -444,3 +474,137 @@ def test_timeseries_data_processor_invalid_interval(
     assert len(response.valid_records) == 1
     assert len(response.invalid_records) == 2
     assert len(response.errors) == 2
+
+
+def _check_assembler_to_processor(
+    config: SafeSynthesizerParameters,
+    df: pd.DataFrame,
+    tokenizer: PreTrainedTokenizer,
+    cache_file_path: str | Path | None,
+) -> None:
+    """Test helper to run assembler and processor.
+
+    Asserts that the processor can parse all records from the text produced
+    by the assembler and extracts out the expected number of records.
+
+    Args:
+        config: The configuration for the synthesizer.
+        df: The dataframe to use for the test.
+        tokenizer: The tokenizer to use for the test.
+    """
+    schema = make_json_schema(df)
+
+    hf_dataset = Dataset.from_pandas(df)
+
+    metadata = ModelMetadata.from_config(config)
+    assembler = TrainingExampleAssembler.from_data(
+        dataset=hf_dataset,
+        tokenizer=tokenizer,
+        metadata=metadata,
+        config=config,
+        seed=125642,
+        cache_file_path=cache_file_path,
+    )
+
+    training_examples = assembler.assemble_training_examples(data_fraction=1.0)
+    processor = create_processor(schema=schema, metadata=metadata, config=config)
+
+    total_parsed_records = 0
+    for idx, example in enumerate(training_examples.train):
+        input_ids = example["input_ids"]
+        labels = example["labels"]
+        assert len(input_ids) == len(labels)
+        completion_input_ids = [id for id, label in zip(input_ids, labels) if label != -100]
+
+        text = tokenizer.decode(completion_input_ids)
+        response = processor(idx, text)
+
+        assert len(response.valid_records) > 0
+        assert len(response.invalid_records) == 0
+        assert len(response.errors) == 0
+        total_parsed_records += len(response.valid_records)
+
+    assert total_parsed_records == len(df)
+
+
+# Purpose: Ensure that the tabular examples we assemble are parsable by the processor
+# with no invalid records.
+@pytest.mark.parametrize("max_sequences_per_example", [1, 2])
+def test_assembler_to_processor_tabular(
+    fixture_over_tokenizers, fixture_session_cache_dir, max_sequences_per_example: int
+):
+    model_name, tokenizer = fixture_over_tokenizers
+    config = SafeSynthesizerParameters.from_params(
+        use_unsloth=True,
+        rope_scaling_factor=1,
+        max_sequences_per_example=max_sequences_per_example,
+        pretrained_model=model_name,
+    )
+    df = pd.DataFrame(
+        {
+            "integer": [1, 2, 3, 5, 10],
+            "float": [4.5, 5.6, 6.7, 2.3, -1.2],
+            "text": ["hello", "world", "foo bar baz", "with\ttabs", "new\nline"],
+            "boolean": [True, False, True, False, True],
+        }
+    )
+
+    _check_assembler_to_processor(config, df, tokenizer, cache_file_path=fixture_session_cache_dir)
+
+
+# Purpose: Ensure that the grouped examples we assemble are parsable by the processor
+# with no invalid records.
+@pytest.mark.parametrize("max_sequences_per_example", [1, 2])
+def test_assembler_to_processor_grouped(fixture_over_tokenizers, fixture_session_cache_dir, max_sequences_per_example):
+    model_name, tokenizer = fixture_over_tokenizers
+    config = SafeSynthesizerParameters.from_params(
+        use_unsloth=True,
+        rope_scaling_factor=1,
+        max_sequences_per_example=max_sequences_per_example,
+        group_training_examples_by="group_id",
+        pretrained_model=model_name,
+    )
+    df = pd.DataFrame(
+        {
+            "group_id": [1, 1, 1, 2, 2],
+            "integer": [1, 2, 3, 5, 10],
+            "float": [4.5, 5.6, 6.7, 2.3, -1.2],
+            "text": ["hello", "world", "foo bar baz", "with\ttabs", "new\nline"],
+            "boolean": [True, False, True, False, True],
+        }
+    )
+
+    _check_assembler_to_processor(config, df, tokenizer, cache_file_path=fixture_session_cache_dir)
+
+
+def test_assembler_to_processor_adobe(
+    fixture_over_tokenizers, fixture_session_cache_dir, fixture_adobe_sampled_dataset
+):
+    model_name, tokenizer = fixture_over_tokenizers
+    config = SafeSynthesizerParameters.from_params(
+        use_unsloth=True,
+        rope_scaling_factor=1,
+        max_sequences_per_example=1,
+        pretrained_model=model_name,
+    )
+    _check_assembler_to_processor(
+        config=config, df=fixture_adobe_sampled_dataset, tokenizer=tokenizer, cache_file_path=fixture_session_cache_dir
+    )
+
+
+def test_assembler_to_processor_non_english(
+    fixture_over_tokenizers, fixture_session_cache_dir, fixture_lmsys_chat_non_english_dataset
+):
+    model_name, tokenizer = fixture_over_tokenizers
+    config = SafeSynthesizerParameters.from_params(
+        use_unsloth=True,
+        rope_scaling_factor=1,
+        max_sequences_per_example=1,
+        pretrained_model=model_name,
+    )
+    _check_assembler_to_processor(
+        config=config,
+        df=fixture_lmsys_chat_non_english_dataset,
+        tokenizer=tokenizer,
+        cache_file_path=fixture_session_cache_dir,
+    )

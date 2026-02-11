@@ -5,15 +5,29 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 ## Workflows Overview
 
 
-| Workflow                                           | Trigger             | Description                                           |
-| -------------------------------------------------- | ------------------- | ----------------------------------------------------- |
-| [ci.yml](ci.yml)                                   | Push to `main`, PRs | Lint, format check, and tests with coverage           |
-| [conventional-commit.yml](conventional-commit.yml) | PRs                 | Validates PR titles follow conventional commit format |
-| [copyright-check.yml](copyright-check.yml)         | PRs                 | Validates NVIDIA copyright headers on Python files    |
-| [dco-assistant.yml](dco-assistant.yml)             | PRs, Comments       | Manages DCO signing via PR comments                   |
-| [release.yml](release.yml)                         | Manual dispatch     | Builds and publishes package to PyPI                  |
-| [secrets-detector.yml](secrets-detector.yml)       | PRs                 | Scans for accidentally committed secrets              |
+| Workflow                                           | Trigger                               | Description                                          |
+| -------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual           | Format, lint, typecheck, and unit tests (CPU)        |
+| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual | GPU E2E tests (A100)                               |
+| [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
+| [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
+| [docs.yml](docs.yml)                               | Push to `main` (docs paths)           | Builds and deploys documentation to GitHub Pages     |
+| [release.yml](release.yml)                         | Manual dispatch                       | Builds and publishes package to PyPI                 |
+| [secrets-detector.yml](secrets-detector.yml)       | PRs                                   | Scans for accidentally committed secrets             |
 
+
+## Pull Request Testing (copy-pr-bot)
+
+GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. They use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern instead:
+
+1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
+2. The push to `pull-request/<number>` triggers the GPU workflow
+3. Untrusted PRs require a vetter to comment `/ok to test <SHA>` before GPU tests run
+4. Draft PRs do **not** auto-sync (`auto_sync_draft: false`), saving GPU resources
+
+Configuration: [`.github/copy-pr-bot.yaml`](../copy-pr-bot.yaml)
+
+CPU checks (`ci-checks.yml`) run on GitHub-hosted `ubuntu-latest` runners and use standard `pull_request` triggers.
 
 ## Workflow Diagram
 
@@ -21,21 +35,30 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 flowchart LR
     subgraph triggers [Triggers]
         push[Push to main]
-        pr[Pull Request]
-        comment[PR Comment]
+        cpb[copy-pr-bot push to pull-request/*]
+        pr[Pull Request event]
         manual[Manual Dispatch]
     end
 
-    subgraph ci [CI Workflow]
+    subgraph ci [CI Checks - GitHub-hosted runners]
+        changes_ci[Detect Changes]
+        format[Format]
         lint[Lint]
-        format[Format Check]
         typecheck[Typecheck]
-        test[Unit Tests]
-        test --> coverage[Coverage Report]
+        unit[Unit Tests]
+        ci_status[CI Status]
+        changes_ci --> format & lint & typecheck & unit
+        format & lint & typecheck & unit --> ci_status
+    end
+
+    subgraph gpu [GPU Tests - on-prem runners]
+        changes_gpu[Detect Changes]
+        e2e[GPU E2E Tests]
+        gpu_status[GPU CI Status]
+        changes_gpu --> e2e --> gpu_status
     end
 
     subgraph compliance [Compliance Workflows]
-        dco[DCO Assistant]
         conventional[Conventional Commit]
         secrets[Secrets Detector]
         copyright[Copyright Check]
@@ -43,16 +66,14 @@ flowchart LR
 
     subgraph release [Release Workflow]
         buildWheel[Build Wheel]
-        bumpVersion[Bump Version]
         publishPyPI[Publish to PyPI]
         ghRelease[GitHub Release]
         slackNotify[Slack Notification]
     end
 
-    push --> ci
-    pr --> ci
-    pr --> compliance
-    comment --> dco
+    push --> ci & gpu
+    cpb --> gpu & copyright
+    pr --> ci & conventional & secrets
     manual --> release
 
     buildWheel --> publishPyPI --> ghRelease --> slackNotify
@@ -63,17 +84,37 @@ flowchart LR
     release -.->|reuses| FW-CI-templates
 ```
 
-## CI Workflow
+## CI Checks Workflow
 
-The main CI workflow runs on every push to `main` and on pull requests:
+The `ci-checks.yml` workflow runs on every push to `main` and on pull requests:
 
-- **Lint**: Runs `ruff check` and `ty` type checks
-- **Format Check**: Verifies code formatting with `ruff format --check`
-- **Test**: Runs pytest with coverage across Python 3.11. more to come.
+- **Detect Changes**: Uses `dorny/paths-filter` to skip jobs when only non-source files change
+- **Format**: Verifies code formatting with `ruff format --check`
+- **Lint**: Runs `ruff check` linting
+- **Typecheck**: Runs `ty` type checks
+- **Unit Tests**: Runs pytest with coverage
+- **CI Status**: Aggregation job -- single required check for branch protection
+
+All jobs run on `ubuntu-latest` (GitHub-hosted).
+
+## GPU Tests Workflow
+
+The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot):
+
+- **GPU E2E Tests**: Runs end-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 60-minute job timeout and 45-minute step timeout
+- **GPU CI Status**: Aggregation job -- single required check for branch protection
+
+### Runners
+
+| Workflow | Job | Runner Label | Type |
+| --- | --- | --- | --- |
+| CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
+| GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
+| GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 
 ### Coverage
 
-Coverage reports are uploaded as artifacts.
+Coverage reports are uploaded as artifacts from both workflows.
 
 ## Compliance Workflows
 

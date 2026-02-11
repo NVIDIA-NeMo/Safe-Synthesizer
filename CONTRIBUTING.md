@@ -47,10 +47,34 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss engine # Engine dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
+   Or, if you have a local clone of the NMP repo, bootstrap everything in one step:
+  ```bash
+   NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
+  ```
+   This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs Python dependencies with CPU extras.
 4. Add the upstream remote:
   ```bash
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
   ```
+
+### NMP Synchronization
+
+If you work with the NMP monorepo, set `NMP_REPO_PATH` to your local checkout to enable sync targets:
+
+```bash
+export NMP_REPO_PATH=/path/to/nmp
+
+# Sync files from NMP to this repo
+make synchronize-from-nmp
+
+# Sync files from this repo to NMP
+make synchronize-to-nmp
+
+# Sync from a specific NMP merge request
+make synchronize-from-nmp-mr MR=5603
+```
+
+> **Note:** `NMP_REPO_PATH` is only required for NMP sync operations. It is not needed for standard development, testing, or CI. we also will remove this after we extricate nss fro mnmp.
 
 ## Repository Settings
 

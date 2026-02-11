@@ -5,6 +5,7 @@
 # /// script
 # dependencies = [
 #   "typer",
+#   "gitpython",
 # ]
 # ///
 
@@ -16,10 +17,13 @@ Scans Python files and adds SPDX copyright headers where missing.
 """
 
 import os
+import tomllib
 from datetime import datetime
+from fnmatch import fnmatch
 from pathlib import Path
 
 import typer
+from git import InvalidGitRepositoryError, Repo
 
 app = typer.Typer(name="copyright-fixer", help="Copyright fixer tool for Safe Synthesizer.", no_args_is_help=True)
 
@@ -32,21 +36,6 @@ _HEADER = (
     "\n"
 )
 
-_SKIP_DIRS = frozenset(
-    {
-        "__pycache__",
-        ".git",
-        ".pytest_cache",
-        ".venv",
-        ".mypy_cache",
-        ".ruff_cache",
-        ".egg-info",
-        "node_modules",
-        "venv",
-        "site",
-        ".uv_cache",
-    }
-)
 
 _EXTENSIONS = frozenset({".py"})
 
@@ -57,6 +46,52 @@ _HEADER_MARKERS = (
     "Copyright (c)",
     "Copyright (C)",
 )
+
+
+# --- ignore helpers ---
+
+
+def _get_repo(start: str) -> Repo | None:
+    """Discover the git repository containing *start*."""
+    try:
+        return Repo(start, search_parent_directories=True)
+    except InvalidGitRepositoryError:
+        return None
+
+
+def _load_ruff_excludes(repo_root: str | None) -> list[str]:
+    """Load exclude patterns from ruff.toml (or pyproject.toml [tool.ruff])."""
+    if repo_root is None:
+        return []
+
+    for name, accessor in (
+        ("ruff.toml", lambda cfg: cfg),
+        (".ruff.toml", lambda cfg: cfg),
+        ("pyproject.toml", lambda cfg: cfg.get("tool", {}).get("ruff", {})),
+    ):
+        path = os.path.join(repo_root, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as fh:
+                ruff_section = accessor(tomllib.load(fh))
+            excludes = ruff_section.get("exclude", [])
+            if excludes:
+                return excludes
+        except Exception:  # noqa: BLE001
+            continue
+    return []
+
+
+def _is_ruff_excluded(relpath: str, excludes: list[str]) -> bool:
+    """Return True if any path component matches a ruff exclude pattern."""
+    parts = Path(relpath).parts
+    for pattern in excludes:
+        pattern = pattern.strip("/")
+        for part in parts:
+            if fnmatch(part, pattern):
+                return True
+    return False
 
 
 # --- core helpers ---
@@ -80,15 +115,30 @@ def _read_head(path: str, nbytes: int = 512) -> str:
 
 
 def _collect_files_from_dir(root: str) -> list[str]:
-    """Walk *root* with os.walk, pruning skip dirs, collecting .py files."""
-    result: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        # Prune in-place so os.walk doesn't descend
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
-        for fname in filenames:
-            if os.path.splitext(fname)[1] in _EXTENSIONS:
-                result.append(os.path.join(dirpath, fname))
-    return result
+    """Collect .py files under *root*, respecting .gitignore and ruff excludes."""
+    repo = _get_repo(root)
+
+    if repo is not None:
+        repo_root = str(repo.working_tree_dir)
+        ruff_excludes = _load_ruff_excludes(repo_root)
+        # git ls-files honours .gitignore automatically; paths are relative to repo root
+        raw = repo.git.ls_files("--cached", "--others", "--exclude-standard", "-z", "--", root)
+        git_files = [f for f in raw.split("\0") if f]
+        py_files = [os.path.join(repo_root, f) for f in git_files if os.path.splitext(f)[1] in _EXTENSIONS]
+    else:
+        ruff_excludes = _load_ruff_excludes(None)
+        # Fallback: plain os.walk when git is unavailable
+        py_files = []
+        for dirpath, _, filenames in os.walk(root):
+            for fname in filenames:
+                if os.path.splitext(fname)[1] in _EXTENSIONS:
+                    py_files.append(os.path.join(dirpath, fname))
+
+    # Additionally filter out ruff-excluded paths
+    if ruff_excludes:
+        py_files = [f for f in py_files if not _is_ruff_excluded(os.path.relpath(f, root), ruff_excludes)]
+
+    return py_files
 
 
 def _add_header(filepath: str) -> bool:

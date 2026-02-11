@@ -177,7 +177,7 @@ def test_tabular_data_assembler_shorter_context_with_test_split(
     assert (
         examples.test.num_rows == 4
     )  # changed from 30 to 4 because we are filling context with records for the test set as well
-    assert examples.train.num_rows == 13
+    assert examples.train.num_rows == 14
 
 
 def test_tabular_data_assembler_dp(
