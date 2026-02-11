@@ -1,6 +1,6 @@
 [project]
 name = "nemo-safe-synthesizer"
-version = "0.0.0"
+dynamic = ["version"]
 description = "Safe synthesizer"
 readme = "README.md"
 authors = [{ name = "NVIDIA", email = "nemo@nvidia.com" }]
@@ -266,8 +266,18 @@ url = "https://pypi.nvidia.com"
 explicit = true
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+# Fallback when no git tag is available (e.g. shallow clone, Dependabot)
+fallback-version = "0.0.0"
+vcs = "git"
+style = "pep440"
+
 
 [tool.hatch.build.targets.wheel]
 

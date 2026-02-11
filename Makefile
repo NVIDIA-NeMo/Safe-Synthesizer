@@ -223,6 +223,23 @@ test-ci-container: container-build-test ## Run CI unit tests in a Linux containe
 		make test-ci
 
 
+### BUILD AND PUBLISH ###
+
+.PHONY: build-wheel
+build-wheel: ## Build wheel (version from git tag via uv-dynamic-versioning)
+	@echo "~~~~~~"
+	rm -rf dist/
+	uv build --wheel
+	@echo "wheel built: $$(ls dist/*.whl)"
+
+.PHONY: publish-internal
+publish-internal: build-wheel ## Build and publish wheel to NVIDIA Artifactory. Uses TWINE_REPOSITORY_URL, TWINE_USERNAME, and TWINE_PASSWORD env vars.
+	@echo "~~~~~~"
+	@echo "uploading to Artifactory: $(ARTIFACTORY_REPO_URL)"
+	uvx twine upload --repository-url $(TWINE_REPOSITORY_URL) --non-interactive dist/*.whl
+	@echo "published: $$(ls dist/*.whl)"
+
+
 ### NMP SYNCHRONIZATION ###
 
 # Guard: require NMP_REPO_PATH to be set before running sync targets
