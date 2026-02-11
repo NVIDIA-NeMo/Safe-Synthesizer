@@ -34,8 +34,6 @@ from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
 from ..defaults import (
-    BACKUP_ATTN_IMPLEMENTATION,
-    DEFAULT_ATTN_IMPLEMENTATION,
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
     FIXED_RUNTIME_LORA_ARGS,
@@ -142,28 +140,42 @@ class HuggingFaceBackend(TrainingBackend):
         """
         return {k: v for k, v in kwargs.items() if k not in self._TRAINER_SPECIFIC_KEYS}
 
+    def _resolve_attn_implementation(self, configured: str) -> str:
+        """Resolve attention implementation, falling back to sdpa if kernels is unavailable.
+
+        Args:
+            configured: The configured attention implementation string.
+
+        Returns:
+            The resolved attention implementation string.
+        """
+        if configured.startswith("kernels-community/"):
+            try:
+                import kernels  # noqa: F401
+
+                return configured
+            except ImportError:
+                logger.warning(
+                    f"kernels package not installed, cannot use '{configured}'. "
+                    "Falling back to 'sdpa'. Install with: pip install kernels"
+                )
+                return "sdpa"
+        return configured
+
     def _build_base_framework_params(self, model_kwargs: dict) -> dict:
         """Build the base framework parameters for model loading.
 
         Args:
             model_kwargs: Filtered model keyword arguments.
-            max_seq_length: The maximum sequence length.
         """
-
-        try:
-            import kernels  # noqa: F401
-
-            attn_implementation = DEFAULT_ATTN_IMPLEMENTATION
-        except ImportError:
-            attn_implementation = BACKUP_ATTN_IMPLEMENTATION
-            logger.warning(f"kernels module not found, using backup attn implementation: {BACKUP_ATTN_IMPLEMENTATION}")
-
         return dict(
             pretrained_model_name_or_path=self.params.training.pretrained_model,
             device_map=model_kwargs.pop(
                 "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
             ),
-            attn_implementation=model_kwargs.pop("attn_implementation", attn_implementation),
+            attn_implementation=model_kwargs.pop(
+                "attn_implementation", self._resolve_attn_implementation(self.params.training.attn_implementation)
+            ),
             dtype=model_kwargs.pop("dtype", torch.bfloat16),
             **model_kwargs,
         )

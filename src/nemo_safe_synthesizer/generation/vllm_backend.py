@@ -81,6 +81,11 @@ class VllmBackend(GeneratorBackend):
 
     def initialize(self, **kwargs) -> None:
         """Initialize and load the model into memory."""
+        # vLLM 0.11.x uses an environment variable for attention backend selection.
+        # When vLLM is upgraded to 0.12+, migrate to the attention_backend constructor arg.
+        if self.config.generation.attention_backend is not None:
+            os.environ["VLLM_ATTENTION_BACKEND"] = self.config.generation.attention_backend
+
         max_vram = get_max_vram(as_fraction=True)
         max_vram = max_vram.get(0)
 
