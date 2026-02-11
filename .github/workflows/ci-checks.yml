@@ -40,7 +40,7 @@ jobs:
   # ---------------------------------------------------------------------------
   changes:
     name: Detect changes
-    runs-on: linux-amd64-cpu8
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -56,7 +56,7 @@ jobs:
     name: Format
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linux-amd64-cpu8
+    runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
     name: Lint
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linux-amd64-cpu8
+    runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -102,7 +102,7 @@ jobs:
     name: Typecheck
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linux-amd64-cpu8
+    runs-on: ubuntu-latest
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -125,7 +125,7 @@ jobs:
     name: Unit Tests - (Python ${{ matrix.python-version }})
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linux-amd64-cpu8
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -173,7 +173,7 @@ jobs:
     name: CI Status
     if: always() && !cancelled()
     needs: [changes, format, lint, typecheck, unit-test]
-    runs-on: linux-amd64-cpu4
+    runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |

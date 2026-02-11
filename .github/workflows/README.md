@@ -8,7 +8,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 | Workflow                                           | Trigger                               | Description                                          |
 | -------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
 | [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual           | Format, lint, typecheck, and unit tests (CPU)        |
-| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual | GPU E2E tests via copy-pr-bot pattern              |
+| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual | GPU E2E tests (A100)                               |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)           | Builds and deploys documentation to GitHub Pages     |
@@ -18,7 +18,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 ## Pull Request Testing (copy-pr-bot)
 
-GPU tests run on NVIDIA on-prem self-hosted runners and require the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern for security:
+GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. They use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern instead:
 
 1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
 2. The push to `pull-request/<number>` triggers the GPU workflow
@@ -27,7 +27,7 @@ GPU tests run on NVIDIA on-prem self-hosted runners and require the [copy-pr-bot
 
 Configuration: [`.github/copy-pr-bot.yaml`](../copy-pr-bot.yaml)
 
-CPU-only workflows (`ci-checks.yml`) use standard `pull_request` triggers since they run on cloud-based runners.
+CPU checks (`ci-checks.yml`) run on GitHub-hosted `ubuntu-latest` runners and use standard `pull_request` triggers.
 
 ## Workflow Diagram
 
@@ -40,7 +40,7 @@ flowchart LR
         manual[Manual Dispatch]
     end
 
-    subgraph ci [CI Checks - CPU runners]
+    subgraph ci [CI Checks - GitHub-hosted runners]
         changes_ci[Detect Changes]
         format[Format]
         lint[Lint]
@@ -95,7 +95,7 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests:
 - **Unit Tests**: Runs pytest with coverage
 - **CI Status**: Aggregation job -- single required check for branch protection
 
-All jobs run on `linux-amd64-cpu8` (NVIDIA self-hosted CPU, 8-core).
+All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Tests Workflow
 
@@ -108,10 +108,9 @@ The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branc
 
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
-| CI Checks | Format, Lint, Typecheck, Unit Tests | `linux-amd64-cpu8` | NVIDIA self-hosted CPU (8-core) |
-| CI Checks | CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
 | GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
-| GPU Tests | GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 
 ### Coverage
 
