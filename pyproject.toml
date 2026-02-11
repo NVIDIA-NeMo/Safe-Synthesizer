@@ -193,6 +193,7 @@ override-dependencies = [
     "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
     "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
     "bitsandbytes==0.42.0; sys_platform=='darwin'",
+    "bitsandbytes==0.46.1; sys_platform=='linux'",
 ]
 
 environments = [
@@ -234,7 +235,8 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
 # it's not used in production.
 # it assumes the nmp repo path is ../aire/microservices/nmp
   nemo-microservices = [
-    { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
+    # { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
+    { path = "../nmp/sdk/python/nemo-microservices"},
     # { index = "nvidia-pypi-public", extra = "microservices"}
   ]
 

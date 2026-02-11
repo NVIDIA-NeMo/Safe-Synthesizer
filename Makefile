@@ -8,7 +8,6 @@ UNAME_S := $(shell uname -s)
 ARCH := $(shell uname -m)
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
 NSS_ROOT_PATH := $(shell pwd)
-PYTORCH_DEPS ?= cpu
 
 # Normalize architecture names
 ifeq ($(ARCH),x86_64)
@@ -23,9 +22,11 @@ ifeq ($(ARCH),arm64)
 	export BUILD_ARCH ?= linux/arm64
 endif
 
+PYTORCH_DEPS ?= cpu
+
 # Pytest configuration
 PYTEST_ADDOPTS := -n auto --dist loadscope --maxprocesses=8 -vv
-PYTEST_CI_OPTS := --cov --cov-report json:coverage.json --cov-report xml:coverage.xml
+PYTEST_CI_OPTS := --cov --cov-report json:coverage.json
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
 
 # Display platform info
@@ -161,7 +162,8 @@ test-ci-slow: ## Run slow tests in CI with coverage
 .PHONY: test-gpu-integration
 test-gpu-integration: ## Run GPU integration tests
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "gpu_integration"
+	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "gpu_integration and not e2e" -k default && \
+	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "gpu_integration and not e2e" -k dp
 
 # Please modify these based on updating the e2e tests for NMP CI
 .PHONY: test-e2e
