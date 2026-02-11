@@ -187,8 +187,9 @@ class SafeSynthesizer(ConfigBuilder):
         When resuming from a trained model for generation, the source paths
         point to the parent workdir that contains the trained adapter.
 
-        If a data source was already provided via with_data_source(), the cached
-        dataset files are not loaded (process_data will use the provided source).
+        Always prefers cached train/test splits from the training run to ensure
+        evaluation metrics are consistent and privacy guarantees are maintained.
+        Falls back to with_data_source() data only if cached files are missing.
 
         Returns:
             Self for method chaining.
@@ -206,17 +207,26 @@ class SafeSynthesizer(ConfigBuilder):
         logger.info(f"Loading model metadata from: {metadata_file}")
         self._llm_metadata = ModelMetadata.from_metadata_json(metadata_file, workdir=self._workdir)
 
-        # Only load cached dataset if no data source was provided via with_data_source()
-        if self._data_source is None:
-            training_path = self._workdir.source_dataset.training
-            test_path = self._workdir.source_dataset.test
-            if not training_path.exists():
-                raise FileNotFoundError(f"Training dataset file not found: {training_path}")
-            if not test_path.exists():
-                raise FileNotFoundError(f"Test dataset file not found: {test_path}")
+        # Always prefer cached train/test splits to preserve the exact split from training.
+        # This ensures evaluation metrics are consistent and privacy guarantees are maintained.
+        # Only fall back to with_data_source() data if cached files are missing.
+        training_path = self._workdir.source_dataset.training
+        test_path = self._workdir.source_dataset.test
+        if training_path.exists() and test_path.exists():
+            logger.info("Loading cached train/test split from training run")
             self._train_df = pd.read_csv(training_path)
             self._test_df = pd.read_csv(test_path)
-
+        elif self._data_source is not None:
+            logger.warning(
+                "Cached dataset not found, will use provided data source. "
+                "Note: A new train/test split will be created which may differ from the original training split."
+            )
+            # process_data() will handle the split using self._data_source
+        else:
+            raise ValueError(
+                "Cached train/test split not found and no data source provided. "
+                "Call with_data_source() before load_from_save_path(), or ensure the cached dataset exists."
+            )
         # match run_dir:
         #     case Path() as p if p.exists():
         #         if not config_file.exists():
