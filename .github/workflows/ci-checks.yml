@@ -176,7 +176,7 @@ jobs:
     name: GPU E2E Tests - (Python ${{ matrix.python-version }})
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: nv-gpu-amd64-a100-1gpu
+    runs-on: linux-amd64-gpu-a100-latest-1
     strategy:
       fail-fast: false
       matrix:
