@@ -367,6 +367,18 @@ This builds a container image from `containers/Dockerfile.test_ci` and runs `mak
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribution guidelines.
 
+### One-Command Setup
+
+If you have a local clone of the NMP repo, you can bootstrap everything in one step:
+
+```bash
+NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
+```
+
+This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs all Python dependencies.
+
+### Step-by-Step Setup
+
 ```bash
 # 1. Bootstrap development tools
 make bootstrap-tools
@@ -380,6 +392,20 @@ make test
 # 4. Format and lint
 make format
 make lint
+```
+
+### NMP Synchronization
+
+To sync code to/from the NMP monorepo, set `NMP_REPO_PATH` to your local NMP checkout:
+
+```bash
+export NMP_REPO_PATH=/path/to/nmp
+
+# Sync files from NMP to this repo
+make synchronize-from-nmp
+
+# Sync files from this repo to NMP
+make synchronize-to-nmp
 ```
 
 Run `make help` to see all available Makefile targets.
