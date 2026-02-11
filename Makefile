@@ -66,7 +66,7 @@ clean-python: ## Remove python virtual environment
 verify-python-version: ## Verify Python version and install if necessary
 	@uv python find 3.11 || uv python install 3.11
 
-.venv: verify-python-version ## Create a Python virtual environment
+.venv: .nmp_repo verify-python-version ## Create a Python virtual environment
 	uv venv --seed --allow-existing
 
 .PHONY: bootstrap-python
@@ -308,3 +308,8 @@ synchronize-to-nmp: synchronize-py-files-to-nmp synchronize-metafiles-to-nmp ## 
 
 .PHONY: synchronize-from-nmp
 synchronize-from-nmp: synchronize-py-files-from-nmp synchronize-metafiles-from-nmp ## Synchronize the full NMP nemo_safe_synthesizer package locally
+
+
+.nmp_repo:
+	$(call check-nmp-repo-path)
+	ln -s $(NMP_REPO_PATH) .nmp_repo

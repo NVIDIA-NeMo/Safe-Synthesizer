@@ -73,3 +73,6 @@ third_party/licenses*ci.jsonl
 wandb/
 # output from unsloth defaults to the local path
 unsloth_compiled_cache/
+
+# symbolic link to the nmp repo folder for uv dependency resolution.
+.nmp_repo

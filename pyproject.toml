@@ -236,7 +236,7 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
 # it assumes the nmp repo path is ../aire/microservices/nmp
   nemo-microservices = [
     # { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
-    { path = "../nmp/sdk/python/nemo-microservices"},
+    { path = ".nmp_repo/sdk/python/nemo-microservices"},
     # { index = "nvidia-pypi-public", extra = "microservices"}
   ]
 
