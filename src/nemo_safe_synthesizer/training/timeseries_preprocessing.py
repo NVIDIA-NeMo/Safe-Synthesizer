@@ -10,11 +10,11 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
-from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 
 from ..config import SafeSynthesizerParameters
 from ..config.time_series import TimeSeriesParameters
 from ..data_processing.actions.utils import guess_datetime_format
+from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from ..observability import get_logger
 

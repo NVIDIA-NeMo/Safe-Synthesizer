@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.config import (
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
+from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F401
 
 
 @pytest.fixture
