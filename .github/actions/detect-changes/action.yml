@@ -28,12 +28,9 @@ outputs:
 runs:
   using: "composite"
   steps:
-    # dorny/paths-filter uses the GitHub API for pull_request events,
-    # but needs a local checkout for push events.
-    - name: Checkout (push events only)
-      uses: actions/checkout@v4
-      if: github.event_name != 'pull_request'
-
+    # Requires actions/checkout to have been run first so that
+    # (a) this action.yml can be found, and
+    # (b) dorny/paths-filter can diff against git history on push events.
     - name: Detect changed paths
       id: filter
       uses: dorny/paths-filter@v3

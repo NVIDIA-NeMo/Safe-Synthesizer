@@ -46,6 +46,7 @@ jobs:
       src: ${{ steps.changes.outputs.src }}
       test: ${{ steps.changes.outputs.test }}
     steps:
+      - uses: actions/checkout@v4
       - name: Detect changes
         id: changes
         uses: ./.github/actions/detect-changes
