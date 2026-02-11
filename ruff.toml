@@ -26,26 +26,8 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
-    "services/evaluator/src/external/evaltool",
-    # Legacy customizer service (kept for reference during v2 migration)
-    "services/customizer-legacy",
-    "services/auditor/fixes/cve-2025-8194",
-    "services/guardrails/fixes/cve-2025-8194",
-    "services/evaluator/fixes/cve-2025-8194",
-    "services/data-designer/fixes/cve-2025-8194",
-    "services/safe-synthesizer/fixes/cve-2025-8194",
-    "services/safe-synthesizer-api/fixes/cve-2025-8194",
-    "architecture/examples",
-    "docs",
-    # Bug bash test notebooks (manual testing, not production code)
-    "tests/bug-bash",
-    # auto-generated SDK
-    "sdk/python",
-    # files borrowed verbatim from garak
-    "packages/garak_api/garakapi/_config.py",
-    "packages/garak_api/garakapi/_plugins.py",
-    "packages/garak_api/garakapi/exception.py",
-]
+    "unsloth_compiled_cache"
+    ]
 
 line-length = 120
 indent-width = 4
