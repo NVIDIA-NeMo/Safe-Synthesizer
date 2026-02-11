@@ -77,7 +77,7 @@ clean-cache: clean-unsloth clean-uv clean-python ## Remove cache files from unsl
 verify-python-version: ## Verify Python version and install if necessary
 	@uv python find 3.11 || uv python install 3.11
 
-.venv: .nmp_repo verify-python-version ## Create a Python virtual environment
+.venv: verify-python-version ## Create a Python virtual environment
 	uv venv --seed --allow-existing
 
 .PHONY: bootstrap-python
@@ -112,6 +112,9 @@ bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss
 		exit 1; \
 	fi
 
+.PHONY: bootstrap-dev-env
+bootstrap-dev-env: bootstrap-tools .nmp_repo ## Bootstrap the full development environment. Set NMP_REPO_PATH for NMP sync support.
+	$(MAKE) bootstrap-nss cpu
 
 ### DOCUMENTATION ###
 
@@ -330,5 +333,11 @@ synchronize-from-nmp: synchronize-py-files-from-nmp synchronize-metafiles-from-n
 
 
 .nmp_repo:
-	$(call check-nmp-repo-path)
-	ln -s $(NMP_REPO_PATH) .nmp_repo
+	@if [ -d "$(NMP_REPO_PATH)" ]; then \
+		ln -sf $(NMP_REPO_PATH) .nmp_repo; \
+	elif [ -z "$(GITHUB_ACTIONS)" ]; then \
+		echo "NMP_REPO_PATH '$(NMP_REPO_PATH)' is not a valid directory. Skipping symlink creation."; \
+	else \
+		echo "NMP_REPO_PATH '$(NMP_REPO_PATH)' is not a valid directory."; \
+		exit 1; \
+	fi
