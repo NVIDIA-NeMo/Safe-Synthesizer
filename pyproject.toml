@@ -36,6 +36,8 @@ dependencies = [
   "structlog>=25.4.0",
   "colorama>=0.4.6",
   "tqdm>=4.67.1",
+  "setuptools>=80.0.0",
+  
 ]
 
 [dependency-groups]

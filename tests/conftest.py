@@ -23,6 +23,7 @@ def pytest_collection_modifyitems(config, items):
         "e2e",
         "integration",
         "gpu_integration",
+        "smoke",
     }
 
     for item in items:
@@ -44,6 +45,11 @@ def pytest_collection_modifyitems(config, items):
             if "integration" not in marker_names:
                 item.add_marker(pytest.mark.integration)
                 marker_names.add("integration")
+
+        if "/smoke/" in path_str:
+            if "smoke" not in marker_names:
+                item.add_marker(pytest.mark.smoke)
+                marker_names.add("smoke")
 
         if not marker_names.intersection(category_markers):
             item.add_marker(pytest.mark.unit)

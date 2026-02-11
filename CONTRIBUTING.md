@@ -415,6 +415,9 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
+# Run CPU smoke tests (~10 seconds, no GPU required)
+make test-smoke
+
 # Run GPU integration tests (requires CUDA)
 make test-gpu-integration
 

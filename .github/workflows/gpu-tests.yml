@@ -73,11 +73,16 @@ jobs:
         with:
           bootstrap-tools: "true"
 
+      - name: Bootstrap CUDA environment
+        run: make bootstrap-nss cu128
+
+      - name: Run GPU smoke tests
+        timeout-minutes: 20
+        run: make test-gpu-integration
+
       - name: Run GPU E2E tests
         timeout-minutes: 45
-        run: |
-          make bootstrap-nss cu128
-          make test-e2e
+        run: make test-e2e
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.

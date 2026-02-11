@@ -168,9 +168,9 @@ test-slow: ## Run all tests including slow tests (excludes e2e)
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
 
 .PHONY: test-ci
-test-ci: ## Run CI unit tests excluding slow and GPU tests
+test-ci: ## Run CI unit tests excluding slow, GPU, and smoke tests
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not gpu_integration and not slow"
+	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not gpu_integration and not slow and not smoke"
 
 .PHONY: test-ci-slow
 test-ci-slow: ## Run slow tests in CI with coverage
@@ -179,11 +179,21 @@ test-ci-slow: ## Run slow tests in CI with coverage
 
 E2E_TEST_FILE := $(NSS_ROOT_PATH)/tests/e2e/test_safe_synthesizer.py
 
+.PHONY: test-smoke
+test-smoke: ## Run CPU smoke tests (~few min, no GPU required)
+	$(PYTEST_CMD) -m "smoke and not gpu_integration"
+
 .PHONY: test-gpu-integration
-test-gpu-integration: ## Run GPU integration tests
+test-gpu-integration: ## Run GPU integration tests (smoke GPU + e2e)
+# -n 0 disables xdist: CUDA device-side asserts poison the worker, cascading to all subsequent tests.
+# Separate invocations: (1) local tiny-model tests, (2) SmolLM2 Hub test, (3) Unsloth (process-isolated from DP).
 	pushd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) tests/smoke/ -n 0 -m "gpu_integration" -k "not unsloth and not smollm2" && \
+	$(PYTEST_CMD) tests/smoke/ -n 0 -m "gpu_integration" -k "unsloth" && \
+	$(PYTEST_CMD) tests/smoke/ -n 0 -m "gpu_integration" -k "unsloth"  && \
 	$(PYTEST_CMD) $(E2E_TEST_FILE) -k default && \
 	$(PYTEST_CMD) $(E2E_TEST_FILE) -k dp
+
 
 # Please modify these based on updating the e2e tests for NMP CI
 .PHONY: test-e2e
