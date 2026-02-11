@@ -24,13 +24,15 @@ logger = get_logger()
 @dataclass
 class SafeSynthesizerAccountant:
     def __init__(self, use_prv: bool, noise_multiplier, sampling_probability, delta, num_steps):
+        # +1 provides headroom for a forward-looking epsilon check
+        # (i.e. "would one more step exceed the budget?").
+        self.max_compositions = num_steps + 1
         if use_prv:
-            # TODO: +1 was added in max_compositions due to a bug in NavFT, we should try to fix it
             self.accountant = PRVAccountant(
                 noise_multiplier=noise_multiplier,
                 sampling_probability=sampling_probability,
                 delta=delta,
-                max_compositions=num_steps + 1,
+                max_compositions=self.max_compositions,
                 eps_error=0.01,
             )
         else:
@@ -40,6 +42,11 @@ class SafeSynthesizerAccountant:
 
     def compute_epsilon(self, steps):
         if self.use_prv:
+            # Cap to max_compositions so callers never exceed the
+            # accountant's pre-computed range.  This can happen when the
+            # HF Trainer runs an extra optimizer step for an incomplete
+            # gradient-accumulation batch at the end of an epoch.
+            steps = min(steps, self.max_compositions)
             return self.accountant.compute_epsilon(steps)[2]
         else:
             return self.accountant.get_epsilon(self.delta)
