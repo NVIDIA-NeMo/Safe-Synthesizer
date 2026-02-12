@@ -12,7 +12,8 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)           | Builds and deploys documentation to GitHub Pages     |
-| [release.yml](release.yml)                         | Manual dispatch                       | Builds and publishes package to PyPI                 |
+| [internal-release.yml](internal-release.yml)       | Manual dispatch                       | Builds and publishes wheel to NVIDIA Artifactory     |
+| [release.yml](release.yml)                         | Manual dispatch                       | Builds and publishes package to PyPI (production)    |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                                   | Scans for accidentally committed secrets             |
 
 
@@ -153,9 +154,44 @@ Scans PRs for accidentally committed secrets. False positives can be added to `.
 
 Validates that Python files have proper NVIDIA copyright headers.
 
-## Release Workflow
+## Internal Release Workflow
 
-The release workflow uses the [FW-CI-templates `_release_library.yml](https://github.com/NVIDIA-NeMo/FW-CI-templates)` reusable workflow.
+The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory. Use this for testing the release process or distributing internal builds.
+
+### How to Publish Internally
+
+**Via GitHub Actions:**
+
+1. Go to **Actions** > **Internal Release**
+2. Click **Run workflow**
+3. Enter the branch, tag, or commit SHA to build (defaults to `main`)
+4. The workflow builds the wheel, uploads it as an artifact, and publishes to Artifactory
+
+Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets to be configured.
+
+**Locally (via Makefile):**
+
+Add the required env vars to your `.local.envrc` (git-ignored):
+
+```bash
+export TWINE_REPOSITORY_URL=<artifactory-repo-url>
+export TWINE_USERNAME=<your-username>
+export TWINE_PASSWORD=<your-api-key>
+```
+
+Then run:
+
+```bash
+# Build wheel only
+make build-wheel
+
+# Build and publish to Artifactory
+make publish-internal
+```
+
+## Release Workflow (Production)
+
+The production release workflow uses the [FW-CI-templates `_release_library.yml`](https://github.com/NVIDIA-NeMo/FW-CI-templates) reusable workflow to publish to PyPI.
 
 ### How to Release
 
@@ -210,6 +246,9 @@ The following secrets must be configured in GitHub repository settings:
 | `SSH_KEY`                | GPG signing key              |
 | `SSH_PWD`                | GPG key passphrase           |
 | `BOT_KEY`                | GitHub App private key       |
+| `ARTIFACTORY_USERNAME`     | NVIDIA Artifactory username  |
+| `ARTIFACTORY_TOKEN`       | NVIDIA Artifactory API key   |
+| `ARTIFACTORY_INTERNAL_URL`| NVIDIA Artifactory repo URL  |
 
 
 

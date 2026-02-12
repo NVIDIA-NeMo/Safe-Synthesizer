@@ -1,0 +1,71 @@
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ---------------------------------------------------------------------------
+# Internal release: build a wheel and publish to NVIDIA Artifactory.
+# Version is determined from git tags via uv-dynamic-versioning.
+# Tag a commit (e.g. `git tag v0.2.0`) before running this workflow.
+# Production releases to PyPI use release.yml (FW-CI-templates).
+# ---------------------------------------------------------------------------
+
+name: "Internal Release"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-ref:
+        description: Branch, tag, or full SHA to build
+        required: true
+        default: main
+        type: string
+
+defaults:
+  run:
+    shell: bash -x -e -u -o pipefail {0}
+
+jobs:
+  publish:
+    name: Build and publish to Artifactory
+    runs-on: ubuntu-latest
+    env:
+      TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
+    steps:
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          ref: ${{ inputs.release-ref }}
+          fetch-depth: 0
+          bootstrap-tools: "false"
+
+      - name: Build and publish
+        run: make publish-internal
+        env:
+          TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
+          TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_TOKEN }}
+
+      - name: Show built version
+        id: version
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          VERSION=$(echo "$WHEEL" | sed -n 's/.*-\([0-9][^-]*\)-.*/\1/p')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Built: $WHEEL (version $VERSION)"
+
+      - name: Upload wheel as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nemo-safe-synthesizer-${{ steps.version.outputs.version }}
+          path: dist/*.whl
+          retention-days: 90

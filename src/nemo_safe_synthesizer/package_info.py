@@ -14,37 +14,17 @@
 
 """Package version information for NeMo Safe Synthesizer.
 
-This file is used by the FW-CI-templates release workflow to manage versions.
-The MAJOR, MINOR, PATCH, and PRE_RELEASE variables are automatically updated
-during the release process.
+Version is determined at build time from git tags via uv-dynamic-versioning.
+At runtime, the version is read from the installed package metadata.
+
+To create a release version, tag a commit:
+    git tag v0.2.0
+    uv build --wheel
 """
 
-from packaging.version import Version
+import importlib.metadata
 
-MAJOR = 0
-MINOR = 1
-PATCH = 0
-PRE_RELEASE = ""
-BUILD = 1
-DEV_RELEASE = False
-
-
-def get_version() -> str:
-    """Get the full version string.
-
-    Returns:
-        Version string in the format MAJOR.MINOR.PATCH[PRE_RELEASE]
-    """
-    version = f"{MAJOR}.{MINOR}.{PATCH}"
-    if PRE_RELEASE:
-        version = f"{version}{PRE_RELEASE}"
-    if DEV_RELEASE:
-        version = f"{version}.dev{BUILD}"
-
-    version = Version(version)
-    version = str(version)
-
-    return version
-
-
-__version__ = get_version()
+try:
+    __version__ = importlib.metadata.version("nemo-safe-synthesizer")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.0.0"  # Fallback for editable installs without metadata
