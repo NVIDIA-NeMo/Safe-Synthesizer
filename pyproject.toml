@@ -172,7 +172,10 @@ cu128 = [
 
 [tool.uv]
 required-version = ">=0.9.14,<0.10.0"
-cache-keys = [{ file = "pyproject.toml" }]
+cache-keys = [
+  { file = "pyproject.toml" }, { git = { commit = true, tags = true } },
+  { file = "uv.lock" }
+]
 conflicts = [
   [
     { extra = "cpu" },

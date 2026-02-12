@@ -1,12 +1,12 @@
-AGENTS.local.md
-.idea
+# ignores agents.local.md, cursor.local.md, claude.local.md, etc.
+*.local.md
 .cursor/rules/personal/
-CLAUDE.local.md
 .claude/settings.local.json
 ai/tmp/
 venv*/
 env*/
-.env*
+*.env
+*.envrc
 temp
 __pycache__/*
 *.pyc
@@ -29,33 +29,26 @@ dist
 .venv
 .ruff_cache
 report.xml
-e2e-report.xml
 test_db.sqlite
-# E2E merged config files (temporary files created during test runs)
-e2e/configs/.*.merged.yaml
-.files_storage/
-logs/*
-*.log
-*.log.jsonl
+
 # Visual Studio Code config
 .vscode/
+*.code-workspace
 # PyCharm config
 .idea/
 .scratch/
+
 # automatically generated folders
 site/
 docs/_build/
 docs/_repo/
 docs/pysdk/reference/
+
 # artifacts from running ./scripts/build_docs.sh
 docs/_build
 docs/conf.py
 !docs/**/_snippets/**/*.log
 docs/**/_snippets/**/*.tgz
-docs/audit/_snippets/output/basic-job-report.jsonl
-openapicheck/
-# third party licenses
-third_party/licenses*ci.jsonl
 
 # artifacts from running Jupyter notebooks
 .ipynb_checkpoints/
@@ -67,10 +60,11 @@ third_party/licenses*ci.jsonl
 *.enc
 *.csr
 
-
 *-artifacts/
+
 # this is sometimes used by wandb as a local path.
 wandb/
+
 # output from unsloth defaults to the local path
 unsloth_compiled_cache/
 

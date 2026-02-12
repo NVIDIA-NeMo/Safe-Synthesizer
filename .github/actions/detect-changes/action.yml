@@ -40,3 +40,9 @@ runs:
             - 'src/**'
           test:
             - 'test/**'
+          pyproject.toml:
+            - 'pyproject.toml'
+          uv.lock:
+            - 'uv.lock'
+          pytest.ini:
+            - 'pytest.ini'
