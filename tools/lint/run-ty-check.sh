@@ -27,13 +27,5 @@ if [ -z "$filtered_files" ]; then
 	exit 0
 fi
 
-# Run ty check on the filtered files
-if ! which ty > /dev/null; then
-    echo "ty not found"
-    TY="uvx ty"
-else
-    TY="ty"
-fi
-
 # shellcheck disable=SC2086
-$TY check $filtered_files # no quotes around $filtered_files to preserve newlines
+ty check $filtered_files # no quotes around $filtered_files to preserve newlines

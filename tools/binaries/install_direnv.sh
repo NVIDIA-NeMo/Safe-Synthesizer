@@ -3,7 +3,7 @@ set -eu
 
 DIRENV_VERSION="2.37.1"
 REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
-source "${REPO_ROOT}/tools/binaries/defs.sh"
+OS="$(uname | tr '[:upper:]' '[:lower:]')"
 
 # Parse arguments
 CONFIGURE_SHELL=false

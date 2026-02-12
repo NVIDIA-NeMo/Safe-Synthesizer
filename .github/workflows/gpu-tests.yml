@@ -73,7 +73,6 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           python-version: ${{ matrix.python-version }}
-          bootstrap-tools: "true"
 
       - name: Run GPU E2E tests
         timeout-minutes: 45

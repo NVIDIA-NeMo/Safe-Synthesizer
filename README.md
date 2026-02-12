@@ -7,12 +7,12 @@ This package makes synthetic data, safely.
 ### Prerequisites
 
 - Python 3.11+
-- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.10.0)
+- [mise](https://mise.jdx.dev/) - Dev tool manager (installs `uv`, `ruff`, `ty`, `yq`, and more)
 - Git
 
 ### Quick Start
 
-Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
+Bootstrap development tools via mise (installs `uv`, `ruff`, `ty`, `yq`, and more):
 
 ```bash
 make bootstrap-tools

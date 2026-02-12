@@ -3,14 +3,14 @@
 ## Prerequisites
 
 - Python 3.11+
-- [uv](https://docs.astral.sh/uv/) -- Python package manager (>=0.9.14, <0.10.0)
+- [mise](https://mise.jdx.dev/) -- Dev tool manager (installs `uv`, `ruff`, `ty`, `yq`, and more)
 - Git
 
 ## Quick Start
 
 ### 1. Bootstrap development tools
 
-Install `uv`, `ruff`, `ty`, `yq`, and other development tools:
+Install `uv`, `ruff`, `ty`, `yq`, and other development tools via mise:
 
 ```bash
 make bootstrap-tools

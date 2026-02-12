@@ -47,7 +47,6 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           fetch-depth: 0
-          bootstrap-tools: "true"
           python-version: "3.11"
 
       - name: Install docs dependencies

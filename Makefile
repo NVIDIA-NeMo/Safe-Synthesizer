@@ -44,19 +44,20 @@ help:
 
 ### BOOTSTRAP AND SETUP ###
 
-.PHONY: bootstrap-tools
-bootstrap-tools: ## Bootstrap tools
-	bash tools/binaries/bootstrap_tools.sh
+.PHONY: install-mise
+install-mise: ## Install mise (dev tool manager). Run once, then make bootstrap-tools
+	@command -v mise >/dev/null 2>&1 || \
+	( curl https://mise.run | sh && \
+	echo "mise installed. Add to your shell (e.g. ~/.zshrc):" && \
+	echo 'echo "eval $$(~/.local/bin/mise activate $(shell basename $$SHELL))"  >> ~/.$(shell basename $$SHELL)rc' && \
+	echo 'and restart your shell before running' && \
+	echo 'make bootstrap-tools')
+
+.PHONY: install-mise bootstrap-tools
+bootstrap-tools: ## Bootstrap tools via mise
+	@command -v mise >/dev/null 2>&1 || { echo "mise not found. Install: https://mise.jdx.dev or run make install-mise"; exit 1; }
+	mise install
 	@echo "tools bootstrapped successfully"
-
-.PHONY: bootstrap-tools-ci
-bootstrap-tools-ci: ## Bootstrap tools for CI
-	bash tools/binaries/bootstrap_tools.sh --bootstrap-only
-
-.PHONY: install-uv
-install-uv: ## Install uv tool
-	bash tools/binaries/install_uv.sh
-	@echo "uv tool installed successfully"
 
 .PHONY: clean-python
 clean-python: ## Remove python virtual environment

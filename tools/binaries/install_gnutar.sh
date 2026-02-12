@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
-source "${REPO_ROOT}/tools/binaries/defs.sh"
+OS="$(uname | tr '[:upper:]' '[:lower:]')"
 
 if [ $OS != "darwin" ]; then
     echo "This script is only for Darwin (macOS) systems."

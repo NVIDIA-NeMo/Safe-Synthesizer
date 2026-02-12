@@ -28,10 +28,6 @@ inputs:
     description: "Number of commits to fetch (0 for all history)"
     required: false
     default: "1"
-  bootstrap-tools:
-    description: "Whether to run make bootstrap-tools"
-    required: false
-    default: "true"
 
 outputs:
   merge-base:
@@ -62,18 +58,12 @@ runs:
         echo "Merge Base SHA: $MERGE_BASE_SHA"
         echo "merge_base=$MERGE_BASE_SHA" >> $GITHUB_OUTPUT
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v6
-      with:
-        # version is parsed from pyproject.toml
-        enable-cache: true
-
     - name: Set up Python ${{ inputs.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install tools
-      if: inputs.bootstrap-tools == 'true'
-      shell: bash
-      run: make bootstrap-tools-ci
+    - name: Install tools via mise
+      uses: jdx/mise-action@v2
+      with:
+        cache: true

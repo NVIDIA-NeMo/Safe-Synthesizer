@@ -9,11 +9,12 @@ Please read our [Code of Conduct](https://github.com/NVIDIA-NeMo/Safe-Synthesize
 ### Prerequisites
 
 - Python 3.11+
+- [mise](https://mise.jdx.dev/) -- Dev tool manager
 - Git
 - [gh](https://cli.github.com/) -- GitHub CLI (optional, for PR workflows)
 
 !!! note
-    Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+    Tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools` (via mise).
 
 ### Setup
 

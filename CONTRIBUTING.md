@@ -23,10 +23,11 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 ### Prerequisites
 
 - Python 3.11+
+- [mise](https://mise.jdx.dev/) - Dev tool manager
 - Git
 - [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
 
-> **Note:** Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+> **Note:** Tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools` (via mise).
 
 ### Setup
 

@@ -47,27 +47,19 @@ if [ -z "$filtered_files" ]; then
 	exit 0
 fi
 
-# Resolve ruff
-if ! which ruff > /dev/null; then
-    echo "ruff not found, falling back to uvx"
-    RUFF="uvx ruff"
-else
-    RUFF="ruff"
-fi
-
 if [ "$CHECK_MODE" = true ]; then
     echo "Running in check mode (no files will be modified)"
     # shellcheck disable=SC2086
-    $RUFF format --check "$NSS_ROOT_PATH" $filtered_files
+    ruff format --check "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
-    $RUFF check --select I "$NSS_ROOT_PATH" $filtered_files
+    ruff check --select I "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
     uv run --script tools/lint/copyright_fixer.py --check $filtered_files
 else
     # shellcheck disable=SC2086
-    $RUFF format "$NSS_ROOT_PATH" $filtered_files
+    ruff format "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
-    $RUFF check --select I --fix "$NSS_ROOT_PATH" $filtered_files
+    ruff check --select I --fix "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
     uv run --script tools/lint/copyright_fixer.py $filtered_files
 fi

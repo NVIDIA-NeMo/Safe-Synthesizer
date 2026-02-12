@@ -1,0 +1,12 @@
+# Tool definitions for Safe-Synthesizer development.
+# Run `mise install` to install all tools, or `make bootstrap-tools`.
+# See https://mise.jdx.dev for documentation.
+
+[tools]
+uv = "0.9.29"
+ruff = "0.15.0"
+ty = "0.0.1-alpha.21"
+yq = "4.44.1"
+jq = "1.8.1"
+direnv = "2.37.1"
+"aqua:google/osv-scanner" = "2.2.3"

@@ -34,13 +34,5 @@ if [ -z "$filtered_files" ]; then
 	exit 0
 fi
 
-# Run ruff check on the filtered files
-if ! which ruff > /dev/null; then
-    echo "ruff not found"
-    RUFF="uvx ruff"
-else
-    RUFF="ruff"
-fi
-
 # shellcheck disable=SC2086
-$RUFF check --fix $filtered_files # no quotes around $filtered_files to preserve newlines
+ruff check --fix $filtered_files # no quotes around $filtered_files to preserve newlines

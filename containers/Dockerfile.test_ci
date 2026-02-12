@@ -5,21 +5,23 @@ RUN apt-get update && \
         git curl build-essential make && \
     rm -rf /var/lib/apt/lists/*
 
+# Install mise
+RUN curl https://mise.run | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
 # Keep venv outside /workspace so bind mounts don't shadow it
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /workspace
 
-# Install CLI tools including uv (cached until tools/ or Makefile change)
-COPY Makefile .
-COPY tools/ tools/
-COPY pyproject.toml .
-RUN REPO_ROOT=/workspace make bootstrap-tools-ci
-
-# bootstrap-tools-ci installs tools to ~/.local/bin
-ENV PATH="/root/.local/bin:${PATH}"
+# Install CLI tools via mise (cached until mise.toml changes)
+COPY mise.toml .
+RUN mise install
 
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
+COPY Makefile .
+COPY pyproject.toml .
+COPY tools/ tools/
 COPY ruff.toml .
 COPY pytest.ini .
 COPY README.md .

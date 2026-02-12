@@ -70,7 +70,6 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           fetch-depth: 0
-          bootstrap-tools: "true"
 
       - name: Check code formatting
         run: |
@@ -93,7 +92,6 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           fetch-depth: 0
-          bootstrap-tools: "true"
 
       - name: Run ruff linting
         run: |
@@ -116,7 +114,6 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           fetch-depth: 0
-          bootstrap-tools: "true"
 
       - name: Run ty type checks
         run: |
@@ -143,7 +140,6 @@ jobs:
         uses: ./.github/actions/setup-python-env
         with:
           python-version: ${{ matrix.python-version }}
-          bootstrap-tools: "true"
 
       - name: Run unit tests with coverage
         run: |

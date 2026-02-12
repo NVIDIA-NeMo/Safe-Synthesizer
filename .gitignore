@@ -70,3 +70,6 @@ unsloth_compiled_cache/
 
 # symbolic link to the nmp repo folder for uv dependency resolution.
 .nmp_repo
+
+# mise local data
+.mise/

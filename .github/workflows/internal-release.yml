@@ -46,7 +46,6 @@ jobs:
         with:
           ref: ${{ inputs.release-ref }}
           fetch-depth: 0
-          bootstrap-tools: "false"
 
       - name: Build and publish
         run: make publish-internal
