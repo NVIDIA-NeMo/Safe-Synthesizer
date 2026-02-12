@@ -5329,23 +5329,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" package_info">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.package_info.get_version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_version
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -8452,23 +8435,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" package_info">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.package_info.get_version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;get_version
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
     </ul>
@@ -8628,9 +8594,11 @@
     <div class="doc doc-contents first">
 
         <p>Package version information for NeMo Safe Synthesizer.</p>
-<p>This file is used by the FW-CI-templates release workflow to manage versions.
-The MAJOR, MINOR, PATCH, and PRE_RELEASE variables are automatically updated
-during the release process.</p>
+<p>Version is determined at build time from git tags via uv-dynamic-versioning.
+At runtime, the version is read from the installed package metadata.</p>
+<p>To create a release version, tag a commit:
+    git tag v0.2.0
+    uv build --wheel</p>
 
 
 
@@ -8641,27 +8609,6 @@ during the release process.</p>
 
 
 
-
-
-<p><span class="doc-section-title">Functions:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            get_version() (nemo_safe_synthesizer.package_info.get_version)" href="#nemo_safe_synthesizer.package_info.get_version">get_version</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Get the full version string.</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
 
 
 
@@ -8677,82 +8624,6 @@ during the release process.</p>
 
 
 
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="nemo_safe_synthesizer.package_info.get_version" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">get_version</span><span class="p">()</span></code>
-
-<a href="#nemo_safe_synthesizer.package_info.get_version" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Get the full version string.</p>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Version string in the format MAJOR.MINOR.PATCH[PRE_RELEASE]</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nemo_safe_synthesizer/package_info.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-32">32</a></span>
-<span class="normal"><a href="#__codelineno-0-33">33</a></span>
-<span class="normal"><a href="#__codelineno-0-34">34</a></span>
-<span class="normal"><a href="#__codelineno-0-35">35</a></span>
-<span class="normal"><a href="#__codelineno-0-36">36</a></span>
-<span class="normal"><a href="#__codelineno-0-37">37</a></span>
-<span class="normal"><a href="#__codelineno-0-38">38</a></span>
-<span class="normal"><a href="#__codelineno-0-39">39</a></span>
-<span class="normal"><a href="#__codelineno-0-40">40</a></span>
-<span class="normal"><a href="#__codelineno-0-41">41</a></span>
-<span class="normal"><a href="#__codelineno-0-42">42</a></span>
-<span class="normal"><a href="#__codelineno-0-43">43</a></span>
-<span class="normal"><a href="#__codelineno-0-44">44</a></span>
-<span class="normal"><a href="#__codelineno-0-45">45</a></span>
-<span class="normal"><a href="#__codelineno-0-46">46</a></span>
-<span class="normal"><a href="#__codelineno-0-47">47</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_version</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the full version string.</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34"></a>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="sd">        Version string in the format MAJOR.MINOR.PATCH[PRE_RELEASE]</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="n">version</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">MAJOR</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">MINOR</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">PATCH</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="k">if</span> <span class="n">PRE_RELEASE</span><span class="p">:</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>        <span class="n">version</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">version</span><span class="si">}{</span><span class="n">PRE_RELEASE</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="k">if</span> <span class="n">DEV_RELEASE</span><span class="p">:</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>        <span class="n">version</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">.dev</span><span class="si">{</span><span class="n">BUILD</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>
-</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>    <span class="n">version</span> <span class="o">=</span> <span class="n">Version</span><span class="p">(</span><span class="n">version</span><span class="p">)</span>
-</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a>    <span class="n">version</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">version</span><span class="p">)</span>
-</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>
-</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a>    <span class="k">return</span> <span class="n">version</span>
-</span></code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
 
 
 
