@@ -156,7 +156,7 @@ Validates that Python files have proper NVIDIA copyright headers.
 
 ## Internal Release Workflow
 
-The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory (`nv-shared-pypi-local`). Use this for testing the release process or distributing internal builds.
+The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory. Use this for testing the release process or distributing internal builds.
 
 ### How to Publish Internally
 
@@ -167,20 +167,16 @@ The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Ar
 3. Enter the branch, tag, or commit SHA to build (defaults to `main`)
 4. The workflow builds the wheel, uploads it as an artifact, and publishes to Artifactory
 
-Requires `ARTIFACTORY_USERNAME` and `ARTIFACTORY_PASSWORD` secrets to be configured.
+Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets to be configured.
 
 **Locally (via Makefile):**
 
-Requires a `~/.pypirc` with the `[local]` repository configured:
+Add the required env vars to your `.local.envrc` (git-ignored):
 
-```ini
-[distutils]
-index-servers = local
-
-[local]
-repository = https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local
-username = <your-username>
-password = <your-api-key>
+```bash
+export TWINE_REPOSITORY_URL=<artifactory-repo-url>
+export TWINE_USERNAME=<your-username>
+export TWINE_PASSWORD=<your-api-key>
 ```
 
 Then run:
@@ -250,8 +246,9 @@ The following secrets must be configured in GitHub repository settings:
 | `SSH_KEY`                | GPG signing key              |
 | `SSH_PWD`                | GPG key passphrase           |
 | `BOT_KEY`                | GitHub App private key       |
-| `ARTIFACTORY_USERNAME`   | NVIDIA Artifactory username  |
-| `ARTIFACTORY_PASSWORD`   | NVIDIA Artifactory API key   |
+| `ARTIFACTORY_USERNAME`     | NVIDIA Artifactory username  |
+| `ARTIFACTORY_TOKEN`       | NVIDIA Artifactory API key   |
+| `ARTIFACTORY_INTERNAL_URL`| NVIDIA Artifactory repo URL  |
 
 
 
