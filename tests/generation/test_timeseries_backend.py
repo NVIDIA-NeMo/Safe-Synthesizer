@@ -148,7 +148,7 @@ def mock_workdir(fixture_session_cache_dir):
     return workdir
 
 
-def create_timeseries_backend(config, model_metadata, workdir, schema=None):
+def create_timeseries_backend(config: SafeSynthesizerParameters, model_metadata, workdir, schema=None):
     """Helper to create a TimeseriesBackend instance with patched file dependencies."""
     if schema is None:
         schema = {
@@ -161,6 +161,7 @@ def create_timeseries_backend(config, model_metadata, workdir, schema=None):
     # Create the real processor
     processor = TimeSeriesDataProcessor(
         schema=schema,
+        config=config.generation.validation,
         time_column=config.time_series.timestamp_column,
         interval_seconds=config.time_series.timestamp_interval_seconds,
         time_format=config.time_series.timestamp_format,

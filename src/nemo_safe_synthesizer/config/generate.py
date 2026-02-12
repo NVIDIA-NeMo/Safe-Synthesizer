@@ -18,7 +18,47 @@ from ..configurator.validators import (
     range_validator,
 )
 
-__all__ = ["GenerateParameters"]
+__all__ = ["GenerateParameters", "ValidationParameters"]
+
+
+class ValidationParameters(Parameters, BaseModel):
+    """Configuration for record and sequence validation.
+
+    These parameters control the validation and automatic fixes when going
+    from LLM output to tabular data.
+    """
+
+    group_by_accept_no_delineator: Annotated[
+        bool,
+        Field(
+            title="group_by_accept_no_delineator",
+            description="Whether to accept completions without both beginning and end of sequence delineators as a single sequence.",
+        ),
+    ] = False
+
+    group_by_ignore_invalid_records: Annotated[
+        bool,
+        Field(
+            title="group_by_ignore_invalid_records",
+            description="Whether to ignore invalid records in a sequence and proceed with the valid records.",
+        ),
+    ] = False
+
+    group_by_fix_non_unique_value: Annotated[
+        bool,
+        Field(
+            title="group_by_fix_non_unique_value",
+            description="Whether to automatically fix non-unique group by values in a sequence by using the first unique value for all records.",
+        ),
+    ] = False
+
+    group_by_fix_unordered_records: Annotated[
+        bool,
+        Field(
+            title="group_by_fix_unordered_records",
+            description="Whether to automatically fix unordered records in a sequence by sorting the records.",
+        ),
+    ] = False
 
 
 class GenerateParameters(Parameters, BaseModel):
@@ -134,3 +174,8 @@ class GenerateParameters(Parameters, BaseModel):
             description="Enforce timeseries fidelity by enforcing the time series order, intervals, start and end times of the records.",
         ),
     ] = False
+
+    validation: ValidationParameters = Field(
+        description="Validation parameters controlling validation logic and automatic fixes when parsing LLM output and converting to tabular data.",
+        default_factory=ValidationParameters,
+    )
