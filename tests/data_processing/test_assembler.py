@@ -533,7 +533,7 @@ def test_grouped_data_assembler_context_width_exception(
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
-        base_max_seq_length=2048,
+        base_max_seq_length=1024,  # as opposed to the actual 2048 because we are using a dataset with shorter sequences
         prompt_config=LLMPromptConfig(
             template=PROMPT_TEMPLATE,
             add_bos_token_to_prompt=True,

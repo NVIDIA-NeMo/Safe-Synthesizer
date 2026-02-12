@@ -1,0 +1,6 @@
+data:
+  random_state: 8726
+generation:
+  num_records: 1000
+training:
+  pretrained_model: HuggingFaceTB/SmolLM3-3B

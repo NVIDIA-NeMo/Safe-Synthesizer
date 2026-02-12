@@ -745,7 +745,8 @@ class HuggingFaceBackend(TrainingBackend):
         # Delete the trainer first, as it holds references to the model
         if hasattr(self, "trainer"):
             del self.trainer
-        del self.model
+        if hasattr(self, "model"):
+            del self.model
         cleanup_memory()
         # Clean up distributed process group if it was initialized by the Trainer
 

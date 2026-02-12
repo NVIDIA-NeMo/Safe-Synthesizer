@@ -1,0 +1,12 @@
+data:
+  random_state: 187260
+generation:
+  num_records: 500
+  use_structured_generation: true
+  structured_generation_backend: outlines
+privacy:
+  dp_enabled: true
+training:
+  batch_size: 8
+  pretrained_model: mistralai/Mistral-7B-Instruct-v0.3
+  learning_rate: 0.0001

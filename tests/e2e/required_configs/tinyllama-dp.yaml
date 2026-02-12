@@ -1,0 +1,11 @@
+data:
+  random_state: 329896
+generation:
+  num_records: 500
+  use_structured_generation: true
+  structured_generation_backend: outlines
+privacy:
+  dp_enabled: true
+training:
+  batch_size: 8
+  pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
