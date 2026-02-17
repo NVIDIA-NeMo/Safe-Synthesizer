@@ -1,7 +1,6 @@
----
-name: gitlab-inspect
-description: Inspect and debug GitLab merge requests, pipelines, and CI/CD jobs. Use when the user wants to check MR status, approval status, pipeline failures, investigate failed jobs, view MR comments, or check merge readiness. Trigger keywords - check MR, MR status, pipeline status, failed pipeline, failed job, job log, approvals, merge readiness, CODEOWNERS, CI failure, investigate failure.
----
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 
 # GitLab Inspection and Debugging
 
