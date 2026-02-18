@@ -234,9 +234,22 @@ build-wheel: ## Build wheel (version from git tag via uv-dynamic-versioning)
 
 .PHONY: publish-internal
 publish-internal: build-wheel ## Build and publish wheel to NVIDIA Artifactory. Uses TWINE_REPOSITORY_URL, TWINE_USERNAME, and TWINE_PASSWORD env vars.
+ifndef TWINE_REPOSITORY_URL
+	$(error TWINE_REPOSITORY_URL is not set. Set it to the URL of the Artifactory repository.)
+endif
+ifndef TWINE_USERNAME
+	$(error TWINE_USERNAME is not set. Set it to the username for the Artifactory repository.)
+endif
+ifndef TWINE_PASSWORD
+	$(error TWINE_PASSWORD is not set. Set it to the password for the Artifactory repository.)
+endif
 	@echo "~~~~~~"
-	@echo "uploading to Artifactory: $(ARTIFACTORY_REPO_URL)"
-	uvx twine upload --repository-url $(TWINE_REPOSITORY_URL) --non-interactive dist/*.whl
+	@echo "uploading to Artifactory: $(TWINE_REPOSITORY_URL)"
+	uvx twine upload \
+		--repository-url $(TWINE_REPOSITORY_URL) \
+		--non-interactive \
+		--verbose \
+		dist/*.whl
 	@echo "published: $$(ls dist/*.whl)"
 
 

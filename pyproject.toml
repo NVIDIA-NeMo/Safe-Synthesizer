@@ -74,10 +74,6 @@ test = [
 
 [project.optional-dependencies]
 
-microservices = [
-  "nemo-microservices>=1.5.0",
-]
-
 engine = [
     "anyascii",
     "pycountry",
@@ -352,8 +348,6 @@ included_paths = [
   "holdout/",
   "sdk/__init__.py",
   "sdk/config_builder.py",
-  "sdk/job_builder.py",
-  "sdk/job.py",
   "sdk/library_builder.py",
   "sdk/datastore.py",
   "__init__.py",
