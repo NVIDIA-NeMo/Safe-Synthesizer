@@ -89,7 +89,6 @@ PACKAGES_TO_SET_TO_WARN = [
     "arrow",
     "bitsandbytes",
     "datasets",
-    "faiss",
     "httpx",
     "matplotlib",
     "nvidia",

@@ -141,12 +141,15 @@ cpu = [
 cu128 = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "faiss-gpu-cu12==1.9.0; sys_platform == 'linux'",
+  "cuda-pathfinder>=1.3.3",
+  "cuvs-cu12>=25.10.0,<25.11; sys_platform=='linux'",
+  "cupy-cuda12x; sys_platform=='linux'",
   "flashinfer-python==0.5.3; sys_platform == 'linux'",
   "flashinfer-cubin==0.5.3; sys_platform == 'linux'",
   "flashinfer-jit-cache==0.5.3+cu128; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1",
+  "libcuvs-cu12",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
   "nvidia-ml-py; sys_platform == 'linux'",
   "opacus",
@@ -225,8 +228,25 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
   flashinfer-jit-cache = [
     { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
   ]
-   nvidia-cublas-cu12 = [
+  nvidia-cublas-cu12 = [
     { index = "pytorch-cu128" },
+  ]
+  cuvs-cu12 = [
+    { index = "nvidia-pypi-public", extra="cu128" }
+  ]
+  libcuvs-cu12 = [
+    { index = "nvidia-pypi-public", extra="cu128" }
+  ]
+
+
+# this is a local path to the nemo-microservices package
+# used for development purposes
+# it's not used in production.
+# it assumes the nmp repo path is ../aire/microservices/nmp
+  nemo-microservices = [
+    # { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
+    { path = ".nmp_repo/sdk/python/nemo-microservices"},
+    # { index = "nvidia-pypi-public", extra = "microservices"}
   ]
 
   nvidia-cuda-cupti-cu12 = [
@@ -296,6 +316,7 @@ explicit = true
 name = "nvidia-pypi-public"
 url = "https://pypi.nvidia.com"
 explicit = true
+
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
