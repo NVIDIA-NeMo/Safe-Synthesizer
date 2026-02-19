@@ -57,24 +57,9 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
   ```
 
-### NMP Synchronization
+### NMP Integration
 
-If you work with the NMP monorepo, set `NMP_REPO_PATH` to your local checkout to enable sync targets:
-
-```bash
-export NMP_REPO_PATH=/path/to/nmp
-
-# Sync files from NMP to this repo
-make synchronize-from-nmp
-
-# Sync files from this repo to NMP
-make synchronize-to-nmp
-
-# Sync from a specific NMP merge request
-make synchronize-from-nmp-mr MR=5603
-```
-
-> **Note:** `NMP_REPO_PATH` is only required for NMP sync operations. It is not needed for standard development, testing, or CI. we also will remove this after we extricate nss fro mnmp.
+NeMo Safe Synthesizer is a standalone package. Changes flow into NMP via Artifactory publishing and vendor packaging. See the [NMP Integration](README.md#nmp-integration) section of the README for details on publishing, SDK vendoring, and local development workflows.
 
 ## Repository Settings
 

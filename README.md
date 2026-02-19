@@ -367,17 +367,7 @@ This builds a container image from `containers/Dockerfile.test_ci` and runs `mak
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribution guidelines.
 
-### One-Command Setup
-
-If you have a local clone of the NMP repo, you can bootstrap everything in one step:
-
-```bash
-NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
-```
-
-This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs all Python dependencies.
-
-### Step-by-Step Setup
+### Setup
 
 ```bash
 # 1. Bootstrap development tools
@@ -394,18 +384,38 @@ make format
 make lint
 ```
 
-### NMP Synchronization
+### NMP Integration
 
-To sync code to/from the NMP monorepo, set `NMP_REPO_PATH` to your local NMP checkout:
+NeMo Safe Synthesizer is developed as a standalone package and published to NVIDIA Artifactory. The NMP platform consumes it as an external dependency.
+
+#### Publishing to Artifactory
+
+The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
 
 ```bash
-export NMP_REPO_PATH=/path/to/nmp
-
-# Sync files from NMP to this repo
-make synchronize-from-nmp
-
-# Sync files from this repo to NMP
-make synchronize-to-nmp
+make publish-internal
 ```
+
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+
+The NMP service (`services/safe-synthesizer/pyproject.toml`) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index.
+
+#### Vendor Packaging for the NMP SDK
+
+A subset of NSS code is vendored into the NMP Python SDK under `beta.safe_synthesizer` via the `[tool.vendor-package]` configuration in `pyproject.toml`. This allows NMP SDK users to configure and interact with Safe Synthesizer without installing the full ML dependency stack (torch, vllm, etc.).
+
+The `included_paths` list in `[tool.vendor-package]` controls which modules are vendored. When adding new SDK-facing modules, update this list.
+
+#### Local Development with NMP
+
+When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
+
+```bash
+# In the NMP repo, from services/safe-synthesizer/
+make use-nss-local          # Build local wheel and patch pyproject.toml
+make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
+```
+
+See the NMP service README (`services/safe-synthesizer/README.md`) for details.
 
 Run `make help` to see all available Makefile targets.
