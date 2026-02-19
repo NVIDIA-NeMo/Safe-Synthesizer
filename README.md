@@ -386,7 +386,7 @@ make lint
 
 ### NMP Integration
 
-NeMo Safe Synthesizer is developed as a standalone package and published to NVIDIA Artifactory. The NMP platform consumes it as an external dependency.
+NeMo Safe Synthesizer is developed as a standalone package and published to NVIDIA Artifactory. The NeMo Platform (NMP) consumes it as an external dependency.
 
 #### Publishing to Artifactory
 
