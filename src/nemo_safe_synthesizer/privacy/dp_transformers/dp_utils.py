@@ -8,7 +8,7 @@
 
 import os
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Optional, Sequence
 
 import opacus
 import pandas as pd
@@ -159,8 +159,8 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
         super().__init__(tokenizer=tokenizer, mlm=False)
 
     def __call__(
-        self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
-    ) -> Dict[str, torch.Tensor]:
+        self, examples: list[list[int] | torch.Tensor | dict[str, torch.Tensor]]
+    ) -> dict[str, torch.Tensor]:
         batch = super().__call__(examples)
 
         if "position_ids" not in batch:
@@ -178,8 +178,8 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
         super().__init__(tokenizer=tokenizer)
 
     def __call__(
-        self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.TensorType]]]
-    ) -> Dict[str, torch.Tensor]:
+        self, examples: list[list[int] | torch.Tensor | dict[str, torch.TensorType]]
+    ) -> dict[str, torch.Tensor]:
         batch = super().__call__(examples)
 
         if "position_ids" not in batch:
@@ -230,15 +230,15 @@ class OpacusDPTrainer(Trainer):
     def __init__(
         self,
         train_dataset: Dataset,
-        model: Union[modeling_utils.PreTrainedModel, torch.nn.Module],
+        model: modeling_utils.PreTrainedModel | torch.nn.Module,
         args=None,
         privacy_args: PrivacyArguments | None = None,
         data_fraction: float | None = None,
         true_dataset_size: int | None = None,
         entity_column_values: list | None = None,
-        callbacks: List[TrainerCallback] | None = None,
+        callbacks: list[TrainerCallback] | None = None,
         secure_mode: bool | None = True,
-        **kwargs: Dict,
+        **kwargs: dict,
     ) -> None:
         self.train_args = args
         self.privacy_args = privacy_args
@@ -394,7 +394,7 @@ class OpacusDPTrainer(Trainer):
     def training_step(
         self,
         model: nn.Module,
-        inputs: Dict[str, Union[torch.Tensor, Any]],
+        inputs: dict[str, torch.Tensor | Any],
         num_items_in_batch=None,
     ) -> torch.Tensor:
         """

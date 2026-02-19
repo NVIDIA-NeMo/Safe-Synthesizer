@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from .models import (
     ModelManifest,
     ObjectRef,
@@ -103,7 +101,7 @@ num_chars = frozenset(
 )
 
 
-def char_check(method: Union[all, any], query: str, check_set: frozenset):
+def char_check(method: all | any, query: str, check_set: frozenset):
     return method(map(lambda s: s in query, check_set))
 
 

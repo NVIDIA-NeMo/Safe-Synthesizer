@@ -67,7 +67,7 @@ class DatetimeDistribution(BaseModel, ABC):
     @abstractmethod
     def sample_datetimes(self, num_records: int) -> list[datetime]: ...
 
-    def sample(self, num_records: int) -> Union[list[datetime], list[str]]:
+    def sample(self, num_records: int) -> list[datetime] | list[str]:
         samples = self.sample_datetimes(num_records)
         return self._apply_universal_params(samples)
 
@@ -136,7 +136,7 @@ class DatetimeUniformDistribution(DatetimeDistribution):
 
 
 DistributionT = Annotated[Distribution, Field(discriminator="distribution_type")]
-DistributionT.__origin__ = Union[tuple(Distribution.__subclasses__())]  # type: ignore
+DistributionT.__origin__ = Union[tuple(Distribution.__subclasses__())]  # type: ignore  # noqa: UP007
 
 DatetimeDistributionT = Annotated[DatetimeDistribution, Field(discriminator="distribution_type")]
-DatetimeDistributionT.__origin__ = Union[tuple(DatetimeDistribution.__subclasses__())]  # type: ignore
+DatetimeDistributionT.__origin__ = Union[tuple(DatetimeDistribution.__subclasses__())]  # type: ignore  # noqa: UP007

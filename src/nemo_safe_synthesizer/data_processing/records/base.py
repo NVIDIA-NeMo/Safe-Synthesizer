@@ -6,7 +6,7 @@
 import re
 from abc import ABC, abstractmethod
 from numbers import Number
-from typing import Iterable, List, Union
+from typing import Iterable
 
 from .value_path import (
     ValuePath,
@@ -33,7 +33,7 @@ DELIM = "."
 WORD_TOKENIZER = re.compile(r"(?!\d)\w+", re.IGNORECASE)
 
 
-def tokenize_on_upper(data: str) -> List[str]:
+def tokenize_on_upper(data: str) -> list[str]:
     if not data:
         return []
     out = []
@@ -51,7 +51,7 @@ def tokenize_on_upper(data: str) -> List[str]:
     return out
 
 
-def tokenize_header(field: str) -> List[str]:
+def tokenize_header(field: str) -> list[str]:
     out = []
     # NOTE(jm): for the purposes of header tokenization, we
     # don't consider `_` to be a word character, so we just
@@ -83,7 +83,7 @@ class KVPair:
     def __init__(
         self,
         field: str,
-        value: Union[str, Number],
+        value: str | Number,
         scalar_type: str,
         array_count: int,
         value_path: ValuePath,

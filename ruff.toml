@@ -29,6 +29,7 @@ exclude = [
     "unsloth_compiled_cache"
     ]
 
+target-version = "py311"
 line-length = 120
 indent-width = 4
 
@@ -36,7 +37,7 @@ indent-width = 4
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-select = ["E4", "E7", "E9", "F", "W291", "W292", "W293", "I001", "I002"]
+select = ["E4", "E7", "E9", "F", "W291", "W292", "W293", "I001", "I002", "UP006", "UP007"]
 ignore = []
 
 # Allow fix for all enabled rules (when `--fix`) is provided.

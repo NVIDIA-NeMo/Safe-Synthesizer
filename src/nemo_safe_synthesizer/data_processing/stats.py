@@ -3,7 +3,6 @@
 
 import math
 from dataclasses import dataclass
-from typing import Union
 
 
 @dataclass
@@ -29,7 +28,7 @@ class RunningStatistics(Statistics):
     for the entire dataset to be loaded into memory.
     """
 
-    def update(self, x: Union[int, float]) -> None:
+    def update(self, x: int | float) -> None:
         """Update statistics with new value `x`."""
         self.count += 1
         self.min = min(self.min, x)

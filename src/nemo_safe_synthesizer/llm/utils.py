@@ -4,7 +4,7 @@
 import gc
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator, Literal, Tuple, Union
+from typing import TYPE_CHECKING, Any, Generator, Literal, Union
 
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -172,7 +172,7 @@ def get_device_map(
     return device_map
 
 
-def count_trainable_params(model: PeftModel) -> Tuple[int, int]:
+def count_trainable_params(model: PeftModel) -> tuple[int, int]:
     """Determines the number of trainable and overall params of a model.
 
     Returns:

@@ -12,7 +12,7 @@ for Pydantic v2 models.
 import operator
 import typing
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Sequence, Type, TypeVar, get_args
+from typing import Any, Callable, Generic, Sequence, TypeVar, get_args
 
 from pydantic import BaseModel, GetCoreSchemaHandler, model_serializer
 from pydantic_core import core_schema
@@ -274,7 +274,7 @@ ValidNoneType = TypeVar("ValidNoneType", ValidNoneParam, None)
 
 def _convert_val_type_to_param(
     value: Any,
-    type_: Type,
+    type_: type,
     name: str | None = None,
 ) -> Parameter[DataT]:
     """

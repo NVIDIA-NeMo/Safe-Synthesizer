@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass, field
 from itertools import islice
 from threading import BoundedSemaphore
-from typing import Any, Callable, Iterator, List, Optional, Union
+from typing import Any, Callable, Iterator, Optional
 
 import joblib.externals.loky as loky
 
@@ -27,7 +27,7 @@ MAX_CHUNKS = 250
 class _ProcPayload:
     seq: int
     in_data: InData
-    out_data: Union[dict, Timings, PipelineResult] = None
+    out_data: dict | Timings | PipelineResult = None
 
 
 _ner_predictor = None  # type: ner.NER
@@ -69,7 +69,7 @@ def _predict(payload: _ProcPayload, **kwargs) -> _ProcPayload:
         raise e
 
 
-def iter_record_chunks(it: Iterator[Any], batch_size: int) -> Iterator[List[Any]]:
+def iter_record_chunks(it: Iterator[Any], batch_size: int) -> Iterator[list[Any]]:
     while True:
         chunk = islice(it, batch_size)
         chunk_list = list(chunk)
@@ -80,7 +80,7 @@ def iter_record_chunks(it: Iterator[Any], batch_size: int) -> Iterator[List[Any]
 
 @dataclass
 class _ResultData:
-    results: List[_ProcPayload] = field(default_factory=list)
+    results: list[_ProcPayload] = field(default_factory=list)
     lock: BoundedSemaphore = field(default_factory=lambda: BoundedSemaphore(value=MAX_CHUNKS))
     # progress_callback: logging.ProgressCallback = field(
     #     default_factory=lambda: logging.get_progress_callback("Classifying data... ")
@@ -128,7 +128,7 @@ class NERParallel:
         self._initialize_pool()
         self.ner_max_runtime_seconds = ner_max_runtime_seconds
 
-    def predict(self, in_data: InData, **kwargs) -> Union[Timings, PipelineResult]:
+    def predict(self, in_data: InData, **kwargs) -> Timings | PipelineResult:
         """
         Runs NER prediction on the input data.
 

@@ -1,15 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List, Union
-
 from ...data_processing.records.json_record import JSONRecord
 
 """Valid input data includes a str, tuple or dict"""
-InData = Union[str, list, dict, JSONRecord]
+InData = str | list | dict | JSONRecord
 
 
-def input_to_json_records(in_data: InData) -> List[JSONRecord]:
+def input_to_json_records(in_data: InData) -> list[JSONRecord]:
     """Try and convert python objects to a list of Fields"""
     if isinstance(in_data, JSONRecord):
         return [in_data]

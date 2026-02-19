@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 from pydantic.v1 import Field
 
 from ..metadata import (
@@ -50,7 +48,7 @@ class EntityReport(ReportBaseModel):
     approx_distinct_count: int
     f_ratio: float
 
-    sources: List[str]
+    sources: list[str]
     """A list of unique sources that contributed predictions
     to the entity summary.
     """
@@ -96,22 +94,22 @@ class FieldMetadataReport(ReportBaseModel):
     Number of records that didnt' have value for this field.
     """
 
-    labels: List[str]
+    labels: list[str]
     """
     Field-level labels for this field.
     """
 
-    attributes: List[str]
+    attributes: list[str]
     """
     Attributes for this field.
     """
 
-    entities: List[EntityReport] = Field(default_factory=list)
+    entities: list[EntityReport] = Field(default_factory=list)
     """
     Granular information about entities detected in field's values.
     """
 
-    types: List[TypeReport] = Field(default_factory=list)
+    types: list[TypeReport] = Field(default_factory=list)
     """
     Scalar types of values in this field.
     """
@@ -123,7 +121,7 @@ class EntitySummaryReport(ReportBaseModel):
     label: str
     """Name of the entity or label."""
 
-    fields: List[str]
+    fields: list[str]
     """List of fields the entity was seen in."""
 
     count: int
@@ -136,7 +134,7 @@ class EntitySummaryReport(ReportBaseModel):
     the dataset.
     """
 
-    sources: List[str]
+    sources: list[str]
     """A list of unique sources that contributed predictions
     to the entity summary.
     """
@@ -162,10 +160,10 @@ class DatasetMetadataReport(ReportBaseModel):
     Number of records that were used to calculate model_metadata.
     """
 
-    fields: List[FieldMetadataReport] = Field(default_factory=list)
+    fields: list[FieldMetadataReport] = Field(default_factory=list)
     """
     Report about each field in the dataset.
     """
 
-    entities: List[EntitySummaryReport] = Field(default_factory=list)
+    entities: list[EntitySummaryReport] = Field(default_factory=list)
     """Aggregate entity metrics by score by label."""

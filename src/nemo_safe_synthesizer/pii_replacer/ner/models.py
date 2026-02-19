@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from ...observability import get_logger
 
@@ -65,7 +65,7 @@ class ModelManifest:
     version: str
     """Model version"""
 
-    sources: List[ObjectRef]
+    sources: list[ObjectRef]
     """A list of pickled objects to load into memory."""
 
     visibility: Visibility
@@ -125,13 +125,13 @@ class CacheManager:
     __instance = None
     """Used to hold a singleton of ``CacheManager``"""
 
-    _cache: Dict[str, Dict[str, Any]]
+    _cache: dict[str, dict[str, Any]]
     """Holds model object values in memory. Key by ``ModelManifest.key`` by ``ObjectRef.key``"""
 
-    _manifests: Dict[str, ModelManifest]
+    _manifests: dict[str, ModelManifest]
     """Contains each registered model manifest"""
 
-    timings: Dict[str, float]
+    timings: dict[str, float]
     """Holds timings for each model manifest. Keyed by ``ModelManifest.model``"""
 
     @staticmethod

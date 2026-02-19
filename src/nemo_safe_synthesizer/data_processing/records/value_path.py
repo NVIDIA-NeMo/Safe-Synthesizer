@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import string
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-ValuePathItem = Union[str, int]
-ValuePath = Tuple[ValuePathItem, ...]
+ValuePathItem = str | int
+ValuePath = tuple[ValuePathItem, ...]
 """
 A tuple representing a path to a value in a document.
 Each item in the tuple represents name of the nested field or array.
@@ -65,7 +65,7 @@ def value_path_to_json_path(path: ValuePath) -> str:
 class InvalidPath(Exception): ...
 
 
-def unflatten(data: Dict[ValuePath, Any]) -> Optional[Union[dict, list]]:
+def unflatten(data: dict[ValuePath, Any]) -> dict | list | None:
     result = None
     for key, value in data.items():
         try:
@@ -87,7 +87,7 @@ def _ensure_dict_key(result: dict, item: str):
         result[item] = None
 
 
-def _unflatten_path(result: Optional[Union[dict, list]], path: ValuePath, value: Any) -> Union[dict, list]:
+def _unflatten_path(result: dict | list | None, path: ValuePath, value: Any) -> dict | list:
     # Note: result will be a list when working with an array at this level of
     # the path, and thus the first element of path is an integer. Otherwise
     # working with an object at this level of the path, result will be a dict
@@ -117,7 +117,7 @@ def _unflatten_path(result: Optional[Union[dict, list]], path: ValuePath, value:
         return result
 
 
-def _unflatten_recursive(result: Union[dict, list], prev_item: ValuePathItem, items: List[ValuePathItem], value: Any):
+def _unflatten_recursive(result: dict | list, prev_item: ValuePathItem, items: list[ValuePathItem], value: Any):
     # Note: result will be a list when working with an array at this level of
     # the path, and thus the first element of path is an integer. Otherwise
     # working with an object at this level of the path, result will be a dict
