@@ -14,6 +14,9 @@ pydantic_model_config = ConfigDict(
     from_attributes=True,
     validate_default=True,
     protected_namespaces=(),
+    # This is needed to ensure we don't generate separate
+    # -Input/-Output schemas for the child objects when used in the NMP sdk.
+    json_schema_mode_override="validation",
 )
 
 
@@ -24,8 +27,8 @@ class NSSBaseModel(BaseModel):
 
     model_config = pydantic_model_config
 
-    def dict(self) -> dict[str, Any]:
-        return self.model_dump()
+    def dict(self, **kwargs: Any) -> dict[str, Any]:
+        return self.model_dump(**kwargs)
 
 
 class LRScheduler(str, Enum):
