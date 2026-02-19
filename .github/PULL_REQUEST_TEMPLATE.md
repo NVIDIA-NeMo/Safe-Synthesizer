@@ -12,7 +12,7 @@ Ensure that the following pass:
 
 - [ ] `make format && make lint` or via prek validation.
 - [ ] `make test` passes locally
-- [ ] `make e2e` passes locally
+- [ ] `make test-e2e` passes locally
 - [ ] `make test-ci-container` passes locally (recommended)
 
 ## Pre-Merge Checklist
