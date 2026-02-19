@@ -246,8 +246,7 @@ class AutoConfigResolver:
 
         else:
             logger.info(
-                "Parameter `max_sequences_per_example` was automatically set "
-                "to 10 for best performance/efficiency."
+                "Parameter `max_sequences_per_example` was automatically set to 10 for best performance/efficiency."
             )
             return {"max_sequences_per_example": 10}
 
@@ -307,7 +306,7 @@ class AutoConfigResolver:
 class AutoParamsValidator:
     value_func: Callable[[Any], bool]
 
-    def validate(self, value):
+    def validate(self, value, _info):
         if isinstance(value, str) and value == "auto":
             return value
         elif self.value_func(value):
