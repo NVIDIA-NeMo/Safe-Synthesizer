@@ -47,11 +47,6 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss engine # Engine dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
-   Or, if you have a local clone of the NMP repo, bootstrap everything in one step:
-  ```bash
-   NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
-  ```
-   This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs Python dependencies with CPU extras.
 4. Add the upstream remote:
   ```bash
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git

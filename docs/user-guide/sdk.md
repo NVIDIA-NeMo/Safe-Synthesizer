@@ -53,7 +53,6 @@ synthesizer.evaluate()
 |-------|-------------|
 | `SafeSynthesizer` | Main entry point for SDK workflows |
 | `ConfigBuilder` | Base builder for configuration management |
-| `JobBuilder` | Builder for job-based workflows |
 
 ## API Reference
 
