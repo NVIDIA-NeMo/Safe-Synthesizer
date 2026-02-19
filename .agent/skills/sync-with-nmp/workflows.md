@@ -8,25 +8,11 @@ The most common flow. An MR merged in NMP needs to be reflected in Safe-Synthesi
 
 ### Step 1: Verify the MR is Merged
 
-```bash
-MR_IID=<number>
-
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/$MR_IID" | \
-  jq '{iid, title, state, squash_commit_sha, merged_at, author: .author.username}'
-```
-
-Confirm `state` is `"merged"` and `squash_commit_sha` is not null.
+Use the GitLab MCP server or browse `gitlab-master.nvidia.com` to confirm the MR is merged and note its squash commit SHA.
 
 ### Step 2: Check What Files Changed
 
-```bash
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/$MR_IID/changes" | \
-  jq -r '[.changes[].new_path | select(startswith("packages/nemo_safe_synthesizer/"))] | unique | .[]'
-```
-
-Review the list. Files under `src/` and `tests/` sync automatically. Others need manual attention.
+Review the MR's changed files in GitLab. Files under `src/` and `tests/` sync automatically. Others need manual attention.
 
 ### Step 3: Ensure Clean Working Tree
 
@@ -104,14 +90,7 @@ When several MRs have landed in NMP since the last sync.
 
 ### Step 1: Identify MRs to Sync
 
-```bash
-# List recent merged MRs touching nemo_safe_synthesizer
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests?state=merged&order_by=updated_at&per_page=20" | \
-  jq '[.[] | {iid, title, merged_at: .merged_at, author: .author.username}]'
-```
-
-Note the MR IIDs that need syncing.
+Use the GitLab MCP server or browse the NMP project's merged MRs to find those touching `packages/nemo_safe_synthesizer/`. Note their IIDs.
 
 ### Step 2: Full Sync Instead of Per-MR
 
@@ -192,11 +171,7 @@ git push -u origin HEAD
 
 ### Step 4: Create NMP MR
 
-```bash
-glab mr create \
-  --title "chore(nss): sync from Safe-Synthesizer" \
-  --description "Syncs latest changes from the public Safe-Synthesizer repo."
-```
+Create a merge request in the NMP GitLab project for the new branch.
 
 ---
 
@@ -239,40 +214,8 @@ diff -r \
 
 Before syncing, investigate what an NMP MR changed and whether it's safe to sync.
 
-### Check MR Details
+Use the GitLab MCP server or browse the MR on `gitlab-master.nvidia.com` to:
 
-```bash
-MR_IID=<number>
-
-# MR summary
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/$MR_IID" | \
-  jq '{iid, title, state, author: .author.username, merged_at, description}'
-
-# Files changed
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/$MR_IID/changes" | \
-  jq -r '.changes[] | "\(.new_path)\t\(.diff | split("\n") | length) lines"'
-```
-
-### Check for Breaking Changes
-
-Look for changes to public interfaces, config schemas, or CLI commands:
-
-```bash
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/$MR_IID/changes" | \
-  jq -r '.changes[] | select(
-    .new_path | test("packages/nemo_safe_synthesizer/src/.*(cli|config|__init__|defaults|errors)")
-  ) | .new_path'
-```
-
-### Check Pipeline Status
-
-Ensure the MR's pipeline passed before syncing:
-
-```bash
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/$MR_IID" | \
-  jq '{pipeline_status: .head_pipeline.status, merge_status}'
-```
+1. Confirm the MR is merged and its pipeline passed
+2. Review changed files -- look for changes to public interfaces (`cli/`, `config/`, `errors.py`)
+3. Note any files outside `src/` and `tests/` that will need manual sync

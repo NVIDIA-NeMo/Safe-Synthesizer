@@ -392,6 +392,16 @@ This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key 
 
 Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
 
+## AI Agents
+
+This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
+- **AGENTS.md** -- primary agent guide
+- **.agent/skills/** -- domain-specific skills (canonical location)
+- **.cursor/rules/** -- Cursor workflow rules
+- **.cursor/skills/** -- symlinks to `.agent/skills/` for Cursor discoverability
+
+Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
+
 ---
 
 Thank you for contributing to NeMo Safe Synthesizer!

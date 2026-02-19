@@ -1,0 +1,93 @@
+---
+alwaysApply: false
+description: Write documentation using Diataxis framework and MkDocs Material syntax. Use when editing docs/, adding pages, or building documentation.
+globs:
+  - docs/**/*.md
+  - mkdocs.yml
+---
+
+# Writing Documentation
+
+## Content Classification (Diataxis Framework)
+
+Before writing, identify the content type:
+
+| Type | User Goal | Characteristics |
+|------|-----------|-----------------|
+| **TUTORIAL** | Learn by doing | Step-by-step lessons, guided learning |
+| **HOW-TO** | Solve a problem | Goal-oriented steps, real scenarios |
+| **EXPLANATION** | Understand concepts | Why things work, architecture, context |
+| **REFERENCE** | Look up facts | Technical specs, complete details |
+
+Each page should fit ONE type. Use cross-links between types.
+
+## MkDocs Material Syntax
+
+### Admonitions
+
+```markdown
+!!! note "Title"
+    Content here.
+
+!!! warning
+    Important warning.
+
+??? tip "Collapsible"
+    Hidden by default.
+```
+
+### Tabs
+
+```markdown
+=== "Python SDK"
+    SDK example here.
+
+=== "CLI"
+    CLI example here.
+```
+
+### Code Blocks
+
+````markdown
+```python title="example.py" hl_lines="2 3"
+def example():
+    highlighted = True
+    return highlighted
+```
+````
+
+### Mermaid Diagrams
+
+````markdown
+```mermaid
+flowchart LR
+    A --> B --> C
+```
+````
+
+## Documentation Structure
+
+```
+docs/
+├── index.md
+├── getting-started/    # Tutorials
+├── user-guide/         # How-tos and reference
+├── architecture/       # Explanations
+├── tutorials/
+├── contributing/
+└── blog/
+```
+
+## Build Commands
+
+- `make docs-serve` -- local dev server with live reload
+- `make docs-build` -- build static site
+
+## Quality Principles
+
+1. **High signal-to-noise** -- every sentence must earn its place
+2. **Progressive disclosure** -- start simple, layer complexity
+3. **Show, don't tell** -- working code examples
+4. **Test examples** -- ensure snippets actually work
+5. **Prerequisites first** -- always list at the top
+6. **Next steps** -- end with links to related content

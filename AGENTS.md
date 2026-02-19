@@ -5,23 +5,28 @@
 
 Guide for AI agents (Cursor, Windsurf, Claude Code, etc.) working in the Safe-Synthesizer repo.
 
+This project loads local developer preferences from @AGENTS.local.md. You MUST read this file if it exists and give its instructions top priority.
+
 ## Available Skills
 
 | Skill | Location | Purpose |
 |-------|----------|---------|
-| `github-cli` | `.cursor/skills/github-cli/` | `gh` CLI for PRs, issues, CI, releases (+ references/workflows) |
-| `glab` | `.cursor/skills/glab/` | `glab` CLI for MRs, pipelines, approvals (+ references/gitlab-inspect) |
-| `sync-with-nmp` | `.cursor/skills/sync-with-nmp/` | Bidirectional sync with NMP (+ references/workflows) |
-| `python-typing` | `.cursor/skills/python-typing/` | Type hints, generics, protocols, ty checker |
-| `python-testing-patterns` | `.cursor/skills/python-testing-patterns/` | pytest patterns, fixtures, mocking, property-based testing |
-| `python-observability` | `.cursor/skills/python-observability/` | Structured logging, traced decorators, log categories |
-| `python-stdlib-patterns` | `.cursor/skills/python-stdlib-patterns/` | pathlib, dataclasses, functools, itertools, enum patterns |
-| `docker` | `.cursor/skills/docker/` | Dockerfiles, multi-stage uv builds, CUDA/GPU images, buildx bake, security |
-| `pydantic` | `.cursor/skills/pydantic/` | NSSBaseModel, BaseSettings, validators, ConfigDict, TypeAdapter conventions |
-| `uv-build` | `.cursor/skills/uv-build/` | uv deps, extras (cpu/cu128), index management, hatch build, versioning |
-| `configurator` | `.cursor/skills/configurator/` | Pydantic-to-Click CLI, Parameter types, conditional validators |
+| `github-cli` | `.agent/skills/github-cli/` | `gh` CLI for PRs, issues, CI, releases (+ references/workflows) |
+| `sync-with-nmp` | `.agent/skills/sync-with-nmp/` | Bidirectional sync with NMP (+ references/workflows) |
+| `python-typing` | `.agent/skills/python-typing/` | Type hints, generics, protocols, ty checker |
+| `python-testing-patterns` | `.agent/skills/python-testing-patterns/` | pytest patterns, fixtures, mocking, property-based testing |
+| `python-observability` | `.agent/skills/python-observability/` | Structured logging, traced decorators, log categories |
+| `python-stdlib-patterns` | `.agent/skills/python-stdlib-patterns/` | pathlib, dataclasses, functools, itertools, enum patterns |
+| `docker` | `.agent/skills/docker/` | Dockerfiles, multi-stage uv builds, CUDA/GPU images, buildx bake, security |
+| `pydantic` | `.agent/skills/pydantic/` | NSSBaseModel, BaseSettings, validators, ConfigDict, TypeAdapter conventions |
+| `uv-build` | `.agent/skills/uv-build/` | uv deps, extras (cpu/cu128), index management, hatch build, versioning |
+| `configurator` | `.agent/skills/configurator/` | Pydantic-to-Click CLI, Parameter types, conditional validators |
+| `diagnose-deps` | `.agent/skills/diagnose-deps/` | Lockfile diff diagnosis, transitive dep changes |
+| `deslop` | `.agent/skills/deslop/` | Remove AI-generated code slop, enforce repo style |
+| `diagnose-failures` | `.agent/skills/diagnose-failures/` | Test/CI/runtime/GPU error triage |
+| `sync-agent-config` | `.agent/skills/sync-agent-config/` | Keep agent config in sync with source-of-truth files |
 
-All skills live in `.cursor/skills/`. Each has a concise `SKILL.md` with quick references; skills with detailed content have a `references/` subdirectory.
+All skills live in `.agent/skills/`. Each has a concise `SKILL.md` with quick references; skills with detailed content have a `references/` subdirectory.
 
 ## Repo Conventions
 
@@ -51,13 +56,14 @@ Python 3.11+ is required. Use modern syntax:
 ### Bootstrap
 
 ```bash
-# Full dev environment (tools + Python + deps)
-make bootstrap-dev-env
+# Step 1: Bootstrap tools (uv, pre-commit, etc.)
+make bootstrap-tools
 
-# Just Python deps (pick one)
+# Step 2: Bootstrap Python env (pick one profile)
 make bootstrap-nss dev        # dev tools only
-make bootstrap-nss cpu        # + engine + CPU PyTorch
-make bootstrap-nss cu128      # + engine + CUDA PyTorch
+make bootstrap-nss cpu       # + engine + CPU PyTorch
+make bootstrap-nss cu128     # + engine + CUDA PyTorch
+make bootstrap-nss engine    # engine only
 ```
 
 ### Code Quality
@@ -76,7 +82,7 @@ bash tools/lint/run-ty-check.sh          # changed files only
 
 Type checking uses [ty](https://github.com/astral-sh/ty) (Astral's type checker), configured in `pyproject.toml` under `[tool.ty.src]`.
 
-**Important for agents**: Always use `make format` and `make lint` instead of manually reformatting or editing code for style. These tools handle formatting (ruff), import sorting, copyright headers, and lint fixes automatically. After making code changes, run `make format` to fix style, then `make lint` to verify. Do not manually rewrite code just to fix formatting, imports, or lint -- let the tools do it.
+**Important for agents**: Always use `make format` and `make lint` instead of manually reformatting or editing code for style. Prefer `make <target>` over raw underlying commands when a target exists. Use `uv run` for Python execution, never raw `python` or `pip`. When in doubt, read the source (`make help`, `pytest --markers`).
 
 ### Testing
 
@@ -239,3 +245,36 @@ synthesizer.evaluate()
     ├── test.csv
     └── validation.csv
 ```
+
+## Module Map
+
+Source code lives in `src/nemo_safe_synthesizer/`:
+
+| Path | Purpose |
+|------|---------|
+| `cli/` | Click CLI, main entry point |
+| `config/` | Pydantic parameter models, SafeSynthesizerParameters |
+| `configurator/` | Pydantic-to-Click mapping, Parameter types, validators |
+| `data_processing/` | Holdout, actions, assembler, records |
+| `evaluation/` | Evaluator, components (privacy, MI, AIA, PII replay), reports |
+| `generation/` | GeneratorBackend, VllmBackend, regex manager, batch gen |
+| `holdout/` | Train/test splitting |
+| `llm/` | Model loading, metadata, memory management |
+| `pii_replacer/` | NER-based PII detection and replacement |
+| `privacy/` | DP transformers (Opacus integration) |
+| `sdk/` | SafeSynthesizer builder, library_builder |
+| `training/` | TrainingBackend, HuggingFace, Unsloth backends |
+| `artifacts/` | Data quality checks, field analysis, metadata |
+| `observability.py` | CategoryLogger, TracedContext, structured logging |
+| `errors.py` | Custom error hierarchy (see below) |
+
+## Error Hierarchy
+
+Source: `src/nemo_safe_synthesizer/errors.py`
+
+| Error Class | Base | Typical Cause | Agent Action |
+|-------------|------|---------------|--------------|
+| `DataError` | `UserError`, `ValueError` | Bad data (NaNs, unsupported types) | Check data/fixtures |
+| `ParameterError` | `UserError`, `ValueError` | Invalid config/params | Check config fields |
+| `GenerationError` | `UserError`, `RuntimeError` | Sampling failures | Check generation config/mocks |
+| `InternalError` | `SafeSynthesizerError`, `RuntimeError` | Library bug | Report/fix |
