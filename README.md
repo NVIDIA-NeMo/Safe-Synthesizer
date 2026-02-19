@@ -398,15 +398,9 @@ make publish-internal
 
 This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
 
-The NMP service (`services/safe-synthesizer/pyproject.toml`) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index.
-
-#### Vendor Packaging for the NMP SDK
-
-A subset of NSS code is vendored into the NMP Python SDK under `beta.safe_synthesizer` via the `[tool.vendor-package]` configuration in `pyproject.toml`. This allows NMP SDK users to configure and interact with Safe Synthesizer without installing the full ML dependency stack (torch, vllm, etc.).
-
-The `included_paths` list in `[tool.vendor-package]` controls which modules are vendored. When adding new SDK-facing modules, update this list.
-
 #### Local Development with NMP
+
+The NMP service (`services/safe-synthesizer/pyproject.toml`) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
 
 When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
 
@@ -416,6 +410,6 @@ make use-nss-local          # Build local wheel and patch pyproject.toml
 make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
 ```
 
-See the NMP service README (`services/safe-synthesizer/README.md`) for details.
+See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
 
 Run `make help` to see all available Makefile targets.

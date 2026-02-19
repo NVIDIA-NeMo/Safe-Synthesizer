@@ -334,35 +334,3 @@ exclude = [
     "./tests/",
     "./tools/",
 ]
-
-[tool.vendor-package]
-package = "nemo_safe_synthesizer"
-target_sdk_module = "beta.safe_synthesizer"
-sdk_optional_dependencies_name = "safe-synthesizer"
-included_paths = [
-  "config/",
-  "configurator/",
-  "data_processing/record_utils.py",
-  "data_processing/dataset.py",
-  "data_processing/stats.py",
-  "holdout/",
-  "sdk/__init__.py",
-  "sdk/config_builder.py",
-  "sdk/library_builder.py",
-  "sdk/datastore.py",
-  "__init__.py",
-  "errors.py",
-  "observability.py",
-  "defaults.py",
-  "utils.py",
-  "cli/settings.py",
-  "cli/artifact_structure.py",
-]
-vendor_tests = true
-tests_path = "tests"
-tests_included_paths = [
-    "config/",
-    "configurator/",
-    "__init__.py",
-    "conftest.py",
-]
