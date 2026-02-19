@@ -78,7 +78,7 @@ class DataParameters(Parameters):
             description=(
                 "If specified, adds at most this number of sequences per example; "
                 "otherwise, fills up context. Supports 'auto' where a value of 1 is "
-                "chosen if differential privacy is enabled, and None otherwise. "
+                "chosen if differential privacy is enabled, and 10 otherwise. "
                 "Required for DP to limit contribution of each example."
             ),
         ),

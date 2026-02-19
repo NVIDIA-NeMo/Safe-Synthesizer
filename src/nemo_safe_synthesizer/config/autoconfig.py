@@ -245,7 +245,11 @@ class AutoConfigResolver:
             return {"max_sequences_per_example": self._config.data.max_sequences_per_example}
 
         else:
-            return {"max_sequences_per_example": None}
+            logger.info(
+                "Parameter `max_sequences_per_example` was automatically set "
+                "to 10 for best performance/efficiency."
+            )
+            return {"max_sequences_per_example": 10}
 
     def _build_updated_params(
         self,

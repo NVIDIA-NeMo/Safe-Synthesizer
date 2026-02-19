@@ -109,7 +109,7 @@ AUTO_NO_DP = AutoConfigTestCase(
         num_input_records_to_sample=None,  # Will be auto-resolved
         delta=None,  # Not used (DP disabled)
         dp_enabled=False,
-        max_seq=None,  # "auto" with no DP -> None
+        max_seq=10,  # "auto" with no DP -> 10
     ),
 )
 
@@ -322,7 +322,7 @@ class TestAutoConfigResolver:
             assert result == {}
 
     def test_determine_max_sequences_per_example(self, sample_data, config, expected):
-        """Max sequences should be 1 for DP, None for non-DP auto, or explicit value."""
+        """Max sequences should be 1 for DP, 10 for non-DP auto, or explicit value."""
         resolver = AutoConfigResolver(sample_data, config)
 
         # Verify validation already resolved the config value

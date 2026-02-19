@@ -88,8 +88,8 @@ class SafeSynthesizerParameters(Parameters):
 
         if not dp_params.dp_enabled:
             if data.max_sequences_per_example is not None and data.max_sequences_per_example == AUTO_STR:
-                logger.debug("setting max_sequences_per_example to None because DP is disabled")
-                data.max_sequences_per_example = None
+                logger.debug("setting max_sequences_per_example to the default of 10 because DP is disabled")
+                data.max_sequences_per_example = 10
             return dp_params
 
         match data.max_sequences_per_example:
