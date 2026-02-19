@@ -89,4 +89,26 @@ tooltips = {
         were not intended to be revealed by the data owners. Based on directly analyzing the output data, a high 
         score indicates that your output data is well-protected from this type of attack.
     """,
+    "time_series_utility_info": """
+        The Time Series Utility metric measures how well synthetic sequences support forecasting or classification tasks.
+        We train a reference model on the real training set and a TSTR (Train on Synthetic, Test on Real) model on the synthetic data,
+        then compare their downstream performance (RMSE or F1, depending on the task). Smaller gaps indicate that synthetic
+        data preserves the predictive signal needed for your target use case.
+    """,
+    "autocorrelation_similarity_info": """
+        The Autocorrelation Similarity metric compares the autocorrelation function (ACF) of each numeric time series column
+        between real and synthetic data. Matching ACF across the first k lags ensures that temporal dependencies and
+        seasonality patterns are preserved, which is critical for sequential modeling workloads.
+    """,
+    "time_series_privacy_info": """
+        The Time Series Privacy metric reports the Nearest Neighbor Distance Ratio (NNDR). For each synthetic point we
+        measure how close it is to its nearest real neighbor, normalized by the distance between that real point and its
+        closest real neighbor. Larger ratios indicate that synthetic records are sufficiently perturbed and do not
+        memorize specific individuals.
+    """,
+    "time_series_line_chart_info": """
+        The Time Series Line Charts show how each numeric feature varies over time for both reference and synthetic data.
+        This visualization helps you compare temporal patterns, trends, and ranges between the original and generated data.
+        Similar patterns indicate that the synthetic data preserves the temporal dynamics of the original data.
+    """,
 }

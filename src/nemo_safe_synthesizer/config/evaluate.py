@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import (
     Annotated,
+    Literal,
 )
 
 from pydantic import (
@@ -15,11 +16,55 @@ from ..configurator.parameters import (
     Parameters,
 )
 
-__all__ = ["EvaluationParameters"]
+__all__ = [
+    "EvaluationParameters",
+    "TimeSeriesEvaluationParameters",
+    "AutocorrelationSimilarityParameters",
+]
 
 DEFAULT_SQS_REPORT_COLUMNS: int = 250
 DEFAULT_RECORD_COUNT = 5000
 QUASI_IDENTIFIER_COUNT = 3
+
+
+class AutocorrelationSimilarityParameters(Parameters):
+    """Configuration for the autocorrelation similarity metric."""
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable the autocorrelation similarity metric.",
+    )
+    value_columns: list[str] | None = Field(
+        default=None,
+        description="Columns to evaluate. Defaults to all numeric value columns.",
+    )
+    timestamp_column: str | None = Field(
+        default=None,
+        description="Timestamp column used to order time series records.",
+    )
+    group_column: str | None = Field(
+        default=None,
+        description="Optional column identifying independent time series groups.",
+    )
+    max_lag: int = Field(
+        default=20,
+        description="Number of lags to include in the autocorrelation comparison.",
+        ge=1,
+    )
+    distance_metric: Literal["euclidean", "mae"] = Field(
+        default="euclidean",
+        description="Distance metric used to compare autocorrelation vectors.",
+    )
+
+
+class TimeSeriesEvaluationParameters(Parameters):
+    """Aggregate configuration for time series evaluation metrics."""
+
+    autocorrelation: AutocorrelationSimilarityParameters = Field(default_factory=AutocorrelationSimilarityParameters)
+
+    @property
+    def enabled(self) -> bool:
+        return any([self.autocorrelation.enabled])
 
 
 class EvaluationParameters(Parameters):
@@ -103,3 +148,8 @@ class EvaluationParameters(Parameters):
             description="List of columns for PII Replay. If not provided, only entities will be used.",
         ),
     ] = None
+
+    time_series: TimeSeriesEvaluationParameters | None = Field(
+        default_factory=TimeSeriesEvaluationParameters,
+        description="Optional configuration for time series-specific evaluation metrics.",
+    )

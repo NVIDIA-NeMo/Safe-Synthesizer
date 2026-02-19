@@ -74,6 +74,34 @@
                 <a href="#aia" class="level-2">Attribute Inference Protection</a>
                 {% endif %}
             {% endif %}
+
+            {% if ctx.with_time_series %}
+                <a href="#time-series" class="level-1">Time Series</a>
+                {% if ctx.get('time_series_similarity_score') %}
+                    <a href="#ts-score" class="level-2">Score</a>
+                {% endif %}
+                {% if ctx.get('autocorrelation_similarity') %}
+                    <a href="#acf-similarity" class="level-2">Autocorrelation</a>
+                {% endif %}
+                {% if ctx.get('drift_similarity') %}
+                    <a href="#drift-similarity" class="level-2">Drift</a>
+                {% endif %}
+                {% if ctx.get('hurst_similarity') %}
+                    <a href="#hurst-similarity" class="level-2">Hurst Exponent</a>
+                {% endif %}
+                {% if ctx.get('dtw_similarity') %}
+                    <a href="#dtw-similarity" class="level-2">DTW</a>
+                {% endif %}
+                {% if ctx.get('rolling_stats_similarity') %}
+                    <a href="#rolling-stats-similarity" class="level-2">Rolling Stats</a>
+                {% endif %}
+                {% if ctx.get('spectral_similarity') %}
+                    <a href="#spectral-similarity" class="level-2">Spectral</a>
+                {% endif %}
+                {% if ctx.get('adf_stationarity') %}
+                    <a href="#adf-stationarity" class="level-2">ADF Stationarity</a>
+                {% endif %}
+            {% endif %}
         </nav>
         <div id="nav-overlay" onclick="toggleNav()">
             <div class="nav-hr-vertical"></div>
@@ -228,6 +256,220 @@
                 {% include "jinja/components/text_structure_similarity.j2" %}
             {% endif %}
         </section>
+
+        {% if ctx.with_time_series %}
+        <section class="time-series" id="time-series">
+            <h1>Time Series Evaluation</h1>
+
+            {% if ctx.get('time_series_similarity_score') %}
+            <div class="component" id="ts-score">
+                <div class="header">
+                    Time Series Similarity Score
+                    <span data-toggle data-for="ts-score-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.time_series_similarity_score.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.time_series_similarity_score.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        The Time Series Similarity Score is a weighted composite of individual time series
+                        metrics: Drift, Hurst Exponent, DTW, Rolling Stats, and Spectral similarity.
+                        It measures how well the synthetic data preserves the temporal characteristics
+                        of the original data.
+                    </div>
+                </div>
+                <div class="tooltips" id="ts-score-info" hidden>
+                    The score uses an additive weighting method where each metric contributes proportionally
+                    to its optimized weight. A score of 1.0 indicates perfect similarity.
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ctx.get('autocorrelation_similarity') %}
+                {% with component=ctx.autocorrelation_similarity, tooltip_id="autocorrelation-similarity-info" %}
+                    {% include "jinja/components/autocorrelation_similarity.j2" %}
+                {% endwith %}
+            {% endif %}
+
+            {% if ctx.get('drift_similarity') %}
+            <div class="component" id="drift-similarity">
+                <div class="header">
+                    Drift Similarity
+                    <span data-toggle data-for="drift-similarity-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.drift_similarity.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.drift_similarity.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        Measures whether the synthetic data preserves the trend direction and magnitude
+                        of the original time series by comparing the mean of first differences.
+                    </div>
+                </div>
+                <div class="tooltips" id="drift-similarity-info" hidden>
+                    Drift is computed as the mean of first differences (y[t+1] - y[t]).
+                    The error is the normalized absolute difference between original and synthetic drift values.
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ctx.get('hurst_similarity') %}
+            <div class="component" id="hurst-similarity">
+                <div class="header">
+                    Hurst Exponent Similarity
+                    <span data-toggle data-for="hurst-similarity-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.hurst_similarity.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.hurst_similarity.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        Compares the long-range memory and trend persistence of the original and synthetic
+                        series using the Hurst exponent (H&lt;0.5: mean-reverting, H=0.5: random walk, H&gt;0.5: trending).
+                    </div>
+                </div>
+                <div class="tooltips" id="hurst-similarity-info" hidden>
+                    The Hurst exponent is estimated via rescaled range (R/S) analysis on first differences.
+                    The similarity is 1 minus the absolute difference between the two exponents.
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ctx.get('dtw_similarity') %}
+            <div class="component" id="dtw-similarity">
+                <div class="header">
+                    DTW Similarity
+                    <span data-toggle data-for="dtw-similarity-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.dtw_similarity.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.dtw_similarity.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        Dynamic Time Warping measures overall shape similarity by finding the optimal
+                        alignment between the original and synthetic series, allowing flexible time shifts.
+                    </div>
+                </div>
+                <div class="tooltips" id="dtw-similarity-info" hidden>
+                    The DTW cost is normalized by series length and scaled by the series' standard
+                    deviation to produce a length- and scale-independent similarity score in [0, 1].
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ctx.get('rolling_stats_similarity') %}
+            <div class="component" id="rolling-stats-similarity">
+                <div class="header">
+                    Rolling Statistics Similarity
+                    <span data-toggle data-for="rolling-stats-similarity-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.rolling_stats_similarity.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.rolling_stats_similarity.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        Compares how the local average evolves over time by computing the RMSE between
+                        the rolling means of the original and synthetic series.
+                    </div>
+                </div>
+                <div class="tooltips" id="rolling-stats-similarity-info" hidden>
+                    Rolling mean RMSE is normalized by the series scale to produce a [0, 1] score.
+                    Lower RMSE (higher similarity) indicates the synthetic data faithfully reproduces
+                    the time-varying mean structure.
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ctx.get('spectral_similarity') %}
+            <div class="component" id="spectral-similarity">
+                <div class="header">
+                    Spectral Similarity
+                    <span data-toggle data-for="spectral-similarity-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.spectral_similarity.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.spectral_similarity.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        Measures how well the synthetic data preserves the frequency content of the
+                        original series by comparing their power spectral densities.
+                    </div>
+                </div>
+                <div class="tooltips" id="spectral-similarity-info" hidden>
+                    The spectral distance is computed as the Jensen-Shannon divergence between the
+                    normalized power spectra of the two series, yielding a [0, 1] distance.
+                </div>
+            </div>
+            {% endif %}
+
+            {% if ctx.get('adf_stationarity') %}
+            <div class="component" id="adf-stationarity">
+                <div class="header">
+                    ADF Stationarity Test
+                    <span data-toggle data-for="adf-stationarity-info" class="info"></span>
+                </div>
+                <div class="score-desc-grid">
+                    <div class="score">
+                        <div class="score-chart non-hovering">
+                            {{ ctx.adf_stationarity.figure }}
+                        </div>
+                        <span class="score-label">
+                            {{ ctx.adf_stationarity.score.grade }}
+                        </span>
+                    </div>
+                    <div class="hr-vertical"></div>
+                    <div class="score-description">
+                        Checks whether the original and synthetic series share the same stationarity
+                        properties using the Augmented Dickey-Fuller test. This is an informational
+                        metric not included in the composite score.
+                    </div>
+                </div>
+                <div class="tooltips" id="adf-stationarity-info" hidden>
+                    The ADF test determines whether a series has a unit root (non-stationary).
+                    A match means both series agree on stationarity status; a mismatch suggests the
+                    synthetic data has fundamentally different trend characteristics.
+                </div>
+            </div>
+            {% endif %}
+
+        </section>
+        {% endif %}
 
         {% if (ctx.with_data_privacy) or (ctx.pii_replay and ctx.pii_replay.pii_replay_data) %}
         <section class="data-privacy" id="data-privacy">

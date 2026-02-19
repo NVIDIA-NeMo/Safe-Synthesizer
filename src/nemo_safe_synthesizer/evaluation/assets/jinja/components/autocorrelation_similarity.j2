@@ -1,0 +1,171 @@
+<div class="component" id="acf-similarity">
+    <div class="header">
+        {{ component.name }}
+        <span data-toggle data-for="{{ tooltip_id }}" class="info"></span>
+    </div>
+    <div class="score-desc-grid">
+        <div class="score">
+            <div class="score-chart non-hovering">
+                {{ component.score.figure }}
+            </div>
+            <span class="score-label">
+                {{ component.score.grade }}
+            </span>
+            <div class="figure-desc">
+                Max Lag: {{ component.details.max_lag | default('N/A') }} &bull; {{ component.details.distance_metric | default('') | upper }}
+                {% if component.details.evaluation_mode == 'per_group' %}
+                &bull; Per-Group
+                {% endif %}
+            </div>
+        </div>
+        <div class="hr-vertical"></div>
+        <div class="score-description">
+            {% if component.details.evaluation_mode == 'per_group' %}
+            <!-- Per-Group Evaluation Mode -->
+            <div class="acf-summary" style="margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #666;">Group Summary ({{ component.details.group_column }})</h4>
+                <table style="width: 100%; font-size: 12px;">
+                    <tr>
+                        <th style="text-align: left; padding: 4px;">Metric</th>
+                        <th style="text-align: right; padding: 4px;">Value</th>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;">Groups in Reference</td>
+                        <td style="text-align: right; padding: 4px;">{{ component.details.summary.total_groups_reference }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;">Groups in Synthetic</td>
+                        <td style="text-align: right; padding: 4px;">{{ component.details.summary.total_groups_synthetic }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;">Common Groups Evaluated</td>
+                        <td style="text-align: right; padding: 4px;">{{ component.details.summary.evaluated_groups }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;"><strong>Average Score</strong></td>
+                        <td style="text-align: right; padding: 4px;"><strong>{{ component.details.summary.average_score }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;">Score Range</td>
+                        <td style="text-align: right; padding: 4px;">{{ component.details.summary.min_score }} - {{ component.details.summary.max_score }}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px;">Std Dev</td>
+                        <td style="text-align: right; padding: 4px;">{{ component.details.summary.std_score }}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Per-Group Scores Table -->
+            <div class="acf-per-group" style="margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #666;">Per-Group Scores</h4>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    <table style="width: 100%; font-size: 12px;">
+                        <tr>
+                            <th style="text-align: left; padding: 4px;">Group</th>
+                            <th style="text-align: right; padding: 4px;">Score</th>
+                            <th style="text-align: right; padding: 4px;">Ref Rows</th>
+                            <th style="text-align: right; padding: 4px;">Syn Rows</th>
+                        </tr>
+                        {% for group in component.details.per_group[:20] %}
+                        <tr{% if group.score is none %} style="color: #999;"{% endif %}>
+                            <td style="padding: 4px;">{{ group.group }}</td>
+                            <td style="text-align: right; padding: 4px;">
+                                {% if group.score is not none %}
+                                    {% if group.score >= 0.8 %}
+                                    <span style="color: #28a745;">{{ group.score }}</span>
+                                    {% elif group.score >= 0.5 %}
+                                    <span style="color: #ffc107;">{{ group.score }}</span>
+                                    {% else %}
+                                    <span style="color: #dc3545;">{{ group.score }}</span>
+                                    {% endif %}
+                                {% else %}
+                                <span title="{{ group.error | default('Error') }}">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td style="text-align: right; padding: 4px;">{{ group.ref_rows }}</td>
+                            <td style="text-align: right; padding: 4px;">{{ group.syn_rows }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% if component.details.per_group | length > 20 %}
+                        <tr>
+                            <td colspan="4" style="padding: 4px; text-align: center; font-style: italic; color: #666;">
+                                ... and {{ component.details.per_group | length - 20 }} more groups
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Groups Only in Reference -->
+            {% if component.details.groups_only_in_reference and component.details.groups_only_in_reference | length > 0 %}
+            <div class="acf-missing-groups" style="margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #dc3545;">
+                    Groups Only in Reference ({{ component.details.groups_only_in_reference | length }})
+                </h4>
+                <div style="max-height: 100px; overflow-y: auto; font-size: 12px; background: #fff3cd; padding: 8px; border-radius: 4px;">
+                    {% for group in component.details.groups_only_in_reference[:10] %}
+                    <span style="display: inline-block; background: #ffeeba; padding: 2px 6px; margin: 2px; border-radius: 3px;">{{ group }}</span>
+                    {% endfor %}
+                    {% if component.details.groups_only_in_reference | length > 10 %}
+                    <span style="display: inline-block; padding: 2px 6px; margin: 2px; color: #856404; font-style: italic;">
+                        ... and {{ component.details.groups_only_in_reference | length - 10 }} more
+                    </span>
+                    {% endif %}
+                </div>
+                <p style="font-size: 11px; color: #856404; margin: 4px 0 0 0;">
+                    These groups exist in the reference data but are missing from the synthetic data.
+                </p>
+            </div>
+            {% endif %}
+            
+            <!-- Groups Only in Synthetic -->
+            {% if component.details.groups_only_in_synthetic and component.details.groups_only_in_synthetic | length > 0 %}
+            <div class="acf-extra-groups" style="margin-bottom: 16px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #17a2b8;">
+                    Groups Only in Synthetic ({{ component.details.groups_only_in_synthetic | length }})
+                </h4>
+                <div style="max-height: 100px; overflow-y: auto; font-size: 12px; background: #d1ecf1; padding: 8px; border-radius: 4px;">
+                    {% for group in component.details.groups_only_in_synthetic[:10] %}
+                    <span style="display: inline-block; background: #bee5eb; padding: 2px 6px; margin: 2px; border-radius: 3px;">{{ group }}</span>
+                    {% endfor %}
+                    {% if component.details.groups_only_in_synthetic | length > 10 %}
+                    <span style="display: inline-block; padding: 2px 6px; margin: 2px; color: #0c5460; font-style: italic;">
+                        ... and {{ component.details.groups_only_in_synthetic | length - 10 }} more
+                    </span>
+                    {% endif %}
+                </div>
+                <p style="font-size: 11px; color: #0c5460; margin: 4px 0 0 0;">
+                    These groups appear in the synthetic data but were not present in the reference data.
+                </p>
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <!-- Global Evaluation Mode (Original Layout) -->
+            <table>
+                <tr>
+                    <th>Column</th>
+                    <th>Distance</th>
+                    <th>ACF Snapshot (Lag &rarr; Ref / Synth)</th>
+                </tr>
+                {% for col in component.details.get('columns', [])[:6] %}
+                <tr>
+                    <td>{{ col.column }}</td>
+                    <td>{{ col.distance }}</td>
+                    <td>
+                        {% for lag, ref, syn in zip(col.lag_values[:4], col.reference_acf[:4], col.synthetic_acf[:4]) %}
+                            Lag {{ lag }}: {{ ref }} / {{ syn }}<br/>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% endif %}
+        </div>
+    </div>
+    <div class="tooltips" id="{{ tooltip_id }}" hidden>
+        {{ ctx.tooltips.autocorrelation_similarity_info }}
+    </div>
+</div>

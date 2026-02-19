@@ -14,9 +14,12 @@ from ....config.evaluate import (
     DEFAULT_RECORD_COUNT,
     DEFAULT_SQS_REPORT_COLUMNS,
 )
+
 from ....config.parameters import SafeSynthesizerParameters
 from ....evaluation.assets.text.multi_modal_tooltips import tooltips
 from ....evaluation.components.attribute_inference_protection import AttributeInferenceProtection
+from ....evaluation.components.adf_stationarity import ADFStationarity
+from ....evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
@@ -31,13 +34,19 @@ from ....evaluation.components.dataset_statistics import (
 from ....evaluation.components.deep_structure import (
     DeepStructure,
 )
+from ....evaluation.components.drift_similarity import DriftSimilarity
+from ....evaluation.components.dtw_similarity import DTWSimilarity
+from ....evaluation.components.hurst_similarity import HurstSimilarity
 from ....evaluation.components.membership_inference_protection import (
     MembershipInferenceProtection,
 )
 from ....evaluation.components.pii_replay import PIIReplay
+from ....evaluation.components.rolling_stats_similarity import RollingStatsSimilarity
+from ....evaluation.components.spectral_similarity import SpectralSimilarity
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
+from ....evaluation.components.time_series_similarity_score import TimeSeriesSimilarityScore
 from ....evaluation.data_model.evaluation_dataset import EvaluationDataset
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -85,6 +94,18 @@ class MultimodalReport(EvaluationReport):
                 ctx["delta"] = self.config.get("delta")
                 ctx["epsilon"] = self.config.get("epsilon")
 
+            ctx["with_time_series"] = any(
+                [
+                    ctx.get("autocorrelation_similarity"),
+                    ctx.get("drift_similarity"),
+                    ctx.get("hurst_similarity"),
+                    ctx.get("dtw_similarity"),
+                    ctx.get("rolling_stats_similarity"),
+                    ctx.get("spectral_similarity"),
+                    ctx.get("time_series_similarity_score"),
+                ]
+            )
+
             # Numeric per-column figures require access to the original data, a little hacky.
             if "column_distribution_stability" in ctx:
                 ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_dataset(
@@ -103,6 +124,32 @@ class MultimodalReport(EvaluationReport):
         return default
 
     @staticmethod
+    def _collect_time_series_columns(config: SafeSynthesizerParameters | None) -> list[str]:
+        if config is None or not getattr(config, "evaluation", None):
+            return []
+        ts_cfg = getattr(config.evaluation, "time_series", None)
+        if not ts_cfg or not ts_cfg.enabled:
+            return []
+
+        cols: set[str] = set()
+
+        def _add(values):
+            if not values:
+                return
+            if isinstance(values, str):
+                cols.add(values)
+            else:
+                cols.update([v for v in values if v])
+
+        autocorrelation = getattr(ts_cfg, "autocorrelation", None)
+        if autocorrelation and autocorrelation.enabled:
+            _add(autocorrelation.value_columns)
+            _add(autocorrelation.timestamp_column)
+            _add(autocorrelation.group_column)
+
+        return [c for c in cols if c]
+
+    @staticmethod
     def from_dataframes(
         reference: pd.DataFrame,
         output: pd.DataFrame,
@@ -110,6 +157,9 @@ class MultimodalReport(EvaluationReport):
         column_statistics: dict[str, ColumnStatistics] | None = None,
         config: SafeSynthesizerParameters | None = None,
     ) -> MultimodalReport:
+        # Check is_timeseries directly since config.get() doesn't find nested attributes reliably
+        is_timeseries = config.time_series.is_timeseries if config and getattr(config, "time_series", None) else False
+
         evaluation_dataset = EvaluationDataset.from_dataframes(
             reference=reference,
             output=output,
@@ -117,7 +167,13 @@ class MultimodalReport(EvaluationReport):
             column_statistics=column_statistics,
             rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
             cols=MultimodalReport._get_config_value("sqs_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
-            mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
+            mandatory_columns=list(
+                set(
+                    (MultimodalReport._get_config_value("mandatory_columns", [], config) or [])
+                    + MultimodalReport._collect_time_series_columns(config)
+                )
+            ),
+            enable_sampling=not is_timeseries,
         )
 
         components = []
@@ -196,6 +252,33 @@ class MultimodalReport(EvaluationReport):
             text_structure_similarity,
             sqs_score,
         ]
+
+        time_series_components: list = []
+        ts_params = config.evaluation.time_series if config and getattr(config, "evaluation", None) else None
+
+        if ts_params and ts_params.enabled:
+            if ts_params.autocorrelation.enabled:
+                time_series_components.append(
+                    AutocorrelationSimilarity.from_evaluation_dataset(evaluation_dataset, config)
+                )
+
+        if is_timeseries:
+            if not any(isinstance(c, AutocorrelationSimilarity) for c in time_series_components):
+                acf_component = AutocorrelationSimilarity.from_evaluation_dataset(evaluation_dataset, config)
+                if acf_component.score and acf_component.score.score is not None:
+                    time_series_components.append(acf_component)
+
+            time_series_components.append(DriftSimilarity.from_evaluation_dataset(evaluation_dataset, config))
+            time_series_components.append(HurstSimilarity.from_evaluation_dataset(evaluation_dataset, config))
+            time_series_components.append(DTWSimilarity.from_evaluation_dataset(evaluation_dataset, config))
+            time_series_components.append(RollingStatsSimilarity.from_evaluation_dataset(evaluation_dataset, config))
+            time_series_components.append(SpectralSimilarity.from_evaluation_dataset(evaluation_dataset, config))
+            time_series_components.append(ADFStationarity.from_evaluation_dataset(evaluation_dataset, config))
+
+            ts_similarity_score = TimeSeriesSimilarityScore.from_components(time_series_components)
+            time_series_components.append(ts_similarity_score)
+
+        components += time_series_components
 
         report = MultimodalReport(config=config, evaluation_dataset=evaluation_dataset, components=components)
         report.evaluation_dataset = evaluation_dataset
