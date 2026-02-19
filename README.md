@@ -400,7 +400,7 @@ This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` env
 
 #### Local Development with NMP
 
-The NMP service (`services/safe-synthesizer/pyproject.toml`) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
+The NMP service (`services/safe-synthesizer/pyproject.toml` in the NVIDIA internal `nmp` repo) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
 
 When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
 
