@@ -113,6 +113,27 @@ AUTO_NO_DP = AutoConfigTestCase(
     ),
 )
 
+AUTO_NO_DP_NULL_MAX_SEQ = AutoConfigTestCase(
+    name="auto_no_dp_null_max_seq",
+    config=SafeSynthesizerParameters(
+        training=TrainingHyperparams(
+            rope_scaling_factor="auto",
+            num_input_records_to_sample="auto",
+            use_unsloth="auto",
+        ),
+        data=DataParameters(max_sequences_per_example=None),
+        privacy=DifferentialPrivacyHyperparams(dp_enabled=False, delta="auto"),
+    ),
+    expected=Expected(
+        use_unsloth=True,  # "auto" resolves to True when DP disabled
+        rope_scaling_factor=None,  # Will be auto-resolved to an int
+        num_input_records_to_sample=None,  # Will be auto-resolved
+        delta=None,  # Not used (DP disabled)
+        dp_enabled=False,
+        max_seq=None,  # null max_sequences_per_example with no DP -> None
+    ),
+)
+
 AUTO_WITH_DP = AutoConfigTestCase(
     name="auto_with_dp",
     config=SafeSynthesizerParameters(
@@ -204,6 +225,7 @@ DP_WITH_UNSLOTH_TRUE = AutoConfigTestCase(
 
 ALL_TEST_CASES: list[AutoConfigTestCase] = [
     AUTO_NO_DP,
+    AUTO_NO_DP_NULL_MAX_SEQ,
     AUTO_WITH_DP,
     AUTO_WITH_DP_NULL_MAX_SEQ,
     EXPLICIT,

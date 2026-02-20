@@ -76,10 +76,10 @@ class DataParameters(Parameters):
         OptionalAutoInt,
         Field(
             description=(
-                "If specified, adds at most this number of sequences per example; "
-                "otherwise, fills up context. Supports 'auto' where a value of 1 is "
-                "chosen if differential privacy is enabled, and 10 otherwise. "
-                "Required for DP to limit contribution of each example."
+                "If specified, adds at most this number of sequences per example. "
+                "Supports 'auto' where a value of 1 is chosen if differential privacy is "
+                "enabled, and 10 otherwise. If not specified or set to 'auto', fills up "
+                "context. Required for DP to limit contribution of each example."
             ),
         ),
     ] = AUTO_STR

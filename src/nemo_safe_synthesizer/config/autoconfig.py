@@ -11,7 +11,7 @@ import inspect
 import math
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable
 
 import pandas as pd
 from pydantic import GetCoreSchemaHandler
@@ -228,12 +228,14 @@ class AutoConfigResolver:
         )
         return {"delta": d}
 
-    def _determine_max_sequences_per_example(self) -> dict[str, Literal["auto"] | int | None]:
+    def _determine_max_sequences_per_example(self) -> dict[str, int | None]:
         """
         Determine max_sequences_per_example if set to auto.
 
         Returns:
-            Dict with max_sequences_per_example if auto-determined, empty dict otherwise.
+            Dict with max_sequences_per_example resolved to a concrete value:
+            1 if DP is enabled, 10 if auto with DP disabled, or the
+            explicit value (int) if manually specified, or None if not specified.
         """
         if self._dp_enabled is True:
             logger.info(
@@ -242,6 +244,10 @@ class AutoConfigResolver:
             )
             return {"max_sequences_per_example": 1}
         elif self._config.data.max_sequences_per_example != AUTO_STR:
+            if self._config.data.max_sequences_per_example is None:
+                logger.info(
+                    "Parameter `max_sequences_per_example` is not specified, so each example will fill up the context window."
+                )
             return {"max_sequences_per_example": self._config.data.max_sequences_per_example}
 
         else:
