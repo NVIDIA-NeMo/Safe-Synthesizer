@@ -23,12 +23,12 @@ Time series support enables Safe Synthesizer to generate synthetic tabular data 
 
 ### Key Features
 
-- **Unified grouped architecture**: All time series are processed through a unified grouped architecture. Single-sequence data is automatically treated as a single group via an internal pseudo-group column, enabling consistent processing paths.
-- **Sliding window generation**: Uses a sliding window approach where recently generated records are fed back as context for generating the next batch.
-- **Parallel group generation**: Multiple groups are processed in parallel batches for efficiency, even single-sequence data uses this optimized path.
-- **Time-range based generation**: The number of records generated is determined by the configured time range and interval `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count.
-- **Chronological constraint enforcement**: Validates that generated timestamps follow the expected interval pattern.
-- **Autocorrelation-based evaluation**: Measures how well the synthetic data preserves temporal patterns from the original data. (ToDo)
+- Unified grouped architecture: All time series are processed through a unified grouped architecture. Single-sequence data is automatically treated as a single group via an internal pseudo-group column, enabling consistent processing paths.
+- Sliding window generation: Uses a sliding window approach where recently generated records are fed back as context for generating the next batch.
+- Parallel group generation: Multiple groups are processed in parallel batches for efficiency, even single-sequence data uses this optimized path.
+- Time-range based generation: The number of records generated is determined by the configured time range and interval `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count.
+- Chronological constraint enforcement: Validates that generated timestamps follow the expected interval pattern.
+- Autocorrelation-based evaluation: Measures how well the synthetic data preserves temporal patterns from the original data. (ToDo)
 
 ---
 
@@ -47,7 +47,7 @@ Located in `src/nemo_safe_synthesizer/config/time_series.py`, this configuration
 | `start_timestamp` | `str \| int \| None` | `None` | Start timestamp for generation. Defaults to the first timestamp in the training data (validated to be consistent across groups). |
 | `stop_timestamp` | `str \| int \| None` | `None` | Stop timestamp for generation. Defaults to the last timestamp in the training data (validated to be consistent across groups). |
 
-**Validation Rules:**
+Validation Rules:
 - When `is_timeseries=True`, at least one of `timestamp_column` or `timestamp_interval_seconds` must be provided.
 - When `is_timeseries=False`, `timestamp_column` cannot be set.
 - For grouped time series, `group_training_examples_by` (in data config) should also be set.
@@ -88,34 +88,34 @@ Time series preprocessing occurs during training data preparation in `src/nemo_s
 
 ### Processing Steps
 
-1. **Pseudo-Group Column Addition**
+1. Pseudo-Group Column Addition
    - If no `group_training_examples_by` column is specified, a `__pseudo_group__` column is added with all rows set to 0.
    - This unifies the processing of grouped and ungrouped time series through a single code path.
 
-2. **Timestamp Column Creation (if needed)**
+2. Timestamp Column Creation (if needed)
    - If `timestamp_column` is not provided but `timestamp_interval_seconds` is, a synthetic `elapsed_seconds` column is created.
    - Records are indexed sequentially with the specified interval per group.
 
-3. **Validation**
+3. Validation
    - Verifies the timestamp column exists in the data.
    - Checks for missing values in the timestamp column.
 
-4. **Sorting**
+4. Sorting
    - Data is always sorted by group column first, then by timestamp within each group.
    - Even ungrouped data follows this pattern (using the pseudo-group column).
 
-5. **Format Inference and Conversion**
+5. Format Inference and Conversion
    - If `timestamp_format` is not provided, attempts to infer the datetime format using `guess_datetime_format()`.
    - Special format `"elapsed_seconds"` indicates integer elapsed time (not datetime).
    - Validates user-provided format matches the actual data.
    - Converts timestamp column to datetime for processing (then back to string format).
 
-6. **Interval Inference and Validation**
+6. Interval Inference and Validation
    - Collects timestamp statistics for each group.
    - If `timestamp_interval_seconds` is provided, validates that actual intervals match (with 0.1s tolerance).
    - If not provided, infers the interval only if all groups have consistent intervals.
 
-7. **Start/Stop Consistency Validation**
+7. Start/Stop Consistency Validation
    - Validates that all groups have the same start and stop timestamps.
    - If timestamps differ across groups, raises a `DataError`.
    - Sets `start_timestamp` and `stop_timestamp` in config based on validated values.
@@ -145,23 +145,23 @@ The `SequentialExampleAssembler` in `src/nemo_safe_synthesizer/data_processing/a
 
 ### Key Differences from Tabular Assembler
 
-1. **No Shuffling**: Records maintain their original order to preserve temporal relationships.
+1. No Shuffling: Records maintain their original order to preserve temporal relationships.
 
-2. **Single-Group Examples**: Each training example contains records from exactly one group. This ensures the model learns patterns within a group's sequence without cross-group contamination.
+2. Single-Group Examples: Each training example contains records from exactly one group. This ensures the model learns patterns within a group's sequence without cross-group contamination.
 
-3. **Sequential Packing**: Records are packed into training examples sequentially, respecting:
+3. Sequential Packing: Records are packed into training examples sequentially, respecting:
    - Token budget (70-100% of max context length for training, 100% for validation)
    - Group boundaries (one group per example)
    - Dataset boundaries (restart detection when row index decreases for data_fraction > 1)
 
-4. **Pseudo-Group Handling**: When no group column is specified, preprocessing adds a `__pseudo_group__` column so ungrouped time series is treated as a single group. This unifies the grouped and ungrouped code paths.
+4. Pseudo-Group Handling: When no group column is specified, preprocessing adds a `__pseudo_group__` column so ungrouped time series is treated as a single group. This unifies the grouped and ungrouped code paths.
 
-5. **Initial Prefill Extraction**
+5. Initial Prefill Extraction
    - Dictionary mapping each group to its first 3 decoded samples (including pseudo-group for single sequences).
    - Stored in `model_metadata.initial_prefill` for use during generation.
    - Used by `TimeseriesBackend` to seed each group's context.
 
-6. **Train/Test Split**
+6. Train/Test Split
    - Split is done by group boundaries using `grouped_train_test_split`.
    - Entire groups go to train OR validation, never split across.
    - Re-sort after split since GroupShuffleSplit shuffles indices.
@@ -226,17 +226,17 @@ TimeseriesBackend(VllmBackend)
 
 ### Key Concepts
 
-- **Time-Range Based Generation**: The number of records generated is determined by `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count. The `config.generation.num_records` parameter is used only for progress tracking.
-- **Sliding Window**: Maintains a window of recent records (controlled by `_prefill_context_size`) included in each prompt for context continuity.
-- **Groups from Training**: Groups are the same as those seen during training (from `model_metadata.initial_prefill`).
+- Time-Range Based Generation: The number of records generated is determined by `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count. The `config.generation.num_records` parameter is used only for progress tracking.
+- Sliding Window: Maintains a window of recent records (controlled by `_prefill_context_size`) included in each prompt for context continuity.
+- Groups from Training: Groups are the same as those seen during training (from `model_metadata.initial_prefill`).
 
 ### Sliding Window Approach
 
-1. **Prefill Initialization**: Start with initial prefill from training data (first 3 records per group).
-2. **Batch Generation**: Generate multiple samples (default 5) per prompt for each active group.
-3. **Response Selection**: Keep the response with the most valid records per group.
-4. **Context Update**: Update sliding window with new valid records.
-5. **Repeat**: Continue until stop timestamp is reached for each group.
+1. Prefill Initialization: Start with initial prefill from training data (first 3 records per group).
+2. Batch Generation: Generate multiple samples (default 5) per prompt for each active group.
+3. Response Selection: Keep the response with the most valid records per group.
+4. Context Update: Update sliding window with new valid records.
+5. Repeat: Continue until stop timestamp is reached for each group.
 
 ### Key Parameters
 
@@ -291,14 +291,14 @@ class GroupState:
 
 ### Stopping Conditions
 
-**Per-Group Stopping:**
-- **Completion (success)**: A group completes when any generated record has timestamp >= `stop_timestamp`.
-- **Failure (low valid fraction)**: A group fails after `config.generation.patience` consecutive batches where invalid fraction >= `config.generation.invalid_fraction_threshold`. Failed groups produce no synthetic data.
+Per-Group Stopping:
+- Completion (success): A group completes when any generated record has timestamp >= `stop_timestamp`.
+- Failure (low valid fraction): A group fails after `config.generation.patience` consecutive batches where invalid fraction >= `config.generation.invalid_fraction_threshold`. Failed groups produce no synthetic data.
 
-**Global Stopping:**
-- **Natural completion**: All groups processed (pending and active lists empty).
-- **No records**: Too many consecutive batches with no valid records globally.
-- **Target reached**: Target number of records reached (for progress tracking).
+Global Stopping:
+- Natural completion: All groups processed (pending and active lists empty).
+- No records: Too many consecutive batches with no valid records globally.
+- Target reached: Target number of records reached (for progress tracking).
 
 ### Progress Checkpoints
 
@@ -324,15 +324,15 @@ def extract_and_validate_timeseries_records(
 ) -> tuple[list[dict], list[str], list[tuple[str, str]]]:
 ```
 
-**Validation Steps:**
+Validation Steps:
 1. Parse JSON and validate against schema.
 2. Check for large number issues.
 3. Verify timestamp column exists.
 4. Parse timestamp using the specified format.
-5. **If interval_seconds is provided**: Validate sequential increment.
+5. If interval_seconds is provided: Validate sequential increment.
    - Handles day rollovers (adds 24h offset when timestamp wraps).
    - Rejects records if interval doesn't match expected step.
-6. **Early termination**: Stops at first invalid record (streaming validation).
+6. Early termination: Stops at first invalid record (streaming validation).
 
 ### 2. Batch-Level Chronological Validation (timeseries_backend.py)
 
@@ -355,7 +355,7 @@ def _is_chronological_for_group(self, records: list[dict], group_state: GroupSta
     return True
 ```
 
-**Key Design Decision**: If records don't continue from the group's last timestamp, all records in that response are moved to `invalid_records` with an "Out-of-order time step" error, and the response is discarded. This is done per-group during `_process_group_result()`.
+Key Design Decision: If records don't continue from the group's last timestamp, all records in that response are moved to `invalid_records` with an "Out-of-order time step" error, and the response is discarded. This is done per-group during `_process_group_result()`.
 
 ---
 
@@ -365,30 +365,30 @@ def _is_chronological_for_group(self, records: list[dict], group_state: GroupSta
 
 Located in `src/nemo_safe_synthesizer/evaluation/components/autocorrelation_similarity.py`.
 
-**Purpose**: Measures how well the synthetic data preserves temporal autocorrelation patterns from the reference data.
+Purpose: Measures how well the synthetic data preserves temporal autocorrelation patterns from the reference data.
 
-**Algorithm:**
+Algorithm:
 
-1. **Compute ACF vectors** for each numeric column:
+1. Compute ACF vectors for each numeric column:
    - Mean-center the data.
    - Calculate autocorrelation for lags 1 to `max_lag`.
    - Clip values to [-1, 1].
 
-2. **Calculate distance** between reference and synthetic ACF:
+2. Calculate distance between reference and synthetic ACF:
    - MAE: Mean Absolute Error.
    - Euclidean: L2 norm.
 
-3. **Normalize and score**:
+3. Normalize and score:
    - Normalize by realistic max distance.
    - Use RMS of normalized differences across columns.
    - Final score = 1 - RMS (higher is better).
 
-**Evaluation Modes:**
+Evaluation Modes:
 
-- **Global**: Computes ACF over entire dataset.
-- **Per-Group**: Computes ACF per group, averages scores.
+- Global: Computes ACF over entire dataset.
+- Per-Group: Computes ACF per group, averages scores.
 
-**Auto-Enable**: When `is_timeseries=True`, autocorrelation similarity is automatically computed even without explicit evaluation config.
+Auto-Enable: When `is_timeseries=True`, autocorrelation similarity is automatically computed even without explicit evaluation config.
 
 ### Integration with Multimodal Report
 
@@ -463,63 +463,63 @@ time_series:
 
 ### 1. Unified Grouped Architecture
 
-**Decision**: All time series (including single-sequence) use the grouped architecture via a pseudo-group column.
+Decision: All time series (including single-sequence) use the grouped architecture via a pseudo-group column.
 
-**Rationale**:
+Rationale:
 - Single code path simplifies maintenance and testing.
 - Single-sequence is just 1 group, no special-casing needed.
 - Parallel generation optimizations apply to all cases.
 
 ### 2. Multiple Samples per Prompt
 
-**Decision**: Generate 5 samples per prompt, keep the best one.
+Decision: Generate 5 samples per prompt, keep the best one.
 
-**Rationale**:
+Rationale:
 - Time series generation is more constrained than tabular.
 - Multiple samples increase the chance of getting a valid continuation.
 - Best sample = most valid records (longer valid sequence is better).
 
 ### 3. Parallel Group Generation
 
-**Decision**: Process multiple groups simultaneously in the same batch.
+Decision: Process multiple groups simultaneously in the same batch.
 
-**Rationale**:
+Rationale:
 - GPU utilization is maximized.
 - Independent groups have no cross-dependencies.
 - Reduces total wall-clock time significantly.
 
 ### 4. Consistent Start/Stop Across Groups
 
-**Decision**: Require all groups to have identical start and stop timestamps.
+Decision: Require all groups to have identical start and stop timestamps.
 
-**Rationale**:
+Rationale:
 - Simplifies generation logic (fixed expected_records per group).
 - Many real-world applications have synchronized sensors.
 - Future: Could relax this for asynchronous time series.
 
 ### 5. Random Token Budget for Training
 
-**Decision**: Sample token budget from [70%, 100%] of max for training examples.
+Decision: Sample token budget from [70%, 100%] of max for training examples.
 
-**Rationale**:
+Rationale:
 - Prevents overfitting to fixed sequence lengths.
 - Creates variable-length examples for robustness.
 - 100% used for validation for consistency.
 
 ### 6. Single-Group Examples
 
-**Decision**: Each training example contains records from exactly one group.
+Decision: Each training example contains records from exactly one group.
 
-**Rationale**:
+Rationale:
 - Ensures model learns patterns within a group's sequence.
 - Prevents cross-group contamination during training.
 - Sequence continuation across example boundaries is natural.
 
 ### 7. Time-Range Based Generation
 
-**Decision**: Number of records is determined by time range and interval, not target count.
+Decision: Number of records is determined by time range and interval, not target count.
 
-**Rationale**:
+Rationale:
 - Ensures complete time coverage for each group.
 - `num_records` parameter is only for progress tracking.
 - Groups complete when stop timestamp is reached.
@@ -528,16 +528,16 @@ time_series:
 
 ## Next Steps
 
-- **Support for variable/irregular intervals** — Planned via `timestamp_validation_mode` (see below).
+- Support for variable/irregular intervals — Planned via `timestamp_validation_mode` (see below).
 - More testing on datasets and different models
 - Compare NSS to other models
 - Add more unit tests
 
 ### Timestamp Validation Mode (Planned)
 
-> ⚠️ **Not Yet Implemented** — This section describes planned functionality.
+> ⚠️ Not Yet Implemented — This section describes planned functionality.
 
-The `timestamp_validation_mode` parameter controls how timestamps are handled during training and generation. This is particularly useful for **time series with varying/irregular intervals** where enforcing a fixed interval is not possible.
+The `timestamp_validation_mode` parameter controls how timestamps are handled during training and generation. This is particularly useful for time series with varying/irregular intervals where enforcing a fixed interval is not possible.
 
 | Mode | Training Behavior | Generation Behavior | Use Case |
 |------|-------------------|---------------------|----------|
