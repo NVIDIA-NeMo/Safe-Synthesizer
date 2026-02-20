@@ -344,7 +344,7 @@ class TestAutoConfigResolver:
             assert result == {}
 
     def test_determine_max_sequences_per_example(self, sample_data, config, expected):
-        """Max sequences should be 1 for DP, 10 for non-DP auto, or explicit value."""
+        """Max sequences should be 1 for DP, 10 for non-DP auto, or explicit value, or None if not specified."""
         resolver = AutoConfigResolver(sample_data, config)
 
         # Verify validation already resolved the config value
