@@ -47,6 +47,7 @@ from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
 from ....evaluation.components.time_series_similarity_score import TimeSeriesSimilarityScore
+from ....evaluation.components.tsc_utility import TSCUtility
 from ....evaluation.data_model.evaluation_dataset import EvaluationDataset
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
@@ -274,6 +275,10 @@ class MultimodalReport(EvaluationReport):
             time_series_components.append(RollingStatsSimilarity.from_evaluation_dataset(evaluation_dataset, config))
             time_series_components.append(SpectralSimilarity.from_evaluation_dataset(evaluation_dataset, config))
             time_series_components.append(ADFStationarity.from_evaluation_dataset(evaluation_dataset, config))
+
+            tsc = TSCUtility.from_evaluation_dataset(evaluation_dataset, config)
+            if tsc.details:
+                time_series_components.append(tsc)
 
             ts_similarity_score = TimeSeriesSimilarityScore.from_components(time_series_components)
             time_series_components.append(ts_similarity_score)
