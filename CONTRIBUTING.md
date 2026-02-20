@@ -17,6 +17,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Developer Certificate of Origin](#developer-certificate-of-origin)
 - [Testing](#testing)
 - [Code Style](#code-style)
+- [Documentation](#documentation)
 
 ## Getting Started
 
@@ -317,6 +318,79 @@ prek install
 ```
 
 This installs hooks that run Ruff (format + lint), ty type checking, and uv lock verification on each commit.
+
+## Documentation
+
+This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) for its documentation site, hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
+
+### Local Preview
+
+Documentation dependencies are included in the `dev` bootstrap profile. If you already ran `make bootstrap-nss dev` (or `cpu`/`cuda`), you're set. Otherwise install them directly:
+
+```bash
+uv sync --group docs
+```
+
+Start a local server with live reload:
+
+```bash
+make docs-serve
+# Browse to http://127.0.0.1:8000
+```
+
+Build the static site (output in `site/`):
+
+```bash
+make docs-build
+```
+
+### Directory Layout
+
+All documentation lives under `docs/`. The structure follows the [Diataxis](https://diataxis.fr/) framework:
+
+| Directory | Content type | Examples |
+| --- | --- | --- |
+| `getting-started/` | Tutorials | Installation, quick start |
+| `user-guide/` | How-tos & reference | CLI, configuration, SDK |
+| `architecture/` | Explanations | Design decisions |
+| `reference/` | API reference | Auto-generated (see below) |
+| `blog/` | Dev notes | Release notes, design posts |
+
+### Adding or Editing a Page
+
+1. Create or edit the `.md` file under the appropriate `docs/` subdirectory.
+2. Add the page to the `nav:` section of `mkdocs.yml` so it appears in the sidebar.
+3. Run `make docs-serve` and verify the page renders correctly.
+
+### MkDocs Material Features
+
+The site configuration (`mkdocs.yml`) enables several useful Markdown extensions:
+
+- **Admonitions** -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
+- **Content tabs** -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
+- **Code blocks** -- syntax highlighting, line numbers, copy button, and annotations
+- **Mermaid diagrams** -- fenced code blocks with ` ```mermaid `
+- **Task lists**, **footnotes**, **definition lists**, and **emoji**
+
+See the [MkDocs Material reference](https://squidfunk.github.io/mkdocs-material/reference/) for full syntax.
+
+### API Reference
+
+API reference pages are auto-generated from Python docstrings. The `mkdocstrings` and `gen-files` plugins run `docs/gen_ref_pages.py` at build time to produce pages under `reference/`. You do not need to edit these files manually -- just write Google-style docstrings in `src/nemo_safe_synthesizer/` and they will appear on the next build.
+
+### Deployment
+
+Documentation is deployed to GitHub Pages automatically when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main`. The workflow is defined in `.github/workflows/docs.yml`.
+
+## AI Agents
+
+This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
+- **AGENTS.md** -- primary agent guide
+- **.agent/skills/** -- domain-specific skills (canonical location)
+- **.cursor/rules/** -- Cursor workflow rules
+- **.cursor/skills/** -- symlinks to `.agent/skills/` for Cursor discoverability
+
+Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
 
 ---
 
