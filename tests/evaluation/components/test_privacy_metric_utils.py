@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
-
 from nemo_safe_synthesizer.evaluation.components.privacy_metric_utils import (
     divide_tabular_text,
     embed_text,
@@ -45,9 +44,9 @@ def test_embed_text(mock_embedder):
     each column equal weight."""
     df = pd.DataFrame(
         {
-            "a": ["x"],       # len 1 → embedding [1, 2, 3]
-            "b": ["xx"],      # len 2 → embedding [2, 4, 6]
-            "c": ["xxxx"],    # len 4 → embedding [4, 8, 12]
+            "a": ["x"],  # len 1 → embedding [1, 2, 3]
+            "b": ["xx"],  # len 2 → embedding [2, 4, 6]
+            "c": ["xxxx"],  # len 4 → embedding [4, 8, 12]
         }
     )
     result = embed_text(df, mock_embedder)

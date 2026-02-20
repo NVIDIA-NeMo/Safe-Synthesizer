@@ -479,9 +479,7 @@ class MembershipInferenceProtection(Component):
             # Divide the dataframes into text and tabular
             text_fields = find_text_fields(df_train_use)
             if len(text_fields) > 0:
-                df_train_use, df_train_text = divide_tabular_text(
-                    df_train_use, text_fields
-                )
+                df_train_use, df_train_text = divide_tabular_text(df_train_use, text_fields)
                 df_test, df_test_text = divide_tabular_text(df_test, text_fields)
                 df_synth, df_synth_text = divide_tabular_text(df_synth, text_fields)
 
