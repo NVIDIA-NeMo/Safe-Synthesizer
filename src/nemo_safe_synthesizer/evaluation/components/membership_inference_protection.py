@@ -15,7 +15,6 @@ from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics import accuracy_score, precision_score
 from sklearn.preprocessing import QuantileTransformer
 
-from ...artifacts.analyzers.field_features import describe_field
 from ...config.evaluate import DEFAULT_RECORD_COUNT
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
@@ -24,6 +23,7 @@ from ...evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGr
 from ...evaluation.nearest_neighbors import NearestNeighborSearch
 from ...observability import get_logger
 from . import multi_modal_figures as figures
+from .privacy_metric_utils import divide_tabular_text, embed_text, find_text_fields
 
 logger = get_logger(__name__)
 
@@ -416,6 +416,7 @@ class MembershipInferenceProtection(Component):
         )
 
     @staticmethod
+<<<<<<< HEAD
     def find_text_fields(df: pd.DataFrame) -> list[str]:
         """Return column names classified as free text."""
         text_fields = []
@@ -464,6 +465,8 @@ class MembershipInferenceProtection(Component):
         return (df_tabular, df_text)
 
     @staticmethod
+=======
+>>>>>>> fix embedding average with unequal weighting, DRY & test
     def mia(
         df_train: pd.DataFrame,
         df_test: pd.DataFrame | None,
@@ -505,7 +508,7 @@ class MembershipInferenceProtection(Component):
                 df_test = df_test.filter([column_name])
                 df_synth = df_synth.filter([column_name])
 
-            text_fields = MembershipInferenceProtection.find_text_fields(df_train)
+            text_fields = find_text_fields(df_train)
             text_cnt = len(text_fields)
             tabular_cnt = len(df_train.columns) - text_cnt
 
@@ -524,13 +527,13 @@ class MembershipInferenceProtection(Component):
                 df_train_use = df_train.sample(n=train_size_needed, random_state=1)
 
             # Divide the dataframes into text and tabular
-            text_fields = MembershipInferenceProtection.find_text_fields(df_train_use)
+            text_fields = find_text_fields(df_train_use)
             if len(text_fields) > 0:
-                df_train_use, df_train_text = MembershipInferenceProtection.divide_tabular_text(
+                df_train_use, df_train_text = divide_tabular_text(
                     df_train_use, text_fields
                 )
-                df_test, df_test_text = MembershipInferenceProtection.divide_tabular_text(df_test, text_fields)
-                df_synth, df_synth_text = MembershipInferenceProtection.divide_tabular_text(df_synth, text_fields)
+                df_test, df_test_text = divide_tabular_text(df_test, text_fields)
+                df_synth, df_synth_text = divide_tabular_text(df_synth, text_fields)
 
             # Normalize the tabular data (adjusted for multimodal)
             if tabular_cnt > 0:
@@ -554,9 +557,10 @@ class MembershipInferenceProtection(Component):
             # Create embeddings for text fields and combine the normalized tabular and the
             # new text embeddings into one dataframe.
             if len(text_fields) > 0:
-                df_train_embeddings = MembershipInferenceProtection.embed_text(df_train_text)
-                df_test_embeddings = MembershipInferenceProtection.embed_text(df_test_text)
-                df_synth_embeddings = MembershipInferenceProtection.embed_text(df_synth_text)
+                embedder = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+                df_train_embeddings = embed_text(df_train_text, embedder)
+                df_test_embeddings = embed_text(df_test_text, embedder)
+                df_synth_embeddings = embed_text(df_synth_text, embedder)
                 df_train_norm = pd.concat([df_train_norm, df_train_embeddings], axis=1)
                 df_test_norm = pd.concat([df_test_norm, df_test_embeddings], axis=1)
                 df_synth_norm = pd.concat([df_synth_norm, df_synth_embeddings], axis=1)
