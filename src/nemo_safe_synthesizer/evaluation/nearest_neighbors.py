@@ -21,8 +21,8 @@ Usage:
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 
 # Must be set BEFORE importing numpy/sklearn (which load OpenBLAS)
 # Cap threads to avoid OpenBLAS crashes on high-core machines (>128 cores)

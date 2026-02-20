@@ -30,7 +30,7 @@ def ensure_nvidia_libraries_preloaded() -> None:
     if _preload_done:
         return
     try:
-        from cuda.pathfinder import (  # noqa: PLC0415
+        from cuda.pathfinder import (  # ty: ignore[unresolved-import]
             DynamicLibNotFoundError,
             load_nvidia_dynamic_lib,
         )
