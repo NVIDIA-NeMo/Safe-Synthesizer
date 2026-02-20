@@ -89,6 +89,8 @@ graph TB
         Privacy[Privacy Module<br/>DP Transformers]
         Records[Records System<br/>JSON/Fragment]
         Stats[Statistics]
+        Observability[Observability<br/>CategoryLogger + Tracing]
+        Configurator[Configurator<br/>Pydantic→Click]
     end
 
     CLI --> ConfigBuilder
@@ -142,13 +144,10 @@ graph TB
     DataActions -.-> Records
     Evaluator -.-> Stats
     DataActions -.-> Artifacts
-
-    style CLI fill:#e1f5ff
-    style SDK fill:#e1f5ff
-    style HFBackend fill:#ffe1e1
-    style VLLMBackend fill:#ffe1e1
-    style Evaluator fill:#e1ffe1
-    style SafeSynthesizerParams fill:#fff4e1
+    TrainingBackend -.-> Observability
+    GenBackend -.-> Observability
+    Evaluator -.-> Observability
+    ConfigBuilder -.-> Configurator
 ```
 
 ---
@@ -190,7 +189,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     B[(data)]
-    B --> C{optional pii <br>relpacement}
+    B --> C{optional pii <br>replacement}
     C --> D(assemble <br> examples)
     D --> E(Fine-tune)
     E --> F[Generate Samples]
@@ -380,7 +379,7 @@ The execution follows a clear pipeline: Data → PII Replacement → Training �
 ### CLI Usage
 
 ```bash
-nemo-safe-synthesizer run \
+safe-synthesizer run \
   --config config.yaml \
   --url data.csv \
   --output-path synthetic.csv
@@ -474,4 +473,4 @@ safe-synthesizer-artifacts/
 
 ---
 
-Last updated: 2025-11-21
+Last updated: 2026-02-19
