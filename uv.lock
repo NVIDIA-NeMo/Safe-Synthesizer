@@ -246,15 +246,6 @@ wheels = [
 ]
 
 [[package]]
-name = "appdirs"
-version = "1.4.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d7/d8/05696357e0311f5b5c316d7b95f46c669dd9c15aaeecbb48c7d0aeb88c40/appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41", size = 13470, upload-time = "2020-05-11T07:59:51.037Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/00/2344469e2084fb287c2e0b57b72910309874c3245463acd6cf5e3db69324/appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128", size = 9566, upload-time = "2020-05-11T07:59:49.499Z" },
-]
-
-[[package]]
 name = "appnope"
 version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
@@ -549,15 +540,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/6d/bf9bda840d5f1dfdbf0feca87fbdb64a918a69bca42cfa0ba7b137c48cb8/cffi-2.0.0-cp313-cp313-win32.whl", hash = "sha256:74a03b9698e198d47562765773b4a8309919089150a0bb17d829ad7b44b60d27", size = 172909, upload-time = "2025-09-08T23:23:14.32Z" },
     { url = "https://files.pythonhosted.org/packages/37/18/6519e1ee6f5a1e579e04b9ddb6f1676c17368a7aba48299c3759bbc3c8b3/cffi-2.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:19f705ada2530c1167abacb171925dd886168931e0a7b78f5bffcae5c6b5be75", size = 183402, upload-time = "2025-09-08T23:23:15.535Z" },
     { url = "https://files.pythonhosted.org/packages/cb/0e/02ceeec9a7d6ee63bb596121c2c8e9b3a9e150936f4fbef6ca1943e6137c/cffi-2.0.0-cp313-cp313-win_arm64.whl", hash = "sha256:256f80b80ca3853f90c21b23ee78cd008713787b1b1e93eae9f3d6a7134abd91", size = 177780, upload-time = "2025-09-08T23:23:16.761Z" },
-]
-
-[[package]]
-name = "chardet"
-version = "5.2.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/0d/f7b6ab21ec75897ed80c17d79b15951a719226b9fababf1e40ea74d69079/chardet-5.2.0.tar.gz", hash = "sha256:1b3b6ff479a8c414bc3fa2c0852995695c4a026dcd6d0633b2dd092ca39c1cf7", size = 2069618, upload-time = "2023-08-01T19:23:02.662Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/6f/f5fbc992a329ee4e0f288c1fe0e2ad9485ed064cac731ed2fe47dcc38cbf/chardet-5.2.0-py3-none-any.whl", hash = "sha256:e1cf59446890a00105fe7b7912492ea04b6e6f06d4b742b2c788469e34c82970", size = 199385, upload-time = "2023-08-01T19:23:00.661Z" },
 ]
 
 [[package]]
@@ -1087,21 +1069,6 @@ wheels = [
 ]
 
 [[package]]
-name = "diff-cover"
-version = "10.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "chardet", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "jinja2", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "pluggy", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "pygments", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/99/b4/eee71d1e338bc1f9bd3539b46b70e303dac061324b759c9a80fa3c96d90d/diff_cover-10.2.0.tar.gz", hash = "sha256:61bf83025f10510c76ef6a5820680cf61b9b974e8f81de70c57ac926fa63872a", size = 102473, upload-time = "2026-01-09T01:59:07.605Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/2c/61eeb887055a37150db824b6bf830e821a736580769ac2fea4eadb0d613f/diff_cover-10.2.0-py3-none-any.whl", hash = "sha256:59c328595e0b8948617cc5269af9e484c86462e2844bfcafa3fb37f8fca0af87", size = 56748, upload-time = "2026-01-09T01:59:06.028Z" },
-]
-
-[[package]]
 name = "diffusers"
 version = "0.36.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1223,27 +1190,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/cc/28/c14e053b6762b1044f34a13aab6859bbf40456d37d23aa286ac24cfd9a5d/executing-2.2.1.tar.gz", hash = "sha256:3632cc370565f6648cc328b32435bd120a1e4ebb20c77e3fdde9a13cd1e533c4", size = 1129488, upload-time = "2025-09-01T09:48:10.866Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl", hash = "sha256:760643d3452b4d777d295bb167ccc74c64a81df23fb5e08eff250c425a4b2017", size = 28317, upload-time = "2025-09-01T09:48:08.5Z" },
-]
-
-[[package]]
-name = "faiss-cpu"
-version = "1.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "packaging", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/a2/b346d976c0adcdeab7d23bf6f58eef6d1c5c9c0bf919353923cf91553049/faiss_cpu-1.9.0-cp311-cp311-macosx_10_14_x86_64.whl", hash = "sha256:b0e9208a36da519dc2eb90e4c44c66a6812a5b68457582d8ed21d04e910e3d1f", size = 7661789, upload-time = "2024-10-08T07:06:26.259Z" },
-    { url = "https://files.pythonhosted.org/packages/6b/9f/f0a39439a938818f1add48bd7b79d4b8e12e60f2f0c1e4a0b37b295625e0/faiss_cpu-1.9.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:6a4b2871057560020b83ad7bb5aaf3b97b64f980f9af2ca99ba34eeb4fe38bdf", size = 3215612, upload-time = "2024-10-08T07:06:28.359Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/c4/5d83db571038082869265826f04b5d4f0a3249fcd2f0df736b35bae0e2c0/faiss_cpu-1.9.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7f1dc3a42ea386f49a86a9d09a3e30a40fa2e678395df5c2f5706c3f26f06751", size = 3641782, upload-time = "2024-10-08T07:06:30.035Z" },
-    { url = "https://files.pythonhosted.org/packages/51/b2/4f9abd2b859cef0e2332d3ff032e1973281fac1204fa8da14effc326f528/faiss_cpu-1.9.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2baeed5f1d8b006533c71184cc29065892647774a3df9c6f6dc31c1b694f57fa", size = 27474817, upload-time = "2024-10-08T07:06:32.581Z" },
-    { url = "https://files.pythonhosted.org/packages/87/2b/850200d901fd0409232d9bcae26228ab9aadf4803bbcc38f93d6f81cab37/faiss_cpu-1.9.0-cp311-cp311-win_amd64.whl", hash = "sha256:81d8fcb0ef92c9e7af2f7104e321895462681a598aff6d526a8da8272a61c1dd", size = 14862693, upload-time = "2024-10-08T07:06:35.073Z" },
-    { url = "https://files.pythonhosted.org/packages/14/76/67475a3009c4aeccab462325144738fb62074ed6edbc9ab55cc9ddddc127/faiss_cpu-1.9.0-cp312-cp312-macosx_10_14_x86_64.whl", hash = "sha256:2ed784120f6be7a7cde90f507831e670b4edc94f20cc7955eef3ae5fba70d449", size = 7691461, upload-time = "2024-10-08T07:06:37.762Z" },
-    { url = "https://files.pythonhosted.org/packages/31/28/6ece7a2bf3a4f53b25533353baf47e42055f16004e79554f3fcd975569f2/faiss_cpu-1.9.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:358be27446389c9df374fba17221ae5e45a7a8c943c4c675f81814d6fb7c31b1", size = 3217821, upload-time = "2024-10-08T07:06:39.377Z" },
-    { url = "https://files.pythonhosted.org/packages/e5/20/822dd24d168a56f1af0f2aa276b183b2176659c44644e67757015e8272b1/faiss_cpu-1.9.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:31a0b5ec546c7455cf526326194ace125199769ccbc90bb69b464cd4a26b7f4d", size = 3651805, upload-time = "2024-10-08T07:06:41.715Z" },
-    { url = "https://files.pythonhosted.org/packages/3b/27/45be1b5e71feef7d22f65c409658d698655a8c86547d20448388521a6697/faiss_cpu-1.9.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:89f03a4882e27c71ead60d84d06263d3f8592c842f0f469eeaf7883cfd4f2bfa", size = 27471710, upload-time = "2024-10-08T07:06:44.653Z" },
-    { url = "https://files.pythonhosted.org/packages/51/d6/4228ddef6324abb7b6a62cf0dd72938147234770b1f04adcb23fa1a424bb/faiss_cpu-1.9.0-cp312-cp312-win_amd64.whl", hash = "sha256:39a163c2c3c33df10b82fd3b61cb6c8bd7884e2526f1393de32ed71814c5cbfb", size = 14864760, upload-time = "2024-10-08T07:06:47.875Z" },
 ]
 
 [[package]]
@@ -3167,7 +3113,6 @@ dependencies = [
 cpu = [
     { name = "accelerate", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "bitsandbytes", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "faiss-cpu", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-cubin", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "flashinfer-python", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "gliner", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -3238,8 +3183,8 @@ engine = [
     { name = "python-stdnum", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "range-regex", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "ratelimit", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "scikit-learn", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "smart-open", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "sqlfluff", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "tenacity", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "tiktoken", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "tldextract", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
@@ -3306,7 +3251,6 @@ requires-dist = [
     { name = "datasets", specifier = "==4.3.0" },
     { name = "dateparser", marker = "extra == 'engine'" },
     { name = "dython", marker = "extra == 'engine'" },
-    { name = "faiss-cpu", marker = "extra == 'cpu'", specifier = "==1.9.0" },
     { name = "faker", specifier = ">=20.0" },
     { name = "faker", marker = "extra == 'engine'" },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.5.3" },
@@ -3347,10 +3291,10 @@ requires-dist = [
     { name = "range-regex", marker = "extra == 'engine'", specifier = ">=0.1.0" },
     { name = "ratelimit", marker = "extra == 'engine'" },
     { name = "rich", specifier = ">=14.1.0" },
+    { name = "scikit-learn", marker = "extra == 'engine'" },
     { name = "sentence-transformers", marker = "extra == 'cpu'" },
     { name = "sentence-transformers", marker = "extra == 'cu128'" },
     { name = "smart-open", marker = "extra == 'engine'", specifier = "==7.0.5" },
-    { name = "sqlfluff", marker = "extra == 'engine'", specifier = "==3.2.0" },
     { name = "structlog", specifier = ">=25.4.0" },
     { name = "tenacity", marker = "extra == 'engine'", specifier = "==9.1.2" },
     { name = "tiktoken", marker = "extra == 'engine'", specifier = ">=0.7.0,<1.0" },
@@ -5654,29 +5598,6 @@ wheels = [
 ]
 
 [[package]]
-name = "sqlfluff"
-version = "3.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "appdirs", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "chardet", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "click", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "colorama", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "diff-cover", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "jinja2", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "pathspec", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "pytest", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "pyyaml", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "regex", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "tblib", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "tqdm", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/93/23/eceff1cab7acc786a48663ef8fa7ad1144b99f3d1c03e058f22aaf0a17cc/sqlfluff-3.2.0.tar.gz", hash = "sha256:65d91dac2b27a248fb3d388d3c3f91c0c704bfa77e6b10b72a599a684795fe76", size = 812528, upload-time = "2024-09-18T21:00:13.507Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/38/550fab101b74b98bdc80978b0115131dbcaa06c65b0208c5f8093fc3831b/sqlfluff-3.2.0-py3-none-any.whl", hash = "sha256:f80832d4d280e8d7cb05afbd77634b3282b757d00bf513a428fcf4ed670634d8", size = 820389, upload-time = "2024-09-18T21:00:11.029Z" },
-]
-
-[[package]]
 name = "stack-data"
 version = "0.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -5779,15 +5700,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090, upload-time = "2022-10-06T17:21:48.54Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252, upload-time = "2022-10-06T17:21:44.262Z" },
-]
-
-[[package]]
-name = "tblib"
-version = "3.2.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f4/8a/14c15ae154895cc131174f858c707790d416c444fc69f93918adfd8c4c0b/tblib-3.2.2.tar.gz", hash = "sha256:e9a652692d91bf4f743d4a15bc174c0b76afc750fe8c7b6d195cc1c1d6d2ccec", size = 35046, upload-time = "2025-11-12T12:21:16.572Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/02/be/5d2d47b1fb58943194fb59dcf222f7c4e35122ec0ffe8c36e18b5d728f0b/tblib-3.2.2-py3-none-any.whl", hash = "sha256:26bdccf339bcce6a88b2b5432c988b266ebbe63a4e593f6b578b1d2e723d2b76", size = 12893, upload-time = "2025-11-12T12:21:14.407Z" },
 ]
 
 [[package]]

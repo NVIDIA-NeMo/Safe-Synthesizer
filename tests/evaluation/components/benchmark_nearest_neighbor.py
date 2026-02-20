@@ -59,7 +59,7 @@ except (ImportError, RuntimeError, OSError, Exception):
     logging.exception("cuVS not available")
     CUVS_AVAILABLE = False
 
-# Optional FAISS GPU import
+# Optional FAISS GPU import, install with uv pip install faiss-gpu-cu12
 FAISS_GPU_AVAILABLE = False
 faiss = None
 

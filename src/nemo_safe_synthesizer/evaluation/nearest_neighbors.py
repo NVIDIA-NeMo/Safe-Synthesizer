@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import logging
 
 # Must be set BEFORE importing numpy/sklearn (which load OpenBLAS)
 # Cap threads to avoid OpenBLAS crashes on high-core machines (>128 cores)
@@ -33,6 +34,7 @@ import numpy as np
 from nemo_safe_synthesizer.evaluation._cuda_preload import ensure_nvidia_libraries_preloaded
 from sklearn.neighbors import NearestNeighbors
 
+logger = logging.getLogger(__name__)
 
 class NearestNeighborSearch:
     """Unified nearest neighbor search with GPU acceleration support.
@@ -96,11 +98,15 @@ class NearestNeighborSearch:
             cls._cuvs_brute_force = cuvs_module
             cls._cp = cp_module
             cls._gpu_available = True
-        except (ImportError, RuntimeError, OSError, Exception):
-            # ImportError: cupy/cuvs not installed
-            # RuntimeError: CUDA libraries not available
-            # OSError: Library loading failed
-            # Exception: Any other GPU-related failure
+        except (ImportError, RuntimeError, OSError, Exception) as e:
+            if isinstance(e, ImportError):
+                logger.warning("cupy/cuvs not installed")
+            elif isinstance(e, RuntimeError):
+                logger.warning("CUDA libraries not available", exc_info=True)
+            elif isinstance(e, OSError):
+                logger.warning("Library loading failed", exc_info=True)
+            else:
+                logger.warning("Unknown GPU-related failure", exc_info=True)
             cls._gpu_available = False
 
         cls._gpu_checked = True
@@ -177,19 +183,3 @@ class NearestNeighborSearch:
     def backend_name(self) -> str:
         """Return the name of the backend being used."""
         return "cuVS (GPU)" if self.use_gpu else "sklearn (CPU)"
-
-
-def get_nearest_neighbors(data: np.ndarray, queries: np.ndarray, k: int = 5) -> tuple[np.ndarray, np.ndarray]:
-    """Convenience function for one-shot nearest neighbor search.
-
-    Args:
-        data: Array of shape (n_samples, n_features) to search in.
-        queries: Array of shape (n_queries, n_features) to search for.
-        k: Number of neighbors to return.
-
-    Returns:
-        Tuple of (distances, indices).
-    """
-    nn = NearestNeighborSearch(n_neighbors=k)
-    nn.fit(data)
-    return nn.kneighbors(queries)

@@ -314,7 +314,8 @@ class AttributeInferenceProtection(Component):
         nn.fit(np.ascontiguousarray(np.array(synth_NN)).astype(np.float32))
         dists, indexes = nn.kneighbors(np.ascontiguousarray(np.array(df_train_norm)).astype(np.float32))
         # Scale the Euclidean distance to [0,1]
-        # Note: sklearn returns Euclidean distance directly, not squared
+        # Note: NearestNeighborSearch.kneighbors() returns Euclidean distance directly, not squared
+        # converting squared distances from GPU backends as needed.
         max_dist = np.amax(dists)
         if max_dist > 0:
             dist_scaled = dists / max_dist

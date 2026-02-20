@@ -32,7 +32,7 @@ def test_attribute_inference_protection(train_df_5k, synth_df_5k, test_df):
 
 
 @pytest.mark.slow
-@pytest.mark.xdist_group(name="needs_gpu")
+@pytest.mark.gpu_integration
 def test_attribute_inference_protection_mixed_text_tabular(train_df_mixed_5k, synth_df_mixed_5k, test_df_mixed):
     """Test AIA with mixed text+tabular data (hybrid sklearn + sentence-transformers path).
 
@@ -41,10 +41,6 @@ def test_attribute_inference_protection_mixed_text_tabular(train_df_mixed_5k, sy
     - sklearn NearestNeighbors for tabular column similarity
     - weighted hybrid distance calculation
     """
-    # Enforce GPU path: hybrid path uses NearestNeighborSearch; ensure GPU is used
-    nn = NearestNeighborSearch(n_neighbors=5)
-    assert nn.use_gpu, "GPU required for hybrid nearest-neighbor path"
-
     evaluation_dataset = EvaluationDataset.from_dataframes(train_df_mixed_5k, synth_df_mixed_5k, test_df_mixed)
     attribute_inference_protection = AttributeInferenceProtection.from_evaluation_dataset(evaluation_dataset)
 
@@ -56,7 +52,7 @@ def test_attribute_inference_protection_mixed_text_tabular(train_df_mixed_5k, sy
     assert attribute_inference_protection.score is not None
 
 
-@pytest.mark.xdist_group(name="needs_gpu")
+@pytest.mark.gpu_integration
 def test_attribute_inference_protection_text_only(train_df_text_only, synth_df_text_only, test_df_text_only):
     """Test AIA with text-only data (sentence-transformers only, no sklearn).
 

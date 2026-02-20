@@ -17,7 +17,7 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import Evalu
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.xdist_group(name="needs_gpu")
+@pytest.mark.gpu_integration
 def test_membership_inference_protection(train_df_5k, synth_df_5k, test_df):
     """Test MIA with tabular-only data (sklearn NearestNeighbors path)."""
     evaluation_dataset = EvaluationDataset.from_dataframes(train_df_5k, synth_df_5k, test_df)
@@ -36,7 +36,7 @@ def test_membership_inference_protection(train_df_5k, synth_df_5k, test_df):
     assert len(membership_inference_protection.fps_values) > 0
 
 
-@pytest.mark.xdist_group(name="needs_gpu")
+@pytest.mark.gpu_integration
 def test_membership_inference_protection_mixed_text_tabular(train_df_mixed_5k, synth_df_mixed_5k, test_df_mixed):
     """Test MIA with mixed text+tabular data (hybrid sklearn + sentence-transformers path).
 
@@ -60,7 +60,7 @@ def test_membership_inference_protection_mixed_text_tabular(train_df_mixed_5k, s
     assert membership_inference_protection.score is not None
 
 
-@pytest.mark.xdist_group(name="needs_gpu")
+@pytest.mark.gpu_integration
 def test_membership_inference_protection_text_only(train_df_text_only, synth_df_text_only, test_df_text_only):
     """Test MIA with text-only data (sentence-transformers only, no sklearn).
 
