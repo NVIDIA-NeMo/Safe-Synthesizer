@@ -1,0 +1,35 @@
+---
+alwaysApply: false
+description: Repo layout - architecture docs, skills, tests, fixtures, config files. Use when exploring the codebase or looking for specific components.
+---
+
+# Repo Navigation
+
+## Architecture
+
+- `design.md` -- architecture diagrams (Mermaid), component details, data flow, technology stack
+- `AGENTS.md` -- agent guide with module map, error hierarchy, skill index, conventions
+
+## Skills
+
+Canonical location: `.agent/skills/` (each has SKILL.md + optional references/).
+Cursor symlinks: `.cursor/skills/` points to `.agent/skills/` for discoverability.
+Full index: see the "Available Skills" table in AGENTS.md.
+
+## Tests
+
+- `tests/` -- mirrors `src/` structure
+- Markers defined in `pytest.ini`: `unit`, `slow`, `e2e`, `gpu_integration`, `integration`, `infrastructure`, `skip_in_ci`, `noautouse`
+- Tests are auto-marked by directory (`tests/e2e/` -> `e2e`, `tests/gpu_integration/` -> `gpu_integration`, etc.)
+- Shared fixtures: `tests/conftest.py`
+- Stub data: `tests/test_data/`, `tests/stub_datasets/`, `tests/stub_tokenizer/`
+
+## Config Files
+
+| File | Purpose |
+|------|---------|
+| `pyproject.toml` | Package metadata, dependencies, extras (cpu/cu128/engine), uv config |
+| `pytest.ini` | Test markers, pytest options, timeout, parallelism |
+| `ruff.toml` | Ruff linting and formatting rules |
+| `mkdocs.yml` | Documentation site config (MkDocs Material) |
+| `.pre-commit-config.yaml` | Pre-commit hooks (ruff, ty, copyright, uv-lock) |
