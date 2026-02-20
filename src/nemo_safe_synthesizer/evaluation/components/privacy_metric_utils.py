@@ -24,9 +24,7 @@ def find_text_fields(df: pd.DataFrame) -> list[str]:
     return text_fields
 
 
-def divide_tabular_text(
-    df: pd.DataFrame, text_fields: list[str]
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def divide_tabular_text(df: pd.DataFrame, text_fields: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split *df* into a tabular-only and a text-only DataFrame.
 
     Columns present in *text_fields* go into the text DataFrame; the
@@ -51,9 +49,7 @@ def embed_text(df: pd.DataFrame, embedder: SentenceTransformer) -> pd.DataFrame:
         data = [str(r) for r in df[col].to_list()]
         embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_numpy=True)
 
-    stacked = np.stack(
-        [embeddings[col] for col in df.columns], axis=0
-    )  # shape: (n_cols, n_rows, embed_dim)
+    stacked = np.stack([embeddings[col] for col in df.columns], axis=0)  # shape: (n_cols, n_rows, embed_dim)
     avg_embeddings = np.mean(stacked, axis=0)  # shape: (n_rows, embed_dim)
 
     return pd.DataFrame({"embedding": list(avg_embeddings)})

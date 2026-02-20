@@ -416,57 +416,6 @@ class MembershipInferenceProtection(Component):
         )
 
     @staticmethod
-<<<<<<< HEAD
-    def find_text_fields(df: pd.DataFrame) -> list[str]:
-        """Return column names classified as free text."""
-        text_fields = []
-        for col in df.columns:
-            field_info = describe_field(col, df[col])
-            if field_info.type.value == "text":
-                text_fields.append(col)
-
-        return text_fields
-
-    @staticmethod
-    def embed_text(df: pd.DataFrame) -> pd.DataFrame:
-        """Embed each text column and average into a single embedding per row."""
-        embeddings = {}
-        embedder = SentenceTransformer("distiluse-base-multilingual-cased-v2")
-        for col in df.columns:
-            data = df[col].to_list()
-            data = [str(r) for r in data]
-            embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_numpy=True)
-
-        avg_embeddings = []
-        for i in range(len(df)):
-            # TODO: Is this average what we want? When there are more than 2 columns, we will
-            # overweight later columns relative to earlier columns.
-            norm = embeddings[df.columns[0]][i]
-            for j in range(1, len(df.columns)):
-                field = df.columns[j]
-                norm = np.average([norm, embeddings[field][i]], axis=0)
-
-            avg_embeddings.append(norm)
-
-        df_embeddings = pd.DataFrame({"embedding": list(avg_embeddings)})
-
-        return df_embeddings
-
-    @staticmethod
-    def divide_tabular_text(df: pd.DataFrame, text_fields: list) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Split a dataframe into tabular-only and text-only subsets."""
-        tabular_fields = []
-        for col in df.columns:
-            if col not in text_fields:
-                tabular_fields.append(col)
-        df_tabular = df.filter(tabular_fields)
-        df_text = df.filter(text_fields)
-
-        return (df_tabular, df_text)
-
-    @staticmethod
-=======
->>>>>>> fix embedding average with unequal weighting, DRY & test
     def mia(
         df_train: pd.DataFrame,
         df_test: pd.DataFrame | None,
@@ -529,9 +478,7 @@ class MembershipInferenceProtection(Component):
             # Divide the dataframes into text and tabular
             text_fields = find_text_fields(df_train_use)
             if len(text_fields) > 0:
-                df_train_use, df_train_text = divide_tabular_text(
-                    df_train_use, text_fields
-                )
+                df_train_use, df_train_text = divide_tabular_text(df_train_use, text_fields)
                 df_test, df_test_text = divide_tabular_text(df_test, text_fields)
                 df_synth, df_synth_text = divide_tabular_text(df_synth, text_fields)
 
