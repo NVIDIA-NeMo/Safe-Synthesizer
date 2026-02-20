@@ -10,7 +10,7 @@ USER_NAME="${USER_NAME:-}"
 if [ -n "${NSS_SLURM_DIR:-}" ]; then
     source "${NSS_SLURM_DIR}/env_variables.sh"
 else
-    source /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/nmp/packages/nemo_safe_synthesizer/script/slurm/env_variables.sh
+    source /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer/script/slurm/env_variables.sh
 fi
 
 ACCOUNT="${ACCOUNT:-llmservice_sdg_research}"

@@ -10,7 +10,8 @@ export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_
 ## change the followings if you want them to be different
 CONFIGS=(unsloth dp dp_usg_guidance) # the jobs will run all datasets with these configs
 export NMP_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/nmp" # where the nmp repo is located
-export NSS_SLURM_DIR="${NMP_DIR}/packages/nemo_safe_synthesizer/script/slurm" # slurm scripts location (inside repo)
+export NSS_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer" # where the nss repo is located
+export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
 export CONFIG_DIR="${NSS_SLURM_DIR}" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files
 export ADAPTER_PATH="${LUSTRE_DIR}/nmp/exp/adapters" # base path for run directories (each run creates a subdirectory via --run-path)

@@ -9,7 +9,7 @@ USER_NAME="${USER_NAME:-${USER:-seayang}}"
 if [ -n "${NSS_SLURM_DIR:-}" ]; then
     source "${NSS_SLURM_DIR}/env_variables.sh"
 else
-    source /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/nmp/packages/nemo_safe_synthesizer/script/slurm/env_variables.sh
+    source /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer/script/slurm/env_variables.sh
 fi
 
 # Ensure minimal build toolchain inside container (no-op if already present)
@@ -22,13 +22,11 @@ apt-get update && apt-get install -y --no-install-recommends \
         libcurl4 \
         libcurl3-gnutls
 
-# Ensure Python environment is available inside the container
-cd "${NMP_DIR}"
-source "${LUSTRE_DIR}/.uv/bin/env"
-source "${NMP_DIR}/.venv/bin/activate"
-uv sync --frozen --all-packages --extra cu128
-
-
+# Temporary: reuse the pre-built venv from the old nmp repo
+# (bypasses uv project resolution that fails on missing .nmp_repo)
+export VIRTUAL_ENV="${NMP_DIR}/.venv"
+export PATH="${VIRTUAL_ENV}/bin:${PATH}"
+cd "${NSS_DIR}"
 
 # for column classification
 export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
@@ -166,7 +164,7 @@ PHASE=${PHASE:-end_to_end}
 if [[ "$PHASE" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
-    uv run safe-synthesizer run train \
+    safe-synthesizer run train \
         --url "$dataset" \
         --config "$config.yaml" \
         --run-path "$run_path" \
@@ -182,7 +180,7 @@ elif [[ "$PHASE" == "generate" ]]; then
         wandb_resume_arg="--wandb-resume-job-id $wandb_id_file"
     fi
 
-    uv run safe-synthesizer run generate \
+    safe-synthesizer run generate \
         --url "$dataset" \
         --config "$config.yaml" \
         --run-path "$run_path" \
@@ -190,7 +188,7 @@ elif [[ "$PHASE" == "generate" ]]; then
         $wandb_resume_arg
 else
     # Full end-to-end run
-    uv run safe-synthesizer run \
+    safe-synthesizer run \
         --url "$dataset" \
         --config "$config.yaml" \
         --run-path "$run_path" \
