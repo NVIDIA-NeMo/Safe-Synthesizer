@@ -24,7 +24,7 @@ git bisect run uv run tools/diff-lockfile.py --run tests/path/to/test.py::test_n
 git bisect reset
 ```
 
-**Exit code reference:**
+Exit code reference:
 
 | Code | Meaning | Bisect action |
 |------|---------|---------------|
@@ -32,7 +32,7 @@ git bisect reset
 | 1-124, 126-127 | Test failed | Mark commit as bad |
 | 125 | `uv sync --frozen` failed | Skip this commit |
 
-**Common pitfalls:**
+Common pitfalls:
 - Forgetting `git bisect reset` leaves the repo in detached HEAD state.
 - If bisect keeps skipping (exit 125), the lockfile is invalid at those commits -- narrow the range with a more recent `GOOD_REF`.
 - The `--run` flag is required to activate bisect mode; without it the script only prints the diff.

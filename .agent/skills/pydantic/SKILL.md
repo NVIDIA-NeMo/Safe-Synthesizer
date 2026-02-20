@@ -32,7 +32,7 @@ Shared `model_config` (`config/base.py`):
 
 ### BaseSettings (env/CLI settings)
 
-Settings classes use `pydantic-settings`, **not** `NSSBaseModel`:
+Settings classes use `pydantic-settings`, not `NSSBaseModel`:
 
 ```python
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -51,7 +51,7 @@ class MySettings(BaseSettings):
     )
 ```
 
-**Conventions**:
+Conventions:
 - Use `AliasChoices("field_name", "NSS_ENV_VAR")` for env var mapping
 - Nested settings via `Field(default_factory=SubSettings)`
 - No global `env_prefix`; each field declares its own aliases
@@ -139,10 +139,10 @@ See `configurator/parameter.py` for the full `Parameter[T]` implementation.
 
 ## Conventions
 
-1. **Inherit from `NSSBaseModel`** for config/result models (not bare `BaseModel`)
-2. **Use `BaseSettings`** for env/CLI settings (not `NSSBaseModel`)
-3. **Use `AliasChoices`** for env var mapping, not `env_prefix`
-4. **Always add `description`** to `Field()` -- it becomes CLI help text
-5. **Use `mode="before"` validators** for coercion, `mode="after"` for checks
-6. **Use `model_validator(mode="after")`** for cross-field validation
-7. **Never use `model_config = {"validate_assignment": True}`** unless explicitly needed (performance cost)
+1. Inherit from `NSSBaseModel` for config/result models (not bare `BaseModel`)
+2. Use `BaseSettings` for env/CLI settings (not `NSSBaseModel`)
+3. Use `AliasChoices` for env var mapping, not `env_prefix`
+4. Always add `description` to `Field()` -- it becomes CLI help text
+5. Use `mode="before"` validators for coercion, `mode="after"` for checks
+6. Use `model_validator(mode="after")` for cross-field validation
+7. Never use `model_config = {"validate_assignment": True}` unless explicitly needed (performance cost)

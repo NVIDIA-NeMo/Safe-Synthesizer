@@ -7,45 +7,45 @@ Model metadata, prompt templates, RoPE scaling, memory management, and quantizat
 
 ## Purpose
 
-- **ModelMetadata** — Stores model-family-specific info: prompt formats, BOS/EOS tokens, RoPE scaling, base max seq length
-- **LLMPromptConfig** — Template string and token settings; built via `from_tokenizer()`
-- **RopeScaling** — Context-window extension (linear, dynamic, yarn, llama3); capped by `MAX_ROPE_SCALING_FACTOR`
-- **Memory** — `cleanup_memory()` and `get_max_vram()` for GPU lifecycle
-- **Quantization** — `get_quantization_config(4|8)` returns `BitsAndBytesConfig` (nf4/nf8, bfloat16 compute)
+- ModelMetadata — Stores model-family-specific info: prompt formats, BOS/EOS tokens, RoPE scaling, base max seq length
+- LLMPromptConfig — Template string and token settings; built via `from_tokenizer()`
+- RopeScaling — Context-window extension (linear, dynamic, yarn, llama3); capped by `MAX_ROPE_SCALING_FACTOR`
+- Memory — `cleanup_memory()` and `get_max_vram()` for GPU lifecycle
+- Quantization — `get_quantization_config(4|8)` returns `BitsAndBytesConfig` (nf4/nf8, bfloat16 compute)
 
 ## Model Subclass Pattern
 
-`ModelMetadata` base → 8 subclasses: TinyLlama, Qwen, Llama32, Mistral, SmolLM2, SmolLM3, Granite, Nemotron. Factory `from_str_or_path(model_name_or_path)` uses **case-insensitive substring matching** on class name (e.g. "Llama32" in path). **Raises** `ValueError` if no subclass matches; no fallback to base.
+`ModelMetadata` base → 8 subclasses: TinyLlama, Qwen, Llama32, Mistral, SmolLM2, SmolLM3, Granite, Nemotron. Factory `from_str_or_path(model_name_or_path)` uses case-insensitive substring matching on class name (e.g. "Llama32" in path). Raises `ValueError` if no subclass matches; no fallback to base.
 
 ## Prompt Config
 
 Each model sets its own template and BOS/EOS via `LLMPromptConfig.from_tokenizer()`. Examples:
 
-- **Llama32** — `user\n {instruction} {schema} \n assistant\n{prefill}`, `<|im_start|>` (151644), add_bos=False, add_eos=False
-- **Mistral** — `[INST] {instruction} \n\n {schema} [/INST]{prefill}`
-- **SmolLM3** — `... <|im_end|> \n <|im_start|>assistant\n{prefill}`, explicit bos/eos
-- **Qwen/Granite** — `user\n {instruction} {schema} \n assistant\n{prefill}` variants
+- Llama32 — `user\n {instruction} {schema} \n assistant\n{prefill}`, `<|im_start|>` (151644), add_bos=False, add_eos=False
+- Mistral — `[INST] {instruction} \n\n {schema} [/INST]{prefill}`
+- SmolLM3 — `... <|im_end|> \n <|im_start|>assistant\n{prefill}`, explicit bos/eos
+- Qwen/Granite — `user\n {instruction} {schema} \n assistant\n{prefill}` variants
 
 ## Rope Scaling
 
-- **RopeScaling** — `rope_type` (linear, dynamic, default, yarn, llama3), `factor`, `theta`
-- **GLOBAL_MAX_SEQ_LENGTH = 2048 * 6** — hard cap; `get_base_max_seq_length()` clamps `max_position_embeddings`
-- **resolve_rope_scaling_factor(factor, autoconfig)** — accepts `None`, `int`, `float`, `dict`, `RopeScaling`. Int/float require `autoconfig` to read theta/rope_type. Returns `None` for factor 1.0
-- **Models that ignore rope scaling** — Mistral, SmolLM2, SmolLM3 (log warning and pass `rope_scaling=None`)
+- RopeScaling — `rope_type` (linear, dynamic, default, yarn, llama3), `factor`, `theta`
+- GLOBAL_MAX_SEQ_LENGTH = 2048 * 6 — hard cap; `get_base_max_seq_length()` clamps `max_position_embeddings`
+- resolve_rope_scaling_factor(factor, autoconfig) — accepts `None`, `int`, `float`, `dict`, `RopeScaling`. Int/float require `autoconfig` to read theta/rope_type. Returns `None` for factor 1.0
+- Models that ignore rope scaling — Mistral, SmolLM2, SmolLM3 (log warning and pass `rope_scaling=None`)
 - Module docstring notes this logic is problematic; prefer future `context_window_size`-style API
 
 ## Memory Management
 
-- **cleanup_memory()** — `gc.collect()` + `torch.cuda.empty_cache()` under `torch.no_grad()`
-- **get_max_vram(memory_fraction, as_string, as_fraction)** — leaves 2GB buffer (`free - 2*1024**3`), applies `memory_fraction` (default 0.8), returns per-device dict `{device_id: GiB_str|float}`
+- cleanup_memory() — `gc.collect()` + `torch.cuda.empty_cache()` under `torch.no_grad()`
+- get_max_vram(memory_fraction, as_string, as_fraction) — leaves 2GB buffer (`free - 2*1024**3`), applies `memory_fraction` (default 0.8), returns per-device dict `{device_id: GiB_str|float}`
 
 ## Gotchas
 
-- **MISSING sentinel** — `rope_scaling` defaults to `MISSING` (unset) vs explicit `None`; `populate_derived_fields` resolves to `RopeScaling | None`
-- **trust_remote_code** — `trust_remote_code_for_model()` returns True only for `nvidia/` and `gretel/` prefixes
-- **initial_prefill** — can be `dict[str, str]` (grouped) or `str` (single column)
-- **rope_parameters_location** — `"autoconfig"` vs `"automodel"`; all current subclasses use `"autoconfig"`
-- **from_str_or_path** — raises on unknown model; no base `ModelMetadata` fallback
+- MISSING sentinel — `rope_scaling` defaults to `MISSING` (unset) vs explicit `None`; `populate_derived_fields` resolves to `RopeScaling | None`
+- trust_remote_code — `trust_remote_code_for_model()` returns True only for `nvidia/` and `gretel/` prefixes
+- initial_prefill — can be `dict[str, str]` (grouped) or `str` (single column)
+- rope_parameters_location — `"autoconfig"` vs `"automodel"`; all current subclasses use `"autoconfig"`
+- from_str_or_path — raises on unknown model; no base `ModelMetadata` fallback
 
 ## Extension Recipe
 

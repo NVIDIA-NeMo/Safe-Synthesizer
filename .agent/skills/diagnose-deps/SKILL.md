@@ -47,25 +47,25 @@ uv run tools/diff-lockfile.py --json | jq -r '.[] | select(.change == "upgraded"
 
 ## Diagnosis Decision Tree
 
-1. **Test broke after `uv lock`?**
+1. Test broke after `uv lock`?
    Run the diff, look for upgraded packages in the failing test's dependency chain.
 
-2. **Import error?**
+2. Import error?
    Filter JSON for added/removed packages matching the missing module:
    ```bash
    uv run tools/diff-lockfile.py --json | jq '.[] | select(.change == "removed" or .change == "added")'
    ```
 
-3. **Performance regression?**
+3. Performance regression?
    Check if `torch`, `transformers`, `vllm`, or other heavy deps changed version.
 
-4. **Multiple PyTorch sources?**
+4. Multiple PyTorch sources?
    `torch` appears 3x in the lockfile (PyPI, `+cpu`, `+cu128`). Filter with:
    ```bash
    uv run tools/diff-lockfile.py --json | jq '[.[] | select(.name == "torch")]'
    ```
 
-5. **Override conflict?**
+5. Override conflict?
    Check `pyproject.toml` `override-dependencies` after seeing `outlines_core` or `flashinfer-*` in the diff. Transitive upgrades can break forced overrides.
 
 ## Fragile Dependency Chains
@@ -80,7 +80,7 @@ Packages most likely to cause breakage in this repo:
 | `flashinfer-*` | 3 sub-packages with platform markers | CUDA toolkit |
 | `transformers` / `peft` / `trl` | HuggingFace ecosystem; frequent coupled updates | `accelerate`, `torch` |
 
-**Dep-sensitive test areas:** `tests/e2e/`, `tests/training/`, `tests/generation/` (import torch/transformers/vllm directly).
+Dep-sensitive test areas: `tests/e2e/`, `tests/training/`, `tests/generation/` (import torch/transformers/vllm directly).
 
 ## Error Scenarios
 
@@ -93,9 +93,9 @@ Packages most likely to cause breakage in this repo:
 
 ## Reference
 
-**`ChangeType` values:** `added`, `removed`, `upgraded`, `downgraded`
+`ChangeType` values: `added`, `removed`, `upgraded`, `downgraded`
 
-**`PackageChange` JSON schema:**
+`PackageChange` JSON schema:
 ```json
 {
   "name": "numpy",
@@ -108,6 +108,6 @@ Packages most likely to cause breakage in this repo:
 
 Fields: `name` (str), `change` (ChangeType), `old` (Package or null), `new` (Package or null), `ref` (str).
 
-**CLI options:** `[BASE_REF]`, `--head`, `--lockfile`, `--json`, `--run TEST_TARGET`
+CLI options: `[BASE_REF]`, `--head`, `--lockfile`, `--json`, `--run TEST_TARGET`
 
 For detailed step-by-step workflows (bisect, cross-skill PR diagnosis, pre-merge review), see [workflows.md](workflows.md).

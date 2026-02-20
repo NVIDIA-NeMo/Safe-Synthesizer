@@ -20,12 +20,12 @@ Advisory skill for keeping agent configuration files in sync when source-of-trut
 
 | When this changes... | Update these files... |
 |---------------------|----------------------|
-| **Makefile** (new/renamed/removed targets) | `.claude/commands/` (add/rename/remove command file), `.cursor/rules/claude-commands.mdc` (update index table), `AGENTS.md` (workflow section if lifecycle changes) |
-| **Source modules** (`src/nemo_safe_synthesizer/*/`) | `AGENTS.md` (module map section) |
-| **`docs/` structure** (`mkdocs.yml` nav changes) | `.cursor/rules/writing-docs.mdc` (directory structure section) |
-| **`pytest.ini` markers** (new markers added/removed) | `.agent/skills/diagnose-failures/SKILL.md` (markers table), `.claude/commands/unit-test.md` and related test commands |
-| **New skill added** | `AGENTS.md` (skill index table), create in `.agent/skills/<name>/` with symlink at `.cursor/skills/<name>` |
-| **`errors.py`** (new error classes) | `AGENTS.md` (error hierarchy table), `.agent/skills/diagnose-failures/SKILL.md` (error hierarchy section) |
+| Makefile (new/renamed/removed targets) | `.claude/commands/` (add/rename/remove command file), `.cursor/rules/claude-commands.mdc` (update index table), `AGENTS.md` (workflow section if lifecycle changes) |
+| Source modules (`src/nemo_safe_synthesizer/*/`) | `AGENTS.md` (module map section) |
+| `docs/` structure (`mkdocs.yml` nav changes) | `.cursor/rules/writing-docs.mdc` (directory structure section) |
+| `pytest.ini` markers (new markers added/removed) | `.agent/skills/diagnose-failures/SKILL.md` (markers table), `.claude/commands/unit-test.md` and related test commands |
+| New skill added | `AGENTS.md` (skill index table), create in `.agent/skills/<name>/` with symlink at `.cursor/skills/<name>` |
+| `errors.py` (new error classes) | `AGENTS.md` (error hierarchy table), `.agent/skills/diagnose-failures/SKILL.md` (error hierarchy section) |
 
 ## New Skill Checklist
 

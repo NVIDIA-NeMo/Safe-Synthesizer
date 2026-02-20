@@ -10,7 +10,7 @@ compatibility: "Python 3.11+ (uses union syntax X | Y, Self, TypeVarTuple)."
 
 ## Type Checker
 
-This repo uses [ty](https://github.com/astral-sh/ty) (Astral's type checker), **not** mypy.
+This repo uses [ty](https://github.com/astral-sh/ty) (Astral's type checker), not mypy.
 
 ```bash
 # Full project (respects [tool.ty.src] in pyproject.toml)
@@ -61,7 +61,7 @@ ty is configured in `pyproject.toml` under `[tool.ty.src]`. See `references/ty-c
 
 ## Common Pitfalls
 
-1. **Mutable default arguments**: `def f(items: list[str] = [])` -- use `None` sentinel instead
-2. **Overusing `Any`**: silences the type checker -- use `object` or define a `Protocol`
-3. **Not narrowing `None`**: access `.attr` on `X | None` without a guard -- use `if x is not None:`
-4. **Mixing `TypeVar` bounds vs constraints**: `T = TypeVar("T", int, str)` means "exactly int or str"; use `bound=` for upper bounds
+1. Mutable default arguments: `def f(items: list[str] = [])` -- use `None` sentinel instead
+2. Overusing `Any`: silences the type checker -- use `object` or define a `Protocol`
+3. Not narrowing `None`: access `.attr` on `X | None` without a guard -- use `if x is not None:`
+4. Mixing `TypeVar` bounds vs constraints: `T = TypeVar("T", int, str)` means "exactly int or str"; use `bound=` for upper bounds

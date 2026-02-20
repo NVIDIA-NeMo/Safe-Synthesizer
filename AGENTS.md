@@ -53,6 +53,11 @@ Python 3.11+ is required. Use modern syntax:
 - `list[str]` not `List[str]`, `dict[str, int]` not `Dict[str, int]`
 - `Self` type for fluent interfaces (3.11+)
 
+### Markdown and Docstrings
+
+- No decorative `**bold**` in list items or body text -- use headers, list markers, colons, and backticks for structure
+- Bold is acceptable only in table cells where it conventionally marks header-like content
+
 ### Bootstrap
 
 ```bash
@@ -82,7 +87,7 @@ bash tools/lint/run-ty-check.sh          # changed files only
 
 Type checking uses [ty](https://github.com/astral-sh/ty) (Astral's type checker), configured in `pyproject.toml` under `[tool.ty.src]`.
 
-**Important for agents**: Always use `make format` and `make lint` instead of manually reformatting or editing code for style. Prefer `make <target>` over raw underlying commands when a target exists. Use `uv run` for Python execution, never raw `python` or `pip`. When in doubt, read the source (`make help`, `pytest --markers`).
+Important for agents: Always use `make format` and `make lint` instead of manually reformatting or editing code for style. Prefer `make <target>` over raw underlying commands when a target exists. Use `uv run` for Python execution, never raw `python` or `pip`. When in doubt, read the source (`make help`, `pytest --markers`).
 
 ### Testing
 
@@ -102,7 +107,7 @@ make test-ci-container
 
 Test runner: `uv run --frozen pytest -n auto --dist loadscope -vv`
 
-**Markers** (defined in `pytest.ini`):
+Markers (defined in `pytest.ini`):
 - `unit` -- unit tests (default, no marker needed)
 - `slow` -- long-running tests
 - `e2e` -- end-to-end pipeline tests (requires CUDA)
@@ -145,7 +150,7 @@ Feature branches off `main`. Branch names often include an issue number prefix (
 
 ## Using Safe-Synthesizer
 
-This section is for agents helping users **run** the package, not develop it.
+This section is for agents helping users run the package, not develop it.
 
 ### CLI
 
@@ -213,11 +218,11 @@ synthesizer.evaluate()
 
 ### Configuration
 
-**Sources** (highest precedence first): CLI overrides > dataset registry overrides > YAML config file.
+Sources (highest precedence first): CLI overrides > dataset registry overrides > YAML config file.
 
-**Config sections**: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`, `enable_synthesis`, `enable_replace_pii`.
+Config sections: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`, `enable_synthesis`, `enable_replace_pii`.
 
-**Environment variables**:
+Environment variables:
 
 | Variable | Purpose |
 |----------|---------|

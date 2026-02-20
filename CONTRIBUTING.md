@@ -394,13 +394,21 @@ Before contributing, run `make format` and `make lint`. See AGENTS.md for full c
 
 ## AI Agents
 
-This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
-- **AGENTS.md** -- primary agent guide
-- **.agent/skills/** -- domain-specific skills (canonical location)
-- **.cursor/rules/** -- Cursor workflow rules
-- **.cursor/skills/** -- symlinks to `.agent/skills/` for Cursor discoverability
+This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format.
 
-Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
+| Config file | Read by | Purpose |
+|-------------|---------|---------|
+| `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
+| `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
+| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
+| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
+
+Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
+
+Before contributing, run `make format` and `make lint`. See `AGENTS.md` for full conventions.
 
 ---
 

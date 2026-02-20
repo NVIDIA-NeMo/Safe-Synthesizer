@@ -16,21 +16,21 @@ Pydantic model fields  -->  pydantic_options() decorator  -->  Click CLI options
      (nested)                    (flattens)                   (--data__holdout)
 ```
 
-1. **`pydantic_options(model_class, field_separator="__")`** walks the Pydantic model tree recursively
+1. `pydantic_options(model_class, field_separator="__")` walks the Pydantic model tree recursively
 2. Each leaf field becomes a `click.option()` with name `--{prefix}{sep}{field_name}`
-3. At runtime, **`parse_overrides(kwargs, field_sep="__")`** converts flat Click kwargs back into a nested dict
+3. At runtime, `parse_overrides(kwargs, field_sep="__")` converts flat Click kwargs back into a nested dict
 4. The nested dict is used with `model_copy(update=overrides)` or `model_validate()`
 
 ## Adding a New Config Field
 
-1. **Add the field** to the relevant Pydantic model (e.g., `DataParameters`, `TrainingHyperparams`):
+1. Add the field to the relevant Pydantic model (e.g., `DataParameters`, `TrainingHyperparams`):
 
 ```python
 class DataParameters(Parameters):
     my_new_field: int = Field(default=10, description="Description for CLI help")
 ```
 
-2. **That's it** -- `pydantic_options` will auto-generate `--data__my_new_field` (or whatever the nesting path is)
+2. That's it -- `pydantic_options` will auto-generate `--data__my_new_field` (or whatever the nesting path is)
 
 3. For nested models, add as a sub-model field:
 
@@ -120,9 +120,9 @@ class TrainingHyperparams(Parameters):
 
 ## Conventions
 
-1. **Always add `description`** to `Field()` -- it becomes the CLI `--help` text
-2. **Use `Parameter[T]`** for config fields that support `"auto"` or unset semantics
-3. **Use `DependsOnValidator`** for fields that are only valid when another field is set
-4. **Use `ValueValidator`** for simple range/predicate checks
-5. **Field separator is `"__"`** (`CLI_NESTED_FIELD_SEPARATOR`) -- don't use `.` unless matching existing code
-6. **Max nesting depth is 2** -- `parse_overrides` raises `ValueError` for 3+ levels
+1. Always add `description` to `Field()` -- it becomes the CLI `--help` text
+2. Use `Parameter[T]` for config fields that support `"auto"` or unset semantics
+3. Use `DependsOnValidator` for fields that are only valid when another field is set
+4. Use `ValueValidator` for simple range/predicate checks
+5. Field separator is `"__"` (`CLI_NESTED_FIELD_SEPARATOR`) -- don't use `.` unless matching existing code
+6. Max nesting depth is 2 -- `parse_overrides` raises `ValueError` for 3+ levels

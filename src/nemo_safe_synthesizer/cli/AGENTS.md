@@ -7,16 +7,16 @@ Click CLI entry point with Pydantic-to-Click option mapping. Maps `SafeSynthesiz
 
 ## Command structure
 
-- **cli** (root group) → `config`, `run`, `artifacts`
-- **run** (subgroup, `invoke_without_command=True`) → default = full pipeline; subcommands: `train`, `generate`
-- **config** → `validate`, `modify`, `create`
-- **artifacts** → `clean`
+- cli (root group) → `config`, `run`, `artifacts`
+- run (subgroup, `invoke_without_command=True`) → default = full pipeline; subcommands: `train`, `generate`
+- config → `validate`, `modify`, `create`
+- artifacts → `clean`
 
 ## pydantic_options()
 
 From `configurator.pydantic_click_options`: decorator that recursively generates Click options from a Pydantic model. Nested `BaseModel` fields become `--parent__child` options. Uses `field_separator` (default `__`) to flatten dotted paths. See `configurator/AGENTS.md` for implementation details.
 
-**Critical**: `parse_overrides(kwargs)` must use the same `field_sep` as `pydantic_options` uses for `field_separator` — otherwise `--data__holdout=0.1` won't become `{"data": {"holdout": 0.1}}`.
+Critical: `parse_overrides(kwargs)` must use the same `field_sep` as `pydantic_options` uses for `field_separator` — otherwise `--data__holdout=0.1` won't become `{"data": {"holdout": 0.1}}`.
 
 ## common_run_options()
 
@@ -24,25 +24,25 @@ Shared decorator in `run.py` that adds `--config`, `--url`, `--artifact-path`, `
 
 ## Settings precedence
 
-1. **CLI overrides** — passed to `CLISettings.from_cli_kwargs(**kwargs)`
-2. **Env vars** — pydantic-settings via `AliasChoices` (e.g. `NSS_ARTIFACTS_PATH`, `NSS_LOG_FORMAT`)
-3. **Config YAML** — loaded via `merge_overrides(config_path, overrides)`
-4. **Defaults** — model defaults
+1. CLI overrides — passed to `CLISettings.from_cli_kwargs(**kwargs)`
+2. Env vars — pydantic-settings via `AliasChoices` (e.g. `NSS_ARTIFACTS_PATH`, `NSS_LOG_FORMAT`)
+3. Config YAML — loaded via `merge_overrides(config_path, overrides)`
+4. Defaults — model defaults
 
 `CLISettings.from_cli_kwargs()` filters out `None` values so env vars can fill in. For run commands, `synthesis_overrides` from `**kwargs` (via `parse_overrides`) are merged over config: CLI > dataset registry overrides > config file.
 
 ## Gotchas
 
-- **Decorator order**: `@common_run_options` then `@pydantic_options(...)`; options are applied bottom-up, so list them in reverse in the decorator chain.
-- **run vs run train/generate**: `run` gets `pydantic_options` on the group; `run train` does not (no per-param overrides for train-only); `run generate` gets `pydantic_options` again for generation overrides.
-- **NSS_PHASE env**: Set before `common_setup()` to `train`, `generate`, or `end_to_end`; used for artifact layout.
-- **VLLM_CONFIGURE_LOGGING**: Set to `0` in `_initialize_logging_for_cli_from_settings` before vLLM import so vLLM uses our handlers.
+- Decorator order: `@common_run_options` then `@pydantic_options(...)`; options are applied bottom-up, so list them in reverse in the decorator chain.
+- run vs run train/generate: `run` gets `pydantic_options` on the group; `run train` does not (no per-param overrides for train-only); `run generate` gets `pydantic_options` again for generation overrides.
+- NSS_PHASE env: Set before `common_setup()` to `train`, `generate`, or `end_to_end`; used for artifact layout.
+- VLLM_CONFIGURE_LOGGING: Set to `0` in `_initialize_logging_for_cli_from_settings` before vLLM import so vLLM uses our handlers.
 
 ## Extension recipe
 
-**New top-level command**: Define `@click.group()` or `@click.command()` in a new module; call `cli.add_command(mycommand)` in `cli.py`.
+New top-level command: Define `@click.group()` or `@click.command()` in a new module; call `cli.add_command(mycommand)` in `cli.py`.
 
-**New run subcommand**: In `run.py`, add:
+New run subcommand: In `run.py`, add:
 
 ```python
 @run.command("mystage")
@@ -55,7 +55,7 @@ def run_mystage(config_path, url, ..., **kwargs):
 ```
 
 
-**New common option**: Add to `common_run_options` list, pass through to handler, include in `CLISettings.from_cli_kwargs()`.
+New common option: Add to `common_run_options` list, pass through to handler, include in `CLISettings.from_cli_kwargs()`.
 
 ## Read first
 

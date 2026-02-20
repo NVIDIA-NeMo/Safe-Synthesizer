@@ -18,6 +18,8 @@ Check the diff against main and remove AI-generated slop introduced in the branc
 - using print statements instead of logging
 - modern typing syntax (`list`, `X | None`, `set` not `List`, `Optional`, `Set`)
 
+- decorative `**bold**` in markdown and docstrings -- structural cues (headers, list markers, colons, backticks) suffice
+
 ## Guardrails
 
 - Keep behavior unchanged unless fixing a clear bug

@@ -9,10 +9,10 @@ description: "Interact with the Safe-Synthesizer GitHub repository using the gh 
 
 ## Detailed References
 
-- **[Full Reference](./references/full-reference.md)** - Comprehensive `gh` reference for PRs, issues, Actions/CI, code review, releases, and repo metadata
-- **[Workflows](./references/workflows.md)** - Pre-merge checklist, debug failed CI, release workflow, triage issues, review PRs locally
+- [Full Reference](./references/full-reference.md) - Comprehensive `gh` reference for PRs, issues, Actions/CI, code review, releases, and repo metadata
+- [Workflows](./references/workflows.md) - Pre-merge checklist, debug failed CI, release workflow, triage issues, review PRs locally
 
-**Note:** The commands below are quick references. For comprehensive detail and multi-step workflows, see the references above.
+Note: The commands below are quick references. For comprehensive detail and multi-step workflows, see the references above.
 
 ## Shell Permissions
 

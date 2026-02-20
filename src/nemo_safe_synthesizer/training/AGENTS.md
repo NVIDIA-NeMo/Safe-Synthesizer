@@ -11,9 +11,9 @@ Train LoRA adapters on tabular or time-series data for synthetic generation. Sup
 
 ## Backend Hierarchy
 
-- **TrainingBackend** (ABC) — defines `prepare_training_data`, `prepare_config`, `prepare_params`, `maybe_quantize`, `load_model`, `train`, `save_model`. Subclasshook checks for these methods.
-- **HuggingFaceBackend** — uses `AutoModelForCausalLM`, HuggingFace `Trainer`, LoRA via PEFT.
-- **UnslothTrainer** — extends `HuggingFaceBackend`. Uses `FastLanguageModel` for model loading and `FastLanguageModel.get_peft_model` for PEFT. Requires CUDA; incompatible with DP.
+- TrainingBackend (ABC) — defines `prepare_training_data`, `prepare_config`, `prepare_params`, `maybe_quantize`, `load_model`, `train`, `save_model`. Subclasshook checks for these methods.
+- HuggingFaceBackend — uses `AutoModelForCausalLM`, HuggingFace `Trainer`, LoRA via PEFT.
+- UnslothTrainer — extends `HuggingFaceBackend`. Uses `FastLanguageModel` for model loading and `FastLanguageModel.get_peft_model` for PEFT. Requires CUDA; incompatible with DP.
 
 ## FIXED_RUNTIME_TRAINING_ARGS
 
@@ -37,32 +37,32 @@ Enabled via `privacy.dp_enabled`. `_configure_dp_training()`:
 
 ## Quantization
 
-- **4-bit** — `nf4`, double quantization, bfloat16 compute (BitsAndBytesConfig).
-- **8-bit** — `nf8`, double quantization, bfloat16 compute.
-- **LoftQ** — `peft_implementation == "loftq"` uses `LoftQConfig(loftq_bits=...)` for alternative LoRA init.
+- 4-bit — `nf4`, double quantization, bfloat16 compute (BitsAndBytesConfig).
+- 8-bit — `nf8`, double quantization, bfloat16 compute.
+- LoftQ — `peft_implementation == "loftq"` uses `LoftQConfig(loftq_bits=...)` for alternative LoRA init.
 - If quantized: `prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)` before applying LoRA. Otherwise: `gradient_checkpointing_enable()`, `enable_input_require_grads()`, `use_cache=False`.
 
 ## Callbacks
 
-- **InferenceEvalCallback** — during eval, generates records and validates against schema; early-stops on invalid fraction (`invalid_fraction_threshold` + `patience`).
-- **ProgressBarCallback** — tqdm progress bar (used when logging level is not INFO/DEBUG).
-- **SafeSynthesizerWorkerCallback** — structured logging with progress, epoch, step, loss; triggers logs at least every `log_interval` seconds and at epoch end.
+- InferenceEvalCallback — during eval, generates records and validates against schema; early-stops on invalid fraction (`invalid_fraction_threshold` + `patience`).
+- ProgressBarCallback — tqdm progress bar (used when logging level is not INFO/DEBUG).
+- SafeSynthesizerWorkerCallback — structured logging with progress, epoch, step, loss; triggers logs at least every `log_interval` seconds and at epoch end.
 
 Trainer removes `PrinterCallback`; adds SafeSynthesizerWorkerCallback or ProgressBarCallback based on log level. `InferenceEvalCallback` added only when `generation_eval=True`.
 
 ## Gotchas
 
-- **`rope_parameters_location`** — `"autoconfig"` sets rope scaling on `autoconfig.rope_scaling`; `"automodel"` passes it via `framework_params["rope_scaling"]`. Wrong choice can break rope scaling.
-- **`_trust_remote_code_for_model()`** — returns `True` only for `nvidia/` models. Used for `AutoConfig.from_pretrained(..., trust_remote_code=...)`.
-- **`_apply_eval_dataset_overrides()`** — when `eval_dataset` is provided, overrides `eval_steps`, `eval_strategy="steps"`, `do_eval=True`, `include_for_metrics`, `eval_accumulation_steps`.
-- **Timeseries preprocessing** — `process_timeseries_data()` adds `PSEUDO_GROUP_COLUMN` (`__nss_sequence_id`) when no group column is specified; treats the whole dataset as one sequence.
-- **Unsloth** — uses `model_name` instead of `pretrained_model_name_or_path`; uses `max_seq_length` instead of `max_position_embeddings`. Disables `SUPPORTS_LLAMA32` to avoid HF Hub requests.
+- `rope_parameters_location` — `"autoconfig"` sets rope scaling on `autoconfig.rope_scaling`; `"automodel"` passes it via `framework_params["rope_scaling"]`. Wrong choice can break rope scaling.
+- `_trust_remote_code_for_model()` — returns `True` only for `nvidia/` models. Used for `AutoConfig.from_pretrained(..., trust_remote_code=...)`.
+- `_apply_eval_dataset_overrides()` — when `eval_dataset` is provided, overrides `eval_steps`, `eval_strategy="steps"`, `do_eval=True`, `include_for_metrics`, `eval_accumulation_steps`.
+- Timeseries preprocessing — `process_timeseries_data()` adds `PSEUDO_GROUP_COLUMN` (`__nss_sequence_id`) when no group column is specified; treats the whole dataset as one sequence.
+- Unsloth — uses `model_name` instead of `pretrained_model_name_or_path`; uses `max_seq_length` instead of `max_position_embeddings`. Disables `SUPPORTS_LLAMA32` to avoid HF Hub requests.
 
 ## Extension Points
 
-- **New backend** — subclass `TrainingBackend`, implement the abstract methods.
-- **Custom callbacks** — extend `TrainerCallback`, add via `callbacks` constructor arg; they are appended after the default callbacks.
-- **Custom data collator** — pass `data_collator` in training args; for DP use `DataCollatorForPrivateTokenClassification` or a compatible variant.
+- New backend — subclass `TrainingBackend`, implement the abstract methods.
+- Custom callbacks — extend `TrainerCallback`, add via `callbacks` constructor arg; they are appended after the default callbacks.
+- Custom data collator — pass `data_collator` in training args; for DP use `DataCollatorForPrivateTokenClassification` or a compatible variant.
 
 ## Read First
 

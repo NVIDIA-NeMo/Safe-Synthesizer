@@ -18,10 +18,10 @@ Safe-Synthesizer (GitHub)           NMP (GitLab)
 └── (metafiles)             ←→      packages/nemo_safe_synthesizer/(metafiles)
 ```
 
-**Primary sync directions:**
+Primary sync directions:
 
-- **Safe-Synthesizer → NMP** ("downstream"): Push OSS contributions back into the internal repo.
-- **NMP → Safe-Synthesizer** ("upstream"): Pull merged NMP changes into the OSS repo.
+- Safe-Synthesizer → NMP ("downstream"): Push OSS contributions back into the internal repo.
+- NMP → Safe-Synthesizer ("upstream"): Pull merged NMP changes into the OSS repo.
 
 ## Prerequisites
 
@@ -60,7 +60,7 @@ When a merge request lands in NMP that touches `packages/nemo_safe_synthesizer/`
 make synchronize-from-nmp-mr MR=<mr-iid>
 ```
 
-**What this does:**
+What this does:
 
 1. If on `main`, creates branch `$USER/sync-<MR>-from-nmp`
 2. Calls `tools/sync-from-mr.sh` which:
@@ -69,7 +69,7 @@ make synchronize-from-nmp-mr MR=<mr-iid>
    - Rsyncs `src/` and `tests/` with `--delete` (exact mirror)
    - Reports files changed in the MR that are outside `src/` and `tests/` (need manual review)
 
-**After syncing**, follow the post-sync workflow below.
+After syncing, follow the post-sync workflow below.
 
 ## Full Sync from NMP
 
@@ -88,7 +88,7 @@ make synchronize-metafiles-from-nmp
 make synchronize-from-nmp
 ```
 
-**Note:** Metafile sync excludes files that are Safe-Synthesizer-specific: `pyproject.toml`, `uv.lock`, `Makefile`, `README.md`, `LICENSE`, `ruff.toml`, `pytest.ini`, `.pre-commit-config.yaml`, etc.
+Note: Metafile sync excludes files that are Safe-Synthesizer-specific: `pyproject.toml`, `uv.lock`, `Makefile`, `README.md`, `LICENSE`, `ruff.toml`, `pytest.ini`, `.pre-commit-config.yaml`, etc.
 
 ## Sync to NMP
 

@@ -9,7 +9,7 @@ Always use `required_permissions: ["all"]` when running `gh` commands. Sandboxed
 
 ## Viewing PRs
 
-> **Known issue:** Plain `gh pr view <number>` can fail with a GraphQL error about
+> Known issue: Plain `gh pr view <number>` can fail with a GraphQL error about
 > "Projects (classic) being deprecated". Always use the `--json` form below.
 
 ```bash
@@ -31,9 +31,9 @@ gh pr view <number> --json number,title,state,url,headRefName,baseRefName,isDraf
 
 Defined in `.github/CODEOWNERS`:
 
-- **All files**: `@NVIDIA-NeMo/safe-synthesizer-maintainers`
-- **`src/` and `tests/`**: `@NVIDIA-NeMo/safe-synthesizer-reviewers`
-- **Critical files** (`pyproject.toml`, `uv.lock`, `SECURITY.md`, `LICENSE`, `.github/`): `@NVIDIA-NeMo/safe-synthesizer-maintainers`
+- All files: `@NVIDIA-NeMo/safe-synthesizer-maintainers`
+- `src/` and `tests/`: `@NVIDIA-NeMo/safe-synthesizer-reviewers`
+- Critical files (`pyproject.toml`, `uv.lock`, `SECURITY.md`, `LICENSE`, `.github/`): `@NVIDIA-NeMo/safe-synthesizer-maintainers`
 
 ```bash
 gh pr edit <number> --add-reviewer NVIDIA-NeMo/safe-synthesizer-reviewers

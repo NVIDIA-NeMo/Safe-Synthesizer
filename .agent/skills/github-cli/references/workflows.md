@@ -29,7 +29,7 @@ echo "=== CI Status ==="
 gh pr checks $PR_NUMBER
 ```
 
-**Checklist:**
+Checklist:
 
 1. `isDraft` is `false`
 2. `mergeable` is `MERGEABLE`

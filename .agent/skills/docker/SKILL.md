@@ -29,7 +29,7 @@ make test-ci-container
 | Distroless Python | Production, minimal attack surface | ~120MB |
 | `ghcr.io/astral-sh/uv:0.9.14` | uv binary source (copy into builder) | -- |
 
-**Rule of thumb**: use `-runtime-` for running code, `-devel-` for compiling extensions.
+Rule of thumb: use `-runtime-` for running code, `-devel-` for compiling extensions.
 
 ## Quick Multi-Stage Pattern (CPU)
 

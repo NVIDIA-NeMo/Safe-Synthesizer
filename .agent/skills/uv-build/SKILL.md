@@ -33,7 +33,7 @@ Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
 | `engine` | ML pipeline deps (outlines, wandb, tiktoken, etc.) -- no torch |
 | `microservices` | `nemo-microservices` from local path |
 
-**`cpu` and `cu128` conflict** -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
+`cpu` and `cu128` conflict -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
 
 ## Index Management
 
@@ -95,9 +95,9 @@ make build-wheel     # or: uv build --wheel
 make publish-internal
 ```
 
-**Version source**: `uv-dynamic-versioning` reads git tags (PEP 440 style). Fallback `0.0.0` for shallow clones.
+Version source: `uv-dynamic-versioning` reads git tags (PEP 440 style). Fallback `0.0.0` for shallow clones.
 
-**Build backend**: `hatchling` with wheel target `packages = ["src/nemo_safe_synthesizer"]`.
+Build backend: `hatchling` with wheel target `packages = ["src/nemo_safe_synthesizer"]`.
 
 ## Key pyproject.toml Sections
 
@@ -120,9 +120,9 @@ make publish-internal
 
 ## Conventions
 
-1. **Never use `pip`** -- always `uv`
-2. **Use `--frozen`** in CI and Make targets to prevent lock updates
-3. **Use `uv run`** to run tools (pytest, mkdocs, etc.)
-4. **Pin uv version** in `[tool.uv] required-version` (currently `>=0.9.14,<0.10.0`)
-5. **Edit extras manually** in `pyproject.toml`, then `uv lock`
-6. **Use `uv add`** for base/group deps
+1. Never use `pip` -- always `uv`
+2. Use `--frozen` in CI and Make targets to prevent lock updates
+3. Use `uv run` to run tools (pytest, mkdocs, etc.)
+4. Pin uv version in `[tool.uv] required-version` (currently `>=0.9.14,<0.10.0`)
+5. Edit extras manually in `pyproject.toml`, then `uv lock`
+6. Use `uv add` for base/group deps
