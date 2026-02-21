@@ -9,8 +9,8 @@ export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_
 
 ## change the followings if you want them to be different
 CONFIGS=(unsloth dp dp_usg_guidance) # the jobs will run all datasets with these configs
-export NMP_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/nmp" # where the nmp repo is located
-export NSS_SLURM_DIR="${NMP_DIR}/packages/nemo_safe_synthesizer/script/slurm" # slurm scripts location (inside repo)
+export NSS_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer" # where the nss repo is located
+export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
 export CONFIG_DIR="${NSS_SLURM_DIR}" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files
 export ADAPTER_PATH="${LUSTRE_DIR}/nmp/exp/adapters" # base path for run directories (each run creates a subdirectory via --run-path)
@@ -30,16 +30,3 @@ export WANDB_MODE="disabled" # "online", "offline" or "disabled"
 #   NSS_LOG_FORMAT - Log format ("json" or "plain")
 #   NSS_LOG_FILE - Path to log file
 export NSS_ARTIFACTS_PATH="${ADAPTER_PATH}"
-
-# time limits for the short and long jobs
-declare -A CONFIG_TIME_LIMITS_SHORT
-declare -A CONFIG_TIME_LIMITS_LONG
-
-CONFIG_TIME_LIMITS_SHORT[unsloth]="00:40:00"
-CONFIG_TIME_LIMITS_SHORT[dp]="02:00:00"
-CONFIG_TIME_LIMITS_SHORT[max]="04:00:00" #fallback if config names do not include unsloth or dp
-
-CONFIG_TIME_LIMITS_LONG[unsloth]="01:20:00"
-CONFIG_TIME_LIMITS_LONG[dp]="02:00:00"
-CONFIG_TIME_LIMITS_LONG[max]="04:00:00" #fallback if config names do not include unsloth or dp
-
