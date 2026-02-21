@@ -1,7 +1,6 @@
+#!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-
-#!/usr/bin/env python3
 """Filter files against ty exclusions from pyproject.toml."""
 
 import fnmatch
