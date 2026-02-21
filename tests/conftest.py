@@ -89,7 +89,7 @@ replace_pii: null
 training:
   batch_size: 1
   gradient_accumulation_steps: 8
-  learning_rate: 0.0005
+  learning_rate: auto
   lora_alpha_over_r: 1.0
   lora_r: 32
   lora_target_modules:
