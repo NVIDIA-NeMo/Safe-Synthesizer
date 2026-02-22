@@ -235,7 +235,7 @@ class TimeSeriesSimilarityScore(CompositeScore):
         h_err = abs(h_orig - h_syn)
 
         dtw_raw = DTWSimilarity._dtw_distance(original, synthetic, window=dtw_window)
-        dtw_norm = DTWSimilarity._dtw_normalized(original, synthetic, window=dtw_window)
+        dtw_norm = dtw_raw / np.sqrt(max(len(original), len(synthetic)))
         dtw_score_val = DTWSimilarity._normalize_dtw_score(original, synthetic, dtw_norm)
 
         rm_rmse = RollingStatsSimilarity._rolling_mean_rmse(original, synthetic, window=rolling_window)

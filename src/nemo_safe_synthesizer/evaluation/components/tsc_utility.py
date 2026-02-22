@@ -96,7 +96,9 @@ class TSCUtility(Component):
 
     @staticmethod
     def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+        evaluation_dataset: EvaluationDataset,
+        config: SafeSynthesizerParameters | None = None,
+        n_trials: int = 1,
     ) -> TSCUtility:
         # Only run for time series data
         is_timeseries = config.time_series.is_timeseries if config and getattr(config, "time_series", None) else False
@@ -104,14 +106,16 @@ class TSCUtility(Component):
             return TSCUtility(score=EvaluationScore(grade=Grade.UNAVAILABLE))
 
         try:
-            return TSCUtility._compute(evaluation_dataset, config)
+            return TSCUtility._compute(evaluation_dataset, config, n_trials=n_trials)
         except Exception as exc:
             logger.warning(f"TSCUtility failed: {exc}")
             return TSCUtility(score=EvaluationScore(grade=Grade.UNAVAILABLE, notes=str(exc)))
 
     @staticmethod
     def _compute(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None
+        evaluation_dataset: EvaluationDataset,
+        config: SafeSynthesizerParameters | None,
+        n_trials: int = 1,
     ) -> TSCUtility:
         from aeon.classification.distance_based import KNeighborsTimeSeriesClassifier
         from aeon.classification.convolution_based import MiniRocketClassifier
@@ -178,10 +182,14 @@ class TSCUtility(Component):
         n_channels = X_orig.shape[1]
         series_length = X_orig.shape[2]
 
-        classifiers = {
-            "DTW": lambda: KNeighborsTimeSeriesClassifier(n_neighbors=1, distance="dtw", distance_params={"window": 0.1}),
-            "MiniROCKET": lambda: MiniRocketClassifier(num_kernels=10_000, random_state=42),
-            "Catch22": lambda: Catch22Classifier(catch24=True, random_state=42),
+        # Seed-parameterized factories. DTW is deterministic so its seed arg is ignored,
+        # but we still run it every trial for consistent bookkeeping (std will be 0).
+        classifier_factories = {
+            "DTW": lambda seed: KNeighborsTimeSeriesClassifier(
+                n_neighbors=1, distance="dtw", distance_params={"window": 0.1}
+            ),
+            "MiniROCKET": lambda seed: MiniRocketClassifier(n_kernels=10_000, random_state=seed),
+            "Catch22": lambda seed: Catch22Classifier(catch24=True, random_state=seed),
         }
 
         conditions = {
@@ -190,28 +198,64 @@ class TSCUtility(Component):
             "augmented": (X_aug, y_aug),
         }
 
+        seeds = list(range(42, 42 + n_trials))
+        logger.info(f"TSCUtility: running {n_trials} trial(s) with seeds {seeds}")
+
+        # Accumulate per-trial metrics: trial_data[condition][clf_name] = [metrics, ...]
+        trial_data: dict[str, dict[str, list[dict]]] = {
+            cond: {clf: [] for clf in classifier_factories} for cond in conditions
+        }
+
+        for seed in seeds:
+            for condition, (X_train, y_train) in conditions.items():
+                for clf_name, clf_factory in classifier_factories.items():
+                    try:
+                        clf = clf_factory(seed)
+                        metrics = _train_test(clf, X_train, y_train, X_test, y_test)
+                        trial_data[condition][clf_name].append(metrics)
+                        logger.debug(
+                            f"  seed={seed} | {condition:10s} | {clf_name:12s} | error={metrics['error']:.4f}"
+                        )
+                    except Exception as exc:
+                        logger.warning(f"TSC [seed={seed}][{condition}][{clf_name}] failed: {exc}")
+
+        # Aggregate across trials
         results: dict[str, dict[str, dict]] = {}
         summary_rows = []
 
-        for condition, (X_train, y_train) in conditions.items():
+        for condition in conditions:
             results[condition] = {}
-            for clf_name, clf_factory in classifiers.items():
-                try:
-                    clf = clf_factory()
-                    metrics = _train_test(clf, X_train, y_train, X_test, y_test)
-                    results[condition][clf_name] = metrics
+            for clf_name in classifier_factories:
+                trials = trial_data[condition][clf_name]
+                if not trials:
+                    results[condition][clf_name] = {
+                        "error": None, "error_std": None, "error_trials": [],
+                        "train_s": None, "pred_s": None,
+                    }
+                    summary_rows.append(f"  {condition:10s} | {clf_name:12s} | ALL TRIALS FAILED")
+                else:
+                    errors = [t["error"] for t in trials]
+                    mean_err = round(float(np.mean(errors)), 4)
+                    std_err = round(float(np.std(errors)), 4) if len(errors) > 1 else 0.0
+                    mean_train = round(float(np.mean([t["train_s"] for t in trials])), 4)
+                    mean_pred = round(float(np.mean([t["pred_s"] for t in trials])), 4)
+                    results[condition][clf_name] = {
+                        "error": mean_err,
+                        "error_std": std_err,
+                        "error_trials": errors,
+                        "train_s": mean_train,
+                        "pred_s": mean_pred,
+                    }
                     summary_rows.append(
-                        f"  {condition:10s} | {clf_name:12s} | error={metrics['error']:.4f} | train={metrics['train_s']}s | pred={metrics['pred_s']}s"
+                        f"  {condition:10s} | {clf_name:12s} | "
+                        f"error={mean_err:.4f}±{std_err:.4f} (n={len(errors)}) | "
+                        f"train={mean_train}s | pred={mean_pred}s"
                     )
-                except Exception as exc:
-                    logger.warning(f"TSC [{condition}][{clf_name}] failed: {exc}")
-                    results[condition][clf_name] = {"error": None, "train_s": None, "pred_s": None}
-                    summary_rows.append(f"  {condition:10s} | {clf_name:12s} | FAILED: {exc}")
 
         # Log summary table
         logger.info("TSC Utility Results:")
         logger.info(f"  n_train_original={n_train_original}, n_train_synthetic={n_train_synthetic}, n_test={n_test}")
-        logger.info(f"  n_channels={n_channels}, series_length={series_length}")
+        logger.info(f"  n_channels={n_channels}, series_length={series_length}, n_trials={n_trials}")
         for row in summary_rows:
             logger.info(row)
 
@@ -221,7 +265,7 @@ class TSCUtility(Component):
             if wandb.run is not None:
                 wandb_metrics = {}
                 for condition in ["original", "synthetic", "augmented"]:
-                    for clf_name in ["DTW", "MiniROCKET", "Catch22"]:
+                    for clf_name in classifier_factories:
                         error = results.get(condition, {}).get(clf_name, {}).get("error")
                         if error is not None:
                             wandb_metrics[f"tsc/{condition}/{clf_name}_error"] = error
@@ -235,9 +279,34 @@ class TSCUtility(Component):
             "n_test": n_test,
             "n_channels": n_channels,
             "series_length": series_length,
+            "n_trials": n_trials,
+            "seeds": seeds,
             "label_column": LABEL_COLUMN,
             "group_column": group_col,
             "results": results,
         }
 
-        return TSCUtility(score=EvaluationScore(grade=Grade.UNAVAILABLE), details=details)
+        # Derive score from the average TSTR gap (error_synthetic - error_original).
+        # Classifiers that failed in either condition are excluded.
+        # gap=0  → similarity=1.0 (perfect utility preservation)
+        # gap=0.5 → similarity=0.0 (synthetic trains a near-random classifier)
+        # Negative gaps (synthetic beats original) are treated as gap=0.
+        common_clfs = [
+            clf for clf in classifier_factories
+            if results.get("original", {}).get(clf, {}).get("error") is not None
+            and results.get("synthetic", {}).get(clf, {}).get("error") is not None
+        ]
+        if common_clfs:
+            avg_gap = float(np.mean([
+                results["synthetic"][clf]["error"] - results["original"][clf]["error"]
+                for clf in common_clfs
+            ]))
+            similarity = max(0.0, min(1.0, 1.0 - max(0.0, avg_gap) * 2))
+            tsc_score = EvaluationScore.finalize_grade(raw_score=similarity, score=similarity * 10)
+        else:
+            tsc_score = EvaluationScore(
+                grade=Grade.UNAVAILABLE,
+                notes="No classifier pairs succeeded for both original and synthetic conditions.",
+            )
+
+        return TSCUtility(score=tsc_score, details=details)

@@ -65,23 +65,53 @@ class DriftSimilarity(Component):
                     timestamp_col = acf_cfg.timestamp_column
                     group_col = acf_cfg.group_column
 
+            # Fall back to top-level config when ts_eval_config doesn't supply them
+            if group_col is None and config and getattr(config, "data", None):
+                group_col = getattr(config.data, "group_training_examples_by", None)
+            if timestamp_col is None and config and getattr(config, "time_series", None):
+                timestamp_col = getattr(config.time_series, "timestamp_column", None)
+
             columns = resolve_columns(reference, None, exclude=set(filter(None, [timestamp_col, group_col])))
             if not columns:
                 return DriftSimilarity(score=EvaluationScore(notes="No numeric columns available."))
+
+            # When group and timestamp columns are known, compare mean series across groups
+            # rather than the full flattened array, which has spurious cross-group jumps
+            # at every group boundary that inflate the drift error.
+            use_mean_series = (
+                group_col is not None
+                and timestamp_col is not None
+                and group_col in reference.columns
+                and timestamp_col in reference.columns
+                and group_col in synthetic.columns
+                and timestamp_col in synthetic.columns
+            )
 
             per_column = []
             errors = []
             for col in columns:
                 if col not in reference.columns or col not in synthetic.columns:
                     continue
-                ref_sorted = sort_time_series(
-                    reference[[col] + [c for c in [timestamp_col] if c and c in reference.columns]], timestamp_col, None
-                )
-                syn_sorted = sort_time_series(
-                    synthetic[[col] + [c for c in [timestamp_col] if c and c in synthetic.columns]], timestamp_col, None
-                )
-                ref_values = ref_sorted[col].dropna().astype(float).to_numpy()
-                syn_values = syn_sorted[col].dropna().astype(float).to_numpy()
+                if use_mean_series:
+                    ref_values = (
+                        reference.groupby(timestamp_col)[col].mean().sort_index().dropna().astype(float).to_numpy()
+                    )
+                    syn_values = (
+                        synthetic.groupby(timestamp_col)[col].mean().sort_index().dropna().astype(float).to_numpy()
+                    )
+                else:
+                    ref_sorted = sort_time_series(
+                        reference[[col] + [c for c in [timestamp_col] if c and c in reference.columns]],
+                        timestamp_col,
+                        None,
+                    )
+                    syn_sorted = sort_time_series(
+                        synthetic[[col] + [c for c in [timestamp_col] if c and c in synthetic.columns]],
+                        timestamp_col,
+                        None,
+                    )
+                    ref_values = ref_sorted[col].dropna().astype(float).to_numpy()
+                    syn_values = syn_sorted[col].dropna().astype(float).to_numpy()
 
                 d_orig = DriftSimilarity._drift_mean(ref_values)
                 d_syn = DriftSimilarity._drift_mean(syn_values)
