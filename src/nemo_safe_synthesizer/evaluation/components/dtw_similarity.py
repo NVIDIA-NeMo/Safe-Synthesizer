@@ -65,26 +65,56 @@ class DTWSimilarity(Component):
                     timestamp_col = acf_cfg.timestamp_column
                     group_col = acf_cfg.group_column
 
+            # Fall back to top-level config when ts_eval_config doesn't supply them
+            if group_col is None and config and getattr(config, "data", None):
+                group_col = getattr(config.data, "group_training_examples_by", None)
+            if timestamp_col is None and config and getattr(config, "time_series", None):
+                timestamp_col = getattr(config.time_series, "timestamp_column", None)
+
             columns = resolve_columns(reference, None, exclude=set(filter(None, [timestamp_col, group_col])))
             if not columns:
                 return DTWSimilarity(score=EvaluationScore(notes="No numeric columns available."))
+
+            # When group and timestamp columns are known, compare mean series across groups
+            # (one representative 47-point series per channel) rather than the full
+            # flattened array, which produces meaningless cross-group discontinuities.
+            use_mean_series = (
+                group_col is not None
+                and timestamp_col is not None
+                and group_col in reference.columns
+                and timestamp_col in reference.columns
+                and group_col in synthetic.columns
+                and timestamp_col in synthetic.columns
+            )
 
             per_column = []
             scores = []
             for col in columns:
                 if col not in reference.columns or col not in synthetic.columns:
                     continue
-                ref_sorted = sort_time_series(
-                    reference[[col] + [c for c in [timestamp_col] if c and c in reference.columns]], timestamp_col, None
-                )
-                syn_sorted = sort_time_series(
-                    synthetic[[col] + [c for c in [timestamp_col] if c and c in synthetic.columns]], timestamp_col, None
-                )
-                ref_values = ref_sorted[col].dropna().astype(float).to_numpy()
-                syn_values = syn_sorted[col].dropna().astype(float).to_numpy()
+                if use_mean_series:
+                    ref_values = (
+                        reference.groupby(timestamp_col)[col].mean().sort_index().dropna().astype(float).to_numpy()
+                    )
+                    syn_values = (
+                        synthetic.groupby(timestamp_col)[col].mean().sort_index().dropna().astype(float).to_numpy()
+                    )
+                else:
+                    ref_sorted = sort_time_series(
+                        reference[[col] + [c for c in [timestamp_col] if c and c in reference.columns]],
+                        timestamp_col,
+                        None,
+                    )
+                    syn_sorted = sort_time_series(
+                        synthetic[[col] + [c for c in [timestamp_col] if c and c in synthetic.columns]],
+                        timestamp_col,
+                        None,
+                    )
+                    ref_values = ref_sorted[col].dropna().astype(float).to_numpy()
+                    syn_values = syn_sorted[col].dropna().astype(float).to_numpy()
 
                 dtw_raw = DTWSimilarity._dtw_distance(ref_values, syn_values)
-                dtw_norm = DTWSimilarity._dtw_normalized(ref_values, syn_values)
+                dtw_norm = dtw_raw / np.sqrt(max(len(ref_values), len(syn_values)))
                 dtw_score = DTWSimilarity._normalize_dtw_score(ref_values, syn_values, dtw_norm)
                 scores.append(dtw_score)
                 per_column.append(
@@ -116,7 +146,7 @@ class DTWSimilarity(Component):
         synthetic = np.asarray(synthetic, dtype=float)
 
         dtw_raw = DTWSimilarity._dtw_distance(original, synthetic, window=window)
-        dtw_norm = DTWSimilarity._dtw_normalized(original, synthetic, window=window)
+        dtw_norm = dtw_raw / np.sqrt(max(len(original), len(synthetic)))
         dtw_score = DTWSimilarity._normalize_dtw_score(original, synthetic, dtw_norm)
         similarity = max(0.0, 1.0 - dtw_score)
 
@@ -134,27 +164,21 @@ class DTWSimilarity(Component):
 
     @staticmethod
     def _dtw_distance(original: NDArray, synthetic: NDArray, window: int | None = None) -> float:
-        """Compute Dynamic Time Warping distance between two 1-D series.
+        """Compute DTW distance between two 1-D series via aeon's compiled implementation.
 
-        Uses Sakoe-Chiba band constraint when *window* is set to speed up computation.
+        Uses the Sakoe-Chiba band constraint when *window* is set. *window* is expressed
+        as an integer number of steps; it is converted to the float fraction expected by
+        aeon's API (fraction = window / max(N, M)).
         Returns the raw DTW cost.
         """
-        n, m = len(original), len(synthetic)
-        if window is None:
-            window = max(n, m)  # no constraint
+        from aeon.distances import dtw_distance as aeon_dtw_distance
 
-        # Cost matrix (1-indexed for cleaner boundary handling)
-        cost = np.full((n + 1, m + 1), np.inf)
-        cost[0, 0] = 0.0
-
-        for i in range(1, n + 1):
-            j_start = max(1, i - window)
-            j_end = min(m, i + window)
-            for j in range(j_start, j_end + 1):
-                d = (original[i - 1] - synthetic[j - 1]) ** 2
-                cost[i, j] = d + min(cost[i - 1, j], cost[i, j - 1], cost[i - 1, j - 1])
-
-        return float(np.sqrt(cost[n, m]))
+        window_frac: float | None = None
+        if window is not None:
+            window_frac = window / max(len(original), len(synthetic))
+        # aeon returns the accumulated squared cost; take sqrt to match the
+        # original implementation's scale (sqrt(sum_sq_along_path)).
+        return float(np.sqrt(aeon_dtw_distance(original, synthetic, window=window_frac)))
 
     @staticmethod
     def _dtw_normalized(original: NDArray, synthetic: NDArray, window: int | None = None) -> float:
