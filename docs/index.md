@@ -7,7 +7,7 @@ hide:
 
 **Generate synthetic data with privacy guarantees.**
 
-NeMo Safe Synthesizer is a comprehensive package for generating safe synthetic data. It uses LLM fine-tuning with optional differential privacy to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting individual privacy.
+NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic data. It uses LLM fine-tuning with optional differential privacy to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting individual privacy.
 
 ---
 
