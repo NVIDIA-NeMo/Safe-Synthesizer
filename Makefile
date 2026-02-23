@@ -154,14 +154,6 @@ test-slow: ## Run all tests including slow tests (excludes e2e)
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
 
-.PHONY: test-sdk-related
-test-sdk-related: ## Run SDK-related tests (config, sdk, cli, api)
-	$(PYTEST_CMD) \
-		$(NSS_ROOT_PATH)/tests/config \
-		$(NSS_ROOT_PATH)/tests/sdk \
-		$(NSS_ROOT_PATH)/tests/cli \
-		$(NSS_ROOT_PATH)/tests/api
-
 .PHONY: test-ci
 test-ci: ## Run CI unit tests excluding slow and GPU tests
 	pushd $(NSS_ROOT_PATH) && \
@@ -385,9 +377,9 @@ NSS_CONFIGS  := tinyllama_unsloth tinyllama_dp smollm3_unsloth smollm3_dp mistra
 NSS_DATASETS := clinc_oos dow_jones_index
 
 define nss_combo_test
-test-nss-$(1)-$(2)-ci: ## Run pytest test for $(subst _,-,$(1)) config with $(2) dataset
+test-nss-$(1)-$(2)-ci: ## Run pytest test for $(shell echo $(1) | tr '_' '-') config with $(shell echo $(2) | tr '_' '-') dataset
 	$(MAKE) bootstrap-nss cu128
-	$(PYTEST_NO_XDIST_CMD) -vv $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests/e2e/ -k "test_$(2)_dataset[$(subst _,-,$(1))]"
+	$(PYTEST_NO_XDIST_CMD) -vv $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests/e2e/test_dataset_config.py -k "test_$(2)_dataset[$(subst _,-,$(1))]"
 endef
 
 $(foreach config,$(NSS_CONFIGS),\
