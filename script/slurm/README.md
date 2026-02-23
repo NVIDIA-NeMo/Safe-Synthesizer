@@ -16,10 +16,10 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 
 ### Prerequisites
 
-- **Slurm Cluster Access:** Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
-- **NIM API Key:** You will need a `NIM_API_KEY` to run column classification. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com) using your `nvidian` organization account.
-- **Enroot Credentials** Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
-- **uv and python install in the slurm cluster**
+- Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
+- NIM API Key: You will need a `NIM_API_KEY` to run column classification. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com) using your `nvidian` organization account.
+- Enroot Credentials Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
+- uv and python install in the slurm cluster
   - This is a strongly recommended setup, but is not be the only way to get things working.
   - The key issues about working in slurm we need to address
     - /home/$USER is quite small (10 GB) and not recommended for accessing data, easily filled up by uv cache
@@ -41,8 +41,8 @@ uv python install 3.11
 
 #### Nice to have
 
-- **Passwordless login** See https://confluence.nvidia.com/display/HWINFCSSUP/Setting+Up+Passwordless+SSH+Key+Authentication?src=contextnavpagetreemode
-- **Env vars in .bashrc**
+- Passwordless login See https://confluence.nvidia.com/display/HWINFCSSUP/Setting+Up+Passwordless+SSH+Key+Authentication?src=contextnavpagetreemode
+- Env vars in .bashrc
   - Add `export VARIABLE=VALUE` to the end of `~/.bashrc` for commonly used environment variables, like `USER_NAME` and `LUSTRE_DIR`.
   - Recommended snippet to have in `~/.bashrc` so uv and python work on login node and slurm jobs:
 ```bash
@@ -93,7 +93,7 @@ Edit `env_variables.sh` to match your environment. Key items:
 - `NSS_SHARED_DIR`: location of shared files such as benchmark data and container images, see section below for details.
 - Time limits: `CONFIG_TIME_LIMITS_SHORT` and `CONFIG_TIME_LIMITS_LONG` associative maps. Keys are matched by pattern (`unsloth`, `dp`), falling back to `max`.
 
-**NSS CLI Environment Variables** (used by `safe-synthesizer` CLI via pydantic-settings):
+NSS CLI Environment Variables (used by `safe-synthesizer` CLI via pydantic-settings):
 - `NSS_ARTIFACTS_PATH`: Base directory for artifacts (aliased from `ADAPTER_PATH`).
 - `NSS_PHASE`: Current phase (train, generate, end_to_end).
 - `NSS_CONFIG`: Path to YAML config file.
@@ -117,23 +117,23 @@ bash submit_slurm_jobs.sh --exp-name matrix_seq --dataset-group short --runs 1 -
 bash submit_slurm_jobs.sh --exp-name matrix_e2e_seq --dataset-group short --runs 1 --partition polar4 --pipeline-mode end_to_end --submit-mode sequential
 ```
 
-- **CONFIGS source**: By default, configs come from `CONFIGS=(...)` in `env_variables.sh`. Override with `--configs c1,c2` (base names without `.yaml`).
-- **RUNS**: Number of runs per dataset-config pair.
-- **PARTITION**: Slurm partition to use. See partition info in your cluster docs.
-- **EXP_NAME**: Experiment namespace for logs/outputs.
-- **DATASET_GROUP**: `short` or `long` (selects built-in dataset sets and time limits).
-- **SLEEP_SEC**: Pause between submissions to reduce image import contention.
-- **PIPELINE_MODE**: `two_stage` (TRAIN→GEN with dependency) or `end_to_end` (single job).
-- **SUBMIT_MODE**: `array` (submit arrays) or `sequential` (submit jobs with dependencies per dataset/run).
-- **WANDB_PROJECT**: Name of the Weights & Biases project to track experiments. Defaults to the experiment name if not specified.
+- CONFIGS source: By default, configs come from `CONFIGS=(...)` in `env_variables.sh`. Override with `--configs c1,c2` (base names without `.yaml`).
+- RUNS: Number of runs per dataset-config pair.
+- PARTITION: Slurm partition to use. See partition info in your cluster docs.
+- `EXP_NAME`: Experiment namespace for logs/outputs.
+- `DATASET_GROUP`: `short` or `long` (selects built-in dataset sets and time limits).
+- `SLEEP_SEC`: Pause between submissions to reduce image import contention.
+- `PIPELINE_MODE`: `two_stage` (TRAIN→GEN with dependency) or `end_to_end` (single job).
+- `SUBMIT_MODE`: `array` (submit arrays) or `sequential` (submit jobs with dependencies per dataset/run).
+- `WANDB_PROJECT`: Name of the Weights & Biases project to track experiments. Defaults to the experiment name if not specified.
 
-**How many jobs will run concurrently?**
+How many jobs will run concurrently?
 
 For the built-in `short` group there are currently 17 datasets (see `slurm_nss_matrix.sh`).
 - In `two_stage` mode with arrays, the submitter launches one TRAIN array and one GEN array. GEN tasks are linked to corresponding TRAIN tasks via `aftercorr`. Effective max concurrency is cluster/partition limited, but GEN tasks won’t start until their matching TRAIN tasks succeed.
 - In `end_to_end` mode, a single array is submitted of size `num_datasets * RUNS * NUM_CONFIGS`.
 
-**How long will my jobs take?**
+How long will my jobs take?
 With `num_input_records_to_sample=25000`
 - For the baseline config, the longest job typically finishes within 80 minutes. Total wall time estimate: `60 * RUNS` minutes.
 - For the `dp` config, the longest job typically finishes within 120 minutes. Total wall time estimate: `120 * RUNS` minutes.

@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Git
 - [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
 
-> **Note:** Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
 
 ### Setup
 
@@ -366,11 +366,11 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 
 The site configuration (`mkdocs.yml`) enables several useful Markdown extensions:
 
-- **Admonitions** -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
-- **Content tabs** -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
-- **Code blocks** -- syntax highlighting, line numbers, copy button, and annotations
-- **Mermaid diagrams** -- fenced code blocks with ` ```mermaid `
-- **Task lists**, **footnotes**, **definition lists**, and **emoji**
+- Admonitions -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
+- Content tabs -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
+- Code blocks -- syntax highlighting, line numbers, copy button, and annotations
+- Mermaid diagrams -- fenced code blocks with ` ```mermaid `
+- Task lists, footnotes, definition lists, and emoji
 
 See the [MkDocs Material reference](https://squidfunk.github.io/mkdocs-material/reference/) for full syntax.
 
@@ -385,12 +385,30 @@ Documentation is deployed to GitHub Pages automatically when changes to `docs/`,
 ## AI Agents
 
 This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
-- **AGENTS.md** -- primary agent guide
-- **.agent/skills/** -- domain-specific skills (canonical location)
-- **.cursor/rules/** -- Cursor workflow rules
-- **.cursor/skills/** -- symlinks to `.agent/skills/` for Cursor discoverability
+- `AGENTS.md` -- primary agent guide
+- `.agent/skills/` -- domain-specific skills (canonical location)
+- `.cursor/rules/` -- Cursor workflow rules
+- `.cursor/skills/` -- symlinks to `.agent/skills/` for Cursor discoverability
 
 Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
+
+## AI Agents
+
+This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format.
+
+| Config file | Read by | Purpose |
+|-------------|---------|---------|
+| `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
+| `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
+| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
+| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
+
+Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
+
+Before contributing, run `make format` and `make lint`. See `AGENTS.md` for full conventions.
 
 ---
 
