@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Sync Workflows
 
 Detailed multi-step recipes for synchronizing between Safe-Synthesizer and NMP. Referenced from [SKILL.md](SKILL.md).

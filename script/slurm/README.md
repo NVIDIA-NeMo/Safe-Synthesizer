@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 ### NeMo Safe Synthesizer Slurm Jobs
 
 This directory contains scripts to launch matrix Slurm jobs for NeMo Safe Synthesizer. Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `srun` (`slurm_srun.sh`) that executes the matrix runner (`slurm_nss_matrix.sh`). All paths and defaults are configured in one place: `env_variables.sh`.
@@ -145,7 +148,7 @@ With `num_input_records_to_sample=25000`
 ```bash
 tail -f ${BASE_LOG_DIR}/${EXP_NAME}/short/<config>/slurm_*.out
 ```
-- W&B logging: set the `WANDB_MODE` to `online` to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name. 
+- W&B logging: set the `WANDB_MODE` to `online` to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
 
   - When running in `two_stage` mode, be mindful not to submit multiple bash commands that run simutaneously because we aren't able to guarantee unique adapter path for each single run. As a result, two runs might be logged as one on W&B.
 

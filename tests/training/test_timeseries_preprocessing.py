@@ -5,6 +5,7 @@
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import DataError

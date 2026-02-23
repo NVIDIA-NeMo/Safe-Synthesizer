@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+from transformers import EvalPrediction, IntervalStrategy
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
     DataParameters,
@@ -22,7 +24,6 @@ from nemo_safe_synthesizer.training.huggingface_backend import (
     compute_metrics,
     preprocess_logits_for_metrics,
 )
-from transformers import EvalPrediction, IntervalStrategy
 
 
 @pytest.fixture

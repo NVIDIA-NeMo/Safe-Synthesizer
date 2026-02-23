@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: deslop
 description: "Remove AI-generated code slop and clean up code style. Triggers on: review, clean up, deslop, code quality, remove slop, PR review."
 related-skills: [python-typing, python-observability, python-stdlib-patterns]

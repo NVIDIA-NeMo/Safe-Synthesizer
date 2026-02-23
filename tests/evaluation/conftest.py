@@ -7,6 +7,7 @@ import faker
 import numpy as np
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config.parameters import (
     DifferentialPrivacyHyperparams,
     EvaluationParameters,

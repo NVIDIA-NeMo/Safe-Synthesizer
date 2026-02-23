@@ -72,8 +72,3 @@ docstring-code-format = false
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
-
-[lint.isort]
-# this is temporary until we fully migrate out of NMP.
-# the nmp repo treats these as third party packages incidentally.
-known-third-party = ["nemo_safe_synthesizer"]

@@ -8,6 +8,7 @@ import pytest
 pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
 
 import pandas as pd
+
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import NemoPII
 
 # Currently use env variables to configure various pieces

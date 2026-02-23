@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # CLI Reference
 
 NeMo Safe Synthesizer provides a command-line interface built with [Click](https://click.palletsprojects.com/).

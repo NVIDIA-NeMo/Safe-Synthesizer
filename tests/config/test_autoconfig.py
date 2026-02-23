@@ -21,6 +21,7 @@ from typing import ContextManager
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
