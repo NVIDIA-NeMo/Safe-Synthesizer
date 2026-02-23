@@ -189,7 +189,7 @@ class GenerateParameters(Parameters, BaseModel):
             description=(
                 "The attention backend for the vLLM engine. Common values: 'FLASHINFER', "
                 "'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. "
-                "If None, vLLM will auto-select the best available backend."
+                "If None or 'auto', vLLM will auto-select the best available backend."
             ),
         ),
-    ] = None
+    ] = "auto"

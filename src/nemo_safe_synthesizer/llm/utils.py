@@ -63,20 +63,18 @@ def gpu_stats():
     logger.info(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
 
 
-def get_max_vram(
-    memory_fraction: float | None = None, as_string: bool = True, as_fraction: bool = False
-) -> dict[int, float | str]:
+def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
     """
-    Calculate max memory allocation for each available GPU and CPU.
+    Calculate max memory allocation for each available GPU and CPU as a fraction of total GPU memory.
 
     Args:
         memory_fraction: Fraction of total GPU memory to allocate (default 0.8 for 80%)
 
     Returns:
-        Dictionary mapping device IDs to memory limits
+        Dictionary mapping device IDs to memory limits as a fraction of total GPU memory
     """
-    if memory_fraction is None:
-        memory_fraction = 0.8
+    if max_vram_fraction is None:
+        max_vram_fraction = 0.8
     max_memory = {}
 
     if torch.cuda.is_available():
@@ -84,14 +82,11 @@ def get_max_vram(
         for i in range(num_gpus):
             free, total = torch.cuda.mem_get_info(device=i)
             safe_free = free - (2 * 1024**3)
-            gpu_memory_utilization = min(memory_fraction, safe_free / total)
+            gpu_memory_utilization = min(max_vram_fraction, safe_free / total)
             memory_gib = gpu_memory_utilization * total / (1024**3)
-            if as_fraction:
-                max_memory[i] = gpu_memory_utilization
-            else:
-                max_memory[i] = memory_gib if not as_string else f"{memory_gib:.2f}GiB"
+            max_memory[i] = gpu_memory_utilization
             logger.info(
-                f"GPU {i}: Will allocate {memory_gib:.2f}GiB ({memory_fraction * 100}% of {total / (1024**3):.2f}GiB)"
+                f"GPU {i}: Will allocate {memory_gib:.2f}GiB ({max_vram_fraction * 100}% of {total / (1024**3):.2f}GiB)"
             )
 
     return max_memory
