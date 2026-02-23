@@ -16,6 +16,18 @@ logger = get_logger(__name__)
 # Path to config files
 CONFIG_DIR = Path(__file__).parent / "required_configs"
 
+llm = pytest.importorskip(
+    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
+)
+
+try:
+    from vllm import LLM  # noqa: F401
+except ImportError:
+    pytest.skip(
+        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
+        allow_module_level=True,
+    )
+
 
 def update_group_by_config(
     config: SafeSynthesizerParameters,
