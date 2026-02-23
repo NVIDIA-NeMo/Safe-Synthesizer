@@ -18,6 +18,7 @@ from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
+from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
 from ..utils import merge_dicts
 from .parameters import SafeSynthesizerParameters
@@ -202,7 +203,7 @@ class AutoConfigResolver:
     def _determine_learning_rate(self) -> dict[str, float]:
         """
         Determine the learning rate if set to auto.
-        This is set to 0.0001 for Mistral-7B-Instruct-v0.3, else 0.0005.
+        Uses model-specific default from llm.metadata (e.g. 0.0001 for Mistral, 0.0005 for others).
 
         Returns:
             Dict with learning_rate if auto-determined, empty dict otherwise.
@@ -210,7 +211,8 @@ class AutoConfigResolver:
         if self._config.training.learning_rate != AUTO_STR:
             logger.info(f"`learning_rate` was set to {self._config.training.learning_rate}, using that value")
             return {}
-        lr = 0.0001 if self._config.training.pretrained_model == "mistralai/Mistral-7B-Instruct-v0.3" else 0.0005
+        # get the LR from metadata given model name or path:
+        lr = ModelMetadata.from_str_or_path(self._config.training.pretrained_model).default_learning_rate
         logger.info(
             f"`learning_rate` was automatically set to {lr} with pretrained_model={self._config.training.pretrained_model}."
         )

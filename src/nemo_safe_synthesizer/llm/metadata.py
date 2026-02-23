@@ -18,7 +18,7 @@ and underfitting errors.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 from pydantic.experimental.missing_sentinel import MISSING
@@ -164,6 +164,9 @@ class ModelMetadata(BaseModel):
     tokens, etc.
     """
 
+    # Learning rate when training.learning_rate is "auto". Override in subclasses (e.g. Mistral).
+    default_learning_rate: ClassVar[float] = 0.0005
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     model_name_or_path: str
@@ -267,6 +270,8 @@ class ModelMetadata(BaseModel):
             if str(class_.__name__).lower() in str(model_name_or_path).lower():
                 return class_(model_name_or_path=str(model_name_or_path), **kwargs)
         raise ValueError(f"Unknown model name or path: {model_name_or_path}")
+
+
 
     @classmethod
     def from_config(
@@ -393,6 +398,9 @@ class Llama32(ModelMetadata):
 
 
 class Mistral(ModelMetadata):
+
+    default_learning_rate: ClassVar[float] = 0.0001
+
     def __init__(
         self,
         model_name_or_path: str,
@@ -402,6 +410,7 @@ class Mistral(ModelMetadata):
     ) -> None:
         tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        config.learning_rate = Mistral.default_learning_rate
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
