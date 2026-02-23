@@ -5,10 +5,6 @@
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/architecture/design/</loc>
-         <lastmod>2026-02-23</lastmod>
-    </url>
-    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/blog/</loc>
          <lastmod>2026-02-23</lastmod>
     </url>
@@ -17,11 +13,31 @@
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/developer-guide/architecture/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/getting-started/installation/</loc>
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/getting-started/quickstart/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/product-overview/data-synthesis/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/product-overview/evaluation/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/product-overview/pii_replacement/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/product-overview/pipeline/</loc>
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
@@ -705,23 +721,15 @@
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/configuration/</loc>
-         <lastmod>2026-02-23</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/evaluation/</loc>
-         <lastmod>2026-02-23</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/pipeline/</loc>
-         <lastmod>2026-02-23</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/privacy/</loc>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/parameters/</loc>
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/sdk/</loc>
+         <lastmod>2026-02-23</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/troubleshooting/</loc>
          <lastmod>2026-02-23</lastmod>
     </url>
     <url>
