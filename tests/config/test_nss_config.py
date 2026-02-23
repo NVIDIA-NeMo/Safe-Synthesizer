@@ -4,6 +4,8 @@
 from typing import Annotated, Literal
 
 import pytest
+from pydantic import Field, ValidationError
+
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
@@ -14,7 +16,6 @@ from nemo_safe_synthesizer.config import (
 from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.configurator.validators import ValueValidator
-from pydantic import Field, ValidationError
 
 
 class SubGroup(Parameters):

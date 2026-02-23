@@ -18,6 +18,8 @@ pytest.importorskip(
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
+from transformers import PretrainedConfig
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.defaults import (
     DEFAULT_INSTRUCTION,
@@ -39,7 +41,6 @@ from nemo_safe_synthesizer.llm.metadata import (
     TinyLlama,
     resolve_rope_scaling_factor,
 )
-from transformers import PretrainedConfig
 
 
 @dataclass(frozen=True)

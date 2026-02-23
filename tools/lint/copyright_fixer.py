@@ -175,7 +175,7 @@ def _add_header(filepath: str) -> bool:
         header = _HASH_HEADER
         # Insert copyright as YAML comments right after opening ---
         sep = "---\r\n" if content.startswith("---\r\n") else "---\n"
-        new_content = sep + header + content[len(sep):]
+        new_content = sep + header + content[len(sep) :]
     else:
         header = _get_header_for_ext(ext)
         new_content = header + content

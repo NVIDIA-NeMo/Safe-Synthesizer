@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Dependency Diagnosis Workflows
 
 Extended step-by-step workflows for `tools/diff-lockfile.py`. See [SKILL.md](SKILL.md) for quick-reference commands.

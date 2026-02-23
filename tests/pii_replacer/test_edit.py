@@ -10,6 +10,7 @@ import re
 from unittest import TestCase
 
 import pandas as pd
+
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import Editor, ProgressLog
 
 # The entity types that use the bothify transformation in DEFAULT_PII_TRANSFORM_CONFIG

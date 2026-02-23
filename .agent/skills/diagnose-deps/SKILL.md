@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: diagnose-deps
 description: Diagnose transitive dependency changes by diffing uv.lock between git refs. Use when a test breaks after a lockfile update, an import error appears after dependency changes, CI fails with version mismatches, or the user asks what changed in dependencies. Trigger keywords - dependency, lockfile, uv.lock, transitive, dep change, version bump, package upgrade, package downgrade, bisect deps.
 ---

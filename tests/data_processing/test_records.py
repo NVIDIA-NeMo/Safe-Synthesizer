@@ -8,6 +8,7 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
+
 from nemo_safe_synthesizer.data_processing.record_utils import (
     _extract_timestamp_seconds,
     _validate_time_interval,
