@@ -7,9 +7,11 @@ import time
 from unittest import mock
 from unittest.mock import MagicMock
 
-import nemo_safe_synthesizer.observability as obs
 import pytest
 import structlog
+from rich.table import Table
+
+import nemo_safe_synthesizer.observability as obs
 from nemo_safe_synthesizer.observability import (
     CategoryFilter,
     CategoryLogger,
@@ -27,7 +29,6 @@ from nemo_safe_synthesizer.observability import (
     initialize_observability,
     traced,
 )
-from rich.table import Table
 
 # =============================================================================
 # NSSObservabilitySettings Tests

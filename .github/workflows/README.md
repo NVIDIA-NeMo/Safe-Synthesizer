@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # GitHub Actions Workflows
 
 This directory contains GitHub Actions workflows for CI/CD automation.
@@ -24,7 +27,7 @@ GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull
 1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
 2. The push to `pull-request/<number>` triggers the GPU workflow
 3. Untrusted PRs require a vetter to comment `/ok to test <SHA>` before GPU tests run
-4. Draft PRs do **not** auto-sync (`auto_sync_draft: false`), saving GPU resources
+4. Draft PRs do not auto-sync (`auto_sync_draft: false`), saving GPU resources
 
 Configuration: [`.github/copy-pr-bot.yaml`](../copy-pr-bot.yaml)
 
@@ -89,12 +92,12 @@ flowchart LR
 
 The `ci-checks.yml` workflow runs on every push to `main` and on pull requests:
 
-- **Detect Changes**: Uses `dorny/paths-filter` to skip jobs when only non-source files change
-- **Format**: Verifies code formatting with `ruff format --check`
-- **Lint**: Runs `ruff check` linting
-- **Typecheck**: Runs `ty` type checks
-- **Unit Tests**: Runs pytest with coverage
-- **CI Status**: Aggregation job -- single required check for branch protection
+- Detect Changes: Uses `dorny/paths-filter` to skip jobs when only non-source files change
+- Format: Verifies code formatting with `ruff format --check`
+- Lint: Runs `ruff check` linting
+- Typecheck: Runs `ty` type checks
+- Unit Tests: Runs pytest with coverage
+- CI Status: Aggregation job -- single required check for branch protection
 
 All jobs run on `ubuntu-latest` (GitHub-hosted).
 
@@ -102,8 +105,8 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot):
 
-- **GPU E2E Tests**: Runs end-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 60-minute job timeout and 45-minute step timeout
-- **GPU CI Status**: Aggregation job -- single required check for branch protection
+- GPU E2E Tests: Runs end-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 60-minute job timeout and 45-minute step timeout
+- GPU CI Status: Aggregation job -- single required check for branch protection
 
 ### Runners
 
@@ -160,16 +163,16 @@ The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Ar
 
 ### How to Publish Internally
 
-**Via GitHub Actions:**
+Via GitHub Actions:
 
-1. Go to **Actions** > **Internal Release**
-2. Click **Run workflow**
+1. Go to Actions > Internal Release
+2. Click Run workflow
 3. Enter the branch, tag, or commit SHA to build (defaults to `main`)
 4. The workflow builds the wheel, uploads it as an artifact, and publishes to Artifactory
 
 Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets to be configured.
 
-**Locally (via Makefile):**
+Locally (via Makefile):
 
 Add the required env vars to your `.local.envrc` (git-ignored):
 
@@ -197,8 +200,8 @@ The production release workflow uses the [FW-CI-templates `_release_library.yml`
 
 this is placeholder information until we do a real release. will update then.
 
-1. Go to **Actions** > **Release NeMo Safe Synthesizer**
-2. Click **Run workflow**
+1. Go to Actions > Release NeMo Safe Synthesizer
+2. Click Run workflow
 3. Fill in the required inputs:
   - `release-ref`: Full SHA or tag of the commit to release
   - `dry-run`: Set to `false` for production release (publishes to PyPI)
@@ -209,12 +212,12 @@ this is placeholder information until we do a real release. will update then.
 
 The workflow performs the following steps:
 
-1. **Dry-run build** - Validates the wheel can be built
-2. **Version bump** - Creates a PR to bump the version in `package_info.py`
-3. **Build wheel** - Builds the production wheel
-4. **Publish to PyPI** - Uploads to PyPI (or test PyPI for dry runs)
-5. **Create GitHub release** - Creates a tagged release with changelog
-6. **Notify** - Sends Slack notification
+1. Dry-run build - Validates the wheel can be built
+2. Version bump - Creates a PR to bump the version in `package_info.py`
+3. Build wheel - Builds the production wheel
+4. Publish to PyPI - Uploads to PyPI (or test PyPI for dry runs)
+5. Create GitHub release - Creates a tagged release with changelog
+6. Notify - Sends Slack notification
 
 ### Version Management
 

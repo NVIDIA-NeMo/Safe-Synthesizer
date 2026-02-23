@@ -192,7 +192,7 @@ def fixture_pems_sf_sample_dataset() -> Dataset:
 # Purpose: DataFrame with embedded carriage returns to exercise serialization/regex edge cases.
 # Used by: (no direct test references currently)
 @pytest.fixture
-def fixture_embeddd_carriage_return_dataframe() -> pd.DataFrame:
+def fixture_embedded_carriage_return_dataframe() -> pd.DataFrame:
     return load_test_dataframe("embedded_carriage_return.parquet")
 
 

@@ -8,6 +8,8 @@ from typing import cast
 import pandas as pd
 import pytest
 from datasets import Dataset
+from transformers import PretrainedConfig, PreTrainedTokenizer
+
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.assembler import (
     Example,
@@ -24,7 +26,6 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
 from nemo_safe_synthesizer.defaults import PROMPT_TEMPLATE, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.errors import GenerationError, ParameterError
 from nemo_safe_synthesizer.llm.metadata import DEFAULT_MAX_SEQ_LENGTH, LLMPromptConfig, ModelMetadata
-from transformers import PretrainedConfig, PreTrainedTokenizer
 
 STUB_PROMPT = "Test prompt"
 STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])

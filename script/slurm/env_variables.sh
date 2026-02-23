@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 
 export USER_NAME="${USER_NAME:-}"
 export LUSTRE_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}" ## do not change this
@@ -42,4 +45,3 @@ CONFIG_TIME_LIMITS_SHORT[max]="04:00:00" #fallback if config names do not includ
 CONFIG_TIME_LIMITS_LONG[unsloth]="01:20:00"
 CONFIG_TIME_LIMITS_LONG[dp]="02:00:00"
 CONFIG_TIME_LIMITS_LONG[max]="04:00:00" #fallback if config names do not include unsloth or dp
-

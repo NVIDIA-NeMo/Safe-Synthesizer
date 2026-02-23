@@ -4,6 +4,7 @@
 import logging
 
 import pytest
+
 from nemo_safe_synthesizer.evaluation.components.correlation import (
     Correlation,
 )

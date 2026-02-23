@@ -185,8 +185,7 @@ class ConfigBuilder(object):
 
         Examples:
             ```python
-            >>> from nemo_microservices import NeMoMicroservices
-            >>> from nemo_microservices.beta.safe_synthesizer.sdk.library_builder import SafeSynthesizer
+            >>> from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
             >>> from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
             >>> # Using default PII replacement settings
             >>> builder = (

@@ -6,6 +6,7 @@ from io import StringIO
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
 from nemo_safe_synthesizer.generation.regex_manager import (

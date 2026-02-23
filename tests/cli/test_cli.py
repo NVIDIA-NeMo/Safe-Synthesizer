@@ -5,6 +5,7 @@ import json
 import re
 
 from click.testing import CliRunner
+
 from nemo_safe_synthesizer.cli.cli import cli
 from nemo_safe_synthesizer.utils import merge_dicts
 

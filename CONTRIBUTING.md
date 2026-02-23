@@ -17,6 +17,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Developer Certificate of Origin](#developer-certificate-of-origin)
 - [Testing](#testing)
 - [Code Style](#code-style)
+- [Documentation](#documentation)
 
 ## Getting Started
 
@@ -26,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Git
 - [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
 
-> **Note:** Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
 
 ### Setup
 
@@ -47,34 +48,14 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss engine # Engine dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
-   Or, if you have a local clone of the NMP repo, bootstrap everything in one step:
-  ```bash
-   NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
-  ```
-   This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs Python dependencies with CPU extras.
 4. Add the upstream remote:
   ```bash
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
   ```
 
-### NMP Synchronization
+### NMP Integration
 
-If you work with the NMP monorepo, set `NMP_REPO_PATH` to your local checkout to enable sync targets:
-
-```bash
-export NMP_REPO_PATH=/path/to/nmp
-
-# Sync files from NMP to this repo
-make synchronize-from-nmp
-
-# Sync files from this repo to NMP
-make synchronize-to-nmp
-
-# Sync from a specific NMP merge request
-make synchronize-from-nmp-mr MR=5603
-```
-
-> **Note:** `NMP_REPO_PATH` is only required for NMP sync operations. It is not needed for standard development, testing, or CI. we also will remove this after we extricate nss fro mnmp.
+NeMo Safe Synthesizer is a standalone package. Changes flow into NMP via Artifactory publishing and vendor packaging. See the [NMP Integration](README.md#nmp-integration) section of the README for details on publishing, SDK vendoring, and local development workflows.
 
 ## Repository Settings
 
@@ -337,6 +318,97 @@ prek install
 ```
 
 This installs hooks that run Ruff (format + lint), ty type checking, and uv lock verification on each commit.
+
+## Documentation
+
+This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) for its documentation site, hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
+
+### Local Preview
+
+Documentation dependencies are included in the `dev` bootstrap profile. If you already ran `make bootstrap-nss dev` (or `cpu`/`cuda`), you're set. Otherwise install them directly:
+
+```bash
+uv sync --group docs
+```
+
+Start a local server with live reload:
+
+```bash
+make docs-serve
+# Browse to http://127.0.0.1:8000
+```
+
+Build the static site (output in `site/`):
+
+```bash
+make docs-build
+```
+
+### Directory Layout
+
+All documentation lives under `docs/`. The structure follows the [Diataxis](https://diataxis.fr/) framework:
+
+| Directory | Content type | Examples |
+| --- | --- | --- |
+| `getting-started/` | Tutorials | Installation, quick start |
+| `user-guide/` | How-tos & reference | CLI, configuration, SDK |
+| `architecture/` | Explanations | Design decisions |
+| `reference/` | API reference | Auto-generated (see below) |
+| `blog/` | Dev notes | Release notes, design posts |
+
+### Adding or Editing a Page
+
+1. Create or edit the `.md` file under the appropriate `docs/` subdirectory.
+2. Add the page to the `nav:` section of `mkdocs.yml` so it appears in the sidebar.
+3. Run `make docs-serve` and verify the page renders correctly.
+
+### MkDocs Material Features
+
+The site configuration (`mkdocs.yml`) enables several useful Markdown extensions:
+
+- Admonitions -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
+- Content tabs -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
+- Code blocks -- syntax highlighting, line numbers, copy button, and annotations
+- Mermaid diagrams -- fenced code blocks with ` ```mermaid `
+- Task lists, footnotes, definition lists, and emoji
+
+See the [MkDocs Material reference](https://squidfunk.github.io/mkdocs-material/reference/) for full syntax.
+
+### API Reference
+
+API reference pages are auto-generated from Python docstrings. The `mkdocstrings` and `gen-files` plugins run `docs/gen_ref_pages.py` at build time to produce pages under `reference/`. You do not need to edit these files manually -- just write Google-style docstrings in `src/nemo_safe_synthesizer/` and they will appear on the next build.
+
+### Deployment
+
+Documentation is deployed to GitHub Pages automatically when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main`. The workflow is defined in `.github/workflows/docs.yml`.
+
+## AI Agents
+
+This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
+- `AGENTS.md` -- primary agent guide
+- `.agent/skills/` -- domain-specific skills (canonical location)
+- `.cursor/rules/` -- Cursor workflow rules
+- `.cursor/skills/` -- symlinks to `.agent/skills/` for Cursor discoverability
+
+Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
+
+## AI Agents
+
+This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format.
+
+| Config file | Read by | Purpose |
+|-------------|---------|---------|
+| `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
+| `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
+| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
+| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
+
+Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
+
+Before contributing, run `make format` and `make lint`. See `AGENTS.md` for full conventions.
 
 ---
 

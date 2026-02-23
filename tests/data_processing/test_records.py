@@ -8,6 +8,7 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
+
 from nemo_safe_synthesizer.data_processing.record_utils import (
     _extract_timestamp_seconds,
     _validate_time_interval,
@@ -272,7 +273,7 @@ def test_normalize_dataframe_carriage_return():
 
 
 def test_normalize_dataframe_carriage_return_repro(
-    fixture_embeddd_carriage_return_dataframe,
+    fixture_embedded_carriage_return_dataframe,
 ):
     # In RDS-1082, we observed prod and dev failures related to embedded
     # carriage returns, but resulting in a different error (possible malformed
@@ -281,7 +282,7 @@ def test_normalize_dataframe_carriage_return_repro(
     # test a minimal DataFrame from one such failure. The difference is probably
     # around dtypes and how the DataFrames used in NavFT are created via json,
     # instead of from csv or manually.
-    normalized_df = normalize_dataframe(fixture_embeddd_carriage_return_dataframe)
+    normalized_df = normalize_dataframe(fixture_embedded_carriage_return_dataframe)
 
     # The normalization changes some of the dtypes in this example, so we don't
     # check for equality before and after. We just want to make sure the

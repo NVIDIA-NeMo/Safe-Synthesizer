@@ -10,6 +10,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+from pandas.testing import assert_index_equal
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DEFAULT_ENTITIES,
     ClassifyConfig,
@@ -21,8 +24,6 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
 )
 from nemo_safe_synthesizer.pii_replacer.data_editor.environment import redact_entities_fn
 from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from pandas.testing import assert_index_equal
-from pydantic import ValidationError
 
 
 def test_gliner_batch_predict_config():

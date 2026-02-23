@@ -4,8 +4,6 @@
 from typing import Sequence, Type
 
 from ..regex import RegexPredictor
-
-# TODO: are relative imports acceptable in nmp repo?
 from .aba_routing_number import AbaRoutingNumber
 from .age import Age
 from .credit_card import CreditCardNumber

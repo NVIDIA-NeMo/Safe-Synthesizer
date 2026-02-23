@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
     DataParameters,

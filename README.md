@@ -260,9 +260,9 @@ Additionally, the registry supports custom config overrides or args that are spe
 
 You can supply a dataset registry (YAML file) via either the CLI or an environment variable:
 
-- **CLI Option**:
+- CLI Option:
 `--dataset-registry <path_or_url>`
-- **Environment Variable**:
+- Environment Variable:
 Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
 
 If both are provided, the CLI option takes precedence.
@@ -318,9 +318,9 @@ For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts
 
 These scripts support:
 
-- **Matrix runs**: Launching jobs across multiple configurations and datasets.
-- **Two-stage pipelines**: Running training and generation as separate jobs with dependencies.
-- **Containerized execution**: Running jobs inside enroot containers.
+- Matrix runs: Launching jobs across multiple configurations and datasets.
+- Two-stage pipelines: Running training and generation as separate jobs with dependencies.
+- Containerized execution: Running jobs inside enroot containers.
 
 See [script/slurm/README.md](script/slurm/README.md) for detailed instructions on cluster setup and job submission.
 
@@ -367,17 +367,7 @@ This builds a container image from `containers/Dockerfile.test_ci` and runs `mak
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribution guidelines.
 
-### One-Command Setup
-
-If you have a local clone of the NMP repo, you can bootstrap everything in one step:
-
-```bash
-NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
-```
-
-This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs all Python dependencies.
-
-### Step-by-Step Setup
+### Setup
 
 ```bash
 # 1. Bootstrap development tools
@@ -394,18 +384,32 @@ make format
 make lint
 ```
 
-### NMP Synchronization
+### NMP Integration
 
-To sync code to/from the NMP monorepo, set `NMP_REPO_PATH` to your local NMP checkout:
+NeMo Safe Synthesizer is developed as a standalone package and published to NVIDIA Artifactory. The NeMo Platform (NMP) consumes it as an external dependency.
+
+#### Publishing to Artifactory
+
+The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
 
 ```bash
-export NMP_REPO_PATH=/path/to/nmp
-
-# Sync files from NMP to this repo
-make synchronize-from-nmp
-
-# Sync files from this repo to NMP
-make synchronize-to-nmp
+make publish-internal
 ```
+
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+
+#### Local Development with NMP
+
+The NMP service (`services/safe-synthesizer/pyproject.toml` in the NVIDIA internal `nmp` repo) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
+
+When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
+
+```bash
+# In the NMP repo, from services/safe-synthesizer/
+make use-nss-local          # Build local wheel and patch pyproject.toml
+make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
+```
+
+See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
 
 Run `make help` to see all available Makefile targets.

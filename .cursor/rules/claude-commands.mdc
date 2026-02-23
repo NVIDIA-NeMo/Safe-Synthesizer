@@ -1,0 +1,10 @@
+---
+alwaysApply: true
+description: Index of available Claude command files. Use when user asks about available commands, workflows, or tasks like running tests, building docs, formatting, or syncing.
+globs:
+  - .claude/commands/**
+---
+
+# Claude Commands
+
+Pre-defined command files live in `.claude/commands/`. When a user asks about a development task (testing, formatting, linting, building, syncing, etc.), read the corresponding command file at `.claude/commands/<command-name>.md` for instructions. See AGENTS.md for the full development workflow reference.

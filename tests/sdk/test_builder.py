@@ -3,6 +3,7 @@
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,

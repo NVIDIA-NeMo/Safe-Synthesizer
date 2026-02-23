@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: sync-with-nmp
 description: Synchronize code between the Safe-Synthesizer GitHub repo and the internal NMP GitLab repo. Use when the user wants to sync changes from an NMP merge request, push changes to NMP, pull the latest NMP code, or manage the bidirectional sync workflow. Trigger keywords - sync, synchronize, NMP, GitLab, merge request, MR, rsync, upstream, downstream, pull from NMP, push to NMP.
 ---
@@ -18,21 +20,20 @@ Safe-Synthesizer (GitHub)           NMP (GitLab)
 └── (metafiles)             ←→      packages/nemo_safe_synthesizer/(metafiles)
 ```
 
-**Primary sync directions:**
+Primary sync directions:
 
-- **Safe-Synthesizer → NMP** ("downstream"): Push OSS contributions back into the internal repo.
-- **NMP → Safe-Synthesizer** ("upstream"): Pull merged NMP changes into the OSS repo.
+- Safe-Synthesizer → NMP ("downstream"): Push OSS contributions back into the internal repo.
+- NMP → Safe-Synthesizer ("upstream"): Pull merged NMP changes into the OSS repo.
 
 ## Prerequisites
 
-- `glab` CLI configured for `gitlab-master.nvidia.com` (see [gitlab-inspect skill](../gitlab-inspect/SKILL.md))
 - NMP repo cloned locally (default: `$HOME/dev/aire/microservices/nmp`)
 - `rsync` and `jq` installed
 - Working directory is the Safe-Synthesizer repo root
 
 ## Shell Permissions
 
-Always use `required_permissions: ["all"]` when running sync commands. The `glab` API calls need unrestricted network access, and `rsync` crosses repo boundaries.
+Always use `required_permissions: ["all"]` when running sync commands. `rsync` crosses repo boundaries.
 
 ## Environment
 
@@ -61,16 +62,16 @@ When a merge request lands in NMP that touches `packages/nemo_safe_synthesizer/`
 make synchronize-from-nmp-mr MR=<mr-iid>
 ```
 
-**What this does:**
+What this does:
 
 1. If on `main`, creates branch `$USER/sync-<MR>-from-nmp`
 2. Calls `tools/sync-from-mr.sh` which:
-   - Fetches the MR's squash commit SHA via `glab` API
+   - Fetches the MR's squash commit SHA via the GitLab API
    - Checks out that commit in the NMP repo
    - Rsyncs `src/` and `tests/` with `--delete` (exact mirror)
    - Reports files changed in the MR that are outside `src/` and `tests/` (need manual review)
 
-**After syncing**, follow the post-sync workflow below.
+After syncing, follow the post-sync workflow below.
 
 ## Full Sync from NMP
 
@@ -89,7 +90,7 @@ make synchronize-metafiles-from-nmp
 make synchronize-from-nmp
 ```
 
-**Note:** Metafile sync excludes files that are Safe-Synthesizer-specific: `pyproject.toml`, `uv.lock`, `Makefile`, `README.md`, `LICENSE`, `ruff.toml`, `pytest.ini`, `.pre-commit-config.yaml`, etc.
+Note: Metafile sync excludes files that are Safe-Synthesizer-specific: `pyproject.toml`, `uv.lock`, `Makefile`, `README.md`, `LICENSE`, `ruff.toml`, `pytest.ini`, `.pre-commit-config.yaml`, etc.
 
 ## Sync to NMP
 
@@ -150,19 +151,7 @@ make synchronize-metafiles-from-nmp
 
 ## Finding NMP MRs to Sync
 
-Use `glab` to find merged MRs that touched the Safe-Synthesizer package:
-
-```bash
-# Recent merged MRs in NMP (all)
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests?state=merged&order_by=updated_at&per_page=10" | \
-  jq '.[] | {iid, title, merged_at: .merged_at, author: .author.username}'
-
-# Check if a specific MR touched nemo_safe_synthesizer
-glab api --hostname gitlab-master.nvidia.com \
-  "projects/150981/merge_requests/<mr-iid>/changes" | \
-  jq '[.changes[].new_path | select(startswith("packages/nemo_safe_synthesizer/"))] | length'
-```
+Use the GitLab MCP server to find merged MRs that touched the Safe-Synthesizer package. Alternatively, browse the NMP project merge requests at `gitlab-master.nvidia.com` filtering by path `packages/nemo_safe_synthesizer/`.
 
 ## Rsync Exclusions
 
@@ -177,10 +166,8 @@ Metafile sync additionally excludes Safe-Synthesizer-specific files: `__init__.p
 | `NMP_REPO_PATH is not set` | `export NMP_REPO_PATH="$HOME/dev/aire/microservices/nmp"` |
 | `MR is not merged` | The MR must be merged in NMP before syncing with `sync-from-mr.sh` |
 | `NMP repo not found` | Clone NMP or fix `NMP_REPO_PATH` |
-| `glab` auth errors | Run `glab auth login --hostname gitlab-master.nvidia.com` |
 | On `main` branch | `synchronize-from-nmp-mr` auto-creates a branch; other targets don't |
 | Merge conflicts after sync | Resolve manually, then `make format && make lint && make test` |
-| `glab` aliased to `op plugin run` | Use `/opt/homebrew/bin/glab` directly |
 
 ## Detailed Workflows
 

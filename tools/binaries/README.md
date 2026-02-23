@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Developer Tools and Setup
 
 This folder holds setup scripts for binary tools and meta-configuration information needed
@@ -21,8 +24,8 @@ bash tools/binaries/bootstrap_tools.sh
 
 Tools are defined in `tools.yaml` with two categories:
 
-1. **Simple binary tools** - Defined entirely in YAML with download URLs
-2. **Custom scripts** - Complex tools that need custom installation logic
+1. Simple binary tools - Defined entirely in YAML with download URLs
+2. Custom scripts - Complex tools that need custom installation logic
 
 ### tools.yaml Structure
 
@@ -57,8 +60,8 @@ custom_scripts:
 
 ## Supported Platforms
 
-- **macOS (darwin)**: arm64, amd64
-- **Linux**: arm64, amd64
+- macOS (darwin): arm64, amd64
+- Linux: arm64, amd64
 
 ## Adding a New Tool
 

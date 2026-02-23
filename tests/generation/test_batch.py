@@ -5,9 +5,10 @@ from logging import INFO
 from unittest import mock
 from unittest.mock import MagicMock
 
-import nemo_safe_synthesizer
 import pandas as pd
 import pytest
+
+import nemo_safe_synthesizer
 from nemo_safe_synthesizer.data_processing.actions.utils import MetadataColumns
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import ParsedResponse
