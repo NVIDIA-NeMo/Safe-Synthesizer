@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Time Series Support for Safe Synthesizer
 
 This document describes the time series synthesis capabilities added to NeMo Safe Synthesizer. It covers the design decisions, configuration parameters, data preprocessing, generation logic, validation, and evaluation components.
@@ -174,27 +177,27 @@ def _fill_context_with_records_generator(dataset):
     # Iteration indices for slicing
     example_start = 0
     current_idx = 0
-    
+
     while current_idx < len(dataset):
         record = dataset[current_idx]
         row_idx = record["__row_idx"]  # Original position
-        
+
         # Set group value at start of new example
         if token_total == 0:
             current_group_value = record_group
-        
+
         # Check flush conditions
         restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
         group_boundary = current_group_value is not None and record_group != current_group_value
         would_exceed_tokens = token_total + record_len > token_budget
-        
+
         if _should_flush_example(...):
             yield _flush_example(dataset, example_start, current_idx)
             # Reset state for next example
             example_start = current_idx
             token_budget = _next_token_budget()  # Random 70-100% for train
             continue
-        
+
         # Add record to current example
         token_total += record_len
         current_idx += 1
@@ -343,15 +346,15 @@ def _is_chronological_for_group(self, records: list[dict], group_state: GroupSta
     """Check if records continue from the group's last timestamp."""
     if not records:
         return False
-    
+
     first_record = records[0]
     timestamp_seconds = self._parse_timestamp_seconds(first_record.get(self._time_column))
-    
+
     if group_state.last_timestamp_seconds is not None:
         expected_ts = self._advance_expected_time(group_state.last_timestamp_seconds)
         if timestamp_seconds != expected_ts:
             return False
-    
+
     return True
 ```
 

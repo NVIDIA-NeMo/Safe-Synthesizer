@@ -3,13 +3,18 @@
 
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 exclude: |
-          (?x)^./(
-              SECURITY.md|
+          (?x)(
+              CITATION.md|
               CONTRIBUTING.md|
               CODE_OF_CONDUCT.md|
+              design.md|
+              CLAUDE.md|
+              AGENTS.md|
+              CHANGELOG.md|
               DCO|
               LICENSE|
-              THIRD_PARTY.md|
+              README.md|
+              SECURITY.md|
               THIRD_PARTY.md
           )$
 
@@ -28,10 +33,6 @@ repos:
 
       - id: trailing-whitespace
         files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
-
-      - id: check-merge-conflict
-        args:
-          - --assume-in-merge
 
 
   - repo: local

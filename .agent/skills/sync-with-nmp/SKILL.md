@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: sync-with-nmp
 description: Synchronize code between the Safe-Synthesizer GitHub repo and the internal NMP GitLab repo. Use when the user wants to sync changes from an NMP merge request, push changes to NMP, pull the latest NMP code, or manage the bidirectional sync workflow. Trigger keywords - sync, synchronize, NMP, GitLab, merge request, MR, rsync, upstream, downstream, pull from NMP, push to NMP.
 ---

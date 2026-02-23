@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: diagnose-failures
 description: "Triage test, CI, runtime, GPU, import errors. Triggers on: test failed, CI failed, pytest error, traceback, OOM, CUDA, import error, DataError, ParameterError, GenerationError, InternalError."
 related-skills: [diagnose-deps, python-testing-patterns]

@@ -44,7 +44,7 @@ class MySettings(BaseSettings):
         extra="ignore",
         env_file=".env",
     )
-    
+
     log_level: str = Field(
         default="INFO",
         validation_alias=AliasChoices("log_level", "NSS_LOG_LEVEL"),
@@ -66,7 +66,7 @@ from pydantic import field_validator
 
 class MyModel(NSSBaseModel):
     mode: str
-    
+
     @field_validator("mode", mode="before")
     @classmethod
     def coerce_mode(cls, v: str) -> str:
@@ -85,7 +85,7 @@ from pydantic import model_validator
 class MyModel(NSSBaseModel):
     start: int
     end: int
-    
+
     @model_validator(mode="after")
     def check_range(self) -> "MyModel":
         if self.end <= self.start:
