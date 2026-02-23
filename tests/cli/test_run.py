@@ -6,9 +6,10 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 import pytest
 from click.testing import CliRunner
+
+import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 

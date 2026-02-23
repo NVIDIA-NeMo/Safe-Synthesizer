@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 import pytest
+
 from nemo_safe_synthesizer.cli.artifact_structure import (
     PROJECT_NAME_DELIMITER,
     BoundDir,

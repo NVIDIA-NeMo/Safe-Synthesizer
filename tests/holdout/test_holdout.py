@@ -4,6 +4,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.holdout.holdout import (
     HOLDOUT_TOO_SMALL_ERROR,
