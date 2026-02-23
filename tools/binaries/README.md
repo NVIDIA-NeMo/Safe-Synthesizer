@@ -21,8 +21,8 @@ bash tools/binaries/bootstrap_tools.sh
 
 Tools are defined in `tools.yaml` with two categories:
 
-1. **Simple binary tools** - Defined entirely in YAML with download URLs
-2. **Custom scripts** - Complex tools that need custom installation logic
+1. Simple binary tools - Defined entirely in YAML with download URLs
+2. Custom scripts - Complex tools that need custom installation logic
 
 ### tools.yaml Structure
 
@@ -57,8 +57,8 @@ custom_scripts:
 
 ## Supported Platforms
 
-- **macOS (darwin)**: arm64, amd64
-- **Linux**: arm64, amd64
+- macOS (darwin): arm64, amd64
+- Linux: arm64, amd64
 
 ## Adding a New Tool
 
