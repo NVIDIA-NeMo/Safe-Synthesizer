@@ -238,10 +238,16 @@ class AutoConfigResolver:
             explicit value (int) if manually specified, or None if not specified.
         """
         if self._dp_enabled is True:
-            logger.info(
-                "Parameter `max_sequences_per_example` was automatically set "
-                "to 1 based on the use of differential privacy."
-            )
+            if self._config.data.max_sequences_per_example in [None, AUTO_STR, 1]:
+                logger.info(
+                    "Parameter `max_sequences_per_example` was automatically set "
+                    "to 1 based on the use of differential privacy."
+                )
+            else:
+                logger.info(
+                    "Parameter `max_sequences_per_example` does not allow the value of "
+                    "{self._config.data.max_sequences_per_example} when DP is enabled. Setting to 1 instead."
+                )
             return {"max_sequences_per_example": 1}
         elif self._config.data.max_sequences_per_example != AUTO_STR:
             if self._config.data.max_sequences_per_example is None:
