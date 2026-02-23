@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 hide:
   - navigation
 ---
@@ -11,44 +13,6 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe synthetic d
 
 ---
 
-<div class="grid cards" markdown>
-
--   **Getting Started**
-
-    ---
-
-    Install the package, set up your environment, and run your first synthetic data pipeline in minutes.
-
-    [:octicons-arrow-right-24: Installation](getting-started/installation.md)
-
--   **User Guide**
-
-    ---
-
-    Learn how to use the CLI, configure pipelines, and work with the Python SDK.
-
-    [:octicons-arrow-right-24: User Guide](user-guide/pipeline.md)
-
--   **Architecture**
-
-    ---
-
-    Understand the pipeline design, component architecture, and key design patterns.
-
-    [:octicons-arrow-right-24: Architecture](architecture/design.md)
-
--   **API Reference**
-
-    ---
-
-    Auto-generated reference documentation from source code docstrings.
-
-    [:octicons-arrow-right-24: API Reference](reference/nemo_safe_synthesizer/sdk/library_builder.md)
-
-</div>
-
----
-
 ## Key Features
 
 - **Privacy-first synthetic data** -- PII detection and replacement, optional differential privacy via Opacus
@@ -56,6 +20,62 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe synthetic d
 - **Fast inference** -- VLLM-powered generation with structured output enforcement
 - **Comprehensive evaluation** -- Privacy metrics, quality scores, distribution analysis, and HTML reports
 - **Flexible interfaces** -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
+
+---
+
+<div class="grid cards" markdown>
+
+-   **Product Overview**
+
+    ---
+
+    Pipeline, data synthesis, PII replacement, and evaluation.
+
+    [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
+
+-   **Getting Started**
+
+    ---
+
+    Install the package, set up your environment, and run your first synthetic data pipeline in minutes.
+
+    [:octicons-arrow-right-24: Getting Started](getting-started/installation.md)
+
+-   **Tutorials**
+
+    ---
+
+    Step-by-step tutorials to get you up and running.
+
+    [:octicons-arrow-right-24: Tutorials](tutorials/index.md)
+
+-   **User Guide**
+
+    ---
+
+    Python SDK, CLI reference, parameters, and troubleshooting.
+
+    [:octicons-arrow-right-24: User Guide](user-guide/sdk.md)
+
+-   **Developer Guide**
+
+    ---
+
+    Architecture documentation and auto-generated API reference.
+
+    [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
+
+-   **Developer Notes**
+
+    ---
+
+    Blog posts and release notes.
+
+    [:octicons-arrow-right-24: Developer Notes](blog/index.md)
+
+</div>
+
+---
 
 ## Quick Example
 

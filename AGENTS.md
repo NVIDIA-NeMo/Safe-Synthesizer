@@ -7,6 +7,15 @@ Guide for AI agents (Cursor, Windsurf, Claude Code, etc.) working in the Safe-Sy
 
 This project loads local developer preferences from @AGENTS.local.md. You MUST read this file if it exists and give its instructions top priority.
 
+## Transparency
+
+When you read a skill file (from `.agent/skills/`) or a context rule (from `.cursor/rules/`), declare what you loaded before proceeding with the task. Format:
+
+- `skill: <name>` -- reason it was activated
+- `rule: <name>` -- reason it was activated
+
+If only always-apply rules were loaded and no additional skills or rules were consulted, say so briefly (e.g., "No additional skills or rules loaded beyond always-apply defaults.").
+
 ## Available Skills
 
 | Skill | Location | Purpose |
@@ -55,8 +64,7 @@ Python 3.11+ is required. Use modern syntax:
 
 ### Markdown and Docstrings
 
-- No decorative `**bold**` in list items or body text -- use headers, list markers, colons, and backticks for structure
-- Bold is acceptable only in table cells where it conventionally marks header-like content
+- No decorative `**bold**` -- use headers, list markers, colons, and backticks for structure
 
 ### Bootstrap
 

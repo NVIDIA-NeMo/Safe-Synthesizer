@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import TransformFnAccounting
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import ColumnClassification, NemoPII, _build_column_statistics
 

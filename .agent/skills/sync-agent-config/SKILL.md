@@ -1,4 +1,6 @@
 ---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 name: sync-agent-config
 description: "Keep agent config in sync with source-of-truth files. Triggers on: new Makefile target, new module, docs structure change, pytest markers change, new skill, agent config stale."
 related-skills: [diagnose-failures]

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+
 from nemo_safe_synthesizer.evaluation.components.deep_structure import DeepStructure
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import EvaluationDataset
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Grade

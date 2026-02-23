@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Python SDK
 
 The Python SDK provides a programmatic interface for building and running Safe Synthesizer workflows using a fluent builder pattern.

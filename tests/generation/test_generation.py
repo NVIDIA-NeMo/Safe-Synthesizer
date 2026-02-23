@@ -6,6 +6,7 @@ from typing import List, Tuple
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.data_processing.actions.data_actions import (
     ActionExecutor,
     CategoricalCol,

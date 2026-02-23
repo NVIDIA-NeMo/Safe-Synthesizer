@@ -260,9 +260,9 @@ Additionally, the registry supports custom config overrides or args that are spe
 
 You can supply a dataset registry (YAML file) via either the CLI or an environment variable:
 
-- **CLI Option**:
+- CLI Option:
 `--dataset-registry <path_or_url>`
-- **Environment Variable**:
+- Environment Variable:
 Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
 
 If both are provided, the CLI option takes precedence.
@@ -318,9 +318,9 @@ For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts
 
 These scripts support:
 
-- **Matrix runs**: Launching jobs across multiple configurations and datasets.
-- **Two-stage pipelines**: Running training and generation as separate jobs with dependencies.
-- **Containerized execution**: Running jobs inside enroot containers.
+- Matrix runs: Launching jobs across multiple configurations and datasets.
+- Two-stage pipelines: Running training and generation as separate jobs with dependencies.
+- Containerized execution: Running jobs inside enroot containers.
 
 See [script/slurm/README.md](script/slurm/README.md) for detailed instructions on cluster setup and job submission.
 
