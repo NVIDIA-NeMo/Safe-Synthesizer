@@ -288,4 +288,8 @@ else
     ${NSS_SLURM_DIR}/slurm_srun.sh
 fi
 
-echo "Done submitting jobs to slurm cluster. Monitor with: squeue -u ${USER_NAME}"
+if [ -n "${DRY_RUN:-}" ]; then
+  echo "Dry run completed without errors"
+else
+  echo "Done submitting jobs to slurm cluster. Monitor with: squeue -u ${USER_NAME}"
+fi
