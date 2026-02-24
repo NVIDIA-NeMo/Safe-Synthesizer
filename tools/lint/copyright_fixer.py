@@ -33,6 +33,8 @@ _CURRENT_YEAR = datetime.now().year
 
 _EXTENSIONS = frozenset({".py", ".sh", ".md", ".yaml", ".yml"})
 
+_COPYRIGHT_IGNORE_FILE = ".copyrightignore"
+
 # Comment-style headers by file type
 _HASH_HEADER = (
     f"# SPDX-FileCopyrightText: Copyright (c) 2025-{_CURRENT_YEAR} NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n"
@@ -99,6 +101,40 @@ def _is_ruff_excluded(relpath: str, excludes: list[str]) -> bool:
     return False
 
 
+def _load_copyright_excludes(repo_root: str | None) -> list[str]:
+    """Load exclude patterns from .copyrightignore at the repo root."""
+    if repo_root is None:
+        return []
+    ignore_path = os.path.join(repo_root, _COPYRIGHT_IGNORE_FILE)
+    if not os.path.isfile(ignore_path):
+        return []
+    with open(ignore_path, encoding="utf-8") as fh:
+        return [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+
+
+def _is_copyright_excluded(relpath: str, patterns: list[str]) -> bool:
+    """Return True if the file matches any .copyrightignore pattern.
+
+    Pattern semantics (gitignore-like):
+      - Trailing ``/`` matches any path component (directory).
+      - Patterns without ``/`` match the file's basename anywhere in the tree.
+      - Patterns containing ``/`` (but not trailing) match from repo root.
+    """
+    p = Path(relpath)
+    for pat in patterns:
+        if pat.endswith("/"):
+            dirname = pat.rstrip("/")
+            if dirname in p.parts:
+                return True
+        elif "/" in pat:
+            if fnmatch(relpath, pat):
+                return True
+        else:
+            if fnmatch(p.name, pat):
+                return True
+    return False
+
+
 # --- core helpers ---
 
 
@@ -120,25 +156,31 @@ def _read_head(path: str, nbytes: int = 512) -> str:
 
 
 def _collect_files_from_dir(root: str) -> list[str]:
-    """Collect files under *root* matching _EXTENSIONS, respecting .gitignore and ruff excludes."""
+    """Collect files under *root* matching _EXTENSIONS, respecting .gitignore, ruff excludes, and .copyrightignore."""
     repo = _get_repo(root)
 
     if repo is not None:
         repo_root = str(repo.working_tree_dir)
         ruff_excludes = _load_ruff_excludes(repo_root)
+        copyright_excludes = _load_copyright_excludes(repo_root)
         raw = repo.git.ls_files("--cached", "--others", "--exclude-standard", "-z", "--", root)
         git_files = [f for f in raw.split("\0") if f]
         target_files = [os.path.join(repo_root, f) for f in git_files if os.path.splitext(f)[1] in _EXTENSIONS]
     else:
         ruff_excludes = _load_ruff_excludes(None)
+        copyright_excludes = _load_copyright_excludes(None)
         target_files = []
         for dirpath, _, filenames in os.walk(root):
             for fname in filenames:
                 if os.path.splitext(fname)[1] in _EXTENSIONS:
                     target_files.append(os.path.join(dirpath, fname))
 
-    if ruff_excludes:
-        target_files = [f for f in target_files if not _is_ruff_excluded(os.path.relpath(f, root), ruff_excludes)]
+    target_files = [
+        f
+        for f in target_files
+        if not _is_copyright_excluded(rel := os.path.relpath(f, root), copyright_excludes)
+        and not (ruff_excludes and _is_ruff_excluded(rel, ruff_excludes))
+    ]
 
     return target_files
 
@@ -192,7 +234,17 @@ def _resolve_targets(paths: list[Path]) -> tuple[list[str], str | None]:
         root = str(paths[0].resolve())
         return _collect_files_from_dir(root), root
 
-    files = [str(p.resolve()) for p in paths if p.is_file() and os.path.splitext(str(p))[1] in _EXTENSIONS]
+    repo = _get_repo(str(paths[0].resolve()))
+    repo_root = str(repo.working_tree_dir) if repo else None
+    copyright_excludes = _load_copyright_excludes(repo_root)
+
+    files = [
+        str(p.resolve())
+        for p in paths
+        if p.is_file()
+        and os.path.splitext(str(p))[1] in _EXTENSIONS
+        and not _is_copyright_excluded(str(p), copyright_excludes)
+    ]
     return files, None
 
 

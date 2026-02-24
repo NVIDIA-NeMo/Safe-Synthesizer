@@ -46,4 +46,4 @@ else
 fi
 
 # shellcheck disable=SC2086
-$RUFF check --fix $filtered_files # no quotes around $filtered_files to preserve newlines
+$RUFF check $filtered_files # no quotes around $filtered_files to preserve newlines
