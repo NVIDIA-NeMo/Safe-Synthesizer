@@ -6,6 +6,7 @@ import logging
 import time
 from contextlib import redirect_stdout
 from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -23,6 +24,8 @@ from transformers import (
     DataCollatorForTokenClassification,
     EvalPrediction,
     IntervalStrategy,
+    PreTrainedModel,
+    PreTrainedTokenizer,
     PrinterCallback,
     Trainer,
     TrainingArguments,
@@ -30,6 +33,7 @@ from transformers import (
 from transformers.trainer_pt_utils import get_model_param_count
 
 from .. import utils
+from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
@@ -86,9 +90,9 @@ FIXED_RUNTIME_TRAINING_ARGS = {
 class HuggingFaceBackend(TrainingBackend):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type = Trainer
+        self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
         self.model_loader_type = AutoModelForCausalLM
-        self.training_output_dir = self.workdir.train.cache.path
+        self.training_output_dir = Path(self.workdir.train.cache)
         self.autoconfig = AutoConfig.from_pretrained(
             self.params.training.pretrained_model, trust_remote_code=self._trust_remote_code_for_model()
         )
@@ -99,7 +103,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
         self.model = self.model_loader_type.from_pretrained(**self.framework_load_params, config=self.autoconfig)
 
-        self.tokenizer = add_bos_eos_tokens_to_tokenizer(
+        self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
             AutoTokenizer.from_pretrained(
                 self.params.training.pretrained_model, model_max_length=model_args.get("max_seq_length", None)
             )
@@ -289,7 +293,9 @@ class HuggingFaceBackend(TrainingBackend):
         else:
             self.model = prepare_model_for_kbit_training(self.model, use_gradient_checkpointing=True)
 
-        self.model = get_peft_model_hf(self.model, peft_config=lora_config)
+        assert isinstance(self.model, PreTrainedModel), f"Expected PreTrainedModel, got {type(self.model)}"
+        peft_model = get_peft_model_hf(self.model, peft_config=lora_config)
+        self.model = peft_model  # ty: ignore[invalid-assignment]  -- PeftMixedModel not in union, but LoraConfig always yields PeftModel
         parameter_count = get_model_param_count(self.model, trainable_only=True) / 1e6
         logger.info(
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",
@@ -318,7 +324,7 @@ class HuggingFaceBackend(TrainingBackend):
             IntervalStrategy.STEPS if self.params.training.validation_ratio > 0 else IntervalStrategy.NO
         )
         return dict(
-            output_dir=self.workdir.train.cache.path,
+            output_dir=Path(self.workdir.train.cache),
             per_device_train_batch_size=self.params.training.batch_size,
             gradient_accumulation_steps=self.params.training.gradient_accumulation_steps,
             lr_scheduler_type=self.params.training.lr_scheduler,
@@ -357,7 +363,11 @@ class HuggingFaceBackend(TrainingBackend):
         Raises:
             ParameterError: If required DP parameters are missing.
         """
-        eps = self.params.privacy.epsilon
+        privacy = self.params.privacy
+        if privacy is None:
+            raise ParameterError("Privacy configuration is required for DP training")
+
+        eps = privacy.epsilon
         logger.user.info(
             f"Differentially-private training is enabled, ε is set to {eps}",
         )
@@ -374,11 +384,11 @@ class HuggingFaceBackend(TrainingBackend):
 
         privacy_args = PrivacyArguments(
             target_epsilon=eps,
-            target_delta=self.params.privacy.delta,
-            per_sample_max_grad_norm=self.params.privacy.per_sample_max_grad_norm,
+            target_delta=privacy.delta,
+            per_sample_max_grad_norm=privacy.per_sample_max_grad_norm,
         )
 
-        self.trainer_type: partial[OpacusDPTrainer] = partial(
+        self.trainer_type = partial(
             OpacusDPTrainer,
             privacy_args=privacy_args,
             true_dataset_size=self.true_dataset_size,
@@ -460,6 +470,9 @@ class HuggingFaceBackend(TrainingBackend):
             trainer: The Trainer instance to configure.
             training_args: The training arguments dictionary containing inference_eval_kwargs.
         """
+        if self.dataset_schema is None:
+            raise ParameterError("dataset_schema must be set before configuring inference eval callback")
+
         logger.info(
             "👀 Heads up -> Generation eval is enabled ✅",
         )
@@ -490,7 +503,7 @@ class HuggingFaceBackend(TrainingBackend):
         training_args = self._build_base_training_args()
         self._apply_eval_dataset_overrides(training_args)
 
-        if self.params.privacy.dp_enabled:
+        if self.params.privacy is not None and self.params.privacy.dp_enabled:
             data_collator = self._configure_dp_training(training_args)
         else:
             data_collator = self._configure_standard_training(training_args)
@@ -626,7 +639,13 @@ class HuggingFaceBackend(TrainingBackend):
         """Prepare training data for training."""
         logger.info("Preparing training data.")
 
+        if self.training_dataset is None:
+            raise DataError("training_dataset must be set before preparing training data")
+
         df_all = self.training_dataset.to_pandas()
+        if not isinstance(df_all, pd.DataFrame):
+            raise DataError("Expected DataFrame from to_pandas(), got an iterator")
+
         self.params = AutoConfigResolver(df_all, self.params).resolve()
 
         # Validate groupby/orderby parameters as a preprocessing step.
@@ -696,15 +715,20 @@ class HuggingFaceBackend(TrainingBackend):
         Args:
             delete_trainable_model: If True, delete the model from memory after saving.
         """
+        if self.dataset_schema is None:
+            raise ParameterError("dataset_schema must be set before saving model")
+
+        adapter_dir = self.workdir.train.adapter
+        assert isinstance(adapter_dir, BoundDir), f"Expected BoundDir, got {type(adapter_dir)}"
         self.workdir.ensure_directories()
-        logger.user.info(f"Saving LoRA adapter to {self.workdir.train.adapter}")
+        logger.user.info(f"Saving LoRA adapter to {adapter_dir}")
         with redirect_stdout(io.StringIO()) as stdout:
-            self.model.save_pretrained(self.workdir.train.adapter)
+            self.model.save_pretrained(str(adapter_dir))
         logger.runtime.debug(stdout.getvalue())
-        logger.user.info(f"Saving model metadata to {self.workdir.train.adapter.metadata}")
+        logger.user.info(f"Saving model metadata to {adapter_dir.metadata}")
         self.model_metadata.save_metadata()
-        logger.user.info(f"Saving dataset schema to {self.workdir.train.adapter.schema}")
-        write_json(self.dataset_schema, self.workdir.train.adapter.schema, indent=4)
+        logger.user.info(f"Saving dataset schema to {adapter_dir.schema}")
+        write_json(self.dataset_schema, adapter_dir.schema, indent=4)
         logger.user.info(f"Saving model parameters to {self.workdir.train.config}")
         write_json(
             self.params.model_dump(mode="json"),
@@ -784,7 +808,8 @@ def compute_metrics(eval_preds: EvalPrediction) -> dict[str, float]:
         Dictionary containing evaluation metrics
     """
     # include_for_metrics has "loss", so the loss is already computed in the forward pass
-    metrics = {"eval_loss": np.mean(eval_preds.losses)}
+    losses = eval_preds.losses if eval_preds.losses is not None else []
+    metrics = {"eval_loss": np.mean(losses)}
 
     # Log the evaluation loss using the same style as callbacks.py
     if metrics["eval_loss"] is not None:

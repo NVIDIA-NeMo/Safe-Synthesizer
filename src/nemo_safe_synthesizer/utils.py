@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Generator, Protocol
@@ -269,7 +270,7 @@ def all_equal_type(iter, type_, flatten_iter=True) -> bool:
 
 def write_json(
     data: dict,
-    path: str | Path,
+    path: str | os.PathLike[str],
     encoding: str | None = None,
     indent: int | None = None,
 ) -> None:
