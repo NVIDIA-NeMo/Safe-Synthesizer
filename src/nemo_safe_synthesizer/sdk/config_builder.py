@@ -91,7 +91,7 @@ class ConfigBuilder(object):
             "_time_series_config",
         ]
 
-    def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
+    def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: type[ParamT], **kwargs) -> ParamT:
         """Resolve configuration from various input types.
         Args:
             values: Configuration values as a dictionary or a BaseModel instance.

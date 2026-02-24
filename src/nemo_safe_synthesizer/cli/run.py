@@ -215,6 +215,9 @@ def run(
     run_logger.warning("Nemo Safe Synthesizer starting")
     run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
+    if df is None:
+        raise click.UsageError("--url is required for end-to-end pipeline")
+
     with traced_user("SafeSynthesizer"):
         from ..sdk.library_builder import SafeSynthesizer
 
@@ -270,6 +273,9 @@ def run_train(
         settings=settings,
         phase="train",
     )
+    if df is None:
+        raise click.UsageError("--url is required for training")
+
     from ..sdk.library_builder import SafeSynthesizer
 
     with traced_user("SafeSynthesizer"):

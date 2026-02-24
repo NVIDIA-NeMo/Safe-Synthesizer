@@ -83,33 +83,22 @@ class DatasetInfo(BaseModel):
     def fetch(self) -> pd.DataFrame:
         """Fetch the dataset and return a pandas DataFrame."""
         url = self.get_url()
-
         logger.info(f"Reading dataset from {url}")
-
-        # Determine the file extension and appropriate reader
-        match Path(url).suffix.lstrip("."):
-            case "csv" | "txt":
-                reader = pd.read_csv
-                default_load_args: dict[str, Any] = {}
-            case "json":
-                reader = pd.read_json
-                default_load_args = {}
-            case "jsonl":
-                reader = pd.read_json
-                default_load_args = {"lines": True}
-            case "parquet":
-                reader = pd.read_parquet
-                default_load_args = {}
-            case extension:
-                if not extension:
-                    extension = f"<no extension found on url '{url}'>"
-                raise ValueError(f"Unsupported file extension: {extension}")
-
-        # Merge load args: user-provided args override defaults
-        final_load_args = {**default_load_args, **(self.load_args or {})}
-
+        extra: dict[str, Any] = self.load_args or {}
         try:
-            return reader(url, **final_load_args)
+            match Path(url).suffix.lstrip("."):
+                case "csv" | "txt":
+                    return pd.read_csv(url, **extra)
+                case "json":
+                    return pd.read_json(url, **extra)
+                case "jsonl":
+                    return pd.read_json(url, lines=True, **extra)
+                case "parquet":
+                    return pd.read_parquet(url, **extra)
+                case extension:
+                    if not extension:
+                        extension = f"<no extension found on url '{url}'>"
+                    raise ValueError(f"Unsupported file extension: {extension}")
         except Exception as e:
             logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
             raise

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import pandas as pd
 from datasets import Dataset
@@ -161,15 +161,15 @@ class SafeSynthesizer(ConfigBuilder):
         save_path: Path | str | None = None,
     ):
         super().__init__(config=config)
-        self._workdir = workdir
-        if self._workdir is None:
-            # Create a default workdir when none provided
-            # Use "default" for config_name and "data" for dataset_name as fallbacks
-            self._workdir = Workdir(
+        self._workdir: Workdir = (
+            workdir
+            if workdir is not None
+            else Workdir(
                 base_path=Path(save_path) if save_path else Path("safe-synthesizer-artifacts"),
                 config_name="default",
                 dataset_name="data",
             )
+        )
         self._resolve_nss_config()
         # Initialize state for pipeline stages
         self._train_df: pd.DataFrame | None = None
@@ -210,8 +210,8 @@ class SafeSynthesizer(ConfigBuilder):
         # Always prefer cached train/test splits to preserve the exact split from training.
         # This ensures evaluation metrics are consistent and privacy guarantees are maintained.
         # Only fall back to with_data_source() data if cached files are missing.
-        training_path = self._workdir.source_dataset.training
-        test_path = self._workdir.source_dataset.test
+        training_path = Path(self._workdir.source_dataset.training)
+        test_path = Path(self._workdir.source_dataset.test)
         if training_path.exists() and test_path.exists():
             logger.info("Loading cached train/test split from training run")
             self._train_df = pd.read_csv(training_path)
@@ -295,7 +295,7 @@ class SafeSynthesizer(ConfigBuilder):
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)
         else:
-            self._workdir.dataset.test.touch()
+            Path(self._workdir.dataset.test).touch()
         return self
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)
@@ -478,7 +478,7 @@ class SafeSynthesizer(ConfigBuilder):
         self.process_data().train().generate().evaluate()
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
-    def save_results(self, output_file: Path | str | None = None) -> None:
+    def save_results(self, output_file: Path | str | None = None) -> Self:
         """Save synthetic data results and evaluation report to the workdir.
 
         Saves:

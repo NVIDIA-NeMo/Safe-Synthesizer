@@ -381,6 +381,7 @@ class Workdir:
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path
+        assert self.run_name is not None
         return self.project_dir / self.run_name
 
     def phase_dir(self, phase: str | None = None) -> Path:
@@ -476,7 +477,7 @@ class Workdir:
             return root_config
 
         # Fallback to train directory config (older training runs)
-        train_config = source_workdir.train.config  # type: ignore[return-value]
+        train_config = Path(source_workdir.train.config)
         if train_config.exists():
             return train_config
 
@@ -494,8 +495,8 @@ class Workdir:
     def source_dataset(self) -> BoundDir:
         """Get the source dataset directory (from parent workdir if available)."""
         if self._parent_workdir is not None:
-            return self._parent_workdir.dataset  # type: ignore[return-value]
-        return self.dataset  # type: ignore[return-value]
+            return self._parent_workdir.dataset
+        return self.dataset
 
     @property
     def source_schema_file(self) -> Path:
@@ -522,14 +523,14 @@ class Workdir:
         if self._current_phase == "generate" and self._parent_workdir is not None:
             # Generation-only run - only create generate directory
             # Train and dataset are in the parent workdir
-            self.generate.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+            self.generate.path.mkdir(parents=True, exist_ok=True)
             self._write_generation_info()
         else:
             # Training run or end-to-end - create all directories
             self.train.cache.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
             self.train.adapter.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
-            self.generate.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
-            self.dataset.path.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+            self.generate.path.mkdir(parents=True, exist_ok=True)
+            self.dataset.path.mkdir(parents=True, exist_ok=True)
 
         return self
 
@@ -553,7 +554,7 @@ class Workdir:
             },
         }
 
-        info_file = self.generate.info  # type: ignore[attr-defined]
+        info_file = self.generate.info
         write_json(info_dict, info_file, indent=2)
 
     def new_generation_run(self) -> Self:

@@ -46,6 +46,7 @@ dev = [
   "pandas-stubs>=2.1.3",
   "prek>=0.3.1",
   "packaging>=25.0.0",
+  "ty",
   "typer>=0.15.0",
   "types-click",
   "types-colorama>=0.4.6",
@@ -332,5 +333,4 @@ exclude = [
     "./src/nemo_safe_synthesizer/artifacts/",
     "./src/nemo_safe_synthesizer/pii_replacer/",
     "./tests/",
-    "./tools/",
 ]

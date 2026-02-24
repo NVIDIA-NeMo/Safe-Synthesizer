@@ -144,6 +144,9 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     def save_model(self):
         pass
 
+    def delete_trainable_model(self) -> None:
+        """Delete the trainable model and clean up GPU memory. Override in subclasses."""
+
     def _trust_remote_code_for_model(self) -> bool:
         """Determines whether the model should be loaded with
         trusting remote code.
