@@ -20,12 +20,9 @@ WARNING: Tests are not currently hermetic and require internet access for:
 """
 
 # ruff: noqa: E402
-import gc
 import sys
-import tempfile
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 # Skip all tests in this module if sentence_transformers is not available

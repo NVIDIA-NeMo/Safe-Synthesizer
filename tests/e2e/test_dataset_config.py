@@ -1,11 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # ruff: noqa: E402
-import gc
 import sys
-import tempfile
 from pathlib import Path
 
-import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config.autoconfig import AutoConfigResolver
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.observability import get_logger
