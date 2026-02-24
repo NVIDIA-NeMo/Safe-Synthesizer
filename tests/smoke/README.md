@@ -19,6 +19,34 @@ end-to-end without throwing. Use the smallest model that exercises the path
 (the local `tiny_llama` stub for most things, SmolLM2-135M when you need
 a real tokenizer/model).
 
+## GPU Test Process Isolation
+
+GPU smoke tests run in three separate single-process (`-n 0`) pytest invocations to avoid CUDA and import-time conflicts:
+
+1. Local tiny-model tests (everything except SmolLM2 and Unsloth)
+2. SmolLM2 Hub download test (downloads ~270MB from HuggingFace)
+3. Unsloth backend test (process-isolated from DP tests)
+
+Why: Unsloth monkey-patches transformers at import time, poisoning Opacus/DP if they share a process. CUDA device-side asserts also cascade across xdist workers. The Makefile `test-smoke-gpu` target handles the split automatically via `-k` filters.
+
+Tests use pytestmark decorators:
+
+```python
+pytestmark = [
+    pytest.mark.requires_gpu,
+    pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
+    pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
+]
+```
+
+For SmolLM2 and Unsloth tests, add the marker to a test function:
+
+```python
+@pytest.mark.usefixtures("_register_smollm2")  # for SmolLM2 tests
+def test_full_pipeline_smollm2(...):
+    ...
+```
+
 ## Things that will bite you
 
 - LoRA rank must be 8 (not 4). vLLM silently rejects rank 4. Use `lora_r=8`.
@@ -27,7 +55,6 @@ a real tokenizer/model).
 - Stub tokenizer vocab is 32000. If you change the tiny model config, keep `vocab_size=32000` or you'll get shape mismatches.
 - Always set `use_unsloth=False` unless you're specifically testing Unsloth. The `auto` default can pull it in and it monkey-patches transformers globally.
 - CPU tests need `optim="adamw_torch"`. The production default (`paged_adamw_32bit`) requires bitsandbytes CUDA kernels.
-- Unsloth tests run in a separate process. Unsloth patches transformers at import time, which breaks Opacus/DP if they share a process. The Makefile handles this automatically.
 
 ## What's in `conftest.py`?
 

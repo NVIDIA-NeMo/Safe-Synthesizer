@@ -163,7 +163,7 @@ jobs:
         run: |
           make bootstrap-nss cpu
           make test-smoke
-      
+
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.

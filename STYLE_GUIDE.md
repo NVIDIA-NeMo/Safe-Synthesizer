@@ -724,10 +724,10 @@ Testing conventions are substantial enough to warrant their own section. For the
 - Fixture scope: function-scoped by default. Session scope only when empirically justified by test runtime -- not based on assumptions about cost.
 - Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
 - Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
-- Markers: auto-assigned by path via `pytest_collection_modifyitems` (`/e2e/` -> `e2e`, `/gpu_integration/` -> `gpu_integration`, default -> `unit`). Explicit markers: `@pytest.mark.slow`, `@pytest.mark.timeout()`.
+- Markers: auto-assigned by path via `pytest_collection_modifyitems` (`/e2e/` -> `e2e`, `/smoke/` -> `smoke`, default -> `unit`). Explicit markers: `@pytest.mark.slow`, `@pytest.mark.requires_gpu`, `@pytest.mark.timeout()`.
 - `conftest.py`: shared fixtures per directory; root conftest has `load_test_dataset()` and `load_test_dataframe()` helpers
 - Use `tmp_path` fixture for file operations, never write to the repo tree
-- Mark CUDA-dependent tests with `@pytest.mark.e2e` or `@pytest.mark.gpu_integration`
+- Mark CUDA-dependent tests with `@pytest.mark.e2e`, `@pytest.mark.smoke`, or `@pytest.mark.requires_gpu`
 - Mock only external boundaries, not internal implementation details
 - Test isolation: no shared mutable state or execution-order dependencies between tests. If something must be run first before executing a test, include it in the test or a fixture.
 - Use `@pytest.mark.parametrize` for testing multiple input combinations rather than copy-pasting similar tests
