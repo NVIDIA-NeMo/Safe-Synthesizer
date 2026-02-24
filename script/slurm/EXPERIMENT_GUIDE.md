@@ -10,7 +10,7 @@ This guide outlines the standard approaches for running experiments across diffe
 
 - **Number of generated records (`num_records`)**: Set to 1000.  
   This value was chosen to align with current NSS job runs, which use the default 1k records. This allows for a more accurate comparison of total runtime. Going forward, we plan to increase this value to obtain more stable scores across runs.
-- **Number of job runs (`runs` in submit_slurm_jobs.sh) **: set to 5.
+- **Number of job runs (`runs` in submit_slurm_jobs.sh)**: set to 5.
   5 runs per dataset x config combination was performed for more consistant results.  
 ### Cluster configuration
 
