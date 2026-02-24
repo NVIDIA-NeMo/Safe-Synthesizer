@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+data:
+  random_state: 18726
+generation:
+  num_records: 500
+  use_structured_generation: true  # somehow the auto backend works better than outlines for smollm3 on clinc_oos
+privacy:
+  dp_enabled: true
+training:
+  batch_size: 8
+  pretrained_model: HuggingFaceTB/SmolLM3-3B

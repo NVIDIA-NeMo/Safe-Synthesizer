@@ -14,7 +14,6 @@ compatibility: "Python 3.11+, pytest with xdist and asyncio_mode=auto."
 # Make targets (preferred)
 make test                 # Unit tests, excluding slow
 make test-slow            # All tests including slow, excluding e2e
-make test-sdk-related     # Config/SDK/CLI/API tests only
 make test-ci-container    # CI tests in a Linux container
 
 # Direct pytest (via uv)

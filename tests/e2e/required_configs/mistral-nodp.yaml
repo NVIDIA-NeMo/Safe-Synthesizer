@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+data:
+  random_state: 872602
+generation:
+  num_records: 500
+training:
+  pretrained_model: mistralai/Mistral-7B-Instruct-v0.3
+  learning_rate: 0.0001
+  use_unsloth: false  # currently unsloth is not working with mistral due to a bug

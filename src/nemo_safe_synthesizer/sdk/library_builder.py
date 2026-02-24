@@ -363,6 +363,10 @@ class SafeSynthesizer(ConfigBuilder):
         if self._total_start is None:
             self._total_start = time.monotonic()
 
+        # Clean up trainer model if it exists (only present when train->generate in same session)
+        if hasattr(self, "trainer") and self.trainer is not None:
+            self.trainer.delete_trainable_model()
+
         # Select backend based on time_series configuration
         if self._nss_config.time_series and self._nss_config.time_series.is_timeseries:
             self.generator = TimeseriesBackend(
