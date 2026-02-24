@@ -41,6 +41,12 @@ jobs:
     env:
       TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
     steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release-ref }}
+          fetch-depth: 0
+
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
         with:
