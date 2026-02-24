@@ -371,7 +371,7 @@ For external PII detection via NIM, set these environment variables:
 
 ```bash
 export NIM_ENDPOINT_URL="https://your-nim-endpoint"
-export NIM_API_KEY="your-api-key"
+export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
 ### CPU Parallelism
