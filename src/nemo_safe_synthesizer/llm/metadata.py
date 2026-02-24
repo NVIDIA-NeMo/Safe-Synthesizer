@@ -570,7 +570,7 @@ class Llama32(ModelMetadata):
 class Mistral(ModelMetadata):
     """Metadata for Mistral AI model family.
 
-    RoPE scaling is **not supported** for Mistral models. Any supplied 
+    RoPE scaling is **not supported** for Mistral models. Any supplied
     ``rope_scaling_factor`` will be ignored with a warning.
 
     Args:
@@ -681,7 +681,7 @@ class Qwen(ModelMetadata):
 class SmolLM2(ModelMetadata):
     """Metadata for HuggingFace SmolLM2 model family (e.g. ``SmolLM2-135M``).
 
-    RoPE scaling is **not supported** and any supplied ``rope_scaling_factor`` 
+    RoPE scaling is **not supported** and any supplied ``rope_scaling_factor``
     will be ignored with a warning.
 
     Args:
