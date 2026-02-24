@@ -8843,6 +8843,18 @@ They affect the quality, diversity, and validity of the generated synthetic reco
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.config.generate.GenerateParameters.attention_backend">attention_backend</span></code></td>
+            <td>
+                  <code><span title="typing.Annotated">Annotated</span>[<span title="str">str</span> | None, <span title="pydantic.Field">Field</span>(title=&#39;attention_backend&#39;, description=&#34;The attention backend for the vLLM engine. Common values: &#39;FLASHINFER&#39;, &#39;FLASH_ATTN&#39;, &#39;TRITON_ATTN&#39;, &#39;FLEX_ATTENTION&#39;. If None or &#39;auto&#39;, vLLM will auto-select the best available backend.&#34;)]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The attention backend for the vLLM engine. If None, vLLM will
+auto-select the best available backend.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 

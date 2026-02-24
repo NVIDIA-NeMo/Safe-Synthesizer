@@ -8927,6 +8927,20 @@ and resource requirements.</p>
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.config.training.TrainingHyperparams.attn_implementation">attn_implementation</span></code></td>
+            <td>
+                  <code><span title="typing.Annotated">Annotated</span>[<span title="str">str</span>, <span title="pydantic.Field">Field</span>(title=&#39;attn_implementation&#39;, description=&#34;The attention implementation to use for model loading. Default uses Flash Attention 3 via the HuggingFace Kernels Hub (requires the &#39;kernels&#39; pip package; falls back to &#39;sdpa&#39; if unavailable). Other common values: &#39;flash_attention_2&#39; (requires flash-attn pip package), &#39;sdpa&#39; (PyTorch scaled dot product attention), &#39;eager&#39; (standard PyTorch). Custom HuggingFace Kernels Hub paths (e.g. &#39;kernels-community/flash-attn2&#39;) are also supported.&#34;)]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The attention implementation to use for model loading.
+Default uses Flash Attention 3 via the HuggingFace Kernels Hub. Falls back to 'sdpa'
+if the kernels package is not installed. Other common values include 'flash_attention_2',
+'sdpa', and 'eager'.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 
