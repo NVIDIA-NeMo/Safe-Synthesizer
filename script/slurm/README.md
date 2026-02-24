@@ -3,7 +3,10 @@
 
 ### NeMo Safe Synthesizer Slurm Jobs
 
-This directory contains scripts to launch matrix Slurm jobs for NeMo Safe Synthesizer. Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `srun` (`slurm_srun.sh`) that executes the matrix runner (`slurm_nss_matrix.sh`). All paths and defaults are configured in one place: `env_variables.sh`.
+This directory contains scripts to launch Slurm jobs for NeMo Safe Synthesizer experimentation.
+The contents of this directly are often specific to internal NVIDIA slurm clusters, but shared here as inspiration for others that might be using slurm to do hyperparameter experiments with NeMo Safe Synthesizer.
+
+Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `srun` (`slurm_srun.sh`) that executes the matrix runner (`slurm_nss_matrix.sh`). All paths and defaults are configured in one place: `env_variables.sh`.
 
 ### Files
 - `env_variables.sh`: Single source of truth for user, paths.
@@ -31,7 +34,7 @@ cd Safe-Synthesizer
 ```
 - uv and python install in the slurm cluster
   - DO NOT FOLLOW the general CONTRIBUTING.md or README.md instructions for installation and setup, unless you understand exactly what's being installed where and how that interacts with the distributed nature of a slurm cluster.
-  - The following setup is strongly recommended, but is not be the only way to get things working.
+  - The following setup is strongly recommended, but is not the only way to get things working.
   - The key issues about working in slurm we need to address
     - /home/$USER is quite small (10 GB) and not recommended for accessing data (easily filled up by uv cache)
     - Slurm jobs may run in containers with different $HOME locations (and different users/uids)
@@ -131,18 +134,18 @@ bash submit_slurm_jobs.sh [--configs c1,c2] [--dataset-urls name1,url1,path1] [-
 # Example: end_to_end with 2 hour time limit across "short" datasets
 bash submit_slurm_jobs.sh --exp-name short_end_to_end --dataset-group short --runs 1 --partition polar4 --pipeline-mode end_to_end --time-limit 2:00:00
 
-# Example: two-stage (TRAIN→GEN) across "short" datasets
-bash submit_slurm_jobs.sh --exp-name short_two_stage --dataset-group short --runs 1 --partition polar4 --pipeline-mode two_stage 
+# Example: two-stage (TRAIN→GEN) across "short" datasets with 1 hour train time limit and 30 minute generate time limit
+bash submit_slurm_jobs.sh --exp-name short_two_stage --dataset-group short --runs 1 --partition polar4 --pipeline-mode two_stage  --train-time-limit 1:00:00 --generate-time-limit 0:30:00
 
-# Example: Adobe-2k (defined in dataset_registry.yaml), three configs, 5 runs each on polar4, use different wandb project from the exp name
+# Example: Adult data (defined in NVIDIA internal dataset_registry.yaml), three configs, 5 runs each on polar4, use different wandb project from the exp name
 bash submit_slurm_jobs.sh \
-  --dataset-urls Adobe-2k \
+  --dataset-urls adult \
   --configs unsloth,dp,dp_usg_guidance \
   --runs 5 \
   --partition polar4 \
-  --exp-name regex_adobe2k \
+  --exp-name regex_adult \
   --pipeline-mode two_stage \
-  --wandb-project other_regex_adobe2k
+  --wandb-project other_adult
 
 # Example: arbitrary path/url (not a named dataset from the dataset_registry.yaml), 1 config, 10 runs, with max 3 jobs running at a time
 bash submit_slurm_jobs.sh \
@@ -173,7 +176,7 @@ bash submit_slurm_jobs.sh \
 In general, concurrent jobs will depend on the cluster GPU availability and the Fair Share for the PPP.
 
 - In `two_stage` mode, the submitter launches one TRAIN array and one GENERATE array. GENERATE tasks are linked to corresponding TRAIN tasks via `aftercorr`. Effective max concurrency is cluster/partition limited, but GEN tasks won’t start until their matching TRAIN tasks succeed.
-- In `end_to_end` mode, a single array is submitted of size `num_datasets * RUNS * NUM_CONFIGS`.
+- In `end_to_end` mode, a single array is submitted of size `# datasets * runs * # configs`.
 
 The `--max-concurrent-slurm-jobs N` param can be used to further restrict concurrent jobs.
 This only restricts within an array, so with end_to_end mode, this will restrict to precisely N simultaneously running jobs.

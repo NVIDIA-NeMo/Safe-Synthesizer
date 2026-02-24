@@ -13,7 +13,7 @@ PARTITION="polar4"
 EXP_NAME="nss_exp"
 DATASET_GROUP=""
 DATASET_URLS_CSV=""
-PIPELINE_MODE="two_stage"  # values: two_stage | end_to_end
+PIPELINE_MODE="end_to_end"  # values: two_stage | end_to_end
 CONFIGS_CSV=""  # optional override for CONFIGS array (comma-separated)
 WANDB_PROJECT="" # optional wandb project name; uses EXP_NAME if not provided
 MAX_CONCURRENT_SLURM_JOBS="" # optional max number of concurrent slurm jobs to run within each array; if not provided, no restriction is applied
@@ -57,7 +57,7 @@ while [ $# -gt 0 ]; do
       echo "Provide either --dataset-urls to specify a list of datasets by name, url, or path, or --dataset-group to use a predefined set of datasets."
       echo "Time limits:"
       echo "    --time-limit is used for end_to_end mode (defaults to 4 hours)"
-      echo "    --train-time-limit and --generate-time-limit are used for two_stage mode, and will default to --time-limit the more more specific train and generate limits are not provided"
+      echo "    --train-time-limit and --generate-time-limit are used for two_stage mode, and will default to --time-limit if the more more specific train and generate limits are not provided"
 
       exit 0;;
     --) shift; break;;
@@ -73,6 +73,20 @@ if [[ (-n "${DATASET_URLS_CSV:-}" && -n "${DATASET_GROUP:-}") || \
   exit 1
 fi
 
+
+if ! [[ "$RUNS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --runs must be a positive integer: '$RUNS'" >&2
+  exit 1
+fi
+if [[ "$RUNS" -le 0 ]]; then
+  echo "ERROR: --runs must be greater than 0: '$RUNS'" >&2
+  exit 1
+fi
+
+if [[ "$PIPELINE_MODE" != "two_stage" && "$PIPELINE_MODE" != "end_to_end" ]]; then
+  echo "ERROR: --pipeline-mode must be one of: two_stage, end_to_end: '$PIPELINE_MODE'" >&2
+  exit 1
+fi
 
 if [[ -z "${USER_NAME:-}" ]]; then
   echo "ERROR: USER_NAME is not set. Please export it before submitting." >&2
@@ -99,12 +113,20 @@ if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
   exit 1
 fi
 
+export ACCOUNT
+export EXP_NAME
+
 # Build configs list: CLI override (comma-separated) takes precedence; otherwise use CONFIGS from env
 declare -a CONFIGS_LIST
 if [ -n "${CONFIGS_CSV:-}" ]; then
   IFS=',' read -r -a CONFIGS_LIST <<< "${CONFIGS_CSV}"
 else
   CONFIGS_LIST=("${CONFIGS[@]}")
+fi
+
+if [ "${#CONFIGS_LIST[@]}" -eq 0 ]; then
+  echo "ERROR: No configs provided. Please provide at least one config with --configs or set CONFIGS in env_variables.sh." >&2
+  exit 1
 fi
 
 EXP_LOG_DIR=${BASE_LOG_DIR}/${EXP_NAME}
@@ -198,7 +220,6 @@ CONTAINER_MOUNTS="/lustre:/lustre"
 
 export CONTAINER_IMAGE
 export CONTAINER_MOUNTS
-export ACCOUNT
 
 mkdir -p "${EXP_LOG_DIR}"
 
@@ -223,7 +244,7 @@ echo "array_spec: ${array_spec}"
 common_args=(
   --parsable
   --partition "${PARTITION}"
-  --account llmservice_sdg_research
+  --account "${ACCOUNT}"
   --comment "${IDLE_EXEMPT_COMMENT}"
   --output ${EXP_LOG_DIR}/slurm_%A_%a.out
   --error ${EXP_LOG_DIR}/slurm_%A_%a.err

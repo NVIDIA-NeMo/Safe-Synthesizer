@@ -89,8 +89,8 @@ apt-get update && apt-get install -y --no-install-recommends \
 # Ensure Python environment is available inside the container
 source "${LUSTRE_DIR}/.uv/bin/env"
 source "${NSS_DIR}/.venv/bin/activate"
-# uv sync --frozen --all-packages --extra cu128
-make bootstrap-nss cu128
+uv sync --frozen --extra cu128 --extra engine --group dev
+
 
 # for column classification
 export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
@@ -105,6 +105,10 @@ dataset_basename=$(basename "$dataset")
 dataset_name="${dataset_basename%.*}"
 
 full_config_path="${CONFIG_DIR}/${config}.yaml"
+if [[ ! -f "$full_config_path" ]]; then
+    echo "Config file not found: ${full_config_path}" >&2
+    exit 1
+fi
 
 # Construct run path for WorkdirStructure
 # - two_stage mode (train/generate): Share same base path without SLURM ID
@@ -147,7 +151,7 @@ echo "[NSS SLURM] full_config_path=${full_config_path}"
 echo "[NSS SLURM] full dataset path/name==${dataset}"
 echo "[NSS SLURM] run_path=$run_path"
 echo "[NSS SLURM] output_dir=$OUTPUT_DIR"
-echo "CUDA_VISIBLE_DEVICES is set to: $CUDA_VISIBLE_DEVICES"
+echo "CUDA_VISIBLE_DEVICES is set to: ${CUDA_VISIBLE_DEVICES:-not set}"
 
 dataset_registry_arg=""
 dataset_registry_file="${NSS_SHARED_DIR}/dataset_registry.yaml"
