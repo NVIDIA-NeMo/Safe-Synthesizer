@@ -7,9 +7,9 @@ CRITICAL: This test must run in its own pytest invocation, separate from all
 DP tests. Unsloth invasively patches transformers at import time, which breaks
 Opacus/DP training if DP tests run in the same process.
 
-The Makefile test-gpu-integration target ensures process isolation:
-  $(PYTEST_CMD) tests/smoke/ -m "gpu_integration" -k "not unsloth"
-  $(PYTEST_CMD) tests/smoke/ -m "gpu_integration" -k "unsloth"
+The Makefile test-smoke-gpu target ensures process isolation:
+  $(PYTEST_CMD) tests/smoke/ -m "requires_gpu" -k "not unsloth"
+  $(PYTEST_CMD) tests/smoke/ -m "requires_gpu" -k "unsloth"
 
 Requires CUDA + internet access (Unsloth loads TinyLlama from HF Hub).
 """
@@ -22,7 +22,7 @@ import torch
 from .conftest import assert_adapter_saved, train_with_sdk
 
 pytestmark = [
-    pytest.mark.gpu_integration,
+    pytest.mark.requires_gpu,
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]

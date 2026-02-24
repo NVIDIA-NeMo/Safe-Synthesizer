@@ -19,11 +19,12 @@ All `make` targets, grouped by scope:
 ```bash
 make test                  # Unit (excludes slow, e2e)
 make test-slow             # All including slow (excludes e2e)
-make test-gpu-integration  # GPU integration (requires CUDA)
+make test-smoke            # CPU smoke tests (~few min, no GPU required)
+make test-smoke-gpu        # GPU smoke tests (requires CUDA)
 make test-e2e              # All e2e (requires CUDA) -- runs default + dp
 make test-e2e-default      # e2e default (unsloth) tests only
 make test-e2e-dp           # e2e DP tests only
-make test-ci               # CI unit tests with coverage (excludes slow, e2e, gpu)
+make test-ci               # CI unit tests with coverage (excludes slow, e2e, gpu, smoke)
 make test-ci-slow          # CI slow tests with coverage
 make test-ci-container     # CI tests in a Linux container (Docker/Podman)
 ```
@@ -31,7 +32,7 @@ make test-ci-container     # CI tests in a Linux container (Docker/Podman)
 Run a single test:
 
 ```bash
-uv run --frozen pytest tests/path/test_file.py::test_name -vvs -n0
+pytest tests/path/test_file.py::test_name -vvs -n0
 ```
 
 Test runner: `uv run --frozen pytest -n auto --dist loadscope -vv`
@@ -69,20 +70,17 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 |--------|---------|
 | `unit` | Unit tests (default, no marker needed) |
 | `slow` | Long-running tests |
+| `smoke` | Quick smoke tests (training/generation hot paths, tiny models) |
 | `e2e` | End-to-end pipeline tests (requires CUDA) |
-| `gpu_integration` | GPU component tests |
-| `integration` | Integration tests |
-| `infrastructure` | Infrastructure compatibility tests |
-| `skip_in_ci` | Skipped in CI |
+| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on `smoke`/`e2e`) |
 | `noautouse` | Skip autouse fixtures for specific tests |
 
 ## Auto-marking
 
 `pytest_collection_modifyitems` in root `conftest.py` assigns markers based on test path:
 
-- `/gpu_integration/` -> `gpu_integration`
 - `/e2e/` -> `e2e`
-- `/integration/` -> `integration`
+- `/smoke/` -> `smoke`
 - No match -> `unit`
 
 Markers are only added if not already present on the test item.
@@ -104,7 +102,7 @@ Load helpers in root `conftest.py`:
 
 ## Fixture Discovery
 
-8 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/` (currently empty).
+9 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/` (currently empty), `tests/smoke/`.
 
 Dataset/tokenizer fixtures use the `fixture_` prefix; config/CLI use descriptive names (`mock_workdir`, `training_hyperparams`).
 
@@ -118,7 +116,8 @@ Per-module fixtures:
 
 - Generation/eval/data_processing: shared tokenizer and JSONL fixtures
 - CLI: `mock_workdir(tmp_path)` for tmp_path-based Workdir
-- Config: `training_hyperparams`, `simple_safe_synthesizer_parameters`
+- Config: `basic_parameter`, `training_hyperparams`, `simple_safe_synthesizer_parameters`
+- Smoke: session-scoped `tiny_llama_config`, `stub_tokenizer`, `local_tinyllama_dir`, `iris_df`; function-scoped `base_smoke_config`, `tiny_model`, `_patch_attn_eager`; helpers `train_with_sdk()`, `assert_adapter_saved()`
 
 ## Fixture Scoping
 
@@ -134,14 +133,12 @@ Mock Workdir via `mock_workdir(tmp_path)` in `cli/conftest.py`.
 
 ## GPU Isolation Gotcha
 
-Unsloth patches transformers invasively. Running unsloth tests before DP tests causes failures. Use separate invocations:
+Unsloth patches transformers at import time, which poisons Opacus/DP if they share a process. CUDA device-side asserts also cascade across xdist workers. Both e2e and smoke GPU tests require process isolation:
 
-```bash
-pytest tests/e2e/ -k default
-pytest tests/e2e/ -k dp
-```
+- `make test-smoke-gpu` runs three separate single-process (`-n 0`) pytest invocations over `tests/smoke/`, split by `-k` filters: (1) non-unsloth/non-smollm2, (2) smollm2, (3) unsloth.
+- `make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
 
-`make test-e2e` handles this automatically via `test-e2e-default` + `test-e2e-dp`.
+See [`tests/smoke/README.md`](smoke/README.md) for additional smoke-specific gotchas.
 
 ## Other Gotchas
 

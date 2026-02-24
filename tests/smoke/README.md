@@ -5,7 +5,7 @@ They use tiny or small models and run in seconds (CPU) or a few minutes (GPU).
 
 ```bash
 make test-smoke             # CPU only, no GPU needed
-make test-gpu-integration   # GPU tests (requires CUDA)
+make test-smoke-gpu          # GPU tests (requires CUDA)
 ```
 
 ## When should I add a smoke test?
@@ -21,13 +21,13 @@ a real tokenizer/model).
 
 ## Things that will bite you
 
-- **LoRA rank must be 8** (not 4). vLLM silently rejects rank 4. Use `lora_r=8`.
-- **Iris only has 151 rows**, but holdout needs >=200. Set `holdout=0, max_holdout=0` to skip it.
-- **Attention implementation**: HuggingFaceBackend defaults to `flashinfer`, which HF doesn't recognize. The `_patch_attn_eager` fixture overrides it to `"sdpa"`.
-- **Stub tokenizer vocab is 32000**. If you change the tiny model config, keep `vocab_size=32000` or you'll get shape mismatches.
-- **Always set `use_unsloth=False`** unless you're specifically testing Unsloth. The `auto` default can pull it in and it monkey-patches transformers globally.
-- **CPU tests need `optim="adamw_torch"`**. The production default (`paged_adamw_32bit`) requires bitsandbytes CUDA kernels.
-- **Unsloth tests run in a separate process**. Unsloth patches transformers at import time, which breaks Opacus/DP if they share a process. The Makefile handles this automatically.
+- LoRA rank must be 8 (not 4). vLLM silently rejects rank 4. Use `lora_r=8`.
+- Iris only has 151 rows, but holdout needs >=200. Set `holdout=0, max_holdout=0` to skip it.
+- Attention implementation: HuggingFaceBackend defaults to `flashinfer`, which HF doesn't recognize. The `_patch_attn_eager` fixture overrides it to `"sdpa"`.
+- Stub tokenizer vocab is 32000. If you change the tiny model config, keep `vocab_size=32000` or you'll get shape mismatches.
+- Always set `use_unsloth=False` unless you're specifically testing Unsloth. The `auto` default can pull it in and it monkey-patches transformers globally.
+- CPU tests need `optim="adamw_torch"`. The production default (`paged_adamw_32bit`) requires bitsandbytes CUDA kernels.
+- Unsloth tests run in a separate process. Unsloth patches transformers at import time, which breaks Opacus/DP if they share a process. The Makefile handles this automatically.
 
 ## What's in `conftest.py`?
 

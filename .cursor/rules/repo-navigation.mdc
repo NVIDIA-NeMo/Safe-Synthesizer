@@ -18,8 +18,8 @@ Cursor symlinks: `.cursor/skills/` points to `.agent/skills/` for discoverabilit
 ## Tests
 
 - `tests/` -- mirrors `src/` structure
-- Markers defined in `pytest.ini` (`unit`, `slow`, `e2e`, `gpu_integration`, `integration`, `infrastructure`)
-- Tests are auto-marked by directory (`tests/e2e/` -> `e2e`, `tests/gpu_integration/` -> `gpu_integration`, etc.)
+- Markers defined in `pytest.ini`: `unit`, `slow`, `smoke`, `e2e`, `requires_gpu`, `noautouse`
+- Tests are auto-marked by directory (`tests/e2e/` -> `e2e`, `tests/smoke/` -> `smoke`, else `unit`)
 - Shared fixtures: `tests/conftest.py`
 - Stub data: `tests/test_data/`, `tests/stub_datasets/`, `tests/stub_tokenizer/`
 

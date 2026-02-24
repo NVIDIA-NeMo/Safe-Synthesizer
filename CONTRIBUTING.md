@@ -418,8 +418,8 @@ make test-slow
 # Run CPU smoke tests (~10 seconds, no GPU required)
 make test-smoke
 
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
+# Run GPU smoke tests (requires CUDA)
+make test-smoke-gpu
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e

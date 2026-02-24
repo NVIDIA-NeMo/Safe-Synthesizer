@@ -10,12 +10,13 @@ import sys
 
 import pytest
 import torch
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 pytestmark = [
-    pytest.mark.gpu_integration,
+    pytest.mark.requires_gpu,
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
