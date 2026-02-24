@@ -78,7 +78,7 @@ class LLMPromptConfig(BaseModel):
 
     @classmethod
     def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
-        """Create a prompt config by reading tokens from a tokenizer.
+        """Create a prompt config by reading from settings of a tokenizer.
 
         If no ``tokenizer`` is supplied one is loaded from ``name``
         via ``AutoTokenizer.from_pretrained``.  Individual fields can
@@ -119,7 +119,7 @@ class LLMPromptConfig(BaseModel):
 def resolve_rope_scaling_factor(
     factor: float | int | RopeScaling | dict | None = None, autoconfig: PretrainedConfig | None = None
 ) -> RopeScaling | None:
-    """Normalise a rope-scaling specification into a ``RopeScaling`` or ``None``.
+    """Normalize a rope-scaling specification into a ``RopeScaling`` or ``None``.
 
     Accepts several convenience representations and converts them into a
     canonical ``RopeScaling`` instance.
@@ -129,7 +129,7 @@ def resolve_rope_scaling_factor(
 
             * ``None``, ``1``, or ``1.0`` — no scaling (returns ``None``).
             * ``RopeScaling`` — returned as-is.
-            * ``dict`` — unpacked into ``RopeScaling(**d)``.
+            * ``dict`` — unpacked as ``RopeScaling(**factor)``.
             * ``int`` / ``float`` — used as the scaling factor; requires
               ``autoconfig`` to read ``rope_theta`` and ``rope_type``.
         autoconfig: A HuggingFace ``PretrainedConfig``.  Required when

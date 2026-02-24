@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 def trust_remote_code_for_model(model_name: str | Path) -> bool:
     """Determine whether to trust remote code when loading a model.
 
-    Currently returns ``True`` only for models whose name starts with
+    Returns ``True`` only for models whose name starts with
     ``"nvidia/"`` or ``"gretel/"``.
 
     Args:
