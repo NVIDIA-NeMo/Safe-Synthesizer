@@ -241,13 +241,13 @@ class TestFilterModelKwargs:
         """Test that non-trainer-specific keys are preserved."""
         kwargs = {
             "device_map": "cuda:0",
-            "attn_implementation": "flash_attention_2",
+            "attn_implementation": "sdpa",
             "custom_param": "custom_value",
         }
         result = backend._filter_model_kwargs(kwargs)
 
         assert result["device_map"] == "cuda:0"
-        assert result["attn_implementation"] == "flash_attention_2"
+        assert result["attn_implementation"] == "sdpa"
         assert result["custom_param"] == "custom_value"
 
     def test_empty_kwargs(self, backend):
@@ -280,15 +280,29 @@ class TestFilterModelKwargs:
 
 @patch("nemo_safe_synthesizer.training.huggingface_backend.get_device_map")
 class TestBuildBaseFrameworkParams:
-    def test_builds_correct_params(self, mock_get_device_map, backend):
-        """Test that base framework params are built correctly."""
+    def test_builds_correct_params_with_kernels(self, mock_get_device_map, backend):
+        """Test that base framework params use kernels-community attn when kernels is available."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"custom_key": "custom_value"}
-        result = backend._build_base_framework_params(model_kwargs)
+        with patch.dict("sys.modules", {"kernels": MagicMock()}):
+            result = backend._build_base_framework_params(model_kwargs)
 
         assert result["pretrained_model_name_or_path"] == "test-model"
         assert result["device_map"] == "auto"
-        assert result["attn_implementation"] == "flash_attention_2"
+        assert result["attn_implementation"] == "kernels-community/vllm-flash-attn3"
+        assert result["dtype"] == torch.bfloat16
+        assert result["custom_key"] == "custom_value"
+
+    def test_builds_correct_params_without_kernels(self, mock_get_device_map, backend):
+        """Test that base framework params fall back to sdpa when kernels is not available."""
+        mock_get_device_map.return_value = "auto"
+        model_kwargs = {"custom_key": "custom_value"}
+        with patch.dict("sys.modules", {"kernels": None}):
+            result = backend._build_base_framework_params(model_kwargs)
+
+        assert result["pretrained_model_name_or_path"] == "test-model"
+        assert result["device_map"] == "auto"
+        assert result["attn_implementation"] == "sdpa"
         assert result["dtype"] == torch.bfloat16
         assert result["custom_key"] == "custom_value"
 
@@ -300,11 +314,21 @@ class TestBuildBaseFrameworkParams:
         assert result["device_map"] == "cuda:1"
 
     def test_uses_custom_attn_implementation(self, mock_get_device_map, backend):
-        """Test that custom attn_implementation is used when provided."""
+        """Test that custom attn_implementation from kwargs overrides config."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"device_map": "auto", "attn_implementation": "sdpa"}
         result = backend._build_base_framework_params(model_kwargs)
         assert result["attn_implementation"] == "sdpa"
+
+    def test_uses_config_attn_implementation(self, mock_get_device_map, backend):
+        """Test that attn_implementation from config is used when not in kwargs."""
+        mock_get_device_map.return_value = "auto"
+        backend.params.training.attn_implementation = "eager"
+        model_kwargs = {"device_map": "auto"}
+        result = backend._build_base_framework_params(model_kwargs)
+        assert result["attn_implementation"] == "eager"
+        # Reset to default
+        backend.params.training.attn_implementation = "kernels-community/vllm-flash-attn3"
 
     def test_uses_custom_dtype(self, mock_get_device_map, backend):
         """Test that custom dtype is used when provided."""
@@ -312,6 +336,32 @@ class TestBuildBaseFrameworkParams:
         model_kwargs = {"device_map": "auto", "dtype": torch.float32}
         result = backend._build_base_framework_params(model_kwargs)
         assert result["dtype"] == torch.float32
+
+
+class TestResolveAttnImplementation:
+    def test_kernels_available(self, backend):
+        """Test that kernels-community path is returned when kernels is importable."""
+        with patch.dict("sys.modules", {"kernels": MagicMock()}):
+            result = backend._resolve_attn_implementation("kernels-community/vllm-flash-attn3")
+        assert result == "kernels-community/vllm-flash-attn3"
+
+    def test_kernels_not_available(self, backend):
+        """Test that sdpa fallback is returned when kernels is not importable."""
+        with patch.dict("sys.modules", {"kernels": None}):
+            result = backend._resolve_attn_implementation("kernels-community/vllm-flash-attn3")
+        assert result == "sdpa"
+
+    def test_kernels_community_other_kernel(self, backend):
+        """Test fallback for other kernels-community paths."""
+        with patch.dict("sys.modules", {"kernels": None}):
+            result = backend._resolve_attn_implementation("kernels-community/flash-attn2")
+        assert result == "sdpa"
+
+    def test_non_kernels_value_passthrough(self, backend):
+        """Test that non-kernels values are passed through as-is."""
+        assert backend._resolve_attn_implementation("eager") == "eager"
+        assert backend._resolve_attn_implementation("sdpa") == "sdpa"
+        assert backend._resolve_attn_implementation("flash_attention_2") == "flash_attention_2"
 
 
 class TestGetQuantizationConfigIfEnabled:

@@ -80,6 +80,10 @@ class TrainingHyperparams(Parameters):
         peft_implementation: The PEFT (Parameter-Efficient Fine-Tuning) implementation to use.
             Options include 'lora' for Low-Rank Adaptation, QLoRA for Quantized LoRA. Each method has its own trade-offs in terms of performance
             and resource requirements.
+        attn_implementation: The attention implementation to use for model loading.
+            Default uses Flash Attention 3 via the HuggingFace Kernels Hub. Falls back to 'sdpa'
+            if the kernels package is not installed. Other common values include 'flash_attention_2',
+            'sdpa', and 'eager'.
     """
 
     num_input_records_to_sample: Annotated[
@@ -289,3 +293,19 @@ class TrainingHyperparams(Parameters):
             description="The fraction of the total VRAM to use for training. Default is 0.9. Modify this to allow longer sequences to be used.",
         ),
     ] = 0.80
+
+    attn_implementation: Annotated[
+        str,
+        Field(
+            title="attn_implementation",
+            description=(
+                "The attention implementation to use for model loading. "
+                "Default uses Flash Attention 3 via the HuggingFace Kernels Hub "
+                "(requires the 'kernels' pip package; falls back to 'sdpa' if unavailable). "
+                "Other common values: 'flash_attention_2' (requires flash-attn pip package), "
+                "'sdpa' (PyTorch scaled dot product attention), 'eager' (standard PyTorch). "
+                "Custom HuggingFace Kernels Hub paths (e.g. 'kernels-community/flash-attn2') "
+                "are also supported."
+            ),
+        ),
+    ] = "kernels-community/vllm-flash-attn3"
