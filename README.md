@@ -222,7 +222,7 @@ If the default `kernels-community/vllm-flash-attn3` is configured but the `kerne
 
 ### Generation (`attention_backend`)
 
-Controls the vLLM attention backend used during synthetic data generation. If `None` (default), vLLM auto-selects the best available backend.
+Controls the vLLM attention backend used during synthetic data generation. Defaults to `"auto"`, which lets vLLM auto-select the best available backend.
 
 ```yaml
 # config.yaml
