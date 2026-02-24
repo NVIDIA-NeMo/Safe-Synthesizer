@@ -13,12 +13,13 @@ ACCOUNT="${ACCOUNT:-llmservice_sdg_research}"
 GPUS_PER_TASK="${GPUS_PER_TASK:-1}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-16}"
 SRUN_EXTRA="${SRUN_EXTRA:-}"
-TIME_LIMIT="${TIME_LIMIT:-04:00:00}"
 
+# No --time flag used in srun since we have a single srun in each allocation so
+# the time limit is controleld by the --time flag on the sbatch calls in
+# submit_slurm_jobs.sh.
 srun -A "${ACCOUNT}" \
   --gpus-per-task="${GPUS_PER_TASK}" \
   --cpus-per-task="${CPUS_PER_TASK}" \
-  --time="${TIME_LIMIT}" \
   --container-image="${CONTAINER_IMAGE}" \
   --container-mounts="${CONTAINER_MOUNTS}" \
   --export=ALL \

@@ -270,21 +270,24 @@ if [[ "${PIPELINE_MODE}" == "two_stage" ]]; then
 
   train_array_id=$( \
     sbatch "${common_args[@]}" \
+      --time="${TRAIN_TIME_LIMIT}" \
       --job-name nss_train \
-      --export=ALL,NSS_PHASE=train,TIME_LIMIT=${TRAIN_TIME_LIMIT} \
+      --export=ALL,NSS_PHASE=train \
       ${NSS_SLURM_DIR}/slurm_srun.sh )
 
   gen_array_id=$( \
     sbatch "${common_args[@]}" \
+      --time="${GENERATE_TIME_LIMIT}" \
       --job-name nss_generate \
       --dependency=aftercorr:${train_array_id} \
-      --export=ALL,NSS_PHASE=generate,TIME_LIMIT=${GENERATE_TIME_LIMIT} \
+      --export=ALL,NSS_PHASE=generate \
       ${NSS_SLURM_DIR}/slurm_srun.sh )
 
 else
   sbatch "${common_args[@]}" \
+    --time="${TIME_LIMIT}" \
     --job-name nss_end_to_end \
-    --export=ALL,NSS_PHASE=end_to_end,TIME_LIMIT=${TIME_LIMIT} \
+    --export=ALL,NSS_PHASE=end_to_end \
     ${NSS_SLURM_DIR}/slurm_srun.sh
 fi
 
