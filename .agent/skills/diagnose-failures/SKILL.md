@@ -59,6 +59,7 @@ Map GitHub Actions job names to local commands:
 | `Lint` | `make lint` (runs ruff + ty + copyright) |
 | `Typecheck` | `bash tools/lint/run-ty-check.sh` |
 | `Unit Tests` | `make test-ci` or `make test` |
+| `Config-Dataset e2e` | `make test-nss-<config>-<dataset>-ci` |
 
 Fetch CI logs:
 ```bash

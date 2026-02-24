@@ -168,11 +168,13 @@ def fixture_chickweight_dataset() -> Dataset:
     return load_test_dataset("chickweight.csv")
 
 
-# Purpose: Dow Jones Index dataset fixture (train split) for sampling.
-# Used by: (no direct test references currently)
+# Purpose: Dow Jones Index dataset fixture for group-by-order-by tests.
+# Used by:
+#   - data_processing/test_assembler.py::test_assembler_dow_jones_index_dataset
+#   - e2e/test_safe_synthesizer.py::test_dow_jones_index_dataset
 @pytest.fixture
 def fixture_dow_jones_index_dataset() -> Dataset:
-    return load_test_dataset("dow_jones_index.csv")
+    return load_test_dataset("dow_jones_index_group_size_8.csv")
 
 
 # Purpose: Sample patient events dataset with multiple groups for grouped tests.
@@ -253,3 +255,10 @@ def fixture_lmsys_chat_non_english_dataset() -> pd.DataFrame:
 @pytest.fixture
 def fixture_adobe_sampled_dataset() -> pd.DataFrame:
     return load_test_dataframe("adobe-sampled.csv")
+
+
+# Purpose: Clinc OOS dataset fixture for free text tests.
+# Used by: e2e/test_safe_synthesizer.py::test_clinc_oos_dataset
+@pytest.fixture
+def fixture_clinc_oos_dataset() -> pd.DataFrame:
+    return load_test_dataframe("clinc_oos.csv")

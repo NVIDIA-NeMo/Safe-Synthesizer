@@ -265,14 +265,14 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
-# Run SDK-related tests (config, sdk, cli, api)
-make test-sdk-related
-
 # Run GPU integration tests (requires CUDA)
 make test-gpu-integration
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
+
+# Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
+make test-nss-tinyllama_unsloth-clinc_oos-ci
 
 # Run CI tests locally in a Linux container (Docker/Podman)
 make test-ci-container

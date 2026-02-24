@@ -106,12 +106,20 @@ make test
 # All tests including slow (excludes e2e)
 make test-slow
 
-# SDK-related tests only
-make test-sdk-related
+# GPU integration (requires CUDA)
+make test-gpu-integration
+
+# End-to-end tests (requires CUDA)
+make test-e2e
+
+# Specific config-dataset e2e combo (12 total)
+make test-nss-tinyllama_unsloth-clinc_oos-ci
 
 # CI tests in a Linux container
 make test-ci-container
 ```
+
+See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and details.
 
 Test runner: `uv run --frozen pytest -n auto --dist loadscope -vv`
 
