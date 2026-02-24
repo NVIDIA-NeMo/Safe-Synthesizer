@@ -293,21 +293,25 @@ Before submitting a PR:
 
 ### Formatting
 
-We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and import sorting. The formatter runs on changed files against the `main` branch.
+We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and linting auto-fix, plus a copyright header fixer. `make format` mutates files — it runs the same fixers as pre-commit.
 
 ```bash
-# Format code and sort imports
+# Format code, auto-fix lint issues, and add missing copyright headers
 make format
 ```
 
 ### Linting and Type Checking
 
-We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. Both run on changed files against `main`.
+We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. `make lint` is read-only — it reports errors without modifying files.
 
 ```bash
-# Run ruff linter (with auto-fix) and ty type checker
+# Check linting, type errors, and missing copyright headers (no auto-fix)
 make lint
 ```
+
+### Copyright Headers
+
+All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically. Files excluded from this requirement (community files like `README.md`, config directories like `.github/`) are listed in `.copyrightignore` at the repo root.
 
 ### Pre-commit Hooks
 
@@ -317,7 +321,7 @@ We recommend setting up pre-commit hooks to catch formatting, linting, and type 
 prek install
 ```
 
-This installs hooks that run Ruff (format + lint), ty type checking, and uv lock verification on each commit.
+This installs hooks that run Ruff (format + lint), copyright header fixer, ty type checking, and uv lock verification on each commit.
 
 ## Documentation
 
