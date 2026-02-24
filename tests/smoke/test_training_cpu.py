@@ -10,6 +10,9 @@ All tests run on CPU with max_steps=1. The point is catching dep breakage
 from dataclasses import dataclass, field
 
 from datasets import Dataset
+from peft import LoraConfig, TaskType, get_peft_model
+from transformers import DataCollatorForTokenClassification, Trainer, TrainingArguments
+
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
 from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION, PROMPT_TEMPLATE
 from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import (
@@ -17,8 +20,6 @@ from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import (
     OpacusDPTrainer,
 )
 from nemo_safe_synthesizer.privacy.dp_transformers.privacy_args import PrivacyArguments
-from peft import LoraConfig, TaskType, get_peft_model
-from transformers import DataCollatorForTokenClassification, Trainer, TrainingArguments
 
 
 def _cpu_training_args(tmp_path, **overrides):

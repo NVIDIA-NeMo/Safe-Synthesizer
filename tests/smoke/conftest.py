@@ -6,12 +6,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from datasets import Dataset
+from transformers import AutoConfig, AutoTokenizer, LlamaConfig, LlamaForCausalLM
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION
 from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig, ModelMetadata
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-from transformers import AutoConfig, AutoTokenizer, LlamaConfig, LlamaForCausalLM
 
 
 class SmolLM2(ModelMetadata):
