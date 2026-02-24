@@ -115,6 +115,8 @@ The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branc
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
 | GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
+| Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 
 ### Coverage
 

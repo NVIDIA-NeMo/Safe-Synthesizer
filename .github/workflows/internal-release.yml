@@ -37,7 +37,7 @@ defaults:
 jobs:
   publish:
     name: Build and publish to Artifactory
-    runs-on: ubuntu-latest
+    runs-on: linux-amd64-cpu4
     env:
       TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
     steps:
