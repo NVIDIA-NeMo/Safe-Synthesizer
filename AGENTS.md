@@ -158,6 +158,16 @@ make build-wheel        # Build wheel (version from git tag)
 make publish-internal   # Publish to NVIDIA Artifactory
 ```
 
+### Git Commits
+
+Always use `--signoff` (`-s`) when committing:
+
+```bash
+git commit -s -m "message"
+```
+
+This adds a `Signed-off-by` trailer for DCO compliance.
+
 ### Branching
 
 Feature branches off `main`. Branch names often include an issue number prefix (e.g., `<author>/123-short-name`).
