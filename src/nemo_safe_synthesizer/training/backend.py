@@ -13,7 +13,6 @@ import pandas as pd
 from datasets import Dataset
 from peft import PeftModel
 from transformers import (
-    AutoTokenizer,
     PreTrainedModel,
     PreTrainedTokenizer,
     Trainer,
@@ -50,7 +49,7 @@ class NSSTrainerResult:
 
 class TrainingBackend(metaclass=abc.ABCMeta):
     model: PreTrainedModel | PeftModel
-    tokenizer: AutoTokenizer | PreTrainedTokenizer
+    tokenizer: PreTrainedTokenizer
     quant_params: dict
     load_params: dict
     trainer_type: type[OpacusDPTrainer | Trainer | FastLanguageModel]
@@ -59,7 +58,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     results: NSSTrainerResult
     training_examples: TrainingExamples
     df_train: pd.DataFrame
-    df_test: pd.DataFrame
+    df_test: pd.DataFrame | None
     dataset_schema: dict | None
     training_output_dir: Path
     workdir: Workdir

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -196,11 +197,11 @@ class DirNode:
                 raise TypeError(f"DirNode can only be used with BoundDir or Workdir, got {type(obj)}")
 
 
-class BoundDir:
+class BoundDir(os.PathLike[str]):
     """Runtime class representing a bound directory path.
 
-    Provides access to child FileNode and DirNode descriptors as attributes,
-    and implements __fspath__ for use with os.path functions.
+    Provides access to child FileNode and DirNode descriptors as attributes.
+    Implements os.PathLike[str] so instances can be used wherever paths are expected.
     """
 
     def __init__(self, path: Path, children: dict[str, FileNode | DirNode]):
@@ -239,12 +240,6 @@ class BoundDir:
 
     def __hash__(self) -> int:
         return hash(self._path)
-
-    def __getattribute__(self, name: str) -> Path | BoundDir:
-        # Allow access to special methods, private attrs, and the path property
-        if name.startswith("_") or name == "path":
-            return super().__getattribute__(name)
-        return self.__getattr__(name)
 
     def __getattr__(self, name: str) -> Path | BoundDir:
         if name.startswith("_"):

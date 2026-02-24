@@ -81,8 +81,14 @@ class VllmBackend(GeneratorBackend):
 
     def initialize(self, **kwargs) -> None:
         """Initialize and load the model into memory."""
-        max_vram = get_max_vram(as_fraction=True)
-        max_vram = max_vram.get(0)
+        # vLLM 0.11.x uses an environment variable for attention backend selection.
+        # When vLLM is upgraded to 0.12+, migrate to the attention_backend constructor arg.
+        if self.config.generation.attention_backend not in [None, "auto"]:
+            os.environ["VLLM_ATTENTION_BACKEND"] = self.config.generation.attention_backend
+
+        max_vram = get_max_vram()
+        # note this only works for single GPU setups
+        max_vram = max_vram.get(0, 0.8)
 
         # vllm requires this "config" to set the backend ahead of time.
         structured_outputs_config = StructuredOutputsConfig(
@@ -91,7 +97,7 @@ class VllmBackend(GeneratorBackend):
         )
         self.llm = vLLM(
             model=self.config.training.pretrained_model,
-            gpu_memory_utilization=float(max_vram),
+            gpu_memory_utilization=max_vram,
             enable_lora=True,
             max_lora_rank=self.config.training.lora_r,
             structured_outputs_config=structured_outputs_config,

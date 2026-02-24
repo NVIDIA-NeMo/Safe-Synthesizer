@@ -191,6 +191,47 @@ Commands:
   validate  Validate a Safe Synthesizer configuration.
 ```
 
+## Attention Configuration
+
+Safe Synthesizer exposes attention implementation settings for both training and generation.
+
+### Training (`attn_implementation`)
+
+Controls the HuggingFace attention backend used during model loading for training. Set via config YAML, CLI, or SDK:
+
+```yaml
+# config.yaml
+training:
+  attn_implementation: "kernels-community/vllm-flash-attn3"
+```
+
+```bash
+# CLI override
+safe-synthesizer run --training__attn_implementation sdpa --url my_data.csv
+```
+
+| Value | Description | Requires |
+|-------|-------------|----------|
+| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub (default) | `kernels` pip package |
+| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
+| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
+| `sdpa` | PyTorch scaled dot product attention | None (built-in) |
+| `eager` | Standard PyTorch attention | None (built-in) |
+
+If the default `kernels-community/vllm-flash-attn3` is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
+
+### Generation (`attention_backend`)
+
+Controls the vLLM attention backend used during synthetic data generation. Defaults to `"auto"`, which lets vLLM auto-select the best available backend.
+
+```yaml
+# config.yaml
+generation:
+  attention_backend: "FLASH_ATTN"
+```
+
+Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
+
 ## Artifacts and Workdirs
 
 Safe Synthesizer uses a structured directory format to manage artifacts (trained models, synthetic data, logs).
