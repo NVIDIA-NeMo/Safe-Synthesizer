@@ -127,13 +127,16 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 
 ### CODE QUALITY ###
+# `make format` mutates files (same fixers as pre-commit).
+# `make lint` is read-only (same checks as CI).
 
 .PHONY: format
-format: ## Format the code
+format: ## Format the code (ruff format + fix + copyright headers)
 	bash tools/format/format.sh
+	uv run --script tools/lint/copyright_fixer.py .
 
 .PHONY: lint
-lint: ## Lint the code
+lint: ## Lint the code (read-only checks)
 	bash tools/lint/ruff-lint.sh
 	bash tools/lint/run-ty-check.sh
 	uv run --script tools/lint/copyright_fixer.py --check .

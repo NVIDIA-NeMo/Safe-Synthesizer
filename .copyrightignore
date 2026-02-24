@@ -1,0 +1,21 @@
+# Files and directories excluded from SPDX copyright header checks.
+
+# Standard community / documentation files
+CHANGELOG.md
+CITATION.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+PULL_REQUEST_TEMPLATE.md
+README.md
+SECURITY.md
+THIRD_PARTY.md
+design.md
+
+# AI / IDE / CI configuration directories
+.agent/
+.claude/
+.cursor/
+.github/
+
+# AI assistant config files
+CLAUDE.md
