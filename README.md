@@ -191,6 +191,47 @@ Commands:
   validate  Validate a Safe Synthesizer configuration.
 ```
 
+## Attention Configuration
+
+Safe Synthesizer exposes attention implementation settings for both training and generation.
+
+### Training (`attn_implementation`)
+
+Controls the HuggingFace attention backend used during model loading for training. Set via config YAML, CLI, or SDK:
+
+```yaml
+# config.yaml
+training:
+  attn_implementation: "kernels-community/vllm-flash-attn3"
+```
+
+```bash
+# CLI override
+safe-synthesizer run --training__attn_implementation sdpa --url my_data.csv
+```
+
+| Value | Description | Requires |
+|-------|-------------|----------|
+| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub (default) | `kernels` pip package |
+| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
+| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
+| `sdpa` | PyTorch scaled dot product attention | None (built-in) |
+| `eager` | Standard PyTorch attention | None (built-in) |
+
+If the default `kernels-community/vllm-flash-attn3` is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
+
+### Generation (`attention_backend`)
+
+Controls the vLLM attention backend used during synthetic data generation. Defaults to `"auto"`, which lets vLLM auto-select the best available backend.
+
+```yaml
+# config.yaml
+generation:
+  attention_backend: "FLASH_ATTN"
+```
+
+Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
+
 ## Artifacts and Workdirs
 
 Safe Synthesizer uses a structured directory format to manage artifacts (trained models, synthetic data, logs).
@@ -260,9 +301,9 @@ Additionally, the registry supports custom config overrides or args that are spe
 
 You can supply a dataset registry (YAML file) via either the CLI or an environment variable:
 
-- **CLI Option**:
+- CLI Option:
 `--dataset-registry <path_or_url>`
-- **Environment Variable**:
+- Environment Variable:
 Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
 
 If both are provided, the CLI option takes precedence.
@@ -318,9 +359,9 @@ For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts
 
 These scripts support:
 
-- **Matrix runs**: Launching jobs across multiple configurations and datasets.
-- **Two-stage pipelines**: Running training and generation as separate jobs with dependencies.
-- **Containerized execution**: Running jobs inside enroot containers.
+- Matrix runs: Launching jobs across multiple configurations and datasets.
+- Two-stage pipelines: Running training and generation as separate jobs with dependencies.
+- Containerized execution: Running jobs inside enroot containers.
 
 See [script/slurm/README.md](script/slurm/README.md) for detailed instructions on cluster setup and job submission.
 
@@ -339,18 +380,20 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
-# Run SDK-related tests (config, sdk, cli, api)
-make test-sdk-related
-
 # Run GPU integration tests (requires CUDA)
 make test-gpu-integration
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
 
+# Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
+make test-nss-tinyllama_unsloth-clinc_oos-ci
+
 # Run specific test files directly
 uv run pytest tests/cli/test_run.py
 ```
+
+See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and usage.
 
 ### Container-Based Testing
 

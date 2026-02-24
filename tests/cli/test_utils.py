@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import common_setup
 

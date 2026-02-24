@@ -75,6 +75,8 @@ class GenerateParameters(Parameters, BaseModel):
         patience: Number of invalid records fraction before stopping.
         invalid_fraction_threshold: "The fraction of invalid records that will stop generation after the `patience` limit is reached."
         use_structured_generation: Whether to use structured generation for better format control.
+        attention_backend: The attention backend for the vLLM engine. If None, vLLM will
+            auto-select the best available backend.
 
     """
 
@@ -179,3 +181,15 @@ class GenerateParameters(Parameters, BaseModel):
         description="Validation parameters controlling validation logic and automatic fixes when parsing LLM output and converting to tabular data.",
         default_factory=ValidationParameters,
     )
+
+    attention_backend: Annotated[
+        str | None,
+        Field(
+            title="attention_backend",
+            description=(
+                "The attention backend for the vLLM engine. Common values: 'FLASHINFER', "
+                "'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. "
+                "If None or 'auto', vLLM will auto-select the best available backend."
+            ),
+        ),
+    ] = "auto"

@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Git
 - [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
 
-> **Note:** Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
 
 ### Setup
 
@@ -265,14 +265,14 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
-# Run SDK-related tests (config, sdk, cli, api)
-make test-sdk-related
-
 # Run GPU integration tests (requires CUDA)
 make test-gpu-integration
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
+
+# Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
+make test-nss-tinyllama_unsloth-clinc_oos-ci
 
 # Run CI tests locally in a Linux container (Docker/Podman)
 make test-ci-container
@@ -293,21 +293,25 @@ Before submitting a PR:
 
 ### Formatting
 
-We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and import sorting. The formatter runs on changed files against the `main` branch.
+We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and linting auto-fix, plus a copyright header fixer. `make format` mutates files — it runs the same fixers as pre-commit.
 
 ```bash
-# Format code and sort imports
+# Format code, auto-fix lint issues, and add missing copyright headers
 make format
 ```
 
 ### Linting and Type Checking
 
-We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. Both run on changed files against `main`.
+We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. `make lint` is read-only — it reports errors without modifying files.
 
 ```bash
-# Run ruff linter (with auto-fix) and ty type checker
+# Check linting, type errors, and missing copyright headers (no auto-fix)
 make lint
 ```
+
+### Copyright Headers
+
+All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically. Files excluded from this requirement (community files like `README.md`, config directories like `.github/`) are listed in `.copyrightignore` at the repo root.
 
 ### Pre-commit Hooks
 
@@ -317,7 +321,7 @@ We recommend setting up pre-commit hooks to catch formatting, linting, and type 
 prek install
 ```
 
-This installs hooks that run Ruff (format + lint), ty type checking, and uv lock verification on each commit.
+This installs hooks that run Ruff (format + lint), copyright header fixer, ty type checking, and uv lock verification on each commit.
 
 ## Documentation
 
@@ -366,11 +370,11 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 
 The site configuration (`mkdocs.yml`) enables several useful Markdown extensions:
 
-- **Admonitions** -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
-- **Content tabs** -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
-- **Code blocks** -- syntax highlighting, line numbers, copy button, and annotations
-- **Mermaid diagrams** -- fenced code blocks with ` ```mermaid `
-- **Task lists**, **footnotes**, **definition lists**, and **emoji**
+- Admonitions -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
+- Content tabs -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
+- Code blocks -- syntax highlighting, line numbers, copy button, and annotations
+- Mermaid diagrams -- fenced code blocks with ` ```mermaid `
+- Task lists, footnotes, definition lists, and emoji
 
 See the [MkDocs Material reference](https://squidfunk.github.io/mkdocs-material/reference/) for full syntax.
 
@@ -385,12 +389,30 @@ Documentation is deployed to GitHub Pages automatically when changes to `docs/`,
 ## AI Agents
 
 This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
-- **AGENTS.md** -- primary agent guide
-- **.agent/skills/** -- domain-specific skills (canonical location)
-- **.cursor/rules/** -- Cursor workflow rules
-- **.cursor/skills/** -- symlinks to `.agent/skills/` for Cursor discoverability
+- `AGENTS.md` -- primary agent guide
+- `.agent/skills/` -- domain-specific skills (canonical location)
+- `.cursor/rules/` -- Cursor workflow rules
+- `.cursor/skills/` -- symlinks to `.agent/skills/` for Cursor discoverability
 
 Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
+
+## AI Agents
+
+This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format.
+
+| Config file | Read by | Purpose |
+|-------------|---------|---------|
+| `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
+| `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
+| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
+| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
+
+Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
+
+Before contributing, run `make format` and `make lint`. See `AGENTS.md` for full conventions.
 
 ---
 

@@ -1,0 +1,8 @@
+dist/
+.venv/
+htmlcov/
+safe-synthesizer-artifacts/
+unsloth_compiled_cache/
+coverage.*
+*.egg-info/
+

@@ -1,6 +1,6 @@
+#!/usr/bin/env -S uv run --script
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#!/usr/bin/env -S uv run --script
 #
 # /// script
 # dependencies = [
@@ -13,7 +13,7 @@
 """
 Copyright header fixer for Safe Synthesizer.
 
-Scans Python files and adds SPDX copyright headers where missing.
+Scans source files and adds SPDX copyright headers where missing.
 """
 
 import os
@@ -30,14 +30,21 @@ app = typer.Typer(name="copyright-fixer", help="Copyright fixer tool for Safe Sy
 # --- constants ---
 
 _CURRENT_YEAR = datetime.now().year
-_HEADER = (
+
+_EXTENSIONS = frozenset({".py", ".sh", ".md", ".yaml", ".yml"})
+
+_COPYRIGHT_IGNORE_FILE = ".copyrightignore"
+
+# Comment-style headers by file type
+_HASH_HEADER = (
     f"# SPDX-FileCopyrightText: Copyright (c) 2025-{_CURRENT_YEAR} NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n"
     "# SPDX-License-Identifier: Apache-2.0\n"
-    "\n"
 )
 
-
-_EXTENSIONS = frozenset({".py"})
+_HTML_HEADER = (
+    f"<!-- SPDX-FileCopyrightText: Copyright (c) 2025-{_CURRENT_YEAR} NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->\n"
+    "<!-- SPDX-License-Identifier: Apache-2.0 -->\n"
+)
 
 # Cheap substring checks — no regex needed
 _HEADER_MARKERS = (
@@ -94,6 +101,40 @@ def _is_ruff_excluded(relpath: str, excludes: list[str]) -> bool:
     return False
 
 
+def _load_copyright_excludes(repo_root: str | None) -> list[str]:
+    """Load exclude patterns from .copyrightignore at the repo root."""
+    if repo_root is None:
+        return []
+    ignore_path = os.path.join(repo_root, _COPYRIGHT_IGNORE_FILE)
+    if not os.path.isfile(ignore_path):
+        return []
+    with open(ignore_path, encoding="utf-8") as fh:
+        return [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+
+
+def _is_copyright_excluded(relpath: str, patterns: list[str]) -> bool:
+    """Return True if the file matches any .copyrightignore pattern.
+
+    Pattern semantics (gitignore-like):
+      - Trailing ``/`` matches any path component (directory).
+      - Patterns without ``/`` match the file's basename anywhere in the tree.
+      - Patterns containing ``/`` (but not trailing) match from repo root.
+    """
+    p = Path(relpath)
+    for pat in patterns:
+        if pat.endswith("/"):
+            dirname = pat.rstrip("/")
+            if dirname in p.parts:
+                return True
+        elif "/" in pat:
+            if fnmatch(relpath, pat):
+                return True
+        else:
+            if fnmatch(p.name, pat):
+                return True
+    return False
+
+
 # --- core helpers ---
 
 
@@ -115,30 +156,42 @@ def _read_head(path: str, nbytes: int = 512) -> str:
 
 
 def _collect_files_from_dir(root: str) -> list[str]:
-    """Collect .py files under *root*, respecting .gitignore and ruff excludes."""
+    """Collect files under *root* matching _EXTENSIONS, respecting .gitignore, ruff excludes, and .copyrightignore."""
     repo = _get_repo(root)
 
     if repo is not None:
         repo_root = str(repo.working_tree_dir)
         ruff_excludes = _load_ruff_excludes(repo_root)
-        # git ls-files honours .gitignore automatically; paths are relative to repo root
+        copyright_excludes = _load_copyright_excludes(repo_root)
         raw = repo.git.ls_files("--cached", "--others", "--exclude-standard", "-z", "--", root)
         git_files = [f for f in raw.split("\0") if f]
-        py_files = [os.path.join(repo_root, f) for f in git_files if os.path.splitext(f)[1] in _EXTENSIONS]
+        target_files = [os.path.join(repo_root, f) for f in git_files if os.path.splitext(f)[1] in _EXTENSIONS]
     else:
         ruff_excludes = _load_ruff_excludes(None)
-        # Fallback: plain os.walk when git is unavailable
-        py_files = []
+        copyright_excludes = _load_copyright_excludes(None)
+        target_files = []
         for dirpath, _, filenames in os.walk(root):
             for fname in filenames:
                 if os.path.splitext(fname)[1] in _EXTENSIONS:
-                    py_files.append(os.path.join(dirpath, fname))
+                    target_files.append(os.path.join(dirpath, fname))
 
-    # Additionally filter out ruff-excluded paths
-    if ruff_excludes:
-        py_files = [f for f in py_files if not _is_ruff_excluded(os.path.relpath(f, root), ruff_excludes)]
+    target_files = [
+        f
+        for f in target_files
+        if not _is_copyright_excluded(rel := os.path.relpath(f, root), copyright_excludes)
+        and not (ruff_excludes and _is_ruff_excluded(rel, ruff_excludes))
+    ]
 
-    return py_files
+    return target_files
+
+
+def _get_header_for_ext(ext: str) -> str:
+    """Return the appropriate copyright header for the given file extension."""
+    if ext in {".py", ".sh", ".yaml", ".yml"}:
+        return _HASH_HEADER + "\n"
+    if ext == ".md":
+        return _HTML_HEADER + "\n"
+    return _HASH_HEADER + "\n"
 
 
 def _add_header(filepath: str) -> bool:
@@ -154,12 +207,20 @@ def _add_header(filepath: str) -> bool:
     if _has_header(content[:512]):
         return False
 
-    # Handle shebang
+    ext = os.path.splitext(filepath)[1]
+
     if content.startswith("#!"):
         newline_pos = content.index("\n") + 1
-        new_content = content[:newline_pos] + _HEADER + content[newline_pos:]
+        header = _get_header_for_ext(ext)
+        new_content = content[:newline_pos] + header + content[newline_pos:]
+    elif ext == ".md" and (content.startswith("---\n") or content.startswith("---\r\n")):
+        header = _HASH_HEADER
+        # Insert copyright as YAML comments right after opening ---
+        sep = "---\r\n" if content.startswith("---\r\n") else "---\n"
+        new_content = sep + header + content[len(sep) :]
     else:
-        new_content = _HEADER + content
+        header = _get_header_for_ext(ext)
+        new_content = header + content
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(new_content)
@@ -173,7 +234,17 @@ def _resolve_targets(paths: list[Path]) -> tuple[list[str], str | None]:
         root = str(paths[0].resolve())
         return _collect_files_from_dir(root), root
 
-    files = [str(p.resolve()) for p in paths if p.is_file() and os.path.splitext(str(p))[1] in _EXTENSIONS]
+    repo = _get_repo(str(paths[0].resolve()))
+    repo_root = str(repo.working_tree_dir) if repo else None
+    copyright_excludes = _load_copyright_excludes(repo_root)
+
+    files = [
+        str(p.resolve())
+        for p in paths
+        if p.is_file()
+        and os.path.splitext(str(p))[1] in _EXTENSIONS
+        and not _is_copyright_excluded(str(p), copyright_excludes)
+    ]
     return files, None
 
 
@@ -188,7 +259,7 @@ def update_license_headers(
     ),
     check: bool = typer.Option(False, "--check", help="Check only, don't modify files. Exit 1 if headers are missing."),
 ) -> None:
-    """Add SPDX copyright headers to Python files missing them.
+    """Add SPDX copyright headers to files missing them.
 
     Accepts a single directory (scans recursively) or a list of individual
     files.  When no argument is provided, scans the current directory.

@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from transformers import PretrainedConfig
+
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
     DataParameters,
@@ -23,7 +25,6 @@ from nemo_safe_synthesizer.generation.timeseries_backend import (
     TimeseriesBackend,
 )
 from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig, ModelMetadata
-from transformers import PretrainedConfig
 
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]"
 

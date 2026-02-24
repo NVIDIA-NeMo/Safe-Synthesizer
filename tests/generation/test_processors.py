@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from datasets import Dataset
+from transformers import AutoTokenizer, PreTrainedTokenizer
+
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
@@ -19,7 +21,6 @@ from nemo_safe_synthesizer.generation.processors import (
 )
 from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.training.backend import ModelMetadata
-from transformers import AutoTokenizer, PreTrainedTokenizer
 
 logger = get_logger(__name__)
 

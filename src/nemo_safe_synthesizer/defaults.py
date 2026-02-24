@@ -92,3 +92,5 @@ RUNTIME_MODEL_CONFIG_NAME = "safe-synthesizer-config"
 EPS = 1e-15
 NUM_SPECIAL_TOKENS = 2
 DEFAULT_CACHE_PREFIX = "safe-synthesizer-dataset-cache"
+DEFAULT_ATTN_IMPLEMENTATION = "kernels-community/vllm-flash-attn3"
+BACKUP_ATTN_IMPLEMENTATION = "sdpa"

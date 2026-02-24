@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
+
 from nemo_safe_synthesizer.evaluation.components.multi_modal_figures import (
     bar_chart,
     combine_subplots,

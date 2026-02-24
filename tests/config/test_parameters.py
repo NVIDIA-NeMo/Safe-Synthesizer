@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-from pydantic import ValidationError
 
 
 def test_safe_synthesizer_parameters():

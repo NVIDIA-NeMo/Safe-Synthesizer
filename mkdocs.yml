@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
 
 site_name: NeMo Safe Synthesizer
@@ -143,20 +146,23 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Product Overview:
+      - Pipeline: product-overview/pipeline.md
+      - Data Synthesis: product-overview/data_synthesis.md
+      - PII Replacement: product-overview/pii_replacement.md
+      - Evaluation: product-overview/evaluation.md
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quickstart.md
-  - User Guide:
-      - Pipeline Overview: user-guide/pipeline.md
-      - CLI Reference: user-guide/cli.md
-      - Configuration: user-guide/configuration.md
-      - Python SDK: user-guide/sdk.md
-      - Evaluation: user-guide/evaluation.md
-      - Privacy: user-guide/privacy.md
-  - Architecture:
-      - Design: architecture/design.md
   - Tutorials:
       - tutorials/index.md
-  - API Reference: reference/
-  - Dev Notes:
+  - User Guide:
+      - Python SDK: user-guide/sdk.md
+      - CLI Reference: user-guide/cli.md
+      - Parameters Reference: user-guide/parameters.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Developer Guide:
+      - Architecture: developer-guide/architecture.md
+      - API Reference: reference/
+  - Developer Notes:
       - blog/index.md

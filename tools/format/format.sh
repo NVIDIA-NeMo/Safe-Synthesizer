@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 
 #
 # format.sh - Format (or check formatting of) changed Python files
@@ -60,14 +63,14 @@ if [ "$CHECK_MODE" = true ]; then
     # shellcheck disable=SC2086
     $RUFF format --check "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
-    $RUFF check --select I "$NSS_ROOT_PATH" $filtered_files
+    $RUFF check "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
     uv run --script tools/lint/copyright_fixer.py --check $filtered_files
 else
     # shellcheck disable=SC2086
     $RUFF format "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
-    $RUFF check --select I --fix "$NSS_ROOT_PATH" $filtered_files
+    $RUFF check --fix "$NSS_ROOT_PATH" $filtered_files
     # shellcheck disable=SC2086
     uv run --script tools/lint/copyright_fixer.py $filtered_files
 fi

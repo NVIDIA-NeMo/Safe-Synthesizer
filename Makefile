@@ -28,6 +28,7 @@ PYTORCH_DEPS ?= cpu
 PYTEST_ADDOPTS := -n auto --dist loadscope -vv
 PYTEST_CI_OPTS := --cov --cov-report json:coverage.json
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
+PYTEST_NO_XDIST_CMD := $(PYTEST_CMD) -n 0
 
 # Display platform info
 $(info local system architecture: $(PLATFORM)/$(ARCH))
@@ -39,7 +40,7 @@ $(info local system architecture: $(PLATFORM)/$(ARCH))
 .PHONY: help
 help:
 	@echo "Makefile commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 
 ### BOOTSTRAP AND SETUP ###
@@ -127,16 +128,19 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 
 ### CODE QUALITY ###
+# `make format` mutates files (same fixers as pre-commit).
+# `make lint` is read-only (same checks as CI).
 
 .PHONY: format
-format: ## Format the code
+format: ## Format the code (ruff format + fix + copyright headers)
 	bash tools/format/format.sh
+	uv run --script tools/lint/copyright_fixer.py .
 
 .PHONY: lint
-lint: ## Lint the code
+lint: ## Lint the code (read-only checks)
 	bash tools/lint/ruff-lint.sh
 	bash tools/lint/run-ty-check.sh
-	python tools/lint/copyright_fixer.py --check .
+	uv run --script tools/lint/copyright_fixer.py --check .
 
 
 ### TESTING ###
@@ -149,14 +153,6 @@ test: ## Run unit tests excluding slow tests
 test-slow: ## Run all tests including slow tests (excludes e2e)
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
-
-.PHONY: test-sdk-related
-test-sdk-related: ## Run SDK-related tests (config, sdk, cli, api)
-	$(PYTEST_CMD) \
-		$(NSS_ROOT_PATH)/tests/config \
-		$(NSS_ROOT_PATH)/tests/sdk \
-		$(NSS_ROOT_PATH)/tests/cli \
-		$(NSS_ROOT_PATH)/tests/api
 
 .PHONY: test-ci
 test-ci: ## Run CI unit tests excluding slow and GPU tests
@@ -365,3 +361,28 @@ synchronize-from-nmp: synchronize-py-files-from-nmp synchronize-metafiles-from-n
 		echo "NMP_REPO_PATH '$(NMP_REPO_PATH)' is not a valid directory."; \
 		exit 1; \
 	fi
+
+
+# ============================================================
+# Config-Dataset Combination Tests (12 total)
+# ============================================================
+# Generated targets: test-nss-{CONFIG}-{DATASET}-ci
+#   CONFIGS : tinyllama_unsloth tinyllama_dp smollm3_unsloth smollm3_dp mistral_nodp mistral_dp
+#   DATASETS: clinc_oos dow_jones_index
+# Example usage:
+#   make test-nss-tinyllama_unsloth-clinc_oos-ci
+#   make test-nss-tinyllama_dp-dow_jones_index-ci
+
+NSS_CONFIGS  := tinyllama_unsloth tinyllama_dp smollm3_unsloth smollm3_dp mistral_nodp mistral_dp
+NSS_DATASETS := clinc_oos dow_jones_index
+
+define nss_combo_test
+test-nss-$(1)-$(2)-ci: ## Run pytest test for $(shell echo $(1) | tr '_' '-') config with $(shell echo $(2) | tr '_' '-') dataset
+	$(MAKE) bootstrap-nss cu128
+	$(PYTEST_NO_XDIST_CMD) -vv $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests/e2e/test_dataset_config.py -k "test_$(2)_dataset[$(subst _,-,$(1))]"
+endef
+
+$(foreach config,$(NSS_CONFIGS),\
+  $(foreach dataset,$(NSS_DATASETS),\
+    $(eval $(call nss_combo_test,$(config),$(dataset)))))
+

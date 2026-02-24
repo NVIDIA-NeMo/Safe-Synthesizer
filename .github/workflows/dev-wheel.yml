@@ -1,0 +1,91 @@
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ---------------------------------------------------------------------------
+# Dev wheel: build and publish to NVIDIA Artifactory on every merge to main.
+# Version is determined from git tags via uv-dynamic-versioning (PEP 440 dev
+# releases, e.g. 0.2.1.dev3+gabcdef for 3 commits past v0.2.0).
+# Skips docs/config-only merges using the detect-changes action.
+# ---------------------------------------------------------------------------
+
+name: "Dev Wheel"
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash -x -e -u -o pipefail {0}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      src: ${{ steps.changes.outputs.src }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Detect changes
+        id: changes
+        uses: ./.github/actions/detect-changes
+
+  dev-wheel:
+    name: Build and publish dev wheel
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          fetch-depth: 0
+          bootstrap-tools: "false"
+
+      - name: Build and publish
+        run: make publish-internal
+        env:
+          TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
+          TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_TOKEN }}
+
+      - name: Show built version
+        id: version
+        run: |
+          WHEEL=$(ls dist/*.whl)
+          VERSION=$(echo "$WHEEL" | sed -n 's/.*-\([0-9][^-]*\)-.*/\1/p')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Built: $WHEEL (version $VERSION)"
+
+      - name: Upload wheel as artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: nemo-safe-synthesizer-${{ steps.version.outputs.version }}
+          path: dist/*.whl
+          retention-days: 90

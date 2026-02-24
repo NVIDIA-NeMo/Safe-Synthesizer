@@ -246,7 +246,7 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
   nvidia-cuda-nvml-cu12 = [
     { index = "pytorch-cu128" },
   ]
-  
+
 
   nvidia-cudnn-cu12 = [
     { index = "pytorch-cu128" },
@@ -269,7 +269,7 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
   nvidia-nvtx-cu12 = [
     { index = "pytorch-cu128" },
   ]
-  
+
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
