@@ -37,6 +37,8 @@ See `references/fix-patterns.md` for repo-specific ty error patterns and their c
 - `tools/lint/run-ty-check.sh` -- run ty on changed files (diff against main or a given SHA)
 - `tools/lint/filter_ty_exclusions.py` -- filters files against `[tool.ty.src].exclude`
 
+CI runs ty only on files changed in the PR (via `run-ty-check.sh`). Touching a file -- even just removing a stale `type: ignore` -- exposes it to all of ty's checks. Pre-existing errors in that file will fail CI even though your change didn't introduce them. Fix them or exclude the file from the PR.
+
 ## Constraints
 
 ### MUST DO

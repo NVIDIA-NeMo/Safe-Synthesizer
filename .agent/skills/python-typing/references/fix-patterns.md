@@ -138,6 +138,38 @@ match values:
         raise TypeError(f"Expected BaseModel, dict, or None; got {type(values)}")
 ```
 
+## Constructor Initialization Pattern
+
+When `__init__` accepts `T | None` but always resolves to `T` before storing, annotate the attribute as `T` to avoid cascading `unresolved-attribute` errors in every method:
+
+```python
+# Before (18 cascading errors -- every self._workdir.foo access needs a None guard)
+def __init__(self, config, workdir: Workdir | None = None):
+    self._workdir = workdir  # inferred as Workdir | None
+    if self._workdir is None:
+        self._workdir = Workdir.create_default(config)
+
+# After (clean -- _workdir is always Workdir after __init__)
+def __init__(self, config, workdir: Workdir | None = None):
+    self._workdir: Workdir = workdir if workdir is not None else Workdir.create_default(config)
+```
+
+## Removing Suppressions Safely
+
+Removing a `type: ignore` can unmask errors the suppression was hiding beyond the one ty reported as unused. Always verify each removal individually:
+
+```python
+# ty reports this as unused:
+self.train.cache.path.mkdir(...)  # type: ignore[union-attr]
+
+# But removing it reveals a DIFFERENT error:
+# error[unresolved-attribute]: `Path` has no attribute `path`
+# because self.train.cache goes through BoundDir.__getattr__ → Path | BoundDir,
+# and .path only exists on BoundDir, not Path.
+```
+
+Run `ty check <file>` after each batch of removals, not just at the end.
+
 ## Platform-Specific Suppression
 
 Some imports only resolve on specific platforms. Keep the suppression even if ty doesn't flag it on your current OS:
