@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -eu
 
 # Get the list of changed Python files
 MERGE_BASE_SHA="${1:-}"
