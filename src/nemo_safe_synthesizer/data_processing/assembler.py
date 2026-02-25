@@ -661,41 +661,41 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     and ensures each training example contains records from only one group.
 
     Key Concepts:
-        - **Order Preservation**: Records are never shuffled. Within each group, records
+        - Order Preservation: Records are never shuffled. Within each group, records
           maintain their original order (typically chronological by timestamp).
-        - **Single-Group Examples**: Each training example contains records from exactly
+        - Single-Group Examples: Each training example contains records from exactly
           one group. This ensures the model learns patterns within a group's sequence
           without cross-group contamination.
-        - **Sequence Continuation**: When a group's records span multiple examples, the
+        - Sequence Continuation: When a group's records span multiple examples, the
           sequence continues naturally across example boundaries. The model sees
           (example1: records 0-99) then (example2: records 100-199) for the same group.
-        - **Pseudo-Group Handling**: When no group column is specified, preprocessing
+        - Pseudo-Group Handling: When no group column is specified, preprocessing
           adds a PSEUDO_GROUP_COLUMN so ungrouped time series is treated as a single
           group. This unifies the grouped and ungrouped code paths.
-        - **Initial Prefill**: For each group, the first 3 records are stored in
+        - Initial Prefill: For each group, the first 3 records are stored in
           `model_metadata.initial_prefill` as a dict mapping group_id -> prefill string.
           This is used by TimeseriesBackend during generation to seed each group's
           context.
 
     Processing Flow:
-        1. **Initialization**:
+        1. Initialization:
            a. Validate that group and order columns exist in dataset
            b. Reorder columns: group_by first, order_by second, then rest
            c. Build keep_columns list to preserve group/order through tokenization
            d. Override schema_prompt to exclude PSEUDO_GROUP_COLUMN from visible schema
 
-        2. **Train/Test Split** (_apply_grouped_train_test_split):
+        2. Train/Test Split (_apply_grouped_train_test_split):
            a. Split along group boundaries using GroupShuffleSplit
            b. Entire groups go to train OR validation, never split across
            c. Re-sort after split (GroupShuffleSplit shuffles indices)
            d. Add row indices column for detecting dataset restart boundaries
 
-        3. **Dataset Preparation** (_prepare_dataset_for_training):
+        3. Dataset Preparation (_prepare_dataset_for_training):
            a. For data_fraction > 1, concatenate multiple passes of the dataset
               (no shuffling, just sequential duplication)
            b. Run example generation via _fill_context_with_records_generator
 
-        4. **Example Generation** (_fill_context_with_records_generator):
+        4. Example Generation (_fill_context_with_records_generator):
            a. Iterate through records sequentially
            b. Track token budget per example (randomized between MIN/MAX_FILL_RATIO)
            c. Flush example when any boundary condition is met:

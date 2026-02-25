@@ -73,7 +73,7 @@ class ModelManifest:
 
     @property
     def key(self) -> str:
-        """Returns a unique key that can be used to store or fetch model sources"""
+        """A unique key that can be used to store or fetch model sources."""
         return f"{self.model}/{self.version}"
 
 

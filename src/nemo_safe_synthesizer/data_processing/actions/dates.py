@@ -167,7 +167,7 @@ class TokenizedStr:
 
     @property
     def component_str(self) -> str:
-        """Returns a string containing only the components of the date. This is
+        """A string containing only the components of the date. This is
         used to matched a date with a date format.
         """
         return " ".join([s for s, _ in self.components])
