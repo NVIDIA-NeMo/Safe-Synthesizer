@@ -18,12 +18,17 @@ Note: The commands below are quick references. For comprehensive detail and mult
 
 Always use `required_permissions: ["all"]` when running `gh` commands. Sandboxed environments fail with TLS certificate errors (`x509: OSStatus -26276`).
 
-## Setup
+## Pre-flight
+
+Before any `gh` operation, verify the binary is available and authenticated:
 
 ```bash
-brew install gh
-gh auth login
-gh auth status  # verify
+# Verify gh is available (check PATH, then common install location)
+which gh 2>/dev/null || ls ~/.local/bin/gh 2>/dev/null
+# If found at ~/.local/bin/gh but not on PATH:
+export PATH="$HOME/.local/bin:$PATH"
+# Verify authentication
+gh auth status
 ```
 
 ## Pull Requests
@@ -42,6 +47,18 @@ gh pr create --title "Title" --body "Description"
 
 # Check out a PR locally
 gh pr checkout <number>
+
+# Create a draft PR (WIP)
+gh pr create --draft --title "Title" --body "Description"
+
+# View PR diff
+gh pr diff <number>
+
+# Check if a PR already exists for the current branch before creating
+gh pr view --json number,url 2>/dev/null && echo "PR exists" || echo "No PR yet"
+
+# Edit an existing PR's title/body
+gh pr edit <number> --title "New title" --body "New body"
 ```
 
 ## CI / Actions
@@ -66,6 +83,9 @@ gh run view <run-id> --log-failed
 gh issue list
 gh issue view <number>
 gh issue create --title "Title" --body "Description"
+
+# Edit an existing issue
+gh issue edit <number> --body "Updated body"
 ```
 
 ## Code Review
@@ -88,3 +108,37 @@ gh release list
 gh release view <tag>
 gh release create <tag> --generate-notes
 ```
+
+## Writing PR and Issue Bodies
+
+Always use HEREDOC for multiline bodies:
+
+```bash
+gh pr create --title "feat: short title" --body "$(cat <<'EOF'
+## Summary
+- 2-4 bullet points, not a full audit
+
+## Test plan
+- [ ] Verify X
+- [ ] Check Y
+EOF
+)"
+```
+
+Keep bodies concise -- 2-4 bullet summary for PRs, problem + options for issues. Don't generate long audit dumps or parameter inventories. When the user asks for "succinct" -- 1-3 sentences, no lists.
+
+Commits must include `--signoff` (`-s`) per AGENTS.md before pushing:
+
+```bash
+git commit -s -m "feat: description"
+git push -u origin HEAD
+gh pr create --draft --title "feat: description" --body "Closes #<issue>"
+```
+
+## Common Mistakes
+
+- Don't WebFetch GitHub Actions URLs for private repos -- use `gh run view` instead (auth required)
+- Don't propose `gh pr create` without checking if a PR already exists first
+- Don't generate long PR/issue bodies -- users consistently ask agents to cut them down
+- Don't forget `--signoff` (`-s`) on commits before push
+- Don't assume `gh` is on PATH -- check `~/.local/bin/gh` as fallback
