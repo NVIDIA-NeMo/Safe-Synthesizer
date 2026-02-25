@@ -731,7 +731,17 @@ Hash-comment for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 ```
 
-`make format` adds missing headers automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
+Exception: `.md` files that start with YAML frontmatter (`---`) get hash-comment headers inside the frontmatter block instead of HTML comments, since HTML comments are not valid YAML:
+
+```markdown
+---
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+title: Page title
+---
+```
+
+`make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
 
 ### File endings
 
