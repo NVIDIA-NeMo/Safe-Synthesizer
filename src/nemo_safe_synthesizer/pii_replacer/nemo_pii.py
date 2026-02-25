@@ -245,7 +245,7 @@ class NemoPII(object):
                     column_classifier = get_column_classifier()
                 except Exception:
                     logging.error(
-                        "Could not initialize column classifier, falling back to default entities.", exc_info=False
+                        "Could not initialize column classifier, falling back to default entities.", exc_info=True
                     )
 
                 # Try to perform classification if we successfully got a classifier
@@ -262,7 +262,7 @@ class NemoPII(object):
                             for (name, entity) in columns.items()
                         }
                     except Exception:
-                        logging.error("Could not perform classify, falling back to default entities.", exc_info=False)
+                        logging.error("Could not perform classify, falling back to default entities.", exc_info=True)
             else:
                 logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")
         finally:
