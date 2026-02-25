@@ -108,6 +108,8 @@ class ConfigBuilder(object):
                 return cls.model_validate(d).model_copy(update=overrides)
             case None:
                 return cls(**overrides)
+            case _:
+                raise TypeError(f"Expected BaseModel, dict, or None, got {type(values)}")
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.

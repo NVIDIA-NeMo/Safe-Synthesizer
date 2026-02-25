@@ -200,7 +200,7 @@ def diff_packages(
                 PackageChange(name=base_pkg.name, change=direction, old=base_pkg, new=head_pkg, ref=ref),
             )
 
-    return LockfileDiff(changes)
+    return LockfileDiff(root=changes)
 
 
 # ---------------------------------------------------------------------------
