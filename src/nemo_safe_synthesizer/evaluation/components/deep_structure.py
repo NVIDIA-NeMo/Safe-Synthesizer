@@ -38,6 +38,8 @@ class DeepStructure(Component):
         d = super().jinja_context
         d["anchor_link"] = "#structure-stability"
         if Component.is_nonempty([self.reference_pca, self.output_pca]):
+            assert self.reference_pca is not None
+            assert self.output_pca is not None
             d["figure"] = figures.structure_stability_figure(
                 reference=self.reference_pca, output=self.output_pca
             ).to_html(full_html=False, include_plotlyjs=False)
@@ -64,8 +66,8 @@ class DeepStructure(Component):
             return DeepStructure(score=EvaluationScore(notes="No columns detected for PCA."))
 
         reference_pca, output_pca = DeepStructure._calculate_pca(
-            evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+            evaluation_dataset.reference[tabular_columns],
+            evaluation_dataset.output[tabular_columns],
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(

@@ -19,7 +19,7 @@ INPUT_DATA_TOO_SMALL_ERROR = (
 
 logger = get_logger(__name__)
 
-DataFrameOptionalTuple = tuple[pd.DataFrame, pd.DataFrame] | tuple[pd.DataFrame, None]
+DataFrameOptionalTuple = tuple[pd.DataFrame, pd.DataFrame | None]
 
 
 def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptionalTuple:
@@ -77,6 +77,9 @@ class Holdout:
             raise ValueError(
                 INPUT_DATA_TOO_SMALL_ERROR,
             )
+
+        assert self.holdout is not None
+        assert self.max_holdout is not None
 
         # Find the number of records to hold out
         if self.holdout < 1.0:

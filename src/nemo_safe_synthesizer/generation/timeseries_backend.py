@@ -321,12 +321,14 @@ class TimeseriesBackend(VllmBackend):
         if timestamp_value is None:
             return None
 
+        assert self._time_format is not None
         try:
             return _parse_timestamp_to_seconds(timestamp_value, self._time_format)
         except (ValueError, TypeError):
             return None
 
     def _advance_expected_time(self, timestamp_seconds: int) -> int:
+        assert self._timestamp_interval_seconds is not None
         return timestamp_seconds + self._timestamp_interval_seconds
 
     def _has_reached_stop_time(self, records: list[dict]) -> bool:
@@ -726,6 +728,7 @@ class TimeseriesBackend(VllmBackend):
             )
 
             # Generate for all prompts at once
+            assert self.llm is not None
             outputs = self.llm.generate(
                 prompts=prompts,
                 sampling_params=modified_params,

@@ -5,7 +5,7 @@
 # This file has been adapted from the `dp-transformers` library.
 # Original source: https://github.com/microsoft/dp-transformers/blob/main/src/dp_transformers/sampler.py
 # See THIRD_PARTY.md for the original MIT license terms.
-from typing import Iterator, Sequence
+from typing import Iterator, Protocol, Sequence
 
 import torch
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler
@@ -16,8 +16,13 @@ from ...observability import get_logger
 logger = get_logger(__name__)
 
 
+class _SizedSampler(Protocol):
+    def __len__(self) -> int: ...
+    def __iter__(self) -> Iterator: ...
+
+
 class _EntitySampler(Sampler):
-    def __init__(self, entity_sampler: Sampler, entity_mapping: Sequence[Sequence[int]]):
+    def __init__(self, entity_sampler: _SizedSampler, entity_mapping: Sequence[Sequence[int]]):
         self.entity_mapping = list(entity_mapping)
         self.entity_sampler = entity_sampler
         self.indices = [0] * len(self.entity_mapping)

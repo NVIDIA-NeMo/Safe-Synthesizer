@@ -21,7 +21,7 @@ class SQSScore(CompositeScore):
     name: str = Field(default="Synthetic Quality Score")
 
     @staticmethod
-    def from_components(components: list[Component] | Component) -> SQSScore:
+    def from_components(components: list[Component] | Component) -> SQSScore:  # ty: ignore[invalid-method-override]  # TODO(ty-fix): see .cursor/ty-fix-notes.md
         if isinstance(components, Component):
             # wrap with a list and continue
             components = [components]

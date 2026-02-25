@@ -26,7 +26,7 @@ class Component(ABC, BaseModel):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> Component:
-        return Component()
+        return Component(name="")
 
     def get_json(self) -> str:
         return self.score.model_dump_json()

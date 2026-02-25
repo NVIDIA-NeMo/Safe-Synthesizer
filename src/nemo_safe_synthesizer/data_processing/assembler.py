@@ -49,7 +49,7 @@ NUM_SPECIAL_TOKENS = 2
 GeneratorType = Generator[dict[str, list], None, None]
 
 
-def _get_max_tokens_action(rope_scaling_factor: int | None) -> str:
+def _get_max_tokens_action(rope_scaling_factor: int | float | None) -> str:
     rsf = rope_scaling_factor if rope_scaling_factor is not None else 1
     if rsf <= 5:
         max_tokens_action = (
@@ -406,6 +406,7 @@ class TrainingExampleAssembler(ABC):
             )
             train_df, test_df = split_dataset
             self.train_dataset = Dataset.from_pandas(train_df)
+            assert test_df is not None
             self.validation_dataset = Dataset.from_pandas(test_df)
             self.validation_dataset.info.description += "is_val"
 
@@ -632,11 +633,18 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             f"Assembling examples from {data_fraction:.1%} of the input records",
         )
 
+        assert self.seed is not None
         rng = utils.get_random_number_generator(self.seed)
         # Process both training and test datasets
+        assert self.train_dataset is not None
         training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
-        validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+        validation_dataset = (
+            self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+            if self.validation_dataset is not None
+            else None
+        )
 
+        assert training_dataset is not None
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,
@@ -1025,10 +1033,17 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             f"Assembling sequential examples from {data_fraction:.1%} of the input records",
         )
 
+        assert self.seed is not None
         rng = utils.get_random_number_generator(self.seed)
+        assert self.train_dataset is not None
         training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
-        validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+        validation_dataset = (
+            self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+            if self.validation_dataset is not None
+            else None
+        )
 
+        assert training_dataset is not None
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,
@@ -1142,6 +1157,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
                     example_dict = self._flush_example(dataset, example_start, current_idx, stats_target)
                     if example_dict is not None:
                         num_examples += 1
+                        assert current_group_value is not None
                         examples_per_group[current_group_value] += 1
                         pbar.set_postfix({"num_examples": num_examples})
                         yield example_dict
@@ -1244,7 +1260,6 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             test_size=None,  # we already did the split
             cache_file_path=cache_file_path,
             seed=seed,
-            *args,
             **kwargs,
         )
 
@@ -1457,11 +1472,18 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             f"Assembling grouped examples from {data_fraction:.1%} of the input training records",
         )
 
+        assert self.seed is not None
         rng = utils.get_random_number_generator(self.seed)
         # Process both training and validation datasets
+        assert self.train_dataset is not None
         training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
-        validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+        validation_dataset = (
+            self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
+            if self.validation_dataset is not None
+            else None
+        )
 
+        assert training_dataset is not None
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,

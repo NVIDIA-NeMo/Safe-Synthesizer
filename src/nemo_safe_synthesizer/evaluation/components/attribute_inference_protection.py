@@ -15,6 +15,7 @@ from typing import cast
 import category_encoders as ce
 import numpy as np
 import pandas as pd
+import torch
 from pandas.api.types import is_float_dtype
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
@@ -267,7 +268,7 @@ class AttributeInferenceProtection(Component):
         if len(text_columns) == 0:
             # Create the faiss index on the synthetic data
             dim = df_synth_norm.shape[1]
-            index = faiss.IndexFlatL2(dim)  # ty: ignore[unresolved-attribute, possibly-unbound-attribute]
+            index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-missing-attribute]
 
             # This usage matches documentation. Specifying n= and x= parameters as
             # the type annotation for IndexFlatL2.add suggests seems unnecessary, possibly related
@@ -288,15 +289,15 @@ class AttributeInferenceProtection(Component):
             df_train_embeddings = AttributeInferenceProtection._embed_text(df_train_text, embedder)
             df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
             hits = util.semantic_search(
-                np.array(list(df_train_embeddings["embedding"])),
-                np.array(list(df_synth_embeddings["embedding"])),
+                torch.from_numpy(np.array(list(df_train_embeddings["embedding"]))),
+                torch.from_numpy(np.array(list(df_synth_embeddings["embedding"]))),
                 top_k=k,
             )
             synth_rows = pd.DataFrame()
             for i in range(k):
                 corpus_id = hits[0][i]["corpus_id"]
                 synth_rows = pd.concat(
-                    [synth_rows, pd.DataFrame([df_synth.iloc[corpus_id]])],
+                    [synth_rows, pd.DataFrame([df_synth.iloc[int(corpus_id)]])],
                     ignore_index=True,
                 )
 
@@ -310,8 +311,8 @@ class AttributeInferenceProtection(Component):
         df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
         search_synth_k = min(1000, len(df_synth_embeddings))
         hits = util.semantic_search(
-            np.array(list(df_train_embeddings["embedding"])),
-            np.array(list(df_synth_embeddings["embedding"])),
+            torch.from_numpy(np.array(list(df_train_embeddings["embedding"]))),
+            torch.from_numpy(np.array(list(df_synth_embeddings["embedding"]))),
             top_k=search_synth_k,
         )
         synth_NN = pd.DataFrame()
@@ -324,12 +325,12 @@ class AttributeInferenceProtection(Component):
             dist = 1 - sim
             text_dist[i] = dist
             corpus_ids.append(corpus_id)
-            synth_NN = pd.concat([synth_NN, pd.DataFrame([df_synth_norm.iloc[corpus_id]])], ignore_index=True)
+            synth_NN = pd.concat([synth_NN, pd.DataFrame([df_synth_norm.iloc[int(corpus_id)]])], ignore_index=True)
 
         # Now get the tabular similarity for these 1000 NN
 
         dim = synth_NN.shape[1]
-        index = faiss.IndexFlatL2(dim)  # ty: ignore[unresolved-attribute, possibly-unbound-attribute]
+        index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-missing-attribute]
         index.add(np.float32(np.ascontiguousarray(np.array(synth_NN))))  # ty: ignore[missing-argument]
         dists, indexes = index.search(np.float32(np.ascontiguousarray(np.array(df_train_norm))), search_synth_k)  # ty: ignore[missing-argument]
         # Scale the Euclidean distance to [0,1]
@@ -531,7 +532,7 @@ class AttributeInferenceProtection(Component):
                 # Lat/lon values inspired this. Text must be dist .35 or less
                 for column in predict_columns:
                     synth_val = synth_values[column]
-                    train_val = train_row_all.iloc[0][column]
+                    train_val = train_row_all.iloc[0][str(column)]
 
                     if pd.isna(train_val):
                         continue

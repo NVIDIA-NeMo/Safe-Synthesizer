@@ -50,12 +50,15 @@ class TextStructureSimilarity(Component):
         d = super().jinja_context
         d["anchor_link"] = "#structure-similarity"
         d["figures"] = []
-        if self.training_statistics:
+        if self.training_statistics and self.synthetic_statistics:
             maybe_figs = [
                 figures.generate_text_structure_similarity_figures(
-                    self.training_statistics[col], self.synthetic_statistics[col], col
+                    self.training_statistics[col],  # ty: ignore[invalid-argument-type]
+                    self.synthetic_statistics[col],  # ty: ignore[invalid-argument-type]
+                    col,
                 )
                 for col in self.training_statistics
+                if col in self.synthetic_statistics
             ]
             d["figures"] = [
                 fig.to_html(full_html=False, include_plotlyjs=False) for fig in maybe_figs if fig is not None

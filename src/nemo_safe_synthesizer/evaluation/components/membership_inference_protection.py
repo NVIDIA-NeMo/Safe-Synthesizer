@@ -10,6 +10,7 @@ import category_encoders as ce
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import torch
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics import accuracy_score, precision_score
@@ -230,7 +231,7 @@ class MembershipInferenceProtection(Component):
         df_train_norm: pd.DataFrame,
         df_test_norm: pd.DataFrame,
         df_synth_norm: pd.DataFrame,
-        index: faiss.IndexFlatL2 | None,  # ty: ignore[unresolved-attribute, possibly-unbound-attribute]
+        index: faiss.IndexFlatL2 | None,  # ty: ignore[possibly-missing-attribute]
         run: int,
         text_cnt: int,
         tabular_cnt: int,
@@ -265,8 +266,8 @@ class MembershipInferenceProtection(Component):
             else:
                 k = 1
             hits = util.semantic_search(
-                np.array(list(real_data["embedding"])),
-                np.array(list(df_synth_norm["embedding"])),
+                torch.from_numpy(np.array(list(real_data["embedding"]))),
+                torch.from_numpy(np.array(list(df_synth_norm["embedding"]))),
                 top_k=k,
             )
             for i in range(len(real_data)):
@@ -340,8 +341,8 @@ class MembershipInferenceProtection(Component):
 
         attack_synth_dist = MembershipInferenceProtection._get_attack_dist(
             attack_synth_dist_tabular,
-            attack_synth_indices_text,
-            attack_synth_dist_text,
+            np.array(attack_synth_indices_text, dtype=object),
+            np.array(attack_synth_dist_text, dtype=object),
             text_cnt,
             tabular_cnt,
             search_synth_k,
@@ -503,7 +504,7 @@ class MembershipInferenceProtection(Component):
                     )
                 # Create the faiss index on the synthetic tabular data
                 dim = df_synth_norm.shape[1]
-                index = faiss.IndexFlatL2(dim)  # ty: ignore[unresolved-attribute, possibly-unbound-attribute]
+                index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-missing-attribute]
                 index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))  # ty: ignore[missing-argument]
             else:
                 df_train_norm = pd.DataFrame()

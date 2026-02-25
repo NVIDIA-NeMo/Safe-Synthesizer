@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 from pydantic.experimental.missing_sentinel import MISSING
 from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
 
-from ..cli.artifact_structure import Workdir
+from ..cli.artifact_structure import BoundDir, Workdir
 from ..config.parameters import SafeSynthesizerParameters
 from ..defaults import (
     DEFAULT_INSTRUCTION,
@@ -174,11 +174,11 @@ class ModelMetadata(BaseModel):
         Field(description="Supported context window for base model, before rope scaling factor adjustment"),
     ] = None
     rope_scaling: Annotated[
-        RopeScaling | MISSING | None,  # type: ignore[invalid-type-form]
+        RopeScaling | float | int | None,
         Field(
-            description="RoPE scaling configuration for context window extension. will be auto-populated if not provided. if an integer is provided, it will be used as the factor and theta will be set to 10000.0",
+            description="RoPE scaling configuration for context window extension. will be auto-populated if not provided. if a number is provided, it will be used as the factor and theta will be set to 10000.0",
         ),
-    ] = MISSING
+    ] = MISSING  # type: ignore[assignment]
     max_sequences_per_example: Annotated[
         int | None,
         Field(description="Maximum number of sequences per training example."),
@@ -218,7 +218,9 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot get adapter_path: workdir is not set")
-        return self.workdir.train.adapter.path.resolve()
+        adapter = self.workdir.train.adapter
+        assert isinstance(adapter, BoundDir)
+        return adapter.path.resolve()
 
     @property
     def metadata_path(self) -> Path:
@@ -237,7 +239,9 @@ class ModelMetadata(BaseModel):
     @property
     def rope_scaling_factor(self) -> float:
         """Get the rope scaling factor for backwards compatibility."""
-        return self.rope_scaling.factor if self.rope_scaling is not None else 1.0
+        if isinstance(self.rope_scaling, RopeScaling):
+            return self.rope_scaling.factor
+        return 1.0
 
     @property
     def max_seq_length(self) -> int:
@@ -245,6 +249,7 @@ class ModelMetadata(BaseModel):
 
         Includes any adjustment for rope_scaling.factor.
         """
+        assert self.base_max_seq_length is not None
         rsf = 1.0
         if isinstance(self.rope_scaling, RopeScaling) and self.rope_scaling.factor > 1.0:
             rsf = self.rope_scaling.factor
@@ -258,7 +263,9 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot save metadata: workdir is not set")
-        write_json(self.model_dump(mode="json"), path=self.workdir.train.adapter.metadata, indent=4)
+        adapter = self.workdir.train.adapter
+        assert isinstance(adapter, BoundDir)
+        write_json(self.model_dump(mode="json"), path=Path(adapter.metadata), indent=4)
 
     @classmethod
     def from_str_or_path(cls: type["ModelMetadata"], model_name_or_path: Path | str, **kwargs) -> ModelMetadata:

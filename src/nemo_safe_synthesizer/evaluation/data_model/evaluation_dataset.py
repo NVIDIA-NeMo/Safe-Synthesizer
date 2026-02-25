@@ -135,8 +135,8 @@ class EvaluationDataset(BaseModel):
         else:
             # Even without sampling, we only want to use shared columns.
             col_set = shared_columns
-        reference = reference[list(col_set)]  # ty: ignore[invalid-assignment]
-        output = output[list(col_set)]  # ty: ignore[invalid-assignment]
+        reference = reference[list(col_set)]
+        output = output[list(col_set)]
 
         # Check and subsample test columns, or split out a test set if not provided.
         if test is not None and not test.empty:
@@ -146,7 +146,7 @@ class EvaluationDataset(BaseModel):
                     "Test dataframe has no columns in common with Reference and Output dataframes. Please check dataframes for mismatch."
                 )
             else:
-                test = test[list(test_shared_columns)]  # ty: ignore[invalid-assignment]
+                test = test[list(test_shared_columns)]
 
         return reference, output, test
 

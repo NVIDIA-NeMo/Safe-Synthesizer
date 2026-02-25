@@ -20,7 +20,7 @@ from transformers import (
 )
 
 if TYPE_CHECKING:
-    from unsloth import FastLanguageModel  # noqa: F401  # ty: ignore[unresolved-import]
+    from unsloth import FastLanguageModel  # noqa: F401
 
 from ..observability import get_logger
 
@@ -198,7 +198,7 @@ def optimize_for_inference(
     Usage: "with optimize_for_inference(model):..."
     """
     if torch.cuda.is_available() and type(model).__name__ == "FastLanguageModel":
-        from unsloth import FastLanguageModel  # noqa: F401  # ty: ignore[unresolved-import]
+        from unsloth import FastLanguageModel  # noqa: F401
 
         FastLanguageModel.for_inference(model)
         yield

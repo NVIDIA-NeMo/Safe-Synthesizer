@@ -153,14 +153,15 @@ class InferenceEvalCallback(TrainerCallback):
                         "🛑 Stopping generation prematurely. No records were generated. "
                         "Please consider adjusting the sampling parameters.",
                     )
-                    state.log_history.append({"training_incomplete": "no_records"})
+                    state.log_history.append({"training_incomplete": "no_records"})  # type: ignore[invalid-argument-type]
                 elif self.generation.status == GenerationStatus.STOP_METRIC_REACHED:
+                    assert self.generation.stop_condition is not None
                     logger.error(
                         "🛑 Stopping generation prematurely. The stopping "
                         "condition was reached with a running average invalid "
                         f"fraction of {self.generation.stop_condition.last_value:.2%}",
                     )
-                    state.log_history.append({"training_incomplete": "stopping_condition_reached"})
+                    state.log_history.append({"training_incomplete": "stopping_condition_reached"})  # type: ignore[invalid-argument-type]
 
 
 class ProgressBarCallback(TrainerCallback):
@@ -184,7 +185,8 @@ class ProgressBarCallback(TrainerCallback):
 
     def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         if state.is_world_process_zero:
-            self.training_bar.update(state.global_step - self.current_step)
+            if self.training_bar is not None:
+                self.training_bar.update(state.global_step - self.current_step)
             self.current_step = state.global_step
 
     def on_prediction_step(
@@ -211,7 +213,7 @@ class ProgressBarCallback(TrainerCallback):
                 self.prediction_bar.close()
             self.prediction_bar = None
 
-    def on_predict(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+    def on_predict(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, metrics=None, **kwargs):
         if state.is_world_process_zero:
             if self.prediction_bar is not None:
                 self.prediction_bar.close()
@@ -235,7 +237,8 @@ class ProgressBarCallback(TrainerCallback):
 
     def on_train_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         if state.is_world_process_zero:
-            self.training_bar.close()
+            if self.training_bar is not None:
+                self.training_bar.close()
             self.training_bar = None
 
 

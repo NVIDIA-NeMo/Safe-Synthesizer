@@ -65,3 +65,64 @@ ty is configured in `pyproject.toml` under `[tool.ty.src]`. See `references/ty-c
 2. Overusing `Any`: silences the type checker -- use `object` or define a `Protocol`
 3. Not narrowing `None`: access `.attr` on `X | None` without a guard -- use `if x is not None:`
 4. Mixing `TypeVar` bounds vs constraints: `T = TypeVar("T", int, str)` means "exactly int or str"; use `bound=` for upper bounds
+
+## Type Narrowing for ty
+
+ty supports standard narrowing constructs. Prefer fixing types over `# ty: ignore`.
+
+### Assert narrowing
+
+`assert` narrows the type for all subsequent code in the same scope (ty 0.0.18+):
+
+```python
+def f(x: str | None) -> str:
+    assert x is not None   # narrows x to str
+    return x
+
+def g(items: Dataset | None, flag: bool) -> Dataset:
+    assert isinstance(items, Dataset)  # narrows items to Dataset
+    return items
+```
+
+Use `assert` when the value is logically guaranteed non-None by prior code flow. Use `if x is None: raise` when the None case represents a real user/config error.
+
+### Conditional narrowing for optional pass-through
+
+When a value can legitimately be `None` and you need to pass it conditionally:
+
+```python
+result = process(data) if data is not None else None
+```
+
+### Method override compatibility
+
+ty enforces the Liskov Substitution Principle strictly. Overridden methods must accept at least as wide a type as the base:
+
+- Match parameter names and types to the base class exactly
+- If the base has an untyped parameter (`features`), don't add a narrower type annotation in the override
+- Add optional parameters with defaults (`return_tensors: str | None = None`) to match the base signature
+- Include return type annotations that match or are narrower than the base
+
+### Protocol for structural constraints
+
+When a parameter needs specific methods but no common base class exists:
+
+```python
+from typing import Protocol, Iterator
+
+class SizedIterable(Protocol):
+    def __len__(self) -> int: ...
+    def __iter__(self) -> Iterator: ...
+
+def process(sampler: SizedIterable) -> int:
+    return len(sampler)
+```
+
+### Third-party stub workarounds
+
+When third-party type stubs are too restrictive, prefer converting values over suppressing:
+
+- `torch.from_numpy(arr)` instead of `# ty: ignore` when `Tensor` is expected but `ndarray` is passed (zero-copy)
+- `np.dtype(s)` to wrap a string dtype for pandas `.astype()` overloads
+- `lambda v, info: self.validate(v)` to match callback signatures (e.g., pydantic core_schema validators)
+- `str(column)` to satisfy pandas `__getitem__` when the key is `Hashable`

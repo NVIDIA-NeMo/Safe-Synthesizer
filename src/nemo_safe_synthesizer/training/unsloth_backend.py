@@ -37,7 +37,7 @@ class UnslothTrainer(HuggingFaceBackend):
     Attributes
     ----------
     trainer_type : type
-        Reference to FastLanguageModel class from Unsloth.
+        Inherited from HuggingFaceBackend; Trainer or OpacusDPTrainer.
     model_loader_type : type
         Reference to FastLanguageModel class for model loading.
 
@@ -52,7 +52,7 @@ class UnslothTrainer(HuggingFaceBackend):
     """
 
     def __init__(self, *args, **kwargs):
-        from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
+        from unsloth import FastLanguageModel
 
         super().__init__(*args, **kwargs)
         self.model_loader_type = FastLanguageModel
@@ -103,7 +103,7 @@ class UnslothTrainer(HuggingFaceBackend):
             self.framework_load_params["load_in_4bit"] = False
             self.framework_load_params["load_in_8bit"] = False
 
-    def maybe_quantize(self):
+    def maybe_quantize(self, **quant_params: dict):
         """Apply PEFT to the model using Unsloth's optimized implementation.
 
         This method configures and applies Parameter-Efficient Fine-Tuning (PEFT)
@@ -121,7 +121,7 @@ class UnslothTrainer(HuggingFaceBackend):
         Unlike the parent class implementation, this method uses Unsloth's
         `FastLanguageModel.get_peft_model`.
         """
-        from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
+        from unsloth import FastLanguageModel
 
         self._prepare_quantize_base()
         qparams = self.quant_params.copy()
@@ -133,7 +133,7 @@ class UnslothTrainer(HuggingFaceBackend):
     def _load_pretrained_model(self, **model_args):
         """unsloth loads as s tuple of model and tokenizer, we need to add the bos and eos tokens to the tokenizer"""
 
-        model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)
+        model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)  # type: ignore[not-iterable]
 
         self.tokenizer = add_bos_eos_tokens_to_tokenizer(
             tokenizer,
@@ -161,7 +161,7 @@ class UnslothTrainer(HuggingFaceBackend):
         """
         # NOTE: this hack stops unsloth from reaching out to huggingface, see
         # https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235
-        from unsloth.models import loader  # ty: ignore[unresolved-import]
+        from unsloth.models import loader
 
         loader.SUPPORTS_LLAMA32 = False
         logger.info(f"load_model: Loading model {self.params.training.pretrained_model} with args: {model_args}")

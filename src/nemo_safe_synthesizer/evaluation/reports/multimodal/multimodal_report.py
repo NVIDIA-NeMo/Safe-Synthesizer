@@ -82,6 +82,7 @@ class MultimodalReport(EvaluationReport):
 
             ctx["dp_enabled"] = self.config and self.config.get("dp_enabled")
             if ctx["dp_enabled"]:
+                assert self.config is not None
                 ctx["delta"] = self.config.get("delta")
                 ctx["epsilon"] = self.config.get("epsilon")
 

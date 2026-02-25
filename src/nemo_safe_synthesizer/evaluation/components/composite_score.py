@@ -23,13 +23,13 @@ class CompositeScore(Component):
     @staticmethod
     def from_components(components: list[Component] | Component, name: str) -> CompositeScore:
         if isinstance(components, Component):
-            return CompositeScore(score=components.score)
+            return CompositeScore(score=components.score, name=name)
         if (
             components is None
             or len(components) == 0
             or all([True for c in components if c.score is None or c.score.score is None])
         ):
-            return CompositeScore(score=EvaluationScore())
+            return CompositeScore(score=EvaluationScore(), name=name)
 
         # Take the mean
         total = 0.0

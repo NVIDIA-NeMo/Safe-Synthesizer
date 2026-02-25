@@ -38,7 +38,7 @@ STRING_LENGTH_MULTIPLE = 1.5
 
 def _handle_enum_value(v: object) -> None | int | float | bool | str:
     # TabFT uses None for na
-    if pd.isna(v):
+    if v is None or (isinstance(v, (float, int)) and pd.isna(v)):
         return None
 
     if isinstance(v, (float, int, bool, str)):
@@ -53,7 +53,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
         # Convert to python int if possible, but np.float32 and other float
         # types will be truncated by int(v), so check equality to make sure
         # we haven't lost precision.
-        t = int(v)
+        t = int(v)  # type: ignore[invalid-argument-type]
         if t == v:
             return t
     except Exception:
@@ -61,7 +61,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
 
     try:
         # Convert to python float if possible
-        return float(v)
+        return float(v)  # type: ignore[invalid-argument-type]
     except Exception:
         pass
 

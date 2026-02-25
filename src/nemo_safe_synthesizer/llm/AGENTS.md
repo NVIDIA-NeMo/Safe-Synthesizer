@@ -41,7 +41,7 @@ Each model sets its own template and BOS/EOS via `LLMPromptConfig.from_tokenizer
 
 ## Gotchas
 
-- MISSING sentinel — `rope_scaling` defaults to `MISSING` (unset) vs explicit `None`; `populate_derived_fields` resolves to `RopeScaling | None`
+- MISSING sentinel — `rope_scaling` field accepts `RopeScaling | float | int | None`, defaults to `MISSING` (unset); `populate_derived_fields` resolves any input to `RopeScaling | None`
 - trust_remote_code — `trust_remote_code_for_model()` returns True only for `nvidia/` and `gretel/` prefixes
 - initial_prefill — can be `dict[str, str]` (grouped) or `str` (single column)
 - rope_parameters_location — `"autoconfig"` vs `"automodel"`; all current subclasses use `"autoconfig"`

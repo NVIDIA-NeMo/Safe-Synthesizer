@@ -11,10 +11,12 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 import opacus
+import opacus.optimizers
 import pandas as pd
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
+from opacus.accountants import RDPAccountant
 from peft import PeftModel
 from torch import nn
 from torch.utils.data import DataLoader
@@ -111,8 +113,7 @@ class DPCallback(TrainerCallback):
 
         optimizer.zero_grad()  # Opacus needs .zero_grad() on the optimizer, HF doesn't call by default.
         if not self.accountant.use_prv:
-            # Use RDPAccountant, which uses `.step()` to increment number of
-            # steps, required for accurate epsilon calculation.
+            assert isinstance(self.accountant.accountant, RDPAccountant)
             self.accountant.accountant.step(
                 noise_multiplier=self.noise_multiplier,
                 sample_rate=self.sampling_probability,
@@ -158,10 +159,8 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer, mlm=False)
 
-    def __call__(
-        self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
-    ) -> Dict[str, torch.Tensor]:
-        batch = super().__call__(examples)
+    def __call__(self, features, return_tensors: str | None = None) -> Dict[str, torch.Tensor]:
+        batch = super().__call__(features, return_tensors=return_tensors)
 
         if "position_ids" not in batch:
             input_ids = batch["input_ids"]
@@ -177,10 +176,8 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer)
 
-    def __call__(
-        self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.TensorType]]]
-    ) -> Dict[str, torch.Tensor]:
-        batch = super().__call__(examples)
+    def __call__(self, features, return_tensors: str | None = None) -> Dict[str, torch.Tensor]:
+        batch = super().__call__(features, return_tensors=return_tensors)
 
         if "position_ids" not in batch:
             input_ids = batch["input_ids"]
@@ -212,7 +209,7 @@ def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]
     # TODO: improve for use in sampler.py using a dictionary or such structure
     # with clearly defined entity_ids
     entity_mapping = [g.index.values for _, g in entities.groupby("entity")]
-    return entity_mapping
+    return entity_mapping  # type: ignore[invalid-return-type]
 
 
 class OpacusDPTrainer(Trainer):
@@ -244,6 +241,9 @@ class OpacusDPTrainer(Trainer):
         self.privacy_args = privacy_args
         self.secure_mode = secure_mode
 
+        assert self.train_args is not None
+        assert self.privacy_args is not None
+
         if entity_column_values is None:
             # Record-level DP == mapping each sample to a unique entity.
             self.entity_mapping = [[i] for i in range(train_dataset.num_rows)]
@@ -274,6 +274,10 @@ class OpacusDPTrainer(Trainer):
                 sampling_probability=self.sampling_probability,
                 num_steps=self.num_steps,
             )
+
+        assert self.privacy_args.noise_multiplier is not None
+        assert self.privacy_args.use_prv is not None
+        assert self.privacy_args.target_epsilon is not None
 
         model = GradSampleModule(model)
 
@@ -323,6 +327,7 @@ class OpacusDPTrainer(Trainer):
         `sampling_probability` is required to calculate privacy budget
         utilization during training.
         """
+        assert self.train_args is not None
         return min(
             1.0,
             self.train_args.per_device_train_batch_size
@@ -348,6 +353,7 @@ class OpacusDPTrainer(Trainer):
         This is used to determine the privacy budget utilization during
         training.
         """
+        assert self.train_args is not None
         if self.true_num_epochs == -1:
             return self.train_args.max_steps
         else:
@@ -360,8 +366,9 @@ class OpacusDPTrainer(Trainer):
 
     def create_optimizer(self):
         _ = super().create_optimizer()
+        assert self.privacy_args is not None
 
-        class DPOptimizer(opacus.optimizers.DPOptimizer):  # ty: ignore[unresolved-attribute]
+        class DPOptimizer(opacus.optimizers.DPOptimizer):
             """HF's AcceleratedOptimizer replaces the original reference to
             `original_optimizer.param_groups`, and the approach used by Opacus
             fails when we try to e.g., update the learning rate. We here use
@@ -381,6 +388,10 @@ class OpacusDPTrainer(Trainer):
         # TODO: explore better mitigation for precision based attacks on finite
         # precision devices
         # https://tpdp.journalprivacyconfidentiality.org/2022/papers/HaneyDHSH22.pdf
+        assert self.optimizer is not None
+        assert self.privacy_args.noise_multiplier is not None
+        assert self.privacy_args.per_sample_max_grad_norm is not None
+        assert self.secure_mode is not None
         self.optimizer = optimizer_generator(
             optimizer=self.optimizer,
             noise_multiplier=self.privacy_args.noise_multiplier,
@@ -402,8 +413,9 @@ class OpacusDPTrainer(Trainer):
         behavior to scale loss for Opacus.
         """
         model.train()
-        if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
-            self.optimizer.train()
+        optimizer_train = getattr(self.optimizer, "train", None)
+        if optimizer_train is not None and callable(optimizer_train):
+            optimizer_train()
 
         # Compared to the original HF implementation (as of 4.48), we use
         # `num_items_in_batch=None` to avoid any extra scaling, since Opacus
@@ -421,10 +433,12 @@ class OpacusDPTrainer(Trainer):
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
-    def _get_train_sampler(self):
+    def _get_train_sampler(self, train_dataset=None):
         """
         Provides entity sampler.
         """
+        assert self.privacy_args is not None
+        assert isinstance(self.train_dataset, Dataset)
         if self.privacy_args.poisson_sampling:
             # NOTE: sample_rate is set s.t. chosen batch size remains the same in average
             sample_rate = min(
@@ -450,6 +464,7 @@ class OpacusDPTrainer(Trainer):
         Returns a torch DataLoader that uses an entity-level sampler.
         """
         train_sampler = self._get_train_sampler()
+        assert isinstance(self.train_dataset, torch.utils.data.Dataset)
         return DataLoader(
             self.train_dataset,
             batch_sampler=train_sampler,
@@ -472,7 +487,9 @@ class OpacusDPTrainer(Trainer):
         else:
             model_to_save = self.model
 
+        assert model_to_save is not None
         output_dir = output_dir if output_dir is not None else self.args.output_dir
+        assert output_dir is not None
         os.makedirs(output_dir, exist_ok=True)
 
         supported_classes = (

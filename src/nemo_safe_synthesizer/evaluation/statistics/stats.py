@@ -489,7 +489,7 @@ def normalize_dataset(df: pd.DataFrame) -> pd.DataFrame:
     nominal_columns = list(df_cp.select_dtypes(include=["object", "category", "boolean"]).columns)
     int64_dtypes = df_cp.columns[df_cp.dtypes == pd.Int64Dtype()]
     # Convert pandas boolean dtype columns to object to replace possible NaNs with "Missing" values:
-    boolean_dtypes = df_cp[nominal_columns].columns[df_cp[nominal_columns].dtypes.eq(pd.BooleanDtype())]
+    boolean_dtypes = df_cp[nominal_columns].columns[df_cp[nominal_columns].dtypes.eq(pd.BooleanDtype())]  # ty: ignore[invalid-argument-type]
     df_cp[boolean_dtypes] = df_cp[boolean_dtypes].astype("object")
     numeric_columns = []
     for c in df_cp.columns:

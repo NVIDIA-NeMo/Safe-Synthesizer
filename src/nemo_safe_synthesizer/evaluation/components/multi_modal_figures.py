@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from typing import cast
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -211,8 +209,7 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
     fig = pie(
-        # the cast done bc ty infers this as a list of bools instead of str.
-        labels=cast(list[str], df[PROTECTION_COLUMN].dropna().astype(str).tolist()),
+        labels=df[PROTECTION_COLUMN].dropna().astype(str).tolist(),
         values=df["Attack Percentage"].replace({0: np.nan}),
         sort=False,
     )

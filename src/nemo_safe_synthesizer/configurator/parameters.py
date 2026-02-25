@@ -47,7 +47,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     and adds small utilities like iteration, parameter lookup, nested parameter group lookup, etc.
 
     Features:
-        - Iteration over parameters and nested parameter groups
+        - Parameter iteration via _iter_parameters()
         - Parameter lookup by name
     """
 
@@ -124,15 +124,6 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         if recursive:
             for pg in param_groups:
                 yield from pg._iter_parameters(recursive=True)
-
-    def __iter__(self) -> Iterable[DataT]:
-        """
-        Make Parameters iterable, yielding all contained Parameter instances.
-
-        Returns:
-            Iterator over all parameters including those in nested groups
-        """
-        return self._iter_parameters(recursive=True)
 
     def get(self, name: str, default: Any = None) -> DataT | Any | None:
         """
@@ -230,7 +221,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         if path:
             return cls.from_yaml(path, overrides)
         else:
-            return cls.from_params(**overrides)
+            return cls.from_params(**(overrides or {}))
 
     def to_yaml(self, path: PathT, exclude_unset: bool = True) -> None:
         """
@@ -265,6 +256,6 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         Yields:
             Tuples of (field_name, AutoParam) for updatable parameters
         """
-        for param in self:
+        for param in self._iter_parameters(recursive=True):
             if param == "auto":
                 yield param

@@ -303,6 +303,7 @@ class GenerationBatches(object):
                 " Please consider increasing the 'num_input_records_to_sample' parameter."
             )
         elif self.status == GenerationStatus.STOP_METRIC_REACHED:
+            assert self.stop_condition is not None
             logger.error(
                 "🛑 Stopping generation prematurely. The stopping "
                 "condition was reached with a running average invalid "

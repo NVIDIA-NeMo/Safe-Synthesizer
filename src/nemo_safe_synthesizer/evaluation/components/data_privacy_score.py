@@ -19,9 +19,9 @@ logger = get_logger(__name__)
 class DataPrivacyScore(CompositeScore):
     name: str = Field(default="Data Privacy Score")
 
-    def from_components(components: list[Component] | Component) -> CompositeScore:
+    def from_components(components: list[Component] | Component) -> CompositeScore:  # ty: ignore[invalid-method-override]  # TODO(ty-fix): see .cursor/ty-fix-notes.md
         if isinstance(components, Component):
-            return CompositeScore(score=components.score)
+            return CompositeScore(score=components.score, name=components.name)
         if (
             components is None
             or len(components) == 0

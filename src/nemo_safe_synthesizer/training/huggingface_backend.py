@@ -45,6 +45,7 @@ from ..defaults import (
 )
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
+from ..llm.metadata import RopeScaling
 from ..llm.utils import (
     add_bos_eos_tokens_to_tokenizer,
     cleanup_memory,
@@ -211,13 +212,11 @@ class HuggingFaceBackend(TrainingBackend):
         """
         rope_scaling = self.model_metadata.rope_scaling
 
-        if rope_scaling is None:
-            # No rope scaling configured
+        if not isinstance(rope_scaling, RopeScaling):
             setattr(self.autoconfig, "rope_scaling", getattr(self.autoconfig, "rope_scaling", None))
             logger.warning(f"rope_scaling not configured, using autoconfig default: {self.autoconfig.rope_scaling}")
             return
 
-        # Convert RopeScaling to HuggingFace dict format or a None
         rope_scaling_dict = rope_scaling.to_hf_dict()
 
         if self.model_metadata.rope_parameters_location == "autoconfig":
@@ -295,7 +294,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         assert isinstance(self.model, PreTrainedModel), f"Expected PreTrainedModel, got {type(self.model)}"
         peft_model = get_peft_model_hf(self.model, peft_config=lora_config)
-        self.model = peft_model  # ty: ignore[invalid-assignment]  -- PeftMixedModel not in union, but LoraConfig always yields PeftModel
+        self.model = peft_model
         parameter_count = get_model_param_count(self.model, trainable_only=True) / 1e6
         logger.info(
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",

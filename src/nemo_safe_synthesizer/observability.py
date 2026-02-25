@@ -160,7 +160,7 @@ class LogCategory(str, Enum):
 
 
 # Contextvar to pass category from LoggerAdapter to processor without going through 'extra'
-_current_log_category: contextvars.ContextVar[str | None] = contextvars.ContextVar(  # ty: ignore[invalid-assignment]
+_current_log_category: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "_current_log_category", default=None
 )
 
@@ -527,10 +527,7 @@ def _prepare_console_logging(
     return console_handler
 
 
-def _prepare_common_processors() -> tuple[
-    list[structlog.stdlib.ProcessorFormatter],
-    Any,
-]:
+def _prepare_common_processors() -> tuple[list[Any], Any]:
     json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
     global SETTINGS
     if SETTINGS and SETTINGS.nss_log_format == "json":
@@ -547,7 +544,7 @@ def _prepare_common_processors() -> tuple[
             return event_dict
 
         timestamp_processor = structlog.processors.TimeStamper()
-        timestamp_processor._stamper = _stamper  # type: ignore[attr-defined]
+        timestamp_processor._stamper = _stamper
         # For console output: render table data as Rich tables, then handle categories
         env_processors = [_category_log_processor, _render_table_data_for_console, _move_category_for_column]
 
@@ -572,7 +569,7 @@ def _prepare_common_processors() -> tuple[
         structlog.processors.EventRenamer(to="message"),
     ]
 
-    return shared_processors, renderer  # type: ignore[return-value]
+    return shared_processors, renderer
 
 
 def _clear_loggers():
@@ -676,11 +673,12 @@ def _initialize_logging():
     # Configure structlog to use stdlib logging as its backend
     # This ensures structlog.get_logger() returns loggers that go through stdlib
     # Note: wrap_for_formatter IS needed here for native structlog logging
+    configure_processors: list[Any] = [
+        *shared_processors,
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ]
     structlog.configure(
-        processors=[
-            *shared_processors,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
+        processors=configure_processors,
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),

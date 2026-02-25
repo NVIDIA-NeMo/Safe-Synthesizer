@@ -48,6 +48,7 @@ class Evaluator:
         logger.info("Performing Evaluation.")
         evaluation_start = time.monotonic()
         output = self.generate_results if isinstance(self.generate_results, pd.DataFrame) else self.generate_results.df
+        assert self.train_df is not None
         report = MultimodalReport.from_dataframes(
             reference=self.train_df,
             output=output,

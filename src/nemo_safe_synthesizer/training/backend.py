@@ -6,8 +6,8 @@ from __future__ import annotations
 import abc
 import logging
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pandas as pd
 from datasets import Dataset
@@ -30,9 +30,6 @@ from ..privacy.dp_transformers.dp_utils import (
     OpacusDPTrainer,
 )
 
-if TYPE_CHECKING:
-    from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
-
 logger = get_logger()
 
 
@@ -52,7 +49,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     tokenizer: PreTrainedTokenizer
     quant_params: dict
     load_params: dict
-    trainer_type: type[OpacusDPTrainer | Trainer | FastLanguageModel]
+    trainer_type: type[Trainer | OpacusDPTrainer] | partial[OpacusDPTrainer]
     trainer: OpacusDPTrainer | Trainer
     callbacks: list[TrainerCallback]
     results: NSSTrainerResult

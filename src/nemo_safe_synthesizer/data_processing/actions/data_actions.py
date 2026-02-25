@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
-from types import FunctionType
 from typing import (
     Annotated,
     Any,
@@ -21,9 +20,9 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 
+import numpy as np
 import pandas as pd
 from dateutil import parser
 from pydantic import (
@@ -165,13 +164,9 @@ class BaseAction(BaseModel, ABC):
         every action run a bunch of noop functions.
         """
 
-        # We use FunctionType annotation for method rather than Callable
-        # because Callable does not guarantee a __name__ attribute, so type
-        # checking with ty will fail. See
-        # https://docs.astral.sh/ty/reference/typing-faq/#why-does-ty-say-callable-has-no-attribute-__name__
-        def _method_if_overridden(method: FunctionType) -> FunctionType | None:
+        def _method_if_overridden(method: Callable[..., Any]) -> Callable[..., Any] | None:
             method_fn = getattr(method, "__func__", None)
-            class_fn = getattr(BaseAction, method.__name__)
+            class_fn = getattr(BaseAction, getattr(method, "__name__", ""))
             if method_fn is not class_fn:
                 return method
             else:
@@ -328,7 +323,7 @@ class GenExpression(GenerateAction):
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         df = self._ctx.transforms_util.execute_col_updates(self.col, df, self._expressions)
         if self.dtype is not None:
-            df[self.col] = df[self.col].astype(self.dtype)  # type: ignore
+            df[self.col] = df[self.col].astype(np.dtype(self.dtype))
 
         return df
 
@@ -392,7 +387,8 @@ class ReplaceDataSource(BaseAction):
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.col in df.columns:
-            column_index = df.columns.get_loc(self.col)
+            column_index_raw = df.columns.get_loc(self.col)
+            column_index = column_index_raw if isinstance(column_index_raw, int) else None
         else:
             column_index = None
         self.set_state(self.State(column_index=column_index))
@@ -555,8 +551,6 @@ class DatetimeCol(ColAction):
 
         # Convert the datetime column to the specified format, coercing errors
         dates = pd.to_datetime(df[self.name], errors="coerce")
-        # ty is having trouble inferring the type of dates
-        dates = cast(pd.Series[pd.Timestamp], dates)
         df[self.name] = dates.apply(lambda x: x.strftime(dt_format) if pd.notna(x) else x)
 
         # Log a warning if any invalid datetime values are detected
@@ -564,7 +558,7 @@ class DatetimeCol(ColAction):
             logger.warning("Invalid datetime value(s) detected.")
 
         # Remove rows with invalid datetime values (NaT)
-        df = df[df[self.name].notna()]  # ty: ignore[invalid-assignment]
+        df = df[df[self.name].notna()]
 
         return df
 
@@ -574,8 +568,6 @@ class DatetimeCol(ColAction):
 
         # Convert the datetime column, coercing errors, and apply the format
         dates = pd.to_datetime(batch[self.name], errors="coerce")
-        # ty is having trouble inferring the type of dates
-        dates = cast(pd.Series[pd.Timestamp], dates)
         batch[self.name] = dates.apply(lambda x: x.strftime(dt_format) if pd.notna(x) else x)
 
         return batch[self.name].notna()
@@ -647,7 +639,9 @@ class ActionExecutor(BaseModel):
         # Rebuild the actions with the `ctx` properly attached. This ensures that each
         # action (and it's corresponding functions) properly reference the same
         # `ctx` during runtime.
-        self.actions = [a.with_ctx(self.ctx) for a in self.actions]
+        ctx = self.ctx
+        assert ctx is not None
+        self.actions = [a.with_ctx(ctx) for a in self.actions]
         self._phase_to_functions = defaultdict(list)
 
         for action in self.actions:

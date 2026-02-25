@@ -9,7 +9,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Tuple, Union
+from typing import Any, List, Tuple, Union
 
 from ...pii_replacer.ner.entity import Score
 from ...pii_replacer.ner.predictor import NERPrediction
@@ -138,7 +138,7 @@ def predictions_to_dict(
         A tuple with a dict of field prediction results by field key and a mapping
         entities to their fields and a list of all entities seen in the record.
     """
-    entity_map = {
+    entity_map: dict[str, Any] = {
         SCORE_HIGH: set(),
         SCORE_MED: set(),
         SCORE_LOW: set(),
@@ -197,10 +197,10 @@ def fragment_from_ner_predictions(
 
 
 def build_ner_metadata(preds: List[dict]) -> Metadata:
-    preds = [NERPrediction.from_dict(p) for p in preds]
+    predictions = [NERPrediction.from_dict(p) for p in preds]
     fragment, ent_map = fragment_from_ner_predictions(
         "ner",
-        preds,
+        predictions,
         uuid.uuid4().hex,
     )
     meta = merge_fragments(fragment)

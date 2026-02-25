@@ -7,7 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from random import randint
-from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union, cast
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 
@@ -130,7 +130,7 @@ def date_component_permutations() -> List[Tuple[str, str, str, str, str]]:
     indexed by y, m, d, hms, tz and can be passed into component formatter from
     ``date_component_orders``.
     """
-    return list(itertools.product(*component_formats.values()))  # type:ignore
+    return list(itertools.product(*component_formats.values()))
 
 
 def gen_date_str_fmt_permutations() -> Set[str]:
@@ -382,8 +382,6 @@ def fit_and_transform_dates(
                 try:
                     inferred_format = inferred_format.replace("!", "")
                     dates = pd.to_datetime(result_df.loc[:, object_col], format=inferred_format)
-                    # ty is having trouble inferring the type of dates
-                    dates = cast(pd.Series[pd.Timestamp], dates)
                     min_date = dates.min()
                     result_df[object_col] = (dates - min_date).dt.total_seconds()
                     date_min_dict[object_col] = {
@@ -399,7 +397,5 @@ def transform_dates(dates: Dict[str, Dict[str, str]], df: pd.DataFrame) -> pd.Da
     result_df = df.copy()
     for col, details in dates.items():
         _dates = pd.to_datetime(result_df[col], format=details["format"], errors="coerce")
-        # ty is having trouble inferring the type of dates
-        _dates = cast(pd.Series[pd.Timestamp], _dates)
         result_df[col] = (_dates - pd.Timestamp(details["min"])).dt.total_seconds()
     return result_df

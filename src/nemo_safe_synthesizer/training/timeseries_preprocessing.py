@@ -76,6 +76,7 @@ def _create_elapsed_time_column(
     ts_config.timestamp_column = timestamp_col_name
 
     # Create elapsed time values (seconds since start of sequence)
+    assert ts_config.timestamp_interval_seconds is not None
     if group_by_col is not None:
         # For grouped data, reset elapsed time at the start of each group
         df[ts_config.timestamp_column] = df.groupby(group_by_col).cumcount() * ts_config.timestamp_interval_seconds

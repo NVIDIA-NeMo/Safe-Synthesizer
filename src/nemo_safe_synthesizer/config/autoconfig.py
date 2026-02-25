@@ -328,5 +328,5 @@ class AutoParamsValidator:
 
     def __get_pydantic_core_schema__(self, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
         return core_schema.with_info_after_validator_function(
-            self.validate, handler(source_type), field_name=handler.field_name
+            lambda v, _info: self.validate(v), handler(source_type), field_name=handler.field_name
         )

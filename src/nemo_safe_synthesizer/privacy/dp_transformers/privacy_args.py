@@ -42,6 +42,7 @@ class SafeSynthesizerAccountant:
 
     def compute_epsilon(self, steps):
         if self.use_prv:
+            assert isinstance(self.accountant, PRVAccountant)
             # Cap to max_compositions so callers never exceed the
             # accountant's pre-computed range.  This can happen when the
             # HF Trainer runs an extra optimizer step for an incomplete
@@ -49,6 +50,7 @@ class SafeSynthesizerAccountant:
             steps = min(steps, self.max_compositions)
             return self.accountant.compute_epsilon(steps)[2]
         else:
+            assert isinstance(self.accountant, RDPAccountant)
             return self.accountant.get_epsilon(self.delta)
 
 
@@ -77,6 +79,8 @@ class PrivacyArguments:
 
     def initialize(self, sampling_probability: float, num_steps: int) -> None:
         if self.noise_multiplier is None:
+            assert self.target_epsilon is not None
+            assert isinstance(self.target_delta, (int, float))
             try:
                 self.noise_multiplier = prv_find_noise_multiplier(
                     sampling_probability=sampling_probability,

@@ -53,7 +53,7 @@ class Parameter(Generic[DataT]):
     value: DataT | Sequence[DataT] | None = None
 
     @model_serializer
-    def ser_model(self) -> dict[str, DataT] | DataT | Sequence[DataT]:
+    def ser_model(self) -> dict[str, DataT] | DataT | Sequence[DataT] | None:
         """
         Serialize the parameter for Pydantic model serialization.
 
@@ -98,7 +98,7 @@ class Parameter(Generic[DataT]):
         non_instance_schema = core_schema.no_info_before_validator_function(cls, sequence_t_schema)
         return core_schema.union_schema([instance_schema, non_instance_schema])
 
-    def _comp_helper(self, other: "Parameter[DataT] | DataT", op: Callable[[Any, Any], bool]) -> bool | None:
+    def _comp_helper(self, other: object, op: Callable[[Any, Any], bool]) -> bool:
         """
         Helper method for comparison operations between parameters and values.
 
@@ -129,7 +129,7 @@ class Parameter(Generic[DataT]):
     def __lt__(self, other: "Parameter[DataT] | DataT") -> bool:
         return self._comp_helper(other, operator.__lt__)
 
-    def __eq__(self, other: "Parameter[DataT] | DataT") -> bool:
+    def __eq__(self, other: object) -> bool:
         return self._comp_helper(other, operator.__eq__)
 
 

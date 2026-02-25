@@ -36,6 +36,9 @@ class Correlation(Component):
         d["anchor_link"] = "#correlation-stability"
 
         if Component.is_nonempty([self.reference_correlation, self.output_correlation, self.correlation_difference]):
+            assert self.reference_correlation is not None
+            assert self.output_correlation is not None
+            assert self.correlation_difference is not None
             d["figure"] = figures.generate_combined_correlation_figure(
                 reference_correlation=self.reference_correlation,
                 output_correlation=self.output_correlation,
@@ -60,8 +63,8 @@ class Correlation(Component):
             correlation_difference,
             mean_absolute_error,
         ) = Correlation._get_correlation_calculations(
-            reference=evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            output=evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+            reference=evaluation_dataset.reference[tabular_columns],
+            output=evaluation_dataset.output[tabular_columns],
             nominal_columns=nominal_columns,
             fields=evaluation_dataset.evaluation_fields,
         )
