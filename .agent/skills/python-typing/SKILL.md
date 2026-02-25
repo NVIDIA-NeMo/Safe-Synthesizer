@@ -83,7 +83,9 @@ When facing many diagnostics across multiple modules, use the layered L1/L2/L3 a
 | `unresolved-attribute` on `T \| None` | Attr access without narrowing | `assert x is not None` or `if x is None: raise` |
 | `invalid-assignment` from generic method | Method returns broad union | Make generic with `TypeVar` bound to `cls` param |
 | `redundant-cast` | Unnecessary `cast()` | Remove it |
-| `invalid-method-override` | Subclass signature differs from base | Align signatures (defer to L2 if cross-module) |
+| `call-top-callable` | Dynamic method on union type | `getattr(obj, "method", None)` + `callable` guard |
+| `invalid-method-override` | Subclass signature differs from base | Align parameter names, types, and defaults to match base |
+| `unresolved-attribute` on union variant | Method only exists on one arm of a union | `isinstance` narrowing before access |
 | implicit `None` return | Match statement lacks wildcard | Add `case _: raise TypeError(...)` |
 | `unresolved-import` (platform) | Package unavailable on macOS | Keep `ty: ignore[unresolved-import]` |
 

@@ -103,6 +103,8 @@ The `@traced` decorator preserves return types via `Callable[P, R] -> Callable[P
 
 ## None Guards
 
+ty (v0.0.18+) fully supports `assert x is not None` as a narrowing construct, along with `if x is None: raise` and `isinstance`. All three correctly narrow the type.
+
 Three patterns, choose based on context:
 
 ```python
@@ -118,6 +120,25 @@ if df is None:
 if self.training_bar is None:
     return
 self.training_bar.update()
+```
+
+Caveat: `assert` statements are stripped when Python runs with `-O`. Use pattern 2 for cases where the guard provides actual runtime safety, not just type narrowing.
+
+Don't blindly assert non-None. If a field can legitimately be `None` in some code paths, a guard that raises will break those paths:
+
+```python
+# Wrong -- validation_dataset is None when there's no holdout split
+assert self.validation_dataset is not None
+training = self._prepare(self.validation_dataset, ...)
+
+# Right -- only assert what's actually required, leave optional fields alone
+assert self.train_dataset is not None
+training = self._prepare(self.train_dataset, ...)
+validation = (
+    self._prepare(self.validation_dataset, ...)
+    if self.validation_dataset is not None
+    else None
+)
 ```
 
 ## Match Exhaustiveness
@@ -160,6 +181,80 @@ def __init__(self, config, workdir: Workdir | None = None):
 # After (clean -- _workdir is always Workdir after __init__)
 def __init__(self, config, workdir: Workdir | None = None):
     self._workdir: Workdir = workdir if workdir is not None else Workdir.create_default(config)
+```
+
+## Protocol for Interface Requirements
+
+When a function needs `len()` support but the concrete type only inherits from an abstract base without `__len__`, define a `Protocol`:
+
+```python
+from typing import Iterator, Protocol
+
+class _SizedSampler(Protocol):
+    def __len__(self) -> int: ...
+    def __iter__(self) -> Iterator: ...
+
+class _EntitySampler(Sampler):
+    def __init__(self, entity_sampler: _SizedSampler, ...):
+        ...
+        total = len(entity_sampler)  # clean -- _SizedSampler guarantees __len__
+```
+
+This avoids `ty: ignore` on `len()` calls when the declared parameter type (`Sampler`) lacks `__len__`.
+
+## getattr for call-top-callable
+
+When an attribute's type is a union that includes non-callable types, ty flags direct calls with `call-top-callable`. Use `getattr` + `callable` to narrow:
+
+```python
+# Before (call-top-callable -- self.optimizer could be Optimizer | None)
+self.optimizer.train()
+
+# After
+optimizer_train = getattr(self.optimizer, "train", None)
+if optimizer_train is not None and callable(optimizer_train):
+    optimizer_train()
+```
+
+## isinstance Narrowing for Union Variants
+
+When a method exists on only one arm of a non-None union, narrow with `isinstance` before calling:
+
+```python
+# Before (unresolved-attribute -- .step() only exists on RDPAccountant)
+if not self.accountant.use_prv:
+    self.accountant.accountant.step(noise_multiplier=nm, sample_rate=sr)
+
+# After
+if not self.accountant.use_prv:
+    assert isinstance(self.accountant.accountant, RDPAccountant)
+    self.accountant.accountant.step(noise_multiplier=nm, sample_rate=sr)
+```
+
+Boolean guards (`if not use_prv:`) don't narrow the union -- ty needs an explicit type check.
+
+## Base Class Override Matching
+
+`invalid-method-override` means the subclass signature is incompatible with the base. Common mismatches:
+
+- Missing parameters the base class defines (even with defaults)
+- Renamed parameters (`examples` vs `features`)
+- Narrower parameter types (violates Liskov -- parameters should be same or wider)
+
+```python
+# Base class
+class DataCollatorMixin:
+    def __call__(self, features, return_tensors: str | None = None): ...
+
+# Before (invalid-method-override -- missing return_tensors, renamed features)
+class PrivateCollator(DataCollatorMixin):
+    def __call__(self, examples: list[dict]) -> dict: ...
+
+# After (matches base signature)
+class PrivateCollator(DataCollatorMixin):
+    def __call__(self, features, return_tensors: str | None = None) -> dict:
+        batch = super().__call__(features, return_tensors=return_tensors)
+        ...
 ```
 
 ## Removing Suppressions Safely
