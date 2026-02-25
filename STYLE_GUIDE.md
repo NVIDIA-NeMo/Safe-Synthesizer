@@ -89,8 +89,6 @@ class TrainingHyperparams(NSSBaseModel):
 - Comprehensions over imperative loops where intent is clearer. No multiple `for` clauses -- optimize for readability, not conciseness (per [Google Python Style Guide sec 2.7](https://google.github.io/styleguide/pyguide.html#27-comprehensions--generator-expressions)).
 - Clamping/saturation over raising when out-of-range inputs shouldn't crash the system.
 - Idempotent teardown via `_torn_down` guard flags; per-step resilience in cleanup (each step isolated so one failure doesn't cascade).
-- Public API boundary: `__all__` in all `__init__.py` files; only listed items are public.
-
 Builder pattern -- `with_*` methods return `Self`:
 
 ```python
@@ -112,8 +110,6 @@ match values:
         return cls.model_validate(d).model_copy(update=overrides)
     case None:
         return cls(**overrides)
-    case _:
-        raise TypeError(f"Expected BaseModel, dict, or None, got {type(values)}")
 ```
 
 ### Error messages
@@ -161,8 +157,41 @@ logger.runtime.debug("Memory freed", extra={"bytes": freed_bytes})
 
 - Raise from the custom hierarchy with dual inheritance (`DataError(UserError, ValueError)`, etc.) with descriptive messages
 - `try/finally` for resource cleanup (never rely on `__del__` alone)
-- `except Exception:` + `logger.debug(..., exc_info=True)` for non-fatal cleanup failures
+- `except Exception:` + `logger.debug(..., exc_info=True)` for non-fatal cleanup at teardown boundaries -- this is distinct from the "patterns to avoid" rule against defensive `try/except Exception` wrapping trusted internal calls that shouldn't fail
 - Bare `except Exception: pass` only in `__del__` methods where suppression is intentional
+- Use `raise X from e` to chain exceptions when re-raising with a different type
+
+Prefer `try/finally` over relying on `__del__`, context managers that hide lifecycle, or bare `return` that skips cleanup. Multi-step cleanup should isolate each step so one failure doesn't prevent the next:
+
+```python
+try:
+    ss.run()
+    ss.save_results(workdir)
+finally:
+    if hasattr(ss, "generator") and ss.generator is not None:
+        ss.generator.teardown()
+```
+
+For backends with expensive resources, use the `_torn_down` guard pattern:
+
+```python
+def teardown(self) -> None:
+    if self._torn_down:
+        return
+    self._torn_down = True
+
+    try:
+        cleanup_dist_env_and_memory()
+    except Exception:
+        logger.debug("cleanup_dist_env_and_memory failed during teardown", exc_info=True)
+
+    self.llm = None
+
+    try:
+        cleanup_memory()
+    except Exception:
+        logger.debug("cleanup_memory failed during teardown", exc_info=True)
+```
 
 ### Docstrings
 
@@ -354,11 +383,11 @@ Redundant docstring that restates the signature:
 
 ```python
 # Before (restates the obvious)
-def get_logger(name: str) -> CategoryLogger:
+def get_logger(name: str | None = None) -> CategoryLogger:
     """Get a logger with the given name."""
 
 # After (explains what the caller actually needs to know)
-def get_logger(name: str) -> CategoryLogger:
+def get_logger(name: str | None = None) -> CategoryLogger:
     """Return a category logger for structured logging.
 
     Always pass ``__name__`` as the argument. The returned logger has
@@ -368,18 +397,14 @@ def get_logger(name: str) -> CategoryLogger:
     """
 ```
 
-#### Additional rules
+#### Quick reference
 
-- First line states intent/purpose, not a restatement of the signature
-- Complex code deserves proportionally detailed explanation -- err on the side of more context
-- Explain the "why" and constraints: what assumptions does the code make? What breaks if the caller violates them?
+The before/after examples above demonstrate most rules. These additional points are not shown in the examples:
+
+- No decorative `**bold**` in docstrings
 - Document side effects, thread safety, and idempotency guarantees where applicable
 - Use `Example:` sections with working code for public API methods
-- `Yields:` instead of `Returns:` for generators
-- `@property` docstrings use attribute style (`"""The adapter path."""`) not method style (`"""Returns the adapter path."""`)
-- No decorative `**bold**` in docstrings
-- Module-level docstrings: module's responsibility, key classes/functions, optional usage example
-- Class-level docstrings: purpose, usage pattern, `Attributes:` section mirroring public fields
+- Complex code deserves proportionally detailed explanation -- err on the side of more context
 
 ### Deprecation
 
@@ -443,14 +468,14 @@ Testing conventions are substantial enough to warrant their own section. For the
 - No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold acceptable only in table header-like cells.
 - Use `--` (em-dash) for asides, not `-` (hyphen).
 - Use backticks for code identifiers, paths, and CLI commands.
-- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use MkDocs Material syntax -- admonitions (`!!! note`), tabs (`===`), code blocks with titles and highlights.
-- Mermaid diagrams: no spaces in node IDs, quote labels with special characters, no explicit colors or styles.
+- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use `MkDocs Material` syntax -- admonitions (`!!! note`), tabs (`===`), code blocks with titles and highlights.
+- `Mermaid` diagrams: no spaces in node IDs, quote labels with special characters, no explicit colors or styles.
 
 ---
 
 ## Dockerfiles
 
-The repo currently has one CI Dockerfile ([containers/Dockerfile.test_ci](containers/Dockerfile.test_ci)). These conventions apply to new Dockerfiles; the CI image follows a simpler pattern.
+The repo currently has one CI `Dockerfile` ([containers/Dockerfile.test_ci](containers/Dockerfile.test_ci)). These conventions apply to new `Dockerfile`s; the CI image follows a simpler pattern.
 
 - Multi-stage builds for production images
 - Copy uv from `ghcr.io/astral-sh/uv:<version>`
@@ -458,7 +483,7 @@ The repo currently has one CI Dockerfile ([containers/Dockerfile.test_ci](contai
 - `--no-install-recommends` + `rm -rf /var/lib/apt/lists/*`
 - Non-root user (`appuser`) for production images
 - `HEALTHCHECK` directives for production images
-- Order COPY directives for cache efficiency (deps before source)
+- Order `COPY` directives for cache efficiency (deps before source)
 - Comments explaining cache invalidation points
 
 ---
@@ -472,7 +497,7 @@ Current state is inconsistent; these are the target conventions for new scripts.
 - Naming: `snake_case` for functions, `_` prefix for internal helpers
 - Variables: always quote (`"$VAR"`, `"${VAR}"`), defaults via `${VAR:-default}`
 - Repo root detection: `REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}`
-- Source shared utilities from `tools/binaries/defs.sh` and `common_functions.sh` where applicable
+- Source shared utilities from `tools/binaries/defs.sh` and `tools/binaries/common_functions.sh` where applicable
 - Shellcheck: add `# shellcheck disable=SCXXXX` with brief reason when disabling a check
 
 ```bash
@@ -535,7 +560,7 @@ Hash-comment for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 
 ### File endings
 
-- Newline at EOF, no trailing whitespace (enforced by pre-commit)
+- Newline at EOF, no trailing whitespace (enforced by `pre-commit`)
 - Line length: 120 characters (configured in [ruff.toml](ruff.toml))
 
 ---
