@@ -148,7 +148,7 @@ export SEED
 
 echo "[NSS SLURM] config=${config}, dataset=${dataset_name}, job_idx=${job_idx}, slurm_id=${slurm_id}"
 echo "[NSS SLURM] full_config_path=${full_config_path}"
-echo "[NSS SLURM] full dataset path/name==${dataset}"
+echo "[NSS SLURM] full dataset path/name=${dataset}"
 echo "[NSS SLURM] run_path=$run_path"
 echo "[NSS SLURM] output_dir=$OUTPUT_DIR"
 echo "CUDA_VISIBLE_DEVICES is set to: ${CUDA_VISIBLE_DEVICES:-not set}"
