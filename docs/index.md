@@ -7,7 +7,7 @@ hide:
 
 # NeMo Safe Synthesizer
 
-**Generate synthetic data with privacy guarantees.**
+Generate synthetic data with privacy guarantees.
 
 NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic data. It uses LLM fine-tuning with optional differential privacy to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting individual privacy.
 
@@ -15,17 +15,17 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
 ## Key Features
 
-- **Privacy-first synthetic data** -- PII detection and replacement, optional differential privacy via Opacus
-- **LLM fine-tuning** -- LoRA fine-tuning with HuggingFace or Unsloth backends, quantization support
-- **Fast inference** -- VLLM-powered generation with structured output enforcement
-- **Comprehensive evaluation** -- Privacy metrics, quality scores, distribution analysis, and HTML reports
-- **Flexible interfaces** -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
+- Privacy-first synthetic data -- PII detection and replacement, optional differential privacy via Opacus
+- LLM fine-tuning -- LoRA fine-tuning with HuggingFace or Unsloth backends, quantization support
+- Fast inference -- VLLM-powered generation with structured output enforcement
+- Comprehensive evaluation -- Privacy metrics, quality scores, distribution analysis, and HTML reports
+- Flexible interfaces -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
 
 ---
 
 <div class="grid cards" markdown>
 
--   **Product Overview**
+-   Product Overview
 
     ---
 
@@ -33,7 +33,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
 
--   **Getting Started**
+-   Getting Started
 
     ---
 
@@ -41,7 +41,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Getting Started](getting-started/installation.md)
 
--   **Tutorials**
+-   Tutorials
 
     ---
 
@@ -49,7 +49,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Tutorials](tutorials/index.md)
 
--   **User Guide**
+-   User Guide
 
     ---
 
@@ -57,7 +57,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: User Guide](user-guide/sdk.md)
 
--   **Developer Guide**
+-   Developer Guide
 
     ---
 
@@ -65,7 +65,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
 
--   **Developer Notes**
+-   Developer Notes
 
     ---
 

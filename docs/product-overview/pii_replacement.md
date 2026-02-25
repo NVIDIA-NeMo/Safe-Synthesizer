@@ -13,10 +13,10 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 
 The PII replacement pipeline operates in multiple stages:
 
-1. **Detection**: Identifies PII entities using configurable detection methods
-2. **Classification**: Categorizes detected entities by type (name, email, address, etc.)
-3. **Transformation**: Replaces or redacts PII using configurable rules
-4. **Validation**: Verifies that sensitive information has been properly handled
+1. Detection: identifies PII entities using configurable detection methods
+2. Classification: categorizes detected entities by type (name, email, address, etc.)
+3. Transformation: replaces or redacts PII using configurable rules
+4. Validation: verifies that sensitive information has been properly handled
 
 ### Detection Methods
 
@@ -59,22 +59,22 @@ Pattern-based detection for structured PII:
 
 After detection, PII can be handled in multiple ways:
 
-- **Fake Data**: Generate realistic replacements using the [Faker](https://faker.readthedocs.io/) library
-- **Redaction**: Replace with placeholder tokens
-- **Hashing**: One-way hashing for consistency
-- **Custom Rules**: Define your own transformation logic
+- Fake Data: generate realistic replacements using the [Faker](https://faker.readthedocs.io/) library
+- Redaction: replace with placeholder tokens
+- Hashing: one-way hashing for consistency
+- Custom Rules: define your own transformation logic
 
 ### Supported Entity Types
 
 Safe Synthesizer recognizes many PII types out of the box:
 
-- **Personal**: Names, dates of birth, ages
-- **Contact**: Emails, phone numbers, addresses
-- **Identifiers**: SSN, passport numbers, license numbers
-- **Financial**: Credit card numbers, bank accounts, IBAN, SWIFT codes
-- **Medical**: Patient IDs, medical record numbers
-- **Digital**: IP addresses, URLs, UUIDs, API keys, JWTs
-- **Custom**: Define your own entity types
+- Personal: names, dates of birth, ages
+- Contact: emails, phone numbers, addresses
+- Identifiers: SSN, passport numbers, license numbers
+- Financial: credit card numbers, bank accounts, IBAN, SWIFT codes
+- Medical: patient IDs, medical record numbers
+- Digital: IP addresses, URLs, UUIDs, API keys, JWTs
+- Custom: define your own entity types
 
 ### Configuration
 
@@ -114,20 +114,20 @@ Safe Synthesizer supports Differential Privacy (DP) training via [Opacus](https:
 
 ### Key Concepts
 
-- **Epsilon (epsilon)**: Privacy budget -- lower values mean stronger privacy
+- Epsilon (epsilon): privacy budget -- lower values mean stronger privacy
     - epsilon = 1: Very strong privacy
     - epsilon = 6-10: Moderate privacy
     - epsilon > 10: Weak privacy
-- **Delta (delta)**: Probability of privacy guarantee failure. Typically set to 1/n^2 where n is the dataset size (e.g., 1e-5)
-- **Max Gradient Norm**: Maximum gradient clipping norm, controls the sensitivity of the training process
+- Delta (delta): probability of privacy guarantee failure. Typically set to 1/n^2 where n is the dataset size (e.g., 1e-5)
+- Max Gradient Norm: maximum gradient clipping norm, controls the sensitivity of the training process
 
 ### How It Works
 
 DP-SGD (Differentially Private Stochastic Gradient Descent) adds calibrated noise to gradients during training, providing a mathematical privacy guarantee that limits what can be learned about any individual record:
 
-1. **Gradient Clipping**: Per-sample gradients are clipped to a maximum norm
-2. **Noise Injection**: Calibrated Gaussian noise is added to the clipped gradients
-3. **Privacy Accounting**: The total privacy budget (epsilon) is tracked across training
+1. Gradient Clipping: per-sample gradients are clipped to a maximum norm
+2. Noise Injection: calibrated Gaussian noise is added to the clipped gradients
+3. Privacy Accounting: the total privacy budget (epsilon) is tracked across training
 
 ### Configuration
 
@@ -169,10 +169,10 @@ synthesizer.run()
 
 Best practices:
 
-1. **Single Release**: Only release one synthetic dataset per original dataset when possible
-2. **Composition**: If multiple releases are needed, divide the privacy budget accordingly
-3. **Documentation**: Track all data releases and cumulative privacy budget
-4. **Renewal**: Privacy budget doesn't reset -- consider this in your data lifecycle
+1. Single Release: only release one synthetic dataset per original dataset when possible
+2. Composition: if multiple releases are needed, divide the privacy budget accordingly
+3. Documentation: track all data releases and cumulative privacy budget
+4. Renewal: privacy budget doesn't reset -- consider this in your data lifecycle
 
 ---
 
@@ -180,8 +180,8 @@ Best practices:
 
 After generation, the evaluation system measures privacy through several metrics:
 
-- **PII Replay Detection** -- Checks if original PII values appear in synthetic data
-- **Membership Inference Protection** -- Measures resistance to membership inference attacks (can an attacker tell if a specific record was in the training data?)
-- **Attribute Inference Protection** -- Measures resistance to attribute inference attacks (can sensitive attributes be inferred from other known attributes?)
+- PII Replay Detection -- Checks if original PII values appear in synthetic data
+- Membership Inference Protection -- Measures resistance to membership inference attacks (can an attacker tell if a specific record was in the training data?)
+- Attribute Inference Protection -- Measures resistance to attribute inference attacks (can sensitive attributes be inferred from other known attributes?)
 
 See [Evaluation](evaluation.md) for full details on privacy and quality metrics.

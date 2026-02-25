@@ -187,28 +187,28 @@ flowchart LR
 
 ### 1. Configuration Layer
 
-**Path**: `src/nemo_safe_synthesizer/config/`
+Path: `src/nemo_safe_synthesizer/config/`
 
-- **SafeSynthesizerParameters**: Main configuration class that aggregates all parameters
-- **DataParameters**: Dataset and preprocessing configurations
-- **TrainingHyperparams**: Training settings (learning rate, epochs, batch size, etc.)
-- **GenerateParameters**: Generation settings (temperature, top_p, num_records, etc.)
-- **EvaluationParameters**: Evaluation component toggles and settings
-- **PiiReplacerConfig**: PII detection and replacement settings
-- **DifferentialPrivacyHyperparams**: DP training parameters (epsilon, delta, clipping norm)
+- SafeSynthesizerParameters: main configuration class that aggregates all parameters
+- DataParameters: dataset and preprocessing configurations
+- TrainingHyperparams: training settings (learning rate, epochs, batch size, etc.)
+- GenerateParameters: generation settings (temperature, top_p, num_records, etc.)
+- EvaluationParameters: evaluation component toggles and settings
+- PiiReplacerConfig: PII detection and replacement settings
+- DifferentialPrivacyHyperparams: DP training parameters (epsilon, delta, clipping norm)
 
 ### 2. Data Processing Pipeline
 
-**Path**: `src/nemo_safe_synthesizer/data_processing/`
+Path: `src/nemo_safe_synthesizer/data_processing/`
 
-- **Holdout** (`holdout/`): Splits data into train/test sets with stratification support
-- **NemoPII** (`pii_replacer/`): Detects PII entities (names, emails, SSN, etc.) and replaces with synthetic but realistic values
-- **ActionExecutor** (`actions/`): Executes data transformations (date normalization, distributions)
-- **ExampleAssembler** (`assembler.py`): Converts records to JSON format, tokenizes for model training, handles truncation and padding
+- Holdout (`holdout/`): splits data into train/test sets with stratification support
+- NemoPII (`pii_replacer/`): detects PII entities (names, emails, SSN, etc.) and replaces with synthetic but realistic values
+- ActionExecutor (`actions/`): executes data transformations (date normalization, distributions)
+- ExampleAssembler (`assembler.py`): converts records to JSON format, tokenizes for model training, handles truncation and padding
 
 ### 3. Training Backend
 
-**Path**: `src/nemo_safe_synthesizer/training/`
+Path: `src/nemo_safe_synthesizer/training/`
 
 | Backend | Description |
 |---------|-------------|
@@ -217,25 +217,25 @@ flowchart LR
 
 ### 4. Generation Backend
 
-**Path**: `src/nemo_safe_synthesizer/generation/`
+Path: `src/nemo_safe_synthesizer/generation/`
 
-- **VllmBackend**: Fast inference using VLLM with LoRA adapter support
-- **RegexManager**: Enforces structured output (JSON format)
-- **BatchGenerator**: Manages batch generation with retry logic
-- **Processors**: Post-processing of generated text
+- VllmBackend: fast inference using VLLM with LoRA adapter support
+- RegexManager: enforces structured output (JSON format)
+- BatchGenerator: manages batch generation with retry logic
+- Processors: post-processing of generated text
 
 ### 5. Evaluation System
 
-**Path**: `src/nemo_safe_synthesizer/evaluation/`
+Path: `src/nemo_safe_synthesizer/evaluation/`
 
 Components include: Data Privacy Score, PII Replay Detection, Membership Inference Protection, Attribute Inference Protection, Column Distributions, Correlations, Text Semantic Similarity, Text Structure Similarity, and SQS Score.
 
 ### 6. Supporting Modules
 
-- **LLM Utilities** (`llm/`): Model metadata, loading, and memory management
-- **Privacy Module** (`privacy/dp_transformers/`): Opacus integration for DP-SGD
-- **Artifacts** (`artifacts/`): Data quality checks, field analysis, metadata management
-- **Records System** (`data_processing/records/`): JSON record and fragment handling
+- LLM Utilities (`llm/`): model metadata, loading, and memory management
+- Privacy Module (`privacy/dp_transformers/`): Opacus integration for DP-SGD
+- Artifacts (`artifacts/`): data quality checks, field analysis, metadata management
+- Records System (`data_processing/records/`): JSON record and fragment handling
 
 ---
 
@@ -289,8 +289,8 @@ The execution follows a clear pipeline: Data --> PII Replacement --> Training --
 
 ## Extension Points
 
-1. **Custom Training Backend**: Implement `TrainingBackend` abstract class
-2. **Custom Generation Backend**: Implement `GeneratorBackend` abstract class
-3. **Custom Evaluation Component**: Extend `Component` base class
-4. **Custom Data Actions**: Add to `data_processing/actions/`
-5. **Custom PII Detectors**: Extend NER pipeline
+1. Custom Training Backend: implement `TrainingBackend` abstract class
+2. Custom Generation Backend: implement `GeneratorBackend` abstract class
+3. Custom Evaluation Component: extend `Component` base class
+4. Custom Data Actions: add to `data_processing/actions/`
+5. Custom PII Detectors: extend NER pipeline

@@ -2,7 +2,7 @@
 
 [Licensed](https://github.com/clinc/oos-eval/blob/master/LICENSE) under CC-BY-3.0 (Creative Commons Attribution 3.0 Unported).
 
-**Citation:**
+Citation:
 
 Larson, S., Mahendran, A., Peper, J. J., Clarke, C., Lee, A., Hill, P., Kummerfeld, J. K., Leach, K., Laurenzano, M. A., Tang, L., & Mars, J. (2019). An Evaluation Dataset for Intent Classification and Out-of-Scope Prediction. In *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)*. https://www.aclweb.org/anthology/D19-1131
 
