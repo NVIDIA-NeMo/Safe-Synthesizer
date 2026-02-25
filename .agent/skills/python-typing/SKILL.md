@@ -30,6 +30,7 @@ uvx ty check
 ```
 
 ty is configured in `pyproject.toml` under `[tool.ty.src]`. See `references/ty-config.md` for details.
+See `references/fix-patterns.md` for repo-specific ty error patterns and their canonical fixes.
 
 ## Repo Scripts
 
@@ -65,3 +66,33 @@ ty is configured in `pyproject.toml` under `[tool.ty.src]`. See `references/ty-c
 2. Overusing `Any`: silences the type checker -- use `object` or define a `Protocol`
 3. Not narrowing `None`: access `.attr` on `X | None` without a guard -- use `if x is not None:`
 4. Mixing `TypeVar` bounds vs constraints: `T = TypeVar("T", int, str)` means "exactly int or str"; use `bound=` for upper bounds
+
+## Fixing ty Diagnostics at Scale
+
+When facing many diagnostics across multiple modules, use a layered approach:
+
+- L1 (parallel, module-local): mechanical fixes within each module -- stale ignores, redundant casts, None-narrowing. If a fix requires changing another module, append to a shared `.cursor/ty-fix-notes.md` and leave a temporary `# ty: ignore[rule]  # TODO(ty-fix)` placeholder.
+- L2 (sequential, cross-module): one agent works through the notes stack -- base class signature alignment, parameter type widening, annotation corrections. Remove all `TODO(ty-fix)` placeholders.
+- L3 (readonly analysis): examine for systemic improvements -- None elimination, union narrowing, descriptor typing, stub gaps. Produce findings, not code changes.
+
+## Common Fix Patterns
+
+| Error | Root cause | Fix |
+|-------|-----------|-----|
+| `unused-type-ignore-comment` | ty resolved the type; suppression is stale | Remove the comment |
+| `call-non-callable` on `BoundDir` chain | `__getattr__` returns `Path \| BoundDir` | Wrap in `Path()` -- `BoundDir` is `os.PathLike` |
+| `invalid-argument-type` from `**kwargs` | Match-branch union leaks concrete types | Inline calls per branch or annotate dict as `dict[str, Any]` |
+| `unresolved-attribute` on `T \| None` | Attr access without narrowing | `assert x is not None` or `if x is None: raise` |
+| `invalid-assignment` from generic method | Method returns broad union | Make generic with `TypeVar` bound to `cls` param |
+| `redundant-cast` | Unnecessary `cast()` | Remove it |
+| `invalid-method-override` | Subclass signature differs from base | Align signatures (defer to L2 if cross-module) |
+| implicit `None` return | Match statement lacks wildcard | Add `case _: raise TypeError(...)` |
+| `unresolved-import` (platform) | Package unavailable on macOS | Keep `ty: ignore[unresolved-import]` |
+
+## Suppression Rules
+
+When to suppress vs fix:
+
+- Fix: stale comments from previous type-checker versions, redundant casts, narrowing gaps, annotation bugs
+- Suppress with `# ty: ignore[rule]`: incomplete third-party stubs (structlog, opacus, faiss, sentence-transformers), platform-specific imports (unsloth on macOS), genuinely dynamic code (`__getattr__`, recursive JSON traversal)
+- Never: blanket `# ty: ignore` without a rule code, `# type: ignore` on new code (use `# ty: ignore[rule]` syntax instead)
