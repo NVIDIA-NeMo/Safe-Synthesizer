@@ -11,7 +11,7 @@ import inspect
 import math
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable
 
 import pandas as pd
 from pydantic import GetCoreSchemaHandler
@@ -228,24 +228,39 @@ class AutoConfigResolver:
         )
         return {"delta": d}
 
-    def _determine_max_sequences_per_example(self) -> dict[str, Literal["auto"] | int | None]:
+    def _determine_max_sequences_per_example(self) -> dict[str, int | None]:
         """
         Determine max_sequences_per_example if set to auto.
 
         Returns:
-            Dict with max_sequences_per_example if auto-determined, empty dict otherwise.
+            Dict with max_sequences_per_example resolved to a concrete value:
+            1 if DP is enabled, 10 if auto with DP disabled, or the
+            explicit value (int) if manually specified, or None if not specified.
         """
         if self._dp_enabled is True:
-            logger.info(
-                "Parameter `max_sequences_per_example` was automatically set "
-                "to 1 based on the use of differential privacy."
-            )
+            if self._config.data.max_sequences_per_example in [None, AUTO_STR, 1]:
+                logger.info(
+                    "Parameter `max_sequences_per_example` was automatically set "
+                    "to 1 based on the use of differential privacy."
+                )
+            else:
+                logger.info(
+                    "Parameter `max_sequences_per_example` does not allow the value of "
+                    "{self._config.data.max_sequences_per_example} when DP is enabled. Setting to 1 instead."
+                )
             return {"max_sequences_per_example": 1}
         elif self._config.data.max_sequences_per_example != AUTO_STR:
+            if self._config.data.max_sequences_per_example is None:
+                logger.info(
+                    "Parameter `max_sequences_per_example` is not specified, so each example will fill up the context window."
+                )
             return {"max_sequences_per_example": self._config.data.max_sequences_per_example}
 
         else:
-            return {"max_sequences_per_example": None}
+            logger.info(
+                "Parameter `max_sequences_per_example` was automatically set to 10 for best performance/efficiency."
+            )
+            return {"max_sequences_per_example": 10}
 
     def _build_updated_params(
         self,
@@ -303,7 +318,7 @@ class AutoConfigResolver:
 class AutoParamsValidator:
     value_func: Callable[[Any], bool]
 
-    def validate(self, value):
+    def validate(self, value, _info):
         if isinstance(value, str) and value == "auto":
             return value
         elif self.value_func(value):
