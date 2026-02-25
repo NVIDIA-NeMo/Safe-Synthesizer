@@ -89,6 +89,7 @@ class TrainingHyperparams(NSSBaseModel):
 - Comprehensions over imperative loops where intent is clearer. No multiple `for` clauses -- optimize for readability, not conciseness (per [Google Python Style Guide sec 2.7](https://google.github.io/styleguide/pyguide.html#27-comprehensions--generator-expressions)).
 - Clamping/saturation over raising when out-of-range inputs shouldn't crash the system.
 - Idempotent teardown via `_torn_down` guard flags; per-step resilience in cleanup (each step isolated so one failure doesn't cascade).
+
 Builder pattern -- `with_*` methods return `Self`:
 
 ```python
@@ -110,6 +111,155 @@ match values:
         return cls.model_validate(d).model_copy(update=overrides)
     case None:
         return cls(**overrides)
+```
+
+### Keeping functions flat
+
+Deeply nested code is hard to read, test, and modify. If a function has more than two levels of indentation beyond `def`, it needs work.
+
+Here is a bad example -- arrow-shaped code with nested loops, conditionals, and interleaved logic:
+
+```python
+# No -- deeply nested, hard to test individual pieces
+def build_training_examples(records, tokenizer, config):
+    examples = []
+    for group in records:
+        if group:
+            tokens_used = 0
+            for record in group:
+                if record.is_valid():
+                    encoded = tokenizer.encode(record.text)
+                    if tokens_used + len(encoded) <= config.token_budget:
+                        tokens_used += len(encoded)
+                        if config.include_metadata:
+                            encoded = _prepend_metadata(encoded, record)
+                        examples.append(encoded)
+                    else:
+                        break
+    return examples
+```
+
+Three ways to rewrite it:
+
+#### Option A: guard clauses + extract inner loop
+
+Flatten the nesting with early `continue`/`break`, and pull the inner loop into a named helper with a single job:
+
+```python
+def _collect_from_group(group, tokenizer, config):
+    collected = []
+    tokens_used = 0
+    for record in group:
+        if not record.is_valid():
+            continue
+        encoded = tokenizer.encode(record.text)
+        if tokens_used + len(encoded) > config.token_budget:
+            break
+        tokens_used += len(encoded)
+        if config.include_metadata:
+            encoded = _prepend_metadata(encoded, record)
+        collected.append(encoded)
+    return collected
+
+def build_training_examples(records, tokenizer, config):
+    return [
+        example
+        for group in records
+        if group
+        for example in _collect_from_group(group, tokenizer, config)
+    ]
+```
+
+#### Option B: generator with `yield`
+
+Use a generator to separate iteration from collection. Each `yield` represents one valid example -- the caller decides how to consume them:
+
+```python
+def _iter_examples(records, tokenizer, config):
+    for group in records:
+        if not group:
+            continue
+        tokens_used = 0
+        for record in group:
+            if not record.is_valid():
+                continue
+            encoded = tokenizer.encode(record.text)
+            if tokens_used + len(encoded) > config.token_budget:
+                break
+            tokens_used += len(encoded)
+            if config.include_metadata:
+                encoded = _prepend_metadata(encoded, record)
+            yield encoded
+
+def build_training_examples(records, tokenizer, config):
+    return list(_iter_examples(records, tokenizer, config))
+```
+
+#### Option C: functional decomposition with higher-order functions
+
+Break the problem into composable steps. Each function is pure and independently testable:
+
+```python
+def _valid_records(group):
+    return (r for r in group if r.is_valid())
+
+def _encode_within_budget(records, tokenizer, budget):
+    tokens_used = 0
+    for record in records:
+        encoded = tokenizer.encode(record.text)
+        if tokens_used + len(encoded) > budget:
+            return
+        tokens_used += len(encoded)
+        yield record, encoded
+
+def _maybe_add_metadata(record, encoded, include_metadata):
+    if include_metadata:
+        return _prepend_metadata(encoded, record)
+    return encoded
+
+def build_training_examples(records, tokenizer, config):
+    examples = []
+    for group in records:
+        if not group:
+            continue
+        for record, encoded in _encode_within_budget(
+            _valid_records(group), tokenizer, config.token_budget
+        ):
+            examples.append(_maybe_add_metadata(record, encoded, config.include_metadata))
+    return examples
+```
+
+#### Named predicates for complex conditions
+
+When a condition is a wall of boolean logic, name each piece:
+
+```python
+# No -- opaque
+if (prev_row_idx is not None and row_idx < prev_row_idx) or \
+   (current_group is not None and record_group != current_group) or \
+   num_sequences >= max_sequences or \
+   token_total + record_len > token_budget:
+    flush_example()
+
+# Yes -- each condition tells you what it means
+restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
+group_boundary = current_group is not None and record_group != current_group
+would_exceed_seq = num_sequences >= max_sequences
+would_exceed_tokens = token_total + record_len > token_budget
+
+if restart_boundary or group_boundary or would_exceed_seq or would_exceed_tokens:
+    flush_example()
+```
+
+Or extract it entirely when the predicate is reused or has domain meaning:
+
+```python
+def _should_flush_example(*, prev_row_idx, row_idx, current_group, record_group,
+                          num_sequences, max_sequences, token_total, record_len, token_budget) -> bool:
+    """Determine if the current training example should be flushed and a new one started."""
+    restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
+    group_boundary = current_group is not None and record_group != current_group
+    return restart_boundary or group_boundary or num_sequences >= max_sequences or token_total + record_len > token_budget
 ```
 
 ### Error messages
