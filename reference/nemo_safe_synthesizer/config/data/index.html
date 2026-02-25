@@ -8692,7 +8692,7 @@
           <tr class="doc-section-item">
             <td><code><span title="nemo_safe_synthesizer.config.data.DataParameters.max_sequences_per_example">max_sequences_per_example</span></code></td>
             <td>
-                  <code><span title="typing.Annotated">Annotated</span>[<span title="nemo_safe_synthesizer.config.types.OptionalAutoInt">OptionalAutoInt</span>, <span title="pydantic.Field">Field</span>(description=&#34;If specified, adds at most this number of sequences per example; otherwise, fills up context. Supports &#39;auto&#39; where a value of 1 is chosen if differential privacy is enabled, and None otherwise. Required for DP to limit contribution of each example.&#34;)]</code>
+                  <code><span title="typing.Annotated">Annotated</span>[<span title="nemo_safe_synthesizer.config.types.OptionalAutoInt">OptionalAutoInt</span>, <span title="pydantic.Field">Field</span>(description=&#34;If specified, adds at most this number of sequences per example. Supports &#39;auto&#39; where a value of 1 is chosen if differential privacy is enabled, and 10 otherwise. If not specified or set to &#39;auto&#39;, fills up context. Required for DP to limit contribution of each example.&#34;)]</code>
             </td>
             <td>
               <div class="doc-md-description">
