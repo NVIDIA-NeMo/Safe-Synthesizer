@@ -1,5 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+
+"""Executable pipeline for Safe Synthesizer.
+
+Extends :class:`~nemo_safe_synthesizer.sdk.config_builder.ConfigBuilder`
+with the :class:`SafeSynthesizer` class, which adds artifact management
+(via ``Workdir``) and stepwise pipeline execution:
+``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
+"""
+
 from __future__ import annotations
 
 import os
@@ -34,6 +43,19 @@ if TYPE_CHECKING:
 
 
 def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) -> SafeSynthesizerResults:
+    """Run PII replacement without synthesis and return results.
+
+    Applies the PII replacer to *df*, optionally evaluates, and
+    packages everything into a :class:`SafeSynthesizerResults`.
+
+    Args:
+        config: Resolved parameters (must have ``replace_pii`` set).
+        df: Source DataFrame to transform.
+
+    Returns:
+        Results containing the PII-replaced DataFrame and optional
+        evaluation report.
+    """
     total_start = time.monotonic()
 
     replacer = NemoPII(config.replace_pii)
@@ -64,20 +86,33 @@ def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) 
 
 
 def _get_unsloth_backend_class() -> type[TrainingBackend]:
-    """Get the Unsloth training backend class."""
+    """Lazily import and return the Unsloth training backend class.
+
+    The import is deferred so that the ``unsloth`` extra is only
+    required when Unsloth is actually selected as the backend.
+
+    Returns:
+        The ``UnslothTrainer`` class.
+    """
     from ..training.unsloth_backend import UnslothTrainer
 
     return UnslothTrainer
 
 
 def get_training_backend_class(config: SafeSynthesizerParameters) -> type[TrainingBackend]:
-    """Get the training backend class for the given configuration.
+    """Select the training backend class based on configuration.
+
+    Returns ``HuggingFaceBackend`` by default, or ``UnslothTrainer``
+    when ``config.training.use_unsloth`` is ``True``.
 
     Args:
-        config: SafeSynthesizerParameters object.
+        config: Resolved pipeline parameters.
 
     Returns:
-        The training backend class.
+        The training backend class to instantiate.
+
+    Raises:
+        ValueError: If the backend identifier is unrecognized.
     """
     class_map = {
         "huggingface": HuggingFaceBackend,
@@ -161,6 +196,17 @@ class SafeSynthesizer(ConfigBuilder):
         workdir: Workdir | None = None,
         save_path: Path | str | None = None,
     ):
+        """Initialize the builder and create a working directory.
+
+        Args:
+            config: Optional pre-built parameters that seed every
+                config section.
+            workdir: Explicit artifact directory layout.  When ``None``
+                a default ``Workdir`` is created under ``save_path``.
+            save_path: Root directory for artifacts when ``workdir``
+                is not provided.  Defaults to
+                ``"safe-synthesizer-artifacts"``.
+        """
         super().__init__(config=config)
         self._workdir = workdir
         if self._workdir is None:
@@ -435,6 +481,11 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     def _run_pii_replacer_only(self) -> SafeSynthesizerResults:
+        """Execute PII-only mode using the builder's data source.
+
+        Returns:
+            Results containing the PII-replaced DataFrame.
+        """
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)

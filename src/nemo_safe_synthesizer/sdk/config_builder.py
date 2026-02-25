@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Builder-pattern configuration layer for Safe Synthesizer.
+
+Provides :class:`ConfigBuilder`, the base builder that accumulates
+per-section configuration objects (training, generation, data, etc.)
+via fluent ``with_*`` methods before resolving them into a single
+:class:`~nemo_safe_synthesizer.config.SafeSynthesizerParameters`.
+"""
+
 from __future__ import annotations
 
 from typing import Mapping, Self, TypeAlias, TypeVar
@@ -55,6 +63,26 @@ ParamDict: TypeAlias = dict[str, str | int | float | bool | None | Mapping[KT, V
 
 
 class ConfigBuilder(object):
+    """Fluent builder for assembling Safe Synthesizer configuration.
+
+    Accumulates per-section configuration objects (data, training,
+    generation, evaluation, privacy, PII replacement, and time-series)
+    via ``with_*`` methods.  Call :meth:`resolve` (or let
+    :class:`~nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer`
+    do it) to collapse them into a single
+    :class:`~nemo_safe_synthesizer.config.SafeSynthesizerParameters`.
+
+    Each ``with_*`` method accepts an optional typed config object *or*
+    a plain dict, plus ``**kwargs`` overrides.  ``kwargs`` always take
+    precedence over fields in the config/dict.  All ``with_*`` methods
+    return ``self`` for chaining.
+
+    Args:
+        config: Optional pre-built parameters.  When supplied, the
+            individual ``_*_config`` attributes are seeded from its
+            sections.
+    """
+
     def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
         self._nss_config: SafeSynthesizerParameters | None = config
         if self._nss_config is not None:
@@ -94,13 +122,17 @@ class ConfigBuilder(object):
     def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
         """Resolve configuration from various input types.
 
+        Precedence: ``kwargs`` override ``values``; ``values`` override
+        model defaults.
+
         Args:
-            values: Configuration values as a dictionary or a BaseModel instance.
-            cls: The BaseModel class to validate against.
-            **overrides: Additional configuration parameters to override.
+            values: Existing config, a raw dict, or ``None`` for
+                defaults-only.
+            cls: The Pydantic model class to validate against.
+            **kwargs: Field-level overrides applied on top.
 
         Returns:
-            An instance of the specified BaseModel class with the resolved configuration.
+            A validated config instance of type ``cls``.
         """
         overrides = kwargs
         match values:
@@ -124,20 +156,41 @@ class ConfigBuilder(object):
         return self
 
     def synthesize(self) -> Self:
-        """Enables synthesis for the job run.
+        """Enable the synthesis pipeline for this run.
 
-        Use if not setting training or generation parameters directly
+        Calling this is not strictly necessary when ``with_train`` or
+        ``with_generate`` are used (they set the flag automatically),
+        but it provides an explicit opt-in when relying on defaults.
+
+        Returns:
+            Self for method chaining.
         """
         self._enable_synthesis = True
         return self
 
     def with_data(self, config: DataParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure  settings."""
+        """Configure data processing settings.
+
+        Args:
+            config: Data configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``holdout_size``).
+
+        Returns:
+            Self for method chaining.
+        """
         self._data_config: DataParameters | None = self._resolve_config(values=config, cls=DataParameters, **kwargs)
         return self
 
     def with_train(self, config: TrainingHyperparams | ParamDict | None = None, **kwargs) -> Self:
-        """Configure training settings."""
+        """Configure training hyperparameters and enable synthesis.
+
+        Args:
+            config: Training configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``learning_rate``).
+
+        Returns:
+            Self for method chaining.
+        """
         self._training_config: TrainingHyperparams | None = self._resolve_config(
             values=config, cls=TrainingHyperparams, **kwargs
         )
@@ -145,7 +198,15 @@ class ConfigBuilder(object):
         return self
 
     def with_generate(self, config: GenerateParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure generation settings."""
+        """Configure generation settings and enable synthesis.
+
+        Args:
+            config: Generation configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``num_records``).
+
+        Returns:
+            Self for method chaining.
+        """
         self._generation_config: GenerateParameters | None = self._resolve_config(
             values=config, cls=GenerateParameters, **kwargs
         )
@@ -153,7 +214,15 @@ class ConfigBuilder(object):
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure time-series settings."""
+        """Configure time-series generation settings.
+
+        Args:
+            config: Time-series configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``time_column``).
+
+        Returns:
+            Self for method chaining.
+        """
         self._time_series_config: TimeSeriesParameters | None = self._resolve_config(
             values=config, cls=TimeSeriesParameters, **kwargs
         )
@@ -162,7 +231,15 @@ class ConfigBuilder(object):
     def with_differential_privacy(
         self, config: DifferentialPrivacyHyperparams | ParamDict | None = None, **kwargs
     ) -> Self:
-        """Configure privacy settings."""
+        """Configure differential privacy settings.
+
+        Args:
+            config: DP configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``epsilon``).
+
+        Returns:
+            Self for method chaining.
+        """
         self._privacy_config: DifferentialPrivacyHyperparams | None = self._resolve_config(
             values=config, cls=DifferentialPrivacyHyperparams, **kwargs
         )
@@ -227,11 +304,27 @@ class ConfigBuilder(object):
         return self
 
     def resolve(self) -> Self:
+        """Finalize configuration and data source.
+
+        Assembles the individual ``_*_config`` sections into a single
+        ``SafeSynthesizerParameters`` and converts the data source
+        (URL string or DataFrame) into a ``DataFrame``.
+
+        Returns:
+            Self for method chaining.
+        """
         self._resolve_nss_config()
         self._resolve_datasource()
         return self
 
     def _resolve_nss_config(self) -> None:
+        """Assemble per-section configs into a ``SafeSynthesizerParameters``.
+
+        Iterates over ``_nss_inputs``, maps each ``_*_config`` attribute
+        to its ``SafeSynthesizerParameters`` field name, and constructs
+        the unified config.  Also injects ``_classify_model_provider``
+        into the PII replacer config when set.
+        """
         params_map: dict = {k: k.split("_")[1] for k in self._nss_inputs}
         params_map["_replace_pii_config"] = "replace_pii"
         params_map["_time_series_config"] = "time_series"
@@ -260,6 +353,18 @@ class ConfigBuilder(object):
             logger.debug(f"Injected classify model provider into PII config: {self._classify_model_provider}")
 
     def _resolve_datasource(self, **kwargs) -> None:
+        """Convert the data source into a ``pandas.DataFrame``.
+
+        If ``_data_source`` is already a DataFrame it is kept as-is.
+        A string is treated as a CSV URL and fetched via
+        ``pd.read_csv``.
+
+        Args:
+            **kwargs: Forwarded to ``pd.read_csv`` when loading from URL.
+
+        Raises:
+            ValueError: If ``_data_source`` is not a DataFrame or string.
+        """
         match self._data_source:
             case pd.DataFrame():
                 pass
