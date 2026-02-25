@@ -113,7 +113,7 @@ AUTO_NO_DP = AutoConfigTestCase(
         learning_rate=None,  # Will be auto-resolved based on model name
         delta=None,  # Not used (DP disabled)
         dp_enabled=False,
-        max_seq=None,  # "auto" with no DP -> None
+        max_seq=10,  # "auto" with no DP -> 10
     ),
 )
 
@@ -137,29 +137,6 @@ AUTO_WITH_DP = AutoConfigTestCase(
         delta=None,  # Will be auto-resolved based on data size
         dp_enabled=True,
         max_seq=1,  # DP enabled -> always 1
-    ),
-)
-
-AUTO_WITH_DP_NULL_MAX_SEQ = AutoConfigTestCase(
-    name="auto_with_dp_null_max_seq",
-    config=SafeSynthesizerParameters(
-        training=TrainingHyperparams(
-            rope_scaling_factor="auto",
-            num_input_records_to_sample="auto",
-            learning_rate="auto",
-            use_unsloth="auto",
-        ),
-        data=DataParameters(max_sequences_per_example=None),  # Explicit None
-        privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta="auto"),
-    ),
-    expected=Expected(
-        use_unsloth=False,  # "auto" resolves to False when DP enabled
-        rope_scaling_factor=None,  # Will be auto-resolved to an int
-        num_input_records_to_sample=None,  # Will be auto-resolved
-        learning_rate=None,  # Will be auto-resolved based on model name
-        delta=None,  # Will be auto-resolved based on data size
-        dp_enabled=True,
-        max_seq=1,  # DP enabled -> always 1 (even with None input)
     ),
 )
 
@@ -217,7 +194,6 @@ DP_WITH_UNSLOTH_TRUE = AutoConfigTestCase(
 ALL_TEST_CASES: list[AutoConfigTestCase] = [
     AUTO_NO_DP,
     AUTO_WITH_DP,
-    AUTO_WITH_DP_NULL_MAX_SEQ,
     EXPLICIT,
     DP_WITH_UNSLOTH_TRUE,
 ]
@@ -356,15 +332,23 @@ class TestAutoConfigResolver:
         else:
             assert result == {}
 
-    def test_determine_max_sequences_per_example(self, sample_data, config, expected):
-        """Max sequences should be 1 for DP, None for non-DP auto, or explicit value."""
-        resolver = AutoConfigResolver(sample_data, config)
-
-        # Verify validation already resolved the config value
-        assert config.data.max_sequences_per_example == expected.max_seq
-
+    @pytest.mark.parametrize(
+        "max_seq_input, expected_max_seq",
+        [
+            pytest.param("auto", [1, 10], id="auto_max_seq"),  # dp_enabled=True -> 1, dp_enabled=False -> 10
+            pytest.param(5, [1, 5], id="explicit_max_seq"),  # dp_enabled=True -> 1, dp_enabled=False -> 5
+            pytest.param(None, [1, None], id="none_max_seq"),  # dp_enabled=True -> 1, dp_enabled=False -> None
+        ],
+    )
+    def test_determine_max_sequences_per_example(self, sample_data, config, max_seq_input, expected_max_seq):
+        """Max sequences should be 1 for DP regardless of input; for non-DP, auto -> 10, explicit -> explicit value, None -> None."""
+        config_copy = config.model_copy(deep=True)
+        config_copy.data.max_sequences_per_example = max_seq_input
+        resolver = AutoConfigResolver(sample_data, config_copy)
         result = resolver._determine_max_sequences_per_example()
-        assert result == {"max_sequences_per_example": expected.max_seq}
+
+        expected_index = 0 if config_copy.privacy.dp_enabled else 1
+        assert result == {"max_sequences_per_example": expected_max_seq[expected_index]}
 
     def test_resolve(self, sample_data, config, expected):
         """Full resolution should produce valid SafeSynthesizerParameters.
