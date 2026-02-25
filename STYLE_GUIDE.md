@@ -71,14 +71,19 @@ class TrainingHyperparams(NSSBaseModel):
 - `get_logger(__name__)` -- never `logging.getLogger()` or `structlog.get_logger()` directly
 - Category loggers: `.runtime` for internals, `.user` for progress/results, `.system` for system events
 - `@traced` decorators are an optional enhancement for entry-point functions, not a universal requirement
-- Structured data via `extra={}`, not string interpolation
 - Never `print()` for operational output. Approved alternatives: `click.echo()` for CLI output, `sys.stdout.write()` for raw output in tools.
+- Use `extra={}` for data that downstream tools should query or aggregate (metrics, counts, durations). f-strings are fine for human-readable context that doesn't need machine parsing.
 
 ```python
 logger = get_logger(__name__)
 
+# Structured data that tools should query -- use extra={}
 logger.user.info("Training complete", extra={"epochs": 3, "loss": 0.42})
-logger.runtime.debug("Memory freed", extra={"bytes": freed_bytes})
+logger.runtime.debug("Memory usage", extra={"bytes": freed_bytes, "phase": "teardown"})
+
+# Human-readable context -- f-strings are fine
+logger.info(f"Loading model from: {model_path}")
+logger.warning(f"Column {column!r} not found, skipping")
 ```
 
 ### Error hierarchy
