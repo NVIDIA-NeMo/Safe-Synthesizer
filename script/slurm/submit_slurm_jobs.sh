@@ -3,32 +3,32 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+# Submit script for running NSS experiments on a slurm cluster.
+
 set -euo pipefail
 
-# Matrix submitter across built-in dataset groups in slurm_nss_matrix.sh
-# Usage:
-#   bash exp/submit_slurm_jobs.sh [CONFIGS_CSV] [RUNS] [PARTITION] [EXP_NAME] [DATASET_GROUP] [SLEEP_SEC] [PIPELINE_MODE]
-# Examples:
-#   bash exp/submit_slurm_jobs.sh unsloth,dp,dp_usg_guidance 5 polar4 matrix_exp short 5 two_stage
-
-# Defaults; override with flags below. CONFIGS now come from env_variables.sh (CONFIGS array)
-RUNS="5"
+# Defaults; override with flags below.
+RUNS="1"
 PARTITION="polar4"
-EXP_NAME="matrix_exp"
-DATASET_GROUP="short"
-SLEEP_SEC="5"
-PIPELINE_MODE="two_stage"  # values: two_stage | end_to_end
+EXP_NAME="nss_exp"
+DATASET_GROUP=""
+DATASET_URLS_CSV=""
+PIPELINE_MODE="end_to_end"  # values: two_stage | end_to_end
 CONFIGS_CSV=""  # optional override for CONFIGS array (comma-separated)
-SUBMIT_MODE="array"  # values: array | sequential
 WANDB_PROJECT="" # optional wandb project name; uses EXP_NAME if not provided
+MAX_CONCURRENT_SLURM_JOBS="" # optional max number of concurrent slurm jobs to run within each array; if not provided, no restriction is applied
+ACCOUNT="${ACCOUNT:-llmservice_sdg_research}"
+TIME_LIMIT="04:00:00"
+TRAIN_TIME_LIMIT=""
+GENERATE_TIME_LIMIT=""
 
 # Parse flags (order-independent). Unknown flags are ignored.
 while [ $# -gt 0 ]; do
   case "$1" in
     --configs|-c)
       CONFIGS_CSV="${2:-}"; shift 2;;
-    --submit-mode)
-      SUBMIT_MODE="${2:-$SUBMIT_MODE}"; shift 2;;
+    --dataset-urls|-d)
+      DATASET_URLS_CSV="${2:-}"; shift 2;;
     --runs|-r)
       RUNS="${2:-$RUNS}"; shift 2;;
     --partition|-p)
@@ -37,24 +37,68 @@ while [ $# -gt 0 ]; do
       EXP_NAME="${2:-$EXP_NAME}"; shift 2;;
     --dataset-group|-g)
       DATASET_GROUP="${2:-$DATASET_GROUP}"; shift 2;;
-    --sleep-sec|-s)
-      SLEEP_SEC="${2:-$SLEEP_SEC}"; shift 2;;
     --pipeline-mode|-m)
       PIPELINE_MODE="${2:-$PIPELINE_MODE}"; shift 2;;
     --wandb-project|-w)
       WANDB_PROJECT="${2:-}"; shift 2;;
+    --max-concurrent-slurm-jobs)
+      MAX_CONCURRENT_SLURM_JOBS="${2:-$MAX_CONCURRENT_SLURM_JOBS}"; shift 2;;
+    --time-limit|-t)
+      TIME_LIMIT="${2:-$TIME_LIMIT}"; shift 2;;
+    --train-time-limit)
+      TRAIN_TIME_LIMIT="${2:-$TRAIN_TIME_LIMIT}"; shift 2;;
+    --generate-time-limit)
+      GENERATE_TIME_LIMIT="${2:-$GENERATE_TIME_LIMIT}"; shift 2;;
+    --dry-run)
+      DRY_RUN="true"; shift;;
     --help|-h)
-      echo "Usage: $0 [--configs c1,c2] [--runs N] [--partition P] [--exp-name NAME] [--dataset-group short|long] [--sleep-sec S] [--pipeline-mode two_stage|end_to_end] [--submit-mode array|sequential] [--wandb-project PROJECT]"
+      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--dry-run]"
+      echo ""
+      echo "Provide either --dataset-urls to specify a list of datasets by name, url, or path, or --dataset-group to use a predefined set of datasets."
+      echo "Time limits:"
+      echo "    --time-limit is used for end_to_end mode (defaults to 4 hours)"
+      echo "    --train-time-limit and --generate-time-limit are used for two_stage mode, and will default to --time-limit if the more more specific train and generate limits are not provided"
+
       exit 0;;
     --) shift; break;;
     *) shift;;  # ignore unknown
   esac
 done
 
+if [[ (-n "${DATASET_URLS_CSV:-}" && -n "${DATASET_GROUP:-}") || \
+      (-z "${DATASET_URLS_CSV:-}" && -z "${DATASET_GROUP:-}") ]]; then
+  echo "ERROR: Exactly one of --dataset-urls and --dataset-group must be provided." >&2
+  echo " DATASET_URLS: ${DATASET_URLS_CSV:-}" >&2
+  echo " DATASET_GROUP: ${DATASET_GROUP:-}" >&2
+  exit 1
+fi
+
+
+if ! [[ "$RUNS" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --runs must be a positive integer: '$RUNS'" >&2
+  exit 1
+fi
+if [[ "$RUNS" -le 0 ]]; then
+  echo "ERROR: --runs must be greater than 0: '$RUNS'" >&2
+  exit 1
+fi
+
+if [[ "$PIPELINE_MODE" != "two_stage" && "$PIPELINE_MODE" != "end_to_end" ]]; then
+  echo "ERROR: --pipeline-mode must be one of: two_stage, end_to_end: '$PIPELINE_MODE'" >&2
+  exit 1
+fi
+
 if [[ -z "${USER_NAME:-}" ]]; then
   echo "ERROR: USER_NAME is not set. Please export it before submitting." >&2
   echo "Example: export USER_NAME=your_lustre_username" >&2
   exit 1
+fi
+
+if [[ -z "${TRAIN_TIME_LIMIT:-}" ]]; then
+  TRAIN_TIME_LIMIT="${TIME_LIMIT}"
+fi
+if [[ -z "${GENERATE_TIME_LIMIT:-}" ]]; then
+  GENERATE_TIME_LIMIT="${TIME_LIMIT}"
 fi
 
 source env_variables.sh
@@ -69,24 +113,35 @@ if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
   exit 1
 fi
 
+export ACCOUNT
+export EXP_NAME
+
 # Build configs list: CLI override (comma-separated) takes precedence; otherwise use CONFIGS from env
+declare -a CONFIGS_LIST
 if [ -n "${CONFIGS_CSV:-}" ]; then
   IFS=',' read -r -a CONFIGS_LIST <<< "${CONFIGS_CSV}"
 else
   CONFIGS_LIST=("${CONFIGS[@]}")
 fi
 
+if [ "${#CONFIGS_LIST[@]}" -eq 0 ]; then
+  echo "ERROR: No configs provided. Please provide at least one config with --configs or set CONFIGS in env_variables.sh." >&2
+  exit 1
+fi
+
 EXP_LOG_DIR=${BASE_LOG_DIR}/${EXP_NAME}
-mkdir -p "${EXP_LOG_DIR}"
 
 # Set WANDB_PROJECT to custom value or default to EXP_NAME
 export WANDB_PROJECT="${WANDB_PROJECT:-$EXP_NAME}"
 
-echo "Submitting matrix jobs (pipeline=${PIPELINE_MODE}, RUNS=${RUNS}, PARTITION=${PARTITION}, EXP_NAME=${EXP_NAME}, GROUP=${DATASET_GROUP}, WANDB_PROJECT=${WANDB_PROJECT})"
+echo "Submitting array jobs (pipeline=${PIPELINE_MODE}, RUNS=${RUNS}, PARTITION=${PARTITION}, EXP_NAME=${EXP_NAME}, GROUP=${DATASET_GROUP}, WANDB_PROJECT=${WANDB_PROJECT})"
 
-# Mirror dataset counts used in slurm_nss_matrix.sh to size the array correctly
+# Array variable of datasets to process
 declare -a DATASETS
-if [[ "${DATASET_GROUP}" == "long" ]]; then
+
+if [[ -n "${DATASET_URLS_CSV:-}" ]]; then
+  IFS=',' read -r -a DATASETS <<< "${DATASET_URLS_CSV}"
+elif [[ "${DATASET_GROUP:-}" == "long" ]]; then
   DATASETS=(
     ai_generated_essays
     call_transcripts
@@ -95,7 +150,7 @@ if [[ "${DATASET_GROUP}" == "long" ]]; then
     car_accident
     diabetes
   )
-else
+elif [[ "${DATASET_GROUP:-}" == "short" ]]; then
   DATASETS=(
     adult
     amazon_reviews_25k
@@ -114,189 +169,130 @@ else
     shoppers
     stack_exchange_data_dump
   )
+else
+  echo "ERROR: Unrecognized dataset group: ${DATASET_GROUP}" >&2
+  exit 1
 fi
+
 num_datasets=${#DATASETS[@]}
 
-total_tasks=$(( num_datasets * RUNS ))
+echo "DATASETS: ${DATASETS[*]}"
+echo "CONFIGS_LIST: ${CONFIGS_LIST[*]}"
+num_configs=${#CONFIGS_LIST[@]}
 
+total_tasks=$(( num_datasets * num_configs * RUNS ))
+
+echo "total_tasks: ${total_tasks}"
+
+# Assumes dataset and config names do not contain commas
+
+# Use a single job array to submit all experiments across datasets and configs
+# (Except for two_stage, we'll have 2 job arrays: one for train and one for generate)
+# Pack the dataset and config names for the array into 2 comma-separated strings
+# defining all the experiments to execute.
+PACKED_CONFIGS=""
+PACKED_DATASETS=""
+# Probably a more efficient way to do this, but this is simple and works.
 for config in "${CONFIGS_LIST[@]}"; do
-  mkdir -p "${EXP_LOG_DIR}/${DATASET_GROUP}/${config}"
-
-  # Resolve time limit similarly to submit_single_dataset.sh
-  base_key="${config}"
-  if [[ "${config}" == *unsloth* ]]; then
-    base_key="unsloth"
-  elif [[ "${config}" == *dp* ]]; then
-    base_key="dp"
-  else
-    base_key="max"
-  fi
-  if [[ "${DATASET_GROUP}" == "long" ]]; then
-    TIME_LIMIT="${CONFIG_TIME_LIMITS_LONG[${base_key}]}"
-  else
-    TIME_LIMIT="${CONFIG_TIME_LIMITS_SHORT[${base_key}]}"
-  fi
-
-  # Derive per-phase time limits with safe fallbacks to the general limit
-  if [[ "${DATASET_GROUP}" == "long" ]]; then
-    default_time="${CONFIG_TIME_LIMITS_LONG[${base_key}]}"
-    if declare -p CONFIG_TRAIN_TIME_LIMITS_LONG >/dev/null 2>&1; then
-      train_time_candidate="${CONFIG_TRAIN_TIME_LIMITS_LONG[${base_key}]:-}"
-    else
-      train_time_candidate=""
-    fi
-    if declare -p CONFIG_GEN_TIME_LIMITS_LONG >/dev/null 2>&1; then
-      gen_time_candidate="${CONFIG_GEN_TIME_LIMITS_LONG[${base_key}]:-}"
-    else
-      gen_time_candidate=""
-    fi
-  else
-    default_time="${CONFIG_TIME_LIMITS_SHORT[${base_key}]}"
-    if declare -p CONFIG_TRAIN_TIME_LIMITS_SHORT >/dev/null 2>&1; then
-      train_time_candidate="${CONFIG_TRAIN_TIME_LIMITS_SHORT[${base_key}]:-}"
-    else
-      train_time_candidate=""
-    fi
-    if declare -p CONFIG_GEN_TIME_LIMITS_SHORT >/dev/null 2>&1; then
-      gen_time_candidate="${CONFIG_GEN_TIME_LIMITS_SHORT[${base_key}]:-}"
-    else
-      gen_time_candidate=""
-    fi
-  fi
-  TIME_LIMIT_TRAIN="${train_time_candidate:-$default_time}"
-  TIME_LIMIT_GEN="${gen_time_candidate:-$default_time}"
-
-  if [[ "${PIPELINE_MODE}" == "two_stage" ]]; then
-    if [[ "${SUBMIT_MODE}" == "sequential" ]]; then
-      echo "[${config}] Submitting sequential by run-index (all datasets for run 0, then run 1, ...). TRAIN→GEN uses afterok; cross-run uses afterany on prior GEN."
-      # Track previous run's GEN job id per dataset index
-      declare -a PREV_GEN_JOB_IDS
-      for (( run_idx=0; run_idx<${RUNS}; run_idx++ )); do
-        # First submit all TRAIN jobs for this run index
-        declare -a TRAIN_JOB_IDS
-        for (( d=0; d<${num_datasets}; d++ )); do
-          dep_args=()
-          if [[ -n "${PREV_GEN_JOB_IDS[d]:-}" ]]; then
-            dep_args+=(--dependency=afterany:${PREV_GEN_JOB_IDS[d]})
-          fi
-          train_job_id=$( \
-            sbatch --parsable \
-              --partition=${PARTITION} \
-              --job-name=${USER_NAME}_nss_${DATASET_GROUP}_${config}_d${d}_r${run_idx}_train \
-              --account=llmservice_sdg_research \
-              --comment="${IDLE_EXEMPT_COMMENT}" \
-              --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%j.out \
-              --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%j.err \
-              --time=${TIME_LIMIT_TRAIN} \
-              --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
-              ${dep_args:+${dep_args[@]}} \
-              --export=ALL,PHASE=train,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_TRAIN},DATASET_INDEX=${d},RUN_INDEX=${run_idx},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
-              ${NSS_SLURM_DIR}/slurm_srun.sh )
-          TRAIN_JOB_IDS[d]="${train_job_id}"
-          echo "[${config}] dataset_idx=${d} run_index=${run_idx} TRAIN submitted ${train_job_id}"
-        done
-        # Then submit all GEN jobs for this run index with dependency on corresponding TRAIN
-        for (( d=0; d<${num_datasets}; d++ )); do
-          gen_job_id=$( \
-            sbatch --parsable \
-              --partition=${PARTITION} \
-              --job-name=${USER_NAME}_nss_${DATASET_GROUP}_${config}_d${d}_r${run_idx}_gen \
-              --account=llmservice_sdg_research \
-              --comment="${IDLE_EXEMPT_COMMENT}" \
-              --dependency=afterok:${TRAIN_JOB_IDS[d]} \
-              --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%j.out \
-              --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%j.err \
-              --time=${TIME_LIMIT_GEN} \
-              --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
-              --export=ALL,PHASE=generate,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_GEN},DATASET_INDEX=${d},RUN_INDEX=${run_idx},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
-              ${NSS_SLURM_DIR}/slurm_srun.sh )
-          PREV_GEN_JOB_IDS[d]="${gen_job_id}"
-          echo "[${config}] dataset_idx=${d} run_index=${run_idx} GEN submitted ${gen_job_id} (afterok ${TRAIN_JOB_IDS[d]})"
-        done
-        echo "Pausing ${SLEEP_SEC}s before next submit..."; sleep ${SLEEP_SEC}
-      done
-    else
-      echo "[${config}] Submitting TRAIN array of ${total_tasks} tasks (runs=${RUNS}, datasets=${num_datasets}, time=${TIME_LIMIT_TRAIN})"
-      train_array_id=$( \
-        sbatch --parsable \
-          --partition=${PARTITION} \
-          --job-name=${USER_NAME}_nss_${DATASET_GROUP}_${config}_train \
-          --account=llmservice_sdg_research \
-          --comment="${IDLE_EXEMPT_COMMENT}" \
-          --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%A_%a.out \
-          --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%A_%a.err \
-          --time=${TIME_LIMIT_TRAIN} \
-          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
-          --array=0-$((total_tasks-1)) \
-          --export=ALL,PHASE=train,ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_TRAIN},num_configs=1 \
-          ${NSS_SLURM_DIR}/slurm_srun.sh )
-
-      echo "[${config}] Submitting GEN array dependent on TRAIN (aftercorr ${train_array_id}, time=${TIME_LIMIT_GEN})"
-      gen_array_id=$( \
-        sbatch --parsable \
-          --partition=${PARTITION} \
-          --job-name=${USER_NAME}_nss_${DATASET_GROUP}_${config}_gen \
-          --account=llmservice_sdg_research \
-          --comment="${IDLE_EXEMPT_COMMENT}" \
-          --dependency=aftercorr:${train_array_id} \
-          --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%A_%a.out \
-          --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%A_%a.err \
-          --time=${TIME_LIMIT_GEN} \
-          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
-          --array=0-$((total_tasks-1)) \
-          --export=ALL,PHASE=generate,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_GEN},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
-          ${NSS_SLURM_DIR}/slurm_srun.sh )
-
-      echo "[${config}] TRAIN ${train_array_id}, GEN ${gen_array_id}"
-      echo "Pausing ${SLEEP_SEC}s before next submit..."; sleep ${SLEEP_SEC}
-    fi
-  else
-    if [[ "${SUBMIT_MODE}" == "sequential" ]]; then
-      echo "[${config}] Submitting end-to-end sequential by run-index (all datasets for run 0, then run 1, ...). Each run waits on prior run's job per dataset (afterany)."
-      declare -a PREV_E2E_JOB_IDS
-      for (( run_idx=0; run_idx<${RUNS}; run_idx++ )); do
-        for (( d=0; d<${num_datasets}; d++ )); do
-          dep_args=()
-          if [[ -n "${PREV_E2E_JOB_IDS[d]:-}" ]]; then
-            dep_args+=(--dependency=afterany:${PREV_E2E_JOB_IDS[d]})
-          fi
-          job_id=$( \
-            sbatch --parsable \
-              --partition=${PARTITION} \
-              --job-name=${USER_NAME}_nss_${DATASET_GROUP}_${config}_d${d}_r${run_idx}_single \
-              --account=llmservice_sdg_research \
-              --comment="${IDLE_EXEMPT_COMMENT}" \
-              --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%j.out \
-              --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%j.err \
-              --time=${TIME_LIMIT} \
-              --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
-              ${dep_args:+${dep_args[@]}} \
-              --export=ALL,PHASE=end_to_end,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT},DATASET_INDEX=${d},RUN_INDEX=${run_idx},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
-              ${NSS_SLURM_DIR}/slurm_srun.sh )
-          PREV_E2E_JOB_IDS[d]="${job_id}"
-          echo "[${config}] dataset_idx=${d} run_index=${run_idx} submitted job ${job_id}"
-        done
-        echo "Pausing ${SLEEP_SEC}s before next submit..."; sleep ${SLEEP_SEC}
-      done
-    else
-      echo "[${config}] Submitting end-to-end array of ${total_tasks} tasks"
-      job_id=$( \
-        sbatch --parsable \
-          --partition=${PARTITION} \
-          --job-name=${USER_NAME}_nss_${DATASET_GROUP}_${config}_single \
-          --account=llmservice_sdg_research \
-          --comment="${IDLE_EXEMPT_COMMENT}" \
-          --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%A_%a.out \
-          --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%A_%a.err \
-          --time=${TIME_LIMIT} \
-          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
-          --array=0-$((total_tasks-1)) \
-          --export=ALL,PHASE=end_to_end,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
-          ${NSS_SLURM_DIR}/slurm_srun.sh )
-      echo "[${config}] submitted job ${job_id}"
-      echo "Pausing ${SLEEP_SEC}s before next submit..."; sleep ${SLEEP_SEC}
-    fi
-  fi
+  for dataset in "${DATASETS[@]}"; do
+    for run_idx in $(seq 0 $((RUNS-1))); do
+      PACKED_CONFIGS="${PACKED_CONFIGS:+$PACKED_CONFIGS,}${config}"
+      PACKED_DATASETS="${PACKED_DATASETS:+$PACKED_DATASETS,}${dataset}"
+    done
+  done
 done
+export PACKED_DATASETS
+export PACKED_CONFIGS
 
-echo "Done. Monitor with: squeue -u ${USER_NAME}"
+echo "PACKED_DATASETS: ${PACKED_DATASETS}"
+echo "PACKED_CONFIGS: ${PACKED_CONFIGS}"
+
+# To reduce startup time and avoid timeouts downloading the image, use an existing
+# image already saved on lustre if possible.
+CACHED_IMAGE_PATH="${NSS_SHARED_DIR}/images/cuda_12_8_1_cudnn_runtime_ubuntu24_04.sqsh"
+if [ -f "${CACHED_IMAGE_PATH}" ]; then
+  CONTAINER_IMAGE="${CACHED_IMAGE_PATH}"
+else
+  CONTAINER_IMAGE="nvcr.io/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04"
+fi
+echo "Using container image: ${CONTAINER_IMAGE}"
+CONTAINER_MOUNTS="/lustre:/lustre"
+
+export CONTAINER_IMAGE
+export CONTAINER_MOUNTS
+
+mkdir -p "${EXP_LOG_DIR}"
+
+# No customized time limits for the moment, we can add them back later if we
+# see them providing value. Given variability in expected runtime for configs
+# x dataset, unclear if it's worth it.
+
+
+# Setup array args for sbatch
+array_spec="0-$((total_tasks-1))"
+if [ -n "${MAX_CONCURRENT_SLURM_JOBS:-}" ]; then
+  echo "Restricted to at most ${MAX_CONCURRENT_SLURM_JOBS} concurrent jobs with each array."
+  if [[ "${PIPELINE_MODE}" == "two_stage" ]]; then
+    echo "NOTE: With --pipeline-mode two_stage, we will submit two arrays, so the maximum potential concurrent jobs will be ${MAX_CONCURRENT_SLURM_JOBS} * 2. But due to generate needing to run after train, mostly we should stay well below that 2x limit."
+  fi
+  array_spec="${array_spec}%${MAX_CONCURRENT_SLURM_JOBS}"
+fi
+
+echo "array_spec: ${array_spec}"
+
+
+common_args=(
+  --parsable
+  --partition "${PARTITION}"
+  --account "${ACCOUNT}"
+  --comment "${IDLE_EXEMPT_COMMENT}"
+  --output ${EXP_LOG_DIR}/slurm_%A_%a.out
+  --error ${EXP_LOG_DIR}/slurm_%A_%a.err
+  --nodes 1
+  --ntasks-per-node 1
+  --cpus-per-task 16
+  --mem 32G
+  --gres gpu:1
+  --array "${array_spec}"
+)
+
+
+
+if [ -n "${DRY_RUN:-}" ]; then
+  echo "--dry-run enabled, no jobs will be submitted, using --test-only flag with sbatch"
+  common_args+=("--test-only")
+fi
+
+if [[ "${PIPELINE_MODE}" == "two_stage" ]]; then
+  # Submit two job arrays with sbatch, one for train and one for generate. Uses
+  # --dependency=aftercorr to ensure generate jobs only run after train jobs
+  # have completed successfully.
+
+  train_array_id=$( \
+    sbatch "${common_args[@]}" \
+      --time="${TRAIN_TIME_LIMIT}" \
+      --job-name nss_train \
+      --export=ALL,NSS_PHASE=train \
+      ${NSS_SLURM_DIR}/slurm_srun.sh )
+
+  gen_array_id=$( \
+    sbatch "${common_args[@]}" \
+      --time="${GENERATE_TIME_LIMIT}" \
+      --job-name nss_generate \
+      --dependency=aftercorr:${train_array_id} \
+      --export=ALL,NSS_PHASE=generate \
+      ${NSS_SLURM_DIR}/slurm_srun.sh )
+
+else
+  sbatch "${common_args[@]}" \
+    --time="${TIME_LIMIT}" \
+    --job-name nss_end_to_end \
+    --export=ALL,NSS_PHASE=end_to_end \
+    ${NSS_SLURM_DIR}/slurm_srun.sh
+fi
+
+if [ -n "${DRY_RUN:-}" ]; then
+  echo "Dry run completed without errors"
+else
+  echo "Done submitting jobs to slurm cluster. Monitor with: squeue -u ${USER_NAME}"
+fi
