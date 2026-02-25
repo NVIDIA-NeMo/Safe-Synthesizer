@@ -1,9 +1,11 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # NSS Experiment Guide
 
 This guide outlines the standard approaches for running experiments across different models in NSS. Detailed instructions for running NSS Slurm jobs can be found in the [dedicated README](README.md).
 
 ---
-
 ## Configuration Experiments
 
 ### Parameter Setup
