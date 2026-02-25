@@ -44,9 +44,6 @@ gh api repos/NVIDIA-NeMo/Safe-Synthesizer/issues/<number>/comments
 ```bash
 # Get a PR's base commit SHA (useful for lockfile diff diagnosis)
 gh pr view <number> --json baseRefOid -q .baseRefOid
-
-# View a specific job's full log
-gh run view <run-id> --log --job=<job-id>
 ```
 
 ## Repo Settings via API

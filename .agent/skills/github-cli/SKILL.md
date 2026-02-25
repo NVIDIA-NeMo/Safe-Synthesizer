@@ -127,18 +127,8 @@ EOF
 
 Keep bodies concise -- 2-4 bullet summary for PRs, problem + options for issues. Don't generate long audit dumps or parameter inventories. When the user asks for "succinct" -- 1-3 sentences, no lists.
 
-Commits must include `--signoff` (`-s`) per AGENTS.md before pushing:
-
-```bash
-git commit -s -m "feat: description"
-git push -u origin HEAD
-gh pr create --draft --title "feat: description" --body "Closes #<issue>"
-```
-
 ## Common Mistakes
 
 - Don't WebFetch GitHub Actions URLs for private repos -- use `gh run view` instead (auth required)
 - Don't propose `gh pr create` without checking if a PR already exists first
 - Don't generate long PR/issue bodies -- users consistently ask agents to cut them down
-- Don't forget `--signoff` (`-s`) on commits before push
-- Don't assume `gh` is on PATH -- check `~/.local/bin/gh` as fallback
