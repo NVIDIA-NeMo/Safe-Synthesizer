@@ -23,6 +23,7 @@ If only always-apply rules were loaded and no additional skills or rules were co
 | `github-cli` | `.agent/skills/github-cli/` | `gh` CLI for PRs, issues, CI, releases (+ references/workflows) |
 | `sync-with-nmp` | `.agent/skills/sync-with-nmp/` | Bidirectional sync with NMP (+ references/workflows) |
 | `python-typing` | `.agent/skills/python-typing/` | Type hints, generics, protocols, ty checker |
+| `skill-audit` | `.agent/skills/skill-audit/` | Audit chat transcripts to update skills |
 | `python-testing-patterns` | `.agent/skills/python-testing-patterns/` | pytest patterns, fixtures, mocking, property-based testing |
 | `python-observability` | `.agent/skills/python-observability/` | Structured logging, traced decorators, log categories |
 | `python-stdlib-patterns` | `.agent/skills/python-stdlib-patterns/` | pathlib, dataclasses, functools, itertools, enum patterns |
