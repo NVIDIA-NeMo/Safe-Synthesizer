@@ -13,17 +13,20 @@ For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](t
 ## Contents
 
 - [Principles](#principles)
-- [Python](#python)
-  - [Type hints](#type-hints)
+- [Python: library conventions](#python-library-conventions) -- what to use
   - [Data modeling](#data-modeling)
+  - [Logging and observability](#logging-and-observability)
+  - [Error hierarchy](#error-hierarchy)
+  - [Deprecation](#deprecation)
+- [Python: code style](#python-code-style) -- how to write
+  - [Type hints](#type-hints)
   - [Control flow](#control-flow)
+  - [Keeping functions flat](#keeping-functions-flat)
   - [Error messages](#error-messages)
+  - [Resource cleanup](#resource-cleanup)
   - [Naming](#naming)
   - [Imports](#imports)
-  - [Logging and observability](#logging-and-observability)
-  - [Error handling](#error-handling)
   - [Docstrings](#docstrings)
-  - [Deprecation](#deprecation)
   - [Patterns to avoid](#patterns-to-avoid)
 - [Testing](#testing)
 - [Markdown](#markdown)
@@ -43,7 +46,82 @@ For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](t
 
 ---
 
-## Python
+## Python: library conventions
+
+These are the building blocks of this codebase -- the specific types, base classes, and patterns you reach for when writing Safe Synthesizer code.
+
+### Data modeling
+
+- Pydantic: `NSSBaseModel` for config/parameter models in `config/` (adds `extra="forbid"`). Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
+- `BaseSettings` for env/CLI settings. `AliasChoices` for env var mapping, not `env_prefix`.
+- Always add `description` to `Field()` -- it becomes CLI help text.
+- `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
+- `field(default_factory=list)` for mutable defaults, never `= []`.
+- `StrEnum` for string-valued enums used in configs/serialization. Plain `Enum` for internal-only named constants.
+
+```python
+class TrainingHyperparams(NSSBaseModel):
+    learning_rate: float = Field(default=2e-4, description="Learning rate for the optimizer.")
+    num_epochs: int = Field(default=3, description="Number of training epochs.")
+    lora_rank: int = Field(default=16, description="Rank of the LoRA adapter.")
+```
+
+### Logging and observability
+
+- `get_logger(__name__)` -- never `logging.getLogger()` or `structlog.get_logger()` directly
+- Category loggers: `.runtime` for internals, `.user` for progress/results, `.system` for system events
+- `@traced` decorators are an optional enhancement for entry-point functions, not a universal requirement
+- Structured data via `extra={}`, not string interpolation
+- Never `print()` for operational output. Approved alternatives: `click.echo()` for CLI output, `sys.stdout.write()` for raw output in tools.
+
+```python
+logger = get_logger(__name__)
+
+logger.user.info("Training complete", extra={"epochs": 3, "loss": 0.42})
+logger.runtime.debug("Memory freed", extra={"bytes": freed_bytes})
+```
+
+### Error hierarchy
+
+Raise from the custom hierarchy with dual inheritance so callers can catch either the library-specific type or the built-in:
+
+- `SafeSynthesizerError` -- base for all known errors
+- `UserError(SafeSynthesizerError)` -- invalid usage (bad inputs, uninitialized state)
+- `DataError(UserError, ValueError)` -- problems with training data
+- `ParameterError(UserError, ValueError)` -- invalid config or parameter input
+- `GenerationError(UserError, RuntimeError)` -- sampling/generation failures
+- `InternalError(SafeSynthesizerError, RuntimeError)` -- library bug (equivalent to HTTP 5xx)
+
+### Deprecation
+
+When deprecating public APIs:
+
+- Use `warnings.warn("message", DeprecationWarning, stacklevel=2)` so the warning points to caller code, not library internals.
+- Include the version where the feature was deprecated and the version where it will be removed.
+- Provide a migration path in the warning message.
+- Add a `.. deprecated::` directive in the docstring.
+- Deprecated features should continue to work until removal.
+
+```python
+def old_method(self) -> None:
+    """Do the thing.
+
+    .. deprecated:: 0.5.0
+        Use :meth:`new_method` instead. Will be removed in 0.7.0.
+    """
+    warnings.warn(
+        "old_method is deprecated, use new_method instead. Will be removed in 0.7.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return self.new_method()
+```
+
+---
+
+## Python: code style
+
+How to write clear, testable Python -- independent of which library primitives you use.
 
 ### Type hints
 
@@ -67,28 +145,11 @@ def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSyn
 
 Legacy modules (`pii_replacer/`, `data_processing/`, `privacy/`, `artifacts/`) still use `Optional`/`List`/`Dict` in ~100 places -- migration in progress.
 
-### Data modeling
-
-- Pydantic: `NSSBaseModel` for config/parameter models in `config/` (adds `extra="forbid"`). Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
-- `BaseSettings` for env/CLI settings. `AliasChoices` for env var mapping, not `env_prefix`.
-- Always add `description` to `Field()` -- it becomes CLI help text.
-- `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
-- `field(default_factory=list)` for mutable defaults, never `= []`.
-- `StrEnum` for string-valued enums used in configs/serialization. Plain `Enum` for internal-only named constants.
-
-```python
-class TrainingHyperparams(NSSBaseModel):
-    learning_rate: float = Field(default=2e-4, description="Learning rate for the optimizer.")
-    num_epochs: int = Field(default=3, description="Number of training epochs.")
-    lora_rank: int = Field(default=16, description="Rank of the LoRA adapter.")
-```
-
 ### Control flow
 
 - Prefer `match`/`case` for dispatch on types or tagged values. Not a blanket rule -- `if`/`elif` is fine for simple boolean predicates.
 - Comprehensions over imperative loops where intent is clearer. No multiple `for` clauses -- optimize for readability, not conciseness (per [Google Python Style Guide sec 2.7](https://google.github.io/styleguide/pyguide.html#27-comprehensions--generator-expressions)).
-- Clamping/saturation over raising when out-of-range inputs shouldn't crash the system.
-- Idempotent teardown via `_torn_down` guard flags; per-step resilience in cleanup (each step isolated so one failure doesn't cascade).
+- Clamping/saturation over raising when out-of-range inputs shouldn't crash the system -- prefer returning a bounded value with a log warning over raising.
 
 Builder pattern -- `with_*` methods return `Self`:
 
@@ -288,24 +349,8 @@ raise DataError(f"The {column} column could not be processed.")
 - `TYPE_CHECKING` blocks for heavy forward references (`pandas`, `torch`, `transformers`)
 - `from __future__ import annotations` only in modules that already have it
 
-### Logging and observability
+### Resource cleanup
 
-- `get_logger(__name__)` -- never `logging.getLogger()` or `structlog.get_logger()` directly
-- Category loggers: `.runtime` for internals, `.user` for progress/results, `.system` for system events
-- `@traced` decorators are an optional enhancement for entry-point functions, not a universal requirement
-- Structured data via `extra={}`, not string interpolation
-- Never `print()` for operational output. Approved alternatives: `click.echo()` for CLI output, `sys.stdout.write()` for raw output in tools.
-
-```python
-logger = get_logger(__name__)
-
-logger.user.info("Training complete", extra={"epochs": 3, "loss": 0.42})
-logger.runtime.debug("Memory freed", extra={"bytes": freed_bytes})
-```
-
-### Error handling
-
-- Raise from the custom hierarchy with dual inheritance (`DataError(UserError, ValueError)`, etc.) with descriptive messages
 - `try/finally` for resource cleanup (never rely on `__del__` alone)
 - `except Exception:` + `logger.debug(..., exc_info=True)` for non-fatal cleanup at teardown boundaries -- this is distinct from the "patterns to avoid" rule against defensive `try/except Exception` wrapping trusted internal calls that shouldn't fail
 - Bare `except Exception: pass` only in `__del__` methods where suppression is intentional
@@ -555,31 +600,6 @@ The before/after examples above demonstrate most rules. These additional points 
 - Document side effects, thread safety, and idempotency guarantees where applicable
 - Use `Example:` sections with working code for public API methods
 - Complex code deserves proportionally detailed explanation -- err on the side of more context
-
-### Deprecation
-
-When deprecating public APIs:
-
-- Use `warnings.warn("message", DeprecationWarning, stacklevel=2)` so the warning points to caller code, not library internals.
-- Include the version where the feature was deprecated and the version where it will be removed.
-- Provide a migration path in the warning message.
-- Add a `.. deprecated::` directive in the docstring.
-- Deprecated features should continue to work until removal.
-
-```python
-def old_method(self) -> None:
-    """Do the thing.
-
-    .. deprecated:: 0.5.0
-        Use :meth:`new_method` instead. Will be removed in 0.7.0.
-    """
-    warnings.warn(
-        "old_method is deprecated, use new_method instead. Will be removed in 0.7.0.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return self.new_method()
-```
 
 ### Patterns to avoid
 
