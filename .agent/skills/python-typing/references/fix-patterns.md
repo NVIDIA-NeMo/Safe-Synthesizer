@@ -5,6 +5,14 @@
 
 Detailed examples for the most common ty error patterns in this codebase.
 
+## Layered Approach for Bulk Fixes
+
+When facing many diagnostics across multiple modules:
+
+- L1 (parallel, module-local): mechanical fixes within each module -- stale ignores, redundant casts, None-narrowing. If a fix requires changing another module, append to a shared `.cursor/ty-fix-notes.md` (see format below) and leave a temporary `# ty: ignore[rule]  # TODO(ty-fix)` placeholder.
+- L2 (sequential, cross-module): one agent works through the notes stack -- base class signature alignment, parameter type widening, annotation corrections. Remove all `TODO(ty-fix)` placeholders.
+- L3 (readonly analysis): examine for systemic improvements -- None elimination, union narrowing, descriptor typing, stub gaps. Produce findings, not code changes.
+
 ## BoundDir Chain Wrapping
 
 `BoundDir.__getattr__` returns `Path | BoundDir`. When chaining through descriptors (e.g., `workdir.train.config`), the type checker can't prove the result is `Path`. Wrap in `Path()` since `BoundDir` implements `os.PathLike[str]`:
@@ -194,13 +202,10 @@ LockfileDiff(root=changes)
 
 ## Working-Notes Stack Format
 
-When fixing diagnostics across many modules, create `.cursor/ty-fix-notes.md`:
+Format for `.cursor/ty-fix-notes.md` used during L1/L2 layered fixes:
 
 ```markdown
 # ty Fix Working Notes
-
-Items appended by L1 agents when a fix requires touching files outside their module.
-L2 agent works through them top-to-bottom.
 
 ## Stack
 

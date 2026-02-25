@@ -71,11 +71,7 @@ CI runs ty only on files changed in the PR (via `run-ty-check.sh`). Touching a f
 
 ## Fixing ty Diagnostics at Scale
 
-When facing many diagnostics across multiple modules, use a layered approach:
-
-- L1 (parallel, module-local): mechanical fixes within each module -- stale ignores, redundant casts, None-narrowing. If a fix requires changing another module, append to a shared `.cursor/ty-fix-notes.md` and leave a temporary `# ty: ignore[rule]  # TODO(ty-fix)` placeholder.
-- L2 (sequential, cross-module): one agent works through the notes stack -- base class signature alignment, parameter type widening, annotation corrections. Remove all `TODO(ty-fix)` placeholders.
-- L3 (readonly analysis): examine for systemic improvements -- None elimination, union narrowing, descriptor typing, stub gaps. Produce findings, not code changes.
+When facing many diagnostics across multiple modules, use the layered L1/L2/L3 approach described in `references/fix-patterns.md`.
 
 ## Common Fix Patterns
 
@@ -97,4 +93,3 @@ When to suppress vs fix:
 
 - Fix: stale comments from previous type-checker versions, redundant casts, narrowing gaps, annotation bugs
 - Suppress with `# ty: ignore[rule]`: incomplete third-party stubs (structlog, opacus, faiss, sentence-transformers), platform-specific imports (unsloth on macOS), genuinely dynamic code (`__getattr__`, recursive JSON traversal)
-- Never: blanket `# ty: ignore` without a rule code, `# type: ignore` on new code (use `# ty: ignore[rule]` syntax instead)
