@@ -309,7 +309,7 @@ class TestAutoConfigResolver:
     )
     def test_determine_max_sequences_per_example(self, sample_data, config, max_seq_input, expected_max_seq):
         """Max sequences should be 1 for DP regardless of input; for non-DP, auto -> 10, explicit -> explicit value, None -> None."""
-        config_copy = config.copy()
+        config_copy = config.model_copy(deep=True)
         config_copy.data.max_sequences_per_example = max_seq_input
         resolver = AutoConfigResolver(sample_data, config_copy)
         result = resolver._determine_max_sequences_per_example()
