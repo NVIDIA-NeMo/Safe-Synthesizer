@@ -307,15 +307,18 @@ class TestAutoConfigResolver:
         "pretrained_model, expected_lr",
         [
             pytest.param(None, 0.0005, id="non_mistral_model"),
+            pytest.param("HuggingFaceTB/SmolLM3-3B", 0.0005, id="smollm"),
             pytest.param("mistralai/Mistral-7B-Instruct-v0.3", 0.0001, id="mistral"),
         ],
     )
     def test_determine_learning_rate(self, sample_data, config, expected, pretrained_model, expected_lr):
         """Learning rate is auto configured with pretrained model → 0.0001 for Mistral, 0.0005 otherwise; unchanged for explicit."""
+        config_copy = config
         if pretrained_model is not None:
-            config.training.pretrained_model = pretrained_model
+            config_copy = config.model_copy(deep=True)
+            config_copy.training.pretrained_model = pretrained_model
 
-        resolver = AutoConfigResolver(sample_data, config)
+        resolver = AutoConfigResolver(sample_data, config_copy)
         result = resolver._determine_learning_rate()
 
         if expected.is_auto:

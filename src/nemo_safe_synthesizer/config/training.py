@@ -159,7 +159,7 @@ class TrainingHyperparams(Parameters):
             title="learning_rate",
             description=(
                 "The initial learning rate for `AdamW` optimizer. "
-                "Setting to 'auto' uses learning rate of 0.0005 for all models except for mistralai/Mistral-7B-Instruct-v0.3 that is set to 0.0001"
+                "Setting to 'auto' uses learning rate of 0.0005 for all models except for Mistral that is set to 0.0001"
             ),
         ),
     ] = AUTO_STR

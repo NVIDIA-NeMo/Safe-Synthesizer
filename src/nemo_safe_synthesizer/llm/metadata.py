@@ -271,8 +271,6 @@ class ModelMetadata(BaseModel):
                 return class_(model_name_or_path=str(model_name_or_path), **kwargs)
         raise ValueError(f"Unknown model name or path: {model_name_or_path}")
 
-
-
     @classmethod
     def from_config(
         cls: type["ModelMetadata"],
@@ -398,7 +396,6 @@ class Llama32(ModelMetadata):
 
 
 class Mistral(ModelMetadata):
-
     default_learning_rate: ClassVar[float] = 0.0001
 
     def __init__(
