@@ -14,11 +14,11 @@ It uses LLM fine-tuning with optional [differential privacy](https://en.wikipedi
 
 - Privacy-first synthetic data -- PII detection and replacement, optional differential privacy via [Opacus](https://github.com/meta-pytorch/opacus)
 - LLM fine-tuning -- LoRA fine-tuning optimized for tabular data, including numeric, categorical, and text columns
-- Fast inference -- [VLLM](https://github.com/vllm-project/vllm)-powered generation with optional structured output enforcement
+- Fast inference -- [vLLM](https://github.com/vllm-project/vllm)-powered generation with optional structured output enforcement
 - Comprehensive evaluation -- Privacy metrics, quality scores, distribution analysis, and HTML reports
 - Flexible interfaces -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
 
-## Next steps
+## Next Steps
 
 <div class="grid cards" markdown>
 
@@ -34,7 +34,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://en.wikipedi
 
     ---
 
-    Learn about the product: data synthesis, PII replacement, evaluation, and pipeline.
+    Data synthesis, PII replacement, evaluation, and pipeline.
 
     [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
 
@@ -50,7 +50,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://en.wikipedi
 
     ---
 
-    Use the package: Python SDK, CLI reference, available parameters, and troubleshooting.
+    Python SDK, CLI reference, available parameters, and troubleshooting.
 
     [:octicons-arrow-right-24: User Guide](user-guide/sdk.md)
 
@@ -58,7 +58,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://en.wikipedi
 
     ---
 
-    Dive into the details: architecture documentation and auto-generated API reference.
+    Architecture documentation and auto-generated API reference.
 
     [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
 
@@ -66,23 +66,18 @@ It uses LLM fine-tuning with optional [differential privacy](https://en.wikipedi
 
     ---
 
-    Hear from the developers: blog posts and release notes.
+    Blog posts and release notes.
 
     [:octicons-arrow-right-24: Developer Notes](blog/index.md)
 
 </div>
 
----
-
-
 ## Contact
 
-- [Need help? Ask us a question](https://github.com/NVIDIA-NeMo/safe-synthesizer/discussions)
+- [Need help? Ask us a question](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions)
 - [Report a bug](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=bug-report.yml)
 - [Make a feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=feature-request.yml)
 - [Report a security vulnerability](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/security/policy)
-
----
 
 ## License
 
