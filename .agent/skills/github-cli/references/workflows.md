@@ -259,3 +259,91 @@ gh pr review <number> --request-changes --body "Format check fails locally, see 
 git checkout -
 git stash pop
 ```
+
+## Issue-to-PR Lifecycle
+
+End-to-end workflow: create an issue, branch, implement, and open a draft PR.
+
+### Step 1: Create the Issue
+
+```bash
+gh issue create \
+  --title "fix: short description of the problem" \
+  --body "$(cat <<'EOF'
+Problem statement in 1-2 sentences.
+
+Proposed fix: brief description.
+EOF
+)"
+```
+
+### Step 2: Create Branch and Implement
+
+```bash
+ISSUE=<number-from-step-1>
+git checkout -b $USER/$ISSUE-short-name origin/main
+# ... make changes ...
+git add -A
+git commit -s -m "fix: description (closes #$ISSUE)"
+git push -u origin HEAD
+```
+
+### Step 3: Open Draft PR
+
+```bash
+gh pr create --draft \
+  --title "fix: description" \
+  --body "$(cat <<'EOF'
+Closes #<issue-number>
+
+- Change 1
+- Change 2
+EOF
+)"
+```
+
+## Fetch and Address Review Comments
+
+### Step 1: Get Inline Comments
+
+```bash
+# Inline code review comments (not available via gh pr view --json)
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
+```
+
+### Step 2: Address Comments in Code
+
+Make fixes, commit with signoff:
+
+```bash
+git add -A
+git commit -s -m "fix: address review feedback"
+git push
+```
+
+### Step 3: Update PR Body for Squash Merge
+
+```bash
+gh pr edit <number> --body "$(cat <<'EOF'
+## Summary
+- Updated summary reflecting all changes
+
+## Test plan
+- [x] Tests pass
+EOF
+)"
+```
+
+## Retroactive Signoff
+
+If commits were pushed without `--signoff` (`-s`):
+
+```bash
+# Amend the last commit to add signoff
+git commit --amend --signoff --no-edit
+git push --force-with-lease
+
+# For multiple commits, interactive rebase (careful -- rewrites history)
+git rebase --signoff HEAD~<n>
+git push --force-with-lease
+```
