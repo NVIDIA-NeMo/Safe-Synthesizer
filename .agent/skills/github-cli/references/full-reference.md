@@ -27,6 +27,35 @@ gh pr view <number> --json number,title,state,url,headRefName,baseRefName,isDraf
   }'
 ```
 
+## Review Comments
+
+`gh pr view --json comments` returns top-level PR conversation comments only. Inline code review comments (attached to specific diff lines) require the REST API:
+
+```bash
+# Inline code review comments on a PR
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
+
+# Issue discussion thread
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/issues/<number>/comments
+```
+
+## Useful Data Extraction
+
+```bash
+# Get a PR's base commit SHA (useful for lockfile diff diagnosis)
+gh pr view <number> --json baseRefOid -q .baseRefOid
+```
+
+## Repo Settings via API
+
+```bash
+# Configure squash merge to use PR title + body as commit message
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer \
+  --method PATCH \
+  -f squash_merge_commit_title=PR_TITLE \
+  -f squash_merge_commit_message=PR_BODY
+```
+
 ## CODEOWNERS
 
 Defined in `.github/CODEOWNERS`:
