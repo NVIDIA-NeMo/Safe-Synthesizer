@@ -112,12 +112,12 @@ How to write clear, testable Python -- independent of which library primitives y
 The codebase targets Python 3.11+ and uses native typing syntax throughout. Expect this minimum for the foreseeable future.
 
 ```python
-# Yes
+# After
 from typing import Self
 
 def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
 
-# No
+# Before
 def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer":
 ```
 
@@ -281,14 +281,14 @@ def build_training_examples(records, tokenizer, config):
 When a condition is a wall of boolean logic, name each piece:
 
 ```python
-# No -- opaque
+# Before -- opaque
 if (prev_row_idx is not None and row_idx < prev_row_idx) or \
    (current_group is not None and record_group != current_group) or \
    num_sequences >= max_sequences or \
    token_total + record_len > token_budget:
-    flush_example()
+       flush_example()
 
-# Yes -- each condition tells you what it means
+# After -- each condition tells you what it means
 restart_boundary = prev_row_idx is not None and row_idx < prev_row_idx
 group_boundary = current_group is not None and record_group != current_group
 would_exceed_seq = num_sequences >= max_sequences
@@ -314,11 +314,11 @@ def _should_flush_example(*, prev_row_idx, row_idx, current_group, record_group,
 Error messages must precisely match the actual error condition. Interpolated pieces must be clearly identifiable:
 
 ```python
-# Yes
+# After
 raise ValueError(f"Not a probability: {p!r}")
 raise DataError(f"Column {column!r} not found in dataframe with columns {list(df.columns)}")
 
-# No
+# Before
 raise ValueError("Invalid value")
 raise DataError(f"The {column} column could not be processed.")
 ```
@@ -531,16 +531,20 @@ class SafeSynthesizerParameters(Parameters):
 Generator with `Yields:` instead of `Returns:`:
 
 ```python
-# Before
-def generate_batches(self, num_records):
-    """Generate records."""
-
-# After
+# Before (uses Returns: for a generator, vague description)
 def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
     """Generate synthetic records in batches.
 
-    Each batch contains up to `batch_size` records. Invalid records are
-    filtered and retried until `num_records` valid records are produced
+    Returns:
+        Batches of synthetic records.
+    """
+
+# After (Yields: tells the reader what each iteration produces)
+def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
+    """Generate synthetic records in batches.
+
+    Each batch contains up to ``batch_size`` records. Invalid records are
+    filtered and retried until ``num_records`` valid records are produced
     or the retry limit is reached.
 
     Args:
