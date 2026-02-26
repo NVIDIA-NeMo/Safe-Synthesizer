@@ -7,7 +7,7 @@ import string
 from dataclasses import dataclass
 from numbers import Number
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord
@@ -139,7 +139,7 @@ class FieldStr:
 
     def spacy_doc_to_ner_prediction(
         self, doc: Doc, source: str, validator: Optional[Callable] = None
-    ) -> List[NERPrediction]:
+    ) -> list[NERPrediction]:
         """Given a prediction document, return an NERPrediction.
 
         This function will apply a set of rules on a Spacy doc and extract predictions
@@ -179,7 +179,7 @@ class FieldStr:
         return preds
 
 
-def _flatten_fields(in_data: List[KVPair]) -> List[FieldStr]:
+def _flatten_fields(in_data: list[KVPair]) -> list[FieldStr]:
     """Prepare input data for NLP usage.
 
     Args:
@@ -214,13 +214,13 @@ def _get_spacy_ent_score(_, ent: Entity) -> float:
 
 class SpacyPredictor(Predictor):
     nlp: Any
-    timings: Dict[str, Number]
+    timings: dict[str, Number]
     default_name: str = "spacy"
 
     def __init__(
         self,
         name: str = None,
-        model: Union[str] = None,
+        model: str = None,
         namespace: Optional[str] = None,
     ):
         if spacy is None:
@@ -262,7 +262,7 @@ class SpacyPredictor(Predictor):
         doc.set_extension(const.NER_SCORE, default=None, force=True)
         return self.nlp(doc.text)
 
-    def evaluate(self, in_data: JSONRecord) -> List[NERPrediction]:
+    def evaluate(self, in_data: JSONRecord) -> list[NERPrediction]:
         fields = _flatten_fields(in_data.kv_pairs)
 
         pred_by_field = []

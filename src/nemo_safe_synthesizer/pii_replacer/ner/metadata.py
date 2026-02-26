@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from dataclasses import field as Field
 from enum import StrEnum
 from math import ceil
-from typing import List, Optional, Set, Union
+from typing import Optional
 
 from ...data_processing.records.json_record import JSONRecord
 from .ner import NER, PipelineResult
@@ -33,7 +33,7 @@ class EntityMetadata:
     approx_cardinality: int
     """How many distinct values there were for this entity type."""
 
-    sources: List[str]
+    sources: list[str]
     """A list of unique sources that contributed predictions
     to the entity summary.
     """
@@ -89,16 +89,16 @@ class FieldMetadata:
     either transforms or synthesizer, for one reason or another.
     """
 
-    entities: List[EntityMetadata] = Field(default_factory=list)
+    entities: list[EntityMetadata] = Field(default_factory=list)
     """List of entities detected in values of this field."""
 
-    types: List[TypeMetadata] = Field(default_factory=list)
+    types: list[TypeMetadata] = Field(default_factory=list)
     """List of types detected in values of this field."""
 
-    field_labels: List[str] = Field(default_factory=list)
+    field_labels: list[str] = Field(default_factory=list)
     """Labels detected for this field."""
 
-    field_attributes: List[FieldAttribute] = Field(default_factory=list)
+    field_attributes: list[FieldAttribute] = Field(default_factory=list)
     """Attributes detected for this field."""
 
     def dict(self):
@@ -112,7 +112,7 @@ class EntitySummary:
     label: str
     """Name of the entity or label."""
 
-    fields: List[str]
+    fields: list[str]
     """Fields containing the entity or label."""
 
     count: int
@@ -124,7 +124,7 @@ class EntitySummary:
     using an HLL datastructure.
     """
 
-    sources: List[str]
+    sources: list[str]
     """A list of unique sources that contributed predictions
     to the entity summary.
     """
@@ -135,13 +135,13 @@ class EntitySummary:
 
 @dataclass(frozen=True)
 class FieldsMetadata:
-    fields: List[FieldMetadata] = Field(default_factory=list)
+    fields: list[FieldMetadata] = Field(default_factory=list)
     """
     List of fields in the dataset.
     Note: This list is ordered in the same order that original dataset was ordered.
     """
 
-    entities: List[EntitySummary] = Field(default_factory=list)
+    entities: list[EntitySummary] = Field(default_factory=list)
     """List of entities in the dataset. Unique by entity label and score."""
 
 
@@ -183,13 +183,13 @@ class MetadataService:
 
     def __init__(
         self,
-        ner: Union[NER, NERParallel],
+        ner: NER | NERParallel,
         field_label_condition: FieldLabelCondition = None,
     ):
         self.ner = ner
         self.dataset_metadata_tracker = _DatasetMetadataTracker(field_label_condition=field_label_condition)  # noqa: F821
 
-    def add_field_names(self, field_names: List[str]):
+    def add_field_names(self, field_names: list[str]):
         """
         Adds names of all fields that should be tracked.
         This is necessary to track fields that can be present in the dataset,
@@ -205,10 +205,10 @@ class MetadataService:
 
     def predict(
         self,
-        records: List[JSONRecord],
+        records: list[JSONRecord],
         min_score: float = 0.0,
         timings_only: bool = False,
-        include_labels: Optional[Set[str]] = None,
+        include_labels: Optional[set[str]] = None,
     ) -> PipelineResult:
         # potential improvements here
         # - if a field is already classified as something on a field level -> do we skip doing NER on that field?

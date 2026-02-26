@@ -79,17 +79,17 @@ class Batch:
 
     @property
     def num_prompts(self) -> int:
-        """Return the total number of prompts submitted."""
+        """The total number of prompts submitted."""
         return len(self._responses)
 
     @property
     def num_invalid_records(self) -> int:
-        """Return the number of invalid records generated."""
+        """The number of invalid records generated."""
         return sum([len(resp.invalid_records) for resp in self._responses])
 
     @property
     def num_valid_records(self) -> int:
-        """Return the number of valid records generated."""
+        """The number of valid records generated."""
         return sum([len(resp.valid_records) for resp in self._responses])
 
     @property
@@ -98,12 +98,12 @@ class Batch:
 
     @property
     def num_data_config_rejected_records(self) -> int:
-        """Return the number of records rejected due to data_config."""
+        """The number of records rejected due to data_config."""
         return len(self.data_config_rejected_records)
 
     @property
     def valid_record_fraction(self) -> float:
-        """Return the fraction of valid records generated."""
+        """The fraction of valid records generated."""
         total_records = self.num_valid_records + self.num_invalid_records
         return 0 if total_records == 0 else self.num_valid_records / total_records
 
@@ -149,7 +149,7 @@ class Batch:
 
     @property
     def stopping_metric(self) -> float:
-        """Return metric used to determine if generation should stop."""
+        """The metric used to determine if generation should stop."""
         return 1.0 - self.valid_record_fraction
 
     def to_dataframe(self) -> pd.DataFrame | None:

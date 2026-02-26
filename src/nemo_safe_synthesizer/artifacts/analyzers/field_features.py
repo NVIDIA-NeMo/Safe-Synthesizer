@@ -58,7 +58,7 @@ def _add_info_to_manifest(context: AnalyzerContext, fields: list[FieldFeatures])
         manifest.add_feature(key, value)
 
     # serialize to dict and anonymize field names
-    fields_dict = [field.dict() for field in fields]
+    fields_dict = [field.to_dict() for field in fields]
     for field_dict in fields_dict:
         field_dict["name"] = context.field_name_anonymizer.anonymize(field_dict["name"])
 

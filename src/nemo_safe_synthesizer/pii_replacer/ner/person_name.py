@@ -8,7 +8,7 @@ import io
 import itertools
 import re
 from dataclasses import dataclass, field
-from typing import FrozenSet, Iterable, List
+from typing import Iterable
 
 from flashtext import KeywordProcessor
 
@@ -48,7 +48,7 @@ TOKEN_REGEX = re.compile(r"\b(?!\d)\w+", re.IGNORECASE)
 MAX_STR_LEN = 64
 
 
-def build_name_only_headers(others: Iterable[str]) -> List[Pattern]:
+def build_name_only_headers(others: Iterable[str]) -> list[Pattern]:
     out = []
     for other in others:
         out.append(r"{}.?{}".format("name", other))
@@ -71,12 +71,12 @@ class WordList:
     headers_neg: KeywordProcessor = None  # NOTE: init'd as a FrozenSet then converted
     """A list of header tokens that should not be present to trigger prediction flow"""
 
-    headers_pairs: FrozenSet[str] = field(default_factory=frozenset)
+    headers_pairs: frozenset[str] = field(default_factory=frozenset)
     """A list of words that can be combined with the word 'name', this should
     be used to build additional header pairs for analysis
     """
 
-    parts: FrozenSet[str] = field(default_factory=frozenset)
+    parts: frozenset[str] = field(default_factory=frozenset)
     """These are parts of a name that can be used to match, things like
     Mr., Mrs., etc
     """
@@ -178,7 +178,7 @@ class PersonNamePredictor(Predictor):
                 return True
         return False
 
-    def evaluate(self, in_record: JSONRecord) -> List[NERPrediction]:
+    def evaluate(self, in_record: JSONRecord) -> list[NERPrediction]:
         record_fields = in_record.kv_pairs
         result_set_by_field = [set() for _ in record_fields]
 

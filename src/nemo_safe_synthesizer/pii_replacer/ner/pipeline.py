@@ -6,7 +6,7 @@ from __future__ import annotations
 from enum import Enum
 from numbers import Number
 from pathlib import Path
-from typing import Dict, Iterator, List, Sequence, Type, Union
+from typing import Iterator, Sequence
 
 from ...observability import get_logger
 from . import person_name
@@ -45,10 +45,10 @@ class PredictionSource(Enum):
 
 
 class Pipeline:
-    predictors: List[Predictor]
-    load_timings: Dict[str, Number]
+    predictors: list[Predictor]
+    load_timings: dict[str, Number]
 
-    def __init__(self, predictors: List[Predictor] = None):
+    def __init__(self, predictors: list[Predictor] = None):
         """A lightweight container class for managing prediction pipelines."""
         self.predictors = predictors or []
         self.load_timings = {}
@@ -56,7 +56,7 @@ class Pipeline:
     def _next_udf_name(self):
         return f"user_defined_predictor_{len(self.predictors) + 1}"
 
-    def add_predictors(self, predictors: Union[Predictor, List[Predictor]]):
+    def add_predictors(self, predictors: Predictor | list[Predictor]):
         if isinstance(predictors, Predictor):
             self.predictors.append(predictors)
         if isinstance(predictors, list):
@@ -106,15 +106,13 @@ class Pipeline:
         self.add_predictors(get_predictors_from_yaml(_path))
 
     @classmethod
-    def from_class_refs(cls, predictors: Sequence[Type[Predictor]]) -> Pipeline:
+    def from_class_refs(cls, predictors: Sequence[type[Predictor]]) -> Pipeline:
         klasses = [p() for p in predictors]
         return cls(klasses)
 
     @property
-    def predictor_list(self) -> List[str]:
-        """Return the list of all namespaced predictors
-        currently loaded on the pipeline
-        """
+    def predictor_list(self) -> list[str]:
+        """All namespaced predictors currently loaded on the pipeline."""
         return [p.source for p in self.predictors]
 
 
@@ -152,7 +150,7 @@ def create_default_ner(full: bool = False) -> NER:
     return NER(pipeline=pipe)
 
 
-def from_source_string_list(*, include: List[str] = None, exclude: List[str] = None) -> Pipeline:
+def from_source_string_list(*, include: list[str] = None, exclude: list[str] = None) -> Pipeline:
     if include and exclude:
         raise ValueError("cannot include and exclude")
 

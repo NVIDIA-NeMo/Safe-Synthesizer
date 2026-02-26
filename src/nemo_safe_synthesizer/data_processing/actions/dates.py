@@ -7,7 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from random import randint
-from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union, cast
+from typing import Iterable, Iterator, Optional, cast
 
 import pandas as pd
 
@@ -125,7 +125,7 @@ def strptime_extra(date_string: str, fmt: str) -> datetime:
     return dt
 
 
-def date_component_permutations() -> List[Tuple[str, str, str, str, str]]:
+def date_component_permutations() -> list[tuple[str, str, str, str, str]]:
     """Returns a list of string formats by component type. Each permutation is
     indexed by y, m, d, hms, tz and can be passed into component formatter from
     ``date_component_orders``.
@@ -133,7 +133,7 @@ def date_component_permutations() -> List[Tuple[str, str, str, str, str]]:
     return list(itertools.product(*component_formats.values()))  # type:ignore
 
 
-def gen_date_str_fmt_permutations() -> Set[str]:
+def gen_date_str_fmt_permutations() -> set[str]:
     """Returns a list of unique date string format permutations"""
     return {order(*str_fmt) for str_fmt in date_component_permutations() for order in date_component_orders}
 
@@ -157,10 +157,10 @@ class TokenizedStr:
     and component seperators.
     """
 
-    components: List[Tuple[str, Tuple[int, int]]]
+    components: list[tuple[str, tuple[int, int]]]
     """A list of components and their string index mapped from the source string"""
 
-    seperators: List[str]
+    seperators: list[str]
     """A list of component seperators. Zipping this list with ``components`` yields
     the original string.
     """
@@ -172,7 +172,7 @@ class TokenizedStr:
         """
         return " ".join([s for s, _ in self.components])
 
-    def assemble_str_from_components(self, new_components: List[str]) -> str:
+    def assemble_str_from_components(self, new_components: list[str]) -> str:
         """Given a new set of components, rebuild the string with formatting preserved.
 
         Args:
@@ -292,14 +292,14 @@ def maybe_match(date, format) -> Optional[datetime]:
 
 def parse_date(
     input_date: str,
-    date_str_fmts: Union[List[str], Set[str]] = date_str_fmt_permutations,
+    date_str_fmts: list[str] | set[str] = date_str_fmt_permutations,
 ) -> Optional[ParsedDate]:
     return next(parse_date_multiple(input_date, date_str_fmts), None)
 
 
 def parse_date_multiple(
     input_date: str,
-    date_str_fmts: Union[List[str], Set[str]] = date_str_fmt_permutations,
+    date_str_fmts: list[str] | set[str] = date_str_fmt_permutations,
 ) -> Iterator[ParsedDate]:
     tokenized_date = tokenize_date_str(input_date)
 
@@ -370,7 +370,7 @@ def infer_from_series(date_series: Iterable[str]) -> Optional[str]:
 def fit_and_transform_dates(
     df: pd.DataFrame,
     inplace: bool = False,
-) -> Tuple[Dict[str, Dict[str, str]], pd.DataFrame]:
+) -> tuple[dict[str, dict[str, str]], pd.DataFrame]:
     date_min_dict = {}
     object_cols = [col for col, col_type in df.dtypes.iteritems() if col_type == "object"]
     result_df = df.copy() if not inplace else df
@@ -395,7 +395,7 @@ def fit_and_transform_dates(
     return date_min_dict, result_df
 
 
-def transform_dates(dates: Dict[str, Dict[str, str]], df: pd.DataFrame) -> pd.DataFrame:
+def transform_dates(dates: dict[str, dict[str, str]], df: pd.DataFrame) -> pd.DataFrame:
     result_df = df.copy()
     for col, details in dates.items():
         _dates = pd.to_datetime(result_df[col], format=details["format"], errors="coerce")

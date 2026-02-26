@@ -11,7 +11,6 @@
 # Convert activations and backprops to float for per-sample gradient
 # computation. During mixed precision training it is possible that the
 # activations and/or backprops are not in full precision.
-from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -21,8 +20,8 @@ from opt_einsum import contract
 
 @register_grad_sampler(nn.Linear)
 def compute_linear_grad_sample(
-    layer: nn.Linear, activations: List[torch.Tensor], backprops: torch.Tensor
-) -> Dict[nn.Parameter, torch.Tensor]:
+    layer: nn.Linear, activations: list[torch.Tensor], backprops: torch.Tensor
+) -> dict[nn.Parameter, torch.Tensor]:
     """
     Computes per sample gradients for ``nn.Linear`` layer
 

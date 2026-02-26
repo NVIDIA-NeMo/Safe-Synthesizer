@@ -42,8 +42,8 @@ The `run` command executes the Safe Synthesizer pipeline. Without a subcommand, 
 
 ### Subcommands
 
-- **`run train`** -- Run only the training stage
-- **`run generate`** -- Run only the generation stage (requires a trained adapter)
+- `run train` -- Run only the training stage
+- `run generate` -- Run only the generation stage (requires a trained adapter)
 
 ## `config` -- Manage Configurations
 

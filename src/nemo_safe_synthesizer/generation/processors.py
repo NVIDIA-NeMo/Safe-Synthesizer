@@ -44,7 +44,7 @@ class Processor(ABC):
 
     @property
     def name(self):
-        """Return the processor's name with spaces for logging."""
+        """The processor's name with spaces, for logging."""
         n = self.__class__.__name__
         return n[0] + "".join(" " + c if c.isupper() else c for c in n[1:])
 

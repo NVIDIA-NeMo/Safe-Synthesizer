@@ -15,7 +15,6 @@ from typing import (
     Hashable,
     Literal,
     Optional,
-    Type,
     TypeVar,
     Union,
 )
@@ -188,7 +187,7 @@ class ExpressionSource(DataSource):
 
 
 DataSourceT = Annotated[DataSource, Field(discriminator="type_")]
-DataSourceT.__origin__ = Union[tuple(DataSource.__subclasses__())]  # type: ignore
+DataSourceT.__origin__ = Union[tuple(DataSource.__subclasses__())]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
 
 def is_abstract(c: Any) -> bool:
@@ -200,11 +199,11 @@ def is_abstract(c: Any) -> bool:
     return inspect.isabstract(c) or ABC in c.__bases__
 
 
-def all_subclasses(klass: Type[T]) -> set[Type[T]]:
+def all_subclasses(klass: type[T]) -> set[type[T]]:
     """
     Grab all of the recursive subclasses of `klass`.
     """
-    subclasses: set[Type[T]] = set()
+    subclasses: set[type[T]] = set()
     subclass_queue = [klass]
     while subclass_queue:
         parent = subclass_queue.pop()
@@ -215,7 +214,7 @@ def all_subclasses(klass: Type[T]) -> set[Type[T]]:
     return subclasses
 
 
-def concrete_subclasses(klass: Type[T]) -> set[Type[T]]:
+def concrete_subclasses(klass: type[T]) -> set[type[T]]:
     """
     Find all the subclasses of `klass`, then filter out the abstract
     subclasses.
