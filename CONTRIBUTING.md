@@ -52,6 +52,12 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
   ```
+5. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+  ```bash
+   echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
+   direnv allow
+  ```
+   Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
 
 ### NMP Integration
 
