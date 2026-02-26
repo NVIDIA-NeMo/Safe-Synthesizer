@@ -13,7 +13,6 @@ Pre-defined command files live in `.claude/commands/`. When a user asks about a 
 |---------|------|
 | `unit-test` | Run unit tests |
 | `test-slow` | All tests including slow |
-| `test-sdk-related` | Config/SDK/CLI/API tests |
 | `test-ci-container` | CI tests in a container |
 | `gpu-test` | GPU integration and e2e tests |
 | `format` | Format code (ruff + copyright) |

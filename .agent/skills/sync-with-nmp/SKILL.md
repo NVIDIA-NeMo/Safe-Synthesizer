@@ -68,7 +68,7 @@ What this does:
 2. Calls `tools/sync-from-mr.sh` which:
    - Fetches the MR's squash commit SHA via the GitLab API
    - Checks out that commit in the NMP repo
-   - Rsyncs `src/` and `tests/` with `--delete` (exact mirror)
+   - Copies changed `src/` and `tests/` files from the MR's squash commit
    - Reports files changed in the MR that are outside `src/` and `tests/` (need manual review)
 
 After syncing, follow the post-sync workflow below.

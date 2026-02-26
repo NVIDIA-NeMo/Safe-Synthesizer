@@ -390,16 +390,6 @@ Documentation is deployed to GitHub Pages automatically when changes to `docs/`,
 
 ## AI Agents
 
-This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
-- `AGENTS.md` -- primary agent guide
-- `.agent/skills/` -- domain-specific skills (canonical location)
-- `.cursor/rules/` -- Cursor workflow rules
-- `.cursor/skills/` -- symlinks to `.agent/skills/` for Cursor discoverability
-
-Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
-
-## AI Agents
-
 This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format.
 
 | Config file | Read by | Purpose |

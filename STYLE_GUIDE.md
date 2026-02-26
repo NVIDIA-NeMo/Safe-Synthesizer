@@ -125,7 +125,7 @@ def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSyn
 - Avoid `Any` -- prefer `object`, generics, or `Protocol`
 - `TYPE_CHECKING` guards for heavy imports (`pandas`, `torch`, `transformers`); not needed for stdlib or lightweight imports
 
-Legacy modules (`pii_replacer/`, `data_processing/`, `privacy/`, `artifacts/`) still use `Optional`/`List`/`Dict` in ~100 places -- migration in progress.
+Legacy modules (`pii_replacer/`, `data_processing/`, `privacy/`, `artifacts/`) still use `Optional`/`List`/`Dict` in ~250 places -- migration in progress.
 
 ### Control flow
 

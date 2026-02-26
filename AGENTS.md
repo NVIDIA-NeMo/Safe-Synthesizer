@@ -51,3 +51,7 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `artifacts/` | Data quality checks, field analysis, metadata |
 | `observability.py` | CategoryLogger, TracedContext, structured logging |
 | `errors.py` | Custom error hierarchy -- see `diagnose-failures` skill |
+| `defaults.py` | Default settings, constants (`DEFAULT_ARTIFACTS_PATH`, `PSEUDO_GROUP_COLUMN`) |
+| `package_info.py` | Package version (uv-dynamic-versioning) |
+| `results.py` | Result compilation (`make_nss_results`, `make_nss_summary`) |
+| `utils.py` | Schema prompt creation, pattern matching helpers |
