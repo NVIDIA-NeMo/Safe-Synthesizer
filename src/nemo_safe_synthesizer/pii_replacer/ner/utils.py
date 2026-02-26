@@ -3,7 +3,7 @@
 
 from ...data_processing.records.json_record import JSONRecord
 
-"""Valid input data includes a str, tuple or dict"""
+# Valid input data includes a str, tuple or dict
 InData = str | list | dict | JSONRecord
 
 
