@@ -36,6 +36,8 @@ Then map the error class:
 - `InternalError` → likely a real bug in the source code
 - `AssertionError` → check expected values, test logic
 
+Conditional-assert pitfall: do not `assert field is not None` for fields that are legitimately `None` in some configurations (e.g. `validation_dataset` when holdout is disabled). Use a conditional guard instead.
+
 ### Pytest Markers
 
 Markers are defined in `pytest.ini`. Run `make test` (unit), `make test-slow` (all), or `uv run pytest -m <marker>` for specific markers.
@@ -69,8 +71,15 @@ gh run view <run-id> --log-failed
 | Error | Likely Cause | Fix |
 |-------|-------------|-----|
 | `CUDA out of memory` | Batch too large or model too big | Reduce `batch_size` or use quantization |
-| `CUDA not available` | Wrong extra installed | Reinstall with `make bootstrap-nss cuda` |
+| `CUDA not available` | Wrong extra installed | Reinstall with `make bootstrap-nss cu128` |
 | `NCCL error` | Multi-GPU issues | Use `CUDA_VISIBLE_DEVICES=0` for single-GPU |
+
+### Running GPU / e2e Tests
+
+- Always use `-n 0` (disables xdist forking). xdist forks crash with CUDA contexts.
+- Agent sandbox blocks CUDA and network -- use `required_permissions: ["all"]`.
+- Flash Attention requires head_dim >= 64. Tiny test models (e.g. GPT-2) fail with it -- pass `attn_implementation="eager"`.
+- DP `max_compositions` mismatch: usually a `prv_accountant` version issue -- see `diagnose-deps` skill.
 
 ## 5. Runtime Errors
 
