@@ -53,7 +53,7 @@ These are the building blocks of this codebase -- the specific types, base class
 ### Data modeling
 
 - Pydantic: `NSSBaseModel` for config/parameter models in `config/` which define the user-facing configuration of NSS. Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
-- `BaseSettings` for env/CLI settings. Prefer `AliasChoices` on individual fields when you need a field to respond to both its Python name and an env var name (e.g., `validation_alias=AliasChoices("config_path", "NSS_CONFIG")`). `env_prefix` is acceptable for simple settings classes where all fields share a common prefix and no per-field aliasing is needed.
+- `BaseSettings` for env/CLI settings. Prefer `AliasChoices` on individual fields when you need a field to respond to both its Python name and an env var name (e.g., `validation_alias=AliasChoices("config_path", "NSS_CONFIG")`). `env_prefix` is acceptable for simple settings classes where all fields share a common prefix and no per-field aliasing is needed. Note that not all parts of the repo do this yet and we can follow up to ensure this is stable.
 - Always add `description` to `Field()` -- it becomes CLI help text.
 - `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
 - `field(default_factory=list)` for mutable defaults, never `= []`.
