@@ -24,6 +24,8 @@ Common commands: `make test` (unit tests), `make format` (ruff + copyright), `ma
 
 Feature branches off `main`. Branch names often include an issue number prefix (e.g., `<author>/123-short-name`).
 
+All commits require DCO sign-off. Always use `git commit --signoff` (or `-s`) -- never write the `Signed-off-by` trailer manually.
+
 For testing, building, syncing, bootstrapping, and other workflows, see the matching skill or `.claude/commands/` file.
 
 ## Module Map
