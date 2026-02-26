@@ -13,7 +13,7 @@ YQ_VERSION="v4.44.1"
 
 install_yq() {
     if command -v yq >/dev/null 2>&1; then
-        echo "yq is already installed at $(which yq)"
+        echo "yq is already installed at $(command -v yq)"
         yq --version
         return 0
     fi

@@ -31,7 +31,7 @@ if [ -z "$filtered_files" ]; then
 fi
 
 # Run ty check on the filtered files
-if ! which ty > /dev/null; then
+if ! command -v ty >/dev/null 2>&1; then
     echo "ty not found"
     TY="uvx ty"
 else

@@ -35,7 +35,7 @@ done
 
 install_direnv() {
     if command -v direnv >/dev/null; then
-        echo "direnv is already installed at $(which direnv)"
+        echo "direnv is already installed at $(command -v direnv)"
     else
         echo "Installing direnv..."
         if [ "$OS" == "darwin" ]; then
