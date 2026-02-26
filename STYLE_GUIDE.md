@@ -441,11 +441,23 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
     The base class provides the _torn_down guard flag pattern -- check
     it at the top of teardown() and set it before returning.
 
-    Attributes:
+    Args:
         config: Generation parameters controlling temperature, top_p, etc.
         adapter_path: Path to the trained LoRA adapter directory.
+
+    Attributes:
+        _torn_down: Guard flag to make teardown idempotent.
     """
 ```
+
+#### Class docstrings: `Args:` and `Attributes:`
+
+Put constructor `Args:` in the class docstring, not on `__init__`. IDEs (Cursor, VS Code) show the class docstring when hovering over constructor calls -- if `Args:` is on `__init__`, users never see it without navigating to the source.
+
+- `Args:` -- constructor parameters (what the caller passes to `__init__`)
+- `Attributes:` -- public instance attributes the caller can read after construction
+
+Include both when a class has nontrivial constructor parameters AND public attributes worth documenting. For simple classes where the args and attributes are the same fields, `Args:` alone is sufficient.
 
 #### Before and after
 
@@ -606,7 +618,7 @@ The before/after examples above demonstrate most rules. These additional points 
 - `cast()` / `Any` to paper over type mismatches
 - `os.path` -- use `pathlib.Path` (tolerated only in vendored/tooling scripts)
 - Mutable default arguments -- use `None` and initialize inside the function. Acceptable immutable defaults: `None`, `str`, `int`, `float`, `bool`, `tuple`, `frozenset`, `pathlib.Path`
-- `print()` statements -- use `get_logger(__name__)` from `observability.py` or `click.echo()` for CLI
+- `print()` statements in library code -- use `get_logger(__name__)` from `observability.py` or `click.echo()` for CLI. `print()` is fine in tests, standalone scripts, and tooling (`T201` is suppressed for `tests/`, `tools/`, `script/` in `ruff.toml`).
 - `assert` for validation in library code -- `assert` statements can be stripped by `-O` and must never guard correctness. Use `if/raise` for input validation. `assert` is fine in tests where `pytest` relies on it.
 
 ---

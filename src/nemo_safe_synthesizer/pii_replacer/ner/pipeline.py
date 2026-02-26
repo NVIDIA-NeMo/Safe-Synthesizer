@@ -45,11 +45,12 @@ class PredictionSource(Enum):
 
 
 class Pipeline:
+    """A lightweight container class for managing prediction pipelines."""
+
     predictors: list[Predictor]
     load_timings: dict[str, Number]
 
     def __init__(self, predictors: list[Predictor] = None):
-        """A lightweight container class for managing prediction pipelines."""
         self.predictors = predictors or []
         self.load_timings = {}
 

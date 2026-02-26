@@ -64,6 +64,11 @@ unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
+[lint.per-file-ignores]
+"tests/**" = ["T201"]    # print() is fine in tests
+"tools/**" = ["T201"]    # print() is fine in tooling scripts
+"script/**" = ["T201"]   # print() is fine in standalone scripts
+
 [format]
 # Like Black, use double quotes for strings.
 quote-style = "double"
