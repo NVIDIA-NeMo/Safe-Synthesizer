@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Abstract training backend and shared result container."""
+
 from __future__ import annotations
 
 import abc
@@ -38,6 +40,19 @@ logger = get_logger()
 
 @dataclass
 class NSSTrainerResult:
+    """Result container returned after a training run completes.
+
+    Attributes:
+        training_complete: ``True`` if training finished normally; ``False``
+            if it was stopped early (e.g. by the inference-eval callback).
+        config: The resolved parameters used for the run.
+        log_history: Per-step log entries recorded by the HuggingFace Trainer.
+        adapter_path: Filesystem path to the saved LoRA adapter.
+        df_train: Training DataFrame (post-preprocessing).
+        df_ml_utility_holdout: Optional hold-out split for ML-utility evaluation.
+        elapsed_time: Wall-clock training duration in seconds.
+    """
+
     training_complete: bool
     config: SafeSynthesizerParameters
     log_history: list[dict]
@@ -48,6 +63,46 @@ class NSSTrainerResult:
 
 
 class TrainingBackend(metaclass=abc.ABCMeta):
+    """Abstract base class for LLM fine-tuning backends.
+
+    Lifecycle: ``__init__`` -> ``prepare_training_data`` -> ``load_model``
+    -> ``prepare_params`` -> ``train`` -> ``save_model``.
+
+    Subclasses must implement every abstract method.  Two concrete
+    implementations are provided:
+    :class:`~.huggingface_backend.HuggingFaceBackend` (standard
+    HuggingFace Trainer with full DP-SGD support) and
+    :class:`~.unsloth_backend.UnslothTrainer` (Unsloth-optimized
+    training with lower memory usage and faster throughput, but no
+    DP support).
+
+    Args:
+        params: Pipeline configuration.
+        model_metadata: Pretrained model metadata (prompt template,
+            sequence length, RoPE scaling, etc.).
+        training_dataset: HuggingFace ``Dataset`` to fine-tune on.
+        data_fraction: Ratio of ``num_input_records_to_sample`` to
+            total training records.  Passed to the Opacus DP trainer
+            to compute per-step sampling probability for privacy
+            accounting.  Computed automatically during
+            :meth:`prepare_training_data`; only supply explicitly when
+            resuming a partially completed run.
+        logging_level: Python logging verbosity level.
+        true_dataset_size: Total number of records (or groups, when
+            grouping is enabled) in the training set before
+            subsampling.  Used by the Opacus DP trainer alongside
+            ``data_fraction`` for privacy accounting.
+        eval_dataset: Optional evaluation dataset.
+        generation_eval: If ``True``, attach the
+            :class:`~.callbacks.InferenceEvalCallback` during training.
+        callbacks: Extra HuggingFace ``TrainerCallback`` instances.
+        action_executor: Optional preprocessing action executor.
+        workdir: Working directory for artifacts; required.
+
+    Raises:
+        ValueError: If ``workdir`` is not provided.
+    """
+
     model: PreTrainedModel | PeftModel
     tokenizer: PreTrainedTokenizer
     quant_params: dict
@@ -118,31 +173,31 @@ class TrainingBackend(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def prepare_training_data(self):
-        pass
+        """Load, validate, and tokenize the training dataset."""
 
     @abc.abstractmethod
     def prepare_config(self):
-        pass
+        """Set framework-specific model-loading parameters."""
 
     @abc.abstractmethod
     def prepare_params(self):
-        pass
+        """Build training arguments and instantiate the trainer."""
 
     @abc.abstractmethod
     def maybe_quantize(self, **quant_params: dict):
-        pass
+        """Apply PEFT / quantization wrapping to the loaded model."""
 
     @abc.abstractmethod
     def load_model(self):
-        pass
+        """Load the pretrained model and tokenizer."""
 
     @abc.abstractmethod
     def train(self):
-        pass
+        """Run the full training loop and populate :attr:`results`."""
 
     @abc.abstractmethod
     def save_model(self):
-        pass
+        """Persist the fine-tuned adapter and related artifacts."""
 
     def _trust_remote_code_for_model(self) -> bool:
         """Determines whether the model should be loaded with

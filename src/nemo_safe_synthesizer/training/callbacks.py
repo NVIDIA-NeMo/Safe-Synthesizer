@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""HuggingFace Trainer callbacks for Safe Synthesizer training."""
+
 import time
 from typing import Optional
 
@@ -97,6 +99,13 @@ class InferenceEvalCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ) -> None:
+        """Generate records with the current model and optionally stop training.
+
+        Runs inference for :attr:`num_batches` batches, validates each against
+        the schema, and sets ``control.should_training_stop`` if the invalid
+        record fraction exceeds the threshold for ``patience`` consecutive
+        evaluations.
+        """
         if not state.is_world_process_zero:
             return
 
@@ -240,7 +249,14 @@ class ProgressBarCallback(TrainerCallback):
 
 
 class SafeSynthesizerWorkerCallback(TrainerCallback):
-    """Trainer callback to log training information to the worker logs."""
+    """Trainer callback that emits structured progress logs at a fixed interval.
+
+    Logs are written via the ``logger.runtime`` channel as rendered tables
+    containing epoch, step, loss, and progress fraction.
+
+    Args:
+        log_interval: Minimum seconds between successive log emissions.
+    """
 
     _start_ts: float
     _last_log_ts: float
@@ -262,9 +278,12 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         self._start_ts = time.monotonic()
 
     def _checked_log_if(self, cond: bool, state: TrainerState, control: TrainerControl) -> Optional[TrainerControl]:
-        # We need to keep track of the last global_step that was used when logging,
-        # as triggering log handling twice for the same step leads to div by 0.
-        # https://github.com/huggingface/transformers/blob/v4.29.0/src/transformers/trainer.py#L2279
+        """Set ``control.should_log`` when ``cond`` is true, guarding against duplicate steps.
+
+        The HuggingFace Trainer triggers a division-by-zero if the same
+        ``global_step`` is logged twice, so this method tracks the last
+        logged step and skips if it hasn't advanced.
+        """
         if state.is_local_process_zero and state.global_step > self._last_log_global_step and cond:
             control.should_log = True
             return control

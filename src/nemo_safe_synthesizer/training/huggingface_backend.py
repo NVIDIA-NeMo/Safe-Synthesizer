@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""HuggingFace Trainer backend for LoRA fine-tuning."""
+
 import io
 import logging
 import time
@@ -87,6 +89,14 @@ FIXED_RUNTIME_TRAINING_ARGS = {
 
 
 class HuggingFaceBackend(TrainingBackend):
+    """Training backend built on the HuggingFace ``Trainer``.
+
+    Handles model loading (``AutoModelForCausalLM``), LoRA/QLoRA wrapping,
+    RoPE scaling, optional differential-privacy training via
+    :class:`~..privacy.dp_transformers.dp_utils.OpacusDPTrainer`, and
+    artifact persistence (adapter, schema, metadata).
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
@@ -97,6 +107,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
     def _load_pretrained_model(self, **model_args):
+        """Load the pretrained model and tokenizer via ``AutoModelForCausalLM``."""
         self.autoconfig.max_position_embeddings = (
             model_args.pop("max_seq_length", None) or self.model_metadata.max_seq_length
         )
@@ -170,6 +181,9 @@ class HuggingFaceBackend(TrainingBackend):
 
         Args:
             model_kwargs: Filtered model keyword arguments.
+
+        Returns:
+            Dictionary of parameters for ``from_pretrained``.
         """
         return dict(
             pretrained_model_name_or_path=self.params.training.pretrained_model,
@@ -259,6 +273,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.framework_load_params = framework_params
 
     def _prepare_quantize_base(self, **quantize_params: dict):
+        """Populate :attr:`quant_params` with LoRA and optional quantization settings."""
         self.quant_params = dict(
             task_type=TaskType.CAUSAL_LM,
             init_lora_weights=True,
@@ -282,6 +297,7 @@ class HuggingFaceBackend(TrainingBackend):
                 self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=self.params.training.quantization_bits)
 
     def maybe_quantize(self, **quant_params: dict):
+        """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
         self._prepare_quantize_base(**quant_params)
         lora_config = LoraConfig(**self.quant_params)
         if not self.params.training.quantize_model:
@@ -636,7 +652,16 @@ class HuggingFaceBackend(TrainingBackend):
             logger.user.info("", extra=extra)
 
     def prepare_training_data(self):
-        """Prepare training data for training."""
+        """Validate, preprocess, and tokenize the training dataset.
+
+        Runs auto-config resolution, time-series processing, groupby /
+        orderby validation, and assembles tokenized training examples.
+        Populates :attr:`training_examples`, :attr:`dataset_schema`,
+        :attr:`df_train`, and :attr:`data_fraction`.
+
+        Raises:
+            DataError: If the training dataset is missing or malformed.
+        """
         logger.info("Preparing training data.")
 
         if self.training_dataset is None:
@@ -687,6 +712,11 @@ class HuggingFaceBackend(TrainingBackend):
 
     @utils.time_function
     def train(self, **training_args):
+        """Run the full training pipeline and populate :attr:`results`.
+
+        Sequentially calls :meth:`prepare_training_data`,
+        :meth:`prepare_params`, trains the model, and saves artifacts.
+        """
         training_start = time.monotonic()
         self.prepare_training_data()
         self.prepare_params(**training_args)
@@ -762,6 +792,7 @@ class HuggingFaceBackend(TrainingBackend):
         return f
 
     def info(self):
+        """Print a summary of key trainer attributes to stdout."""
         fields = [
             "params",
             "training_output_dir",
