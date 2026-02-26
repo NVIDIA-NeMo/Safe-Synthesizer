@@ -17,7 +17,6 @@ For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](t
   - [Data modeling](#data-modeling)
   - [Logging and observability](#logging-and-observability)
   - [Error hierarchy](#error-hierarchy)
-  - [Deprecation](#deprecation)
 - [Python: code style](#python-code-style) -- how to write
   - [Type hints](#type-hints)
   - [Control flow](#control-flow)
@@ -39,6 +38,7 @@ For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](t
 
 ## Principles
 
+- Use American English spelling: "initialize" not "initialise", "recognize" not "recognise", "color" not "colour".
 - Tools enforce what they can (`ruff`, `ty`, `pre-commit`). This guide covers what tools can't enforce.
 - Some rules below are aspirational -- legacy code is being migrated. New code must follow these conventions; existing deviations are tolerated during migration.
 - The current ruff rule set ([ruff.toml](ruff.toml)) does not enforce `UP006`/`UP007`/`B006`/`T201`. These rules are review-enforced until the ruff config is expanded.
@@ -52,7 +52,7 @@ These are the building blocks of this codebase -- the specific types, base class
 
 ### Data modeling
 
-- Pydantic: `NSSBaseModel` for config/parameter models in `config/` (adds `extra="forbid"`). Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
+- Pydantic: `NSSBaseModel` for config/parameter models in `config/` which define the user-facing configuration of NSS. Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
 - `BaseSettings` for env/CLI settings. `AliasChoices` for env var mapping, not `env_prefix`.
 - Always add `description` to `Field()` -- it becomes CLI help text.
 - `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
@@ -68,13 +68,15 @@ class TrainingHyperparams(NSSBaseModel):
 
 ### Logging and observability
 
-- `get_logger(__name__)` -- never `logging.getLogger()` or `structlog.get_logger()` directly
+- `observability.get_logger(__name__)` -- never `logging.getLogger()` or `structlog.get_logger()` directly
 - Category loggers: `.runtime` for internals, `.user` for progress/results, `.system` for system events
 - `@traced` decorators are an optional enhancement for entry-point functions, not a universal requirement
 - Never `print()` for operational output. Approved alternatives: `click.echo()` for CLI output, `sys.stdout.write()` for raw output in tools.
 - Use `extra={}` for data that downstream tools should query or aggregate (metrics, counts, durations). f-strings are fine for human-readable context that doesn't need machine parsing.
 
 ```python
+from nemo_safe_synthesizer.observability import get_logger
+
 logger = get_logger(__name__)
 
 # Structured data that tools should query -- use extra={}
@@ -97,31 +99,6 @@ Raise from the custom hierarchy with dual inheritance so callers can catch eithe
 - `GenerationError(UserError, RuntimeError)` -- sampling/generation failures
 - `InternalError(SafeSynthesizerError, RuntimeError)` -- library bug (equivalent to HTTP 5xx)
 
-### Deprecation
-
-When deprecating public APIs:
-
-- Use `warnings.warn("message", DeprecationWarning, stacklevel=2)` so the warning points to caller code, not library internals.
-- Include the version where the feature was deprecated and the version where it will be removed.
-- Provide a migration path in the warning message.
-- Add a `.. deprecated::` directive in the docstring.
-- Deprecated features should continue to work until removal.
-
-```python
-def old_method(self) -> None:
-    """Do the thing.
-
-    .. deprecated:: 0.5.0
-        Use :meth:`new_method` instead. Will be removed in 0.7.0.
-    """
-    warnings.warn(
-        "old_method is deprecated, use new_method instead. Will be removed in 0.7.0.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return self.new_method()
-```
-
 ---
 
 ## Python: code style
@@ -142,8 +119,8 @@ def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSyn
 
 - `X | Y` not `Optional[X]` or `Union[X, Y]`
 - `list[str]` not `List[str]`, `dict[str, int]` not `Dict[str, int]`
-- `Self` for fluent method returns (Python 3.11+)
-- Collection ABCs for parameters (`Sequence`, `Mapping`, `Iterable`); concrete types for return values
+- `Self` for fluent method returns
+- Collection ABCs for function arguments (`Sequence`, `Mapping`, `Iterable`); concrete types for return values
 - `Protocol` for structural subtyping when you need duck-typing boundaries
 - Avoid `Any` -- prefer `object`, generics, or `Protocol`
 - `TYPE_CHECKING` guards for heavy imports (`pandas`, `torch`, `transformers`); not needed for stdlib or lightweight imports
@@ -228,12 +205,12 @@ def _collect_from_group(group, tokenizer, config):
     return collected
 
 def build_training_examples(records, tokenizer, config):
-    return [
-        example
-        for group in records
-        if group
-        for example in _collect_from_group(group, tokenizer, config)
-    ]
+    examples = []
+    for group in records:
+        if not group:
+            continue
+        examples.extend(_collect_from_group(group, tokenizer, config))
+    return examples
 ```
 
 #### Option B: generator with `yield`
@@ -350,7 +327,8 @@ raise DataError(f"The {column} column could not be processed.")
 
 ### Imports
 
-- stdlib / third-party / local groups (enforced by ruff I001/I002)
+- Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)
+- Relative imports in `src/` (`from ..observability import get_logger`), absolute imports in `tests/` (`from nemo_safe_synthesizer.observability import get_logger`)
 - `TYPE_CHECKING` blocks for heavy forward references (`pandas`, `torch`, `transformers`)
 - `from __future__ import annotations` only in modules that already have it
 
@@ -406,6 +384,8 @@ A docstring is mandatory for every function that has one or more of: being part 
 Overridden methods decorated with `@override` do not need a docstring unless they materially refine the base contract.
 
 #### Tiers
+
+These are three classes of documentation depth, not a preference ranking. Use the tier appropriate to the complexity of the particular function or class.
 
 Tier 1 -- simple/obvious. One-line summary, no `Args:` block if the signature is self-documenting:
 
@@ -605,17 +585,19 @@ The before/after examples above demonstrate most rules. These additional points 
 - Document side effects, thread safety, and idempotency guarantees where applicable
 - Use `Example:` sections with working code for public API methods
 - Complex code deserves proportionally detailed explanation -- err on the side of more context
+- Cross-references in docstrings: use double backticks (` `` `) for inline code, `:meth:`method_name` `, `:class:`ClassName` `, and `:func:`function_name` ` for API cross-links in `MkDocs`/Sphinx
 
 ### Patterns to avoid
 
-- Narrating comments -- comments explain "why", not "what"
+- Narrating comments -- comments should explain "why", not "what"
 - Redundant docstrings that restate the function signature
 - Defensive `try/except Exception` on trusted internal paths
 - `# type: ignore` / `# ty: ignore` without attempting a fix
 - `cast()` / `Any` to paper over type mismatches
 - `os.path` -- use `pathlib.Path` (tolerated only in vendored/tooling scripts)
-- Mutable default arguments
-- `print()` statements -- use logging or `click.echo()` for CLI
+- Mutable default arguments -- use `None` and initialize inside the function. Acceptable immutable defaults: `None`, `str`, `int`, `float`, `bool`, `tuple`, `frozenset`, `pathlib.Path`
+- `print()` statements -- use `get_logger(__name__)` from `observability.py` or `click.echo()` for CLI
+- `assert` for validation in library code -- `assert` statements can be stripped by `-O` and must never guard correctness. Use `if/raise` for input validation. `assert` is fine in tests where `pytest` relies on it.
 
 ---
 
@@ -623,9 +605,9 @@ The before/after examples above demonstrate most rules. These additional points 
 
 Testing conventions are substantial enough to warrant their own section. For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](tests/TESTING.md). This section covers style conventions for writing tests.
 
-- File naming: `test_*.py` or `*_test.py`; class naming: `Test*`; function naming: `test_<module>_<expected_behavior>`
+- File naming: `test_*.py`; class naming: `Test*`; function naming: `test_<module>_<expected_behavior>`
 - Fixtures: `fixture_` prefix convention; `# Purpose:` comments describing usage and data
-- Fixture scope: function-scoped by default, session-scoped for expensive resources (model loading, tokenization)
+- Fixture scope: function-scoped by default. Session scope only when empirically justified by test runtime -- not based on assumptions about cost.
 - Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
 - Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
 - Markers: auto-assigned by path via `pytest_collection_modifyitems` (`/e2e/` -> `e2e`, `/gpu_integration/` -> `gpu_integration`, default -> `unit`). Explicit markers: `@pytest.mark.slow`, `@pytest.mark.timeout()`.
@@ -633,7 +615,7 @@ Testing conventions are substantial enough to warrant their own section. For the
 - Use `tmp_path` fixture for file operations, never write to the repo tree
 - Mark CUDA-dependent tests with `@pytest.mark.e2e` or `@pytest.mark.gpu_integration`
 - Mock only external boundaries, not internal implementation details
-- Test isolation: avoid shared mutable state and execution-order dependencies between tests
+- Test isolation: no shared mutable state or execution-order dependencies between tests. If something must be run first before executing a test, include it in the test or a fixture.
 - Use `@pytest.mark.parametrize` for testing multiple input combinations rather than copy-pasting similar tests
 
 ---
@@ -642,8 +624,8 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 - No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold acceptable only in table header-like cells.
 - Use `--` (em-dash) for asides, not `-` (hyphen).
-- Use backticks for code identifiers, paths, and CLI commands.
-- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use `MkDocs Material` syntax -- admonitions (`!!! note`), tabs (`===`), code blocks with titles and highlights.
+- Use single backticks for code identifiers, paths, and CLI commands in markdown. In Python docstrings, use double backticks (` `` `) for inline code per reStructuredText convention.
+- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use `MkDocs Material` syntax -- [admonitions](https://squidfunk.github.io/mkdocs-material/reference/admonitions/) (`!!! note`), tabs (`===`), code blocks with titles and highlights.
 - `Mermaid` diagrams: no spaces in node IDs, quote labels with special characters, no explicit colors or styles.
 
 ---
@@ -656,8 +638,8 @@ The repo currently has one CI `Dockerfile` ([containers/Dockerfile.test_ci](cont
 - Copy uv from `ghcr.io/astral-sh/uv:<version>`
 - `--mount=type=cache` for pip/uv caches
 - `--no-install-recommends` + `rm -rf /var/lib/apt/lists/*`
-- Non-root user (`appuser`) for production images
-- `HEALTHCHECK` directives for production images
+- Non-root user (`appuser`)
+- `HEALTHCHECK` directives
 - Order `COPY` directives for cache efficiency (deps before source)
 - Comments explaining cache invalidation points
 
@@ -670,10 +652,10 @@ Current state is inconsistent; these are the target conventions for new scripts.
 - Shebang: `#!/usr/bin/env bash` (not `#!/bin/bash`)
 - Safety: minimum floor is `set -eu`. Use `set -euo pipefail` unless `pipefail` breaks piped-grep patterns in the specific script.
 - Naming: `snake_case` for functions, `_` prefix for internal helpers
-- Variables: always quote (`"$VAR"`, `"${VAR}"`), defaults via `${VAR:-default}`
+- Variables: always quote (`"$VAR"`, `"${VAR}"`), defaults via `${VAR:-default}`. Use `readonly` for variables that should not change after assignment.
 - Repo root detection: `REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}`
 - Source shared utilities from `tools/binaries/defs.sh` and `tools/binaries/common_functions.sh` where applicable
-- Shellcheck: add `# shellcheck disable=SCXXXX` with brief reason when disabling a check
+- Use `shellcheck` to lint shell scripts. When disabling a check, add `# shellcheck disable=SCXXXX` with a brief reason.
 
 ```bash
 #!/usr/bin/env bash
@@ -708,7 +690,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 - Target help format: `target-name: ## Description` (enables `make help` auto-generation)
 - Tab indentation (standard Makefile)
-- `.PHONY` declarations grouped at top of section
+- `.PHONY` declaration directly above each target it applies to
 - Variables in `### CONFIGURATION ###` section
 
 ---
@@ -746,7 +728,7 @@ title: Page title
 ### File endings
 
 - Newline at EOF, no trailing whitespace (enforced by `pre-commit`)
-- Line length: 120 characters (configured in [ruff.toml](ruff.toml))
+- Line length: 120 characters for code, comments, and docstrings (configured in [ruff.toml](ruff.toml))
 
 ---
 
