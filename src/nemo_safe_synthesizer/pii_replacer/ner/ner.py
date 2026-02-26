@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-"""
-Named Entity Recognition
-"""
+"""Named Entity Recognition"""
 
 from __future__ import annotations
 

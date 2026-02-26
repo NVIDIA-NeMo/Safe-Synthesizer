@@ -25,7 +25,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
 <div class="grid cards" markdown>
 
--   Product Overview
+-   **Product Overview**
 
     ---
 
@@ -33,7 +33,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
 
--   Getting Started
+-   **Getting Started**
 
     ---
 
@@ -41,7 +41,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Getting Started](getting-started/installation.md)
 
--   Tutorials
+-   **Tutorials**
 
     ---
 
@@ -49,7 +49,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Tutorials](tutorials/index.md)
 
--   User Guide
+-   **User Guide**
 
     ---
 
@@ -57,7 +57,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: User Guide](user-guide/sdk.md)
 
--   Developer Guide
+-   **Developer Guide**
 
     ---
 
@@ -65,7 +65,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
 
--   Developer Notes
+-   **Developer Notes**
 
     ---
 

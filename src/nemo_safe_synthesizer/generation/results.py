@@ -99,7 +99,6 @@ class GenerateJobResults:
 class GenerationBatches(object):
     """Object that tracks the various batches during the generation phase of a job. Mostly internal for the Generator backend
 
-
     Args:
         target_num_records: The target number of records to generate.
         batches: A list of BatchResults objects.

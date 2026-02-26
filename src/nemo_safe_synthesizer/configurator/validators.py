@@ -113,9 +113,7 @@ class ValueValidator:
     value_func: Callable[[Parameter[Any]], bool]
 
     def validate(self, value, info: ValidationInfo):
-        """
-        Validate a Parameter using the provided validation function.
-        """
+        """Validate a Parameter using the provided validation function."""
         if (v := getattr(value, "value", None)) is None:
             real_val = value
         else:

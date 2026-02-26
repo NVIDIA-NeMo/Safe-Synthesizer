@@ -200,9 +200,7 @@ def is_abstract(c: Any) -> bool:
 
 
 def all_subclasses(klass: type[T]) -> set[type[T]]:
-    """
-    Grab all of the recursive subclasses of `klass`.
-    """
+    """Grab all of the recursive subclasses of `klass`."""
     subclasses: set[type[T]] = set()
     subclass_queue = [klass]
     while subclass_queue:

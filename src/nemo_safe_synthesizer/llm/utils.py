@@ -49,9 +49,7 @@ def cleanup_memory() -> None:
 
 
 def gpu_stats():
-    """
-    Get the GPU stats.
-    """
+    """Get the GPU stats."""
 
     def round_gb(value: float) -> float:
         return round(value / 1024 / 1024 / 1024, 3)
@@ -93,9 +91,7 @@ def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
 
 
 def add_bos_eos_tokens_to_tokenizer(tokenizer: PreTrainedTokenizer) -> PreTrainedTokenizer:
-    """
-    Configure the tokenizer with bos, eos tokens for sample splitting.
-    """
+    """Configure the tokenizer with bos, eos tokens for sample splitting."""
     tokenizer.add_bos_token = True
     tokenizer.add_eos_token = True
     if not tokenizer.pad_token_id:
@@ -110,9 +106,7 @@ def get_param_from_config(
     trust_remote_code: bool | None = None,
     config: AutoConfig | None = None,
 ) -> str | None:
-    """
-    Get a parameter from the model's AutoConfig.
-    """
+    """Get a parameter from the model's AutoConfig."""
     if config is None:
         if model_name is None:
             raise ValueError("model_name is required if config is not provided")
@@ -155,7 +149,6 @@ def get_device_map(
         OrderedDict: An ordered dictionary representing the device map,
             where keys are layers and values are device IDs.
     """
-
     config = autoconfig or AutoConfig.from_pretrained(
         model_target,
         revision=revision,

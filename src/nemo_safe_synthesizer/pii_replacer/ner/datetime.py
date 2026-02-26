@@ -164,9 +164,7 @@ def _parse_dates(value: str | int | float, scalar_type: Optional[str] = None) ->
 
 
 class DateTime(Predictor):
-    """
-    Date date/time matcher.
-    """
+    """Date date/time matcher."""
 
     default_name: str = "datetime"
 

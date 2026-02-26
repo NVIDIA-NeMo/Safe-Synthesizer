@@ -13,9 +13,7 @@ if TYPE_CHECKING:
 
 
 class SafeSynthesizerTiming(NSSBaseModel):
-    """
-    Output object for Safe Synthesizer
-    """
+    """Output object for Safe Synthesizer"""
 
     total_time_sec: float | None = None
     pii_replacer_time_sec: float | None = None
@@ -43,9 +41,7 @@ class SafeSynthesizerTiming(NSSBaseModel):
 
 
 class SafeSynthesizerSummary(NSSBaseModel):
-    """
-    Output object for Safe Synthesizer
-    """
+    """Output object for Safe Synthesizer"""
 
     synthetic_data_quality_score: float | None = None
     column_correlation_stability_score: float | None = None

@@ -594,7 +594,6 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
             A prepared dataset ready for training or validation. Returns None if the input
             dataset is None.
         """
-
         if dataset is None:
             return None
 
@@ -976,7 +975,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         data are required to satisfy ``data_fraction > 1``, it concatenates extra passes over the
         dataset so examples consume the series from the start again.
         """
-
         self._window_rng = None
 
         if dataset is None:

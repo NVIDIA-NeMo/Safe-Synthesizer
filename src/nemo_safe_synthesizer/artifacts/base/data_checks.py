@@ -101,22 +101,16 @@ class DataCheckResults(BaseModel):
 
     @cached_property
     def violation_count(self) -> int:
-        """
-        Returns: How many violations across all checks were reported.
-        """
+        """Returns: How many violations across all checks were reported."""
         return sum(w.violations_count() for w in self.warnings())
 
     def warnings(self) -> Iterator[DataCheckWarning]:
-        """
-        Returns: Iterator over all warnings from all checks.
-        """
+        """Returns: Iterator over all warnings from all checks."""
         for result in self.check_results:
             yield from result.warnings
 
     def safe_summary(self) -> dict[str, Any]:
-        """
-        Create a summary of data check results, which only contains high-level information.
-        """
+        """Create a summary of data check results, which only contains high-level information."""
         return {
             "violation_count": self.violation_count,
             "duration_ms": self.elapsed_time_ms,

@@ -475,7 +475,8 @@ class Qwen(ModelMetadata):
 
 class SmolLM2(ModelMetadata):
     """SmolLM2 models (e.g., HuggingFaceTB/SmolLM2-135M).
-    Potentially used for testing."""
+    Potentially used for testing.
+    """
 
     def __init__(
         self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs

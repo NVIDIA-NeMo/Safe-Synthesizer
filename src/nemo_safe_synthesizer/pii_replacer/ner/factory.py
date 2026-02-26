@@ -24,9 +24,7 @@ logger = get_logger(__name__)
 
 
 class PredictorFilter(ABC):
-    """
-    Used to filter predictors that should be included in the NER.
-    """
+    """Used to filter predictors that should be included in the NER."""
 
     @abstractmethod
     def should_include(self, predictor: Predictor): ...
@@ -138,7 +136,6 @@ class NERFactory(NERFactoryBase):
             record_count: Estimated number or records to label, which is used to optimize size of
                 the worker pool.
         """
-
         # leave 1 CPU free for other work
         num_proc = max(1, multiprocessing.cpu_count() - 1)
         if record_count:
@@ -200,9 +197,7 @@ class StaticNERFactory(NERFactoryBase):
 
 @dataclass(frozen=True)
 class NERBundle:
-    """
-    Bundle that contains all of the NER-related information that the code running NER may need.
-    """
+    """Bundle that contains all of the NER-related information that the code running NER may need."""
 
     factory: NERFactoryBase = field(default_factory=NERFactory)
 

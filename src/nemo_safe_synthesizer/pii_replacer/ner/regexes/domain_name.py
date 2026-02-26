@@ -78,7 +78,8 @@ class DomainName(RegexPredictor):
 
 class Hostname(RegexPredictor):
     """Hostname detection. The same pattern as domain name, however
-    we do not rely on requiring an extracted fqdn from the match."""
+    we do not rely on requiring an extracted fqdn from the match.
+    """
 
     def __init__(self):
         entity = Entity.HOSTNAME

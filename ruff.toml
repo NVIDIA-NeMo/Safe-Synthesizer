@@ -54,6 +54,19 @@ select = [
     "B006",  # mutable default argument
     # flake8-print
     "T201",  # print() found
+    # pydocstyle -- docstring formatting (convention=google below)
+    "D200",  # single-line docstring should fit on one line
+    "D201",  # no blank line before docstring
+    "D202",  # no blank line after docstring
+    "D209",  # closing quotes on separate line
+    "D210",  # no whitespace surrounding docstring text
+    "D300",  # use triple double quotes
+    "D301",  # use r"" for backslashes
+    "D403",  # capitalize first word
+    "D410",  # blank line after section
+    "D411",  # blank line before section
+    "D414",  # empty docstring section
+    "D419",  # empty docstring
 ]
 ignore = []
 
@@ -63,6 +76,9 @@ unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.pydocstyle]
+convention = "google"
 
 [lint.per-file-ignores]
 "tests/**" = ["T201"]    # print() is fine in tests

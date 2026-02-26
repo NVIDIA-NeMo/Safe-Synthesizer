@@ -78,7 +78,6 @@ class LabelEvaluator:
         Args:
             config_labels: Labels configured by the users.
         """
-
         explicit_labels = set([])
         label_regexes: list[Pattern] = []
 

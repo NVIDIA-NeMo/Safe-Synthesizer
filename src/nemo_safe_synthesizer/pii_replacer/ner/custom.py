@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Module that supports reading in custom Regex predictors from a config file.
+r"""Module that supports reading in custom Regex predictors from a config file.
 
 Support reading in a YAML file of user defined predictor properties and load
 them into individual Regex predictors and patterns.

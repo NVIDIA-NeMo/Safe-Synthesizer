@@ -78,7 +78,6 @@ class Processor(ABC):
         Returns:
             Parsed response object that contains the extracted records.
         """
-
         # Make sure the string composed of valid utf-8 characters.
         text = text.encode("utf-8", "ignore").decode("utf-8")
 

@@ -200,9 +200,7 @@ class GradSampleModule(opacus.GradSampleModule):
 
 
 def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]:
-    """
-    Creates a mapping from entities to samples in a dataset.
-    """
+    """Creates a mapping from entities to samples in a dataset."""
     entities = pd.DataFrame(data={"entity": entity_column_values})
     # Using `groupby("entity")` - note that the entities returned by groupby are
     # sorted, but the order of records in each group is preserved.
@@ -298,9 +296,7 @@ class OpacusDPTrainer(Trainer):
         self.add_callback(self.dp_callback)
 
     def get_epsilon(self):
-        """
-        Calculate the epsilon after model training completes.
-        """
+        """Calculate the epsilon after model training completes."""
         return self.accountant.compute_epsilon(self.state.global_step)
 
     @property
@@ -364,7 +360,8 @@ class OpacusDPTrainer(Trainer):
             `original_optimizer.param_groups`, and the approach used by Opacus
             fails when we try to e.g., update the learning rate. We here use
             the same approach used in accelerate, which makes `param_groups` a
-            proper 'pointer'."""
+            proper 'pointer'.
+            """
 
             @property
             def param_groups(self):
@@ -420,9 +417,7 @@ class OpacusDPTrainer(Trainer):
         return loss.detach() / self.args.gradient_accumulation_steps
 
     def _get_train_sampler(self):
-        """
-        Provides entity sampler.
-        """
+        """Provides entity sampler."""
         if self.privacy_args.poisson_sampling:
             # NOTE: sample_rate is set s.t. chosen batch size remains the same in average
             sample_rate = min(
@@ -444,9 +439,7 @@ class OpacusDPTrainer(Trainer):
         return train_sampler
 
     def get_train_dataloader(self) -> DataLoader:
-        """
-        Returns a torch DataLoader that uses an entity-level sampler.
-        """
+        """Returns a torch DataLoader that uses an entity-level sampler."""
         train_sampler = self._get_train_sampler()
         return DataLoader(
             self.train_dataset,

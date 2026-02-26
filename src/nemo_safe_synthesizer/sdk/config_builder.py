@@ -93,10 +93,12 @@ class ConfigBuilder(object):
 
     def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
         """Resolve configuration from various input types.
+
         Args:
             values: Configuration values as a dictionary or a BaseModel instance.
             cls: The BaseModel class to validate against.
             **overrides: Additional configuration parameters to override.
+
         Returns:
             An instance of the specified BaseModel class with the resolved configuration.
         """

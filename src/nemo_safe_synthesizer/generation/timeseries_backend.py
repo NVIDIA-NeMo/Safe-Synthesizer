@@ -809,7 +809,6 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             List of valid records from the retained response.
         """
-
         final_records = []
 
         # Find the index of the response with the most valid records

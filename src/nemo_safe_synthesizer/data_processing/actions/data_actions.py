@@ -270,9 +270,7 @@ class GenerateAction(BaseAction, ABC):
 
     @abstractmethod
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generate new data based on the existing data in the dataframe.
-        """
+        """Generate new data based on the existing data in the dataframe."""
         ...
 
     def generate_records(self, num_records: int) -> list[dict[Hashable, Any]]:
@@ -413,9 +411,7 @@ class ReplaceDataSource(BaseAction):
 
 
 class GenDatetimeDistribution(GenerateAction):
-    """
-    Generate a datetime from a provided datetime distribution.
-    """
+    """Generate a datetime from a provided datetime distribution."""
 
     type_: Literal["gen_datetime_distribution"] = "gen_datetime_distribution"
     col: str
@@ -695,9 +691,7 @@ class ActionExecutor(BaseModel):
 def data_actions_fn(
     action_executor: ActionExecutor,
 ) -> utils.DataActionsFn:
-    """
-    applies an action executor to a dataframe.
-    """
+    """Applies an action executor to a dataframe."""
 
     def fn(batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         logger.info("Applying data_config postprocessing")

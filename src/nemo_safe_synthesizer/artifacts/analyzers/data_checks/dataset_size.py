@@ -19,9 +19,7 @@ _FIELD_COUNT_LIMIT = 30
 
 
 class DatasetSizeCheck(DataCheck):
-    """
-    Generates warnings for datasets that are likely too large to create a good model.
-    """
+    """Generates warnings for datasets that are likely too large to create a good model."""
 
     @property
     def check_id(self) -> str:

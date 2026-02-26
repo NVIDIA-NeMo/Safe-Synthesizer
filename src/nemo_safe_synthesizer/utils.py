@@ -187,7 +187,6 @@ def grouped_train_test_split(
     Returns:
         A tuple of the train and test sets.
     """
-
     # Convert to pandas for group operations
     df = dataset.to_pandas()
     # importing like this to avoid a dep for testing on the sdk side
@@ -201,9 +200,7 @@ class DataActionsFn(Protocol):
 
 
 def debug_fmt(df: pd.DataFrame) -> str:
-    """
-    Format dataframes for the purposes of data actions debugging.
-    """
+    """Format dataframes for the purposes of data actions debugging."""
     return df.head(5).to_json(orient="records", date_format="iso")
 
 
@@ -223,7 +220,7 @@ def merge_dicts(base: dict, new: dict) -> dict:
 
 def is_iterable(x: Any):
     """
-    checks if the object is iterable. valid for items with __getitem__ iters.
+    Checks if the object is iterable. valid for items with __getitem__ iters.
     Rare cases of `__getitem__` not being iterable abound.
     """
     return hasattr(x, "__iter__") and hasattr(x, "__getitem__")
@@ -247,7 +244,7 @@ def flatten(iter) -> Generator:
 
 def all_equal_type(iter, type_, flatten_iter=True) -> bool:
     """
-    check if all the values in an iterable.
+    Check if all the values in an iterable.
 
     Args:
         iter: the iterable

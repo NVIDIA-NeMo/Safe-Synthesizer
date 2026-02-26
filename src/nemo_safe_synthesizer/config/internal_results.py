@@ -11,9 +11,7 @@ __all__ = ["SafeSynthesizerResults"]
 
 
 class SafeSynthesizerResults(NSSBaseModel):
-    """
-    Output object for Safe Synthesizer
-    """
+    """Output object for Safe Synthesizer"""
 
     synthetic_data: pd.DataFrame | None = None
     summary: SafeSynthesizerSummary

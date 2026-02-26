@@ -19,9 +19,11 @@ __all__ = ["pydantic_options", "parse_overrides"]
 
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
     """Parse Click command line overrides into a nested dictionary.
+
     Args:
         values: Dictionary of command line arguments from Click.
         field_sep: Separator used in command line arguments to denote nesting.
+
     Returns:
         A nested dictionary of overrides.
     """

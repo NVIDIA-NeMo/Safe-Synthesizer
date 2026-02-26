@@ -136,9 +136,7 @@ class BaseRecord(ABC):
 
 
 def normalize_labels(labels: Iterable[str]) -> set[str]:
-    """
-    Normalize labels by converting them to lowercase.
-    """
+    """Normalize labels by converting them to lowercase."""
     return {normalize_label(label) for label in labels}
 
 

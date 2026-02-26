@@ -115,8 +115,7 @@ class UnslothTrainer(HuggingFaceBackend):
         self.model = FastLanguageModel.get_peft_model(self.model, **qparams)
 
     def _load_pretrained_model(self, **model_args):
-        """unsloth loads as s tuple of model and tokenizer, we need to add the bos and eos tokens to the tokenizer"""
-
+        """Unsloth loads as s tuple of model and tokenizer, we need to add the bos and eos tokens to the tokenizer"""
         model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)
 
         self.tokenizer = add_bos_eos_tokens_to_tokenizer(

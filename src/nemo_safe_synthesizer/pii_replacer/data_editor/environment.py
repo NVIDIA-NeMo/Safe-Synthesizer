@@ -158,16 +158,12 @@ class Faker:
 
 
 def redact_entities_fn(entity: NERPrediction) -> str:
-    """
-    Replace entity with its label in angled braces
-    """
+    """Replace entity with its label in angled braces"""
     return f"<{entity.label}>"
 
 
 def label_entities_fn(entity: NERPrediction, extended: Optional[bool] = False) -> str:
-    """
-    Replace entity with its text and label in angled braces
-    """
+    """Replace entity with its text and label in angled braces"""
     extra_attrs = ""
     if extended:
         extra_attrs = f''' source="{entity.source}" score="{entity.score}"'''
@@ -175,9 +171,7 @@ def label_entities_fn(entity: NERPrediction, extended: Optional[bool] = False) -
 
 
 def hash_entities_fn(default_salt: str, entity: NERPrediction, salt: Optional[str] = None) -> str:
-    """
-    Replace entity with a hash of its text
-    """
+    """Replace entity with a hash of its text"""
     return sha256(default_salt, entity.text, salt=salt)[:9]
 
 
@@ -199,7 +193,6 @@ def fake_entities_fn(
       "redact", "label", and "hash" fall back on associated *_entities_fn
       "raise" will raise an exception causing execution to stop
     """
-
     try:
         return getattr(fake, entity.label)()
     except AttributeError:
@@ -300,9 +293,7 @@ class Environment:
         self._fake.maybe_seed(instance_seed)
 
     def template_to_fnames(self, template_str) -> set[str]:
-        """
-        Parse the template's AST and return set of filter/function names.
-        """
+        """Parse the template's AST and return set of filter/function names."""
         retval = set()
         ast = self._env.parse(f"{{{{{template_str}}}}}")
         fns = [f for f in ast.find_all((jinja2.nodes.Name, jinja2.nodes.Filter))]

@@ -80,6 +80,7 @@ class MetadataFragment:
 def merge_fragments(*fragments, ts: str | None = None) -> Metadata:
     """
     Reduces a list of fragments to a single `Metadata` object.
+
     Args:
         *fragments: a list of MetadataFragments to merge
     Returns:
@@ -133,6 +134,7 @@ def predictions_to_dict(
                 "ip_address": ["conn_str"]
             }
         }
+
     Returns:
         A tuple with a dict of field prediction results by field key and a mapping
         entities to their fields and a list of all entities seen in the record.

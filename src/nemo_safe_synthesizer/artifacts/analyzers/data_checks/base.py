@@ -85,9 +85,7 @@ class DataCheck(ABC):
     @property
     @abstractmethod
     def check_id(self) -> str:
-        """
-        Returns: Unique ID of the check, to be used for reporting, etc.
-        """
+        """Returns: Unique ID of the check, to be used for reporting, etc."""
         ...
 
     @abstractmethod
@@ -122,9 +120,7 @@ def plural_verb(verb: tuple[str, str], count: int) -> str:
 
 
 def warning_explain_prefix(field_names: list[str], issue_name: str) -> str:
-    """
-    Returns: Common prefix for fields-based warnings.
-    """
+    """Returns: Common prefix for fields-based warnings."""
     count = len(field_names)
     template = "{count} {fields} with {issue_name}: {field_names}"
     return template.format(

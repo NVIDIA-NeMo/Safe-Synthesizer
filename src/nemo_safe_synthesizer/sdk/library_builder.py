@@ -72,6 +72,7 @@ def _get_unsloth_backend_class() -> type[TrainingBackend]:
 
 def get_training_backend_class(config: SafeSynthesizerParameters) -> type[TrainingBackend]:
     """Get the training backend class for the given configuration.
+
     Args:
         config: SafeSynthesizerParameters object.
 
@@ -313,7 +314,6 @@ class SafeSynthesizer(ConfigBuilder):
         Raises:
             RuntimeError: If process_data() has not been called first.
         """
-
         # these are for ty
         if TYPE_CHECKING:
             assert self._train_df is not None

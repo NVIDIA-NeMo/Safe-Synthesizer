@@ -233,9 +233,7 @@ class MetadataService:
         return record_labels
 
     def get_metadata(self) -> DatasetMetadata:
-        """
-        Returns dataset model_metadata based on records that were labeled to this point.
-        """
+        """Returns dataset model_metadata based on records that were labeled to this point."""
         return self.dataset_metadata_tracker.get_snapshot()
 
     def get_entity_detail(self, entity_label: str) -> dict:

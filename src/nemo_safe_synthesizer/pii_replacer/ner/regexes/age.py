@@ -3,7 +3,8 @@
 
 """Age detection - generally looking for ages of individuals in years or
 months, so we support 4 digits in a row without any digits before/afterwards
-and also descriptive words that can describe the age of an individual."""
+and also descriptive words that can describe the age of an individual.
+"""
 
 import re
 

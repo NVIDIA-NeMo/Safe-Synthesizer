@@ -50,9 +50,7 @@ class ColumnClassification(BaseModel):
 def classify_config_from_params(
     config: PiiReplacerConfig,
 ) -> ClassifyConfig:
-    """
-    Parse out classification / NER parameters from config
-    """
+    """Parse out classification / NER parameters from config"""
     valid_entities = DEFAULT_ENTITIES
 
     if config.globals.classify.entities is not None:
@@ -146,7 +144,6 @@ def _build_column_statistics(
     column_report: NerReport,
 ) -> dict[str, ColumnStatistics]:
     """Build statistics for each column from various objects used by Editor."""
-
     result = {}
     for field in classifications:
         column_name = field.field_name

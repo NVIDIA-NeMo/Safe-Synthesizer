@@ -644,7 +644,7 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 ## Markdown
 
-- No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold acceptable only in table header-like cells.
+- No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold is acceptable in table header-like cells and MkDocs Material card grid titles (e.g., `docs/index.md`).
 - Use `--` (em-dash) for asides, not `-` (hyphen).
 - Use single backticks for code identifiers, paths, and CLI commands in markdown. In Python docstrings, use double backticks (` `` `) for inline code per reStructuredText convention.
 - Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use `MkDocs Material` syntax -- [admonitions](https://squidfunk.github.io/mkdocs-material/reference/admonitions/) (`!!! note`), tabs (`===`), code blocks with titles and highlights.

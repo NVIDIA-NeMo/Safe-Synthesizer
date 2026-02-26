@@ -166,9 +166,7 @@ class Predictor(ABC):
         token_patterns: Pattern = None,
         regex_patterns: Pattern = None,
     ) -> bool:
-        """
-        Checks to see if the field has a label match.
-        """
+        """Checks to see if the field has a label match."""
         _field = field_pair
         if header_context_source == self.BOTH:
             search_string = (_field.field + " " + _field.value if _field.field else _field.value).casefold()

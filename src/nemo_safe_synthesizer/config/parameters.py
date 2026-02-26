@@ -75,9 +75,7 @@ class SafeSynthesizerParameters(Parameters):
     def check_dp_compatibility(
         cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
     ) -> DifferentialPrivacyHyperparams | None:
-        """
-        Ensure that if DP is enabled, max_sequences_per_example is 1 or auto, as well as that use_unsloth is False.
-        """
+        """Ensure that if DP is enabled, max_sequences_per_example is 1 or auto, as well as that use_unsloth is False."""
         if dp_params is None:
             return dp_params
         logger.debug("Checking DP compatibility for privacy parameters. ")
