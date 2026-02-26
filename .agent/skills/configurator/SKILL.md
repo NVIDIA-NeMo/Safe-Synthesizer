@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 name: configurator
-description: "The repo's Pydantic-to-Click configurator pattern for config models, CLI options, and parameter validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam."
+description: "Pydantic models and the Pydantic-to-Click configurator for config, CLI, and SDK validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam, Pydantic, BaseModel, NSSBaseModel, BaseSettings, field_validator, model_validator, ConfigDict, TypeAdapter, pydantic-settings, validation."
 ---
 
-# Configurator (Pydantic -> Click CLI)
+# Configurator and Pydantic Patterns
 
-This repo uses a custom system that automatically generates Click CLI options from nested Pydantic config models. Located in `src/nemo_safe_synthesizer/configurator/`.
+Pydantic v2 is the backbone of config, settings, CLI, and SDK validation. This repo has a custom system that automatically generates Click CLI options from nested Pydantic config models. Located in `src/nemo_safe_synthesizer/configurator/`.
 
 ## How It Works
 
@@ -20,6 +20,54 @@ Pydantic model fields  -->  pydantic_options() decorator  -->  Click CLI options
 2. Each leaf field becomes a `click.option()` with name `--{prefix}{sep}{field_name}`
 3. At runtime, `parse_overrides(kwargs, field_sep="__")` converts flat Click kwargs back into a nested dict
 4. The nested dict is used with `model_copy(update=overrides)` or `model_validate()`
+
+## Base Models
+
+### NSSBaseModel (config and result models)
+
+All config/result models that don't use `Parameter` fields inherit from `NSSBaseModel`:
+
+```python
+from nemo_safe_synthesizer.config.base import NSSBaseModel
+
+class MyConfig(NSSBaseModel):
+    name: str
+    count: int = 10
+```
+
+Shared `model_config` (`config/base.py`):
+- `arbitrary_types_allowed=True`
+- `validation_error_cause=True`
+- `from_attributes=True`
+- `validate_default=True`
+- `protected_namespaces=()`
+
+### BaseSettings (env/CLI settings)
+
+Settings classes use `pydantic-settings`, not `NSSBaseModel`:
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field
+
+class MySettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_nested_delimiter="__",
+        extra="ignore",
+        env_file=".env",
+    )
+
+    log_level: str = Field(
+        default="INFO",
+        validation_alias=AliasChoices("log_level", "NSS_LOG_LEVEL"),
+    )
+```
+
+Conventions:
+- Use `AliasChoices("field_name", "NSS_ENV_VAR")` for env var mapping
+- Nested settings via `Field(default_factory=SubSettings)`
+- No global `env_prefix`; each field declares its own aliases
+- Filter `None` values from CLI kwargs before constructing: `{k: v for k, v in kwargs.items() if v is not None}`
 
 ## Adding a New Config Field
 
@@ -63,7 +111,43 @@ OptionalAutoInt = AutoParam[int] | None
 OptionalAutoFloat = AutoParam[float] | None
 ```
 
-## Conditional Validation
+## Validators
+
+### field_validator
+
+```python
+from pydantic import field_validator
+
+class MyModel(NSSBaseModel):
+    mode: str
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def coerce_mode(cls, v: str) -> str:
+        return v.lower()
+```
+
+- `mode="before"` for coercion (str -> enum, normalization)
+- `mode="after"` for value checks and clamping
+
+### model_validator
+
+```python
+from pydantic import model_validator
+
+class MyModel(NSSBaseModel):
+    start: int
+    end: int
+
+    @model_validator(mode="after")
+    def check_range(self) -> "MyModel":
+        if self.end <= self.start:
+            raise ValueError("end must be > start")
+        return self
+```
+
+- `mode="before"` + `@classmethod` for preprocessing raw dicts
+- `mode="after"` as instance method for cross-field checks
 
 ### DependsOnValidator
 
@@ -79,7 +163,7 @@ class DataParameters(Parameters):
         str | None,
         DependsOnValidator(
             depends_on="group_by",
-            depends_on_func=lambda v: v is not None,  # only valid when group_by is set
+            depends_on_func=lambda v: v is not None,
         ),
     ] = None
 ```
@@ -109,6 +193,28 @@ class TrainingHyperparams(Parameters):
     batch_size: Annotated[AutoParam[int], AutoParamRangeValidator] = AutoParam(value="auto")
 ```
 
+## ConfigDict Variants
+
+| Use Case | Config |
+|----------|--------|
+| Standard config models | `pydantic_model_config` from `config/base.py` |
+| Forbid extra fields | `ConfigDict(extra="forbid")` |
+| YAML key alias (`type_` -> `type`) | `ConfigDict(alias_generator=...)` |
+| Hide sensitive input in errors | `ConfigDict(hide_input_in_errors=True)` |
+| Settings from env | `SettingsConfigDict(env_nested_delimiter="__", env_file=".env")` |
+
+## TypeAdapter (validation without a model)
+
+```python
+from pydantic import TypeAdapter, ConfigDict
+
+ta = TypeAdapter(
+    dict[str, str | None],
+    config=ConfigDict(hide_input_in_errors=True),
+)
+result = ta.validate_python(raw_data)
+```
+
 ## Key Files
 
 | File | Purpose |
@@ -120,9 +226,13 @@ class TrainingHyperparams(Parameters):
 
 ## Conventions
 
-1. Always add `description` to `Field()` -- it becomes the CLI `--help` text
-2. Use `Parameter[T]` for config fields that support `"auto"` or unset semantics
-3. Use `DependsOnValidator` for fields that are only valid when another field is set
-4. Use `ValueValidator` for simple range/predicate checks
-5. Field separator is `"__"` (`CLI_NESTED_FIELD_SEPARATOR`) -- don't use `.` unless matching existing code
-6. Max nesting depth is 2 -- `parse_overrides` raises `ValueError` for 3+ levels
+1. Inherit from `NSSBaseModel` for config/result models (not bare `BaseModel`)
+2. Use `BaseSettings` for env/CLI settings (not `NSSBaseModel`)
+3. Use `AliasChoices` for env var mapping, not `env_prefix`
+4. Always add `description` to `Field()` -- it becomes the CLI `--help` text
+5. Use `Parameter[T]` for config fields that support `"auto"` or unset semantics
+6. Use `mode="before"` validators for coercion, `mode="after"` for checks
+7. Use `model_validator(mode="after")` for cross-field validation
+8. Use `DependsOnValidator` for fields that are only valid when another field is set
+9. Field separator is `"__"` (`CLI_NESTED_FIELD_SEPARATOR`) -- don't use `.` unless matching existing code
+10. Max nesting depth is 2 -- `parse_overrides` raises `ValueError` for 3+ levels
