@@ -75,7 +75,9 @@ class TrainingHyperparams(NSSBaseModel):
 - Use `extra={}` for data that downstream tools should query or aggregate (metrics, counts, durations). f-strings are fine for human-readable context that doesn't need machine parsing.
 
 ```python
-from .observability import get_logger
+
+# inside the package while developing, note the relative import
+from ..observability import get_logger
 
 logger = get_logger(__name__)
 
@@ -107,10 +109,12 @@ How to write clear, testable Python -- independent of which library primitives y
 
 ### Type hints
 
-New code must use modern syntax:
+The codebase targets Python 3.11+ and uses native typing syntax throughout. Expect this minimum for the foreseeable future.
 
 ```python
 # Yes
+from typing import Self
+
 def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
 
 # No
@@ -382,6 +386,8 @@ Google style is mandatory. Canonical references:
 A docstring is mandatory for every function that has one or more of: being part of the public API, nontrivial size, or non-obvious logic.
 
 Overridden methods decorated with `@override` do not need a docstring unless they materially refine the base contract.
+
+Private helper methods (`_name`) with trivial implementations need no docstring. Private methods with non-obvious logic should use the tier matching their complexity.
 
 #### Tiers
 
@@ -699,14 +705,15 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### Copyright headers
 
-Every source file requires an SPDX copyright header. Format varies by file type:
+Every source file requires an SPDX copyright header - `make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
+
+E.g., Hash-comments for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 
 ```python
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 ```
 
-Hash-comment for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 
 ```markdown
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
@@ -722,8 +729,6 @@ Exception: `.md` files that start with YAML frontmatter (`---`) get hash-comment
 title: Page title
 ---
 ```
-
-`make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
 
 ### File endings
 
