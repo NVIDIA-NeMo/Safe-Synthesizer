@@ -53,7 +53,7 @@ These are the building blocks of this codebase -- the specific types, base class
 ### Data modeling
 
 - Pydantic: `NSSBaseModel` for config/parameter models in `config/` which define the user-facing configuration of NSS. Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
-- `BaseSettings` for env/CLI settings. `AliasChoices` for env var mapping, not `env_prefix`.
+- `BaseSettings` for env/CLI settings. Prefer `AliasChoices` on individual fields when you need a field to respond to both its Python name and an env var name (e.g., `validation_alias=AliasChoices("config_path", "NSS_CONFIG")`). `env_prefix` is acceptable for simple settings classes where all fields share a common prefix and no per-field aliasing is needed.
 - Always add `description` to `Field()` -- it becomes CLI help text.
 - `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
 - `field(default_factory=list)` for mutable defaults, never `= []`.
@@ -75,7 +75,7 @@ class TrainingHyperparams(NSSBaseModel):
 - Use `extra={}` for data that downstream tools should query or aggregate (metrics, counts, durations). f-strings are fine for human-readable context that doesn't need machine parsing.
 
 ```python
-from nemo_safe_synthesizer.observability import get_logger
+from .observability import get_logger
 
 logger = get_logger(__name__)
 
@@ -120,7 +120,7 @@ def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSyn
 - `X | Y` not `Optional[X]` or `Union[X, Y]`
 - `list[str]` not `List[str]`, `dict[str, int]` not `Dict[str, int]`
 - `Self` for fluent method returns
-- Collection ABCs for function arguments (`Sequence`, `Mapping`, `Iterable`); concrete types for return values
+- Collection ABCs for function arguments (`Sequence`, `Mapping`, `Iterable`) so callers can pass any compatible container; concrete types for return values so callers know exactly what they get
 - `Protocol` for structural subtyping when you need duck-typing boundaries
 - Avoid `Any` -- prefer `object`, generics, or `Protocol`
 - `TYPE_CHECKING` guards for heavy imports (`pandas`, `torch`, `transformers`); not needed for stdlib or lightweight imports
@@ -131,7 +131,7 @@ Legacy modules (`pii_replacer/`, `data_processing/`, `privacy/`, `artifacts/`) s
 
 - Prefer `match`/`case` for dispatch on types or tagged values. Not a blanket rule -- `if`/`elif` is fine for simple boolean predicates.
 - Comprehensions over imperative loops where intent is clearer. No multiple `for` clauses -- optimize for readability, not conciseness (per [Google Python Style Guide sec 2.7](https://google.github.io/styleguide/pyguide.html#27-comprehensions--generator-expressions)).
-- Clamping/saturation over raising when out-of-range inputs shouldn't crash the system -- prefer returning a bounded value with a log warning over raising.
+- Clamping/saturation over raising when out-of-range inputs shouldn't crash the system -- prefer returning a bounded value with a log warning over raising (e.g., `p = max(0.0, min(p, 1.0))`).
 
 Builder pattern -- `with_*` methods return `Self`:
 
@@ -330,16 +330,16 @@ raise DataError(f"The {column} column could not be processed.")
 - Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)
 - Relative imports in `src/` (`from ..observability import get_logger`), absolute imports in `tests/` (`from nemo_safe_synthesizer.observability import get_logger`)
 - `TYPE_CHECKING` blocks for heavy forward references (`pandas`, `torch`, `transformers`)
-- `from __future__ import annotations` only in modules that already have it
+- `from __future__ import annotations` -- do not add to modules that don't already have it (adding it can surface subtle type issues in legacy code). New modules may omit it since modern syntax (`X | Y`, `list[str]`) works natively.
 
 ### Resource cleanup
 
 - `try/finally` for resource cleanup (never rely on `__del__` alone)
 - `except Exception:` + `logger.debug(..., exc_info=True)` for non-fatal cleanup at teardown boundaries -- this is distinct from the "patterns to avoid" rule against defensive `try/except Exception` wrapping trusted internal calls that shouldn't fail
 - Bare `except Exception: pass` only in `__del__` methods where suppression is intentional
-- Use `raise X from e` to chain exceptions when re-raising with a different type
+- Use `raise X from e` to chain exceptions when re-raising with a different type (e.g., `raise GenerationError(f"Failed to write: {e}") from e`)
 
-Prefer `try/finally` over relying on `__del__`, context managers that hide lifecycle, or bare `return` that skips cleanup. Multi-step cleanup should isolate each step so one failure doesn't prevent the next:
+Standard context managers (`with open(...)`, `with lock:`) are fine when they fit. Prefer `try/finally` over `__del__`, custom context managers that obscure when resources are acquired/released, or bare `return` that skips cleanup. Multi-step cleanup should isolate each step so one failure doesn't prevent the next:
 
 ```python
 try:
@@ -606,7 +606,7 @@ The before/after examples above demonstrate most rules. These additional points 
 Testing conventions are substantial enough to warrant their own section. For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](tests/TESTING.md). This section covers style conventions for writing tests.
 
 - File naming: `test_*.py`; class naming: `Test*`; function naming: `test_<module>_<expected_behavior>`
-- Fixtures: `fixture_` prefix convention; `# Purpose:` comments describing usage and data
+- Fixtures: `fixture_` prefix convention for grep-ability and to separate fixtures from test functions. Add `# Purpose:` comments describing usage and data.
 - Fixture scope: function-scoped by default. Session scope only when empirically justified by test runtime -- not based on assumptions about cost.
 - Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
 - Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
