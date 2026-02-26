@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import json
 import re
+from typing import TYPE_CHECKING
 
 from outlines_core.json_schema import (
     BOOLEAN,
@@ -17,6 +20,9 @@ from outlines_core.json_schema import (
 from range_regex import bounded_regex_for_range
 
 from ..observability import get_logger
+
+if TYPE_CHECKING:
+    from ..config.parameters import SafeSynthesizerParameters
 
 logger = get_logger()
 
@@ -316,29 +322,36 @@ def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
 
 def build_json_based_regex(
     schema: dict,
+    config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
     whitespace_pattern: str | None = None,
-    group_by: bool = False,
 ):
     """
-    Builds a regular expression based on the provided JSON schema.
+    Builds a regular expression based on the provided JSON schema and config.
 
     Args:
         schema: The dict-based JSON schema used as a base for generating the
             regular expression.
+        config: The configuration object containing the data and generation parameters.
+        bos_token: Token used to delimit the beginning of a sequence when group by is enabled.
+        eos_token: Token used to delimit the end of a sequence when group by is enabled.
         whitespace_pattern: An optional string pattern to match
             whitespaces while constructing the regex.
-        group_by: The grouping token used to wrap the regex across
-            multiple lines. Based on the tokenizer used outside of this.
     """
     whitespace_pattern = whitespace_pattern or ""
 
-    json_regex = _build_regex(schema, whitespace_pattern)
+    record_regex = _build_regex(schema, whitespace_pattern)
 
-    if group_by:
-        json_lines_regex = rf"({bos_token}({json_regex}\n)+{eos_token}\n)+"
+    if config.data.group_training_examples_by is not None:
+        sequence_regex = rf"{re.escape(bos_token)}({record_regex}\n)+{re.escape(eos_token)}"
     else:
-        json_lines_regex = rf"({json_regex}\n)+"
+        # Without grouping, the "sequence" is a single record.
+        sequence_regex = record_regex
 
-    return json_lines_regex
+    if config.generation.structured_generation_use_single_sequence and config.data.max_sequences_per_example == 1:
+        regex = sequence_regex
+    else:
+        regex = rf"({sequence_regex}\n)+"
+
+    return regex

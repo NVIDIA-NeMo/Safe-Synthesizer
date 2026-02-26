@@ -168,6 +168,14 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = "regex"
 
+    structured_generation_use_single_sequence: Annotated[
+        bool,
+        Field(
+            title="structured_generation_use_single_sequence",
+            description="Whether to use a regex that matches exactly one sequence or record if max_sequences_per_example is 1.",
+        ),
+    ] = False
+
     # TODO: We will merge this with `timestamp_validation_mode` described in the MR !5153
     enforce_timeseries_fidelity: Annotated[
         bool,
