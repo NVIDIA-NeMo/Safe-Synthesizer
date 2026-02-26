@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 name: diagnose-failures
 description: "Triage test, CI, runtime, GPU, import errors. Triggers on: test failed, CI failed, pytest error, traceback, OOM, CUDA, import error, DataError, ParameterError, GenerationError, InternalError."
-related-skills: [diagnose-deps, python-testing-patterns]
+related-skills: [diagnose-deps]
 ---
 
 # Diagnose Failures
@@ -38,16 +38,7 @@ Then map the error class:
 
 ### Pytest Markers
 
-| Marker | Meaning | How to run |
-|--------|---------|------------|
-| `unit` | Unit tests (default) | `make test` |
-| `slow` | Long-running tests | `make test-slow` |
-| `e2e` | End-to-end pipeline (requires CUDA) | `make test-e2e` |
-| `gpu_integration` | GPU component tests | `make test-gpu-integration` |
-| `integration` | Integration tests | `uv run pytest -m integration` |
-| `infrastructure` | Infrastructure compat tests | `uv run pytest -m infrastructure` |
-| `skip_in_ci` | Skipped in CI | Local-only tests |
-| `noautouse` | Skip autouse fixtures | Special cases |
+Markers are defined in `pytest.ini`. Run `make test` (unit), `make test-slow` (all), or `uv run pytest -m <marker>` for specific markers.
 
 ## 2. CI Pipeline Failures
 
