@@ -573,4 +573,3 @@ class TinyLlama(ModelMetadata):
             rope_parameters_location="autoconfig",
             **kwargs,
         )
-

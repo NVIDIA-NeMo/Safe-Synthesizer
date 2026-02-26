@@ -398,4 +398,3 @@ class TestAutoConfigResolver:
         assert isinstance(result, SafeSynthesizerParameters)
         if expected.is_auto:
             assert isinstance(result.training.rope_scaling_factor, int)
-            
