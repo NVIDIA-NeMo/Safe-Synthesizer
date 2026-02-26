@@ -10,6 +10,8 @@ related-skills: [python-observability]
 
 Check the diff against main and remove AI-generated slop introduced in the branch.
 
+See [STYLE_GUIDE.md](../../../STYLE_GUIDE.md) for the complete style conventions these checks enforce.
+
 ## Focus Areas
 
 - Narrating comments -- this repo's style is "comments explain why, not what"

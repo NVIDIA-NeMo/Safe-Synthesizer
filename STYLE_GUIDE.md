@@ -1,0 +1,547 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Style Guide
+
+Style conventions for Safe Synthesizer -- for humans and AI agents alike.
+
+This guide covers taste: how to write code, documentation, configs, and tests.
+For contribution process (PRs, branches, DCO, CI), see [CONTRIBUTING.md](CONTRIBUTING.md).
+For architecture and module map, see [AGENTS.md](AGENTS.md) and [docs/developer-guide/architecture.md](docs/developer-guide/architecture.md).
+For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](tests/TESTING.md).
+
+## Contents
+
+- [Principles](#principles)
+- [Python](#python)
+  - [Type hints](#type-hints)
+  - [Data modeling](#data-modeling)
+  - [Control flow](#control-flow)
+  - [Error messages](#error-messages)
+  - [Naming](#naming)
+  - [Imports](#imports)
+  - [Logging and observability](#logging-and-observability)
+  - [Error handling](#error-handling)
+  - [Docstrings](#docstrings)
+  - [Deprecation](#deprecation)
+  - [Patterns to avoid](#patterns-to-avoid)
+- [Testing](#testing)
+- [Markdown](#markdown)
+- [Dockerfiles](#dockerfiles)
+- [Shell scripts](#shell-scripts)
+- [Configuration files](#configuration-files)
+- [General conventions](#general-conventions)
+
+---
+
+## Principles
+
+- Tools enforce what they can (`ruff`, `ty`, `pre-commit`). This guide covers what tools can't enforce.
+- Some rules below are aspirational -- legacy code is being migrated. New code must follow these conventions; existing deviations are tolerated during migration.
+- The current ruff rule set ([ruff.toml](ruff.toml)) does not enforce `UP006`/`UP007`/`B006`/`T201`. These rules are review-enforced until the ruff config is expanded.
+- `__all__` defines the public API surface. Identifiers with a leading `_` are private and can change without notice.
+
+---
+
+## Python
+
+### Type hints
+
+New code must use modern syntax:
+
+```python
+# Yes
+def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
+
+# No
+def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer":
+```
+
+- `X | Y` not `Optional[X]` or `Union[X, Y]`
+- `list[str]` not `List[str]`, `dict[str, int]` not `Dict[str, int]`
+- `Self` for fluent method returns (Python 3.11+)
+- Collection ABCs for parameters (`Sequence`, `Mapping`, `Iterable`); concrete types for return values
+- `Protocol` for structural subtyping when you need duck-typing boundaries
+- Avoid `Any` -- prefer `object`, generics, or `Protocol`
+- `TYPE_CHECKING` guards for heavy imports (`pandas`, `torch`, `transformers`); not needed for stdlib or lightweight imports
+
+Legacy modules (`pii_replacer/`, `data_processing/`, `privacy/`, `artifacts/`) still use `Optional`/`List`/`Dict` in ~100 places -- migration in progress.
+
+### Data modeling
+
+- Pydantic: `NSSBaseModel` for config/parameter models in `config/` (adds `extra="forbid"`). Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
+- `BaseSettings` for env/CLI settings. `AliasChoices` for env var mapping, not `env_prefix`.
+- Always add `description` to `Field()` -- it becomes CLI help text.
+- `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
+- `field(default_factory=list)` for mutable defaults, never `= []`.
+- `StrEnum` for string-valued enums used in configs/serialization. Plain `Enum` for internal-only named constants.
+
+```python
+class TrainingHyperparams(NSSBaseModel):
+    learning_rate: float = Field(default=2e-4, description="Learning rate for the optimizer.")
+    num_epochs: int = Field(default=3, description="Number of training epochs.")
+    lora_rank: int = Field(default=16, description="Rank of the LoRA adapter.")
+```
+
+### Control flow
+
+- Prefer `match`/`case` for dispatch on types or tagged values. Not a blanket rule -- `if`/`elif` is fine for simple boolean predicates.
+- Comprehensions over imperative loops where intent is clearer. No multiple `for` clauses -- optimize for readability, not conciseness (per [Google Python Style Guide sec 2.7](https://google.github.io/styleguide/pyguide.html#27-comprehensions--generator-expressions)).
+- Clamping/saturation over raising when out-of-range inputs shouldn't crash the system.
+- Idempotent teardown via `_torn_down` guard flags; per-step resilience in cleanup (each step isolated so one failure doesn't cascade).
+- Public API boundary: `__all__` in all `__init__.py` files; only listed items are public.
+
+Builder pattern -- `with_*` methods return `Self`:
+
+```python
+synthesizer = (
+    SafeSynthesizer(config)
+    .with_data_source(df)
+    .with_train(learning_rate=0.0001)
+    .with_generate(num_records=10000)
+)
+```
+
+Config resolution via `match`/`case`:
+
+```python
+match values:
+    case BaseModel() as model:
+        return model.model_copy(update=overrides)
+    case dict() as d:
+        return cls.model_validate(d).model_copy(update=overrides)
+    case None:
+        return cls(**overrides)
+    case _:
+        raise TypeError(f"Expected BaseModel, dict, or None, got {type(values)}")
+```
+
+### Error messages
+
+Error messages must precisely match the actual error condition. Interpolated pieces must be clearly identifiable:
+
+```python
+# Yes
+raise ValueError(f"Not a probability: {p!r}")
+raise DataError(f"Column {column!r} not found in dataframe with columns {list(df.columns)}")
+
+# No
+raise ValueError("Invalid value")
+raise DataError(f"The {column} column could not be processed.")
+```
+
+### Naming
+
+- PascalCase classes, snake_case functions/variables, UPPER_SNAKE_CASE constants, leading `_` for private
+- Type variables: PascalCase with `T` suffix (`DataT`, `ParameterT`)
+- Private methods: `_determine_*` for internal resolution, `_resolve_*` for config handling
+
+### Imports
+
+- stdlib / third-party / local groups (enforced by ruff I001/I002)
+- `TYPE_CHECKING` blocks for heavy forward references (`pandas`, `torch`, `transformers`)
+- `from __future__ import annotations` only in modules that already have it
+
+### Logging and observability
+
+- `get_logger(__name__)` -- never `logging.getLogger()` or `structlog.get_logger()` directly
+- Category loggers: `.runtime` for internals, `.user` for progress/results, `.system` for system events
+- `@traced` decorators are an optional enhancement for entry-point functions, not a universal requirement
+- Structured data via `extra={}`, not string interpolation
+- Never `print()` for operational output. Approved alternatives: `click.echo()` for CLI output, `sys.stdout.write()` for raw output in tools.
+
+```python
+logger = get_logger(__name__)
+
+logger.user.info("Training complete", extra={"epochs": 3, "loss": 0.42})
+logger.runtime.debug("Memory freed", extra={"bytes": freed_bytes})
+```
+
+### Error handling
+
+- Raise from the custom hierarchy with dual inheritance (`DataError(UserError, ValueError)`, etc.) with descriptive messages
+- `try/finally` for resource cleanup (never rely on `__del__` alone)
+- `except Exception:` + `logger.debug(..., exc_info=True)` for non-fatal cleanup failures
+- Bare `except Exception: pass` only in `__del__` methods where suppression is intentional
+
+### Docstrings
+
+Google style is mandatory. Canonical references:
+[Google Python Style Guide sec 3.8](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings),
+[Napoleon examples](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html).
+
+#### When docstrings are required
+
+A docstring is mandatory for every function that has one or more of: being part of the public API, nontrivial size, or non-obvious logic.
+
+Overridden methods decorated with `@override` do not need a docstring unless they materially refine the base contract.
+
+#### Tiers
+
+Tier 1 -- simple/obvious. One-line summary, no `Args:` block if the signature is self-documenting:
+
+```python
+def teardown(self) -> None:
+    """Release GPU memory and clean up distributed resources."""
+    self._clear_llm_state()
+```
+
+Tier 2 -- moderate. Summary + `Args:` / `Returns:` / `Raises:` blocks:
+
+```python
+def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: type[ParamT], **kwargs) -> ParamT:
+    """Resolve configuration from various input types.
+
+    Merges caller-supplied overrides on top of a base config. Accepts Pydantic models
+    (copied with updates), plain dicts (validated then updated), or None (built from
+    overrides alone).
+
+    Args:
+        values: Base configuration -- a Pydantic model, a dict, or None.
+        cls: The Pydantic model class to validate against.
+        **kwargs: Field-level overrides applied on top of the base.
+
+    Returns:
+        An instance of `cls` with all overrides applied.
+
+    Raises:
+        TypeError: If `values` is not a BaseModel, dict, or None.
+    """
+```
+
+Tier 3 -- complex. Summary paragraph explaining WHY and WHEN, full sections, lifecycle documentation:
+
+```python
+class GeneratorBackend(metaclass=abc.ABCMeta):
+    """Abstract base for generation backends.
+
+    Lifecycle: __init__ -> initialize() -> generate() [-> generate() ...] -> teardown()
+
+    teardown() must be idempotent and safe to call multiple times.
+    Callers should use try/finally to guarantee teardown runs even if
+    generate() raises. Each cleanup step is isolated so one failure
+    doesn't prevent the next from running.
+
+    Subclasses must implement initialize(), generate(), and teardown().
+    The base class provides the _torn_down guard flag pattern -- check
+    it at the top of teardown() and set it before returning.
+
+    Attributes:
+        config: Generation parameters controlling temperature, top_p, etc.
+        adapter_path: Path to the trained LoRA adapter directory.
+    """
+```
+
+#### Before and after
+
+Vague module docstring:
+
+```python
+# Before
+"""
+Custom error classes
+"""
+
+# After
+"""
+Error hierarchy for Safe Synthesizer.
+
+All public exceptions inherit from SafeSynthesizerError. User-facing errors
+(bad data, bad config, generation failure) inherit from UserError and a
+matching built-in (ValueError, RuntimeError) so callers can catch either.
+
+Classes:
+    SafeSynthesizerError: Base for all known errors.
+    UserError: Invalid usage (bad inputs, uninitialized state).
+    InternalError: Library bug (equivalent to HTTP 5xx).
+    DataError: Problems with training data (NaNs, unsupported types).
+    ParameterError: Invalid config or parameter input.
+    GenerationError: Sampling/generation failures.
+"""
+```
+
+No docstring on abstract method:
+
+```python
+# Before
+@abc.abstractmethod
+def teardown(self):
+    pass
+
+# After
+@abc.abstractmethod
+def teardown(self) -> None:
+    """Release all resources held by this backend.
+
+    Must be idempotent -- safe to call multiple times. Implementations
+    should use the ``_torn_down`` guard flag and isolate each cleanup
+    step so one failure doesn't prevent subsequent cleanup.
+
+    Callers should wrap generate() in try/finally to guarantee this runs.
+    """
+```
+
+Class without Attributes section:
+
+```python
+# Before
+class SafeSynthesizerParameters(Parameters):
+    """Main configuration class for the Safe Synthesizer pipeline."""
+
+# After
+class SafeSynthesizerParameters(Parameters):
+    """Main configuration class for the Safe Synthesizer pipeline.
+
+    Orchestrates all aspects of synthetic data generation including training,
+    generation, privacy, evaluation, and data handling. Provides cross-field
+    validation to ensure parameter compatibility.
+
+    Attributes:
+        data: Data parameters (holdout ratio, column config, etc.).
+        replace_pii: PII replacement parameters.
+        training: Training hyperparameters (learning rate, epochs, LoRA config).
+        generation: Generation parameters (temperature, top_p, num_records).
+        privacy: Differential privacy parameters (epsilon, delta).
+        evaluation: Evaluation component toggles and settings.
+        enable_synthesis: Enable synthesizing new data by training a model.
+        enable_replace_pii: Enable replacing PII in the data.
+
+    Example:
+        config = SafeSynthesizerParameters.from_yaml("config.yaml")
+        synthesizer = SafeSynthesizer(config).with_data_source("data.csv")
+        synthesizer.run()
+    """
+```
+
+Generator with `Yields:` instead of `Returns:`:
+
+```python
+# Before
+def generate_batches(self, num_records):
+    """Generate records."""
+
+# After
+def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
+    """Generate synthetic records in batches.
+
+    Each batch contains up to `batch_size` records. Invalid records are
+    filtered and retried until `num_records` valid records are produced
+    or the retry limit is reached.
+
+    Args:
+        num_records: Total number of valid records to generate.
+
+    Yields:
+        DataFrame of valid synthetic records for the current batch.
+    """
+```
+
+`@property` -- use attribute style, not method style:
+
+```python
+# Before (method style -- wrong)
+@property
+def adapter_path(self) -> Path:
+    """Returns the adapter path."""
+
+# After (attribute style -- correct)
+@property
+def adapter_path(self) -> Path:
+    """The path to the trained LoRA adapter directory."""
+```
+
+Redundant docstring that restates the signature:
+
+```python
+# Before (restates the obvious)
+def get_logger(name: str) -> CategoryLogger:
+    """Get a logger with the given name."""
+
+# After (explains what the caller actually needs to know)
+def get_logger(name: str) -> CategoryLogger:
+    """Return a category logger for structured logging.
+
+    Always pass ``__name__`` as the argument. The returned logger has
+    sub-loggers (``.runtime``, ``.user``, ``.system``, ``.backend``)
+    for categorized output. Logging is NOT initialized on import --
+    entry points must call ``initialize_observability()`` first.
+    """
+```
+
+#### Additional rules
+
+- First line states intent/purpose, not a restatement of the signature
+- Complex code deserves proportionally detailed explanation -- err on the side of more context
+- Explain the "why" and constraints: what assumptions does the code make? What breaks if the caller violates them?
+- Document side effects, thread safety, and idempotency guarantees where applicable
+- Use `Example:` sections with working code for public API methods
+- `Yields:` instead of `Returns:` for generators
+- `@property` docstrings use attribute style (`"""The adapter path."""`) not method style (`"""Returns the adapter path."""`)
+- No decorative `**bold**` in docstrings
+- Module-level docstrings: module's responsibility, key classes/functions, optional usage example
+- Class-level docstrings: purpose, usage pattern, `Attributes:` section mirroring public fields
+
+### Deprecation
+
+When deprecating public APIs:
+
+- Use `warnings.warn("message", DeprecationWarning, stacklevel=2)` so the warning points to caller code, not library internals.
+- Include the version where the feature was deprecated and the version where it will be removed.
+- Provide a migration path in the warning message.
+- Add a `.. deprecated::` directive in the docstring.
+- Deprecated features should continue to work until removal.
+
+```python
+def old_method(self) -> None:
+    """Do the thing.
+
+    .. deprecated:: 0.5.0
+        Use :meth:`new_method` instead. Will be removed in 0.7.0.
+    """
+    warnings.warn(
+        "old_method is deprecated, use new_method instead. Will be removed in 0.7.0.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return self.new_method()
+```
+
+### Patterns to avoid
+
+- Narrating comments -- comments explain "why", not "what"
+- Redundant docstrings that restate the function signature
+- Defensive `try/except Exception` on trusted internal paths
+- `# type: ignore` / `# ty: ignore` without attempting a fix
+- `cast()` / `Any` to paper over type mismatches
+- `os.path` -- use `pathlib.Path` (tolerated only in vendored/tooling scripts)
+- Mutable default arguments
+- `print()` statements -- use logging or `click.echo()` for CLI
+
+---
+
+## Testing
+
+Testing conventions are substantial enough to warrant their own section. For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](tests/TESTING.md). This section covers style conventions for writing tests.
+
+- File naming: `test_*.py` or `*_test.py`; class naming: `Test*`; function naming: `test_<module>_<expected_behavior>`
+- Fixtures: `fixture_` prefix convention; `# Purpose:` comments describing usage and data
+- Fixture scope: function-scoped by default, session-scoped for expensive resources (model loading, tokenization)
+- Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
+- Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
+- Markers: auto-assigned by path via `pytest_collection_modifyitems` (`/e2e/` -> `e2e`, `/gpu_integration/` -> `gpu_integration`, default -> `unit`). Explicit markers: `@pytest.mark.slow`, `@pytest.mark.timeout()`.
+- `conftest.py`: shared fixtures per directory; root conftest has `load_test_dataset()` and `load_test_dataframe()` helpers
+- Use `tmp_path` fixture for file operations, never write to the repo tree
+- Mark CUDA-dependent tests with `@pytest.mark.e2e` or `@pytest.mark.gpu_integration`
+- Mock only external boundaries, not internal implementation details
+- Test isolation: avoid shared mutable state and execution-order dependencies between tests
+- Use `@pytest.mark.parametrize` for testing multiple input combinations rather than copy-pasting similar tests
+
+---
+
+## Markdown
+
+- No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold acceptable only in table header-like cells.
+- Use `--` (em-dash) for asides, not `-` (hyphen).
+- Use backticks for code identifiers, paths, and CLI commands.
+- Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use MkDocs Material syntax -- admonitions (`!!! note`), tabs (`===`), code blocks with titles and highlights.
+- Mermaid diagrams: no spaces in node IDs, quote labels with special characters, no explicit colors or styles.
+
+---
+
+## Dockerfiles
+
+The repo currently has one CI Dockerfile ([containers/Dockerfile.test_ci](containers/Dockerfile.test_ci)). These conventions apply to new Dockerfiles; the CI image follows a simpler pattern.
+
+- Multi-stage builds for production images
+- Copy uv from `ghcr.io/astral-sh/uv:<version>`
+- `--mount=type=cache` for pip/uv caches
+- `--no-install-recommends` + `rm -rf /var/lib/apt/lists/*`
+- Non-root user (`appuser`) for production images
+- `HEALTHCHECK` directives for production images
+- Order COPY directives for cache efficiency (deps before source)
+- Comments explaining cache invalidation points
+
+---
+
+## Shell scripts
+
+Current state is inconsistent; these are the target conventions for new scripts.
+
+- Shebang: `#!/usr/bin/env bash` (not `#!/bin/bash`)
+- Safety: minimum floor is `set -eu`. Use `set -euo pipefail` unless `pipefail` breaks piped-grep patterns in the specific script.
+- Naming: `snake_case` for functions, `_` prefix for internal helpers
+- Variables: always quote (`"$VAR"`, `"${VAR}"`), defaults via `${VAR:-default}`
+- Repo root detection: `REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}`
+- Source shared utilities from `tools/binaries/defs.sh` and `common_functions.sh` where applicable
+- Shellcheck: add `# shellcheck disable=SCXXXX` with brief reason when disabling a check
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
+source "${REPO_ROOT}/tools/binaries/defs.sh"
+
+readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
+```
+
+---
+
+## Configuration files
+
+### YAML
+
+- 2-space indentation
+- Colon-space for key-value pairs (`: `)
+- SPDX copyright headers at top
+- Unquoted values unless special characters require them
+- Empty line at end of file
+- GitHub Actions workflows: `#` with dashes for section dividers
+
+### TOML
+
+- Spaces around `=` for key-value pairs
+- Comments: `# comment` with inline comments for dependency pins
+- Section ordering in `pyproject.toml`: `[project]`, `[dependency-groups]`, `[project.optional-dependencies]`, `[tool.uv]`, `[build-system]`, `[tool.*]`
+
+### Makefile
+
+- Target help format: `target-name: ## Description` (enables `make help` auto-generation)
+- Tab indentation (standard Makefile)
+- `.PHONY` declarations grouped at top of section
+- Variables in `### CONFIGURATION ###` section
+
+---
+
+## General conventions
+
+### Copyright headers
+
+Every source file requires an SPDX copyright header. Format varies by file type:
+
+```python
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+```
+
+Hash-comment for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
+
+```markdown
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+```
+
+`make format` adds missing headers automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
+
+### File endings
+
+- Newline at EOF, no trailing whitespace (enforced by pre-commit)
+- Line length: 120 characters (configured in [ruff.toml](ruff.toml))
+
+---
+
+## Parting words
+
+Be consistent. If the code around you follows a convention, follow it too -- even if this guide says otherwise. Local consistency matters more than global rules.
+
+That said, don't use consistency as an excuse to perpetuate old patterns. When touching legacy code, migrate toward these conventions where practical.

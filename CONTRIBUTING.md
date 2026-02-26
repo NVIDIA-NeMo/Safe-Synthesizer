@@ -291,6 +291,8 @@ Before submitting a PR:
 
 ## Code Style
 
+For detailed style guidelines covering Python, markdown, Dockerfiles, shell scripts, testing, and docstrings, see [STYLE_GUIDE.md](STYLE_GUIDE.md).
+
 ### Formatting
 
 We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and linting auto-fix, plus a copyright header fixer. `make format` mutates files — it runs the same fixers as pre-commit.
