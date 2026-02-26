@@ -18,7 +18,7 @@ and underfitting errors.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 from pydantic.experimental.missing_sentinel import MISSING
@@ -163,6 +163,9 @@ class ModelMetadata(BaseModel):
     Container to hold model-family-specific information - prompt formats,
     tokens, etc.
     """
+
+    # Learning rate when training.learning_rate is "auto". Override in subclasses (e.g. Mistral).
+    default_learning_rate: ClassVar[float] = 0.0005
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -393,6 +396,10 @@ class Llama32(ModelMetadata):
 
 
 class Mistral(ModelMetadata):
+    """Mistral family. Uses lower default learning rate (0.0001) when training.learning_rate is auto."""
+
+    default_learning_rate: ClassVar[float] = 0.0001
+
     def __init__(
         self,
         model_name_or_path: str,
@@ -402,6 +409,7 @@ class Mistral(ModelMetadata):
     ) -> None:
         tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        config.learning_rate = Mistral.default_learning_rate
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
@@ -565,3 +573,4 @@ class TinyLlama(ModelMetadata):
             rope_parameters_location="autoconfig",
             **kwargs,
         )
+

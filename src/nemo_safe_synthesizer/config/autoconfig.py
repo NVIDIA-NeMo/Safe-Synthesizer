@@ -18,6 +18,7 @@ from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
+from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
 from ..utils import merge_dicts
 from .parameters import SafeSynthesizerParameters
@@ -199,6 +200,24 @@ class AutoConfigResolver:
             logger.info("unsloth was set to 'auto', enabling")
             return {"use_unsloth": True}
 
+    def _determine_learning_rate(self) -> dict[str, float]:
+        """
+        Determine the learning rate if set to auto.
+        Uses model-specific default from llm.metadata (e.g. 0.0001 for Mistral, 0.0005 for others).
+
+        Returns:
+            Dict with learning_rate if auto-determined, empty dict otherwise.
+        """
+        if self._config.training.learning_rate != AUTO_STR:
+            logger.info(f"`learning_rate` was set to {self._config.training.learning_rate}, using that value")
+            return {}
+        # get the LR from metadata given model name or path:
+        lr = ModelMetadata.from_str_or_path(self._config.training.pretrained_model).default_learning_rate
+        logger.info(
+            f"`learning_rate` was automatically set to {lr} with pretrained_model={self._config.training.pretrained_model}."
+        )
+        return {"learning_rate": lr}
+
     def _determine_delta(self) -> dict[str, float]:
         """
         Determine the delta parameter for differential privacy if set to auto.
@@ -302,6 +321,7 @@ class AutoConfigResolver:
         training_params.update(self._determine_rope_scaling_factor())
         training_params.update(self._determine_num_input_records_to_sample())
         training_params.update(self._determine_use_unsloth())
+        training_params.update(self._determine_learning_rate())
 
         # Determine data params
         data_params: dict[str, Any] = {}

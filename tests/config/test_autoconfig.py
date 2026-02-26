@@ -39,6 +39,7 @@ class Expected:
         use_unsloth: Expected resolved value for use_unsloth
         rope_scaling_factor: Expected value (None = will be auto-resolved to an int)
         num_input_records_to_sample: Expected value (None = will be auto-resolved)
+        learning_rate: Expected value (None = will be auto-resolved)
         delta: Expected value (None = will be auto-resolved for DP configs)
         dp_enabled: Whether DP is enabled (affects auto-resolution behavior)
         max_seq: Expected resolved value for max_sequences_per_example
@@ -49,6 +50,7 @@ class Expected:
     use_unsloth: bool
     rope_scaling_factor: int | None  # None = auto-resolved
     num_input_records_to_sample: int | None  # None = auto-resolved
+    learning_rate: float | None  # None = auto-resolved
     delta: float | None  # None = auto-resolved or not set
     dp_enabled: bool
     max_seq: int | None  # Expected resolved value
@@ -98,6 +100,7 @@ AUTO_NO_DP = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor="auto",
             num_input_records_to_sample="auto",
+            learning_rate="auto",
             use_unsloth="auto",
         ),
         data=DataParameters(max_sequences_per_example="auto"),
@@ -107,6 +110,7 @@ AUTO_NO_DP = AutoConfigTestCase(
         use_unsloth=True,  # "auto" resolves to True when DP disabled
         rope_scaling_factor=None,  # Will be auto-resolved to an int
         num_input_records_to_sample=None,  # Will be auto-resolved
+        learning_rate=None,  # Will be auto-resolved based on model name
         delta=None,  # Not used (DP disabled)
         dp_enabled=False,
         max_seq=10,  # "auto" with no DP -> 10
@@ -119,6 +123,7 @@ AUTO_WITH_DP = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor="auto",
             num_input_records_to_sample="auto",
+            learning_rate="auto",
             use_unsloth="auto",
         ),
         data=DataParameters(max_sequences_per_example="auto"),
@@ -128,6 +133,7 @@ AUTO_WITH_DP = AutoConfigTestCase(
         use_unsloth=False,  # "auto" resolves to False when DP enabled
         rope_scaling_factor=None,  # Will be auto-resolved to an int
         num_input_records_to_sample=None,  # Will be auto-resolved
+        learning_rate=None,  # Will be auto-resolved based on model name
         delta=None,  # Will be auto-resolved based on data size
         dp_enabled=True,
         max_seq=1,  # DP enabled -> always 1
@@ -140,6 +146,7 @@ EXPLICIT = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor=2,
             num_input_records_to_sample=5000,
+            learning_rate=0.001,
             use_unsloth=True,
         ),
         data=DataParameters(max_sequences_per_example=3),
@@ -149,6 +156,7 @@ EXPLICIT = AutoConfigTestCase(
         use_unsloth=True,  # Explicit value preserved
         rope_scaling_factor=2,  # Explicit value preserved
         num_input_records_to_sample=5000,  # Explicit value preserved
+        learning_rate=0.001,  # Explicit value preserved
         delta=0.001,  # Explicit value preserved
         dp_enabled=False,
         max_seq=3,  # Explicit value preserved
@@ -163,6 +171,7 @@ DP_WITH_UNSLOTH_TRUE = AutoConfigTestCase(
         training=TrainingHyperparams(
             rope_scaling_factor="auto",
             num_input_records_to_sample="auto",
+            learning_rate="auto",
             use_unsloth=True,  # Invalid: explicit True with DP
         ),
         data=DataParameters(max_sequences_per_example="auto"),
@@ -172,6 +181,7 @@ DP_WITH_UNSLOTH_TRUE = AutoConfigTestCase(
         use_unsloth=True,  # This causes the error
         rope_scaling_factor=None,
         num_input_records_to_sample=None,
+        learning_rate=None,
         delta=None,
         dp_enabled=True,
         max_seq=1,
@@ -270,6 +280,29 @@ class TestAutoConfigResolver:
         else:
             assert result == {}
 
+    @pytest.mark.parametrize(
+        "pretrained_model, expected_lr",
+        [
+            pytest.param(None, 0.0005, id="non_mistral_model"),
+            pytest.param("HuggingFaceTB/SmolLM3-3B", 0.0005, id="smollm"),
+            pytest.param("mistralai/Mistral-7B-Instruct-v0.3", 0.0001, id="mistral"),
+        ],
+    )
+    def test_determine_learning_rate(self, sample_data, config, expected, pretrained_model, expected_lr):
+        """Learning rate is auto configured with pretrained model → 0.0001 for Mistral, 0.0005 otherwise; unchanged for explicit."""
+        config_copy = config
+        if pretrained_model is not None:
+            config_copy = config.model_copy(deep=True)
+            config_copy.training.pretrained_model = pretrained_model
+
+        resolver = AutoConfigResolver(sample_data, config_copy)
+        result = resolver._determine_learning_rate()
+
+        if expected.is_auto:
+            assert result == {"learning_rate": expected_lr}
+        else:
+            assert result == {}
+
     def test_determine_use_unsloth(self, sample_data, config, expected):
         """Use_unsloth should be False with DP, True without, or unchanged for explicit."""
         resolver = AutoConfigResolver(sample_data, config)
@@ -331,6 +364,7 @@ class TestAutoConfigResolver:
         if expected.is_auto:
             assert isinstance(result.training.rope_scaling_factor, int)
             assert isinstance(result.training.num_input_records_to_sample, int)
+            assert isinstance(result.training.learning_rate, float)
             assert result.training.use_unsloth is expected.use_unsloth
             assert result.data.max_sequences_per_example == expected.max_seq
             if expected.dp_enabled:
@@ -338,6 +372,7 @@ class TestAutoConfigResolver:
         else:
             assert result.training.rope_scaling_factor == expected.rope_scaling_factor
             assert result.training.num_input_records_to_sample == expected.num_input_records_to_sample
+            assert result.training.learning_rate == expected.learning_rate
             assert result.training.use_unsloth is expected.use_unsloth
             assert result.data.max_sequences_per_example == expected.max_seq
             assert result.privacy and result.privacy.delta == expected.delta
@@ -363,3 +398,4 @@ class TestAutoConfigResolver:
         assert isinstance(result, SafeSynthesizerParameters)
         if expected.is_auto:
             assert isinstance(result.training.rope_scaling_factor, int)
+            
