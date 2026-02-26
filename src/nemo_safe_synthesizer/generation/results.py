@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Generation result containers and multi-batch accumulator."""
+
 from __future__ import annotations
 
 import time
@@ -72,7 +74,18 @@ class GenerateJobResults:
     def from_batches(
         cls, batches: GenerationBatches, max_num_records: int | None, columns: list[str], elapsed_time: float
     ) -> Self:
-        """Create a GenerateJobResults object primarily from a GenerationBatches object."""
+        """Build results from a completed :class:`GenerationBatches` accumulator.
+
+        Args:
+            batches: Accumulated generation batches.
+            max_num_records: If set, truncate the output DataFrame to
+                this many rows.
+            columns: Column names to select from the generated records.
+            elapsed_time: Wall-clock generation duration in seconds.
+
+        Returns:
+            Populated results instance.
+        """
         df = batches.to_dataframe(columns, max_num_records)
         status = batches.status
         num_valid_records = batches.num_valid_records
@@ -96,21 +109,30 @@ class GenerateJobResults:
         )
 
 
-class GenerationBatches(object):
-    """Object that tracks the various batches during the generation phase of a job. Mostly internal for the Generator backend
+class GenerationBatches:
+    """Accumulator that tracks batches during the generation phase.
+
+    Manages the stopping condition, running statistics, and optional
+    post-processing via ``data_actions_fn``.
 
     Args:
-        target_num_records: The target number of records to generate.
-        batches: A list of BatchResults objects.
-        max_num_prompts_per_batch: The maximum number of prompts to process in a batch.
-        invalid_fraction_threshold: The fraction of invalid records that will stop generation after the `patience` limit is reached.
-        patience: Number of consecutive generations where the `invalid_fraction_threshold` is reached before stopping generation.
-        data_actions_fn: A filtering function that'll postprocess and validate records from a batch.
+        target_num_records: Target number of valid records to generate.
+        batches: Pre-existing batches to seed the accumulator with.
+        max_num_prompts_per_batch: Maximum prompts per LLM generation
+            call.
+        invalid_fraction_threshold: Fraction of invalid records that
+            triggers stopping after ``patience`` consecutive batches.
+        patience: Consecutive batch count before the threshold triggers
+            a stop.
+        data_actions_fn: Optional function that post-processes and
+            validates records from each batch.
 
     Attributes:
-        status: The current status of the generation job.
-        running_stopping_metric: A RunningStatistics object to track the stopping metric.
-        stop_condition: The stopping condition object for the generation job.
+        status: Current generation status.
+        running_stopping_metric: Exponential running average of the
+            invalid-record fraction.
+        stop_condition: The patience-based stopping condition, or
+            ``None`` if thresholds were not provided.
     """
 
     def __init__(
@@ -232,14 +254,20 @@ class GenerationBatches(object):
         return sum([batch.num_valid_records for batch in self._batches])
 
     def add_batch(self, batch: Batch) -> None:
-        """Add a Batch object to the generation job.
-        Status of the stopped jobs depends on the following conditions:
-        - Jobs with the first batch of all invalid records are stopped, regardless of the
-         stop_condition status.
-        - Jobs with a stop_condition will continue processing even if subsequent batches
-          (batch number > 1) contain all invalid records, until the stop_condition is met.
-        - Jobs with stop_condition of None will stop generation upon encountering any
-          batch with all invalid records irrespective of the batch number.
+        """Add a batch and update the generation status.
+
+        Stopping rules:
+
+        * The very first batch producing zero valid records always
+          triggers ``STOP_NO_RECORDS``.
+        * When a ``stop_condition`` is configured, subsequent batches
+          with zero valid records are tolerated until the patience-based
+          threshold is reached.
+        * Without a ``stop_condition``, any batch with zero valid
+          records triggers ``STOP_NO_RECORDS``.
+
+        Args:
+            batch: The completed batch to add.
         """
         # TODO: Move application of the data_actions_fn deeper in the generation process
         self._apply_data_actions_fn(batch)
@@ -315,7 +343,16 @@ class GenerationBatches(object):
             )
 
     def to_dataframe(self, columns: list[str], max_num_records: Optional[int] = None) -> pd.DataFrame:
-        """Return a DataFrame of the valid records generated in the generation job."""
+        """Combine valid records from all batches into a single DataFrame.
+
+        Args:
+            columns: Column names to include in the output.
+            max_num_records: If set, truncate to this many rows.
+
+        Returns:
+            DataFrame of valid records, or an empty DataFrame if none
+            were generated.
+        """
         # return an empty DataFrame when any generated batch has 0 valid records.
         if self.num_valid_records == 0:
             return pd.DataFrame()
@@ -326,8 +363,10 @@ class GenerationBatches(object):
 
 
 def rejected_record_to_error(record: dict) -> tuple[str, str]:
-    error_msg = f"Failed data_config validation due to [{record[MetadataColumns.REJECT_REASON.value]}]"
+    """Convert a rejected record into a ``(detailed, summary)`` error tuple.
 
-    # The ret[0]/ret[1] are the same because we don't want the log output
-    # to differ when detailed logging is enabled/disabled.
+    Both elements are identical so that log output is consistent
+    regardless of the ``detailed_errors`` setting.
+    """
+    error_msg = f"Failed data_config validation due to [{record[MetadataColumns.REJECT_REASON.value]}]"
     return (error_msg, error_msg)

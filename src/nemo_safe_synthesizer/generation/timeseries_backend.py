@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Time-series generation backend with chronological validation."""
+
 from __future__ import annotations
 
 import json
@@ -306,6 +308,7 @@ class TimeseriesBackend(VllmBackend):
             self._write_progress_snapshot(batches, snapshot, is_group_based=is_group_based)
 
     def _format_prompt(self, prefill: str) -> str:
+        """Format a generation prompt using the model's template and the given prefill."""
         return self.model_metadata.prompt_config.template.format(
             instruction=self.model_metadata.instruction,
             schema=self._schema_fragment,
@@ -327,9 +330,11 @@ class TimeseriesBackend(VllmBackend):
             return None
 
     def _advance_expected_time(self, timestamp_seconds: int) -> int:
+        """Return the next expected timestamp by adding the configured interval."""
         return timestamp_seconds + self._timestamp_interval_seconds
 
     def _has_reached_stop_time(self, records: list[dict]) -> bool:
+        """Return ``True`` if any record's timestamp meets or exceeds the stop timestamp."""
         if not records or self._stop_timestamp_value is None:
             return False
         stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)

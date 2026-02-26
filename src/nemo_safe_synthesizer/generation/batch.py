@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Single-batch container for generated records and error statistics."""
+
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -24,13 +26,19 @@ logger = get_logger(__name__)
 
 
 def _group_error_messages(all_error_messages: list[str], common_error_string: str) -> list[str]:
-    """
-    Take messages like
-    'col1' is a required property
-    'col2' is a required property
+    """Consolidate error messages that share a common suffix.
 
-    and group them into a single message like
-    "Grouped error message: 'col1'/'col2' is a required property"
+    For example, ``"'col1' is a required property"`` and
+    ``"'col2' is a required property"`` become a single entry:
+    ``"Grouped error message: 'col1'/'col2' is a required property"``.
+
+    Args:
+        all_error_messages: Raw error messages from record validation.
+        common_error_string: The shared substring to group on
+            (e.g. ``" is a required property"``).
+
+    Returns:
+        Updated error messages with duplicates consolidated.
     """
     # Split the error messages to obtain the invidual parts from the similar error messages
     all_message_parts = set()
@@ -71,7 +79,14 @@ def _group_error_messages(all_error_messages: list[str], common_error_string: st
 
 
 class Batch:
-    """A class to store the results of a batch generation."""
+    """Container for the results of a single generation batch.
+
+    Collects :class:`~.processors.ParsedResponse` objects produced by the
+    processor and exposes aggregate counts and error statistics.
+
+    Args:
+        processor: The processor used to parse LLM outputs into records.
+    """
 
     def __init__(self, processor: Processor):
         self._responses: list[ParsedResponse] = []
@@ -79,42 +94,46 @@ class Batch:
 
     @property
     def num_prompts(self) -> int:
-        """The total number of prompts submitted."""
+        """Total number of prompts submitted in this batch."""
         return len(self._responses)
 
     @property
     def num_invalid_records(self) -> int:
-        """The number of invalid records generated."""
+        """Number of invalid records generated in this batch."""
         return sum([len(resp.invalid_records) for resp in self._responses])
 
     @property
     def num_valid_records(self) -> int:
-        """The number of valid records generated."""
+        """Number of valid records generated in this batch."""
         return sum([len(resp.valid_records) for resp in self._responses])
 
     @property
     def data_config_rejected_records(self) -> list[tuple[str, str]]:
+        """Error tuples for records rejected by ``data_config`` validation."""
         return [error for resp in self._responses for error in resp.errors if "data_config" in error[1]]
 
     @property
     def num_data_config_rejected_records(self) -> int:
-        """The number of records rejected due to data_config."""
+        """Count of records rejected by ``data_config`` validation."""
         return len(self.data_config_rejected_records)
 
     @property
     def valid_record_fraction(self) -> float:
-        """The fraction of valid records generated."""
+        """Fraction of generated records that passed validation."""
         total_records = self.num_valid_records + self.num_invalid_records
         return 0 if total_records == 0 else self.num_valid_records / total_records
 
     def error_statistics(self, detailed_errors: bool) -> pd.DataFrame:
-        """
-        Return count statistics on the errors encountered during generation.
+        """Return count statistics on errors encountered during generation.
 
         Args:
-            detailed_errors (bool): If True, return detailed error statistics,
-                including expected column names or allowed field values.
-                If False, only report high-level error categories.
+            detailed_errors: If ``True``, include expected column names
+                and allowed field values.  If ``False``, report only
+                high-level error categories.
+
+        Returns:
+            DataFrame indexed by error message with a ``Percentage``
+            column, sorted by frequency descending.
         """
         idx = 0 if detailed_errors else 1
         err_msgs = [e[idx] for resp in self._responses for e in resp.errors]
@@ -149,7 +168,7 @@ class Batch:
 
     @property
     def stopping_metric(self) -> float:
-        """The metric used to determine if generation should stop."""
+        """Invalid record fraction, used by :class:`~.stopping.GenerationStopCondition`."""
         return 1.0 - self.valid_record_fraction
 
     def to_dataframe(self) -> pd.DataFrame | None:
@@ -164,15 +183,15 @@ class Batch:
         return None if df.empty else normalize_dataframe(df)
 
     def log_summary(self, detailed_errors: bool = False) -> None:
-        """
-        Output a summary of the batch generation results to the log.
+        """Log a summary of the batch generation results.
 
-        Outputs:
-            - Console: Automatically rendered as Rich ASCII tables by structlog processor
-            - JSON logs: Structured key/value pairs for machine parsing
+        Emits structured data via ``logger.user.info`` that is rendered
+        as Rich ASCII tables on the console and as key/value pairs in
+        JSON logs.
 
         Args:
-            detailed_errors (bool): If True, include detailed error statistics in the log.
+            detailed_errors: If ``True``, include per-column error
+                statistics in the log output.
         """
         err_stats: pd.DataFrame = self.error_statistics(detailed_errors=detailed_errors)
 

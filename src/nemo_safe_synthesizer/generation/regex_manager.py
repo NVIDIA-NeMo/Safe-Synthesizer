@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""JSON-schema-to-regex compiler for structured generation.
+
+Converts a subset of JSON Schema into a regular expression that can be
+used by vLLM's structured-output backend to constrain model output to
+valid JSONL records.
+"""
+
 from __future__ import annotations
 
 import json
@@ -36,7 +43,7 @@ JSON_STRING = rf'"{JSON_STRING_INNER}*"'
 # Helper method not exported by outlines_core and outlines doesn't have it anymore
 # past outlines==0.11.8
 def _get_num_items_pattern(min_items, max_items, **kwargs):
-    # Helper function for arrays and objects
+    """Return a regex quantifier ``{min,max}`` for array/object items."""
     min_items = int(min_items or 0)
     if max_items is None:
         return rf"{{{max(min_items - 1, 0)},}}"
@@ -48,11 +55,13 @@ def _get_num_items_pattern(min_items, max_items, **kwargs):
 
 
 def _build_object_key_prefix(name: str, whitespace_pattern: str) -> str:
+    """Build the regex fragment for a JSON object key followed by a colon."""
     key_inner = json.dumps(name, ensure_ascii=True)[1:-1]
     return f'{whitespace_pattern}"{re.escape(key_inner)}"{whitespace_pattern}:{whitespace_pattern}'
 
 
 def _properties_regex(instance, whitespace_pattern, **kwargs):
+    """Build a regex matching a JSON object with known property names."""
     regex = ""
     regex += r"\{"
     properties = instance["properties"]
@@ -327,17 +336,20 @@ def build_json_based_regex(
     eos_token: str,
     whitespace_pattern: str | None = None,
 ):
-    """
-    Builds a regular expression based on the provided JSON schema and config.
+    """Build a regex that constrains LLM output to valid JSONL records.
 
     Args:
-        schema: The dict-based JSON schema used as a base for generating the
-            regular expression.
-        config: The configuration object containing the data and generation parameters.
-        bos_token: Token used to delimit the beginning of a sequence when group by is enabled.
-        eos_token: Token used to delimit the end of a sequence when group by is enabled.
-        whitespace_pattern: An optional string pattern to match
-            whitespaces while constructing the regex.
+        schema: JSON schema dictionary describing the record format.
+        config: Pipeline configuration (used for grouping and
+            structured-generation settings).
+        bos_token: Beginning-of-sequence token (used when grouping).
+        eos_token: End-of-sequence token (used when grouping).
+        whitespace_pattern: Optional regex fragment for matching
+            whitespace between JSON tokens.
+
+    Returns:
+        Compiled regex string suitable for vLLM's structured-output
+        backend.
     """
     whitespace_pattern = whitespace_pattern or ""
 

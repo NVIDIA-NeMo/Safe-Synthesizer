@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Processors that parse raw LLM text into validated records."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -22,7 +24,15 @@ logger = get_logger(__name__)
 
 @dataclass
 class ParsedResponse:
-    """Dataclass to store the parsed response to a single prompt."""
+    """Parsed result of a single LLM prompt response.
+
+    Attributes:
+        valid_records: Records that passed schema validation (as dicts).
+        invalid_records: Raw text of records that failed validation.
+        errors: ``(detailed_msg, summary_msg)`` tuples for each invalid
+            record.
+        prompt_number: Index of the prompt in the batch.
+    """
 
     valid_records: list[dict]
     invalid_records: list[str]
@@ -102,7 +112,23 @@ class TabularDataProcessor(Processor):
 
 
 class TimeSeriesDataProcessor(Processor):
-    """Processor for time-series data generation tasks."""
+    """Processor for time-series data generation tasks.
+
+    Validates chronological ordering and timestamp intervals in
+    addition to the standard schema checks.
+
+    Args:
+        schema: JSON schema as a dictionary.
+        config: Validation parameters.
+        time_column: Name of the timestamp column.
+        interval_seconds: Expected interval between consecutive
+            timestamps, or ``None`` if intervals vary.
+        time_format: Timestamp format string (``strptime``), or
+            ``"elapsed_seconds"`` for numeric elapsed time.
+
+    Raises:
+        ValueError: If ``time_column`` or ``time_format`` is ``None``.
+    """
 
     def __init__(
         self,
@@ -144,8 +170,19 @@ class TimeSeriesDataProcessor(Processor):
 class GroupedDataProcessor(Processor):
     """Processor for grouped data generation tasks.
 
-    This processor is used when the training examples are grouped
-    (and optionally ordered) by a column or columns.
+    Used when training examples are grouped (and optionally ordered) by
+    one or more columns.  Validates that each group has a unique
+    ``group_by`` value and respects the ``order_by`` ordering.
+
+    Args:
+        schema: JSON schema as a dictionary.
+        config: Validation parameters controlling tolerance for
+            invalid records, non-unique group values, etc.
+        bos_token: Token delimiting the beginning of a group sequence.
+        eos_token: Token delimiting the end of a group sequence.
+        group_by: Column name(s) that define groups.
+        order_by: Column name to enforce ordering within a group, or
+            ``None`` if ordering is not required.
     """
 
     def __init__(

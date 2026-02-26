@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""vLLM-based generation backend for tabular data synthesis."""
+
 import os
 import time
 from functools import partial
@@ -35,13 +37,23 @@ os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "1"
 
 
 class VllmBackend(GeneratorBackend):
-    def __init__(
-        self,
-        config: SafeSynthesizerParameters,
-        model_metadata: ModelMetadata,
-        workdir: Workdir,
-        **kwargs,
-    ):
+    """Generation backend using vLLM for high-throughput inference.
+
+    Loads the base model with a LoRA adapter via vLLM and generates
+    synthetic records in batches.  Supports optional structured
+    generation (regex or JSON schema) to constrain outputs.
+
+    Args:
+        config: Pipeline configuration.
+        model_metadata: Model metadata (prompt template, adapter path,
+            sequence length, etc.).
+        workdir: Working directory containing the adapter and schema.
+        **kwargs: Additional options.  ``use_detailed_logs`` (bool)
+            enables verbose error messages (disabled by default to
+            avoid leaking sensitive data).
+    """
+
+    def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, workdir: Workdir, **kwargs):
         self.model_metadata = model_metadata
         self.config = config
         self.remote = False
@@ -257,8 +269,21 @@ class VllmBackend(GeneratorBackend):
         input_ids: torch.TensorType | list[list[int]] | None = None,
         **kwargs,
     ) -> list[RequestOutput]:
-        # attention_mask is unnecessary in vLLM due to continuous batching.
-        # leaving in here for compatibility.
+        """Dispatch a generation call to the underlying vLLM engine.
+
+        Exactly one of ``prompts`` or ``input_ids`` must be provided.
+
+        Args:
+            prompts: Text prompts to generate from.
+            input_ids: Pre-tokenized prompt IDs (tensor or nested list).
+
+        Returns:
+            List of vLLM ``RequestOutput`` objects.
+
+        Raises:
+            ValueError: If both or neither of ``prompts`` / ``input_ids``
+                are provided, or if the generation method is not configured.
+        """
 
         if prompts is None and input_ids is None:
             raise ValueError("Either prompts or input_ids must be provided.")
@@ -445,15 +470,18 @@ class VllmBackend(GeneratorBackend):
 
 
 class TypicalLogitsWarperWrapper:
-    """
-    A wrapper to enable locally typical sampling in vllm.
-    See thread: https://github.com/vllm-project/vllm/issues/1444.
+    """Adapter enabling locally typical sampling in vLLM.
+
+    Wraps the HuggingFace ``TypicalLogitsWarper`` to match the vLLM
+    logits-processor signature.  See
+    `vllm#1444 <https://github.com/vllm-project/vllm/issues/1444>`_.
+
+    Args:
+        mass: Probability mass for typical sampling.
     """
 
     def __init__(self, mass: float):
         self.warper = TypicalLogitsWarper(mass=mass)
 
     def __call__(self, token_ids: list[int], logits: torch.FloatTensor) -> torch.FloatTensor:
-        # transformers warpers assume tensors of shape (batch_size, vocab_size)
-        # and the typical warper doesn't use input_ids
         return self.warper(input_ids=None, scores=logits.reshape((1, -1)))
