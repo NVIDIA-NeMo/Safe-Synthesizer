@@ -8,7 +8,7 @@ hide:
 # NeMo Safe Synthesizer
 
 NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic versions of your data.
-It uses LLM fine-tuning with optional [differential privacy](https://en.wikipedia.org/wiki/Differential_privacy) to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting sensitive information.
+It uses LLM fine-tuning with optional [differential privacy](https://desfontain.es/blog/friendly-intro-to-differential-privacy.html) to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting sensitive information.
 
 ## Key Features
 
