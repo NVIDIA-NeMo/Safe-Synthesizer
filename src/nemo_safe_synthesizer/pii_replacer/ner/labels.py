@@ -40,12 +40,8 @@ class LabelEvaluator:
 
         Example::
 
-            evaluator = LabelEvaluator(
-                explicit_labels=["test"], label_regexes=["^acme/.*$"]
-            )
-            filtered = evaluator.filter_labels(
-                ["test", "test_2", "acme/abc", "test/test"]
-            )
+            evaluator = LabelEvaluator(explicit_labels=["test"], label_regexes=["^acme/.*$"])
+            filtered = evaluator.filter_labels(["test", "test_2", "acme/abc", "test/test"])
             assert list(filtered) == "test", "acme/abc"
 
         Args:
