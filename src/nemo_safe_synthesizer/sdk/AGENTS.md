@@ -27,7 +27,7 @@ Generation: VLLM vs Timeseries is chosen in `generate()`: `time_series.is_timese
 
 ## Config resolution
 
-`_resolve_config(values, cls, kwargs)`** in `ConfigBuilder`:
+`_resolve_config(values, cls, **kwargs)` in `ConfigBuilder`:
 - `values=None` → `cls(**kwargs)` (defaults + overrides)
 - `values` = Pydantic model → `model.model_copy(update=kwargs)`
 - `values` = dict → `cls.model_validate(d).model_copy(update=kwargs)`

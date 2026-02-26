@@ -5,6 +5,8 @@ description: Style rules for markdown and docstrings. Avoid decorative bold; use
 
 # Markdown and Docstring Style
 
+Source of truth: [STYLE_GUIDE.md](../../STYLE_GUIDE.md). This file provides quick-reference rules for agents.
+
 ## No decorative bold
 
 Do not use `**bold**` in list items, body text, or docstrings. Structural cues (headers, list markers, colons, backticks) provide all the emphasis needed. Bold wastes tokens and adds visual noise.

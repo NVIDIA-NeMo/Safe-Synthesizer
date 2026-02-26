@@ -8,6 +8,8 @@ compatibility: "Python 3.11+, structlog, pydantic-settings."
 
 # Python Observability
 
+See [STYLE_GUIDE.md](../../../STYLE_GUIDE.md) for the complete logging and observability conventions.
+
 All observability is centralized in `src/nemo_safe_synthesizer/observability.py`.
 
 ## Core API

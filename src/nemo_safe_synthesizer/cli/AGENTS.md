@@ -14,7 +14,7 @@ Click CLI entry point with Pydantic-to-Click option mapping. Maps `SafeSynthesiz
 
 ## pydantic_options()
 
-From `configurator.pydantic_click_options`: decorator that recursively generates Click options from a Pydantic model. Nested `BaseModel` fields become `--parent__child` options. Uses `field_separator` (default `__`) to flatten dotted paths. See `configurator/AGENTS.md` for implementation details.
+From `configurator.pydantic_click_options`: decorator that recursively generates Click options from a Pydantic model. Nested `BaseModel` fields become `--parent__child` options. Uses `field_separator` (default `__`) to flatten dotted paths.
 
 Critical: `parse_overrides(kwargs)` must use the same `field_sep` as `pydantic_options` uses for `field_separator` — otherwise `--data__holdout=0.1` won't become `{"data": {"holdout": 0.1}}`.
 
