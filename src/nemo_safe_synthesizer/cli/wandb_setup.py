@@ -97,7 +97,7 @@ class WandbSettings(BaseSettings):
 
     @property
     def effective_wandb_project(self) -> str:
-        """Get the effective wandb project name."""
+        """The effective wandb project name."""
         return self.wandb_project or self.exp_name
 
 

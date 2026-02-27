@@ -14,11 +14,11 @@ _No tutorials have been added yet._
 To add a new tutorial:
 
 1. Create a Jupyter notebook (`.ipynb`) in the `docs/tutorials/` directory
-2. Add it to the `nav` section in `mkdocs.yml` under **Tutorials**
+2. Add it to the `nav` section in `mkdocs.yml` under Tutorials
 3. The notebook will be automatically rendered as a documentation page
 
 !!! tip
-    Notebooks are rendered with `mkdocs-jupyter`. Cell outputs are included as-is (notebooks are **not** re-executed during the docs build). Make sure to run your notebook and save it with outputs before committing.
+    Notebooks are rendered with `mkdocs-jupyter`. Cell outputs are included as-is (notebooks are _not_ re-executed during the docs build). Make sure to run your notebook and save it with outputs before committing.
 
 ## Guidelines
 

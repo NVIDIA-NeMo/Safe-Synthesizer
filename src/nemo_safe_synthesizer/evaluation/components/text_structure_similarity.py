@@ -126,9 +126,7 @@ class TextStructureSimilarity(Component):
 
     @staticmethod
     def _preprocess_text_data(text_data: pd.Series, nrows: int) -> pd.Series:
-        """
-        Helper function to clean and possibly downsample text data.
-        """
+        """Helper function to clean and possibly downsample text data."""
         # Use first column only as a pd.Series
 
         # Drop na's and cast everything to string first so we are only selecting good rows.

@@ -211,7 +211,7 @@ class ModelMetadata(BaseModel):
 
     @property
     def adapter_path(self) -> Path:
-        """Get the path where adapter model files are stored.
+        """The path where adapter model files are stored.
 
         Raises:
             ValueError: If workdir is not set.
@@ -222,7 +222,7 @@ class ModelMetadata(BaseModel):
 
     @property
     def metadata_path(self) -> Path:
-        """Get the path to the metadata JSON file.
+        """The path to the metadata JSON file.
 
         Uses workdir.metadata_file which automatically resolves to the parent
         workdir's path when resuming for generation.
@@ -236,7 +236,7 @@ class ModelMetadata(BaseModel):
 
     @property
     def rope_scaling_factor(self) -> float:
-        """Get the rope scaling factor for backwards compatibility."""
+        """The rope scaling factor for backwards compatibility."""
         return self.rope_scaling.factor if self.rope_scaling is not None else 1.0
 
     @property
@@ -475,7 +475,8 @@ class Qwen(ModelMetadata):
 
 class SmolLM2(ModelMetadata):
     """SmolLM2 models (e.g., HuggingFaceTB/SmolLM2-135M).
-    Potentially used for testing."""
+    Potentially used for testing.
+    """
 
     def __init__(
         self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs

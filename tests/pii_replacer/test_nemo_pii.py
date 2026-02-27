@@ -169,7 +169,6 @@ def test_nemo_pii_default_config_national_id(_build_entity_extractor):
 
 def test_build_column_statistics():
     """Test _build_column_statistics with mocked classification and transformer."""
-
     # Create mock classifications for a small dataset/easier to test.
     mock_classifications = [
         ColumnClassification(

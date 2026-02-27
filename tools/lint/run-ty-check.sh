@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -eu
 
 # Get the list of changed Python files
 MERGE_BASE_SHA="${1:-}"
@@ -31,7 +31,7 @@ if [ -z "$filtered_files" ]; then
 fi
 
 # Run ty check on the filtered files
-if ! which ty > /dev/null; then
+if ! command -v ty >/dev/null 2>&1; then
     echo "ty not found"
     TY="uvx ty"
 else

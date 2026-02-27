@@ -6,7 +6,7 @@ import random
 import re
 from datetime import date, datetime, timedelta
 from functools import partial
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, Optional
 
 import dateutil.parser
 import jinja2
@@ -41,7 +41,7 @@ def lookup_locales(value: str) -> Optional[list[str]]:
     return locales if locales else None
 
 
-def tld(value: Union[str, pycountry.db.Data]) -> str:
+def tld(value: str | pycountry.db.Data) -> str:
     if isinstance(value, str):
         value = lookup_country(value)
     value = value.alpha_2.lower()
@@ -142,7 +142,7 @@ class Faker:
     def _fake_without_seed(self, instance_seed: Optional[SeedType] = None) -> VanillaFaker:
         return self._fake
 
-    def __call__(self, locale: Optional[List[str]] = None, seed: Optional[SeedType] = None):
+    def __call__(self, locale: Optional[list[str]] = None, seed: Optional[SeedType] = None):
         if locale is None:
             locale = self._fake.locales
         if seed is None:
@@ -158,16 +158,12 @@ class Faker:
 
 
 def redact_entities_fn(entity: NERPrediction) -> str:
-    """
-    Replace entity with its label in angled braces
-    """
+    """Replace entity with its label in angled braces"""
     return f"<{entity.label}>"
 
 
 def label_entities_fn(entity: NERPrediction, extended: Optional[bool] = False) -> str:
-    """
-    Replace entity with its text and label in angled braces
-    """
+    """Replace entity with its text and label in angled braces"""
     extra_attrs = ""
     if extended:
         extra_attrs = f''' source="{entity.source}" score="{entity.score}"'''
@@ -175,9 +171,7 @@ def label_entities_fn(entity: NERPrediction, extended: Optional[bool] = False) -
 
 
 def hash_entities_fn(default_salt: str, entity: NERPrediction, salt: Optional[str] = None) -> str:
-    """
-    Replace entity with a hash of its text
-    """
+    """Replace entity with a hash of its text"""
     return sha256(default_salt, entity.text, salt=salt)[:9]
 
 
@@ -199,7 +193,6 @@ def fake_entities_fn(
       "redact", "label", and "hash" fall back on associated *_entities_fn
       "raise" will raise an exception causing execution to stop
     """
-
     try:
         return getattr(fake, entity.label)()
     except AttributeError:
@@ -300,9 +293,7 @@ class Environment:
         self._fake.maybe_seed(instance_seed)
 
     def template_to_fnames(self, template_str) -> set[str]:
-        """
-        Parse the template's AST and return set of filter/function names.
-        """
+        """Parse the template's AST and return set of filter/function names."""
         retval = set()
         ast = self._env.parse(f"{{{{{template_str}}}}}")
         fns = [f for f in ast.find_all((jinja2.nodes.Name, jinja2.nodes.Filter))]
@@ -320,7 +311,7 @@ class Environment:
             globals={"__tmp_literal": template_str},
         )
 
-    def _get_delta(self, base: Union[date, datetime, str]) -> timedelta:
+    def _get_delta(self, base: date | datetime | str) -> timedelta:
         if isinstance(base, str):
             base = dateutil.parser.parse(base)
         elif isinstance(base, date):
@@ -332,9 +323,9 @@ class Environment:
 
     def date_shift(
         self,
-        value: Union[date, datetime, str],
-        min_offset: Union[date, datetime, timedelta, str, int] = "-30y",
-        max_offset: Union[date, datetime, timedelta, str, int] = "today",
+        value: date | datetime | str,
+        min_offset: date | datetime | timedelta | str | int = "-30y",
+        max_offset: date | datetime | timedelta | str | int = "today",
     ) -> datetime:
         """
         Pick a random date from interval. Interval defined by input value
@@ -356,9 +347,9 @@ class Environment:
 
     def date_time_shift(
         self,
-        value: Union[date, datetime, str],
-        min_offset: Union[date, datetime, timedelta, str, int] = "-30y",
-        max_offset: Union[date, datetime, timedelta, str, int] = "now",
+        value: date | datetime | str,
+        min_offset: date | datetime | timedelta | str | int = "-30y",
+        max_offset: date | datetime | timedelta | str | int = "now",
     ) -> datetime:
         """
         Pick a random datetime from interval. Interval defined by input value
@@ -378,10 +369,10 @@ class Environment:
         fake_date = fake_date - delta
         return fake_date
 
-    def date_format(self, value: Union[date, datetime, str], format: str = "%Y-%m-%d"):
+    def date_format(self, value: date | datetime | str, format: str = "%Y-%m-%d"):
         return self.date_time_format(value, format=format)
 
-    def date_time_format(self, value: Union[date, datetime, str], format: str = "%Y-%m-%d %H:%M:%S"):
+    def date_time_format(self, value: date | datetime | str, format: str = "%Y-%m-%d %H:%M:%S"):
         if isinstance(value, str):
             value = dateutil.parser.parse(value)
         return value.strftime(format)

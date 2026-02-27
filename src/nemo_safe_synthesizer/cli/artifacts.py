@@ -41,7 +41,8 @@ def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches
     # Determine what to clean
     if caches_only:
         cache_dir = workdir.train.cache
-        assert isinstance(cache_dir, BoundDir)
+        if not isinstance(cache_dir, BoundDir):
+            raise TypeError(f"Expected BoundDir, got {type(cache_dir)}")
         target = cache_dir.path
         item_name = "cache"
     else:

@@ -349,7 +349,8 @@ class TestAutoConfigResolver:
     )
     def test_invalid_config_combinations(self, sample_data, error_case: AutoConfigTestCase):
         """Test that invalid config combinations raise expected errors. This is done mostly to semantically separate the expected-to-fail cases
-        from the above resolve parametrization."""
+        from the above resolve parametrization.
+        """
         with error_case.expected.contextmanager:
             config = error_case.get_config()
             resolver = AutoConfigResolver(sample_data, config)

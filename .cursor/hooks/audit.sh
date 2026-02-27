@@ -1,7 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+set -eu
 
 # audit.sh - Hook script that writes all JSON input to /tmp/agent-audit.log
 # This script is designed to be called by Cursor's hooks system for auditing purposes

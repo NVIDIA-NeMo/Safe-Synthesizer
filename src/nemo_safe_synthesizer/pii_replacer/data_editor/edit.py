@@ -36,9 +36,7 @@ class TransformFnAccounting:
     column_fns: dict[str, set[str]]
 
     def __init__(self, included_fns: list[str]):
-        """
-        included_fns - list of function / filter names that should be included in accounting
-        """
+        """included_fns - list of function / filter names that should be included in accounting"""
         self.included_fns = set(included_fns)
         self.column_fns = defaultdict(set)
 
@@ -93,7 +91,6 @@ class ProgressLog:
 
         If `force` is `True`, log regardless of time passed.
         """
-
         if force or monotonic() - self.last_log > self.log_duration:
             duration = monotonic() - self.start_time
             rows_per_second = 0 if duration == 0 else (self.status.row_n) / duration

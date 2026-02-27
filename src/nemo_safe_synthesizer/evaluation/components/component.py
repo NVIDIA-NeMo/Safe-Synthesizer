@@ -45,9 +45,7 @@ class Component(ABC, BaseModel):
 
     @staticmethod
     def is_nonempty(dfs: None | pd.DataFrame | list[pd.DataFrame | None]) -> bool:
-        """
-        Util for components that need to check dataframes before attempting to render (correlation and PCA)
-        """
+        """Util for components that need to check dataframes before attempting to render (correlation and PCA)"""
         if dfs is None:
             return False
         if isinstance(dfs, pd.DataFrame):

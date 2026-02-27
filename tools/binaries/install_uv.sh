@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+set -eu
 
 REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
 source "${REPO_ROOT}/tools/binaries/defs.sh"
@@ -27,7 +28,7 @@ install_uv() {
     echo "cannot parse uv_version correctly from pyproject.toml"
     exit 1
   }
-  uvs="$(which -a uv | uniq )"
+  uvs="$(command -v uv 2>/dev/null || true)"
 
   if [[ -z "$uvs" ]]; then
     _install_uv "$uv_version"
@@ -55,7 +56,7 @@ install_uv() {
     fi
   fi
   echo "to use non-venv uv by default, add the following to your shell config file (e.g., ~/.bashrc or ~/.zshrc):"
-  echo "alias uv='$(which uv)'"
+  echo "alias uv='$(command -v uv)'"
   echo ""
   printf "done installing uv"
 }

@@ -57,10 +57,7 @@ Conditional Validation:
     ...     debug_mode: bool = False
     ...     verbose_logging: Annotated[
     ...         Parameter[bool],
-    ...         DependsOnValidator(
-    ...             depends_on="debug_mode",
-    ...             depends_on_func=lambda x: x is True
-    ...         ),
-    ...         Field(default=Parameter(name="verbose_logging", value=False))
+    ...         DependsOnValidator(depends_on="debug_mode", depends_on_func=lambda x: x is True),
+    ...         Field(default=Parameter(name="verbose_logging", value=False)),
     ...     ]
 """

@@ -21,9 +21,7 @@ pydantic_model_config = ConfigDict(
 
 
 class NSSBaseModel(BaseModel):
-    """
-    Base model for all NeMo Safe Synthesizer configuration and result models that do not use Parameters.
-    """
+    """Base model for all NeMo Safe Synthesizer configuration and result models that do not use Parameters."""
 
     model_config = pydantic_model_config
 

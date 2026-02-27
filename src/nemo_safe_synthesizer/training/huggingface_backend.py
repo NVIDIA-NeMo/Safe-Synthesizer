@@ -16,7 +16,6 @@ import wandb
 from datasets import Dataset
 from peft import LoftQConfig, LoraConfig, TaskType, prepare_model_for_kbit_training
 from peft import get_peft_model as get_peft_model_hf
-from rich import print
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
@@ -293,7 +292,8 @@ class HuggingFaceBackend(TrainingBackend):
         else:
             self.model = prepare_model_for_kbit_training(self.model, use_gradient_checkpointing=True)
 
-        assert isinstance(self.model, PreTrainedModel), f"Expected PreTrainedModel, got {type(self.model)}"
+        if not isinstance(self.model, PreTrainedModel):
+            raise TypeError(f"Expected PreTrainedModel, got {type(self.model)}")
         peft_model = get_peft_model_hf(self.model, peft_config=lora_config)
         self.model = peft_model  # ty: ignore[invalid-assignment]  -- PeftMixedModel not in union, but LoraConfig always yields PeftModel
         parameter_count = get_model_param_count(self.model, trainable_only=True) / 1e6
@@ -719,7 +719,8 @@ class HuggingFaceBackend(TrainingBackend):
             raise ParameterError("dataset_schema must be set before saving model")
 
         adapter_dir = self.workdir.train.adapter
-        assert isinstance(adapter_dir, BoundDir), f"Expected BoundDir, got {type(adapter_dir)}"
+        if not isinstance(adapter_dir, BoundDir):
+            raise TypeError(f"Expected BoundDir, got {type(adapter_dir)}")
         self.workdir.ensure_directories()
         logger.user.info(f"Saving LoRA adapter to {adapter_dir}")
         with redirect_stdout(io.StringIO()) as stdout:
@@ -773,7 +774,7 @@ class HuggingFaceBackend(TrainingBackend):
         msg += "\n" + "\n".join([f"{field}: {value}" for field, value in info.items()])
         msg += "\n" + "-" * len(msg)
 
-        print(msg)
+        logger.info(msg)
 
 
 def preprocess_logits_for_metrics(

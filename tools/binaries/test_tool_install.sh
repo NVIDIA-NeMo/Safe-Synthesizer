@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+set -eu
 
 REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
 source "$REPO_ROOT/tools/binaries/defs.sh"
@@ -19,14 +20,14 @@ test_tools_linux() {
         --rm \
         --interactive \
         --name test_tool_install \
-        --volume $REPO_ROOT:/safe-synthesizer \
+        --volume "$REPO_ROOT":/safe-synthesizer \
         -e DEBIAN_FRONTEND=noninteractive \
+        -e REPO_ROOT=/safe-synthesizer \
         --platform linux/amd64 \
-        $test_image \
+        "$test_image" \
         bash -c "
             apt-get update &&
-            apt-get install -y git curl build-essential &&
-            git config --global --add safe.directory /safe-synthesizer &&
+            apt-get install -y curl build-essential &&
             cd /safe-synthesizer &&
             make bootstrap-tools &&
             export PATH=\$HOME/.local/bin:\${PATH:+\${PATH}:} &&

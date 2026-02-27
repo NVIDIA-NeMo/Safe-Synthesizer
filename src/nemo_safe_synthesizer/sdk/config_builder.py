@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping, Self, TypeAlias, TypeVar, Union
+from typing import Mapping, Self, TypeAlias, TypeVar
 
 import pandas as pd
 from pydantic import BaseModel
@@ -26,32 +26,32 @@ logger = get_logger(__name__)
 KT = TypeVar("KT")
 VT = TypeVar("VT")
 
-NSSParameters = Union[
-    DataParameters,
-    EvaluationParameters,
-    GenerateParameters,
-    DifferentialPrivacyHyperparams,
-    TimeSeriesParameters,
-    TrainingHyperparams,
-    SafeSynthesizerParameters,
-    PiiReplacerConfig,
-]
+NSSParameters = (
+    DataParameters
+    | EvaluationParameters
+    | GenerateParameters
+    | DifferentialPrivacyHyperparams
+    | TimeSeriesParameters
+    | TrainingHyperparams
+    | SafeSynthesizerParameters
+    | PiiReplacerConfig
+)
 
-NSSParametersT = Union[
-    type[DataParameters],
-    type[EvaluationParameters],
-    type[GenerateParameters],
-    type[DifferentialPrivacyHyperparams],
-    type[TimeSeriesParameters],
-    type[TrainingHyperparams],
-    type[SafeSynthesizerParameters],
-    type[PiiReplacerConfig],
-]
+NSSParametersT = (
+    type[DataParameters]
+    | type[EvaluationParameters]
+    | type[GenerateParameters]
+    | type[DifferentialPrivacyHyperparams]
+    | type[TimeSeriesParameters]
+    | type[TrainingHyperparams]
+    | type[SafeSynthesizerParameters]
+    | type[PiiReplacerConfig]
+)
 
 
 ParamT = TypeVar("ParamT", bound=NSSParameters)
 DataSource = pd.DataFrame | str
-ParamDict: TypeAlias = dict[str, Union[str, int, float, bool, None, Mapping[KT, VT]]]
+ParamDict: TypeAlias = dict[str, str | int | float | bool | None | Mapping[KT, VT]]
 
 
 class ConfigBuilder(object):
@@ -93,10 +93,12 @@ class ConfigBuilder(object):
 
     def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
         """Resolve configuration from various input types.
+
         Args:
             values: Configuration values as a dictionary or a BaseModel instance.
             cls: The BaseModel class to validate against.
             **overrides: Additional configuration parameters to override.
+
         Returns:
             An instance of the specified BaseModel class with the resolved configuration.
         """

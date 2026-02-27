@@ -4,7 +4,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from re import Pattern
-from typing import List, Optional, Tuple, Union
+from typing import Optional
 
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord
@@ -13,7 +13,7 @@ from .ner import NERPrediction
 DEFAULT_CONTEXT_SPAN_SIZE = 16
 
 
-def _get_neighbor_strings(data: str, start: int, end: int, span: int) -> Tuple[str, str]:
+def _get_neighbor_strings(data: str, start: int, end: int, span: int) -> tuple[str, str]:
     left_mark = start - span
     if left_mark < 0:  # if we use a negative number we'll data from the end of the string
         left_mark = 0
@@ -72,7 +72,7 @@ class ContextSpan:
             to search for any matches from the ``pattern_list`` objects.
     """
 
-    pattern_list: List[Union[str, Pattern]]
+    pattern_list: list[str | Pattern]
     span: int = DEFAULT_CONTEXT_SPAN_SIZE
 
     def is_match(self, data: str, start: int, end: int) -> bool:
@@ -98,7 +98,7 @@ class ContextSpan:
         return False
 
 
-def is_context_matched(data: str, start: int, end: int, spans: List[ContextSpan]) -> bool:
+def is_context_matched(data: str, start: int, end: int, spans: list[ContextSpan]) -> bool:
     for span in spans:
         if span.is_match(data, start, end):
             return True
@@ -155,7 +155,7 @@ class Predictor(ABC):
         self._context = predictor_context
 
     @abstractmethod
-    def evaluate(self, in_data: JSONRecord) -> List[NERPrediction]:
+    def evaluate(self, in_data: JSONRecord) -> list[NERPrediction]:
         """This MUST be implemented by each Predictor"""
         pass
 
@@ -166,9 +166,7 @@ class Predictor(ABC):
         token_patterns: Pattern = None,
         regex_patterns: Pattern = None,
     ) -> bool:
-        """
-        Checks to see if the field has a label match.
-        """
+        """Checks to see if the field has a label match."""
         _field = field_pair
         if header_context_source == self.BOTH:
             search_string = (_field.field + " " + _field.value if _field.field else _field.value).casefold()

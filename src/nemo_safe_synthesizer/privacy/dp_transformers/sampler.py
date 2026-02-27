@@ -60,7 +60,6 @@ class ShuffledEntitySampler(_EntitySampler):
                 produces the j-th sample of the i-th entity in the dataset.
             batch_size: Number of examples included in each batch.
         """
-
         entity_sampler = BatchSampler(RandomSampler(entity_mapping), batch_size=batch_size, drop_last=True)
         super().__init__(entity_sampler, entity_mapping)
 
@@ -80,7 +79,6 @@ class PoissonEntitySampler(_EntitySampler):
             sample_rate: Probability of any given entity being included in
                 the batch.
         """
-
         entity_sampler = UniformWithReplacementNonNullSampler(
             num_samples=len(entity_mapping),
             sample_rate=sample_rate,
@@ -90,7 +88,8 @@ class PoissonEntitySampler(_EntitySampler):
 
 class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
     """This sampler is similar to the `UniformWithReplacementSampler`, but it
-    never outputs empty batches, while ensuring they are taken into account."""
+    never outputs empty batches, while ensuring they are taken into account.
+    """
 
     def __init__(self, *args, **kwargs):
         # NOTE: we might want to log empty_batches for debugging purposes

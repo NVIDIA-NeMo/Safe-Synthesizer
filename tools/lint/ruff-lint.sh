@@ -38,7 +38,7 @@ if [ -z "$filtered_files" ]; then
 fi
 
 # Run ruff check on the filtered files
-if ! which ruff > /dev/null; then
+if ! command -v ruff >/dev/null 2>&1; then
     echo "ruff not found"
     RUFF="uvx ruff"
 else
