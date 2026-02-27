@@ -501,10 +501,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-example" class="md-nav__link">
+  <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Example
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contact
       
     </span>
   </a>
@@ -8387,10 +8398,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-example" class="md-nav__link">
+  <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Example
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contact
       
     </span>
   </a>
@@ -8441,26 +8463,19 @@
 
 
 <h1 id="nemo-safe-synthesizer">NeMo Safe Synthesizer<a class="headerlink" href="#nemo-safe-synthesizer" title="Permanent link">&para;</a></h1>
-<p>Generate synthetic data with privacy guarantees.</p>
-<p>NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic data. It uses LLM fine-tuning with optional differential privacy to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting individual privacy.</p>
-<hr />
+<p>NeMo Safe Synthesizer is a comprehensive package for generating a safe, synthetic version of your tabular data.
+It uses LLM fine-tuning with optional <a href="https://desfontain.es/blog/friendly-intro-to-differential-privacy.html">differential privacy</a> to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting sensitive information.</p>
 <h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Privacy-first synthetic data -- PII detection and replacement, optional differential privacy via Opacus</li>
-<li>LLM fine-tuning -- LoRA fine-tuning with HuggingFace or Unsloth backends, quantization support</li>
-<li>Fast inference -- VLLM-powered generation with structured output enforcement</li>
-<li>Comprehensive evaluation -- Privacy metrics, quality scores, distribution analysis, and HTML reports</li>
+<li>Privacy-first synthetic data -- PII detection and replacement, optional differential privacy via <a href="https://github.com/meta-pytorch/opacus">Opacus</a></li>
+<li>LLM fine-tuning -- LoRA fine-tuning optimized for tabular data, including numeric, categorical, and text columns</li>
+<li>Fast inference -- <a href="https://github.com/vllm-project/vllm">vLLM</a>-powered generation with optional structured output enforcement</li>
+<li>Comprehensive evaluation -- Privacy and quality metrics in an in-depth HTML report</li>
 <li>Flexible interfaces -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration</li>
 </ul>
-<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>
-<li>
-<p><strong>Product Overview</strong></p>
-<hr />
-<p>Pipeline, data synthesis, PII replacement, and evaluation.</p>
-<p><a href="product-overview/pipeline/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Product Overview</a></p>
-</li>
 <li>
 <p><strong>Getting Started</strong></p>
 <hr />
@@ -8468,50 +8483,44 @@
 <p><a href="getting-started/installation/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Getting Started</a></p>
 </li>
 <li>
+<p><strong>Product Overview</strong></p>
+<hr />
+<p>Learn about the pipeline steps: replace PII, synthesize data, evaluate.</p>
+<p><a href="product-overview/pipeline/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Product Overview</a></p>
+</li>
+<li>
 <p><strong>Tutorials</strong></p>
 <hr />
-<p>Step-by-step tutorials to get you up and running.</p>
+<p>Follow hands-on tutorials to generate synthetic data.</p>
 <p><a href="tutorials/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Tutorials</a></p>
 </li>
 <li>
 <p><strong>User Guide</strong></p>
 <hr />
-<p>Python SDK, CLI reference, parameters, and troubleshooting.</p>
+<p>Understand the Python SDK and CLI, available parameters, and troubleshooting.</p>
 <p><a href="user-guide/sdk/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> User Guide</a></p>
 </li>
 <li>
 <p><strong>Developer Guide</strong></p>
 <hr />
-<p>Architecture documentation and auto-generated API reference.</p>
+<p>Browse the auto-generated API reference and dive into the architecture details.</p>
 <p><a href="developer-guide/architecture/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Developer Guide</a></p>
 </li>
 <li>
 <p><strong>Developer Notes</strong></p>
 <hr />
-<p>Blog posts and release notes.</p>
+<p>Read developer blog posts and check release notes.</p>
 <p><a href="blog/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Developer Notes</a></p>
 </li>
 </ul>
 </div>
-<hr />
-<h2 id="quick-example">Quick Example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Install and bootstrap</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>bootstrap-tools
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>bootstrap-nss<span class="w"> </span>cpu
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Run the full pipeline</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
-</span></code></pre></div>
-<p>Or use the Python SDK:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.sdk.library_builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizer</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizerParameters</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">config</span> <span class="o">=</span> <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="s2">&quot;config.yaml&quot;</span><span class="p">)</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">synthesizer</span> <span class="o">=</span> <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">results</span> <span class="o">=</span> <span class="n">synthesizer</span><span class="o">.</span><span class="n">results</span>
-</span></code></pre></div>
-<hr />
+<h2 id="contact">Contact<a class="headerlink" href="#contact" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions">Need help? Ask us a question</a></li>
+<li><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=bug-report.yml">Report a bug</a></li>
+<li><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=feature-request.yml">Make a feature request</a></li>
+<li><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/security/policy">Report a security vulnerability</a></li>
+</ul>
 <h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
 <p>NeMo Safe Synthesizer is licensed under the <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/LICENSE">Apache License 2.0</a>.</p>
 
