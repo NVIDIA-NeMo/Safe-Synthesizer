@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Artifact management subcommands (clean).
+
+Provides CLI commands for inspecting and cleaning up artifact directories
+produced by Safe Synthesizer runs.
+"""
+
 from __future__ import annotations
 
 import shutil

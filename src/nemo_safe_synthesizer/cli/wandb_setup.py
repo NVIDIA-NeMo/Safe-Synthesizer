@@ -69,16 +69,23 @@ class WandbSettings(BaseSettings):
     wandb_mode: WandbMode = Field(
         default=WandbMode.DISABLED, validation_alias=AliasChoices("WANDB_MODE", "NSS_WANDB_MODE")
     )
+    """Run mode (online, offline, or disabled)."""
+
     wandb_project: str | None = Field(default=None, validation_alias=AliasChoices("WANDB_PROJECT", "NSS_WANDB_PROJECT"))
-    exp_name: str = Field(default="nss_experiments")  # fallback for wandb_project
+    """WandB project name override."""
+
+    exp_name: str = Field(default="nss_experiments")
+    """Fallback project name when ``wandb_project`` is not set."""
+
     phase: WandbPhase = WandbPhase.UNKNOWN
+    """Current pipeline phase for WandB grouping."""
 
     model_config = {"env_prefix": "NSS_", "env_file": ".env", "extra": "ignore"}
 
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode:
-        """Validate the wandb mode."""
+        """Coerce string or None to ``WandbMode``, defaulting to DISABLED."""
         if v is None:
             return WandbMode.DISABLED
         if isinstance(v, WandbMode):
@@ -88,7 +95,7 @@ class WandbSettings(BaseSettings):
     @field_validator("phase", mode="before")
     @classmethod
     def validate_phase(cls, v: str | WandbPhase | None) -> WandbPhase:
-        """Validate the wandb phase."""
+        """Coerce string or None to ``WandbPhase``, defaulting to UNKNOWN."""
         if v is None:
             return WandbPhase.UNKNOWN
         if isinstance(v, WandbPhase):
@@ -97,7 +104,7 @@ class WandbSettings(BaseSettings):
 
     @property
     def effective_wandb_project(self) -> str:
-        """The effective wandb project name."""
+        """Effective wandb project name, falling back to ``exp_name``."""
         return self.wandb_project or self.exp_name
 
 

@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Configuration management subcommands (validate, modify, create).
+
+Each command loads a ``SafeSynthesizerParameters`` model, optionally applies
+CLI overrides, and either validates, prints, or writes the result.
+"""
+
 from __future__ import annotations
 
 import click

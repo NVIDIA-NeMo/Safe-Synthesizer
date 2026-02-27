@@ -131,7 +131,7 @@ class CLISettings(BaseSettings):
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode | None:
-        """Convert string to WandbMode enum if needed."""
+        """Coerce string or None to ``WandbMode``, passing through enum values unchanged."""
         if v is None:
             return None
         if isinstance(v, WandbMode):
@@ -141,7 +141,7 @@ class CLISettings(BaseSettings):
     @field_validator("verbose", mode="before")
     @classmethod
     def validate_verbose(cls, v: int | str | None) -> int:
-        """Ensure verbose is an integer."""
+        """Coerce string or None to int, defaulting to 0."""
         if v is None:
             return 0
         if isinstance(v, str):
@@ -167,35 +167,35 @@ class CLISettings(BaseSettings):
 
     @property
     def effective_artifact_path(self) -> Path:
-        """The effective artifact path, using default if not set."""
+        """Effective artifact path, falling back to ``DEFAULT_ARTIFACTS_PATH``."""
         if self.artifact_path:
             return Path(self.artifact_path)
         return DEFAULT_ARTIFACTS_PATH
 
     @property
     def effective_log_format(self) -> Literal["json", "plain"]:
-        """The effective log format, falling back to observability settings."""
+        """Effective log format, falling back to observability settings."""
         if self.log_format is not None:
             return self.log_format
         return self.observability.nss_log_format or "plain"
 
     @property
     def effective_log_color(self) -> bool:
-        """The effective log color setting, falling back to observability settings."""
+        """Effective log color setting, falling back to observability settings."""
         if self.log_color is not None:
             return self.log_color
         return self.observability.nss_log_color
 
     @property
     def effective_wandb_mode(self) -> WandbMode:
-        """The effective wandb mode, falling back to wandb settings."""
+        """Effective wandb mode, falling back to wandb settings."""
         if self.wandb_mode is not None:
             return self.wandb_mode
         return self.wandb.wandb_mode
 
     @property
     def effective_wandb_project(self) -> str | None:
-        """The effective wandb project, falling back to wandb settings."""
+        """Effective wandb project, falling back to wandb settings."""
         if self.wandb_project is not None:
             return self.wandb_project
         return self.wandb.wandb_project

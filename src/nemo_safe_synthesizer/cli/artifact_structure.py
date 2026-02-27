@@ -1,7 +1,24 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Artifact directory structure for Safe Synthesizer."""
+"""Artifact directory structure for Safe Synthesizer.
+
+Defines the on-disk layout produced by each pipeline run using a declarative
+descriptor pattern.  ``FileNode`` and ``DirNode`` descriptors declare the
+tree shape on ``Workdir``; at runtime they resolve to ``Path`` and ``BoundDir``
+objects respectively, giving typed access to every artifact path without
+hard-coding strings throughout the CLI.
+
+Typical directory tree::
+
+    $base_path/<config>---<dataset>/<run_name>/
+    - safe-synthesizer-config.json
+    - train/  ...
+    - generate/  ...
+    - dataset/  ...
+
+See ``Workdir`` for the full structure.
+"""
 
 from __future__ import annotations
 
@@ -114,7 +131,7 @@ class RunName:
 
     @property
     def timestamp(self) -> datetime | None:
-        """The timestamp if this is a timestamp-based run name."""
+        """Parsed timestamp, or None for non-timestamp-based run names."""
         return self._timestamp
 
 
@@ -144,7 +161,7 @@ class FileNode:
     def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> Path: ...
 
     def __get__(self, obj: object | None, objtype: type | None = None) -> FileNode | Path:
-        # Get the parent path from the instance using pattern matching
+        """Resolve to the descriptor itself (class access) or a full ``Path`` (instance access)."""
         match obj:
             case None:
                 return self
@@ -185,7 +202,7 @@ class DirNode:
     def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> BoundDir: ...
 
     def __get__(self, obj: object | None, objtype: type | None = None) -> DirNode | BoundDir:
-        # Get the parent path from the instance using pattern matching
+        """Resolve to the descriptor itself (class access) or a ``BoundDir`` (instance access)."""
         match obj:
             case None:
                 return self
@@ -216,7 +233,7 @@ class BoundDir(os.PathLike[str]):
 
     @property
     def path(self) -> Path:
-        """The directory path."""
+        """The resolved directory path."""
         return self._path
 
     def __fspath__(self) -> str:
@@ -242,6 +259,7 @@ class BoundDir(os.PathLike[str]):
         return hash(self._path)
 
     def __getattr__(self, name: str) -> Path | BoundDir:
+        """Resolve child ``FileNode`` to ``Path`` or child ``DirNode`` to ``BoundDir``."""
         if name.startswith("_"):
             raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
@@ -268,22 +286,22 @@ class Workdir:
 
     Structure:
         $base_path/<config>---<dataset>/<run_name>/
-        ├── safe-synthesizer-config.json
-        ├── train/
-        │   ├── safe-synthesizer-config.json
-        │   └── adapter/
-        │       ├── adapter_config.json
-        │       ├── metadata_v2.json
-        │       └── dataset_schema.json
-        ├── generate/
-        │   ├── safe-synthesizer-config.json
-        │   ├── logs.jsonl
-        │   ├── synthetic_data.csv
-        │   └── evaluation_report.html
-        └── dataset/
-            ├── training.csv
-            ├── test.csv
-            └── validation.csv
+        - safe-synthesizer-config.json
+        - train/
+          - safe-synthesizer-config.json
+          - adapter/
+            - adapter_config.json
+            - metadata_v2.json
+            - dataset_schema.json
+        - generate/
+          - safe-synthesizer-config.json
+          - logs.jsonl
+          - synthetic_data.csv
+          - evaluation_report.html
+        - dataset/
+          - training.csv
+          - test.csv
+          - validation.csv
 
     Args:
         base_path: The base path for the workdir
@@ -358,15 +376,14 @@ class Workdir:
 
     @property
     def project_name(self) -> str:
-        """The project name (config---dataset)."""
+        """Project name in ``<config>---<dataset>`` format."""
         return f"{self.config_name}{PROJECT_NAME_DELIMITER}{self.dataset_name}"
 
     @property
     def project_dir(self) -> Path:
-        """The project directory path ($base_path/<config>---<dataset>/).
+        """Project directory path (``$base_path/<config>---<dataset>/``).
 
-        If an explicit run path was provided, returns its parent directory.
-        Otherwise returns $base_path/<config>---<dataset>/.
+        Falls back to the parent of ``_explicit_run_path`` when one was provided.
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path.parent
@@ -374,10 +391,9 @@ class Workdir:
 
     @property
     def run_dir(self) -> Path:
-        """The run directory path.
+        """Run directory path (``$base_path/<config>---<dataset>/<run_name>/``).
 
-        If an explicit run path was provided, returns that path directly.
-        Otherwise returns $base_path/<config>---<dataset>/<run_name>/.
+        Uses ``_explicit_run_path`` directly when one was provided.
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path
@@ -397,7 +413,7 @@ class Workdir:
 
     @property
     def log_file(self) -> Path:
-        """The log file path for the current phase."""
+        """Log file path for the current phase."""
         phase = self._current_phase or "unknown"
         if phase == "generate":
             return self.generate.logs  # type: ignore[return-value]
@@ -455,18 +471,18 @@ class Workdir:
 
     @property
     def source_run_dir(self) -> Path:
-        """The source run directory (parent's run_dir if this is a child generation run)."""
+        """Source run directory (parent's ``run_dir`` for child generation runs)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.run_dir
         return self.run_dir
 
     @property
     def source_config(self) -> Path:
-        """The source config file (from parent workdir if available).
+        """Source config file path (from parent workdir if available).
 
         Checks multiple locations for backwards compatibility:
-        1. Root level config: <run_dir>/safe-synthesizer-config.json
-        2. Train config: <run_dir>/train/safe-synthesizer-config.json
+        1. Root level config: ``<run_dir>/safe-synthesizer-config.json``
+        2. Train config: ``<run_dir>/train/safe-synthesizer-config.json``
         """
         source_workdir = self._parent_workdir if self._parent_workdir is not None else self
 
@@ -485,21 +501,21 @@ class Workdir:
 
     @property
     def source_adapter_path(self) -> Path:
-        """The source adapter path (from parent workdir if available)."""
+        """Source adapter path (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.adapter_path
         return self.adapter_path
 
     @property
     def source_dataset(self) -> BoundDir:
-        """The source dataset directory (from parent workdir if available)."""
+        """Source dataset directory (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.dataset  # type: ignore[return-value]
         return self.dataset  # type: ignore[return-value]
 
     @property
     def source_schema_file(self) -> Path:
-        """The source schema file (from parent workdir if available)."""
+        """Source schema file path (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.schema_file
         return self.schema_file

@@ -116,7 +116,12 @@ class DatasetInfo(BaseModel):
 
 
 class DatasetRegistry(BaseModel):
-    """Registry of datasets for easy reference by name."""
+    """Registry of datasets for easy reference by name.
+
+    Datasets can be looked up by name via ``get_dataset``.  If the name is
+    not in the registry, a new ``DatasetInfo`` is created on-the-fly treating
+    the name as a literal URL or path.
+    """
 
     datasets: list[DatasetInfo] = Field(default_factory=list)
     """List of datasets in the registry."""
@@ -129,14 +134,24 @@ class DatasetRegistry(BaseModel):
     """
 
     def __init__(self, **data):
+        """Set back-references so each ``DatasetInfo`` can resolve ``base_url``."""
         super().__init__(**data)
         for dataset in self.datasets:
             dataset._registry = self
 
     def get_dataset(self, url: str) -> DatasetInfo:
-        """Get a dataset from the registry.
+        """Look up a dataset by name, creating an ad-hoc entry if not found.
 
-        Automatically adds a new Dataset with name url if it doesn't exist in the registry.
+        When ``url`` matches a registered name the corresponding entry is
+        returned.  Otherwise a new ``DatasetInfo`` is created with the raw
+        ``url`` as both name and path (without a registry back-reference, so
+        relative paths resolve against the working directory).
+
+        Args:
+            url: Dataset name, URL, or file path.
+
+        Returns:
+            Matching or newly created ``DatasetInfo``.
         """
         for dataset in self.datasets:
             if dataset.name == url:
@@ -153,7 +168,17 @@ class DatasetRegistry(BaseModel):
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> Self:
-        """Load a DatasetRegistry from a YAML file."""
+        """Load a ``DatasetRegistry`` from a YAML file.
+
+        Args:
+            path: Path to the YAML file.
+
+        Returns:
+            Parsed registry with back-references set on each dataset.
+
+        Raises:
+            FileNotFoundError: If ``path`` does not exist.
+        """
         if not Path(path).exists():
             raise FileNotFoundError(f"File {path} does not exist")
         with open(path, "r") as f:
