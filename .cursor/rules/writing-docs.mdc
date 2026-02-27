@@ -72,9 +72,9 @@ docs/
 ├── index.md
 ├── getting-started/    # Tutorials
 ├── user-guide/         # How-tos and reference
-├── architecture/       # Explanations
+├── developer-guide/    # Explanations
+├── product-overview/   # Product feature docs
 ├── tutorials/
-├── contributing/
 └── blog/
 ```
 

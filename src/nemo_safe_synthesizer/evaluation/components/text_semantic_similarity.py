@@ -200,9 +200,7 @@ class TextSemanticSimilarity(Component):
 
     @staticmethod
     def _preprocess_text_data(text_data: pd.Series, nrows: int) -> pd.Series:
-        """
-        Helper function to clean and possibly downsample text data.
-        """
+        """Helper function to clean and possibly downsample text data."""
         # Use first column only as a pd.Series
         # Longwinded NOTE:
         # take a df with multiple columns and sniff out the best one.
@@ -277,6 +275,7 @@ class TextSemanticSimilarity(Component):
     def _get_cosine_similarity(real_mean: npt.NDArray[np.single], synth_mean: npt.NDArray[np.single]) -> float:
         """
         Calculates and scales the cosine similarity between the real and synthetic average embeddings.
+
         Args:
             real_mean : mean of the real embedded vectors
             synth_mean : mean of the synthetic embedded vectors
@@ -303,7 +302,6 @@ class TextSemanticSimilarity(Component):
             curving is applied. Practically the scores are expected to be between 3.7
             (worst) and 10 (best).
         """
-
         try:
             return sem_sim * 10
 
@@ -341,7 +339,6 @@ class TextSemanticSimilarity(Component):
         samples with a "greater" alternative to capture underfitting. They combine
         to deliver the final raw score, which is then rescaled and graded.
         """
-
         # Compare distributions
 
         # Calculate cosine similarity using the dot product (equivalent as
@@ -432,6 +429,7 @@ class TextSemanticSimilarity(Component):
         """
         PCA on train and synthetic dataframes.  See https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html.
         Also, plots the scatter matrix of the first "n_components" of the real and synthetic data.
+
         Args:
             reference: The dataframe of training text embeddings to analyze for principal components. Must be all numeric values.
             output: The dataframe of synthetic text embeddings to analyze for principal components. Must be all numeric values.

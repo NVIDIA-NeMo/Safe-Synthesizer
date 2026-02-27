@@ -51,7 +51,7 @@ if [ -z "$filtered_files" ]; then
 fi
 
 # Resolve ruff
-if ! which ruff > /dev/null; then
+if ! command -v ruff >/dev/null 2>&1; then
     echo "ruff not found, falling back to uvx"
     RUFF="uvx ruff"
 else

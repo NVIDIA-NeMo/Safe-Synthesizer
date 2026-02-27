@@ -18,7 +18,6 @@ from typing import (
     Literal,
     Optional,
     Protocol,
-    Type,
     TypeVar,
     Union,
     cast,
@@ -74,7 +73,7 @@ class ValidateBatchPhase(str, Enum):
     VALIDATE_BATCH = "validate_batch"
 
 
-FunctionPhase = Union[ProcessPhase, ValidateBatchPhase]
+FunctionPhase = ProcessPhase | ValidateBatchPhase
 
 
 BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
@@ -232,7 +231,7 @@ class BaseAction(BaseModel, ABC):
     def set_state(self, state_obj: BaseModel) -> None:
         self._ctx.state[self.hash()] = state_obj.model_dump_json()
 
-    def get_state(self, state_obj_type: Type[BaseModelT]) -> BaseModelT:
+    def get_state(self, state_obj_type: type[BaseModelT]) -> BaseModelT:
         state_obj_json = self._ctx.state[self.hash()]
         return state_obj_type.model_validate(json.loads(state_obj_json))
 
@@ -271,9 +270,7 @@ class GenerateAction(BaseAction, ABC):
 
     @abstractmethod
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generate new data based on the existing data in the dataframe.
-        """
+        """Generate new data based on the existing data in the dataframe."""
         ...
 
     def generate_records(self, num_records: int) -> list[dict[Hashable, Any]]:
@@ -414,9 +411,7 @@ class ReplaceDataSource(BaseAction):
 
 
 class GenDatetimeDistribution(GenerateAction):
-    """
-    Generate a datetime from a provided datetime distribution.
-    """
+    """Generate a datetime from a provided datetime distribution."""
 
     type_: Literal["gen_datetime_distribution"] = "gen_datetime_distribution"
     col: str
@@ -583,7 +578,7 @@ class DatetimeCol(ColAction):
 
 class CategoricalCol(ColAction):
     type_: Literal["categorical"] = "categorical"
-    values: list[Union[str, int, float]]
+    values: list[str | int | float]
 
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
         return batch[self.name].isin(self.values)
@@ -613,13 +608,13 @@ the actions before they register with `__subclasses__`. Currently all the action
 are in this module, however, so that isn't an issue.
 """
 ActionT = Annotated[BaseAction, Field(discriminator="type_")]
-ActionT.__origin__ = Union[tuple(concrete_subclasses(BaseAction))]  # type: ignore
+ActionT.__origin__ = Union[tuple(concrete_subclasses(BaseAction))]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
 GenerateActionT = Annotated[GenerateAction, Field(discriminator="type_")]
-GenerateActionT.__origin__ = Union[tuple(concrete_subclasses(GenerateAction))]  # type: ignore
+GenerateActionT.__origin__ = Union[tuple(concrete_subclasses(GenerateAction))]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
 ColT = Annotated[ColAction, Field(discriminator="type_")]
-ColT.__origin__ = Union[tuple(concrete_subclasses(ColAction))]  # type: ignore
+ColT.__origin__ = Union[tuple(concrete_subclasses(ColAction))]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
 
 class ActionExecutor(BaseModel):
@@ -696,9 +691,7 @@ class ActionExecutor(BaseModel):
 def data_actions_fn(
     action_executor: ActionExecutor,
 ) -> utils.DataActionsFn:
-    """
-    applies an action executor to a dataframe.
-    """
+    """Applies an action executor to a dataframe."""
 
     def fn(batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         logger.info("Applying data_config postprocessing")

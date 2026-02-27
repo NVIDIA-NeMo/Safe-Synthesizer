@@ -58,9 +58,7 @@ class EntityExtractorMock(EntityExtractorGliner):
 
 
 class ColumnClassifierMock(ColumnClassifier):
-    """
-    Classifier with no backend; uses hard coded mapping.
-    """
+    """Classifier with no backend; uses hard coded mapping."""
 
     _num_samples: Optional[int]
 

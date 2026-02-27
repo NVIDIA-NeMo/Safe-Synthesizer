@@ -58,7 +58,7 @@ def _add_info_to_manifest(context: AnalyzerContext, fields: list[FieldFeatures])
         manifest.add_feature(key, value)
 
     # serialize to dict and anonymize field names
-    fields_dict = [field.dict() for field in fields]
+    fields_dict = [field.to_dict() for field in fields]
     for field_dict in fields_dict:
         field_dict["name"] = context.field_name_anonymizer.anonymize(field_dict["name"])
 
@@ -145,12 +145,12 @@ def _calculate_aggregates(fields: list[FieldFeatures], context: AnalyzerContext)
 def _max_aggregate(fields: list[FieldFeatures], cmp_key: callable, item_fn: callable) -> list[dict[str, Any]] | None:
     """
     Calculates MAX() aggregate.
+
     Args:
         fields: list of fields for calculation
         cmp_key: function that extracts key based on which fields are compared
         item_fn: function that creates an item with information about the field that has max value
     """
-
     max_field = max(fields, key=lambda field: cmp_key(field) or 0)
     if cmp_key(max_field) is not None:
         max_value = cmp_key(max_field)
@@ -268,9 +268,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
 
 
 def floor_power_of_10(value: int | float) -> int | float:
-    """
-    Returns the biggest power of 10 that is smaller than the provided value.
-    """
+    """Returns the biggest power of 10 that is smaller than the provided value."""
     if value == 0:
         return 1
 

@@ -189,7 +189,6 @@ def _run_csv_writer(df: pd.DataFrame):
 
     Any normalized DataFrame should successfully write without errors.
     """
-
     output = BytesIO()
     df.to_csv(output, index=False)
 
@@ -324,7 +323,6 @@ def test_extract_timestamp_seconds():
 
 def test_validate_time_interval_cases():
     """Test _validate_time_interval in multiple cases: first record, valid, invalid, day rollover."""
-
     # First record (no previous timestamp)
     result_seconds, result_offset, error = _validate_time_interval(
         timestamp_seconds=0,

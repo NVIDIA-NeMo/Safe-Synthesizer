@@ -138,7 +138,6 @@ class DatasetRegistry(BaseModel):
 
         Automatically adds a new Dataset with name url if it doesn't exist in the registry.
         """
-
         for dataset in self.datasets:
             if dataset.name == url:
                 return dataset

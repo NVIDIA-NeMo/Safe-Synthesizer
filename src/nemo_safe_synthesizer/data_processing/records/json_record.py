@@ -9,7 +9,7 @@ of automatic processing and field-level tracking done
 """
 
 from itertools import chain, starmap
-from typing import Optional, Tuple
+from typing import Optional
 
 from . import base
 from .value_path import (
@@ -51,7 +51,7 @@ def flatten(raw, array_marker=base.ARRAY_POS):
     return raw
 
 
-def remove_gretel_array_markers(data: str) -> Tuple[str, int, base.ValuePath]:
+def remove_gretel_array_markers(data: str) -> tuple[str, int, base.ValuePath]:
     array_count = 0
     parts = data.split(base.NESTING_DELIM)
     path_items = []

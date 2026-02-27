@@ -4,7 +4,7 @@
 import dataclasses
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 
 class ManifestStatus(StrEnum):
@@ -50,30 +50,30 @@ class ArtifactManifest:
     error_message: Optional[str] = None
     error_trace: Optional[str] = None
 
-    manifest: Dict[str, Any] = field(default_factory=dict)
+    manifest: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def fields(self) -> Dict[str, list]:
+    def fields(self) -> dict[str, list]:
         return self.manifest.get("fields", {})
 
     @property
-    def types(self) -> List[dict]:
+    def types(self) -> list[dict]:
         return self.manifest.get("types", [])
 
     @fields.setter
-    def fields(self, value: Dict[str, list]) -> None:
+    def fields(self, value: dict[str, list]) -> None:
         self.manifest["fields"] = value
 
     @property
-    def data_check_results(self) -> List[Dict[str, Any]]:
+    def data_check_results(self) -> list[dict[str, Any]]:
         return self.manifest.get("data_check_results", [])
 
     @data_check_results.setter
-    def data_check_results(self, value: List[Dict[str, Any]]) -> None:
+    def data_check_results(self, value: list[dict[str, Any]]) -> None:
         self.manifest["data_check_results"] = value
 
     def add_feature(self, name: str, value: Any):
         self.manifest[name] = value
 
-    def dict(self) -> Dict[str, Any]:
+    def dict(self) -> dict[str, Any]:
         return {key: value for key, value in dataclasses.asdict(self).items() if value is not None}

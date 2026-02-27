@@ -72,9 +72,7 @@ def update_group_by_config(
     ],
 )
 def test_clinc_oos_dataset(fixture_clinc_oos_dataset, config_file, quality_threshold, privacy_threshold):
-    """
-    Test CLINC OOS, a free text dataset, with different models and DP settings.
-    """
+    """Test CLINC OOS, a free text dataset, with different models and DP settings."""
     df = fixture_clinc_oos_dataset
     config = SafeSynthesizerParameters.from_yaml(CONFIG_DIR / config_file)
     config = AutoConfigResolver(df, config)()
@@ -134,9 +132,7 @@ def test_clinc_oos_dataset(fixture_clinc_oos_dataset, config_file, quality_thres
     ],
 )
 def test_dow_jones_index_dataset(fixture_dow_jones_index_dataset, config_file, quality_threshold, privacy_threshold):
-    """
-    Test Dow Jones Index dataset, a group-by-order-by dataset, with different models and DP settings.
-    """
+    """Test Dow Jones Index dataset, a group-by-order-by dataset, with different models and DP settings."""
     df = fixture_dow_jones_index_dataset.to_pandas()
     config = SafeSynthesizerParameters.from_yaml(CONFIG_DIR / config_file)
     config = update_group_by_config(config, "stock", "date")

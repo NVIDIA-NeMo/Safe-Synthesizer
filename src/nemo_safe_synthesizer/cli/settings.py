@@ -184,35 +184,35 @@ class CLISettings(BaseSettings):
 
     @property
     def effective_artifact_path(self) -> Path:
-        """Get the effective artifact path, using default if not set."""
+        """The effective artifact path, using default if not set."""
         if self.artifact_path:
             return Path(self.artifact_path)
         return DEFAULT_ARTIFACTS_PATH
 
     @property
     def effective_log_format(self) -> Literal["json", "plain"]:
-        """Get the effective log format, falling back to observability settings."""
+        """The effective log format, falling back to observability settings."""
         if self.log_format is not None:
             return self.log_format
         return self.observability.nss_log_format or "plain"
 
     @property
     def effective_log_color(self) -> bool:
-        """Get the effective log color setting, falling back to observability settings."""
+        """The effective log color setting, falling back to observability settings."""
         if self.log_color is not None:
             return self.log_color
         return self.observability.nss_log_color
 
     @property
     def effective_wandb_mode(self) -> WandbMode:
-        """Get the effective wandb mode, falling back to wandb settings."""
+        """The effective wandb mode, falling back to wandb settings."""
         if self.wandb_mode is not None:
             return self.wandb_mode
         return self.wandb.wandb_mode
 
     @property
     def effective_wandb_project(self) -> str | None:
-        """Get the effective wandb project, falling back to wandb settings."""
+        """The effective wandb project, falling back to wandb settings."""
         if self.wandb_project is not None:
             return self.wandb_project
         return self.wandb.wandb_project

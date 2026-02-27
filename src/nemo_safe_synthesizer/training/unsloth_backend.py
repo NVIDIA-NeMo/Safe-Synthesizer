@@ -19,36 +19,23 @@ class UnslothTrainer(HuggingFaceBackend):
     training routines, which provide faster training speeds and reduced memory
     usage compared to standard HuggingFace implementations.
 
-    Parameters
-    ----------
-    *args : tuple
-        Positional arguments passed to the parent HuggingFaceBackend.
-    **kwargs : dict
-        Keyword arguments passed to the parent HuggingFaceBackend. Additionally
-        supports:
+    Args:
+        *args: Positional arguments passed to the parent HuggingFaceBackend.
+        **kwargs: Keyword arguments passed to the parent HuggingFaceBackend. Additionally
+            supports:
+            - rope_scaling (RopeScaling, optional): RoPE scaling configuration from model metadata.
+            - torch_dtype (torch.dtype, optional): Data type for model weights.
+            - quantization_config (dict, optional): Configuration for model quantization.
 
-        rope_scaling : RopeScaling, optional
-            RoPE (Rotary Position Embedding) scaling configuration from model metadata.
-        torch_dtype : torch.dtype, optional
-            Data type for model weights.
-        quantization_config : dict, optional
-            Configuration for model quantization.
+    Attributes:
+        trainer_type: Reference to FastLanguageModel class from Unsloth.
+        model_loader_type: Reference to FastLanguageModel class for model loading.
 
-    Attributes
-    ----------
-    trainer_type : type
-        Reference to FastLanguageModel class from Unsloth.
-    model_loader_type : type
-        Reference to FastLanguageModel class for model loading.
+    Raises:
+        RuntimeError: If CUDA is not available, as Unsloth requires GPU support.
 
-    Raises
-    ------
-    RuntimeError
-        If CUDA is not available, as Unsloth requires GPU support.
-
-    See Also
-    --------
-    HuggingFaceBackend : Parent class providing base training functionality.
+    See Also:
+        HuggingFaceBackend: Parent class providing base training functionality.
     """
 
     def __init__(self, *args, **kwargs):
@@ -110,16 +97,13 @@ class UnslothTrainer(HuggingFaceBackend):
         using Unsloth's optimized implementation. The PEFT wrapping is always
         applied to ensure the adapter is saved correctly.
 
-        Parameters
-        ----------
-        **quant_params : dict
-            Additional quantization parameters to override defaults.
-            These are merged with the base quantization configuration.
+        Args:
+            **quant_params: Additional quantization parameters to override defaults.
+                These are merged with the base quantization configuration.
 
-        Notes
-        -----
-        Unlike the parent class implementation, this method uses Unsloth's
-        `FastLanguageModel.get_peft_model`.
+        Note:
+            Unlike the parent class implementation, this method uses Unsloth's
+            `FastLanguageModel.get_peft_model`.
         """
         from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
 
@@ -131,8 +115,7 @@ class UnslothTrainer(HuggingFaceBackend):
         self.model = FastLanguageModel.get_peft_model(self.model, **qparams)
 
     def _load_pretrained_model(self, **model_args):
-        """unsloth loads as s tuple of model and tokenizer, we need to add the bos and eos tokens to the tokenizer"""
-
+        """Unsloth loads a tuple of model and tokenizer, we need to add the bos and eos tokens to the tokenizer"""
         model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)
 
         self.tokenizer = add_bos_eos_tokens_to_tokenizer(
@@ -143,21 +126,18 @@ class UnslothTrainer(HuggingFaceBackend):
     def load_model(self, **model_args):
         """Load a pretrained model using Unsloth's FastLanguageModel.
 
-        Parameters
-        ----------
-        **model_args : dict
-            Additional keyword arguments for model configuration.
+        Args:
+            **model_args: Additional keyword arguments for model configuration.
 
-        Notes
-        -----
-        This method applies a workaround that disables Unsloth's LLAMA32
-        support check to prevent unnecessary HuggingFace Hub requests.
-        See: https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235
+        Note:
+            This method applies a workaround that disables Unsloth's LLAMA32
+            support check to prevent unnecessary HuggingFace Hub requests.
+            See: https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235
 
-        The method follows this sequence:
-        1. Configure model loading parameters
-        2. Load the pretrained model
-        3. Apply quantization if enabled
+            The method follows this sequence:
+            1. Configure model loading parameters
+            2. Load the pretrained model
+            3. Apply quantization if enabled
         """
         # NOTE: this hack stops unsloth from reaching out to huggingface, see
         # https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235

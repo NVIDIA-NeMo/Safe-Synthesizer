@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Union
+from collections.abc import Callable, Iterable
 
 from .models import (
     ModelManifest,
@@ -103,7 +103,7 @@ num_chars = frozenset(
 )
 
 
-def char_check(method: Union[all, any], query: str, check_set: frozenset):
+def char_check(method: Callable[[Iterable[bool]], bool], query: str, check_set: frozenset):
     return method(map(lambda s: s in query, check_set))
 
 

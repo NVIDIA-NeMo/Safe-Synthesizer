@@ -52,6 +52,11 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
   ```
+5. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+  ```bash
+   echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
+  ```
+   Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
 
 ### NMP Integration
 
@@ -291,6 +296,8 @@ Before submitting a PR:
 
 ## Code Style
 
+For detailed style guidelines covering Python, markdown, Dockerfiles, shell scripts, testing, and docstrings, see [STYLE_GUIDE.md](STYLE_GUIDE.md).
+
 ### Formatting
 
 We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and linting auto-fix, plus a copyright header fixer. `make format` mutates files — it runs the same fixers as pre-commit.
@@ -385,16 +392,6 @@ API reference pages are auto-generated from Python docstrings. The `mkdocstrings
 ### Deployment
 
 Documentation is deployed to GitHub Pages automatically when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main`. The workflow is defined in `.github/workflows/docs.yml`.
-
-## AI Agents
-
-This project supports AI coding assistants (Cursor, Windsurf, Claude Code). Key files:
-- `AGENTS.md` -- primary agent guide
-- `.agent/skills/` -- domain-specific skills (canonical location)
-- `.cursor/rules/` -- Cursor workflow rules
-- `.cursor/skills/` -- symlinks to `.agent/skills/` for Cursor discoverability
-
-Before contributing, run `make format` and `make lint`. See AGENTS.md for full conventions.
 
 ## AI Agents
 

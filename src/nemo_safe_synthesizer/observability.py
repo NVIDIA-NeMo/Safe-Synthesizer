@@ -321,9 +321,7 @@ def _prepare_json_logging() -> tuple[
 
 
 def _prepare_file_logging() -> logging.Handler | None:
-    """
-    Prepare file logging for JSON logs.
-    """
+    """Prepare file logging for JSON logs."""
     if SETTINGS and SETTINGS.nss_log_file:
         json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
         json_foreign_pre_chain = [
@@ -653,10 +651,7 @@ class CategoryLogger(logging.Logger):
 
 
 def _initialize_logging():
-    """
-    Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability().
-    """
-
+    """Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability()."""
     SETTINGS.__init__()
     program_level, dependencies_level = verbosity_mapping[SETTINGS.nss_log_level.upper()]
     _clear_loggers()

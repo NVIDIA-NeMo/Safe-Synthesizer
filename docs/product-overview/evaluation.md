@@ -9,8 +9,8 @@ Evaluation is a critical component of Safe Synthesizer that helps you understand
 
 The evaluation system compares your original and synthetic datasets using two main frameworks:
 
-1. **Synthetic Quality Score (SQS)**: Measures how well the synthetic data preserves statistical properties and utility
-2. **Data Privacy Score (DPS)**: Assesses privacy protection and resistance to various attack vectors
+1. Synthetic Quality Score (SQS): measures how well the synthetic data preserves statistical properties and utility
+2. Data Privacy Score (DPS): assesses privacy protection and resistance to various attack vectors
 
 Each framework consists of multiple metrics that are combined into an overall score.
 

@@ -99,7 +99,6 @@ class GenerateJobResults:
 class GenerationBatches(object):
     """Object that tracks the various batches during the generation phase of a job. Mostly internal for the Generator backend
 
-
     Args:
         target_num_records: The target number of records to generate.
         batches: A list of BatchResults objects.
@@ -214,22 +213,22 @@ class GenerationBatches(object):
 
     @property
     def num_batches(self) -> int:
-        """Return the number of batches in the generation job."""
+        """The number of batches in the generation job."""
         return len(self._batches)
 
     @property
     def num_prompts(self) -> int:
-        """Return the total number of prompts processed in the generation job."""
+        """The total number of prompts processed in the generation job."""
         return sum([batch.num_prompts for batch in self._batches])
 
     @property
     def num_invalid_records(self) -> int:
-        """Return the total number of invalid records generated in the generation job."""
+        """The total number of invalid records generated in the generation job."""
         return sum([batch.num_invalid_records for batch in self._batches])
 
     @property
     def num_valid_records(self) -> int:
-        """Return the total number of valid records generated in the generation job."""
+        """The total number of valid records generated in the generation job."""
         return sum([batch.num_valid_records for batch in self._batches])
 
     def add_batch(self, batch: Batch) -> None:

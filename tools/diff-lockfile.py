@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""diff-lockfile: compare uv.lock between git refs and report dependency changes.
+r"""diff-lockfile: compare uv.lock between git refs and report dependency changes.
 
 Parses two versions of a uv.lock file (base ref vs head ref) and categorizes
 every package version change as added, removed, upgraded, or downgraded.
