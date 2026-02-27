@@ -212,6 +212,12 @@ The `main` branch has the following protections:
   ```
 6. Open a Pull Request using the [PR template](.github/PULL_REQUEST_TEMPLATE.md)
 7. Address review feedback — reviewers from [CODEOWNERS](.github/CODEOWNERS) will be automatically assigned
+   - Respond to comments in the github console, be sure to submit as pending comments are only visible to you
+   - Resolve comments where the requested change has been made
+   - Leave comments unresolved if seeking further review or input from the reviewer
+   - Reviewers may re-open resolved comments with further comments or questions, that's okay and part of the process
+   - After responding to all comments and pushing changes to the branch, re-request review with the circular arrow button to the right of the reviewer name
+   - Use the Assignees list to indicate who's expected to take the next action on the PR, such as PR author after reviewer leaves comments, or the reviewer after updates have been made
 8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted
 
 ### CODEOWNERS
