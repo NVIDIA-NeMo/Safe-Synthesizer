@@ -484,6 +484,8 @@ class RopeScaling(BaseModel):
     """Base frequency for rotary embeddings."""
 ```
 
+When a field uses `Field(description=...)`, duplicate the description in the inline docstring.
+
 Fields without defaults, with defaults, and with `Field()` all follow the same pattern:
 
 ```python
@@ -649,7 +651,19 @@ The before/after examples above demonstrate most rules. These additional points 
 - Document side effects, thread safety, and idempotency guarantees where applicable
 - Use `Example:` sections with working code for public API methods
 - Complex code deserves proportionally detailed explanation -- err on the side of more context
-- Cross-references in docstrings: use double backticks (` `` `) for inline code. For clickable API cross-links, use the `mkdocstrings` autorefs syntax: `` [`display`][full.dotted.path] `` (e.g. `` [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config] ``). Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
+- Cross-references in docstrings: use double backticks for inline code. For clickable API cross-links, use the `mkdocstrings` autorefs syntax:
+
+  ```
+  [`display`][full.dotted.path]
+  ```
+
+  For example:
+
+  ```
+  [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config]
+  ```
+
+  Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
 
 ### Patterns to avoid
 
