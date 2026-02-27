@@ -99,7 +99,7 @@ training:
   - o_proj
   lr_scheduler: cosine
   num_input_records_to_sample: auto
-  pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  pretrained_model: HuggingFaceTB/SmolLM3-3B
   rope_scaling_factor: auto
   use_unsloth: auto
   validation_ratio: 0.0
@@ -151,7 +151,9 @@ def load_test_dataframe(filename: str) -> pd.DataFrame:
 
 @pytest.fixture
 def fixture_stub_tokenizer_path() -> str:
-    return str(Path(__file__).parent / "stub_tokenizer")
+    return str(Path(__file__).parent / "test_data" / "tokenizers" / "smollm3b")
+    
+
 
 
 # Purpose: Iris dataset fixture (train split) for quick test sampling.

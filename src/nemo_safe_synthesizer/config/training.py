@@ -71,7 +71,7 @@ class TrainingHyperparams(Parameters):
             The range should be 0 to 1. If set to 0, no validation will be performed.
             If set larger than 0, validation loss will be computed and reported throughout training.
         validation_steps: The number of steps between validation checks for the HF Trainer arguments.
-        pretrained_model: Pretrained model to use for fine-tuning. Uses default of TinyLlama.
+        pretrained_model: Pretrained model to use for fine-tuning. Uses default of SmolLM3.
         quantize_model: Whether to quantize the model during training. This can reduce memory usage
             and potentially speed up training, but may also impact model accuracy.
         quantization_bits: The number of bits to use for quantization if `quantize_model` is True.
@@ -244,9 +244,9 @@ class TrainingHyperparams(Parameters):
         str,
         Field(
             title="pretrained_model",
-            description="Pretrained model to use for fine tuning. Uses default of TinyLlama.",
+            description="Pretrained model to use for fine tuning. Uses default of SmolLM3.",
         ),
-    ] = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    ] = "HuggingFaceTB/SmolLM3-3B"
 
     quantize_model: Annotated[
         bool,
