@@ -1,18 +1,28 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-This module contains the ModelMetadata class, which is used to store model-family-specific
-information - prompt formats, and our program runtime information. the most problematic
-part of this module is the rope_scaling logic, which is used to scale the context window
-of the model based on the tokens in the dataset.
+"""Model-family metadata for prompt formatting, RoPE scaling, and runtime bookkeeping.
 
-We should probably change how users specify this up front in the parameters, using
-something like "context_window_size" or "max_context_window_size".  and determine if we
-should use rope scaling or not from that, the model, and the data itself.
+Provides ``ModelMetadata`` and its per-family subclasses (``Llama32``,
+``Mistral``, ``Qwen``, etc.) that capture prompt templates, special-token
+settings, and context-window configuration.  The ``RopeScaling`` model
+handles context-window extension via Rotary Position Embeddings.
 
-Currently we're using the global max sequence length of 2048 * 6 to prevent OOM errors
-and underfitting errors.
+A global maximum sequence length (``GLOBAL_MAX_SEQ_LENGTH = 2048 * 6``)
+is applied as a safety cap to prevent OOM and underfitting errors.
+
+Classes:
+    LLMPromptConfig: Prompt template and special-token settings.
+    RopeScaling: RoPE scaling parameters for context-window extension.
+    ModelMetadata: Base container for model-family-specific metadata.
+    Granite: IBM Granite family metadata.
+    Llama32: Meta Llama 3.2 family metadata.
+    Mistral: Mistral AI family metadata.
+    Nemotron: NVIDIA Nemotron family metadata.
+    Qwen: Alibaba Qwen family metadata.
+    SmolLM2: HuggingFace SmolLM2 family metadata.
+    SmolLM3: HuggingFace SmolLM3 family metadata.
+    TinyLlama: TinyLlama family metadata.
 """
 
 from __future__ import annotations
@@ -46,35 +56,36 @@ class LLMPromptConfig(BaseModel):
     Holds the Jinja-style prompt ``template`` together with flags and
     token values that control how BOS/EOS markers are injected during
     training and inference.
-
-    Attributes:
-        template: Prompt template string with three placeholders:
-
-            * ``{instruction}`` — task directive telling the model what
-              to generate (e.g. *"Generate a JSONL dataset with the
-              following columns: "*).
-            * ``{schema}`` — column schema fragment listing expected
-              output fields, typically formatted as
-              ``"col":<unk>,"col2":<unk>``.
-            * ``{prefill}`` — optional text injected at the start of
-              the model's response to steer generation, currently used
-              for time series data.
-        add_bos_token_to_prompt: Whether to prepend the BOS token.
-        add_eos_token_to_prompt: Whether to append the EOS token.
-        bos_token: Beginning-of-sequence token string.
-        bos_token_id: Integer id for the BOS token.
-        eos_token: End-of-sequence token string.
-        eos_token_id: Integer id for the EOS token.
     """
 
     template: str
+    """Prompt template with ``{instruction}``, ``{schema}``, and ``{prefill}`` placeholders.
+
+    * ``{instruction}`` -- task directive telling the model what to generate
+      (e.g. "Generate a JSONL dataset with the following columns: ").
+    * ``{schema}`` -- column schema fragment listing expected output fields,
+      typically formatted as ``"col":<unk>,"col2":<unk>``.
+    * ``{prefill}`` -- optional text injected at the start of the model's
+      response to steer generation, currently used for time series data.
+    """
+
     add_bos_token_to_prompt: bool
+    """Whether to prepend the BOS token to the prompt."""
+
     add_eos_token_to_prompt: bool
+    """Whether to append the EOS token to the prompt."""
 
     bos_token: str
+    """Beginning-of-sequence token string."""
+
     bos_token_id: int
+    """Integer id for the BOS token."""
+
     eos_token: str
+    """End-of-sequence token string."""
+
     eos_token_id: int
+    """Integer id for the EOS token."""
 
     @classmethod
     def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
@@ -165,21 +176,19 @@ class RopeScaling(BaseModel):
     Encapsulates the parameters needed to extend a model's context
     window via RoPE scaling.  Will be superseded by
     ``RotaryEmbeddingConfigMixin`` when available in transformers v5.
-
-    Attributes:
-        rope_type: Scaling algorithm — one of ``"linear"``,
-            ``"dynamic"``, ``"default"``, ``"yarn"``, or ``"llama3"``.
-        factor: Context-window multiplier. Clamped to
-            ``MAX_ROPE_SCALING_FACTOR``.
-        theta: Base frequency for rotary embeddings.
     """
 
     rope_type: Annotated[
         Literal["linear", "dynamic", "default", "yarn", "llama3"],
         Field(description="Type of rope scaling"),
     ] = "default"
+    """Scaling algorithm (``"linear"``, ``"dynamic"``, ``"default"``, ``"yarn"``, or ``"llama3"``)."""
+
     factor: Annotated[float, Field(description="Multiplier for rope scaling to extend context window")] = 1.0
+    """Context-window multiplier, clamped to ``MAX_ROPE_SCALING_FACTOR``."""
+
     theta: Annotated[float, Field(description="Theta for rope scaling")] = 10000.0
+    """Base frequency for rotary embeddings."""
 
     @field_validator("factor", mode="after")
     @classmethod
@@ -249,53 +258,66 @@ class ModelMetadata(BaseModel):
     subclass (e.g. ``Llama32``, ``Mistral``) that sets the correct
     defaults.
 
-    Use the factory methods :meth:`from_str_or_path`, :meth:`from_config`,
-    or :meth:`from_metadata_json` to construct instances rather than
-    calling the constructor directly.
-
-    Attributes:
-        model_name_or_path: HuggingFace model identifier or local path.
-        prompt_config: Prompt template and token settings.
-        autoconfig: HuggingFace ``PretrainedConfig`` (excluded from
-            serialisation).
-        base_max_seq_length: Context window size **before** RoPE scaling.
-        rope_scaling: RoPE scaling configuration, auto-populated when
-            not supplied.
-        max_sequences_per_example: Cap on sequences packed into one
-            training example (must be ``1`` for differential privacy).
-        workdir: Artifact directory layout.
-        is_adapter: Whether an adapter checkpoint is loaded.
-        instruction: Default system instruction text.
-        rope_parameters_location: Where to read RoPE parameters from
-            (``"autoconfig"`` or ``"automodel"``).
-        initial_prefill: Optional prefill text for generation.  May be
-            a single string or a per-column dict.
+    Use the factory methods [`from_str_or_path`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_str_or_path],
+    [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config],
+    or [`from_metadata_json`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_metadata_json]
+    to construct instances rather than calling the constructor directly.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     model_name_or_path: str
+    """HuggingFace model identifier or local path."""
+
     prompt_config: LLMPromptConfig
+    """Prompt template and token settings."""
+
     autoconfig: Annotated[PretrainedConfig, Field(description="PretrainedConfig object for the model", exclude=True)]
+    """HuggingFace ``PretrainedConfig`` (excluded from serialization)."""
+
     base_max_seq_length: Annotated[
         int | None,
         Field(description="Supported context window for base model, before rope scaling factor adjustment"),
     ] = None
+    """Context window size before RoPE scaling."""
+
     rope_scaling: Annotated[
         RopeScaling | MISSING | None,  # type: ignore[invalid-type-form]
         Field(
             description="RoPE scaling configuration for context window extension. will be auto-populated if not provided. if an integer is provided, it will be used as the factor and theta will be set to 10000.0",
         ),
     ] = MISSING
+    """RoPE scaling configuration, auto-populated when not supplied."""
+
     max_sequences_per_example: Annotated[
         int | None,
         Field(description="Maximum number of sequences per training example."),
     ] = None
+    """Cap on sequences packed into one training example.
+
+    Resolved by ``AutoConfigResolver`` to ``1`` when DP is enabled,
+    ``10`` when DP is disabled and set to ``"auto"``, or a
+    user-supplied integer.
+    """
+
     workdir: Workdir | None = None
+    """Artifact directory layout."""
+
     is_adapter: bool = False
+    """Whether an adapter checkpoint is loaded."""
+
     instruction: str = DEFAULT_INSTRUCTION
+    """Default system instruction text."""
+
     rope_parameters_location: Literal["autoconfig", "automodel"] = "automodel"
+    """Where to read RoPE parameters from (``"autoconfig"`` or ``"automodel"``)."""
+
     initial_prefill: dict[str, str] | str | None = None
+    """Optional prefill text for generation.
+
+    Currently used for time series data. May be a single string or a
+    per-column dict.
+    """
 
     @model_validator(mode="before")
     @classmethod
@@ -330,7 +352,7 @@ class ModelMetadata(BaseModel):
         """Serialize ``PretrainedConfig`` to a plain dict for JSON export.
 
         Args:
-            config: The HuggingFace config to serialise.
+            config: The HuggingFace config to serialize.
 
         Returns:
             Dict representation of the config.
@@ -352,8 +374,8 @@ class ModelMetadata(BaseModel):
     def metadata_path(self) -> Path:
         """The path to the metadata JSON file.
 
-        Uses workdir.metadata_file which automatically resolves to the parent
-        workdir's path when resuming for generation.
+        Uses ``workdir.metadata_file`` which automatically resolves to the
+        parent workdir's path when resuming for generation.
 
         Raises:
             ValueError: If workdir is not set.
@@ -424,10 +446,11 @@ class ModelMetadata(BaseModel):
         ``AutoConfigResolver`` before calling this method.
 
         If ``rope_scaling_factor`` is set, a ``RopeScaling`` object is
-        created with the model's native theta.  If
-        ``max_sequences_per_example`` is set in ``config.data`` it is
-        forwarded to constrain sequence packing (must be ``1`` for
-        differential privacy).
+        created with the model's native theta.
+        ``max_sequences_per_example`` is always forwarded from
+        ``config.data`` -- ``AutoConfigResolver`` resolves it to ``1``
+        when DP is enabled, ``10`` when set to ``"auto"`` with DP
+        disabled, or the user-supplied integer.
 
         Args:
             config: Resolved parameters with model and training
@@ -505,7 +528,7 @@ class Granite(ModelMetadata):
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Optional RoPE scaling factor.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -540,7 +563,7 @@ class Llama32(ModelMetadata):
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Optional RoPE scaling factor.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -570,14 +593,14 @@ class Llama32(ModelMetadata):
 class Mistral(ModelMetadata):
     """Metadata for Mistral AI model family.
 
-    RoPE scaling is **not supported** for Mistral models. Any supplied
+    RoPE scaling is not supported for Mistral models. Any supplied
     ``rope_scaling_factor`` will be ignored with a warning.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Ignored with a warning if provided.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -618,7 +641,7 @@ class Nemotron(ModelMetadata):
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Optional RoPE scaling factor.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -651,7 +674,7 @@ class Qwen(ModelMetadata):
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Optional RoPE scaling factor.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -681,14 +704,14 @@ class Qwen(ModelMetadata):
 class SmolLM2(ModelMetadata):
     """Metadata for HuggingFace SmolLM2 model family (e.g. ``SmolLM2-135M``).
 
-    RoPE scaling is **not supported** and any supplied ``rope_scaling_factor``
+    RoPE scaling is not supported and any supplied ``rope_scaling_factor``
     will be ignored with a warning.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Ignored with a warning if provided.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -724,14 +747,14 @@ class SmolLM3(ModelMetadata):
     """Metadata for HuggingFace SmolLM3 model family.
 
     Uses ``<|im_start|>`` (id 128011) as the BOS token.  RoPE scaling
-    is **not supported**. Any supplied ``rope_scaling_factor`` will be
+    is not supported. Any supplied ``rope_scaling_factor`` will be
     ignored with a warning.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Ignored with a warning if provided.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
@@ -777,7 +800,7 @@ class TinyLlama(ModelMetadata):
         model_name_or_path: HuggingFace model identifier or local path.
         tokenizer: Optional pre-loaded tokenizer.
         rope_scaling_factor: Optional RoPE scaling factor.
-        **kwargs: Forwarded to :class:`ModelMetadata`.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
     def __init__(
