@@ -194,7 +194,7 @@ class TestBuildStructuredOutputParams:
             backend._build_structured_output_params()
 
             mock_build_regex.assert_called_once()
-            call_args, _  = mock_build_regex.call_args
+            call_args, _ = mock_build_regex.call_args
             assert call_args[1].data.group_training_examples_by == "category"
 
 
