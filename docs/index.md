@@ -34,7 +34,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://desfontain.
 
     ---
 
-    Learn about the the pipeline steps: replace PII, synthesize data, evaluate.
+    Learn about the pipeline steps: replace PII, synthesize data, evaluate.
 
     [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
 
