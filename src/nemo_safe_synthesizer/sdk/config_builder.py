@@ -214,7 +214,7 @@ class ConfigBuilder(object):
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure time-series generation settings.
+        """Configure time-series synthesis settings.
 
         Args:
             config: Time-series configuration object or dict.
