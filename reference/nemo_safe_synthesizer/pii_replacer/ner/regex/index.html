@@ -9226,7 +9226,7 @@ applied.</p>
       instance-attribute
    (nemo_safe_synthesizer.pii_replacer.ner.regex.Pattern.header_contexts)" href="#nemo_safe_synthesizer.pii_replacer.ner.regex.Pattern.header_contexts">header_contexts</a></code></td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.List">List</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.Pattern">Pattern</span>]]]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="list">list</span>[<span title="str">str</span> | <span title="typing.Pattern">Pattern</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9242,7 +9242,7 @@ applied.</p>
       instance-attribute
    (nemo_safe_synthesizer.pii_replacer.ner.regex.Pattern.neg_header_contexts)" href="#nemo_safe_synthesizer.pii_replacer.ner.regex.Pattern.neg_header_contexts">neg_header_contexts</a></code></td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.List">List</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="typing.Pattern">Pattern</span>]]]</code>
+                  <code><span title="typing.Optional">Optional</span>[<span title="list">list</span>[<span title="str">str</span> | <span title="typing.Pattern">Pattern</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9274,15 +9274,15 @@ applied.</p>
       instance-attribute
    (nemo_safe_synthesizer.pii_replacer.ner.regex.Pattern.span_contexts)" href="#nemo_safe_synthesizer.pii_replacer.ner.regex.Pattern.span_contexts">span_contexts</a></code></td>
             <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[<a class="autorefs autorefs-internal" title="              ContextSpan(pattern_list, span=DEFAULT_CONTEXT_SPAN_SIZE)
+                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="              ContextSpan(pattern_list, span=DEFAULT_CONTEXT_SPAN_SIZE)
 
   
       dataclass
-   (nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan)" href="../predictor/#nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan">ContextSpan</a>, <span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="              ContextSpan(pattern_list, span=DEFAULT_CONTEXT_SPAN_SIZE)
+   (nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan)" href="../predictor/#nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan">ContextSpan</a> | <span title="list">list</span>[<a class="autorefs autorefs-internal" title="              ContextSpan(pattern_list, span=DEFAULT_CONTEXT_SPAN_SIZE)
 
   
       dataclass
-   (nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan)" href="../predictor/#nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan">ContextSpan</a>]]]</code>
+   (nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan)" href="../predictor/#nemo_safe_synthesizer.pii_replacer.ner.predictor.ContextSpan">ContextSpan</a>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9578,7 +9578,7 @@ with varying accuracy scores.</p>
 <span class="normal"><a href="#__codelineno-0-154">154</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-135"><a id="__codelineno-0-135" name="__codelineno-0-135"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
 </span><span id="__span-0-136"><a id="__codelineno-0-136" name="__codelineno-0-136"></a>    <span class="bp">self</span><span class="p">,</span>
 </span><span id="__span-0-137"><a id="__codelineno-0-137" name="__codelineno-0-137"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-138"><a id="__codelineno-0-138" name="__codelineno-0-138"></a>    <span class="n">patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Pattern</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-138"><a id="__codelineno-0-138" name="__codelineno-0-138"></a>    <span class="n">patterns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Pattern</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-139"><a id="__codelineno-0-139" name="__codelineno-0-139"></a>    <span class="n">entity</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Entity</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-140"><a id="__codelineno-0-140" name="__codelineno-0-140"></a>    <span class="n">namespace</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-141"><a id="__codelineno-0-141" name="__codelineno-0-141"></a><span class="p">):</span>
@@ -9679,7 +9679,7 @@ be used.</p>
 <span class="normal"><a href="#__codelineno-0-171">171</a></span>
 <span class="normal"><a href="#__codelineno-0-172">172</a></span>
 <span class="normal"><a href="#__codelineno-0-173">173</a></span>
-<span class="normal"><a href="#__codelineno-0-174">174</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-167"><a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="k">def</span><span class="w"> </span><span class="nf">filter_by_range_by_score</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field_matches</span><span class="p">:</span> <span class="n">Set</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-174">174</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-167"><a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="k">def</span><span class="w"> </span><span class="nf">filter_by_range_by_score</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field_matches</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
 </span><span id="__span-0-168"><a id="__codelineno-0-168" name="__codelineno-0-168"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Filter predictions by text range and take max score.&quot;&quot;&quot;</span>
 </span><span id="__span-0-169"><a id="__codelineno-0-169" name="__codelineno-0-169"></a>    <span class="n">by_range</span> <span class="o">=</span> <span class="n">itertools</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span>
 </span><span id="__span-0-170"><a id="__codelineno-0-170" name="__codelineno-0-170"></a>        <span class="nb">sorted</span><span class="p">(</span><span class="n">field_matches</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">n</span><span class="p">:</span> <span class="n">n</span><span class="o">.</span><span class="n">text</span><span class="p">),</span>
@@ -9750,7 +9750,7 @@ entities are represented.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="              NERPrediction(text, start, end, label, source, score, field=None, value_path=None, substring_match=None)
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="              NERPrediction(text, start, end, label, source, score, field=None, value_path=None, substring_match=None)
 
   
       dataclass
@@ -9764,7 +9764,7 @@ entities are represented.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing.List">List</span>[<a class="autorefs autorefs-internal" title="              NERPrediction(text, start, end, label, source, score, field=None, value_path=None, substring_match=None)
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="              NERPrediction(text, start, end, label, source, score, field=None, value_path=None, substring_match=None)
 
   
       dataclass
@@ -9880,7 +9880,7 @@ entities are represented.</p>
 <span class="normal"><a href="#__codelineno-0-271">271</a></span>
 <span class="normal"><a href="#__codelineno-0-272">272</a></span>
 <span class="normal"><a href="#__codelineno-0-273">273</a></span>
-<span class="normal"><a href="#__codelineno-0-274">274</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-176"><a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_record</span><span class="p">:</span> <span class="n">JSONRecord</span><span class="p">,</span> <span class="n">res_by_field</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-176"><a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_record</span><span class="p">:</span> <span class="n">JSONRecord</span><span class="p">,</span> <span class="n">res_by_field</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
 </span><span id="__span-0-177"><a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 </span><span id="__span-0-178"><a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">    Given a single record determine if any</span>
 </span><span id="__span-0-179"><a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">    entities are represented.</span>
@@ -10066,7 +10066,7 @@ mapped per-entity. A list of <code>RegexPredictors</code> can be exported at any
       instance-attribute
    (nemo_safe_synthesizer.pii_replacer.ner.regex.PhraseMatcherBuilder.phrase_patterns)" href="#nemo_safe_synthesizer.pii_replacer.ner.regex.PhraseMatcherBuilder.phrase_patterns">phrase_patterns</a></code></td>
             <td>
-                  <code><span title="typing.Dict">Dict</span>[<span title="typing.Union">Union</span>[<span title="str">str</span>, <span title="nemo_safe_synthesizer.pii_replacer.ner.entity.Entity">Entity</span>], <span title="nemo_safe_synthesizer.pii_replacer.ner.regex.PhrasePatterns">PhrasePatterns</span>]</code>
+                  <code><span title="dict">dict</span>[<span title="str">str</span> | <span title="nemo_safe_synthesizer.pii_replacer.ner.entity.Entity">Entity</span>, <span title="nemo_safe_synthesizer.pii_replacer.ner.regex.PhrasePatterns">PhrasePatterns</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -10167,7 +10167,7 @@ case sensitive matches</p>
 <span class="normal"><a href="#__codelineno-0-337">337</a></span>
 <span class="normal"><a href="#__codelineno-0-338">338</a></span>
 <span class="normal"><a href="#__codelineno-0-339">339</a></span>
-<span class="normal"><a href="#__codelineno-0-340">340</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_phrase</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Entity</span><span class="p">],</span> <span class="n">phrase</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">case</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_phrase</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Entity</span><span class="p">,</span> <span class="n">phrase</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">case</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 </span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Take a simple phrase and modify it to become a regex&quot;&quot;&quot;</span>
 </span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="c1"># escape special chars</span>
 </span><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a>    <span class="n">phrase</span> <span class="o">=</span> <span class="n">phrase</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;\.&quot;</span><span class="p">)</span>
@@ -10250,7 +10250,7 @@ case sensitive matches</p>
 <span class="normal"><a href="#__codelineno-0-54">54</a></span>
 <span class="normal"><a href="#__codelineno-0-55">55</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a><span class="k">def</span><span class="w"> </span><span class="nf">split_header_contexts</span><span class="p">(</span>
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="n">contexts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="n">RePattern</span><span class="p">],</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">RePattern</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">RePattern</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">RePattern</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">RePattern</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
 </span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Split a list of strings and RePatterns into two distcit regexes.</span>
 </span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">    Returns (regexes, tokens)</span>
@@ -10335,7 +10335,7 @@ a phrase matcher predictor.</p>
 <span class="normal"><a href="#__codelineno-0-406">406</a></span>
 <span class="normal"><a href="#__codelineno-0-407">407</a></span>
 <span class="normal"><a href="#__codelineno-0-408">408</a></span>
-<span class="normal"><a href="#__codelineno-0-409">409</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a><span class="k">def</span><span class="w"> </span><span class="nf">phrase_predictors_from_entity_ruler</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">er_patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">dict</span><span class="p">],</span> <span class="n">entity_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">RegexPredictor</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-409">409</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a><span class="k">def</span><span class="w"> </span><span class="nf">phrase_predictors_from_entity_ruler</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">er_patterns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">],</span> <span class="n">entity_map</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">RegexPredictor</span><span class="p">]:</span>
 </span><span id="__span-0-375"><a id="__codelineno-0-375" name="__codelineno-0-375"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Given a list of Spacy EntityRuler patterns, create</span>
 </span><span id="__span-0-376"><a id="__codelineno-0-376" name="__codelineno-0-376"></a><span class="sd">    a phrase matcher predictor.</span>
 </span><span id="__span-0-377"><a id="__codelineno-0-377" name="__codelineno-0-377"></a><span class="sd">    &quot;&quot;&quot;</span>

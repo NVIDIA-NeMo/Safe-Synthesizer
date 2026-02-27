@@ -8807,9 +8807,9 @@
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
 <p>Safe Synthesizer employs a novel approach to synthetic data generation:</p>
 <ol>
-<li><strong>Tabular Fine-Tuning</strong>: Fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties</li>
-<li><strong>Generation</strong>: Uses the fine-tuned model to generate new synthetic records that maintain data utility</li>
-<li><strong>Privacy Protection</strong>: Optionally applies differential privacy during training for mathematical privacy guarantees</li>
+<li>Tabular Fine-Tuning: fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties</li>
+<li>Generation: uses the fine-tuned model to generate new synthetic records that maintain data utility</li>
+<li>Privacy Protection: optionally applies differential privacy during training for mathematical privacy guarantees</li>
 </ol>
 <h2 id="pipeline-stages">Pipeline Stages<a class="headerlink" href="#pipeline-stages" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart LR
@@ -8859,10 +8859,10 @@
 <h2 id="supported-data-types">Supported Data Types<a class="headerlink" href="#supported-data-types" title="Permanent link">&para;</a></h2>
 <p>Safe Synthesizer supports diverse tabular data:</p>
 <ul>
-<li><strong>Numeric</strong>: Continuous and discrete numerical values</li>
-<li><strong>Categorical</strong>: Text labels and categories</li>
-<li><strong>Text</strong>: Free-form text fields</li>
-<li><strong>Temporal</strong>: Event sequences and time series</li>
+<li>Numeric: continuous and discrete numerical values</li>
+<li>Categorical: text labels and categories</li>
+<li>Text: free-form text fields</li>
+<li>Temporal: event sequences and time series</li>
 </ul>
 <h2 id="running-the-pipeline">Running the Pipeline<a class="headerlink" href="#running-the-pipeline" title="Permanent link">&para;</a></h2>
 <h3 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h3>
@@ -8906,20 +8906,20 @@
 <li>Adjust generation parameters based on evaluation results</li>
 </ul>
 <h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
-<p><strong>GPU Memory Issues</strong></p>
+<p>GPU Memory Issues</p>
 <ul>
 <li>Reduce <code>batch_size</code> in training parameters</li>
 <li>Use a smaller subset of data for initial testing</li>
 <li>Increase <code>gradient_accumulation_steps</code> to maintain effective batch size with lower memory</li>
 <li>Check GPU usage with <code>nvidia-smi</code></li>
 </ul>
-<p><strong>Invalid Data Format Errors</strong></p>
+<p>Invalid Data Format Errors</p>
 <ul>
 <li>Ensure CSV is UTF-8 encoded</li>
 <li>Validate column names don't contain special characters</li>
 <li>Check for null values or inconsistent data types</li>
 </ul>
-<p><strong>Generation Quality Issues</strong></p>
+<p>Generation Quality Issues</p>
 <ul>
 <li>Increase training data or epochs for more training</li>
 <li>Adjust <code>temperature</code> (try 0.7-1.0 range)</li>

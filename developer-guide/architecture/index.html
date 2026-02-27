@@ -9003,26 +9003,26 @@
 <hr />
 <h2 id="component-details">Component Details<a class="headerlink" href="#component-details" title="Permanent link">&para;</a></h2>
 <h3 id="1-configuration-layer">1. Configuration Layer<a class="headerlink" href="#1-configuration-layer" title="Permanent link">&para;</a></h3>
-<p><strong>Path</strong>: <code>src/nemo_safe_synthesizer/config/</code></p>
+<p>Path: <code>src/nemo_safe_synthesizer/config/</code></p>
 <ul>
-<li><strong>SafeSynthesizerParameters</strong>: Main configuration class that aggregates all parameters</li>
-<li><strong>DataParameters</strong>: Dataset and preprocessing configurations</li>
-<li><strong>TrainingHyperparams</strong>: Training settings (learning rate, epochs, batch size, etc.)</li>
-<li><strong>GenerateParameters</strong>: Generation settings (temperature, top_p, num_records, etc.)</li>
-<li><strong>EvaluationParameters</strong>: Evaluation component toggles and settings</li>
-<li><strong>PiiReplacerConfig</strong>: PII detection and replacement settings</li>
-<li><strong>DifferentialPrivacyHyperparams</strong>: DP training parameters (epsilon, delta, clipping norm)</li>
+<li>SafeSynthesizerParameters: main configuration class that aggregates all parameters</li>
+<li>DataParameters: dataset and preprocessing configurations</li>
+<li>TrainingHyperparams: training settings (learning rate, epochs, batch size, etc.)</li>
+<li>GenerateParameters: generation settings (temperature, top_p, num_records, etc.)</li>
+<li>EvaluationParameters: evaluation component toggles and settings</li>
+<li>PiiReplacerConfig: PII detection and replacement settings</li>
+<li>DifferentialPrivacyHyperparams: DP training parameters (epsilon, delta, clipping norm)</li>
 </ul>
 <h3 id="2-data-processing-pipeline">2. Data Processing Pipeline<a class="headerlink" href="#2-data-processing-pipeline" title="Permanent link">&para;</a></h3>
-<p><strong>Path</strong>: <code>src/nemo_safe_synthesizer/data_processing/</code></p>
+<p>Path: <code>src/nemo_safe_synthesizer/data_processing/</code></p>
 <ul>
-<li><strong>Holdout</strong> (<code>holdout/</code>): Splits data into train/test sets with stratification support</li>
-<li><strong>NemoPII</strong> (<code>pii_replacer/</code>): Detects PII entities (names, emails, SSN, etc.) and replaces with synthetic but realistic values</li>
-<li><strong>ActionExecutor</strong> (<code>actions/</code>): Executes data transformations (date normalization, distributions)</li>
-<li><strong>ExampleAssembler</strong> (<code>assembler.py</code>): Converts records to JSON format, tokenizes for model training, handles truncation and padding</li>
+<li>Holdout (<code>holdout/</code>): splits data into train/test sets with stratification support</li>
+<li>NemoPII (<code>pii_replacer/</code>): detects PII entities (names, emails, SSN, etc.) and replaces with synthetic but realistic values</li>
+<li>ActionExecutor (<code>actions/</code>): executes data transformations (date normalization, distributions)</li>
+<li>ExampleAssembler (<code>assembler.py</code>): converts records to JSON format, tokenizes for model training, handles truncation and padding</li>
 </ul>
 <h3 id="3-training-backend">3. Training Backend<a class="headerlink" href="#3-training-backend" title="Permanent link">&para;</a></h3>
-<p><strong>Path</strong>: <code>src/nemo_safe_synthesizer/training/</code></p>
+<p>Path: <code>src/nemo_safe_synthesizer/training/</code></p>
 <table>
 <thead>
 <tr>
@@ -9042,22 +9042,22 @@
 </tbody>
 </table>
 <h3 id="4-generation-backend">4. Generation Backend<a class="headerlink" href="#4-generation-backend" title="Permanent link">&para;</a></h3>
-<p><strong>Path</strong>: <code>src/nemo_safe_synthesizer/generation/</code></p>
+<p>Path: <code>src/nemo_safe_synthesizer/generation/</code></p>
 <ul>
-<li><strong>VllmBackend</strong>: Fast inference using VLLM with LoRA adapter support</li>
-<li><strong>RegexManager</strong>: Enforces structured output (JSON format)</li>
-<li><strong>BatchGenerator</strong>: Manages batch generation with retry logic</li>
-<li><strong>Processors</strong>: Post-processing of generated text</li>
+<li>VllmBackend: fast inference using VLLM with LoRA adapter support</li>
+<li>RegexManager: enforces structured output (JSON format)</li>
+<li>BatchGenerator: manages batch generation with retry logic</li>
+<li>Processors: post-processing of generated text</li>
 </ul>
 <h3 id="5-evaluation-system">5. Evaluation System<a class="headerlink" href="#5-evaluation-system" title="Permanent link">&para;</a></h3>
-<p><strong>Path</strong>: <code>src/nemo_safe_synthesizer/evaluation/</code></p>
+<p>Path: <code>src/nemo_safe_synthesizer/evaluation/</code></p>
 <p>Components include: Data Privacy Score, PII Replay Detection, Membership Inference Protection, Attribute Inference Protection, Column Distributions, Correlations, Text Semantic Similarity, Text Structure Similarity, and SQS Score.</p>
 <h3 id="6-supporting-modules">6. Supporting Modules<a class="headerlink" href="#6-supporting-modules" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>LLM Utilities</strong> (<code>llm/</code>): Model metadata, loading, and memory management</li>
-<li><strong>Privacy Module</strong> (<code>privacy/dp_transformers/</code>): Opacus integration for DP-SGD</li>
-<li><strong>Artifacts</strong> (<code>artifacts/</code>): Data quality checks, field analysis, metadata management</li>
-<li><strong>Records System</strong> (<code>data_processing/records/</code>): JSON record and fragment handling</li>
+<li>LLM Utilities (<code>llm/</code>): model metadata, loading, and memory management</li>
+<li>Privacy Module (<code>privacy/dp_transformers/</code>): Opacus integration for DP-SGD</li>
+<li>Artifacts (<code>artifacts/</code>): data quality checks, field analysis, metadata management</li>
+<li>Records System (<code>data_processing/records/</code>): JSON record and fragment handling</li>
 </ul>
 <hr />
 <h2 id="key-design-patterns">Key Design Patterns<a class="headerlink" href="#key-design-patterns" title="Permanent link">&para;</a></h2>
@@ -9125,11 +9125,11 @@
 <hr />
 <h2 id="extension-points">Extension Points<a class="headerlink" href="#extension-points" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>Custom Training Backend</strong>: Implement <code>TrainingBackend</code> abstract class</li>
-<li><strong>Custom Generation Backend</strong>: Implement <code>GeneratorBackend</code> abstract class</li>
-<li><strong>Custom Evaluation Component</strong>: Extend <code>Component</code> base class</li>
-<li><strong>Custom Data Actions</strong>: Add to <code>data_processing/actions/</code></li>
-<li><strong>Custom PII Detectors</strong>: Extend NER pipeline</li>
+<li>Custom Training Backend: implement <code>TrainingBackend</code> abstract class</li>
+<li>Custom Generation Backend: implement <code>GeneratorBackend</code> abstract class</li>
+<li>Custom Evaluation Component: extend <code>Component</code> base class</li>
+<li>Custom Data Actions: add to <code>data_processing/actions/</code></li>
+<li>Custom PII Detectors: extend NER pipeline</li>
 </ol>
 
 

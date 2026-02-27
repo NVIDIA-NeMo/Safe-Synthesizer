@@ -8831,10 +8831,10 @@
 <h3 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
 <p>The PII replacement pipeline operates in multiple stages:</p>
 <ol>
-<li><strong>Detection</strong>: Identifies PII entities using configurable detection methods</li>
-<li><strong>Classification</strong>: Categorizes detected entities by type (name, email, address, etc.)</li>
-<li><strong>Transformation</strong>: Replaces or redacts PII using configurable rules</li>
-<li><strong>Validation</strong>: Verifies that sensitive information has been properly handled</li>
+<li>Detection: identifies PII entities using configurable detection methods</li>
+<li>Classification: categorizes detected entities by type (name, email, address, etc.)</li>
+<li>Transformation: replaces or redacts PII using configurable rules</li>
+<li>Validation: verifies that sensitive information has been properly handled</li>
 </ol>
 <h3 id="detection-methods">Detection Methods<a class="headerlink" href="#detection-methods" title="Permanent link">&para;</a></h3>
 <p>Safe Synthesizer supports multiple PII detection approaches:</p>
@@ -8895,21 +8895,21 @@
 <h3 id="replacement-strategies">Replacement Strategies<a class="headerlink" href="#replacement-strategies" title="Permanent link">&para;</a></h3>
 <p>After detection, PII can be handled in multiple ways:</p>
 <ul>
-<li><strong>Fake Data</strong>: Generate realistic replacements using the <a href="https://faker.readthedocs.io/">Faker</a> library</li>
-<li><strong>Redaction</strong>: Replace with placeholder tokens</li>
-<li><strong>Hashing</strong>: One-way hashing for consistency</li>
-<li><strong>Custom Rules</strong>: Define your own transformation logic</li>
+<li>Fake Data: generate realistic replacements using the <a href="https://faker.readthedocs.io/">Faker</a> library</li>
+<li>Redaction: replace with placeholder tokens</li>
+<li>Hashing: one-way hashing for consistency</li>
+<li>Custom Rules: define your own transformation logic</li>
 </ul>
 <h3 id="supported-entity-types">Supported Entity Types<a class="headerlink" href="#supported-entity-types" title="Permanent link">&para;</a></h3>
 <p>Safe Synthesizer recognizes many PII types out of the box:</p>
 <ul>
-<li><strong>Personal</strong>: Names, dates of birth, ages</li>
-<li><strong>Contact</strong>: Emails, phone numbers, addresses</li>
-<li><strong>Identifiers</strong>: SSN, passport numbers, license numbers</li>
-<li><strong>Financial</strong>: Credit card numbers, bank accounts, IBAN, SWIFT codes</li>
-<li><strong>Medical</strong>: Patient IDs, medical record numbers</li>
-<li><strong>Digital</strong>: IP addresses, URLs, UUIDs, API keys, JWTs</li>
-<li><strong>Custom</strong>: Define your own entity types</li>
+<li>Personal: names, dates of birth, ages</li>
+<li>Contact: emails, phone numbers, addresses</li>
+<li>Identifiers: SSN, passport numbers, license numbers</li>
+<li>Financial: credit card numbers, bank accounts, IBAN, SWIFT codes</li>
+<li>Medical: patient IDs, medical record numbers</li>
+<li>Digital: IP addresses, URLs, UUIDs, API keys, JWTs</li>
+<li>Custom: define your own entity types</li>
 </ul>
 <h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
 <p>PII replacement is configured through the <code>replace_pii</code> section of your YAML config:</p>
@@ -8940,21 +8940,21 @@
 <p>Safe Synthesizer supports Differential Privacy (DP) training via <a href="https://opacus.ai/">Opacus</a> integration. DP provides mathematical guarantees that synthetic data doesn't reveal information about individual records in the training data.</p>
 <h3 id="key-concepts">Key Concepts<a class="headerlink" href="#key-concepts" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Epsilon (epsilon)</strong>: Privacy budget -- lower values mean stronger privacy<ul>
+<li>Epsilon (epsilon): privacy budget -- lower values mean stronger privacy<ul>
 <li>epsilon = 1: Very strong privacy</li>
 <li>epsilon = 6-10: Moderate privacy</li>
 <li>epsilon &gt; 10: Weak privacy</li>
 </ul>
 </li>
-<li><strong>Delta (delta)</strong>: Probability of privacy guarantee failure. Typically set to 1/n^2 where n is the dataset size (e.g., 1e-5)</li>
-<li><strong>Max Gradient Norm</strong>: Maximum gradient clipping norm, controls the sensitivity of the training process</li>
+<li>Delta (delta): probability of privacy guarantee failure. Typically set to 1/n^2 where n is the dataset size (e.g., 1e-5)</li>
+<li>Max Gradient Norm: maximum gradient clipping norm, controls the sensitivity of the training process</li>
 </ul>
 <h3 id="how-it-works_1">How It Works<a class="headerlink" href="#how-it-works_1" title="Permanent link">&para;</a></h3>
 <p>DP-SGD (Differentially Private Stochastic Gradient Descent) adds calibrated noise to gradients during training, providing a mathematical privacy guarantee that limits what can be learned about any individual record:</p>
 <ol>
-<li><strong>Gradient Clipping</strong>: Per-sample gradients are clipped to a maximum norm</li>
-<li><strong>Noise Injection</strong>: Calibrated Gaussian noise is added to the clipped gradients</li>
-<li><strong>Privacy Accounting</strong>: The total privacy budget (epsilon) is tracked across training</li>
+<li>Gradient Clipping: per-sample gradients are clipped to a maximum norm</li>
+<li>Noise Injection: calibrated Gaussian noise is added to the clipped gradients</li>
+<li>Privacy Accounting: the total privacy budget (epsilon) is tracked across training</li>
 </ol>
 <h3 id="configuration_1">Configuration<a class="headerlink" href="#configuration_1" title="Permanent link">&para;</a></h3>
 <p>Enable differential privacy in your YAML config:</p>
@@ -9008,18 +9008,18 @@
 </div>
 <p>Best practices:</p>
 <ol>
-<li><strong>Single Release</strong>: Only release one synthetic dataset per original dataset when possible</li>
-<li><strong>Composition</strong>: If multiple releases are needed, divide the privacy budget accordingly</li>
-<li><strong>Documentation</strong>: Track all data releases and cumulative privacy budget</li>
-<li><strong>Renewal</strong>: Privacy budget doesn't reset -- consider this in your data lifecycle</li>
+<li>Single Release: only release one synthetic dataset per original dataset when possible</li>
+<li>Composition: if multiple releases are needed, divide the privacy budget accordingly</li>
+<li>Documentation: track all data releases and cumulative privacy budget</li>
+<li>Renewal: privacy budget doesn't reset -- consider this in your data lifecycle</li>
 </ol>
 <hr />
 <h2 id="privacy-evaluation">Privacy Evaluation<a class="headerlink" href="#privacy-evaluation" title="Permanent link">&para;</a></h2>
 <p>After generation, the evaluation system measures privacy through several metrics:</p>
 <ul>
-<li><strong>PII Replay Detection</strong> -- Checks if original PII values appear in synthetic data</li>
-<li><strong>Membership Inference Protection</strong> -- Measures resistance to membership inference attacks (can an attacker tell if a specific record was in the training data?)</li>
-<li><strong>Attribute Inference Protection</strong> -- Measures resistance to attribute inference attacks (can sensitive attributes be inferred from other known attributes?)</li>
+<li>PII Replay Detection -- Checks if original PII values appear in synthetic data</li>
+<li>Membership Inference Protection -- Measures resistance to membership inference attacks (can an attacker tell if a specific record was in the training data?)</li>
+<li>Attribute Inference Protection -- Measures resistance to attribute inference attacks (can sensitive attributes be inferred from other known attributes?)</li>
 </ul>
 <p>See <a href="../evaluation/">Evaluation</a> for full details on privacy and quality metrics.</p>
 

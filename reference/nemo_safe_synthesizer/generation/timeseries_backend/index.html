@@ -9097,21 +9097,21 @@ ensuring temporal continuity.</p>
 <details class="key-concepts" open>
   <summary>Key Concepts</summary>
   <ul>
-<li><strong>Time-Range Based Generation</strong>: The number of records generated is
+<li>Time-Range Based Generation: The number of records generated is
   determined by the configured time range and interval, not by a target
   count. Specifically: (stop_timestamp - start_timestamp) / interval_seconds.
   The <code>config.generation.num_records</code> parameter is used only for progress
   tracking, not to limit output.</li>
-<li><strong>Sliding Window</strong>: The backend maintains a window of recent records
+<li>Sliding Window: The backend maintains a window of recent records
   (controlled by <code>_prefill_context_size</code>) that are included in each prompt
   to provide context for the LLM, ensuring generated records follow the
   established patterns and timestamps.</li>
-<li><strong>Parallel Group Generation</strong>: Multiple time-series groups (e.g., different
+<li>Parallel Group Generation: Multiple time-series groups (e.g., different
   devices, customers) are processed in parallel batches for efficiency.
   Even single-sequence data uses this path (treated as 1 group via a
   pseudo-group column added during preprocessing). Groups are the same as
   those seen during training (from <code>model_metadata.initial_prefill</code>).</li>
-<li><strong>Chronological Validation</strong>: Each generated record must continue from the
+<li>Chronological Validation: Each generated record must continue from the
   previous timestamp at the expected interval. Out-of-order records are
   marked invalid.</li>
 </ul>
@@ -9138,22 +9138,22 @@ ensuring temporal continuity.</p>
   <p>Generation stops when all groups finish (either completed or failed). Individual
 groups and the overall generation can stop for different reasons:</p>
 <p>Per-Group Stopping:
-    - <strong>Completion (success)</strong>: A group completes when any generated record
+    - Completion (success): A group completes when any generated record
       has a timestamp &gt;= <code>_stop_timestamp_value</code>. The group is marked as
       completed and removed from active processing.
-    - <strong>Failure (low valid fraction)</strong>: A group fails after
+    - Failure (low valid fraction): A group fails after
       <code>config.generation.patience</code> consecutive batches where the invalid
       record fraction &gt;= <code>config.generation.invalid_fraction_threshold</code>.
       This prevents infinite loops when the model consistently produces
-      bad output for a particular group. <strong>Failed groups are not retried
-      and produce no synthetic data for that group ID.</strong> The failure is
+      bad output for a particular group. Failed groups are not retried
+      and produce no synthetic data for that group ID. The failure is
       reflected in <code>all_groups_succeeded</code> returning False.</p>
 <p>Global Stopping:
-    - <strong>Natural completion</strong>: Generation ends when both the pending groups
+    - Natural completion: Generation ends when both the pending groups
       queue and active groups list are empty (all groups processed).
-    - <strong>No records</strong>: If <code>GenerationBatches</code> detects too many consecutive
+    - No records: If <code>GenerationBatches</code> detects too many consecutive
       batches with no valid records globally, it signals <code>STOP_NO_RECORDS</code>.
-    - <strong>Target reached</strong>: If the target number of records is reached,
+    - Target reached: If the target number of records is reached,
       <code>GenerationBatches</code> signals <code>STOP_METRIC_REACHED</code>.</p>
 <p>When global stopping occurs before all groups complete, <code>all_groups_succeeded</code>
 returns False, and the final generation status reflects partial completion.</p>
@@ -9533,7 +9533,8 @@ seen during training (from model_metadata.initial_prefill).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/generation/timeseries_backend.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-833">833</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-832">832</a></span>
+<span class="normal"><a href="#__codelineno-0-833">833</a></span>
 <span class="normal"><a href="#__codelineno-0-834">834</a></span>
 <span class="normal"><a href="#__codelineno-0-835">835</a></span>
 <span class="normal"><a href="#__codelineno-0-836">836</a></span>
@@ -9617,93 +9618,92 @@ seen during training (from model_metadata.initial_prefill).</p>
 <span class="normal"><a href="#__codelineno-0-914">914</a></span>
 <span class="normal"><a href="#__codelineno-0-915">915</a></span>
 <span class="normal"><a href="#__codelineno-0-916">916</a></span>
-<span class="normal"><a href="#__codelineno-0-917">917</a></span>
-<span class="normal"><a href="#__codelineno-0-918">918</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span>
-</span><span id="__span-0-834"><a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-835"><a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="n">keep_llm_state</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-836"><a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="n">data_actions_fn</span><span class="p">:</span> <span class="n">utils</span><span class="o">.</span><span class="n">DataActionsFn</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-837"><a id="__codelineno-0-837" name="__codelineno-0-837"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GenerateJobResults</span><span class="p">:</span>
-</span><span id="__span-0-838"><a id="__codelineno-0-838" name="__codelineno-0-838"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate time-series tabular data using Nemo Safe Synthesizer.</span>
-</span><span id="__span-0-839"><a id="__codelineno-0-839" name="__codelineno-0-839"></a>
-</span><span id="__span-0-840"><a id="__codelineno-0-840" name="__codelineno-0-840"></a><span class="sd">    All time series are processed as groups (single-sequence is treated as 1 group</span>
-</span><span id="__span-0-841"><a id="__codelineno-0-841" name="__codelineno-0-841"></a><span class="sd">    via pseudo-group column added during preprocessing).</span>
-</span><span id="__span-0-842"><a id="__codelineno-0-842" name="__codelineno-0-842"></a>
-</span><span id="__span-0-843"><a id="__codelineno-0-843" name="__codelineno-0-843"></a><span class="sd">    Note:</span>
-</span><span id="__span-0-844"><a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        Generation is time-range based, not count-based. The number of records</span>
-</span><span id="__span-0-845"><a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="sd">        generated is determined by (stop_timestamp - start_timestamp) / interval_seconds</span>
-</span><span id="__span-0-846"><a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="sd">        for each group. The config.generation.num_records parameter is used for</span>
-</span><span id="__span-0-847"><a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">        progress tracking but does not limit output. Groups are the same as those</span>
-</span><span id="__span-0-848"><a id="__codelineno-0-848" name="__codelineno-0-848"></a><span class="sd">        seen during training (from model_metadata.initial_prefill).</span>
-</span><span id="__span-0-849"><a id="__codelineno-0-849" name="__codelineno-0-849"></a>
-</span><span id="__span-0-850"><a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-851"><a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">        keep_llm_state: If True, keep the model in memory after generation.</span>
-</span><span id="__span-0-852"><a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="sd">        data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.</span>
-</span><span id="__span-0-853"><a id="__codelineno-0-853" name="__codelineno-0-853"></a>
-</span><span id="__span-0-854"><a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-855"><a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">        Generation results object, which includes a DataFrame of generated records.</span>
-</span><span id="__span-0-856"><a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-857"><a id="__codelineno-0-857" name="__codelineno-0-857"></a>    <span class="n">generation_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
-</span><span id="__span-0-858"><a id="__codelineno-0-858" name="__codelineno-0-858"></a>    <span class="n">num_records</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">num_records</span>
-</span><span id="__span-0-859"><a id="__codelineno-0-859" name="__codelineno-0-859"></a>
-</span><span id="__span-0-860"><a id="__codelineno-0-860" name="__codelineno-0-860"></a>    <span class="n">need_special_token_outputs</span> <span class="o">=</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">processor</span><span class="p">,</span> <span class="n">TimeSeriesDataProcessor</span><span class="p">)</span>
-</span><span id="__span-0-861"><a id="__codelineno-0-861" name="__codelineno-0-861"></a>    <span class="n">sampling_params</span> <span class="o">=</span> <span class="n">SamplingParams</span><span class="p">(</span>
-</span><span id="__span-0-862"><a id="__codelineno-0-862" name="__codelineno-0-862"></a>        <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span>
-</span><span id="__span-0-863"><a id="__codelineno-0-863" name="__codelineno-0-863"></a>        <span class="n">repetition_penalty</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">repetition_penalty</span><span class="p">,</span>
-</span><span id="__span-0-864"><a id="__codelineno-0-864" name="__codelineno-0-864"></a>        <span class="n">top_p</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">top_p</span><span class="p">,</span>
-</span><span id="__span-0-865"><a id="__codelineno-0-865" name="__codelineno-0-865"></a>        <span class="n">top_k</span><span class="o">=</span><span class="n">FIXED_RUNTIME_GENERATE_ARGS</span><span class="p">[</span><span class="s2">&quot;top_k&quot;</span><span class="p">],</span>
-</span><span id="__span-0-866"><a id="__codelineno-0-866" name="__codelineno-0-866"></a>        <span class="n">min_p</span><span class="o">=</span><span class="n">FIXED_RUNTIME_GENERATE_ARGS</span><span class="p">[</span><span class="s2">&quot;min_p&quot;</span><span class="p">],</span>
-</span><span id="__span-0-867"><a id="__codelineno-0-867" name="__codelineno-0-867"></a>        <span class="n">max_tokens</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model_metadata</span><span class="o">.</span><span class="n">max_seq_length</span><span class="p">,</span>
-</span><span id="__span-0-868"><a id="__codelineno-0-868" name="__codelineno-0-868"></a>        <span class="n">skip_special_tokens</span><span class="o">=</span><span class="ow">not</span> <span class="n">need_special_token_outputs</span><span class="p">,</span>
-</span><span id="__span-0-869"><a id="__codelineno-0-869" name="__codelineno-0-869"></a>        <span class="n">include_stop_str_in_output</span><span class="o">=</span><span class="n">need_special_token_outputs</span><span class="p">,</span>
-</span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a>        <span class="n">ignore_eos</span><span class="o">=</span><span class="n">need_special_token_outputs</span><span class="p">,</span>
-</span><span id="__span-0-871"><a id="__codelineno-0-871" name="__codelineno-0-871"></a>    <span class="p">)</span>
-</span><span id="__span-0-872"><a id="__codelineno-0-872" name="__codelineno-0-872"></a>
-</span><span id="__span-0-873"><a id="__codelineno-0-873" name="__codelineno-0-873"></a>    <span class="n">batches</span> <span class="o">=</span> <span class="n">GenerationBatches</span><span class="p">(</span>
-</span><span id="__span-0-874"><a id="__codelineno-0-874" name="__codelineno-0-874"></a>        <span class="n">target_num_records</span><span class="o">=</span><span class="n">num_records</span><span class="p">,</span>
-</span><span id="__span-0-875"><a id="__codelineno-0-875" name="__codelineno-0-875"></a>        <span class="n">patience</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">patience</span><span class="p">,</span>
-</span><span id="__span-0-876"><a id="__codelineno-0-876" name="__codelineno-0-876"></a>        <span class="n">invalid_fraction_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">invalid_fraction_threshold</span><span class="p">,</span>
-</span><span id="__span-0-877"><a id="__codelineno-0-877" name="__codelineno-0-877"></a>        <span class="n">data_actions_fn</span><span class="o">=</span><span class="n">data_actions_fn</span><span class="p">,</span>
-</span><span id="__span-0-878"><a id="__codelineno-0-878" name="__codelineno-0-878"></a>    <span class="p">)</span>
-</span><span id="__span-0-879"><a id="__codelineno-0-879" name="__codelineno-0-879"></a>
-</span><span id="__span-0-880"><a id="__codelineno-0-880" name="__codelineno-0-880"></a>    <span class="c1"># Use parallel group generation (single-sequence is just 1 group)</span>
-</span><span id="__span-0-881"><a id="__codelineno-0-881" name="__codelineno-0-881"></a>    <span class="n">num_groups</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="p">)</span>
-</span><span id="__span-0-882"><a id="__codelineno-0-882" name="__codelineno-0-882"></a>
-</span><span id="__span-0-883"><a id="__codelineno-0-883" name="__codelineno-0-883"></a>    <span class="c1"># Compute total expected records across all groups for snapshot thresholds</span>
-</span><span id="__span-0-884"><a id="__codelineno-0-884" name="__codelineno-0-884"></a>    <span class="n">total_expected_records</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_total_expected_records</span><span class="p">()</span>
-</span><span id="__span-0-885"><a id="__codelineno-0-885" name="__codelineno-0-885"></a>    <span class="n">progress_snapshots</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_progress_snapshots</span><span class="p">(</span><span class="n">total_expected_records</span><span class="p">,</span> <span class="n">is_group_based</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-</span><span id="__span-0-886"><a id="__codelineno-0-886" name="__codelineno-0-886"></a>
-</span><span id="__span-0-887"><a id="__codelineno-0-887" name="__codelineno-0-887"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-</span><span id="__span-0-888"><a id="__codelineno-0-888" name="__codelineno-0-888"></a>        <span class="sa">f</span><span class="s2">&quot;Generating for </span><span class="si">{</span><span class="n">num_groups</span><span class="si">}</span><span class="s2"> groups using parallel generation &quot;</span>
-</span><span id="__span-0-889"><a id="__codelineno-0-889" name="__codelineno-0-889"></a>        <span class="sa">f</span><span class="s2">&quot;(total expected records: </span><span class="si">{</span><span class="n">total_expected_records</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
-</span><span id="__span-0-890"><a id="__codelineno-0-890" name="__codelineno-0-890"></a>    <span class="p">)</span>
-</span><span id="__span-0-891"><a id="__codelineno-0-891" name="__codelineno-0-891"></a>    <span class="n">all_groups_completed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_parallel_groups</span><span class="p">(</span>
-</span><span id="__span-0-892"><a id="__codelineno-0-892" name="__codelineno-0-892"></a>        <span class="n">batches</span><span class="o">=</span><span class="n">batches</span><span class="p">,</span>
-</span><span id="__span-0-893"><a id="__codelineno-0-893" name="__codelineno-0-893"></a>        <span class="n">sampling_params</span><span class="o">=</span><span class="n">sampling_params</span><span class="p">,</span>
-</span><span id="__span-0-894"><a id="__codelineno-0-894" name="__codelineno-0-894"></a>        <span class="n">progress_snapshots</span><span class="o">=</span><span class="n">progress_snapshots</span><span class="p">,</span>
-</span><span id="__span-0-895"><a id="__codelineno-0-895" name="__codelineno-0-895"></a>    <span class="p">)</span>
-</span><span id="__span-0-896"><a id="__codelineno-0-896" name="__codelineno-0-896"></a>
-</span><span id="__span-0-897"><a id="__codelineno-0-897" name="__codelineno-0-897"></a>    <span class="k">if</span> <span class="n">all_groups_completed</span> <span class="ow">and</span> <span class="n">batches</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">GenerationStatus</span><span class="o">.</span><span class="n">IN_PROGRESS</span><span class="p">:</span>
-</span><span id="__span-0-898"><a id="__codelineno-0-898" name="__codelineno-0-898"></a>        <span class="n">batches</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">GenerationStatus</span><span class="o">.</span><span class="n">COMPLETE</span>
-</span><span id="__span-0-899"><a id="__codelineno-0-899" name="__codelineno-0-899"></a>
-</span><span id="__span-0-900"><a id="__codelineno-0-900" name="__codelineno-0-900"></a>    <span class="n">batches</span><span class="o">.</span><span class="n">job_complete</span><span class="p">()</span>
-</span><span id="__span-0-901"><a id="__codelineno-0-901" name="__codelineno-0-901"></a>    <span class="n">batches</span><span class="o">.</span><span class="n">log_status</span><span class="p">()</span>
-</span><span id="__span-0-902"><a id="__codelineno-0-902" name="__codelineno-0-902"></a>
-</span><span id="__span-0-903"><a id="__codelineno-0-903" name="__codelineno-0-903"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">keep_llm_state</span><span class="p">:</span>
-</span><span id="__span-0-904"><a id="__codelineno-0-904" name="__codelineno-0-904"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_clear_llm_state</span><span class="p">()</span>
-</span><span id="__span-0-905"><a id="__codelineno-0-905" name="__codelineno-0-905"></a>
-</span><span id="__span-0-906"><a id="__codelineno-0-906" name="__codelineno-0-906"></a>    <span class="n">generation_time_sec</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">generation_start</span>
-</span><span id="__span-0-907"><a id="__codelineno-0-907" name="__codelineno-0-907"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">elapsed_time</span> <span class="o">=</span> <span class="n">generation_time_sec</span>
-</span><span id="__span-0-908"><a id="__codelineno-0-908" name="__codelineno-0-908"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span> <span class="o">=</span> <span class="n">GenerateJobResults</span><span class="o">.</span><span class="n">from_batches</span><span class="p">(</span>
-</span><span id="__span-0-909"><a id="__codelineno-0-909" name="__codelineno-0-909"></a>        <span class="n">batches</span><span class="o">=</span><span class="n">batches</span><span class="p">,</span>
-</span><span id="__span-0-910"><a id="__codelineno-0-910" name="__codelineno-0-910"></a>        <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">,</span>
-</span><span id="__span-0-911"><a id="__codelineno-0-911" name="__codelineno-0-911"></a>        <span class="n">max_num_records</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Time-range based, not count-based</span>
-</span><span id="__span-0-912"><a id="__codelineno-0-912" name="__codelineno-0-912"></a>        <span class="n">elapsed_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">elapsed_time</span><span class="p">,</span>
-</span><span id="__span-0-913"><a id="__codelineno-0-913" name="__codelineno-0-913"></a>    <span class="p">)</span>
-</span><span id="__span-0-914"><a id="__codelineno-0-914" name="__codelineno-0-914"></a>
-</span><span id="__span-0-915"><a id="__codelineno-0-915" name="__codelineno-0-915"></a>    <span class="c1"># Sort by group and timestamp for consistent output (also removes pseudo-group column)</span>
-</span><span id="__span-0-916"><a id="__codelineno-0-916" name="__codelineno-0-916"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span><span class="o">.</span><span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sort_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span><span class="o">.</span><span class="n">df</span><span class="p">)</span>
-</span><span id="__span-0-917"><a id="__codelineno-0-917" name="__codelineno-0-917"></a>
-</span><span id="__span-0-918"><a id="__codelineno-0-918" name="__codelineno-0-918"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span>
+<span class="normal"><a href="#__codelineno-0-917">917</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-832"><a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate</span><span class="p">(</span>
+</span><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-834"><a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="n">keep_llm_state</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-835"><a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="n">data_actions_fn</span><span class="p">:</span> <span class="n">utils</span><span class="o">.</span><span class="n">DataActionsFn</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-836"><a id="__codelineno-0-836" name="__codelineno-0-836"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GenerateJobResults</span><span class="p">:</span>
+</span><span id="__span-0-837"><a id="__codelineno-0-837" name="__codelineno-0-837"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate time-series tabular data using Nemo Safe Synthesizer.</span>
+</span><span id="__span-0-838"><a id="__codelineno-0-838" name="__codelineno-0-838"></a>
+</span><span id="__span-0-839"><a id="__codelineno-0-839" name="__codelineno-0-839"></a><span class="sd">    All time series are processed as groups (single-sequence is treated as 1 group</span>
+</span><span id="__span-0-840"><a id="__codelineno-0-840" name="__codelineno-0-840"></a><span class="sd">    via pseudo-group column added during preprocessing).</span>
+</span><span id="__span-0-841"><a id="__codelineno-0-841" name="__codelineno-0-841"></a>
+</span><span id="__span-0-842"><a id="__codelineno-0-842" name="__codelineno-0-842"></a><span class="sd">    Note:</span>
+</span><span id="__span-0-843"><a id="__codelineno-0-843" name="__codelineno-0-843"></a><span class="sd">        Generation is time-range based, not count-based. The number of records</span>
+</span><span id="__span-0-844"><a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="sd">        generated is determined by (stop_timestamp - start_timestamp) / interval_seconds</span>
+</span><span id="__span-0-845"><a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="sd">        for each group. The config.generation.num_records parameter is used for</span>
+</span><span id="__span-0-846"><a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="sd">        progress tracking but does not limit output. Groups are the same as those</span>
+</span><span id="__span-0-847"><a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">        seen during training (from model_metadata.initial_prefill).</span>
+</span><span id="__span-0-848"><a id="__codelineno-0-848" name="__codelineno-0-848"></a>
+</span><span id="__span-0-849"><a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-850"><a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">        keep_llm_state: If True, keep the model in memory after generation.</span>
+</span><span id="__span-0-851"><a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">        data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.</span>
+</span><span id="__span-0-852"><a id="__codelineno-0-852" name="__codelineno-0-852"></a>
+</span><span id="__span-0-853"><a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-854"><a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">        Generation results object, which includes a DataFrame of generated records.</span>
+</span><span id="__span-0-855"><a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-856"><a id="__codelineno-0-856" name="__codelineno-0-856"></a>    <span class="n">generation_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+</span><span id="__span-0-857"><a id="__codelineno-0-857" name="__codelineno-0-857"></a>    <span class="n">num_records</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">num_records</span>
+</span><span id="__span-0-858"><a id="__codelineno-0-858" name="__codelineno-0-858"></a>
+</span><span id="__span-0-859"><a id="__codelineno-0-859" name="__codelineno-0-859"></a>    <span class="n">need_special_token_outputs</span> <span class="o">=</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">processor</span><span class="p">,</span> <span class="n">TimeSeriesDataProcessor</span><span class="p">)</span>
+</span><span id="__span-0-860"><a id="__codelineno-0-860" name="__codelineno-0-860"></a>    <span class="n">sampling_params</span> <span class="o">=</span> <span class="n">SamplingParams</span><span class="p">(</span>
+</span><span id="__span-0-861"><a id="__codelineno-0-861" name="__codelineno-0-861"></a>        <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">temperature</span><span class="p">,</span>
+</span><span id="__span-0-862"><a id="__codelineno-0-862" name="__codelineno-0-862"></a>        <span class="n">repetition_penalty</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">repetition_penalty</span><span class="p">,</span>
+</span><span id="__span-0-863"><a id="__codelineno-0-863" name="__codelineno-0-863"></a>        <span class="n">top_p</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">top_p</span><span class="p">,</span>
+</span><span id="__span-0-864"><a id="__codelineno-0-864" name="__codelineno-0-864"></a>        <span class="n">top_k</span><span class="o">=</span><span class="n">FIXED_RUNTIME_GENERATE_ARGS</span><span class="p">[</span><span class="s2">&quot;top_k&quot;</span><span class="p">],</span>
+</span><span id="__span-0-865"><a id="__codelineno-0-865" name="__codelineno-0-865"></a>        <span class="n">min_p</span><span class="o">=</span><span class="n">FIXED_RUNTIME_GENERATE_ARGS</span><span class="p">[</span><span class="s2">&quot;min_p&quot;</span><span class="p">],</span>
+</span><span id="__span-0-866"><a id="__codelineno-0-866" name="__codelineno-0-866"></a>        <span class="n">max_tokens</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model_metadata</span><span class="o">.</span><span class="n">max_seq_length</span><span class="p">,</span>
+</span><span id="__span-0-867"><a id="__codelineno-0-867" name="__codelineno-0-867"></a>        <span class="n">skip_special_tokens</span><span class="o">=</span><span class="ow">not</span> <span class="n">need_special_token_outputs</span><span class="p">,</span>
+</span><span id="__span-0-868"><a id="__codelineno-0-868" name="__codelineno-0-868"></a>        <span class="n">include_stop_str_in_output</span><span class="o">=</span><span class="n">need_special_token_outputs</span><span class="p">,</span>
+</span><span id="__span-0-869"><a id="__codelineno-0-869" name="__codelineno-0-869"></a>        <span class="n">ignore_eos</span><span class="o">=</span><span class="n">need_special_token_outputs</span><span class="p">,</span>
+</span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a>    <span class="p">)</span>
+</span><span id="__span-0-871"><a id="__codelineno-0-871" name="__codelineno-0-871"></a>
+</span><span id="__span-0-872"><a id="__codelineno-0-872" name="__codelineno-0-872"></a>    <span class="n">batches</span> <span class="o">=</span> <span class="n">GenerationBatches</span><span class="p">(</span>
+</span><span id="__span-0-873"><a id="__codelineno-0-873" name="__codelineno-0-873"></a>        <span class="n">target_num_records</span><span class="o">=</span><span class="n">num_records</span><span class="p">,</span>
+</span><span id="__span-0-874"><a id="__codelineno-0-874" name="__codelineno-0-874"></a>        <span class="n">patience</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">patience</span><span class="p">,</span>
+</span><span id="__span-0-875"><a id="__codelineno-0-875" name="__codelineno-0-875"></a>        <span class="n">invalid_fraction_threshold</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">invalid_fraction_threshold</span><span class="p">,</span>
+</span><span id="__span-0-876"><a id="__codelineno-0-876" name="__codelineno-0-876"></a>        <span class="n">data_actions_fn</span><span class="o">=</span><span class="n">data_actions_fn</span><span class="p">,</span>
+</span><span id="__span-0-877"><a id="__codelineno-0-877" name="__codelineno-0-877"></a>    <span class="p">)</span>
+</span><span id="__span-0-878"><a id="__codelineno-0-878" name="__codelineno-0-878"></a>
+</span><span id="__span-0-879"><a id="__codelineno-0-879" name="__codelineno-0-879"></a>    <span class="c1"># Use parallel group generation (single-sequence is just 1 group)</span>
+</span><span id="__span-0-880"><a id="__codelineno-0-880" name="__codelineno-0-880"></a>    <span class="n">num_groups</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_groups</span><span class="p">)</span>
+</span><span id="__span-0-881"><a id="__codelineno-0-881" name="__codelineno-0-881"></a>
+</span><span id="__span-0-882"><a id="__codelineno-0-882" name="__codelineno-0-882"></a>    <span class="c1"># Compute total expected records across all groups for snapshot thresholds</span>
+</span><span id="__span-0-883"><a id="__codelineno-0-883" name="__codelineno-0-883"></a>    <span class="n">total_expected_records</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_total_expected_records</span><span class="p">()</span>
+</span><span id="__span-0-884"><a id="__codelineno-0-884" name="__codelineno-0-884"></a>    <span class="n">progress_snapshots</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_progress_snapshots</span><span class="p">(</span><span class="n">total_expected_records</span><span class="p">,</span> <span class="n">is_group_based</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-0-885"><a id="__codelineno-0-885" name="__codelineno-0-885"></a>
+</span><span id="__span-0-886"><a id="__codelineno-0-886" name="__codelineno-0-886"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+</span><span id="__span-0-887"><a id="__codelineno-0-887" name="__codelineno-0-887"></a>        <span class="sa">f</span><span class="s2">&quot;Generating for </span><span class="si">{</span><span class="n">num_groups</span><span class="si">}</span><span class="s2"> groups using parallel generation &quot;</span>
+</span><span id="__span-0-888"><a id="__codelineno-0-888" name="__codelineno-0-888"></a>        <span class="sa">f</span><span class="s2">&quot;(total expected records: </span><span class="si">{</span><span class="n">total_expected_records</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">,</span>
+</span><span id="__span-0-889"><a id="__codelineno-0-889" name="__codelineno-0-889"></a>    <span class="p">)</span>
+</span><span id="__span-0-890"><a id="__codelineno-0-890" name="__codelineno-0-890"></a>    <span class="n">all_groups_completed</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_generate_parallel_groups</span><span class="p">(</span>
+</span><span id="__span-0-891"><a id="__codelineno-0-891" name="__codelineno-0-891"></a>        <span class="n">batches</span><span class="o">=</span><span class="n">batches</span><span class="p">,</span>
+</span><span id="__span-0-892"><a id="__codelineno-0-892" name="__codelineno-0-892"></a>        <span class="n">sampling_params</span><span class="o">=</span><span class="n">sampling_params</span><span class="p">,</span>
+</span><span id="__span-0-893"><a id="__codelineno-0-893" name="__codelineno-0-893"></a>        <span class="n">progress_snapshots</span><span class="o">=</span><span class="n">progress_snapshots</span><span class="p">,</span>
+</span><span id="__span-0-894"><a id="__codelineno-0-894" name="__codelineno-0-894"></a>    <span class="p">)</span>
+</span><span id="__span-0-895"><a id="__codelineno-0-895" name="__codelineno-0-895"></a>
+</span><span id="__span-0-896"><a id="__codelineno-0-896" name="__codelineno-0-896"></a>    <span class="k">if</span> <span class="n">all_groups_completed</span> <span class="ow">and</span> <span class="n">batches</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">GenerationStatus</span><span class="o">.</span><span class="n">IN_PROGRESS</span><span class="p">:</span>
+</span><span id="__span-0-897"><a id="__codelineno-0-897" name="__codelineno-0-897"></a>        <span class="n">batches</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">GenerationStatus</span><span class="o">.</span><span class="n">COMPLETE</span>
+</span><span id="__span-0-898"><a id="__codelineno-0-898" name="__codelineno-0-898"></a>
+</span><span id="__span-0-899"><a id="__codelineno-0-899" name="__codelineno-0-899"></a>    <span class="n">batches</span><span class="o">.</span><span class="n">job_complete</span><span class="p">()</span>
+</span><span id="__span-0-900"><a id="__codelineno-0-900" name="__codelineno-0-900"></a>    <span class="n">batches</span><span class="o">.</span><span class="n">log_status</span><span class="p">()</span>
+</span><span id="__span-0-901"><a id="__codelineno-0-901" name="__codelineno-0-901"></a>
+</span><span id="__span-0-902"><a id="__codelineno-0-902" name="__codelineno-0-902"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">keep_llm_state</span><span class="p">:</span>
+</span><span id="__span-0-903"><a id="__codelineno-0-903" name="__codelineno-0-903"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_clear_llm_state</span><span class="p">()</span>
+</span><span id="__span-0-904"><a id="__codelineno-0-904" name="__codelineno-0-904"></a>
+</span><span id="__span-0-905"><a id="__codelineno-0-905" name="__codelineno-0-905"></a>    <span class="n">generation_time_sec</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">generation_start</span>
+</span><span id="__span-0-906"><a id="__codelineno-0-906" name="__codelineno-0-906"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">elapsed_time</span> <span class="o">=</span> <span class="n">generation_time_sec</span>
+</span><span id="__span-0-907"><a id="__codelineno-0-907" name="__codelineno-0-907"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span> <span class="o">=</span> <span class="n">GenerateJobResults</span><span class="o">.</span><span class="n">from_batches</span><span class="p">(</span>
+</span><span id="__span-0-908"><a id="__codelineno-0-908" name="__codelineno-0-908"></a>        <span class="n">batches</span><span class="o">=</span><span class="n">batches</span><span class="p">,</span>
+</span><span id="__span-0-909"><a id="__codelineno-0-909" name="__codelineno-0-909"></a>        <span class="n">columns</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">columns</span><span class="p">,</span>
+</span><span id="__span-0-910"><a id="__codelineno-0-910" name="__codelineno-0-910"></a>        <span class="n">max_num_records</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Time-range based, not count-based</span>
+</span><span id="__span-0-911"><a id="__codelineno-0-911" name="__codelineno-0-911"></a>        <span class="n">elapsed_time</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">elapsed_time</span><span class="p">,</span>
+</span><span id="__span-0-912"><a id="__codelineno-0-912" name="__codelineno-0-912"></a>    <span class="p">)</span>
+</span><span id="__span-0-913"><a id="__codelineno-0-913" name="__codelineno-0-913"></a>
+</span><span id="__span-0-914"><a id="__codelineno-0-914" name="__codelineno-0-914"></a>    <span class="c1"># Sort by group and timestamp for consistent output (also removes pseudo-group column)</span>
+</span><span id="__span-0-915"><a id="__codelineno-0-915" name="__codelineno-0-915"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span><span class="o">.</span><span class="n">df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sort_dataframe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span><span class="o">.</span><span class="n">df</span><span class="p">)</span>
+</span><span id="__span-0-916"><a id="__codelineno-0-916" name="__codelineno-0-916"></a>
+</span><span id="__span-0-917"><a id="__codelineno-0-917" name="__codelineno-0-917"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">gen_results</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
