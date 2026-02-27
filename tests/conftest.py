@@ -152,8 +152,6 @@ def load_test_dataframe(filename: str) -> pd.DataFrame:
 @pytest.fixture
 def fixture_stub_tokenizer_path() -> str:
     return str(Path(__file__).parent / "test_data" / "tokenizers" / "smollm3b")
-    
-
 
 
 # Purpose: Iris dataset fixture (train split) for quick test sampling.

@@ -174,9 +174,7 @@ def test_tabular_data_assembler_shorter_context_with_test_split(
     assert assembler.num_records_validation == 30
 
     examples = assembler.assemble_training_examples()
-    assert (
-        examples.test.num_rows == 3
-    )  # depends on tokenizer/model: we fill context with records for the test set
+    assert examples.test.num_rows == 3  # depends on tokenizer/model: we fill context with records for the test set
     assert examples.train.num_rows == 11
 
 
