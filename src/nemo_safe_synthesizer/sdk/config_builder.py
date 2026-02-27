@@ -3,10 +3,10 @@
 
 """Builder-pattern configuration layer for Safe Synthesizer.
 
-Provides :class:`ConfigBuilder`, the base builder that accumulates
+Provides ``ConfigBuilder``, the base builder that accumulates
 per-section configuration objects (training, generation, data, etc.)
 via fluent ``with_*`` methods before resolving them into a single
-:class:`~nemo_safe_synthesizer.config.SafeSynthesizerParameters`.
+``SafeSynthesizerParameters``.
 """
 
 from __future__ import annotations
@@ -67,12 +67,11 @@ class ConfigBuilder(object):
 
     Accumulates per-section configuration objects (data, training,
     generation, evaluation, privacy, PII replacement, and time-series)
-    via ``with_*`` methods.  Call :meth:`resolve` (or let
-    :class:`~nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer`
-    do it) to collapse them into a single
-    :class:`~nemo_safe_synthesizer.config.SafeSynthesizerParameters`.
+    via ``with_*`` methods.  Call ``resolve()`` (or let
+    ``SafeSynthesizer`` do it) to collapse them into a single
+    ``SafeSynthesizerParameters``.
 
-    Each ``with_*`` method accepts an optional typed config object *or*
+    Each ``with_*`` method accepts an optional typed config object or
     a plain dict, plus ``**kwargs`` overrides.  ``kwargs`` always take
     precedence over fields in the config/dict.  All ``with_*`` methods
     return ``self`` for chaining.
@@ -150,7 +149,7 @@ class ConfigBuilder(object):
             df_source: Training dataset as a pandas DataFrame or a fetchable URL.
 
         Returns:
-            The current Safe Synthesizer builder instance.
+            Self for method chaining.
         """
         self._data_source = df_source
         return self
@@ -246,32 +245,25 @@ class ConfigBuilder(object):
         return self
 
     def with_replace_pii(self, config: PiiReplacerConfig | ParamDict | None = None, **kwargs) -> Self:
-        """Configure PII replacement settings. Will use default PII replacement settings if none are provided, which can be found in
-        nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig.
+        """Configure PII replacement settings and enable PII replacement.
 
-        If you pass a keyword argument with a config object, overlapping keyword arguments will take precedence.
+        Falls back to ``PiiReplacerConfig.get_default_config()`` when
+        ``config`` is ``None``.
 
         Args:
-            config: PII replacement configuration or dictionary containing PII replacement parameters.
-            **kwargs: Configuration parameters for PII replacement.
+            config: PII replacement configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``classify``).
 
         Returns:
-            The current Safe Synthesizer builder instance.
-
+            Self for method chaining.
 
         Raises:
-            ValueError: If the provided config is not a PiiReplacerConfig, dictionary, or None/unset.
+            ValueError: If ``config`` is not a ``PiiReplacerConfig``,
+                dict, or ``None``.
 
-        Examples:
-            ```python
-            >>> from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-            >>> from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-            >>> # Using default PII replacement settings
-            >>> builder = (
-            >>>     SafeSynthesizer()
-            >>>     .with_data_source(your_dataframe)
-            >>>     .with_replace_pii(config=custom_pii_config, **{"classify": {"enable_classify": False}}))
-            ```
+        Example::
+
+            builder = SafeSynthesizer().with_data_source(your_dataframe).with_replace_pii(config=custom_pii_config)
         """
         cfg = None
         match config:
@@ -292,11 +284,11 @@ class ConfigBuilder(object):
         """Configure evaluation settings.
 
         Args:
-            config: Evaluation configuration or dictionary containing evaluation parameters.
-            **kwargs: Configuration parameters for evaluation.
+            config: Evaluation configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``enabled``).
 
         Returns:
-            The current Safe Synthesizer builder instance.
+            Self for method chaining.
         """
         self._evaluation_config: EvaluationParameters | None = self._resolve_config(
             values=config, cls=EvaluationParameters, **kwargs
