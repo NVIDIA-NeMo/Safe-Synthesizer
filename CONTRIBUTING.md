@@ -219,7 +219,7 @@ The `main` branch has the following protections:
    - After responding to all comments and pushing changes to the branch, re-request review with the circular arrow button to the right of the reviewer name
    - Use the Assignees list to indicate who's expected to take the next action on the PR, such as PR author after reviewer leaves comments, or the reviewer after updates have been made
    - if there is an error or something that requires changes, it's okay to review it and mark it as "requires changes" for explicit feedback. there's cases where we can possible triage by pr status - e.g., PRs that are open and are possibly ready, just need review or approval, vs things that are needing work.
-8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted
+8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted. please review the git message, which will automatically be set to the first comment in the PR.
 
 ### CODEOWNERS
 
