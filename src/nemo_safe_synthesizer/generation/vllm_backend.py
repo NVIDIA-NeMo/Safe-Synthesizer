@@ -118,9 +118,9 @@ class VllmBackend(GeneratorBackend):
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
             regex = build_json_based_regex(
                 self.schema,
+                self.config,
                 self.model_metadata.prompt_config.bos_token,
                 self.model_metadata.prompt_config.eos_token,
-                group_by=self.config.data.group_training_examples_by is not None,
             )
             params["regex"] = regex
         elif self.config.generation.structured_generation_schema_method == "json_schema":
