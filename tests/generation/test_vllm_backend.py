@@ -146,11 +146,18 @@ class TestBuildStructuredOutputParams:
         assert result is None
 
     def test_returns_params_with_regex_when_regex_method(
-        self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+        self,
+        params_with_structured_generation_regex,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
         """Test that StructuredOutputsParams with regex is returned when regex method is used."""
         backend = create_backend(
-            params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+            params_with_structured_generation_regex,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
         )
 
         with patch(
@@ -158,34 +165,49 @@ class TestBuildStructuredOutputParams:
             return_value="test_regex_pattern",
         ) as mock_build_regex:
             result = backend._build_structured_output_params()
-
             mock_build_regex.assert_called_once_with(
                 mock_schema,
+                params_with_structured_generation_regex,
                 mock_model_metadata.prompt_config.bos_token,
                 mock_model_metadata.prompt_config.eos_token,
-                group_by=False,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
 
     def test_returns_params_with_json_when_json_schema_method(
-        self, params_with_structured_generation_json, mock_model_metadata, mock_schema, mock_workdir
+        self,
+        params_with_structured_generation_json,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
         """Test that StructuredOutputsParams with json is returned when json_schema method is used."""
-        backend = create_backend(params_with_structured_generation_json, mock_model_metadata, mock_schema, mock_workdir)
+        backend = create_backend(
+            params_with_structured_generation_json,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
 
         result = backend._build_structured_output_params()
 
         assert result is not None
         assert result.json == mock_schema
 
-    def test_group_by_passed_when_grouping_enabled(
-        self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+    def test_config_passed_when_grouping_enabled(
+        self,
+        params_with_structured_generation_regex,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
-        """Test that group_by=True is passed when group_training_examples_by is set."""
+        """Test that config is passed to build_json_based_regex (grouping is handled internally)."""
         params_with_structured_generation_regex.data.group_training_examples_by = "category"
         backend = create_backend(
-            params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+            params_with_structured_generation_regex,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
         )
 
         with patch(
@@ -194,9 +216,12 @@ class TestBuildStructuredOutputParams:
         ) as mock_build_regex:
             backend._build_structured_output_params()
 
-            mock_build_regex.assert_called_once()
-            _, kwargs = mock_build_regex.call_args
-            assert kwargs.get("group_by") is True
+            mock_build_regex.assert_called_once_with(
+                mock_schema,
+                params_with_structured_generation_regex,
+                mock_model_metadata.prompt_config.bos_token,
+                mock_model_metadata.prompt_config.eos_token,
+            )
 
 
 class TestResolveTemperature:
@@ -354,7 +379,9 @@ class TestGetApiParamMapping:
         assert key == "logits_processors"
         assert len(value) == 1
         # Verify it's a TypicalLogitsWarperWrapper
-        from nemo_safe_synthesizer.generation.vllm_backend import TypicalLogitsWarperWrapper
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            TypicalLogitsWarperWrapper,
+        )
 
         assert isinstance(value[0], TypicalLogitsWarperWrapper)
 

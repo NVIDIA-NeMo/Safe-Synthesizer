@@ -93,11 +93,13 @@ flowchart LR
 The `ci-checks.yml` workflow runs on every push to `main` and on pull requests:
 
 - Detect Changes: Uses `dorny/paths-filter` to skip jobs when only non-source files change
-- Format: Verifies code formatting with `ruff format --check`
-- Lint: Runs `ruff check` linting
-- Typecheck: Runs `ty` type checks
+- Format: Verifies code formatting with `ruff format --check` and checks SPDX copyright headers
+- Lint: Runs `ruff check` on all tracked Python files
+- Typecheck: Runs `ty check` on all tracked Python files (excludes configured in `pyproject.toml [tool.ty.src]`)
 - Unit Tests: Runs pytest with coverage
 - CI Status: Aggregation job -- single required check for branch protection
+
+All format, lint, and typecheck jobs run on all tracked files (not just changed files). `ruff` and `ty` are fast enough to check the entire repo. To replicate CI locally: `make format && make lint && make test`.
 
 All jobs run on `ubuntu-latest` (GitHub-hosted).
 

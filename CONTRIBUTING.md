@@ -39,8 +39,11 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```
 3. Set up the development environment:
   ```bash
-   # Install development tools (uv, ruff, ty, yq, etc.)
+   # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
    make bootstrap-tools
+
+   # Ensure ~/.local/bin is on your PATH (add to your shell profile if needed)
+   export PATH="$HOME/.local/bin:$PATH"
 
    # Install Python dependencies (choose one)
    make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
@@ -305,37 +308,35 @@ Before submitting a PR:
 
 For detailed style guidelines covering Python, markdown, Dockerfiles, shell scripts, testing, and docstrings, see [STYLE_GUIDE.md](STYLE_GUIDE.md).
 
-### Formatting
+### Formatting, Linting, and Type Checking
 
-We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and linting auto-fix, plus a copyright header fixer. `make format` mutates files — it runs the same fixers as pre-commit.
-
-```bash
-# Format code, auto-fix lint issues, and add missing copyright headers
-make format
-```
-
-### Linting and Type Checking
-
-We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. `make lint` is read-only — it reports errors without modifying files.
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `make bootstrap-tools` and check all tracked files.
 
 ```bash
-# Check linting, type errors, and missing copyright headers (no auto-fix)
-make lint
+make format   # auto-fix: ruff format + import sorting + copyright headers
+make lint     # read-only: ruff lint + ty typecheck + copyright check
+make test     # unit tests
 ```
 
-### Copyright Headers
+These three commands replicate what CI runs. Pre-commit hooks (`prek install`) provide faster feedback during development but are not a substitute for the `make` targets.
 
-All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically. Files excluded from this requirement (community files like `README.md`, config directories like `.github/`) are listed in `.copyrightignore` at the repo root.
-
-### Pre-commit Hooks
-
-We recommend setting up pre-commit hooks to catch formatting, linting, and type issues before committing:
+The wrapper scripts in `tools/` also accept explicit file paths:
 
 ```bash
-prek install
+bash tools/lint/ruff-lint.sh src/nemo_safe_synthesizer/cli/run.py
+bash tools/format/format.sh --check src/nemo_safe_synthesizer/cli/run.py
 ```
 
-This installs hooks that run Ruff (format + lint), copyright header fixer, ty type checking, and uv lock verification on each commit.
+All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
+
+| Check | CI | `make format` / `make lint` | Pre-commit (`prek`) |
+|---|---|---|---|
+| ruff format | read-only | auto-fix | staged files (auto-fix) |
+| ruff lint | read-only | `make lint`: read-only; `make format`: auto-fix | staged files |
+| ty typecheck | all files | all files | all files |
+| copyright headers | read-only | `make lint`: read-only; `make format`: auto-fix | staged files (auto-fix) |
+| uv lock drift | checked | not checked | on `pyproject.toml` changes |
+| DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
 
