@@ -26,7 +26,6 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 - Python 3.11+
 - Git
-- [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
 
@@ -51,7 +50,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    cd Safe-Synthesizer
 
-   # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
+   # Install development tools (uv, ruff, ty, yq, gh, etc.) to ~/.local/bin
    make bootstrap-tools
 
    # Ensure ~/.local/bin is on your PATH (add to your shell profile if needed)
@@ -82,7 +81,13 @@ Choose one of the two options below.
 
 Most contributors already have an SSH key for GitHub authentication. The same key can also sign commits. If you don't have an SSH key yet, see [Generating a new SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
-1. Check whether your key is already registered for signing:
+1. Set scopes on your `gh` cli. We'll remove them later.
+
+   ```bash
+   gh auth refresh -s admin:ssh_signing_key
+   ```
+
+2. Check whether your key is already registered for signing:
 
    ```bash
    gh ssh-key list
@@ -90,17 +95,16 @@ Most contributors already have an SSH key for GitHub authentication. The same ke
 
    If your key already appears with type `signing`, skip to step 3.
 
-2. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). The `admin:ssh_signing_key` scope grants write access to your account's signing keys; the one-liner below adds it, registers the key, then removes the scope so it doesn't persist in your token:
+3. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). The `admin:ssh_signing_key` scope grants write access to your account's signing keys; the one-liner below adds it, registers the key, then removes the scope so it doesn't persist in your token:
 
    ```bash
-   gh auth refresh -s admin:ssh_signing_key \
      && gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
      && gh auth refresh -r admin:ssh_signing_key
    ```
 
    Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-new-ssh-key-to-your-github-account) > SSH and GPG keys > New SSH key > Key type: "Signing Key".
 
-3. Configure git to sign commits (see [Telling Git about your signing key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key) for details):
+4. Configure git to sign commits (see [Telling Git about your signing key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key) for details):
 
    ```bash
    git config --global gpg.format ssh
@@ -108,7 +112,7 @@ Most contributors already have an SSH key for GitHub authentication. The same ke
    git config --global commit.gpgsign true
    ```
 
-4. (Optional) Configure local verification:
+5. (Optional) Configure local verification:
 
    To see "Good signature" locally when running `git log --show-signature`, git needs to know which SSH keys to trust.
 
@@ -148,7 +152,7 @@ git commit --allow-empty -s -S -m "test: verify commit signing"
 git log --show-signature -1
 
 # Clean up the test commit
-git reset --hard HEAD~1
+git reset --soft HEAD~1
 ```
 
 You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
@@ -163,10 +167,15 @@ NVIDIA internal contributors who work primarily on repos that require DCO and si
 
 #### Re-signing existing commits
 
-If you have unsigned commits on a feature branch that were pushed before signing was configured, rebase to re-create them with signatures:
+If you have unsigned commits on a feature branch that were pushed before signing was configured, rebase to re-create them with signatures. Use the remote that points to the NVIDIA repo (`origin` for internal contributors, `upstream` for external forks):
 
 ```bash
+# NVIDIA internal
 git rebase --force-rebase --gpg-sign --signoff origin/main
+
+# External (forked)
+git rebase --force-rebase --gpg-sign --signoff upstream/main
+
 git push --force-with-lease
 ```
 
