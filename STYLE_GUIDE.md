@@ -698,6 +698,7 @@ The before/after examples above demonstrate most rules. These additional points 
   ```
 
   Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
+- __init__.py files do not need docstrings.
 
 ### Patterns to avoid
 
