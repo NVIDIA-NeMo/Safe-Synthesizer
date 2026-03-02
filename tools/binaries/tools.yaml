@@ -64,6 +64,14 @@ tools:
       amd64: "x86_64"
     bootstrap: true
 
+  gh:
+    version: "2.87.0"
+    check_command: "gh --version"
+    url: "https://github.com/cli/cli/releases/download/v{version}/gh_{version}_{os}_{arch}.tar.gz"
+    extract: "gh_{version}_{os}_{arch}/bin/gh"
+    os_map:
+      darwin: "macOS"
+
 # Tools with custom install scripts (complex logic)
 custom_scripts:
   - name: direnv
