@@ -17,7 +17,8 @@ logger = get_logger(__name__)
 class UnslothTrainer(HuggingFaceBackend):
     """Training backend using Unsloth for optimized LLM fine-tuning.
 
-    Extends :class:`HuggingFaceBackend` to leverage Unsloth's optimized
+    Extends [`HuggingFaceBackend`][nemo_safe_synthesizer.training.huggingface_backend.HuggingFaceBackend]
+    to leverage Unsloth's optimized
     training routines, providing faster training speeds and reduced memory
     usage compared to standard HuggingFace implementations.
 
@@ -88,9 +89,13 @@ class UnslothTrainer(HuggingFaceBackend):
     def maybe_quantize(self):
         """Apply PEFT wrapping via Unsloth's ``FastLanguageModel.get_peft_model``.
 
-        Unlike the parent implementation, this always wraps the model as a
-        PEFT model (even without quantization) so the adapter is saved
-        correctly.
+        This method configures and applies Parameter-Efficient Fine-Tuning (PEFT)
+        using Unsloth's optimized implementation. The PEFT wrapping is always
+        applied to ensure the adapter is saved correctly.
+
+        Note:
+            Unlike the parent class implementation, this method uses Unsloth's
+            ``FastLanguageModel.get_peft_model``.
         """
         from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
 
@@ -103,7 +108,6 @@ class UnslothTrainer(HuggingFaceBackend):
 
     def _load_pretrained_model(self, **model_args):
         """Load model and tokenizer via Unsloth and add BOS/EOS tokens."""
-
         model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)
 
         self.tokenizer = add_bos_eos_tokens_to_tokenizer(
@@ -120,8 +124,12 @@ class UnslothTrainer(HuggingFaceBackend):
         and :meth:`maybe_quantize` in sequence.
 
         Args:
-            **model_args: Additional keyword arguments for model
-                configuration.
+            **model_args: Additional keyword arguments for model configuration.
+
+        Note:
+            This method applies a workaround that disables Unsloth's LLAMA32
+            support check to prevent unnecessary HuggingFace Hub requests.
+            See: https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235
         """
         # NOTE: this hack stops unsloth from reaching out to huggingface, see
         # https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235

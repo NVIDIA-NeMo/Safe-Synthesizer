@@ -93,8 +93,8 @@ class HuggingFaceBackend(TrainingBackend):
 
     Handles model loading (``AutoModelForCausalLM``), LoRA/QLoRA wrapping,
     RoPE scaling, optional differential-privacy training via
-    :class:`~..privacy.dp_transformers.dp_utils.OpacusDPTrainer`, and
-    artifact persistence (adapter, schema, metadata).
+    [`OpacusDPTrainer`][nemo_safe_synthesizer.privacy.dp_transformers.dp_utils.OpacusDPTrainer],
+    and artifact persistence (adapter, schema, metadata).
     """
 
     def __init__(self, *args, **kwargs):
@@ -246,12 +246,11 @@ class HuggingFaceBackend(TrainingBackend):
 
     @traced_runtime("prepare_config")
     def prepare_config(self, add_max_memory: bool = True, **kwargs):
-        """
-        Set common model arguments for initializing a model.
+        """Set common model arguments for initializing a model.
 
         Args:
             add_max_memory: Whether to add max_memory to the model arguments.
-            kwargs: Additional keyword arguments, overriding default arguments when set.
+            **kwargs: Additional keyword arguments, overriding default arguments when set.
         """
         if self.framework_load_params:
             logger.info("already prepared loading parameters")
@@ -273,7 +272,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.framework_load_params = framework_params
 
     def _prepare_quantize_base(self, **quantize_params: dict):
-        """Populate :attr:`quant_params` with LoRA and optional quantization settings."""
+        """Populate ``quant_params`` with LoRA and optional quantization settings."""
         self.quant_params = dict(
             task_type=TaskType.CAUSAL_LM,
             init_lora_weights=True,
@@ -318,12 +317,11 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
     def load_model(self, **model_args):
-        """
-        Load an AutoModelForCausalLM instance with specified arguments.
+        """Load an ``AutoModelForCausalLM`` instance with specified arguments.
 
         Args:
             **model_args: Additional keyword arguments for model configuration,
-                          passed directly to AutoModelForCausalLM.from_pretrained().
+                passed directly to ``AutoModelForCausalLM.from_pretrained()``.
         """
         logger.info(f"loading pretrained model: {self.params.training.pretrained_model}")
         self.prepare_config(**model_args)
@@ -656,8 +654,8 @@ class HuggingFaceBackend(TrainingBackend):
 
         Runs auto-config resolution, time-series processing, groupby /
         orderby validation, and assembles tokenized training examples.
-        Populates :attr:`training_examples`, :attr:`dataset_schema`,
-        :attr:`df_train`, and :attr:`data_fraction`.
+        Populates ``training_examples``, ``dataset_schema``,
+        ``df_train``, and ``data_fraction``.
 
         Raises:
             DataError: If the training dataset is missing or malformed.
@@ -712,10 +710,10 @@ class HuggingFaceBackend(TrainingBackend):
 
     @utils.time_function
     def train(self, **training_args):
-        """Run the full training pipeline and populate :attr:`results`.
+        """Run the full training pipeline and populate ``results``.
 
-        Sequentially calls :meth:`prepare_training_data`,
-        :meth:`prepare_params`, trains the model, and saves artifacts.
+        Sequentially calls ``prepare_training_data``,
+        ``prepare_params``, trains the model, and saves artifacts.
         """
         training_start = time.monotonic()
         self.prepare_training_data()
@@ -811,34 +809,42 @@ class HuggingFaceBackend(TrainingBackend):
 def preprocess_logits_for_metrics(
     logits: tuple[torch.Tensor, ...], labels: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """
+    """Reduce logits to argmax predictions to avoid OOM during evaluation.
 
-    Running into OOM errors for ecommerce dataset during evaluation loop.
-    Found this workaround online: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
-    Original Trainer may have a memory leak.
-    This is a workaround to avoid storing too many tensors that are not needed.
+    The default Trainer stores full logit tensors across evaluation batches,
+    which can exhaust GPU memory on large datasets.  This callback replaces
+    them with predicted token IDs immediately after the forward pass.
+
+    See: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
 
     Args:
-        logits: Tuple of logits tensors from the model output
-        labels: Ground truth labels tensor
+        logits: Tuple of logits tensors from the model output.
+        labels: Ground truth labels tensor.
 
     Returns:
-        Tuple containing:
-            - Predicted token IDs
-            - Ground truth labels
+        Tuple of ``(predicted_token_ids, labels)``.
     """
     pred_ids = torch.argmax(logits[0], dim=-1)
     return pred_ids, labels
 
 
 def compute_metrics(eval_preds: EvalPrediction) -> dict[str, float]:
-    """Compute metrics for evaluation.
+    """Compute evaluation metrics from forward-pass losses.
+
+    Metrics returned:
+
+    - **mean cross-entropy loss** (``eval_loss``) -- average of per-batch
+      losses collected during the evaluation loop.
+
+    The per-batch losses are pre-computed during the forward pass
+    (via ``include_for_metrics``).
 
     Args:
-        eval_preds: Evaluation predictions object containing losses and predictions
+        eval_preds: Evaluation predictions object whose ``losses`` field
+            contains per-batch losses collected during the eval loop.
 
     Returns:
-        Dictionary containing evaluation metrics
+        Dictionary mapping metric names to values.
     """
     # include_for_metrics has "loss", so the loss is already computed in the forward pass
     losses = eval_preds.losses if eval_preds.losses is not None else []

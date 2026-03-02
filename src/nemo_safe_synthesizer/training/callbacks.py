@@ -4,7 +4,6 @@
 """HuggingFace Trainer callbacks for Safe Synthesizer training."""
 
 import time
-from typing import Optional
 
 from tqdm.auto import tqdm
 from transformers import (
@@ -37,19 +36,24 @@ logger = get_logger(__name__)
 
 
 class InferenceEvalCallback(TrainerCallback):
-    """🤗 Trainer callback that performs inference-based evaluation during training.
+    """Trainer callback that performs inference-based evaluation during training.
 
-    This callback generates records using the current model and validates them against a schema.
-    Empirically, the fraction of invalid records generated is a good indicator of the model's
-    performance. The callback can stop training if the fraction of invalid records satisfies
-    the stopping criteria specified by `invalid_fraction_threshold` and `patience`.
+    Generates records using the current model and validates them against a
+    schema.  Empirically, the fraction of invalid records generated is a good
+    indicator of model quality.  The callback can stop training early if the
+    invalid fraction satisfies the stopping criteria specified by
+    ``invalid_fraction_threshold`` and ``patience``.
 
     Args:
         schema: Schema to validate the generated records against.
+        metadata: Pretrained model metadata (prompt template, instruction, etc.).
+        processor: Record processor used to parse and validate generated text.
         num_prompts_per_batch: Number of prompts per batch.
         num_batches: Number of batches to generate.
-        invalid_fraction_threshold: The fraction of invalid records that will stop generation after the `patience` limit is reached.
-        patience: Number of consecutive generations where the `invalid_fraction_threshold` is reached before stopping generation.
+        invalid_fraction_threshold: The fraction of invalid records that will
+            stop generation after the ``patience`` limit is reached.
+        patience: Number of consecutive generations where the
+            ``invalid_fraction_threshold`` is reached before stopping.
         generate_kwargs: Keyword arguments to pass to the model's generate method.
     """
 
@@ -59,7 +63,7 @@ class InferenceEvalCallback(TrainerCallback):
         metadata: ModelMetadata,
         processor: Processor,
         num_prompts_per_batch: int = 16,
-        num_batches: Optional[int] = None,
+        num_batches: int | None = None,
         patience: int = 3,
         invalid_fraction_threshold: float = 0.8,
         generate_kwargs: dict | None = None,
@@ -101,7 +105,7 @@ class InferenceEvalCallback(TrainerCallback):
     ) -> None:
         """Generate records with the current model and optionally stop training.
 
-        Runs inference for :attr:`num_batches` batches, validates each against
+        Runs inference for ``num_batches`` batches, validates each against
         the schema, and sets ``control.should_training_stop`` if the invalid
         record fraction exceeds the threshold for ``patience`` consecutive
         evaluations.
@@ -173,9 +177,10 @@ class InferenceEvalCallback(TrainerCallback):
 
 
 class ProgressBarCallback(TrainerCallback):
-    """A `TrainerCallback` that displays the progress of training or evaluation.
+    """A ``TrainerCallback`` that displays the progress of training or evaluation.
 
-    Note: This callback can only be used during development.
+    Note:
+        This callback can only be used during development.
     """
 
     def __init__(self):
@@ -277,7 +282,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
     ):
         self._start_ts = time.monotonic()
 
-    def _checked_log_if(self, cond: bool, state: TrainerState, control: TrainerControl) -> Optional[TrainerControl]:
+    def _checked_log_if(self, cond: bool, state: TrainerState, control: TrainerControl) -> TrainerControl | None:
         """Set ``control.should_log`` when ``cond`` is true, guarding against duplicate steps.
 
         The HuggingFace Trainer triggers a division-by-zero if the same
