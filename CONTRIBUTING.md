@@ -318,6 +318,8 @@ make lint     # read-only: ruff lint + ty typecheck + copyright check
 make test     # unit tests
 ```
 
+We use ``ruff`` && ``ty`` to do the majority of this work, and we wrap them with settings for consistency.
+
 These three commands replicate what CI runs. Pre-commit hooks (`prek install`) provide faster feedback during development but are not a substitute for the `make` targets.
 
 The wrapper scripts in `tools/` also accept explicit file paths:
@@ -335,7 +337,7 @@ All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright h
 | ruff lint | read-only | `make lint`: read-only; `make format`: auto-fix | staged files |
 | ty typecheck | all files | all files | all files |
 | copyright headers | read-only | `make lint`: read-only; `make format`: auto-fix | staged files (auto-fix) |
-| uv lock drift | checked | not checked | on `pyproject.toml` changes |
+| uv lock drift | not checked | not checked | on `pyproject.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
