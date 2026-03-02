@@ -14,7 +14,7 @@ problem-to-solution structure -- find your symptom, then follow the fix.
 | "kernels package not installed" warning | `kernels` pip package missing | `pip install kernels` or set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet, model not cached | [Pre-cache models](#pre-caching-models), set `HF_HUB_OFFLINE=1` after caching |
 | `torch.cuda.OutOfMemoryError` in training | VRAM exhausted | [Reduce batch size, enable quantization, lower VRAM fraction](#out-of-memory-during-training) |
-| `torch.cuda.OutOfMemoryError` in generation | VRAM exhausted | [Lower VRAM fraction, check training cleanup](#out-of-memory-during-generation) |
+| `torch.cuda.OutOfMemoryError` in generation | VRAM exhausted | [Check training cleanup, verify free VRAM](#out-of-memory-during-generation) |
 | `torch.cuda.OutOfMemoryError` in evaluation | Large dataset + PCA/binning | [Disable expensive components or reduce columns](#out-of-memory-during-evaluation) |
 | "Cannot use unsloth without GPU" | No CUDA device | [Use HuggingFace backend or install CUDA drivers](#no-gpu-detected) |
 | "max_sequences_per_example must be set to 1 or 'auto'" | Incompatible DP config | Set `data.max_sequences_per_example: 1` or `"auto"` |
@@ -178,8 +178,8 @@ Several environment variables control network behavior:
 | Variable | Scope | Effect |
 |----------|-------|--------|
 | `HF_HOME` | All Hugging Face downloads | Set the cache directory for downloaded models |
-| `HF_HUB_OFFLINE=1` | All Hugging Face downloads | Error instead of attempting downloads |
-| `LOCAL_FILES_ONLY=true` | Unsloth backend, GLiNER | Skip network downloads, use local files only |
+| `HF_HUB_OFFLINE` | All Hugging Face downloads | When set to `1`, error instead of attempting downloads |
+| `LOCAL_FILES_ONLY` | Unsloth backend, GLiNER | When set to `true`, skip network downloads and use local files only |
 | `VLLM_CACHE_ROOT` | vLLM | Set the vLLM model cache directory |
 
 !!! warning
@@ -204,8 +204,8 @@ set the training attention backend to a built-in option:
     safe-synthesizer run --training__attn_implementation sdpa --url data.csv
     ```
 
-To prevent column classification from contacting `build.nvidia.com`, either set
-`NIM_ENDPOINT_URL` to a local endpoint or disable classification:
+To prevent outbound classification requests, either set `NIM_ENDPOINT_URL`
+to a local endpoint or disable classification:
 
 ```yaml
 replace_pii:
@@ -220,11 +220,13 @@ replace_pii:
 
 ### VRAM Management
 
-Safe Synthesizer reserves GPU memory conservatively:
+Both training and generation allocate GPU memory via `get_max_vram()`, which
+defaults to 80% of available VRAM with a 2 GiB safety buffer subtracted.
 
-- `training.max_vram_fraction` (default `0.80`) -- fraction of total VRAM to allocate
-- An additional 2 GiB safety buffer is subtracted from free VRAM before allocation
-- vLLM's `gpu_memory_utilization` is derived from the same calculation
+!!! note
+    `training.max_vram_fraction` exists in config but is not currently wired
+    into either the training or generation paths. Both use the hardcoded 0.8
+    default in `get_max_vram()`.
 
 ### Out of Memory During Training
 
@@ -241,8 +243,8 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
    factor is how you shrink it. When using `data.group_training_examples_by`,
    multiple records must fit in context, making this constraint tighter.
    Consider truncating or removing very long training examples.
-3. Enable quantization with `load_in_4bit: true` or `load_in_8bit: true`
-4. Lower `training.max_vram_fraction` if other processes share the GPU
+3. Enable quantization by setting `training.quantize_model: true` and choosing
+   `training.quantization_bits: 4` (4-bit) or `8` (8-bit)
 
 !!! note
     There is a known memory leak in the HuggingFace Trainer evaluation loop
@@ -252,10 +254,13 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
 ### Out of Memory During Generation
 
 Generation OOM errors appear during the "Generation" phase with vLLM stack
-traces. If generation OOMs:
+traces. vLLM manages its own memory pool using `get_max_vram()` (defaults to
+80% of available VRAM). If generation OOMs:
 
-1. Lower `training.max_vram_fraction` to give vLLM less memory
-2. Ensure no other processes hold GPU memory (training cleanup should release it)
+1. Ensure no other processes hold GPU memory -- training cleanup should release
+   it, but verify with `nvidia-smi`
+2. If the GPU has less memory than expected, check that the training teardown
+   completed before generation started
 
 ### Out of Memory During Evaluation
 
@@ -457,7 +462,7 @@ Out-of-order records:
 
 The PII replacer downloads the GLiNER NER model on first use. This respects
 the `LOCAL_FILES_ONLY` environment variable, but has no retry logic -- if the
-download fails, it raises a `RuntimeError`.
+download fails, it raises an exception.
 
 Fix: pre-download the model by running PII replacement once in an environment
 with internet access, or set `LOCAL_FILES_ONLY=true` after the model is cached.
@@ -477,16 +482,18 @@ replace_pii:
   globals:
     classify:
       enable_classify: true
-      entities: ["PERSON", "EMAIL", "PHONE_NUMBER"]
+      entities: ["person", "email", "phone_number"]
 ```
 
 ### NER Processing Timeouts
 
-NER has a `max_runtime_seconds` timeout. If processing a chunk takes too long,
-it is dropped with a warning in the logs.
+NER uses an internal `max_runtime_seconds` timeout. If processing a chunk takes
+too long, it is dropped with a warning in the logs.
 
-Fix: check the logs for timeout warnings. For large datasets, increase
-`max_runtime_seconds` or reduce the size of text fields.
+Fix: check the logs for timeout warnings. The timeout is not currently
+configurable; for large datasets, reduce the amount of text processed per
+chunk (for example, shorten text fields or split them into smaller pieces) and
+optionally reduce CPU parallelism so each worker has more resources.
 
 ### CPU Parallelism
 
@@ -508,7 +515,8 @@ Several evaluation metrics have minimum data requirements:
 
 | Metric | Minimum | Behavior if Unmet |
 |--------|---------|-------------------|
-| Holdout / text + privacy metrics | 200 records | Raises `ValueError` |
+| Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
+| Text semantic similarity | 200 records | Silently skipped, warning logged |
 | Attribute Inference Attack | 3+ columns | Silently skipped, warning logged |
 | PCA (deep structure) | 2x2 matrix | Silently skipped, warning logged |
 
