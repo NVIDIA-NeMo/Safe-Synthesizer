@@ -146,11 +146,18 @@ class TestBuildStructuredOutputParams:
         assert result is None
 
     def test_returns_params_with_regex_when_regex_method(
-        self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+        self,
+        params_with_structured_generation_regex,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
         """Test that StructuredOutputsParams with regex is returned when regex method is used."""
         backend = create_backend(
-            params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+            params_with_structured_generation_regex,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
         )
 
         with patch(
@@ -168,10 +175,19 @@ class TestBuildStructuredOutputParams:
             assert result.regex == "test_regex_pattern"
 
     def test_returns_params_with_json_when_json_schema_method(
-        self, params_with_structured_generation_json, mock_model_metadata, mock_schema, mock_workdir
+        self,
+        params_with_structured_generation_json,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
         """Test that StructuredOutputsParams with json is returned when json_schema method is used."""
-        backend = create_backend(params_with_structured_generation_json, mock_model_metadata, mock_schema, mock_workdir)
+        backend = create_backend(
+            params_with_structured_generation_json,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
 
         result = backend._build_structured_output_params()
 
@@ -184,7 +200,10 @@ class TestBuildStructuredOutputParams:
         """Test that config with group_training_examples_by set is passed to build_json_based_regex."""
         params_with_structured_generation_regex.data.group_training_examples_by = "category"
         backend = create_backend(
-            params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+            params_with_structured_generation_regex,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
         )
 
         with patch(
@@ -192,7 +211,6 @@ class TestBuildStructuredOutputParams:
             return_value="test_regex_pattern",
         ) as mock_build_regex:
             backend._build_structured_output_params()
-
             mock_build_regex.assert_called_once()
             call_args, _ = mock_build_regex.call_args
             assert call_args[1].data.group_training_examples_by == "category"
@@ -353,7 +371,9 @@ class TestGetApiParamMapping:
         assert key == "logits_processors"
         assert len(value) == 1
         # Verify it's a TypicalLogitsWarperWrapper
-        from nemo_safe_synthesizer.generation.vllm_backend import TypicalLogitsWarperWrapper
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            TypicalLogitsWarperWrapper,
+        )
 
         assert isinstance(value[0], TypicalLogitsWarperWrapper)
 
