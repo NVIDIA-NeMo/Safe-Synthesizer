@@ -149,7 +149,7 @@ class ConfigBuilder(object):
             df_source: Training dataset as a pandas DataFrame or a fetchable URL.
 
         Returns:
-            Self for method chaining.
+            This builder instance with the data source configured.
         """
         self._data_source = df_source
         return self
@@ -162,7 +162,7 @@ class ConfigBuilder(object):
         but it provides an explicit opt-in when relying on defaults.
 
         Returns:
-            Self for method chaining.
+            This builder instance with synthesis enabled.
         """
         self._enable_synthesis = True
         return self
@@ -175,7 +175,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``holdout_size``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with data processing settings applied.
         """
         self._data_config: DataParameters | None = self._resolve_config(values=config, cls=DataParameters, **kwargs)
         return self
@@ -188,7 +188,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``learning_rate``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with training hyperparameters applied and synthesis enabled.
         """
         self._training_config: TrainingHyperparams | None = self._resolve_config(
             values=config, cls=TrainingHyperparams, **kwargs
@@ -204,7 +204,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``num_records``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with generation settings applied and synthesis enabled.
         """
         self._generation_config: GenerateParameters | None = self._resolve_config(
             values=config, cls=GenerateParameters, **kwargs
@@ -220,7 +220,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``time_column``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with time-series synthesis settings applied.
         """
         self._time_series_config: TimeSeriesParameters | None = self._resolve_config(
             values=config, cls=TimeSeriesParameters, **kwargs
@@ -237,7 +237,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``epsilon``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with differential privacy settings applied.
         """
         self._privacy_config: DifferentialPrivacyHyperparams | None = self._resolve_config(
             values=config, cls=DifferentialPrivacyHyperparams, **kwargs
@@ -255,7 +255,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``classify``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with PII replacement configured and enabled.
 
         Raises:
             ValueError: If ``config`` is not a ``PiiReplacerConfig``,
@@ -288,7 +288,7 @@ class ConfigBuilder(object):
             **kwargs: Field-level overrides (e.g. ``enabled``).
 
         Returns:
-            Self for method chaining.
+            This builder instance with evaluation settings applied.
         """
         self._evaluation_config: EvaluationParameters | None = self._resolve_config(
             values=config, cls=EvaluationParameters, **kwargs
@@ -303,7 +303,7 @@ class ConfigBuilder(object):
         (URL string or DataFrame) into a ``DataFrame``.
 
         Returns:
-            Self for method chaining.
+            This builder instance with all configuration sections finalized.
         """
         self._resolve_nss_config()
         self._resolve_datasource()
