@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Abstract training backend and shared result container."""
+"""Abstract class for training backend and shared result dataclass."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ logger = get_logger()
 
 @dataclass
 class NSSTrainerResult:
-    """Result container returned after a training run completes.
+    """Stores all outputs from a training run.
 
     Attributes:
         training_complete: ``True`` if training finished normally; ``False``
@@ -48,7 +48,7 @@ class NSSTrainerResult:
         config: The resolved parameters used for the run.
         log_history: Per-step log entries recorded by the HuggingFace Trainer.
         adapter_path: Filesystem path to the saved LoRA adapter.
-        df_train: Training DataFrame (post-preprocessing).
+        df_train: Training DataFrame (after preprocessing).
         df_ml_utility_holdout: Optional hold-out split for ML-utility evaluation.
         elapsed_time: Wall-clock training duration in seconds.
     """
@@ -77,7 +77,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     DP support).
 
     Args:
-        params: Pipeline configuration.
+        params: NSS pipeline configuration.
         model_metadata: Pretrained model metadata (prompt template,
             sequence length, RoPE scaling, etc.).
         training_dataset: HuggingFace ``Dataset`` to fine-tune on.
