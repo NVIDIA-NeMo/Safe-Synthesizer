@@ -26,6 +26,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 - Python 3.11+
 - Git
+- [gh](https://cli.github.com/) -- GitHub CLI (for commit signing key registration and PR workflows)
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
 
@@ -50,7 +51,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    cd Safe-Synthesizer
 
-   # Install development tools (uv, ruff, ty, yq, gh, etc.) to ~/.local/bin
+   # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
    make bootstrap-tools
 
    # Ensure ~/.local/bin is on your PATH (add to your shell profile if needed)
