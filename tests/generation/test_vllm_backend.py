@@ -194,7 +194,6 @@ class TestBuildStructuredOutputParams:
         assert result is not None
         assert result.json == mock_schema
 
-
     def test_config_with_grouping_passed_to_build_regex(
         self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
     ):
