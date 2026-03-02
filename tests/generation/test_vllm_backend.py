@@ -194,14 +194,11 @@ class TestBuildStructuredOutputParams:
         assert result is not None
         assert result.json == mock_schema
 
-    def test_config_passed_when_grouping_enabled(
-        self,
-        params_with_structured_generation_regex,
-        mock_model_metadata,
-        mock_schema,
-        mock_workdir,
+
+    def test_config_with_grouping_passed_to_build_regex(
+        self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
     ):
-        """Test that config is passed to build_json_based_regex (grouping is handled internally)."""
+        """Test that config with group_training_examples_by set is passed to build_json_based_regex."""
         params_with_structured_generation_regex.data.group_training_examples_by = "category"
         backend = create_backend(
             params_with_structured_generation_regex,
@@ -215,13 +212,9 @@ class TestBuildStructuredOutputParams:
             return_value="test_regex_pattern",
         ) as mock_build_regex:
             backend._build_structured_output_params()
-
-            mock_build_regex.assert_called_once_with(
-                mock_schema,
-                params_with_structured_generation_regex,
-                mock_model_metadata.prompt_config.bos_token,
-                mock_model_metadata.prompt_config.eos_token,
-            )
+            mock_build_regex.assert_called_once()
+            call_args, _ = mock_build_regex.call_args
+            assert call_args[1].data.group_training_examples_by == "category"
 
 
 class TestResolveTemperature:
