@@ -459,6 +459,49 @@ Put constructor `Args:` in the class docstring, not on `__init__`. IDEs (Cursor,
 
 Include both when a class has nontrivial constructor parameters AND public attributes worth documenting. For simple classes where the args and attributes are the same fields, `Args:` alone is sufficient.
 
+#### Field-level docstrings for Pydantic models and dataclasses
+
+Pydantic models and dataclasses: document each field with an inline docstring immediately after the field definition. Omit the `Attributes:` section to avoid duplication. Regular classes that set attributes in `__init__` should still use `Attributes:` (as in the Tier 3 example above).
+
+```python
+class RopeScaling(BaseModel):
+    """Rotary Position Embedding (RoPE) scaling configuration.
+
+    Encapsulates the parameters needed to extend a model's context
+    window via RoPE scaling.
+    """
+
+    rope_type: Annotated[
+        Literal["linear", "dynamic", "default", "yarn", "llama3"],
+        Field(description="Type of rope scaling"),
+    ] = "default"
+    """Scaling algorithm (``"linear"``, ``"dynamic"``, ``"default"``, ``"yarn"``, or ``"llama3"``)."""
+
+    factor: Annotated[float, Field(description="Multiplier for rope scaling")] = 1.0
+    """Context-window multiplier, clamped to ``MAX_ROPE_SCALING_FACTOR``."""
+
+    theta: Annotated[float, Field(description="Theta for rope scaling")] = 10000.0
+    """Base frequency for rotary embeddings."""
+```
+
+When a field uses `Field(description=...)`, duplicate the description in the inline docstring.
+
+Fields without defaults, with defaults, and with `Field()` all follow the same pattern:
+
+```python
+    model_name: str
+    """HuggingFace model identifier or local path."""
+
+    is_adapter: bool = False
+    """Whether an adapter checkpoint is loaded."""
+
+    base_max_seq_length: Annotated[
+        int | None,
+        Field(description="Context window before rope scaling"),
+    ] = None
+    """Context window size before RoPE scaling."""
+```
+
 #### Before and after
 
 Vague module docstring:
@@ -508,14 +551,14 @@ def teardown(self) -> None:
     """
 ```
 
-Class without Attributes section:
+Pydantic model without field documentation:
 
 ```python
 # Before
 class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline."""
 
-# After
+# After -- inline field docstrings instead of Attributes: section
 class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline.
 
@@ -523,21 +566,22 @@ class SafeSynthesizerParameters(Parameters):
     generation, privacy, evaluation, and data handling. Provides cross-field
     validation to ensure parameter compatibility.
 
-    Attributes:
-        data: Data parameters (holdout ratio, column config, etc.).
-        replace_pii: PII replacement parameters.
-        training: Training hyperparameters (learning rate, epochs, LoRA config).
-        generation: Generation parameters (temperature, top_p, num_records).
-        privacy: Differential privacy parameters (epsilon, delta).
-        evaluation: Evaluation component toggles and settings.
-        enable_synthesis: Enable synthesizing new data by training a model.
-        enable_replace_pii: Enable replacing PII in the data.
-
     Example:
         config = SafeSynthesizerParameters.from_yaml("config.yaml")
         synthesizer = SafeSynthesizer(config).with_data_source("data.csv")
         synthesizer.run()
     """
+
+    data: DataParameters = Field(default_factory=DataParameters, description="...")
+    """Data parameters (holdout ratio, column config, etc.)."""
+
+    training: TrainingHyperparams = Field(default_factory=TrainingHyperparams, description="...")
+    """Training hyperparameters (learning rate, epochs, LoRA config)."""
+
+    generation: GenerateParameters = Field(default_factory=GenerateParameters, description="...")
+    """Generation parameters (temperature, top_p, num_records)."""
+
+    # ... remaining fields follow the same pattern ...
 ```
 
 Generator with `Yields:` instead of `Returns:`:
@@ -607,7 +651,19 @@ The before/after examples above demonstrate most rules. These additional points 
 - Document side effects, thread safety, and idempotency guarantees where applicable
 - Use `Example:` sections with working code for public API methods
 - Complex code deserves proportionally detailed explanation -- err on the side of more context
-- Cross-references in docstrings: use double backticks (` `` `) for inline code, `:meth:`method_name` `, `:class:`ClassName` `, and `:func:`function_name` ` for API cross-links in `MkDocs`/Sphinx
+- Cross-references in docstrings: use double backticks for inline code. For clickable API cross-links, use the `mkdocstrings` autorefs syntax:
+
+  ```
+  [`display`][full.dotted.path]
+  ```
+
+  For example:
+
+  ```
+  [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config]
+  ```
+
+  Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
 
 ### Patterns to avoid
 
