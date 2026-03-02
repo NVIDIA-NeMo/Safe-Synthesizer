@@ -69,9 +69,18 @@ safe-synthesizer artifacts --help
 | Variable | Description |
 |----------|-------------|
 | `NSS_ARTIFACTS_PATH` | Default artifact path |
-| `NSS_LOG_FORMAT` | Default log format |
+| `NSS_LOG_FORMAT` | Default log format (`json` or `plain`) |
 | `NSS_LOG_FILE` | Default log file path |
 | `NSS_DATASET_REGISTRY` | Dataset registry YAML path/URL |
+| `HF_HOME` | Hugging Face cache directory (default `~/.cache/huggingface`) |
+| `HF_HUB_OFFLINE` | Set to `1` to error instead of downloading models |
+| `LOCAL_FILES_ONLY` | Set to `true` to skip network downloads (Unsloth, GLiNER only) |
+| `VLLM_ATTENTION_BACKEND` | Override vLLM attention backend |
+| `VLLM_CACHE_ROOT` | vLLM model cache directory |
 | `WANDB_MODE` | WandB mode |
 | `WANDB_PROJECT` | WandB project name |
 | `WANDB_API_KEY` | WandB API key |
+| `SAFE_SYNTHESIZER_CPU_COUNT` | Number of CPU processes for NER (default: system CPU count) |
+| `NIM_ENDPOINT_URL` | NIM endpoint for column classification / external PII detection |
+| `NIM_API_KEY` | NIM API key |
+| `NIM_MODEL_ID` | Model ID for column classification (default: `qwen/qwen2.5-coder-32b-instruct`) |

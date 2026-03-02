@@ -4,7 +4,29 @@
 # Troubleshooting
 
 This guide covers common issues, error messages, and configuration pitfalls
-you may encounter when using NeMo Safe Synthesizer.
+you may encounter when using NeMo Safe Synthesizer. Each section follows a
+problem-to-solution structure -- find your symptom, then follow the fix.
+
+## Quick Reference
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| "kernels package not installed" warning | `kernels` pip package missing | `pip install kernels` or set `training.attn_implementation: sdpa` |
+| `ConnectionError` during startup | No internet, model not cached | [Pre-cache models](#pre-caching-models), set `HF_HUB_OFFLINE=1` after caching |
+| `torch.cuda.OutOfMemoryError` in training | VRAM exhausted | [Reduce batch size, enable quantization, lower VRAM fraction](#out-of-memory-during-training) |
+| `torch.cuda.OutOfMemoryError` in generation | VRAM exhausted | [Lower VRAM fraction, check training cleanup](#out-of-memory-during-generation) |
+| `torch.cuda.OutOfMemoryError` in evaluation | Large dataset + PCA/binning | [Disable expensive components or reduce columns](#out-of-memory-during-evaluation) |
+| "Cannot use unsloth without GPU" | No CUDA device | [Use HuggingFace backend or install CUDA drivers](#no-gpu-detected) |
+| "max_sequences_per_example must be set to 1 or 'auto'" | Incompatible DP config | Set `data.max_sequences_per_example: 1` or `"auto"` |
+| "Unsloth is currently not compatible with DP" | Mutual exclusion | Set `use_unsloth: false` for DP training |
+| "Unable to determine a noise multiplier" | Epsilon too low for dataset | [Increase epsilon or add records](#common-dp-errors) |
+| "Generation stopped prematurely due to no valid records" | Model underfitting or schema mismatch | [Increase `num_input_records_to_sample`, check training logs](#generationerror) |
+| "Number of tokens exceeds context length" | Records too long for model | [Increase `rope_scaling_factor` or reduce record size](#generationerror) |
+| "fraction of invalid records was higher than..." | Generation quality too low | [Lower `invalid_fraction_threshold` or retrain](#generationerror) |
+| Evaluation metrics show UNAVAILABLE | Too few records or columns | [Ensure >= 200 records, >= 3 columns](#minimum-data-requirements) |
+| PII uses default entities unexpectedly | Column classifier failed | [Check logs, set entities explicitly](#pii-uses-unexpected-entity-types) |
+| "timestamp_column has missing values" | Dirty time series data | Clean NaN/null values from the timestamp column |
+| "groups must have same start timestamp" | Inconsistent time series groups | Align group start/stop timestamps in preprocessing |
 
 ---
 
@@ -67,10 +89,18 @@ In vLLM 0.11.x, this is set via the `VLLM_ATTENTION_BACKEND` environment variabl
 Safe Synthesizer handles this automatically when `generation.attention_backend` is
 configured.
 
-```yaml
-generation:
-  attention_backend: "FLASH_ATTN"
-```
+=== "YAML"
+
+    ```yaml
+    generation:
+      attention_backend: "FLASH_ATTN"
+    ```
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run --generation__attention_backend FLASH_ATTN --url data.csv
+    ```
 
 Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
 
@@ -82,9 +112,11 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 
 ## Network and Download Behavior
 
-Safe Synthesizer downloads models, tokenizers, and other artifacts from the
-internet at various pipeline stages. If you are running in a network-restricted
-environment, understanding these download points is critical.
+Safe Synthesizer downloads models, tokenizers, and other artifacts at various
+pipeline stages. All model and tokenizer downloads go through
+[Hugging Face Hub](https://huggingface.co/docs/huggingface_hub/guides/manage-cache).
+If you are running in a network-restricted environment, understanding these
+download points is critical.
 
 ### What Gets Downloaded
 
@@ -92,25 +124,29 @@ Training:
 
 - Model weights, config, and tokenizer via `AutoModelForCausalLM.from_pretrained()`,
   `AutoConfig.from_pretrained()`, and `AutoTokenizer.from_pretrained()` -- all
-  fetched from HuggingFace Hub on first use
-- When `attn_implementation` starts with `kernels-community/`, the `kernels`
-  package downloads compiled attention kernels from HuggingFace Hub
+  fetched from Hugging Face Hub on first use
+- When `training.attn_implementation` starts with `kernels-community/`, the
+  `kernels` package downloads compiled attention kernels from Hugging Face Hub
+  (see [Attention Backends](#attention-backends))
 - Unsloth backend also downloads models via `FastLanguageModel.from_pretrained()`
+  through Hugging Face Hub
 
 Generation:
 
-- vLLM downloads the base model on initialization if not already cached
+- vLLM downloads the base model through HuggingFace Hub on initialization if
+  not already cached
 
 PII replacement:
 
-- GLiNER downloads its NER model on first use
+- GLiNER downloads its NER model on first use via HuggingFace
+- Column classification makes requests to a NIM/OpenAI-compatible endpoint
+  (controlled by `NIM_ENDPOINT_URL`) for entity type detection
 
 Evaluation:
 
-- `SentenceTransformer("distiluse-base-multilingual-cased-v2")` is downloaded in
-  text semantic similarity, attribute inference protection, and membership inference
-  protection components. The download retries up to 10 times with exponential
-  backoff (up to ~6 minutes total)
+- `SentenceTransformer("distiluse-base-multilingual-cased-v2")` is downloaded
+  for text semantic similarity, attribute inference protection, and membership
+  inference protection components
 - Tiktoken downloads tokenizer encoding files on first use
 
 !!! warning
@@ -123,13 +159,11 @@ Evaluation:
 To avoid runtime downloads, run the pipeline once in an environment with internet
 access. All downloaded artifacts are stored under `HF_HOME`
 (defaults to `~/.cache/huggingface`). You can then copy or mount this cache
-directory in your target environment.
+directory in your target environment. If you'd like to pre-warm your cache, you can do a single run like:
 
 ```bash
-# Set a shared cache location
-export HF_HOME=/shared/cache/huggingface
+export HF_HOME=/shared/cache/huggingface # or default
 
-# Run once to populate the cache
 safe-synthesizer run --config config.yaml --url data.csv
 
 # The cache at /shared/cache/huggingface now has everything needed
@@ -143,8 +177,8 @@ Several environment variables control network behavior:
 
 | Variable | Scope | Effect |
 |----------|-------|--------|
-| `HF_HOME` | All HuggingFace downloads | Set the cache directory for downloaded models |
-| `HF_HUB_OFFLINE=1` | All HuggingFace downloads | Error instead of attempting downloads |
+| `HF_HOME` | All Hugging Face downloads | Set the cache directory for downloaded models |
+| `HF_HUB_OFFLINE=1` | All Hugging Face downloads | Error instead of attempting downloads |
 | `LOCAL_FILES_ONLY=true` | Unsloth backend, GLiNER | Skip network downloads, use local files only |
 | `VLLM_CACHE_ROOT` | vLLM | Set the vLLM model cache directory |
 
@@ -157,9 +191,27 @@ Several environment variables control network behavior:
 To avoid the `kernels` package making network calls to the Kernels Hub entirely,
 set the training attention backend to a built-in option:
 
+=== "YAML"
+
+    ```yaml
+    training:
+      attn_implementation: "sdpa"
+    ```
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run --training__attn_implementation sdpa --url data.csv
+    ```
+
+To prevent column classification from contacting `build.nvidia.com`, either set
+`NIM_ENDPOINT_URL` to a local endpoint or disable classification:
+
 ```yaml
-training:
-  attn_implementation: "sdpa"
+replace_pii:
+  globals:
+    classify:
+      enable_classify: false
 ```
 
 ---
@@ -176,12 +228,19 @@ Safe Synthesizer reserves GPU memory conservatively:
 
 ### Out of Memory During Training
 
-If you see `torch.cuda.OutOfMemoryError` during training:
+Training OOM errors appear during the "Training" phase with HuggingFace Trainer
+stack traces. If you see `torch.cuda.OutOfMemoryError`:
 
 1. Reduce `training.batch_size` (default is `1`, effective batch size includes
    `gradient_accumulation_steps` which defaults to `8`)
-2. Reduce `training.max_seq_length` or let `rope_scaling_factor` auto-resolve
-   to a smaller value
+2. Lower `training.rope_scaling_factor` to reduce the effective context window,
+   or let it auto-resolve to a smaller value. The effective context length
+   (`max_seq_length`) is a computed property on
+   [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata] --
+   `base_max_seq_length * rope_scaling_factor` -- so reducing the rope scaling
+   factor is how you shrink it. When using `data.group_training_examples_by`,
+   multiple records must fit in context, making this constraint tighter.
+   Consider truncating or removing very long training examples.
 3. Enable quantization with `load_in_4bit: true` or `load_in_8bit: true`
 4. Lower `training.max_vram_fraction` if other processes share the GPU
 
@@ -192,31 +251,38 @@ If you see `torch.cuda.OutOfMemoryError` during training:
 
 ### Out of Memory During Generation
 
-vLLM manages its own memory pool. If generation OOMs:
+Generation OOM errors appear during the "Generation" phase with vLLM stack
+traces. If generation OOMs:
 
 1. Lower `training.max_vram_fraction` to give vLLM less memory
 2. Ensure no other processes hold GPU memory (training cleanup should release it)
 
 ### Out of Memory During Evaluation
 
-Evaluation components that can be memory-intensive:
+If evaluation OOMs, disable the expensive components or reduce dataset size:
 
-- PCA computation in deep structure analysis -- skipped automatically if the
-  matrix is too small, but can OOM on very wide datasets
-- Histogram binning uses `doane` method instead of `fd` to reduce memory usage
+1. For wide datasets, PCA computation in deep structure analysis can OOM.
+   Reduce the number of columns or disable the deep structure component.
+2. Histogram binning uses `doane` method to reduce memory, but very large
+   datasets may still cause issues. Reduce `sqs_report_columns` or
+   `sqs_report_rows` to limit the evaluation scope.
 
 ### No GPU Detected
 
-If `torch.cuda.is_available()` returns `False`:
+If Safe Synthesizer fails to find a GPU, you will see one of these errors:
+
+- Unsloth backend: `RuntimeError: Cannot use unsloth without GPU`
+- HuggingFace backend: training will attempt to use CPU (very slow)
+
+To diagnose:
 
 1. Verify NVIDIA drivers: `nvidia-smi`
-2. Verify CUDA toolkit: `nvcc --version`
-3. Verify PyTorch CUDA build: `python -c "import torch; print(torch.cuda.is_available())"`
-4. Ensure you installed the `cu128` extras, not `cpu`
+2. Verify PyTorch CUDA build: `python -c "import torch; print(torch.cuda.is_available())"`
+3. Ensure you installed the `cu128` extras, not `cpu`
 
-The Unsloth backend requires a GPU and raises a `RuntimeError` immediately
-if none is found. Switch to the HuggingFace backend for CPU-only environments
-(useful for development, not recommended for production training).
+The Unsloth backend requires a GPU and raises immediately if none is found.
+Switch to the HuggingFace backend for CPU-only environments (useful for
+development, not recommended for production training).
 
 ### Memory Cleanup
 
@@ -237,7 +303,7 @@ Several defaults may not match your expectations:
 |-----------|---------|-------|
 | `training.batch_size` | `1` | Effective batch = `batch_size` x `gradient_accumulation_steps` (8) |
 | `training.validation_ratio` | `0.0` | No validation split by default |
-| `data.max_holdout` | `2000` | Caps holdout set even if percentage would be larger |
+| `data.holdout` | `0.05` | 5% of records held out for evaluation; capped by `data.max_holdout` (2000) |
 | `data.random_state` | `None` | Auto-generates a random seed -- set explicitly for reproducibility |
 | `generation.num_records` | `1000` | May be too small for production use |
 | `generation.temperature` | `0.9` | Relatively high randomness |
@@ -245,30 +311,45 @@ Several defaults may not match your expectations:
 ### Auto-Resolved Parameters
 
 Many parameters accept `"auto"` and are resolved at runtime by the
-AutoConfigResolver:
+[`AutoConfigResolver`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver].
+See the [Parameters Reference](parameters.md) for the full list.
 
 - `training.rope_scaling_factor` -- estimated from dataset token counts using
   heuristics (4 chars per token for text, 1 token per digit). Can underestimate
   for complex or multilingual data.
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
-- `training.use_unsloth` -- resolves to `true` unless DP is enabled
+- `training.use_unsloth` -- resolves to `true` unless DP is enabled. Also needs
+  to be set to `false` for Mistral models until upstream Unsloth support is fixed.
 - `privacy.delta` -- computed from record count
 
-Use `safe-synthesizer config validate --config config.yaml` to see how `"auto"`
-values resolve for your configuration.
+Use `safe-synthesizer config validate` to see how `"auto"` values resolve for
+your configuration:
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer config validate --config config.yaml
+    ```
 
 ### Common Validation Errors
 
 `order_training_examples_by` requires `group_training_examples_by`:
 
 : If you set `data.order_training_examples_by` without also setting
-  `data.group_training_examples_by`, validation will fail. Ordering only
+  `data.group_training_examples_by`, config validation will fail. Ordering only
   makes sense within groups.
 
-Unsupported dataset file extensions:
+Unsupported file extensions:
 
-: The dataset registry supports `.csv`, `.txt`, `.json`, `.jsonl`, and `.parquet`.
-  Other formats raise a `ValueError`.
+: The `url` parameter accepts `.csv`, `.txt`, `.json`, `.jsonl`, and `.parquet`
+  files. Other formats raise a `ValueError`.
+
+Incompatible DP settings:
+
+: If `privacy.dp_enabled` is `true` but `use_unsloth` is `true` or
+  `data.max_sequences_per_example` is not `1`, config validation will fail
+  with a clear error message. Set these to `"auto"` and they will resolve
+  correctly.
 
 ---
 
@@ -281,7 +362,7 @@ not immediately point to the root cause.
 
 - DP and Unsloth are mutually exclusive. If `privacy.dp_enabled` is `true`,
   `use_unsloth` must be `false` or `"auto"` (which resolves to `false`).
-- `training.max_sequences_per_example` must be `1` when DP is enabled.
+- `data.max_sequences_per_example` must be `1` when DP is enabled.
   Set it to `"auto"` and it will resolve correctly.
 - `data_fraction` and `true_dataset_size` must be available at runtime --
   these are normally set automatically when running the full pipeline.
@@ -309,9 +390,33 @@ not immediately point to the root cause.
 
 ## Time Series
 
+!!! warning "Experimental"
+    Time series synthesis is an experimental feature. APIs and behavior may
+    change between releases.
+
 Time series synthesis has additional validation and generation requirements.
 
 ### Configuration Requirements
+
+=== "YAML"
+
+    ```yaml
+    time_series:
+      is_timeseries: true
+      timestamp_column: "timestamp"
+      timestamp_interval_seconds: 60
+      timestamp_format: "%Y-%m-%d %H:%M:%S"
+    ```
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run \
+      --time_series__is_timeseries true \
+      --time_series__timestamp_column timestamp \
+      --time_series__timestamp_interval_seconds 60 \
+      --url data.csv
+    ```
 
 - Set `time_series.is_timeseries: true` and provide at least one of
   `timestamp_column` or `timestamp_interval_seconds`
@@ -348,31 +453,40 @@ Out-of-order records:
 
 ## PII Replacement
 
-### Model Downloads
+### GLiNER Download Fails
 
 The PII replacer downloads the GLiNER NER model on first use. This respects
 the `LOCAL_FILES_ONLY` environment variable, but has no retry logic -- if the
 download fails, it raises a `RuntimeError`.
 
-Pre-download the model by running PII replacement once in an environment with
-internet access, or set `LOCAL_FILES_ONLY=true` after the model is cached.
+Fix: pre-download the model by running PII replacement once in an environment
+with internet access, or set `LOCAL_FILES_ONLY=true` after the model is cached.
 
-### NER Processing
+### PII Uses Unexpected Entity Types
 
-- NER has a `max_runtime_seconds` timeout. Chunks that exceed it are dropped
-  with a warning in the logs.
-- If the column classifier fails to initialize or classify, it falls back to
-  default entity types silently. Check logs for classification errors if PII
-  replacement seems to use unexpected entity types.
+If PII replacement is not detecting the entity types you expect, the column
+classifier may have failed silently. When the classifier fails to initialize
+or classify, it falls back to default entity types. Check logs for classification
+errors if PII replacement seems to use unexpected entity types.
 
-### NIM Endpoint
+Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
+is reachable:
 
-For external PII detection via NIM, set these environment variables:
-
-```bash
-export NIM_ENDPOINT_URL="https://your-nim-endpoint"
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+```yaml
+replace_pii:
+  globals:
+    classify:
+      enable_classify: true
+      entities: ["PERSON", "EMAIL", "PHONE_NUMBER"]
 ```
+
+### NER Processing Timeouts
+
+NER has a `max_runtime_seconds` timeout. If processing a chunk takes too long,
+it is dropped with a warning in the logs.
+
+Fix: check the logs for timeout warnings. For large datasets, increase
+`max_runtime_seconds` or reduce the size of text fields.
 
 ### CPU Parallelism
 
@@ -410,9 +524,9 @@ metrics:
 
 ### SentenceTransformer Downloads
 
-The `distiluse-base-multilingual-cased-v2` model is downloaded with up to
-10 retries and exponential backoff (total wait up to ~6 minutes). If all
-retries fail, text semantic similarity metrics are silently skipped.
+The `distiluse-base-multilingual-cased-v2` model is downloaded from
+Hugging Face Hub. If the download fails, text semantic similarity metrics
+are silently skipped.
 
 ### Report Truncation
 
@@ -420,14 +534,11 @@ SQS reports are limited to `sqs_report_columns=250` columns and
 `sqs_report_rows=5000` rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
 
-### Optional Dependencies
+### FAISS
 
-FAISS is optional for membership inference protection. If not installed, some
-functionality silently degrades. Install it for full evaluation coverage:
-
-```bash
-pip install faiss-cpu  # or faiss-gpu for GPU-accelerated search
-```
+FAISS is included in the `cpu` and `cu128` install extras (`faiss-cpu` and
+`faiss-gpu-cu12` respectively). If you installed without extras, membership
+inference protection may silently degrade.
 
 ---
 
@@ -462,62 +573,27 @@ Checklist:
 
 ### GenerationError
 
-Generation failures -- context length exceeded, rejection sampling exhausted,
-or invalid fraction threshold reached.
+Generation failures. The most common error messages:
 
-Checklist:
+"Generation stopped prematurely due to no valid records":
 
-1. Check `generation.patience` and `generation.invalid_fraction_threshold`
-2. Verify the adapter trained successfully (check training logs)
-3. If context length is exceeded, increase `training.rope_scaling_factor`
-   or reduce record size
-4. Increase `training.num_input_records_to_sample` if generation stops
-   immediately with zero valid records
+: No valid records were produced. Increase `training.num_input_records_to_sample`
+  to give the model more context, and check training logs for quality issues.
+
+"Generation stopped prematurely because the average fraction of invalid records was higher than...":
+
+: Too many invalid records across `patience` consecutive batches. Consider
+  lowering `generation.invalid_fraction_threshold`, retraining with more data,
+  or increasing `training.rope_scaling_factor` if records are being truncated.
+
+"The number of tokens in an example exceeds the available context length":
+
+: A single training example exceeds `max_seq_length`. Increase
+  `training.rope_scaling_factor` or reduce record size. With
+  `data.group_training_examples_by`, multiple records share context, making
+  this limit tighter.
 
 ### InternalError
 
 Library bugs. If you encounter this error through documented interfaces,
-please file an issue on GitHub.
-
----
-
-## Quick Reference
-
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| "kernels package not installed" warning | `kernels` pip package missing | `pip install kernels` or set `attn_implementation: sdpa` |
-| `ConnectionError` during startup | No internet, model not cached | Pre-cache models, set `HF_HUB_OFFLINE=1` after caching |
-| `torch.cuda.OutOfMemoryError` in training | VRAM exhausted | Reduce `batch_size`, enable `load_in_4bit`, lower `max_vram_fraction` |
-| `torch.cuda.OutOfMemoryError` in evaluation | Large dataset + PCA/binning | Reduce dataset size or column count |
-| "Cannot use unsloth without GPU" | No CUDA device | Use HuggingFace backend or install CUDA drivers |
-| "max_sequences_per_example must be 1" | Incompatible DP config | Set `max_sequences_per_example: 1` or `"auto"` |
-| "Unsloth is currently not compatible with DP" | Mutual exclusion | Set `use_unsloth: false` for DP training |
-| "Unable to determine a noise multiplier" | Epsilon too low for dataset | Increase `epsilon` or add more training records |
-| Generation stops with 0 valid records | Model underfitting or schema mismatch | Increase `num_input_records_to_sample`, check training logs |
-| "Number of tokens exceeds context length" | Records too long for model | Increase `rope_scaling_factor` or reduce record size |
-| Evaluation metrics show UNAVAILABLE | Too few records or columns | Ensure >= 200 records, >= 3 columns for privacy metrics |
-| PII uses default entities unexpectedly | Column classifier failed | Check logs for classification errors; set entities explicitly |
-| "timestamp_column has missing values" | Dirty time series data | Clean NaN/null values from the timestamp column |
-| "groups must have same start timestamp" | Inconsistent time series groups | Align group start/stop timestamps in preprocessing |
-
----
-
-## Environment Variables
-
-A consolidated reference of environment variables that affect runtime behavior.
-
-| Variable | Affects | Default | Purpose |
-|----------|---------|---------|---------|
-| `HF_HOME` | All stages | `~/.cache/huggingface` | HuggingFace cache directory |
-| `HF_HUB_OFFLINE` | All stages | unset | Set to `1` to error instead of downloading |
-| `LOCAL_FILES_ONLY` | Unsloth, GLiNER | `False` | Skip network downloads for supported backends |
-| `VLLM_ATTENTION_BACKEND` | Generation | unset (auto) | Override vLLM attention backend |
-| `VLLM_CACHE_ROOT` | Generation | system default | vLLM model cache directory |
-| `NSS_ARTIFACTS_PATH` | All stages | `./safe-synthesizer-artifacts` | Default artifact output path |
-| `NSS_LOG_FORMAT` | All stages | `plain` | `json` or `plain` |
-| `NSS_LOG_FILE` | All stages | under run dir | Log file path |
-| `NSS_WANDB_MODE` | Training | `disabled` | WandB mode (`online`, `offline`, `disabled`) |
-| `WANDB_API_KEY` | Training | unset | Required for WandB `online` mode |
-| `SAFE_SYNTHESIZER_CPU_COUNT` | PII replacement | system CPU count | Number of CPU processes for NER |
-| `NIM_ENDPOINT_URL` | PII replacement | unset | NIM endpoint for external PII detection |
-| `NIM_API_KEY` | PII replacement | `not-needed` | NIM API key |
+please [file an issue on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
