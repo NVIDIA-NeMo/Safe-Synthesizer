@@ -41,14 +41,15 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 
    # External -- fork on GitHub, then:
-   git clone https://github.com/<your-username>/safe-synthesizer.git
-   git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
+   git clone https://github.com/<your-username>/Safe-Synthesizer.git
+   cd Safe-Synthesizer
+   git remote add upstream https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
   ```
 
 2. Set up the development environment:
 
   ```bash
-   cd safe-synthesizer
+   cd Safe-Synthesizer
 
    # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
    make bootstrap-tools
@@ -83,29 +84,41 @@ Most contributors already have an SSH key for GitHub authentication. The same ke
 
 1. Check whether your key is already registered for signing:
 
-```bash
-gh ssh-key list
-```
+   ```bash
+   gh ssh-key list
+   ```
 
-If your key already appears with type `signing`, skip to step 3.
+   If your key already appears with type `signing`, skip to step 3.
 
 2. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). The `admin:ssh_signing_key` scope grants write access to your account's signing keys; the one-liner below adds it, registers the key, then removes the scope so it doesn't persist in your token:
 
-```bash
-gh auth refresh -s admin:ssh_signing_key \
-  && gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
-  && gh auth refresh -r admin:ssh_signing_key
-```
+   ```bash
+   gh auth refresh -s admin:ssh_signing_key \
+     && gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
+     && gh auth refresh -r admin:ssh_signing_key
+   ```
 
-Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-new-ssh-key-to-your-github-account) > SSH and GPG keys > New SSH key > Key type: "Signing Key".
+   Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-new-ssh-key-to-your-github-account) > SSH and GPG keys > New SSH key > Key type: "Signing Key".
 
 3. Configure git to sign commits (see [Telling Git about your signing key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key) for details):
 
-```bash
-git config --global gpg.format ssh
-git config --global user.signingkey ~/.ssh/id_ed25519.pub
-git config --global commit.gpgsign true
-```
+   ```bash
+   git config --global gpg.format ssh
+   git config --global user.signingkey ~/.ssh/id_ed25519.pub
+   git config --global commit.gpgsign true
+   ```
+
+4. (Optional) Configure local verification:
+
+   To see "Good signature" locally when running `git log --show-signature`, git needs to know which SSH keys to trust.
+
+   ```bash
+   # Create allowed_signers file
+   echo "$(git config --get user.email) $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
+
+   # Tell git to use it
+   git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+   ```
 
 #### Option B: GPG signing
 
@@ -113,36 +126,47 @@ If you already have a GPG key or prefer GPG. To generate one, see [Generating a 
 
 1. Register the key on GitHub. The `admin:gpg_key` scope grants write access to your account's GPG keys; the one-liner below adds it, uploads the key, then removes the scope:
 
-```bash
-gh auth refresh -s admin:gpg_key \
-  && gh gpg-key add <public-key-file> \
-  && gh auth refresh -r admin:gpg_key
-```
+   ```bash
+   gh auth refresh -s admin:gpg_key \
+     && gh gpg-key add <public-key-file> \
+     && gh auth refresh -r admin:gpg_key
+   ```
 
-Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account) > SSH and GPG keys > New GPG key.
+   Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account) > SSH and GPG keys > New GPG key.
 
 2. Configure git to sign commits:
 
-```bash
-git config --global user.signingkey <GPG-KEY-ID>
-git config --global commit.gpgsign true
-```
+   ```bash
+   git config --global user.signingkey <GPG-KEY-ID>
+   git config --global commit.gpgsign true
+   ```
 
 #### Verify signing works
 
 ```bash
-git commit --allow-empty -s -m "test: verify commit signing"
+git commit --allow-empty -s -S -m "test: verify commit signing"
 git log --show-signature -1
+
+# Clean up the test commit
+git reset --hard HEAD~1
 ```
 
 You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
+
+To avoid forgetting `--signoff` and `--gpg-sign` on future commits, alias `git commit` to always include both. This is scoped to the current repo only:
+
+```bash
+git config alias.commit "commit --signoff --gpg-sign"
+```
+
+NVIDIA internal contributors who work primarily on repos that require DCO and signing can set this globally instead: `git config --global alias.commit "commit --signoff --gpg-sign"`.
 
 #### Re-signing existing commits
 
 If you have unsigned commits on a feature branch that were pushed before signing was configured, rebase to re-create them with signatures:
 
 ```bash
-git rebase --force-rebase --signoff origin/main
+git rebase --force-rebase --gpg-sign --signoff origin/main
 git push --force-with-lease
 ```
 
