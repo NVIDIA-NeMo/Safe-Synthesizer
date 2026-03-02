@@ -15,6 +15,13 @@ from ...evaluation.statistics import stats
 
 
 class DatasetStatistics(Component):
+    """Summary statistics for the reference and output datasets.
+
+    Reports row/column counts, missing-value percentages, and the number
+    of memorized (verbatim-repeated) rows. This component does not produce
+    a numeric score -- it provides context for the HTML report.
+    """
+
     name: str = Field(default="Dataset Statistics")
     # Copy these out for rendering convenience
     reference_rows: int = Field(default=0, ge=0)
@@ -27,6 +34,7 @@ class DatasetStatistics(Component):
 
     @cached_property
     def jinja_context(self):
+        """Template context merging all dataset summary fields into the base context."""
         d = super().jinja_context
         stats = self.model_dump()
         # Dump all the other fields, but don't overwrite pre-prepped stuff in d
@@ -37,6 +45,7 @@ class DatasetStatistics(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> DatasetStatistics:
+        """Compute summary statistics from the evaluation dataset."""
         return DatasetStatistics(
             score=EvaluationScore(),
             reference_rows=evaluation_dataset.reference_rows,

@@ -26,6 +26,8 @@ _WORD_REGEX = re.compile(r"\w+")
 
 
 class TextDataSetStatistics(BaseModel):
+    """Per-column text structure statistics (sentence count, word length, etc.)."""
+
     row_count: int = Field(default=0)
     column_count: int = Field(default=0)
     duplicate_lines: int = Field(default=0)
@@ -41,19 +43,29 @@ class TextDataSetStatistics(BaseModel):
 
 
 class TextStructureSimilarity(Component):
+    """Text Structure Similarity metric.
+
+    Compares per-record sentence count, words-per-sentence, and
+    characters-per-word distributions between reference and output
+    text columns using Jensen-Shannon divergence.
+    """
+
     name: str = Field(default="Text Structure Similarity")
     training_statistics: dict[str, TextDataSetStatistics] = Field(default=dict())
     synthetic_statistics: dict[str, TextDataSetStatistics] = Field(default=dict())
 
     @cached_property
     def jinja_context(self):
+        """Template context with per-column text structure histogram figures."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-similarity"
         d["figures"] = []
         if self.training_statistics:
             maybe_figs = [
                 figures.generate_text_structure_similarity_figures(
-                    self.training_statistics[col], self.synthetic_statistics[col], col
+                    self.training_statistics[col],  # ty: ignore[invalid-argument-type]
+                    self.synthetic_statistics[col],  # ty: ignore[invalid-argument-type]
+                    col,
                 )
                 for col in self.training_statistics
             ]
@@ -67,6 +79,7 @@ class TextStructureSimilarity(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> TextStructureSimilarity:
+        """Compute text structure similarity across all text columns."""
         text_fields = [
             f.name for f in evaluation_dataset.evaluation_fields if f.reference_field_features.type == FieldType.TEXT
         ]
@@ -141,19 +154,13 @@ class TextStructureSimilarity(Component):
 
     @staticmethod
     def _get_sentence_count(text: str) -> int:
-        """
-        Calculates the number of the sentences in a text. This counts acronyms with periods in other
-        languages as well.
-
-        Sources:
-        https://www.quora.com/Do-all-living-languages-use-the-period-to-end-a-sentence
-        https://github.com/zaemyung/sentsplit/blob/main/sentsplit/segment.py#L277
+        """Count sentences in a text string using a multilingual regex.
 
         Args:
-            text: A string text in (almost) any language.
+            text: A string of text in (almost) any language.
 
-        Returns: Counts of sentences
-
+        Returns:
+            Number of non-empty sentence segments.
         """
         return sum([1 if len(s.strip()) > 0 else 0 for s in _SENTENCE_REGEX.findall(text)])
 
@@ -175,6 +182,7 @@ class TextStructureSimilarity(Component):
 
     @staticmethod
     def _get_text_statistics(text: pd.Series) -> TextDataSetStatistics:
+        """Compute text structure statistics for a single text column."""
         if text is None or len(text) == 0:
             logger.error("Empty text series. Returning empty text statistics.")
             return TextDataSetStatistics()
@@ -220,16 +228,17 @@ class TextStructureSimilarity(Component):
     def _get_text_statistics_score(
         training_statistics: TextDataSetStatistics, synthetic_statistics: TextDataSetStatistics
     ) -> EvaluationScore:
-        """Calculates the distribution score averaged across character, word and sentence count for real
-        and synthetic text. Plots word, character and sentence distribution for train and synthetic data.
+        """Score text structure similarity for a single text column using per-record statistic distributions.
+
+        Computes ``EvaluationField`` JS divergence for sentence count,
+        words-per-sentence, and characters-per-word, then averages.
 
         Args:
-            real (pd.Series): real text data.
-            synth (pd.Series): synthetic text data.
+            training_statistics: Per-record text statistics for the reference data.
+            synthetic_statistics: Per-record text statistics for the synthetic data.
 
         Returns:
-            int: distribution score of the text statistics (syllable, word and sentence count.)
-
+            A finalized ``EvaluationScore`` for text structure similarity.
         """
         try:
             count_df_fields = []

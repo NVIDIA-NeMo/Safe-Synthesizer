@@ -6,6 +6,13 @@ from pydantic import BaseModel, Field
 
 
 class Entity(BaseModel):
+    """A named entity detected in a column with its occurrence count.
+
+    Attributes:
+        name: Entity type label (e.g. ``"SSN"``, ``"email"``).
+        count: Number of occurrences in the column.
+    """
+
     name: str
     count: int
 
@@ -15,7 +22,13 @@ class Entity(BaseModel):
 
 
 class EntityMetadata(BaseModel):
-    """Info for evaluation and report generation on entities and transformations applied to a column"""
+    """Per-column entity detection and transformation metadata for evaluation.
+
+    Attributes:
+        entities: Detected PII entities with occurrence counts, if any.
+        transformed: Whether the column was transformed during PII replacement.
+        transform_function: Name of the transform function applied, if any.
+    """
 
     entities: list[Entity] | None = Field(default=None)
     transformed: bool = Field(default=False)

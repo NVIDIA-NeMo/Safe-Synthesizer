@@ -39,6 +39,8 @@ logger = get_logger(__name__)
 
 
 class TextSemanticSimilarityDatum(BaseModel):
+    """Per-column text semantic similarity scores and PCA projections."""
+
     text_semantic_similarity: EvaluationScore = Field(default=EvaluationScore())
     text_semantic_similarity_underfitting_factor: EvaluationScore = Field(default=EvaluationScore())
     text_semantic_similarity_overfitting_factor: EvaluationScore = Field(default=EvaluationScore())
@@ -50,11 +52,20 @@ class TextSemanticSimilarityDatum(BaseModel):
 
 
 class TextSemanticSimilarity(Component):
+    """Text Semantic Similarity metric.
+
+    Embeds text columns with a sentence transformer and compares the
+    distribution of cosine similarities between reference-synthetic and
+    reference-reference (or test-test) pairs using two-sided
+    Kolmogorov-Smirnov tests to capture both underfitting and overfitting.
+    """
+
     name: str = Field(default="Text Semantic Similarity")
     text_semantic_similarity_dict: dict[str, TextSemanticSimilarityDatum] = Field(default=dict())
 
     @cached_property
     def jinja_context(self):
+        """Template context with per-column PCA scatter figures."""
         ctx = super().jinja_context
         ctx["anchor_link"] = "#semantic-similarity"
         ctx["figures"] = []
@@ -76,6 +87,7 @@ class TextSemanticSimilarity(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> TextSemanticSimilarity:
+        """Compute text semantic similarity across all text columns."""
         if evaluation_dataset.test is None or evaluation_dataset.test.empty:
             return TextSemanticSimilarity(
                 score=EvaluationScore(
@@ -216,6 +228,7 @@ class TextSemanticSimilarity(Component):
     ##
     @staticmethod
     def _init_sentence_transformer_model() -> SentenceTransformer | None:
+        """Load the sentence transformer model with exponential-backoff retries."""
         try:
             for attempt in Retrying(
                 # TODO(PLAT-2537): Temporarily increase retries, but we will bundle this model next, so download is not required.
@@ -234,14 +247,14 @@ class TextSemanticSimilarity(Component):
     def _get_embedding_vectors(
         text_data: pd.Series, sentence_transformer_model: SentenceTransformer
     ) -> npt.NDArray[np.single]:
-        """
-        Generates the embedding vectors of the text dataset.
+        """Generate embedding vectors for a text series.
 
         Args:
-            text_data: pd.Series of the text column in the dataset.
+            text_data: Text column to embed.
+            sentence_transformer_model: Pre-loaded sentence transformer.
 
-        Returns: np.ndarrays of the embedded vectors.
-
+        Returns:
+            2-D array of shape ``(len(text_data), embedding_dim)``.
         """
         try:
             return sentence_transformer_model.encode(
@@ -256,14 +269,13 @@ class TextSemanticSimilarity(Component):
     def _average_embedded_vectors(
         embedded_vector: npt.NDArray[np.single],
     ) -> npt.NDArray[np.single]:
-        """
-        Generates the mean of the text-embedded vectors across the entire records.
+        """Average embedding vectors across all records.
 
         Args:
-            embedded_vector: np.ndarray, a 2D array of the text embedded vectors (# records, embedded vector size)
+            embedded_vector: 2-D array of shape ``(n_records, embedding_dim)``.
 
-        Returns: A 1D np.array.
-
+        Returns:
+            1-D array of shape ``(embedding_dim,)``.
         """
         try:
             return np.mean(embedded_vector, axis=0)
@@ -273,15 +285,14 @@ class TextSemanticSimilarity(Component):
 
     @staticmethod
     def _get_cosine_similarity(real_mean: npt.NDArray[np.single], synth_mean: npt.NDArray[np.single]) -> float:
-        """
-        Calculates and scales the cosine similarity between the real and synthetic average embeddings.
+        """Compute cosine similarity between two mean embedding vectors.
 
         Args:
-            real_mean : mean of the real embedded vectors
-            synth_mean : mean of the synthetic embedded vectors
+            real_mean: Mean embedding of the real (reference) data.
+            synth_mean: Mean embedding of the synthetic data.
 
         Returns:
-            float : cosine similarity between the average of real and synthetic embedded vectors.
+            Cosine similarity in ``[-1, 1]``, or ``0`` on failure.
         """
         try:
             denom = norm(real_mean) * norm(synth_mean)
@@ -296,11 +307,10 @@ class TextSemanticSimilarity(Component):
 
     @staticmethod
     def _scale_semantic_similarity(sem_sim: float) -> float | None:
-        """
-        Returns:
-            float: the semantic similarity score scaled from 0-1 to 0-10. Currently no
-            curving is applied. Practically the scores are expected to be between 3.7
-            (worst) and 10 (best).
+        """Scale a 0--1 semantic similarity value to the 0--10 score range.
+
+        No curving is applied; practically the scores fall between 3.7
+        (worst) and 10 (best).
         """
         try:
             return sem_sim * 10
@@ -318,26 +328,31 @@ class TextSemanticSimilarity(Component):
     ) -> tuple[EvaluationScore, EvaluationScore, EvaluationScore]:
         """
         Compute the semantic similarity between the real and synthetic
-        embeddings (normalized to have length 1). The metric is based on:
+        embeddings (normalized to have length 1). The metric is based on
+        two one-sided Kolmogorov-Smirnov tests:
 
-        `ks_test.statistic`: The test statistic from a Kolmogorov-Smirnov
-           test, to compare the cumulative distributions of two datasets. The
-           test measures the distance between two cdfs to determine if there is
-           any significant difference between the distributions. The two
-           distributions we are comparing are:
-              - First we calculate the cosine similarity between each synthetic
-                sample and all real samples. We use the cosine similarity of the
-                nearest real sample to each synthetic sample as the first
-                distribution.
-              - Then we calculate the cosine similarity between each real sample
-                and all real samples. We use the cosine similarity of the
-                nearest real sample to each real sample (helpful to account for
-                outliers in the training data) as the second distribution.
+        **Overfitting (KS "less")** -- detects whether synthetic samples are
+        *more* similar to the training data than the training data is to
+        itself (i.e. memorisation):
+          - F(x): for each synthetic sample, the max cosine similarity to
+            any training sample.
+          - G(x): for each training sample, the max cosine similarity to
+            any other training sample (self-similarity excluded via zeroed
+            diagonal).
 
-        `ks_test.statistic` is calculated with the training samples as the real samples
-        with a "less" alternative to campture overfitting, and the test samples as the real
-        samples with a "greater" alternative to capture underfitting. They combine
-        to deliver the final raw score, which is then rescaled and graded.
+        **Underfitting (KS "greater")** -- detects whether synthetic samples
+        are *less* similar to the held-out test data than the test data is
+        to itself (i.e. poor generalisation):
+          - F(x): for each synthetic sample, the max cosine similarity to
+            any test sample.
+          - G(x): for each test sample, the max cosine similarity to any
+            other test sample (self-similarity excluded via zeroed
+            diagonal).
+
+        Each KS statistic (in [0, 1]) is mapped to a factor via
+        ``exp(-statistic)`` (in [exp(-1), 1] ≈ [0.37, 1]), and the two
+        factors are multiplied to produce the final raw score, which is
+        then rescaled to [0, 10] and graded.
         """
         # Compare distributions
 
@@ -426,18 +441,15 @@ class TextSemanticSimilarity(Component):
     def _get_pca(
         reference: pd.DataFrame, output: pd.DataFrame, n_components: int = 4
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        PCA on train and synthetic dataframes.  See https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html.
-        Also, plots the scatter matrix of the first "n_components" of the real and synthetic data.
+        """Compute joined PCA on text embedding dataframes.
 
         Args:
-            reference: The dataframe of training text embeddings to analyze for principal components. Must be all numeric values.
-            output: The dataframe of synthetic text embeddings to analyze for principal components. Must be all numeric values.
-            n_components: Number of components to keep.
+            reference: Training text embeddings (all numeric).
+            output: Synthetic text embeddings (all numeric).
+            n_components: Number of principal components to keep.
 
         Returns:
-            Dataframe of principal components.
-
+            Tuple of (reference PCA dataframe, output PCA dataframe).
         """
         try:
             reference = reference.replace([np.inf, -np.inf], np.nan).dropna(axis="columns", how="all")

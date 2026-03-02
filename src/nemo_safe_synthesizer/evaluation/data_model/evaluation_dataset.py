@@ -19,6 +19,26 @@ logger = get_logger(__name__)
 
 
 class EvaluationDataset(BaseModel):
+    """Paired reference and output dataframes prepared for evaluation.
+
+    On construction the validator computes per-column ``EvaluationField``
+    instances, counts memorized lines, and records dataset dimensions.
+    Use ``from_dataframes`` to build an instance with optional column/row
+    subsampling.
+
+    Attributes:
+        reference: Training (reference) dataframe.
+        output: Synthetic (output) dataframe.
+        test: Optional holdout dataframe for text-similarity and privacy metrics.
+        reference_rows: Row count of the reference dataframe.
+        reference_cols: Column count of the reference dataframe.
+        output_rows: Row count of the output dataframe.
+        output_cols: Column count of the output dataframe.
+        memorized_lines: Number of exact row matches between reference and output.
+        column_statistics: Per-column PII entity counts and transform metadata.
+        evaluation_fields: Per-column evaluation metadata and distribution scores.
+    """
+
     reference: pd.DataFrame = Field(default=pd.DataFrame())
     output: pd.DataFrame = Field(default=pd.DataFrame())
     test: pd.DataFrame | None = Field(default=None)
@@ -37,12 +57,23 @@ class EvaluationDataset(BaseModel):
 
     @staticmethod
     def check_dataframe(df: pd.DataFrame, df_name: str):
+        """Raise ``ValueError`` if *df* is ``None`` or empty."""
         if df is None:
             raise ValueError(f"{df_name} is None!")
         if df.empty:
             raise ValueError(f"{df_name} is empty!")
 
     def get_columns_of_type(self, types: set[FieldType], mode="reference") -> list[str]:
+        """Return column names whose ``FieldType`` is in *types*.
+
+        Args:
+            types: Set of ``FieldType`` values to match.
+            mode: Which dataframe's field features to inspect --
+                ``"reference"``, ``"output"``, or ``"both"`` (intersection).
+
+        Returns:
+            List of matching column names.
+        """
         if mode == "reference":
             return [f.name for f in self.evaluation_fields if f.reference_field_features.type in types]
         elif mode == "output":
@@ -57,12 +88,15 @@ class EvaluationDataset(BaseModel):
             return []
 
     def get_tabular_columns(self, mode="reference") -> list[str]:
+        """Return columns classified as binary, categorical, or numeric."""
         return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, mode)
 
     def get_nominal_columns(self, mode="reference") -> list[str]:
+        """Return columns classified as binary or categorical."""
         return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, mode)
 
     def get_text_columns(self, mode="reference") -> list[str]:
+        """Return columns classified as free text."""
         return self.get_columns_of_type({FieldType.TEXT}, mode)
 
     @model_validator(mode="after")
@@ -111,6 +145,25 @@ class EvaluationDataset(BaseModel):
         target_column_count: int = DEFAULT_SQS_REPORT_COLUMNS,
         mandatory_columns: list[str] | None = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+        """Reduce dataframes to shared columns, optionally subsampling columns.
+
+        Mandatory columns are always included. A fixed random seed ensures
+        reproducible column selection across evaluation components.
+
+        Args:
+            reference: Training dataframe.
+            output: Synthetic dataframe.
+            test: Optional holdout dataframe.
+            target_column_count: Maximum number of columns to keep.
+            mandatory_columns: Columns that must be included regardless.
+
+        Returns:
+            Tuple of (reference, output, test) dataframes restricted to the
+            selected column set.
+
+        Raises:
+            ValueError: If reference and output share no columns.
+        """
         if mandatory_columns is None:
             mandatory_columns = []
         # Check and subsample columns
@@ -137,8 +190,8 @@ class EvaluationDataset(BaseModel):
         else:
             # Even without sampling, we only want to use shared columns.
             col_set = shared_columns
-        reference = reference[list(col_set)]  # ty: ignore[invalid-assignment]
-        output = output[list(col_set)]  # ty: ignore[invalid-assignment]
+        reference = reference[list(col_set)]
+        output = output[list(col_set)]
 
         # Check and subsample test columns, or split out a test set if not provided.
         if test is not None and not test.empty:
@@ -148,7 +201,7 @@ class EvaluationDataset(BaseModel):
                     "Test dataframe has no columns in common with Reference and Output dataframes. Please check dataframes for mismatch."
                 )
             else:
-                test = test[list(test_shared_columns)]  # ty: ignore[invalid-assignment]
+                test = test[list(test_shared_columns)]
 
         return reference, output, test
 
@@ -158,6 +211,7 @@ class EvaluationDataset(BaseModel):
         output: pd.DataFrame,
         target_record_count: int = DEFAULT_RECORD_COUNT,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Downsample both dataframes to at most *target_record_count* rows."""
         target_record_count = min(target_record_count, reference.shape[0], output.shape[0])
         if target_record_count < reference.shape[0]:
             logger.info(f"Subsampling reference data from {reference.shape[0]} records to {target_record_count}.")
@@ -178,6 +232,25 @@ class EvaluationDataset(BaseModel):
         mandatory_columns: list[str] | None = None,
         enable_sampling: bool = True,
     ) -> EvaluationDataset:
+        """Build an ``EvaluationDataset`` with optional column/row subsampling.
+
+        This is the primary constructor for evaluation. It validates inputs,
+        optionally subsamples columns and rows, then delegates to the
+        Pydantic model validator which computes per-column evaluation fields.
+
+        Args:
+            reference: Training dataframe.
+            output: Synthetic dataframe.
+            test: Optional holdout dataframe for text-similarity and privacy metrics.
+            column_statistics: Per-column PII entity metadata.
+            rows: Target row count for subsampling.
+            cols: Target column count for subsampling.
+            mandatory_columns: Columns to always include in subsampling.
+            enable_sampling: When ``False``, skip all subsampling.
+
+        Returns:
+            A fully initialized ``EvaluationDataset``.
+        """
         # Spot check df's before doing anything.
         EvaluationDataset.check_dataframe(reference, "Reference")
         EvaluationDataset.check_dataframe(output, "Output")

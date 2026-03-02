@@ -18,10 +18,19 @@ logger = get_logger(__name__)
 
 
 class SQSScore(CompositeScore):
+    """Synthetic Quality Score -- weighted aggregate of quality sub-metrics.
+
+    Combines column distribution stability, correlation stability, deep
+    structure stability, text semantic similarity, and text structure
+    similarity into a single 0--10 score weighted by the number of
+    tabular vs. text columns.
+    """
+
     name: str = Field(default="Synthetic Quality Score")
 
     @staticmethod
-    def from_components(components: list[Component] | Component) -> SQSScore:
+    def from_components(components: list[Component] | Component, name: str = "Synthetic Quality Score") -> SQSScore:
+        """Compute the SQS from a list of quality sub-metric components."""
         if isinstance(components, Component):
             # wrap with a list and continue
             components = [components]
@@ -67,6 +76,25 @@ class SQSScore(CompositeScore):
         tabular_cols: int,
         text_cols: int,
     ) -> EvaluationScore:
+        """Compute the overall SQS from individual sub-metric scores.
+
+        The tabular SQS is a weighted combination of correlation, distribution,
+        and PCA stability.  The text SQS blends semantic and structural
+        similarity.  The final score weights tabular and text SQS by their
+        respective column counts.
+
+        Args:
+            field_correlation_stability: Correlation stability sub-score (0--10).
+            principal_component_stability: PCA stability sub-score (0--10).
+            field_distribution_stability: Distribution stability sub-score (0--10).
+            text_semantic_similarity: Semantic similarity sub-score (0--10).
+            text_structure_similarity: Structural similarity sub-score (0--10).
+            tabular_cols: Number of tabular columns in the dataset.
+            text_cols: Number of text columns in the dataset.
+
+        Returns:
+            A finalized ``EvaluationScore`` for the overall SQS.
+        """
         # Compute SQS for tabular fields.
         tabular_sqs = None
         try:

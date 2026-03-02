@@ -13,6 +13,8 @@ logger = get_logger(__name__)
 
 
 class Grade(Enum):
+    """Qualitative quality grade for a synthetic data metric."""
+
     UNAVAILABLE = "Unavailable"
     VERY_POOR = "Very Poor"
     POOR = "Poor"
@@ -22,6 +24,8 @@ class Grade(Enum):
 
 
 class PrivacyGrade(Enum):
+    """Qualitative privacy grade for a privacy metric."""
+
     UNAVAILABLE = "Unavailable"
     POOR = "Poor"
     MODERATE = "Moderate"
@@ -31,6 +35,13 @@ class PrivacyGrade(Enum):
 
 
 class EvaluationScore(BaseModel):
+    """Numeric and qualitative score for a single evaluation metric.
+
+    Carries the raw measurement, a 0--10 scaled score, a qualitative grade,
+    and optional notes (warnings or error messages). Use ``finalize_grade``
+    to construct a fully populated instance from raw and scaled values.
+    """
+
     raw_score: float | None = Field(
         description="The raw score, None if the score failed to be calculated.", default=None, ge=0
     )
@@ -49,12 +60,14 @@ class EvaluationScore(BaseModel):
 
     @staticmethod
     def round_raw_score(raw_score: float | None) -> float | None:
+        """Round the raw score to four decimal places."""
         if raw_score is None:
             return None
         return round(raw_score, 4)
 
     @staticmethod
     def clip_score(score: float | None) -> float | None:
+        """Clip and round a score to one decimal in [0, 10]."""
         if score is None:
             return None
         # Cast score to a float with 1 decimal and limit to [0,10]
@@ -62,6 +75,7 @@ class EvaluationScore(BaseModel):
 
     @staticmethod
     def score_to_grade(score: float | None, is_privacy=False) -> Grade | PrivacyGrade:
+        """Map a 0--10 numeric score to a qualitative grade."""
         if score is None:
             return PrivacyGrade.UNAVAILABLE if is_privacy else Grade.UNAVAILABLE
         idx = int(score) // 2
@@ -76,6 +90,11 @@ class EvaluationScore(BaseModel):
 
     @staticmethod
     def finalize_grade(raw_score: float | None, score: float | None, is_privacy=False) -> EvaluationScore:
+        """Build a complete ``EvaluationScore`` from raw and scaled values.
+
+        Rounds, clips, and maps to a grade in one step. Returns a default
+        (unavailable) score on failure.
+        """
         default_score = EvaluationScore()
         try:
             raw_score = EvaluationScore.round_raw_score(raw_score)

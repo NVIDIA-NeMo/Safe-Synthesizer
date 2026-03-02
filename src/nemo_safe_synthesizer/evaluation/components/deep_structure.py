@@ -27,6 +27,16 @@ logger = get_logger(__name__)
 
 
 class DeepStructure(Component):
+    """Deep Structure Stability metric via joined PCA.
+
+    Projects reference and output data into a shared principal-component
+    space and scores the distributional similarity of the projections.
+
+    Attributes:
+        reference_pca: PCA-projected reference dataframe.
+        output_pca: PCA-projected output dataframe.
+    """
+
     name: str = Field(default="Deep Structure Stability")
     reference_pca: pd.DataFrame | None = Field(default=None)
     output_pca: pd.DataFrame | None = Field(default=None)
@@ -35,11 +45,13 @@ class DeepStructure(Component):
 
     @cached_property
     def jinja_context(self):
+        """Template context with PCA scatter plot figure."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-stability"
         if Component.is_nonempty([self.reference_pca, self.output_pca]):
             d["figure"] = figures.structure_stability_figure(
-                reference=self.reference_pca, output=self.output_pca
+                reference=self.reference_pca,  # ty: ignore[invalid-argument-type]
+                output=self.output_pca,  # ty: ignore[invalid-argument-type]
             ).to_html(full_html=False, include_plotlyjs=False)
         else:
             d["figure"] = None
@@ -49,23 +61,22 @@ class DeepStructure(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> DeepStructure:
-        """
-        Hook into _calculate_pca to get our PCA values and then use these to get the principal_component_stability SQS.
+        """Compute PCA projections and the principal component stability score.
 
         Args:
-            evaluation_dataset: EvaluationDataset
-            config: the main configuration object
+            evaluation_dataset: Paired reference/output data.
+            config: Pipeline configuration (unused, reserved for future use).
 
-        Returns: tuple of reference and output PCA and the principal_component_stability SQS.
-
+        Returns:
+            A ``DeepStructure`` with PCA dataframes and the stability score.
         """
         tabular_columns = evaluation_dataset.get_tabular_columns(mode="both")
         if not tabular_columns:
             return DeepStructure(score=EvaluationScore(notes="No columns detected for PCA."))
 
         reference_pca, output_pca = DeepStructure._calculate_pca(
-            evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+            evaluation_dataset.reference[tabular_columns],
+            evaluation_dataset.output[tabular_columns],
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(
@@ -77,15 +88,15 @@ class DeepStructure(Component):
 
     @staticmethod
     def _fill_in_numeric_columns(df: pd.DataFrame, numeric_columns: list[str]) -> pd.DataFrame | None:
-        """
-        Fill in missing values in numeric columns with the median value.
+        """Fill missing values in numeric columns with the column median.
 
         Args:
-            df: The dataframe to fill in.
-            numeric_columns: The columns to fill in.
+            df: Dataframe to fill in.
+            numeric_columns: Columns to retain and fill.
 
         Returns:
-            The dataframe with missing values filled in, keeping only the numeric columns.
+            A dataframe containing only *numeric_columns* with NaNs replaced,
+            or ``None`` if *numeric_columns* is empty.
         """
         df_num = df.reindex(columns=numeric_columns)
         int64_dtypes = df_num.columns[df_num.dtypes == pd.Int64Dtype()]
@@ -106,17 +117,19 @@ class DeepStructure(Component):
     def _encode_categorical_columns(
         reference_df: pd.DataFrame, output_df: pd.DataFrame, categorical_columns: list[str]
     ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-        """
-        Encode the categorical columns of the train and synthetic dataframes by the frequency of each value,
-        as observed in the train dataframe. Any new values in the synthetic dataframe will be encoded as 0.
+        """Frequency-encode categorical columns, fitted on the reference data.
+
+        New values in *output_df* that were not seen in *reference_df* are
+        encoded as 0.
 
         Args:
-            reference_df: The train dataframe.
-            output_df: The synthetic dataframe.
-            categorical_columns: The columns to encode.
+            reference_df: Training dataframe (used to fit the encoder).
+            output_df: Synthetic dataframe (transformed only).
+            categorical_columns: Columns to encode.
 
         Returns:
-            Encoded dataframes of categorical columns from the train and synthetic dataframes.
+            Tuple of (encoded reference, encoded output), or ``(None, None)``
+            if *categorical_columns* is empty.
         """
         if len(categorical_columns) == 0:
             return None, None
@@ -140,18 +153,19 @@ class DeepStructure(Component):
         reference_df: pd.DataFrame,
         output_df: pd.DataFrame,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Preprocess dataframes for joined PCA. Divide the dataframe into numeric/categorical/others,
-        fill missing values and encode categorical columns by the frequency of each value.
-        Drop the columns that are not numeric or categorical.
+        """Preprocess dataframes for joined PCA.
+
+        Splits columns into numeric and categorical, fills missing values,
+        frequency-encodes categoricals, and drops text/other columns that
+        would distort the PCA projection.
 
         Args:
-            reference_df: The training dataframe to be subjected to PCA.
-            output_df: The synthetic dataframe. It will be projected onto the principal components of the training dataframe.
+            reference_df: Training dataframe (used to fit encoders and PCA).
+            output_df: Synthetic dataframe (transformed only).
 
         Returns:
-            The preprocessed dataframes, ready for joined PCA.
-
+            Tuple of (preprocessed reference, preprocessed output) ready
+            for ``compute_joined_pcas``.
         """
         # Identify field types
         reference_field_types = [describe_field(name, reference_df[name]).type for name in reference_df.columns]
@@ -196,15 +210,17 @@ class DeepStructure(Component):
 
     @staticmethod
     def _calculate_pca(reference: pd.DataFrame, output: pd.DataFrame):
-        """
-        Compute the PCA values for reference and output dataframes, after doing some sanity checks and sampling.
+        """Compute PCA projections for reference and output dataframes.
+
+        Subsamples, preprocesses, and runs joined PCA. Returns ``(None, None)``
+        if data is insufficient (fewer than 2 rows or 2 columns after prep).
 
         Args:
-            reference: pd.DataFrame
-            output: pd.DataFrame
+            reference: Tabular reference dataframe.
+            output: Tabular output dataframe.
 
-        Returns: tuple of reference and output PCA values
-
+        Returns:
+            Tuple of (reference PCA dataframe, output PCA dataframe).
         """
         reference_pca = None
         output_pca = None
@@ -250,6 +266,11 @@ class DeepStructure(Component):
         reference_pca: pd.DataFrame | None,
         output_pca: pd.DataFrame | None,
     ) -> EvaluationScore:
+        """Score the distributional similarity of PCA projections.
+
+        Computes per-component Jensen-Shannon divergence, averages,
+        and applies an exponential function to produce a 0--10 score.
+        """
         if reference_pca is None or output_pca is None:
             return EvaluationScore(notes="Missing input Dataframe.")
 

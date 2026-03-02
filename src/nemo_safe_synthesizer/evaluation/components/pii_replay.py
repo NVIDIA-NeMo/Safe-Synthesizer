@@ -45,6 +45,18 @@ class PIIReplayData(BaseModel):
 
 
 class PIIReplay(Component):
+    """PII Replay metric -- counts PII values from the reference data appearing in the output.
+
+    For each classified PII entity, reports total and unique replay counts.
+    This component does not produce a numeric score; it surfaces PII
+    leakage details for the HTML report.
+
+    Attributes:
+        reference_total_records: Total rows in the reference data.
+        output_total_records: Total rows in the output data.
+        pii_replay_data: Per-column / per-entity replay statistics.
+    """
+
     name: str = Field(default="PII Replay")
     reference_total_records: int = Field(default=0)
     output_total_records: int = Field(default=0)
@@ -52,6 +64,7 @@ class PIIReplay(Component):
 
     @cached_property
     def jinja_context(self):
+        """Template context with PII replay statistics and entity type list."""
         d = super().jinja_context
         d["reference_total_records"] = self.reference_total_records
         d["output_total_records"] = self.output_total_records
@@ -61,6 +74,7 @@ class PIIReplay(Component):
 
     @staticmethod
     def from_evaluation_dataset(evaluation_dataset, config: SafeSynthesizerParameters | None = None) -> PIIReplay:
+        """Compute PII replay counts from classified entity metadata."""
         if evaluation_dataset.column_statistics is None or len(evaluation_dataset.column_statistics) == 0:
             logger.warning("No classified entities, skipping PII Replay.")
             return PIIReplay(score=EvaluationScore())

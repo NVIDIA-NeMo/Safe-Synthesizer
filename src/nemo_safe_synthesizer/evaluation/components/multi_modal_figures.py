@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-from typing import cast
+"""Plotly figure builders for the multi-modal evaluation report."""
 
 import numpy as np
 import pandas as pd
@@ -32,10 +32,12 @@ INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
 
 
 def degree_to_radian(degrees):
+    """Convert degrees to radians."""
     return degrees * pi / 180
 
 
 def gauge_chart(evaluation_score: EvaluationScore, degree_start=210, degree_end=-30, min=False, dps=False) -> go.Figure:
+    """Render a semicircular gauge chart for a single evaluation score."""
     if isinstance(evaluation_score.grade, PrivacyGrade):
         dps = True
 
@@ -126,6 +128,7 @@ def pie(
     textinfo: str = "label+percent",
     sort: bool = True,
 ) -> go.Figure:
+    """Create a pie chart with privacy-grade color mapping."""
     return go.Figure(
         data=[
             go.Pie(
@@ -152,6 +155,7 @@ def scatter(
     color: str = _REPORT_PALETTE[0],
     name: str = "Reference",
 ) -> go.Scatter:
+    """Create a scatter trace for overlay plots."""
     return go.Scatter(
         x=x,
         y=y,
@@ -172,6 +176,7 @@ def histogram(
     name: str = "Reference",
     **kwargs,
 ) -> go.Histogram:
+    """Create a histogram trace for distribution plots."""
     return go.Histogram(
         x=x,
         marker=dict(
@@ -200,6 +205,7 @@ def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
 
 
 def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
+    """Generate a pie chart summarizing membership inference attack results."""
     # Done for legend ordering
     PROTECTION_COLUMN = "Protection"
     df[PROTECTION_COLUMN] = df[PROTECTION_COLUMN].astype("category")
@@ -209,8 +215,7 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
     fig = pie(
-        # the cast done bc ty infers this as a list of bools instead of str.
-        labels=cast(list[str], df[PROTECTION_COLUMN].dropna().astype(str).tolist()),
+        labels=df[PROTECTION_COLUMN].dropna().astype(str).tolist(),
         values=df["Attack Percentage"].replace({0: np.nan}),
         sort=False,
     )
@@ -222,6 +227,7 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
 
 
 def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
+    """Generate a horizontal bar chart of per-column attribute inference risk."""
     fig = go.Figure()
     df.sort_values(by="Risk", inplace=True, ascending=True)
     for grade in PrivacyGrade:
@@ -266,15 +272,14 @@ def generate_aia_figure(df: pd.DataFrame) -> go.Figure:
 
 
 def correlation_heatmap(matrix: pd.DataFrame, name: str = "Correlation") -> go.Figure:
-    """
-    Generate the figure for a list of correlation matrices.
+    """Generate a heatmap figure for a correlation matrix.
 
-    Arguments:
-        matrix: The correlation matrix computed by dython.
-        name: Name to use in add_trace.
+    Args:
+        matrix: Correlation matrix (columns are truncated to 15 chars for display).
+        name: Trace name used in the legend.
 
     Returns:
-        A plotly.graph_objects.Figure, a subplot with heatmaps.
+        A Plotly ``Figure`` containing a single heatmap trace.
     """
     fig = go.Figure()
     fields = [x if len(x) <= 15 else x[0:14] + "..." for x in matrix.columns]
@@ -311,6 +316,7 @@ def correlation_heatmap(matrix: pd.DataFrame, name: str = "Correlation") -> go.F
 
 
 def _generate_correlation_hovertext(corr_reference: pd.DataFrame, corr_output: pd.DataFrame, corr_diff: pd.DataFrame):
+    """Build a 2-D hover-text matrix showing reference, output, and difference correlations."""
     hovertext = list()
     # Loop through the y values
     for y in corr_reference.columns:
@@ -338,11 +344,15 @@ def generate_combined_correlation_figure(
     output_correlation: pd.DataFrame,
     correlation_difference: pd.DataFrame,
 ) -> go.Figure:
-    """
-    Combine two of the correlation figures into a single row.
+    """Combine reference, output, and difference correlation heatmaps into one row.
+
+    Args:
+        reference_correlation: Correlation matrix of the reference data.
+        output_correlation: Correlation matrix of the output data.
+        correlation_difference: Element-wise absolute difference matrix.
 
     Returns:
-        a new Figure.
+        A Plotly ``Figure`` with three side-by-side heatmap subplots.
     """
     hovertext = _generate_correlation_hovertext(reference_correlation, output_correlation, correlation_difference)
 
@@ -378,20 +388,17 @@ def generate_combined_correlation_figure(
 
 
 def scatter_plot(x: pd.Series, y: pd.Series, color=_REPORT_PALETTE[0], maximum_points=5000) -> go.Figure:
-    """
-    Make a plotly scatter plot.
+    """Create a scatter plot, capping the number of points to avoid browser crashes.
 
     Args:
-        x: series of x values
-        y: corresponding series of y values
-        color: marker color, defaults to _REPORT_PALETTE[0]
-        maximum_points: this plot will crash the browser page if there are too many points. Cap at this number of points.
-            No callers currently attempt to change the default value.  If you use a value of 0, the code will
-            make NO ATTEMPT to cap the number of points and your page may crash.
+        x: Series of x-axis values.
+        y: Series of y-axis values.
+        color: Marker color (defaults to the first palette color).
+        maximum_points: Maximum number of points to render. ``0`` disables
+            the cap (use with caution -- may crash the browser).
 
     Returns:
-        A plotly.graph_objects.Figure
-
+        A Plotly ``Figure`` with a single scatter trace.
     """
     # Sample training set to equal synthetic set or vice versa
     if maximum_points == 0:
@@ -416,6 +423,7 @@ def scatter_plot(x: pd.Series, y: pd.Series, color=_REPORT_PALETTE[0], maximum_p
 
 
 def structure_stability_figure(reference: pd.DataFrame, output: pd.DataFrame) -> go.Figure:
+    """Generate side-by-side PCA scatter plots for reference and output data."""
     reference_scatter = scatter_plot(x=reference["pc1"], y=reference["pc2"])
     output_scatter = scatter_plot(x=output["pc1"], y=output["pc2"], color=_REPORT_PALETTE[1])
     fig = combine_subplots(
@@ -447,24 +455,20 @@ def combine_subplots(
     height=None,
     margin=None,
 ) -> go.Figure:
-    """
-    Take a list of go.Figures and make a single go.Figure out of them.  They will all be on one row.
+    """Combine multiple Plotly figures into a single-row subplot figure.
 
     Args:
-        figures: List of go.Figures to combine.
-        titles: List of subplot titles, must be same length as number of traces.
-        general_title: Title for the entire figure.
-        subplot_type: see https://plotly.com/python/subplots/#subplots-types,
-        shared_xaxes: Passed into plotly make_subplots call, see
-            https://plotly.com/python-api-reference/generated/plotly.subplots.make_subplots.html
-        shared_yaxes: Passed into plotly make_subplots call, see
-            https://plotly.com/python-api-reference/generated/plotly.subplots.make_subplots.html
-        height: Passed to fig.update_layout if present. Local jupyter notebooks can look wonky if this
-            is absent, other environments are usually okay without it.
-        margin: Passed to fig.update_layout if present. Updates the margin of the figure.
+        figures: Figures to combine (one subplot column each).
+        titles: Per-subplot titles (same length as *figures*).
+        general_title: Overall figure title.
+        subplot_type: Plotly subplot type (e.g. ``"xy"``, ``"domain"``).
+        shared_xaxes: Share x-axes across subplots.
+        shared_yaxes: Share y-axes across subplots.
+        height: Optional explicit figure height in pixels.
+        margin: Optional margin dict passed to ``update_layout``.
 
     Returns:
-        a single new plotly.graph_objects.Figure.
+        A single Plotly ``Figure`` containing all traces in one row.
     """
     specs = [[{"type": subplot_type}] * len(figures)]
 
@@ -494,15 +498,14 @@ def combine_subplots(
 
 
 def bar_chart(reference_distribution: dict, output_distribution: dict) -> go.Figure:
-    """
-    Generate a bar chart for a categorical distribution.
+    """Generate a grouped bar chart comparing two categorical distributions.
 
-    Arguments:
-        reference_distribution: dict of (distribution value, count) from the reference df
-        output_distribution: dict of (distribution value, count) from the output df
+    Args:
+        reference_distribution: Mapping of ``{category: percentage}`` from the reference data.
+        output_distribution: Mapping of ``{category: percentage}`` from the output data.
 
     Returns:
-        A plotly.graph_objects.Figure
+        A Plotly ``Figure`` with grouped bars for reference and output.
     """
     columns = sorted(set(reference_distribution.keys()).union(output_distribution.keys()))
     reference_values = []
@@ -547,15 +550,14 @@ def bar_chart(reference_distribution: dict, output_distribution: dict) -> go.Fig
 
 
 def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | None:
-    """
-    Generate a histogram distplot for a numeric distribution.
+    """Generate overlaid histograms for a numeric distribution.
 
-    Arguments:
-        reference: The reference pd.Series for which we make the histogram.
-        output: The output pd.Series for which we make the histogram.
+    Args:
+        reference: Numeric reference series.
+        output: Numeric output series.
 
     Returns:
-        A plotly.graph_objects.Figure
+        A Plotly ``Figure`` with overlaid reference/output histograms.
     """
     fig = go.Figure()
     fig.update_layout(
@@ -610,6 +612,7 @@ def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | Non
 def generate_text_structure_similarity_figures(
     training_statistics: pd.DataFrame, synthetic_statistics: pd.DataFrame, title: str
 ) -> go.Figure | None:
+    """Generate overlaid histograms of sentence/word/character distributions."""
     statistics_keys = [
         "sentence_count",
         "average_words_per_sentence",
@@ -649,6 +652,7 @@ def generate_text_structure_similarity_figures(
 def generate_text_semantic_similarity_figures(
     training_pca: pd.DataFrame, synthetic_pca: pd.DataFrame, title: str
 ) -> go.Figure | None:
+    """Generate a PCA scatter matrix for text embedding similarity."""
     figures = []
     for key in training_pca.columns:
         for subkey in synthetic_pca.columns:
