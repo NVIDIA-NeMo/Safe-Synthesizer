@@ -98,7 +98,7 @@ Most contributors already have an SSH key for GitHub authentication. The same ke
 3. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). The `admin:ssh_signing_key` scope grants write access to your account's signing keys; the one-liner below adds it, registers the key, then removes the scope so it doesn't persist in your token:
 
    ```bash
-     && gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
+     gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
      && gh auth refresh -r admin:ssh_signing_key
    ```
 
