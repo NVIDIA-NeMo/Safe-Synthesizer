@@ -278,7 +278,7 @@ class AttributeInferenceProtection(Component):
         if len(text_columns) == 0:
             # Create the faiss index on the synthetic data
             dim = df_synth_norm.shape[1]
-            index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-missing-attribute]
+            index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-unbound-attribute]
 
             # This usage matches documentation. Specifying n= and x= parameters as
             # the type annotation for IndexFlatL2.add suggests seems unnecessary, possibly related
@@ -340,7 +340,7 @@ class AttributeInferenceProtection(Component):
         # Now get the tabular similarity for these 1000 NN
 
         dim = synth_NN.shape[1]
-        index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-missing-attribute]
+        index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-unbound-attribute]
         index.add(np.float32(np.ascontiguousarray(np.array(synth_NN))))  # ty: ignore[missing-argument]
         dists, indexes = index.search(np.float32(np.ascontiguousarray(np.array(df_train_norm))), search_synth_k)  # ty: ignore[missing-argument]
         # Scale the Euclidean distance to [0,1]

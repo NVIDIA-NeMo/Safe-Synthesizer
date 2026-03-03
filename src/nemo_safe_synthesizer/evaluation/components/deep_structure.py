@@ -75,8 +75,8 @@ class DeepStructure(Component):
             return DeepStructure(score=EvaluationScore(notes="No columns detected for PCA."))
 
         reference_pca, output_pca = DeepStructure._calculate_pca(
-            evaluation_dataset.reference[tabular_columns],
-            evaluation_dataset.output[tabular_columns],
+            evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
+            evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(

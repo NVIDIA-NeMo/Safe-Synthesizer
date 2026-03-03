@@ -246,7 +246,7 @@ class MembershipInferenceProtection(Component):
         df_train_norm: pd.DataFrame,
         df_test_norm: pd.DataFrame,
         df_synth_norm: pd.DataFrame,
-        index: faiss.IndexFlatL2 | None,  # ty: ignore[possibly-missing-attribute]
+        index: faiss.IndexFlatL2 | None,  # ty: ignore[possibly-unbound-attribute]
         run: int,
         text_cnt: int,
         tabular_cnt: int,
@@ -554,7 +554,7 @@ class MembershipInferenceProtection(Component):
                     )
                 # Create the faiss index on the synthetic tabular data
                 dim = df_synth_norm.shape[1]
-                index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-missing-attribute]
+                index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-unbound-attribute]
                 index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))  # ty: ignore[missing-argument]
             else:
                 df_train_norm = pd.DataFrame()
