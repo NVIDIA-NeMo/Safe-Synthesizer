@@ -8873,7 +8873,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            FieldFeatures (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures">FieldFeatures</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            FieldFeatures
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures">FieldFeatures</a></code></td>
             <td>
               <div class="doc-md-description">
                 
@@ -8915,6 +8920,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>FieldFeatures</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8922,172 +8931,115 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            count
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.name">name</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.type">type</span></code>
+                (<code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldType">FieldType</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            count
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.count">count</a></code></td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of non-empty values.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            unique_values_list
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.count">count</a></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            unique_values_list
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_values_list)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_values_list">unique_values_list</a></code></td>
-            <td>
-                  <code><span title="list">list</span>[<span title="typing.Any">Any</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of unique values.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            unique_count
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_values_list)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_values_list">unique_values_list</a></code>
+                (<code><span title="list">list</span>[<span title="typing.Any">Any</span>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            unique_count
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_count">unique_count</a></code></td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of unique values.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            missing_count
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_count">unique_count</a></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_percent">unique_percent</span></code>
+                (<code><span title="float">float</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            missing_count
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.missing_count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.missing_count">missing_count</a></code></td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of missing values.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            avg_str_length
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.missing_count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.missing_count">missing_count</a></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.missing_percent">missing_percent</span></code>
+                (<code><span title="float">float</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_str_length">min_str_length</span></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_str_length">max_str_length</span></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            avg_str_length
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.avg_str_length)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.avg_str_length">avg_str_length</a></code></td>
-            <td>
-                  <code><span title="float">float</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Average length of string representation of field's value.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            min_precision = Field(default=None)
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.avg_str_length)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.avg_str_length">avg_str_length</a></code>
+                (<code><span title="float">float</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_value">min_value</span></code>
+                (<code><span title="int">int</span> | <span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_value">max_value</span></code>
+                (<code><span title="int">int</span> | <span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            min_precision = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_precision)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_precision">min_precision</a></code></td>
-            <td>
-                  <code><span title="int">int</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Min number of decimal spaces from all of the values for this field.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            max_precision = Field(default=None)
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_precision)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_precision">min_precision</a></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            max_precision = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_precision)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_precision">max_precision</a></code></td>
-            <td>
-                  <code><span title="int">int</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Max number of decimal spaces from all of the values for this field.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            space_count = Field(default=None)
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_precision)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_precision">max_precision</a></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            space_count = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.space_count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.space_count">space_count</a></code></td>
-            <td>
-                  <code><span title="int">int</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of times space character (' ') appears in field's values.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            classification = Field(default=None)
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.space_count)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.space_count">space_count</a></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            classification = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.classification)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.classification">classification</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Classification information, based on labels detected in field's values.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.classification)" href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.classification">classification</a></code>
+                (<code><span title="dict">dict</span> | None</code>)
+            </li>
+        </ul>
 
 
 
@@ -9108,7 +9060,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">count</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.count" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9130,7 +9082,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">unique_values_list</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_values_list" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9152,7 +9104,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">unique_count</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.unique_count" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9174,7 +9126,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">missing_count</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.missing_count" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9197,7 +9149,7 @@ It's number of records from the dataset that don't have value set for this field
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">avg_str_length</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.avg_str_length" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9217,11 +9169,10 @@ Note: this only includes non-missing values (i.e. we don't add 0 for fields that
 
 
 <h4 id="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_precision" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">min_precision</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">min_precision</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.min_precision" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9241,11 +9192,10 @@ E.g. it's 1 for number like "1.1" and 3 for "1.234".</p>
 
 
 <h4 id="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_precision" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">max_precision</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">max_precision</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.max_precision" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9264,11 +9214,10 @@ E.g. it's 1 for number like "1.1" and 3 for "1.234".</p>
 
 
 <h4 id="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.space_count" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">space_count</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">space_count</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.space_count" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9287,11 +9236,10 @@ E.g. it's 1 for number like "1.1" and 3 for "1.234".</p>
 
 
 <h4 id="nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.classification" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">classification</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">classification</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures.classification" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9489,6 +9437,10 @@ and stored on the <code>AnalyzerContext</code></p>
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

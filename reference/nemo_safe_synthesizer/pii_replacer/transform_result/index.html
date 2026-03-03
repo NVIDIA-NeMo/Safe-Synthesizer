@@ -8837,7 +8837,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            ColumnStatistics (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics">ColumnStatistics</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            ColumnStatistics
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics">ColumnStatistics</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Metadata and statistics for transformations and detected entities in a column.</p>
@@ -8845,7 +8850,12 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            TransformResult (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult">TransformResult</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            TransformResult
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult">TransformResult</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Result object for data and statistics after applying pii replacement.</p>
@@ -8879,6 +8889,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>ColumnStatistics</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8886,129 +8900,61 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p>Metadata and statistics for transformations and detected entities in a column.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            assigned_type
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            assigned_type
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_type)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_type">assigned_type</a></code></td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Type assigned to the column, usually from column classification.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            assigned_entity
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_type)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_type">assigned_type</a></code>
+                (<code><span title="str">str</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            assigned_entity
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_entity)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_entity">assigned_entity</a></code></td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Entity assigned to the column, usually from column classification.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            detected_entity_counts = Field(default_factory=dict)
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_entity)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_entity">assigned_entity</a></code>
+                (<code><span title="str">str</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            detected_entity_counts
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_counts)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_counts">detected_entity_counts</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="int">int</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary of entity to count of how many times NER detected it in the column.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            detected_entity_values = Field(default_factory=dict)
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_counts)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_counts">detected_entity_counts</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <span title="int">int</span>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            detected_entity_values
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_values)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_values">detected_entity_values</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="set">set</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary of entity to set of detected values.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            is_transformed = False
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_values)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_values">detected_entity_values</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <span title="set">set</span>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            is_transformed = False
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.is_transformed)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.is_transformed">is_transformed</a></code></td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether the column was transformed.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            transform_functions = Field(default_factory=set)
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.is_transformed)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.is_transformed">is_transformed</a></code>
+                (<code><span title="bool">bool</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            transform_functions
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.transform_functions)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.transform_functions">transform_functions</a></code></td>
-            <td>
-                  <code><span title="set">set</span>[<span title="str">str</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Functions that were used to transform the column.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.transform_functions)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.transform_functions">transform_functions</a></code>
+                (<code><span title="set">set</span>[<span title="str">str</span>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -9029,7 +8975,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">assigned_type</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_type" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9051,7 +8997,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">assigned_entity</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.assigned_entity" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9070,11 +9016,10 @@
 
 
 <h4 id="nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_counts" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">detected_entity_counts</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">detected_entity_counts</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_counts" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9093,11 +9038,10 @@
 
 
 <h4 id="nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_values" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">detected_entity_values</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">detected_entity_values</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.detected_entity_values" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9119,8 +9063,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">is_transformed</span> <span class="o">=</span> <span class="kc">False</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.is_transformed" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9139,11 +9082,10 @@
 
 
 <h4 id="nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.transform_functions" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">transform_functions</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">set</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">transform_functions</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics.transform_functions" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9176,6 +9118,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>TransformResult</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -9183,65 +9129,38 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p>Result object for data and statistics after applying pii replacement.</p>
 
+    
+      <p>Config:</p>
+      <ul>
+          <li><code>arbitrary_types_allowed</code>: <code class="highlight language-python"><span class="kc">True</span></code></li>
+      </ul>
 
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            transformed_df
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            transformed_df
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.transformed_df)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.transformed_df">transformed_df</a></code></td>
-            <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Transformed dataframe with PII replaced.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            column_statistics
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.transformed_df)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.transformed_df">transformed_df</a></code>
+                (<code><span title="pandas.DataFrame">DataFrame</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            column_statistics
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.column_statistics)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.column_statistics">column_statistics</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <a class="autorefs autorefs-internal" title="            ColumnStatistics (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics">ColumnStatistics</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dictionary of column name to statistics for that column.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.column_statistics)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.column_statistics">column_statistics</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <a class="autorefs autorefs-internal" title="            ColumnStatistics
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics">ColumnStatistics</a>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -9262,7 +9181,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">transformed_df</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.transformed_df" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9284,7 +9203,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">column_statistics</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult.column_statistics" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9422,6 +9341,10 @@
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../js/toc-toggle.js"></script>
       

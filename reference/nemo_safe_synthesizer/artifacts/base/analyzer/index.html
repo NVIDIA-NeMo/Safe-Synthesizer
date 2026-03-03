@@ -8697,7 +8697,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            AnalyzerContext (nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext)" href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext">AnalyzerContext</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            AnalyzerContext
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext)" href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext">AnalyzerContext</a></code></td>
             <td>
               <div class="doc-md-description">
                 
@@ -8731,6 +8736,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>AnalyzerContext</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8738,65 +8747,57 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
+    
+      <p>Config:</p>
+      <ul>
+          <li><code>arbitrary_types_allowed</code>: <code class="highlight language-python"><span class="kc">True</span></code></li>
+      </ul>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            field_name_anonymizer = Field(default=(NoopNameAnonymizer()))
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.data_frame">data_frame</span></code>
+                (<code><span title="pandas.DataFrame">DataFrame</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            field_name_anonymizer = NoopNameAnonymizer()
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_name_anonymizer)" href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_name_anonymizer">field_name_anonymizer</a></code></td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="            NameAnonymizer (nemo_safe_synthesizer.artifacts.base.name_anonymizer.NameAnonymizer)" href="../name_anonymizer/#nemo_safe_synthesizer.artifacts.base.name_anonymizer.NameAnonymizer">NameAnonymizer</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>To be used by analyzers where field name needs to be anonymized.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            field_info = Field(default=None)
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_name_anonymizer)" href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_name_anonymizer">field_name_anonymizer</a></code>
+                (<code><a class="autorefs autorefs-internal" title="            NameAnonymizer (nemo_safe_synthesizer.artifacts.base.name_anonymizer.NameAnonymizer)" href="../name_anonymizer/#nemo_safe_synthesizer.artifacts.base.name_anonymizer.NameAnonymizer">NameAnonymizer</a></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.ner_metadata">ner_metadata</span></code>
+                (<code><span title="nemo_safe_synthesizer.artifacts.base.metadata.DatasetMetadata">DatasetMetadata</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_features">field_features</span></code>
+                (<code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            FieldFeatures
+
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_info)" href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_info">field_info</a></code></td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="              FieldFeaturesInfo(field_features) (nemo_safe_synthesizer.artifacts.base.fields.FieldFeaturesInfo)" href="../fields/#nemo_safe_synthesizer.artifacts.base.fields.FieldFeaturesInfo">FieldFeaturesInfo</a> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Can be used by other libraries to get general field information without having to parse the manifest data</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-model
+   (nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures)" href="../fields/#nemo_safe_synthesizer.artifacts.base.fields.FieldFeatures">FieldFeatures</a>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            field_info = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_info)" href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_info">field_info</a></code>
+                (<code><a class="autorefs autorefs-internal" title="              FieldFeaturesInfo(field_features) (nemo_safe_synthesizer.artifacts.base.fields.FieldFeaturesInfo)" href="../fields/#nemo_safe_synthesizer.artifacts.base.fields.FieldFeaturesInfo">FieldFeaturesInfo</a> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.data_check_results">data_check_results</span></code>
+                (<code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            DataCheckResult
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.artifacts.base.data_checks.DataCheckResult)" href="../data_checks/#nemo_safe_synthesizer.artifacts.base.data_checks.DataCheckResult">DataCheckResult</a>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -8814,11 +8815,10 @@
 
 
 <h4 id="nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_name_anonymizer" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">field_name_anonymizer</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="p">(</span><span class="n">NoopNameAnonymizer</span><span class="p">()))</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">field_name_anonymizer</span> <span class="o">=</span> <span class="n">NoopNameAnonymizer</span><span class="p">()</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_name_anonymizer" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -8837,11 +8837,10 @@
 
 
 <h4 id="nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_info" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">field_info</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">field_info</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.artifacts.base.analyzer.AnalyzerContext.field_info" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -8979,6 +8978,10 @@
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

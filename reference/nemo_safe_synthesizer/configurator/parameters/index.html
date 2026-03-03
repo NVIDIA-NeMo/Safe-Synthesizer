@@ -8800,7 +8800,12 @@ functionality with sophisticated validation logic and YAML serialization support
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            Parameters (nemo_safe_synthesizer.configurator.parameters.Parameters)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters">Parameters</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            Parameters
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.configurator.parameters.Parameters)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters">Parameters</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Abstract base class for organizing collections of configuration/api parameters.</p>
@@ -8834,14 +8839,16 @@ functionality with sophisticated validation logic and YAML serialization support
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>Parameters</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.configurator.parameters.Parameters" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
-
-
 
         <p>Abstract base class for organizing collections of configuration/api parameters.</p>
 <p>This class provides a structured way to define and manage groups of parameters
@@ -8855,109 +8862,11 @@ and adds small utilities like iteration, parameter lookup, nested parameter grou
 <li>Parameter lookup by name</li>
 </ul>
 </details>
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            get(name, default=None) (nemo_safe_synthesizer.configurator.parameters.Parameters.get)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.get">get</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Retrieve a parameter or parameter group by name.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            has(name) (nemo_safe_synthesizer.configurator.parameters.Parameters.has)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.has">has</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Check if a parameter or parameter group exists by name. If you check for a parameter</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            from_yaml_str(raw)
-
-  
-      classmethod
-   (nemo_safe_synthesizer.configurator.parameters.Parameters.from_yaml_str)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.from_yaml_str">from_yaml_str</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Load a Parameters instance from a YAML formatted string.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            from_json(path, overrides=None)
-
-  
-      classmethod
-   (nemo_safe_synthesizer.configurator.parameters.Parameters.from_json)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.from_json">from_json</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Load a Parameters instance from a JSON file.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            from_yaml(path, overrides=None)
-
-  
-      classmethod
-   (nemo_safe_synthesizer.configurator.parameters.Parameters.from_yaml)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.from_yaml">from_yaml</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Load a Parameters instance from a YAML file.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            to_yaml(path, exclude_unset=True) (nemo_safe_synthesizer.configurator.parameters.Parameters.to_yaml)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.to_yaml">to_yaml</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Save this Parameters instance to a YAML file.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            from_params(**kwargs)
-
-  
-      classmethod
-   (nemo_safe_synthesizer.configurator.parameters.Parameters.from_params)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.from_params">from_params</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Create a Parameters instance from keyword arguments.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            get_auto_params() (nemo_safe_synthesizer.configurator.parameters.Parameters.get_auto_params)" href="#nemo_safe_synthesizer.configurator.parameters.Parameters.get_auto_params">get_auto_params</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Get all AutoParam instances that can be updated.</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
-
+    
+      <p>Config:</p>
+      <ul>
+          <li><code>default</code>: <code class="highlight language-python"><span class="n">pydantic_model_config</span></code></li>
+      </ul>
 
 
 
@@ -9947,6 +9856,10 @@ small convenience method.</p>
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../js/toc-toggle.js"></script>
       

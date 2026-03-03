@@ -8689,7 +8689,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            MembershipInferenceProtection (nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection)" href="#nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection">MembershipInferenceProtection</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            MembershipInferenceProtection
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection)" href="#nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection">MembershipInferenceProtection</a></code></td>
             <td>
               <div class="doc-md-description">
                 
@@ -8723,63 +8728,56 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>MembershipInferenceProtection</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            Component (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="            Component
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            embed_text(df)
 
   
-      staticmethod
-   (nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.embed_text)" href="#nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.embed_text">embed_text</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Takes a dataframe of text fields, finds the embeddings for each</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            divide_tabular_text(df, text_fields)
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
+
+    
+      <p>Config:</p>
+      <ul>
+          <li><code>arbitrary_types_allowed</code>: <code class="highlight language-python"><span class="kc">True</span></code></li>
+      </ul>
+
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.score">score</span></code>
+                (<code><a class="autorefs autorefs-internal" title="            EvaluationScore
+
 
   
-      staticmethod
-   (nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.divide_tabular_text)" href="#nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.divide_tabular_text">divide_tabular_text</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Takes a dataframe and divides it into two dataframes, one with the text fields and one with the tabular fields</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
-
-
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore)" href="../../data_model/evaluation_score/#nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore">EvaluationScore</a></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.name">name</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.attack_sum_df">attack_sum_df</span></code>
+                (<code><span title="pandas.DataFrame">DataFrame</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.tps_values">tps_values</span></code>
+                (<code><span title="dict">dict</span>[<span title="float">float</span>, <span title="int">int</span>] | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection.fps_values">fps_values</span></code>
+                (<code><span title="dict">dict</span>[<span title="float">float</span>, <span title="int">int</span>] | None</code>)
+            </li>
+        </ul>
 
 
 
@@ -9041,6 +9039,10 @@ and then averages the embeddings into one embedding and returns a dataframe with
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

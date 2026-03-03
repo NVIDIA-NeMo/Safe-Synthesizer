@@ -3909,6 +3909,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.component.Component.name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.evaluation.components.component.Component.is_nonempty" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8410,6 +8421,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.component.Component.name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.evaluation.components.component.Component.is_nonempty" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8667,7 +8689,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            Component (nemo_safe_synthesizer.evaluation.components.component.Component)" href="#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            Component
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.component.Component)" href="#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></td>
             <td>
               <div class="doc-md-description">
                 
@@ -8701,6 +8728,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>Component</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.evaluation.components.component.Component" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8708,44 +8739,28 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="abc.ABC">ABC</span></code>, <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            is_nonempty(dfs)
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            name
 
   
-      staticmethod
-   (nemo_safe_synthesizer.evaluation.components.component.Component.is_nonempty)" href="#nemo_safe_synthesizer.evaluation.components.component.Component.is_nonempty">is_nonempty</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Util for components that need to check dataframes before attempting to render (correlation and PCA)</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.evaluation.components.component.Component.name)" href="#nemo_safe_synthesizer.evaluation.components.component.Component.name">name</a></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.component.Component.score">score</span></code>
+                (<code><a class="autorefs autorefs-internal" title="            EvaluationScore
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore)" href="../../data_model/evaluation_score/#nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore">EvaluationScore</a></code>)
+            </li>
+        </ul>
 
 
 
@@ -8757,6 +8772,28 @@
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.evaluation.components.component.Component.name" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">name</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.evaluation.components.component.Component.name" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Override this with the fancy display name of your component. It is used for json summaries and rendering scores.</p>
+
+    </div>
+
+</div>
 
 
 
@@ -8923,6 +8960,10 @@
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

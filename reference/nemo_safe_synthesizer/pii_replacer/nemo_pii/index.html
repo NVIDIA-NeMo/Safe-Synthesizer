@@ -8859,7 +8859,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            ColumnClassification (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            ColumnClassification
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>classification info and detected entities in a column prior to transform. entity_count is None and entity_values an empty list if entity is None for non-text fields.</p>
@@ -8972,6 +8977,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>ColumnClassification</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8979,112 +8988,53 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p>classification info and detected entities in a column prior to transform. entity_count is None and entity_values an empty list if entity is None for non-text fields.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            field_name
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            field_name
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.field_name)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.field_name">field_name</a></code></td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The name of the field/column.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            column_type
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.field_name)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.field_name">field_name</a></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            column_type
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.column_type)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.column_type">column_type</a></code></td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The detected column type (e.g., 'text', 'numeric', etc.).</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            entity
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.column_type)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.column_type">column_type</a></code>
+                (<code><span title="str">str</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            entity
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity">entity</a></code></td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The detected entity type (e.g., 'email', 'phone', etc.), or None if no entity detected.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            entity_count = None
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity">entity</a></code>
+                (<code><span title="str">str</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            entity_count = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_count)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_count">entity_count</a></code></td>
-            <td>
-                  <code><span title="int">int</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Number of non-empty values in this field. None if no entity detected.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            entity_values = Field(default_factory=list)
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_count)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_count">entity_count</a></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            entity_values
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_values)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_values">entity_values</a></code></td>
-            <td>
-                  <code><span title="list">list</span>[<span title="typing.Any">Any</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of all unique values for this field. Empty list if no entity detected.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_values)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_values">entity_values</a></code>
+                (<code><span title="list">list</span>[<span title="typing.Any">Any</span>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -9105,7 +9055,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">field_name</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.field_name" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9127,7 +9077,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">column_type</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.column_type" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9149,7 +9099,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">entity</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9171,8 +9121,7 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">entity_count</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_count" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9191,11 +9140,10 @@
 
 
 <h4 id="nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_values" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">entity_values</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">entity_values</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification.entity_values" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9264,7 +9212,12 @@
                 <code>config</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="            PiiReplacerConfig (nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig)" href="../../config/replace_pii/#nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig">PiiReplacerConfig</a> | None</code>
+                  <code><a class="autorefs autorefs-internal" title="            PiiReplacerConfig
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig)" href="../../config/replace_pii/#nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig">PiiReplacerConfig</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9433,7 +9386,12 @@
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            ColumnClassification (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a>]</code>
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            ColumnClassification
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9443,7 +9401,12 @@
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            ColumnClassification (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a>]</code>
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            ColumnClassification
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9664,7 +9627,12 @@
                 <code>classifications</code>
             </td>
             <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            ColumnClassification (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a>] | None</code>
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            ColumnClassification
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification)" href="#nemo_safe_synthesizer.pii_replacer.nemo_pii.ColumnClassification">ColumnClassification</a>] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9976,6 +9944,10 @@ provided, column classification will be performed.</p>
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../js/toc-toggle.js"></script>
       

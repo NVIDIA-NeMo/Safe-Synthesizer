@@ -8877,7 +8877,12 @@ URLs or file paths.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            DatasetInfo (nemo_safe_synthesizer.cli.datasets.DatasetInfo)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo">DatasetInfo</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            DatasetInfo
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo">DatasetInfo</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Entry in the dataset registry.</p>
@@ -8885,7 +8890,11 @@ URLs or file paths.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              DatasetRegistry(**data) (nemo_safe_synthesizer.cli.datasets.DatasetRegistry)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry">DatasetRegistry</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="              DatasetRegistry(**data)
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry">DatasetRegistry</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Registry of datasets for easy reference by name.</p>
@@ -8919,6 +8928,10 @@ URLs or file paths.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>DatasetInfo</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8926,126 +8939,53 @@ URLs or file paths.</p>
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p>Entry in the dataset registry.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            get_url() (nemo_safe_synthesizer.cli.datasets.DatasetInfo.get_url)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.get_url">get_url</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Get url for the dataset with base_url from registry added if appropriate.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            fetch() (nemo_safe_synthesizer.cli.datasets.DatasetInfo.fetch)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.fetch">fetch</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Fetch the dataset and return a pandas DataFrame.</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            name
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            name
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.name)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.name">name</a></code></td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Short name of the dataset.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            url
+      pydantic-field
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.name)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.name">name</a></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            url
 
   
-      instance-attribute
-   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.url)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.url">url</a></code></td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>URL or path to the dataset.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            overrides = None
+      pydantic-field
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.url)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.url">url</a></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            overrides = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.overrides)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.overrides">overrides</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Config overrides for this dataset.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            load_args = None
+      pydantic-field
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.overrides)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.overrides">overrides</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>] | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            load_args = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.load_args)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.load_args">load_args</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>] | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Extra arguments needed by the data reader for a this dataset.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo.load_args)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.load_args">load_args</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>] | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.cli.datasets.DatasetInfo._registry">_registry</span></code>
+                (<code><a class="autorefs autorefs-internal" title="              DatasetRegistry(**data)
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry">DatasetRegistry</a> | None</code>)
+            </li>
+        </ul>
 
 
 
@@ -9066,7 +9006,7 @@ URLs or file paths.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">name</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.name" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9089,7 +9029,7 @@ URLs or file paths.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">url</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.url" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9113,8 +9053,7 @@ present.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">overrides</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.overrides" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9139,8 +9078,7 @@ parameters.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">load_args</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo.load_args" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9353,6 +9291,10 @@ Otherwise, self.url is returned as is.</p>
 <h3 id="nemo_safe_synthesizer.cli.datasets.DatasetRegistry" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">DatasetRegistry</span><span class="p">(</span><span class="o">**</span><span class="n">data</span><span class="p">)</span></code>
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -9360,100 +9302,35 @@ Otherwise, self.url is returned as is.</p>
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p>Registry of datasets for easy reference by name.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            get_dataset(url) (nemo_safe_synthesizer.cli.datasets.DatasetRegistry.get_dataset)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.get_dataset">get_dataset</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Get a dataset from the registry.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            from_yaml(path)
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            datasets
 
   
-      classmethod
-   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry.from_yaml)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.from_yaml">from_yaml</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Load a DatasetRegistry from a YAML file.</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry.datasets)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.datasets">datasets</a></code>
+                (<code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            DatasetInfo
 
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            datasets = Field(default_factory=list)
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry.datasets)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.datasets">datasets</a></code></td>
-            <td>
-                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            DatasetInfo (nemo_safe_synthesizer.cli.datasets.DatasetInfo)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo">DatasetInfo</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>List of datasets in the registry.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            base_url = None
+      pydantic-model
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo">DatasetInfo</a>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            base_url = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry.base_url)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.base_url">base_url</a></code></td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Base URL for the registry.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.cli.datasets.DatasetRegistry.base_url)" href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.base_url">base_url</a></code>
+                (<code><span title="str">str</span> | None</code>)
+            </li>
+        </ul>
+
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/cli/datasets.py</code></summary>
@@ -9466,7 +9343,6 @@ Otherwise, self.url is returned as is.</p>
 </span><span id="__span-0-134"><a id="__codelineno-0-134" name="__codelineno-0-134"></a>        <span class="n">dataset</span><span class="o">.</span><span class="n">_registry</span> <span class="o">=</span> <span class="bp">self</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
-
 
 
 <div class="doc doc-children">
@@ -9482,11 +9358,10 @@ Otherwise, self.url is returned as is.</p>
 
 
 <h4 id="nemo_safe_synthesizer.cli.datasets.DatasetRegistry.datasets" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">datasets</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">datasets</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.datasets" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9508,8 +9383,7 @@ Otherwise, self.url is returned as is.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">base_url</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.cli.datasets.DatasetRegistry.base_url" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9746,6 +9620,10 @@ This only applies to the datasets in the registry which have a relative url.</p>
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../js/toc-toggle.js"></script>
       

@@ -8711,7 +8711,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            Distribution (nemo_safe_synthesizer.data_processing.actions.distributions.Distribution)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.Distribution">Distribution</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            Distribution
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.data_processing.actions.distributions.Distribution)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.Distribution">Distribution</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Abstract base class representing a distribution.</p>
@@ -8719,7 +8724,12 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            DatetimeDistribution (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution">DatetimeDistribution</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            DatetimeDistribution
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution">DatetimeDistribution</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>This class is separate from the <code>Distribution</code> ABC above</p>
@@ -8753,6 +8763,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>Distribution</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.data_processing.actions.distributions.Distribution" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8760,22 +8774,11 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code>, <code><span title="abc.ABC">ABC</span></code></p>
 
-
-
         <p>Abstract base class representing a distribution.
 Child classes should specify whichever arguments are needed
 to properly parametrize their distribution.</p>
 
-
-
-
-
-
-
-
-
-
-
+    
 
 
 
@@ -8808,14 +8811,16 @@ to properly parametrize their distribution.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>DatetimeDistribution</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code>, <code><span title="abc.ABC">ABC</span></code></p>
-
-
 
         <p>This class is separate from the <code>Distribution</code> ABC above
 because datetimes need slightly different handling than floats.
@@ -8829,63 +8834,27 @@ to read. We're still able to reuse the original <code>Distribution</code> class 
 of the time in <code>DatetimeDistribution</code>, making the only business logic
 really be about how we want to translate dates &rarr; floats.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            precision = None
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            precision = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.precision)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.precision">precision</a></code></td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="datetime.timedelta">timedelta</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>precision</code> controls how we precisely want to round the dates.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            format = None
+      pydantic-field
+   (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.precision)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.precision">precision</a></code>
+                (<code><span title="typing.Optional">Optional</span>[<span title="datetime.timedelta">timedelta</span>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            format = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.format)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.format">format</a></code></td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>format</code> will determine the string output format of the generated datetimes.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.format)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.format">format</a></code>
+                (<code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -8906,8 +8875,7 @@ really be about how we want to translate dates &rarr; floats.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">precision</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.precision" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -8942,8 +8910,7 @@ precision: 1      # rounded to whole day</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="nb">format</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution.format" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9082,6 +9049,10 @@ The expected strings match inputs to the <code>strftime</code> function.</p>
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

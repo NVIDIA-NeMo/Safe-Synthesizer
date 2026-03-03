@@ -8633,7 +8633,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            ColumnDistribution (nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution)" href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution">ColumnDistribution</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            ColumnDistribution
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution)" href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution">ColumnDistribution</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>This class wears a few hats, not ideal but saves some duplication:</p>
@@ -8667,14 +8672,21 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>ColumnDistribution</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            Component (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="            Component
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
 
         <p>This class wears a few hats, not ideal but saves some duplication:
 * Rendering of each EvaluationFields histogram
@@ -8682,17 +8694,42 @@
 * Computation/rendering of Column Distribution Stability score
 * Field Distribution Stability functions are used for text metrics and (iirc) PCA as well</p>
 
+    
+
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.score">score</span></code>
+                (<code><a class="autorefs autorefs-internal" title="            EvaluationScore
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore)" href="../../data_model/evaluation_score/#nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore">EvaluationScore</a></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.name">name</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.column_statistics">column_statistics</span></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <a class="autorefs autorefs-internal" title="            ColumnStatistics
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics)" href="../../../pii_replacer/transform_result/#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics">ColumnStatistics</a>] | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.evaluation_fields">evaluation_fields</span></code>
+                (<code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="            EvaluationField
 
 
-
-
-
-
-
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.data_model.evaluation_field.EvaluationField)" href="../../data_model/evaluation_field/#nemo_safe_synthesizer.evaluation.data_model.evaluation_field.EvaluationField">EvaluationField</a>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -8829,6 +8866,10 @@
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

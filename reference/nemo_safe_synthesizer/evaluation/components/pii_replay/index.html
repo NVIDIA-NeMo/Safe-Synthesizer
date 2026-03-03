@@ -8633,7 +8633,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            PIIReplayData (nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData)" href="#nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData">PIIReplayData</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            PIIReplayData
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData)" href="#nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData">PIIReplayData</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Contains data for each PII column, listed in the PII Replay section of the SQS report.</p>
@@ -8667,14 +8672,16 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>PIIReplayData</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
-
-
 
         <p>Contains data for each PII column, listed in the PII Replay section of the SQS report.</p>
 
@@ -8813,17 +8820,43 @@
       </tbody>
     </table>
 
+    
 
-
-
-
-
-
-
-
-
-
-
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.column_name">column_name</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.column_assigned_type">column_assigned_type</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.pii_type">pii_type</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.total_ref_data">total_ref_data</span></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.unique_ref_data">unique_ref_data</span></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.total_synth_data">total_synth_data</span></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.unique_synth_data">unique_synth_data</span></code>
+                (<code><span title="int">int</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.pii_replay.PIIReplayData.unique_synth_data_percentage">unique_synth_data_percentage</span></code>
+                (<code><span title="float">float</span></code>)
+            </li>
+        </ul>
 
 
 
@@ -8960,6 +8993,10 @@
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

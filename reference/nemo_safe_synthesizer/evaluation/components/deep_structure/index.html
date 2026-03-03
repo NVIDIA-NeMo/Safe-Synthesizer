@@ -8667,7 +8667,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            DeepStructure (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure">DeepStructure</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            DeepStructure
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure">DeepStructure</a></code></td>
             <td>
               <div class="doc-md-description">
                 
@@ -8701,51 +8706,52 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>DeepStructure</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            Component (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="            Component
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            from_evaluation_dataset(evaluation_dataset, config=None)
 
   
-      staticmethod
-   (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.from_evaluation_dataset)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.from_evaluation_dataset">from_evaluation_dataset</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Hook into _calculate_pca to get our PCA values and then use these to get the principal_component_stability SQS.</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
+
+    
+      <p>Config:</p>
+      <ul>
+          <li><code>arbitrary_types_allowed</code>: <code class="highlight language-python"><span class="kc">True</span></code></li>
+      </ul>
+
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.score">score</span></code>
+                (<code><a class="autorefs autorefs-internal" title="            EvaluationScore
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore)" href="../../data_model/evaluation_score/#nemo_safe_synthesizer.evaluation.data_model.evaluation_score.EvaluationScore">EvaluationScore</a></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.name">name</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca">reference_pca</span></code>
+                (<code><span title="pandas.DataFrame">DataFrame</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca">output_pca</span></code>
+                (<code><span title="pandas.DataFrame">DataFrame</span> | None</code>)
+            </li>
+        </ul>
 
 
 
@@ -8811,7 +8817,12 @@
                 <code>config</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../../../config/parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a> | None</code>
+                  <code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../../../config/parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9013,6 +9024,10 @@
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       

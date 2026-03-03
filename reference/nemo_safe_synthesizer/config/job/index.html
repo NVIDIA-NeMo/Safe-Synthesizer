@@ -2723,6 +2723,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" SafeSynthesizerJobConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hf_token_secret
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -8389,6 +8406,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" SafeSynthesizerJobConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hf_token_secret
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -8607,10 +8641,15 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerJobConfig (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig">SafeSynthesizerJobConfig</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerJobConfig
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig">SafeSynthesizerJobConfig</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Configuration model for Safe Synthesizer jobs. Used primarily to</p>
+                <p>Configuration model for Safe Synthesizer jobs.</p>
               </div>
             </td>
           </tr>
@@ -8641,78 +8680,51 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>SafeSynthesizerJobConfig</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
 
-        <p>Configuration model for Safe Synthesizer jobs. Used primarily to
-configure ourselves for a run to the NeMo Jobs Microservice.</p>
+        <p>Configuration model for Safe Synthesizer jobs.</p>
+<p>Used primarily to configure a run for the NeMo Jobs Microservice.</p>
 
+    
 
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source">data_source</span></code></td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The data source for the job.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config">config</span></code></td>
-            <td>
-                  <code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>The Safe Synthesizer parameters configuration.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret">hf_token_secret</span></code></td>
-            <td>
-                  <code><span title="str">str</span> | None</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional name of a platform secret containing the HuggingFace
-token. The secret should exist in the same workspace as the job. This is
-used to authenticate with HuggingFace Hub for downloading models.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source">data_source</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config">config</span></code>
+                (<code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a></code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            hf_token_secret = None
 
-
-
-
-
-
-
-
-
-
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret">hf_token_secret</a></code>
+                (<code><span title="str">str</span> | None</code>)
+            </li>
+        </ul>
 
 
 
@@ -8724,6 +8736,28 @@ used to authenticate with HuggingFace Hub for downloading models.</p>
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">hf_token_secret</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Name of platform secret containing the HuggingFace token. Must exist in the same workspace as the job.</p>
+
+    </div>
+
+</div>
 
 
 
@@ -8849,6 +8883,10 @@ used to authenticate with HuggingFace Hub for downloading models.</p>
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../js/toc-toggle.js"></script>
       

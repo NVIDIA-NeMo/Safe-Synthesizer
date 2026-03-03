@@ -8629,7 +8629,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerTiming (nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming)" href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming">SafeSynthesizerTiming</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerTiming
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming)" href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming">SafeSynthesizerTiming</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Output object for Safe Synthesizer</p>
@@ -8637,7 +8642,12 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerSummary (nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary)" href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary">SafeSynthesizerSummary</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerSummary
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary)" href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary">SafeSynthesizerSummary</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Output object for Safe Synthesizer</p>
@@ -8671,28 +8681,49 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>SafeSynthesizerTiming</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
 
         <p>Output object for Safe Synthesizer</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming.total_time_sec">total_time_sec</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming.pii_replacer_time_sec">pii_replacer_time_sec</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming.training_time_sec">training_time_sec</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming.generation_time_sec">generation_time_sec</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming.evaluation_time_sec">evaluation_time_sec</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+        </ul>
 
 
 
@@ -8724,28 +8755,90 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>SafeSynthesizerSummary</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
+              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel
 
 
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
 
         <p>Output object for Safe Synthesizer</p>
 
+    
+
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.synthetic_data_quality_score">synthetic_data_quality_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.column_correlation_stability_score">column_correlation_stability_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.deep_structure_stability_score">deep_structure_stability_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.column_distribution_stability_score">column_distribution_stability_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.text_semantic_similarity_score">text_semantic_similarity_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.text_structure_similarity_score">text_structure_similarity_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.data_privacy_score">data_privacy_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.membership_inference_protection_score">membership_inference_protection_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.attribute_inference_protection_score">attribute_inference_protection_score</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.num_valid_records">num_valid_records</span></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.num_invalid_records">num_invalid_records</span></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.num_prompts">num_prompts</span></code>
+                (<code><span title="int">int</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.valid_record_fraction">valid_record_fraction</span></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary.timing">timing</span></code>
+                (<code><a class="autorefs autorefs-internal" title="            SafeSynthesizerTiming
 
 
-
-
-
-
-
-
-
-
-
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming)" href="#nemo_safe_synthesizer.config.external_results.SafeSynthesizerTiming">SafeSynthesizerTiming</a></code>)
+            </li>
+        </ul>
 
 
 
@@ -8882,6 +8975,10 @@
     
     
       <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../js/toc-toggle.js"></script>
       

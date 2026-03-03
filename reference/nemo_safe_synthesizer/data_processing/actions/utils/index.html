@@ -8821,7 +8821,12 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            TransformsUpdate (nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate)" href="#nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate">TransformsUpdate</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="            TransformsUpdate
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate)" href="#nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate">TransformsUpdate</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p><code>transforms_v2</code> takes in untyped <code>dicts</code>, but this model adds a little</p>
@@ -8837,7 +8842,11 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              ActionCtx(**data) (nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx)" href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx">ActionCtx</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="              ActionCtx(**data)
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx)" href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx">ActionCtx</a></code></td>
             <td>
               <div class="doc-md-description">
                 <p>Context available during all action execution. This object</p>
@@ -8916,6 +8925,10 @@
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>TransformsUpdate</code>
 
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -8923,22 +8936,26 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p><code>transforms_v2</code> takes in untyped <code>dicts</code>, but this model adds a little
 bit of structure for better validation.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate.name">name</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate.value">value</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="nemo_safe_synthesizer.data_processing.actions.utils.TransformsUpdate.position">position</span></code>
+                (<code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>)
+            </li>
+        </ul>
 
 
 
@@ -9035,6 +9052,10 @@ to run <code>Step</code>s on input data.</p>
 <h3 id="nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">ActionCtx</span><span class="p">(</span><span class="o">**</span><span class="n">data</span><span class="p">)</span></code>
 
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
+  </span>
+
 <a href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
@@ -9042,69 +9063,32 @@ to run <code>Step</code>s on input data.</p>
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-
         <p>Context available during all action execution. This object
 can be used for some state specific to the execution,
 as well as dependency injection for external services in the future.</p>
 
+    
 
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            seed = None
+        <p>Fields:</p>
+        <ul>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            seed = None
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.seed)" href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.seed">seed</a></code></td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Seed used for all random generation tasks</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            state = {}
+      pydantic-field
+   (nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.seed)" href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.seed">seed</a></code>
+                (<code><span title="typing.Optional">Optional</span>[<span title="int">int</span>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            state = {}
 
   
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.state)" href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.state">state</a></code></td>
-            <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Used for tracking state across multiple action invocations.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+      pydantic-field
+   (nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.state)" href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.state">state</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]</code>)
+            </li>
+        </ul>
+
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/data_processing/actions/utils.py</code></summary>
@@ -9115,7 +9099,6 @@ as well as dependency injection for external services in the future.</p>
 </span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">seed</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
-
 
 
 <div class="doc doc-children">
@@ -9134,8 +9117,7 @@ as well as dependency injection for external services in the future.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">seed</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.seed" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9157,8 +9139,7 @@ as well as dependency injection for external services in the future.</p>
 <code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">state</span> <span class="o">=</span> <span class="p">{}</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#nemo_safe_synthesizer.data_processing.actions.utils.ActionCtx.state" class="headerlink" title="Permanent link">&para;</a></h4>
@@ -9479,6 +9460,10 @@ schema generation.</p>
     
     
       <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../../../js/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
         <script src="../../../../../js/toc-toggle.js"></script>
       
