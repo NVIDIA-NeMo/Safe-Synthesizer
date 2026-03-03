@@ -9,9 +9,7 @@
 - [uv](https://docs.astral.sh/uv/) -- Python package manager (>=0.9.14, <0.10.0)
 - Git
 
-## Quick Start
-
-### 1. Bootstrap development tools
+## Bootstrap Development Tools
 
 Install `uv`, `ruff`, `ty`, `yq`, and other development tools:
 
@@ -19,7 +17,7 @@ Install `uv`, `ruff`, `ty`, `yq`, and other development tools:
 make bootstrap-tools
 ```
 
-### 2. Install the package
+## Install the Package
 
 Bootstrap the project with your desired dependency set:
 
@@ -76,4 +74,4 @@ Commands:
 
 ## Next Steps
 
-Head to the [Quick Start](quickstart.md) guide to run your first pipeline.
+Head to the [Quick Start](overview.md#quick-start) to run your first pipeline.
