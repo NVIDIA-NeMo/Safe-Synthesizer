@@ -87,10 +87,13 @@ plugins:
             show_symbol_type_toc: true
             members_order: source
             merge_init_into_class: true
-            allow_inspection: false
+            allow_inspection: true
             show_if_no_docstring: false
             summary: true
             filters: ["!^_"]
+            extensions:
+              - griffe_pydantic:
+                  schema: false
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py

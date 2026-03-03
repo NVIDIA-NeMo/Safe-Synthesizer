@@ -101,7 +101,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="repetition_penalty",
-            description="The value used to control the likelihood of the model repeating the same token.",
+            description="The value used to control the likelihood of the model repeating the same token. Must be > 0.",
         ),
     ] = 1.0
 
@@ -110,7 +110,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: 0 < v <= 1),
         Field(
             title="top_p",
-            description="Nucleus sampling probability.",
+            description="Nucleus sampling probability. Must be in (0, 1].",
         ),
     ] = 1.0
 
@@ -121,7 +121,7 @@ class GenerateParameters(Parameters, BaseModel):
             title="patience",
             description=(
                 "Number of consecutive generations where the `invalid_fraction_threshold` "
-                "is reached before stopping generation."
+                "is reached before stopping generation. Must be >= 1."
             ),
         ),
     ] = 3
@@ -132,7 +132,8 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="invalid_fraction_threshold",
             description=(
-                "The fraction of invalid records that will stop generation after the `patience` limit is reached."
+                "The fraction of invalid records that will stop generation after the `patience` limit is reached. "
+                "Must be in [0, 1]."
             ),
         ),
     ] = 0.8

@@ -90,8 +90,8 @@ class DataParameters(Parameters):
         Field(
             description=(
                 "Amount of records to holdout. If this is a float between 0 and 1, that ratio of "
-                "records is held out. If an integer greater than 1, that number of records is held out."
-                "If the value is equal to zero, no holdout will be performed."
+                "records is held out. If an integer greater than 1, that number of records is held out. "
+                "If the value is equal to zero, no holdout will be performed. Must be >= 0."
             ),
         ),
     ] = DEFAULT_HOLDOUT
@@ -100,7 +100,7 @@ class DataParameters(Parameters):
         int,
         ValueValidator(value_func=lambda v: v >= 0),
         Field(
-            description="Maximum number of records to hold out. Overrides any behavior set by holdout parameter.",
+            description="Maximum number of records to hold out. Overrides any behavior set by holdout parameter. Must be >= 0.",
         ),
     ] = DEFAULT_MAX_HOLDOUT
 

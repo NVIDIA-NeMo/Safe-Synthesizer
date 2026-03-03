@@ -56,7 +56,7 @@ class DifferentialPrivacyHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="epsilon",
-            description="Target for epsilon when training completes.",
+            description="Target for epsilon when training completes. Must be > 0.",
         ),
     ] = 8.0
 
@@ -66,8 +66,9 @@ class DifferentialPrivacyHyperparams(Parameters):
         Field(
             title="delta",
             description=(
-                "Probability of accidentally leaking information. Setting to 'auto' uses"
-                "delta of 1/n^1.2, where n is the number of training records"
+                "Probability of accidentally leaking information. Setting to 'auto' uses "
+                "delta of 1/n^1.2, where n is the number of training records. "
+                "Must be in [0, 1) or 'auto'."
             ),
         ),
     ] = AUTO_STR
@@ -77,6 +78,6 @@ class DifferentialPrivacyHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="per_sample_max_grad_norm",
-            description="Maximum L2 norm of per sample gradients.",
+            description="Maximum L2 norm of per sample gradients. Must be > 0.",
         ),
     ] = 1.0
