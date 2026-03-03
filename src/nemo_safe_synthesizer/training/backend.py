@@ -226,6 +226,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ``training_examples``, ``dataset_schema``, ``df_train``, and
         ``data_fraction``.
         """
+        ...
 
     @abc.abstractmethod
     def prepare_config(self):
@@ -236,6 +237,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         quantization config, and RoPE scaling. Idempotent -- returns
         immediately if parameters are already prepared.
         """
+        ...
 
     @abc.abstractmethod
     def prepare_params(self):
@@ -245,6 +247,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         DP or standard training, selects the data collator, and creates the
         ``trainer`` instance with attached callbacks.
         """
+        ...
 
     @abc.abstractmethod
     def maybe_quantize(self, **quant_params: dict):
@@ -254,6 +257,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ``model`` as a PEFT model. When quantization is enabled, applies
         k-bit preparation before wrapping.
         """
+        ...
 
     @abc.abstractmethod
     def load_model(self):
@@ -264,6 +268,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ``AutoModelForCausalLM`` or ``FastLanguageModel``), then applies
         PEFT/quantization via ``maybe_quantize``.
         """
+        ...
 
     @abc.abstractmethod
     def train(self):
@@ -273,6 +278,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         training arguments, runs the trainer, and saves artifacts.
         Populates ``results`` with the training outcome.
         """
+        ...
 
     @abc.abstractmethod
     def save_model(self):
@@ -282,6 +288,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         and resolved config to the ``workdir``. Optionally frees the
         model from GPU memory after saving.
         """
+        ...
 
     def _trust_remote_code_for_model(self) -> bool:
         """Determine whether the model should be loaded with ``trust_remote_code=True``.
