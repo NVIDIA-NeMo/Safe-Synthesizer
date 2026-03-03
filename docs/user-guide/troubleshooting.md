@@ -4,8 +4,8 @@
 # Troubleshooting
 
 This guide covers common issues, error messages, and configuration pitfalls
-you may encounter when using NeMo Safe Synthesizer. Each section follows a
-problem-to-solution structure -- find your symptom, then follow the fix.
+you may encounter when using NeMo Safe Synthesizer. Problem-to-solution
+sections come first; [Reference](#reference) material is at the end.
 
 ## Quick Reference
 
@@ -13,7 +13,7 @@ problem-to-solution structure -- find your symptom, then follow the fix.
 |---------|-------------|-----|
 | "kernels package not installed" warning | `kernels` pip package missing | `pip install kernels` or set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet, model not cached | [Pre-cache models](#pre-caching-models), set `HF_HUB_OFFLINE=1` after caching |
-| `torch.cuda.OutOfMemoryError` in training | VRAM exhausted | [Reduce batch size, enable quantization, lower VRAM fraction](#out-of-memory-during-training) |
+| `torch.cuda.OutOfMemoryError` in training | VRAM exhausted | [Reduce batch size, enable quantization](#out-of-memory-during-training) |
 | `torch.cuda.OutOfMemoryError` in generation | VRAM exhausted | [Check training cleanup, verify free VRAM](#out-of-memory-during-generation) |
 | `torch.cuda.OutOfMemoryError` in evaluation | Large dataset + PCA/binning | [Disable expensive components or reduce columns](#out-of-memory-during-evaluation) |
 | "Cannot use unsloth without GPU" | No CUDA device | [Use HuggingFace backend or install CUDA drivers](#no-gpu-detected) |
@@ -24,209 +24,14 @@ problem-to-solution structure -- find your symptom, then follow the fix.
 | "Number of tokens exceeds context length" | Records too long for model | [Reduce record size or increase context window](#context-length-and-record-fitting) |
 | "fraction of invalid records was higher than..." | Generation quality too low | [Lower `invalid_fraction_threshold` or retrain](#generationerror) |
 | Evaluation metrics show UNAVAILABLE | Too few records or columns | [Ensure >= 200 records, >= 3 columns](#minimum-data-requirements) |
+| Low SQS quality scores | Model underfit or too few records | [Review distributions, increase records/epochs](#low-sqs-scores) |
 | PII uses default entities unexpectedly | Column classifier failed | [Check logs, set entities explicitly](#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/null values from the timestamp column |
 | "groups must have same start timestamp" | Inconsistent time series groups | Align group start/stop timestamps in preprocessing |
 
 ---
 
-## Attention Backends
-
-Safe Synthesizer uses configurable attention implementations for both training
-and generation. Misconfiguration here is a common source of startup failures.
-
-### Training: `attn_implementation`
-
-The HuggingFace backend loads models with an attention implementation controlled
-by `training.attn_implementation`. The default is `kernels-community/vllm-flash-attn3`,
-which uses Flash Attention 3 via the
-[HuggingFace Kernels Hub](https://huggingface.co/docs/kernels/index).
-
-If the `kernels` pip package is not installed, the backend automatically falls
-back to `sdpa` (PyTorch scaled dot-product attention) and logs a warning:
-
-```text
-kernels package not installed, cannot use 'kernels-community/vllm-flash-attn3'.
-Falling back to 'sdpa'. Install with: pip install kernels
-```
-
-To explicitly choose a backend, set it in your config or via CLI:
-
-=== "YAML"
-
-    ```yaml
-    training:
-      attn_implementation: "sdpa"
-    ```
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run --training__attn_implementation sdpa --url data.csv
-    ```
-
-Available values:
-
-| Value | Description | Requires |
-|-------|-------------|----------|
-| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via Kernels Hub (default) | `kernels` pip package |
-| `kernels-community/flash-attn2` | Flash Attention 2 via Kernels Hub | `kernels` pip package |
-| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
-| `sdpa` | PyTorch scaled dot-product attention | None (built-in) |
-| `eager` | Standard PyTorch attention | None (built-in) |
-
-!!! tip
-    If you see compilation errors related to `flash-attn` or CUDA capability
-    mismatches, switch to `sdpa` -- it requires no extra packages and works on
-    all CUDA-capable GPUs.
-
-### Generation: `attention_backend`
-
-The vLLM generation engine uses a separate attention backend setting. Defaults to
-`"auto"`, which lets vLLM auto-select the best available backend.
-
-In vLLM 0.11.x, this is set via the `VLLM_ATTENTION_BACKEND` environment variable.
-Safe Synthesizer handles this automatically when `generation.attention_backend` is
-configured.
-
-=== "YAML"
-
-    ```yaml
-    generation:
-      attention_backend: "FLASH_ATTN"
-    ```
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run --generation__attention_backend FLASH_ATTN --url data.csv
-    ```
-
-Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
-
-!!! note
-    Leave this as `"auto"` unless you have a specific reason to override it.
-    vLLM's auto-detection works well in most environments.
-
----
-
-## Network and Download Behavior
-
-Safe Synthesizer downloads models, tokenizers, and other artifacts at various
-pipeline stages. All model and tokenizer downloads go through
-[Hugging Face Hub](https://huggingface.co/docs/huggingface_hub/guides/manage-cache).
-If you are running in a network-restricted environment, understanding these
-download points is critical.
-
-### What Gets Downloaded
-
-Training:
-
-- Model weights, config, and tokenizer via `AutoModelForCausalLM.from_pretrained()`,
-  `AutoConfig.from_pretrained()`, and `AutoTokenizer.from_pretrained()` -- all
-  fetched from Hugging Face Hub on first use
-- When `training.attn_implementation` starts with `kernels-community/`, the
-  `kernels` package downloads compiled attention kernels from Hugging Face Hub
-  (see [Attention Backends](#attention-backends))
-- Unsloth backend also downloads models via `FastLanguageModel.from_pretrained()`
-  through Hugging Face Hub
-
-Generation:
-
-- vLLM downloads the base model through HuggingFace Hub on initialization if
-  not already cached
-
-PII replacement:
-
-- GLiNER downloads its NER model on first use via HuggingFace
-- Column classification makes requests to a NIM/OpenAI-compatible endpoint
-  (controlled by `NIM_ENDPOINT_URL`) for entity type detection
-
-Evaluation:
-
-- `SentenceTransformer("distiluse-base-multilingual-cased-v2")` is downloaded
-  for text semantic similarity, attribute inference protection, and membership
-  inference protection components
-- Tiktoken downloads tokenizer encoding files on first use
-
-!!! warning
-    All of these downloads happen silently on first use. If your first run is in
-    an environment without internet access, you will see connection errors at
-    whichever stage tries to download first.
-
-### Pre-Caching Models
-
-To avoid runtime downloads, run the pipeline once in an environment with internet
-access. All downloaded artifacts are stored under `HF_HOME`
-(defaults to `~/.cache/huggingface`). You can then copy or mount this cache
-directory in your target environment. If you'd like to pre-warm your cache, you can do a single run like:
-
-```bash
-export HF_HOME=/shared/cache/huggingface # or default
-
-safe-synthesizer run --config config.yaml --url data.csv
-
-# The cache at /shared/cache/huggingface now has everything needed
-```
-
----
-
-## Offline and Air-Gapped Environments
-
-Several environment variables control network behavior:
-
-| Variable | Scope | Effect |
-|----------|-------|--------|
-| `HF_HOME` | All Hugging Face downloads | Set the cache directory for downloaded models |
-| `HF_HUB_OFFLINE` | All Hugging Face downloads | When set to `1`, error instead of attempting downloads |
-| `LOCAL_FILES_ONLY` | Unsloth backend, GLiNER | When set to `true`, skip network downloads and use local files only |
-| `VLLM_CACHE_ROOT` | vLLM | Set the vLLM model cache directory |
-
-!!! warning
-    `LOCAL_FILES_ONLY` is not consistently supported across all backends.
-    The HuggingFace training backend and vLLM do not respect it. Use
-    `HF_HUB_OFFLINE=1` combined with a pre-populated `HF_HOME` cache for
-    the most reliable offline experience.
-
-To avoid the `kernels` package making network calls to the Kernels Hub entirely,
-set the training attention backend to a built-in option:
-
-=== "YAML"
-
-    ```yaml
-    training:
-      attn_implementation: "sdpa"
-    ```
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run --training__attn_implementation sdpa --url data.csv
-    ```
-
-To prevent outbound classification requests, either set `NIM_ENDPOINT_URL`
-to a local endpoint or disable classification:
-
-```yaml
-replace_pii:
-  globals:
-    classify:
-      enable_classify: false
-```
-
----
-
-## GPU, VRAM, and CUDA
-
-### VRAM Management
-
-Both training and generation allocate GPU memory via `get_max_vram()`, which
-defaults to 80% of available VRAM with a 2 GiB safety buffer subtracted.
-
-!!! note
-    `training.max_vram_fraction` exists in config but is not currently wired
-    into either the training or generation paths. Both use the hardcoded 0.8
-    default in `get_max_vram()`.
+## GPU and OOM
 
 ### Out of Memory During Training
 
@@ -284,13 +89,6 @@ To diagnose:
 The Unsloth backend requires a GPU and raises immediately if none is found.
 Switch to the HuggingFace backend for CPU-only environments (useful for
 development, not recommended for production training).
-
-### Memory Cleanup
-
-After training completes, the pipeline calls `gc.collect()` and
-`torch.cuda.empty_cache()` to free GPU memory before generation starts.
-If you run training and generation in separate invocations, memory is
-managed independently.
 
 ---
 
@@ -360,9 +158,9 @@ Many parameters accept `"auto"` and are resolved at runtime by the
 [`AutoConfigResolver`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver].
 See the [Parameters Reference](parameters.md) for the full list.
 
-- `training.rope_scaling_factor` -- estimated from dataset token counts using
-  heuristics (4 chars per token for text, 1 token per digit). Can underestimate
-  for complex or multilingual data.
+- `training.rope_scaling_factor` -- auto-estimated from dataset token counts;
+  see [Context Length and Record Fitting](#context-length-and-record-fitting)
+  for details and caveats
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
 - `training.use_unsloth` -- resolves to `true` unless DP is enabled. Also needs
   to be set to `false` for Mistral models until we fix issues with Mistral and Unsloth.
@@ -464,6 +262,21 @@ Time series synthesis has additional validation and generation requirements.
       --url data.csv
     ```
 
+=== "SDK"
+
+    ```python
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_time_series(
+            is_timeseries=True,
+            timestamp_column="timestamp",
+            timestamp_interval_seconds=60,
+            timestamp_format="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    ```
+
 - Set `time_series.is_timeseries: true` and provide at least one of
   `timestamp_column` or `timestamp_interval_seconds`
 - `timestamp_format` must be a valid strftime string or `"elapsed_seconds"` --
@@ -518,13 +331,40 @@ errors if PII replacement seems to use unexpected entity types.
 Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
 is reachable:
 
-```yaml
-replace_pii:
-  globals:
-    classify:
-      enable_classify: true
-      entities: ["person", "email", "phone_number"]
-```
+=== "YAML"
+
+    ```yaml
+    replace_pii:
+      globals:
+        classify:
+          enable_classify: true
+          entities: ["person", "email", "phone_number"]
+    ```
+
+=== "CLI"
+
+    ```bash
+    # PII classify config is deeply nested; YAML is recommended.
+    safe-synthesizer run \
+      --replace_pii__globals__classify__enable_classify true \
+      --url data.csv
+    ```
+
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+
+    pii_config = PiiReplacerConfig.get_default_config()
+    pii_config.globals.classify.enable_classify = True
+    pii_config.globals.classify.entities = ["person", "email", "phone_number"]
+
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_replace_pii(config=pii_config)
+    )
+    ```
 
 ### NER Processing Timeouts
 
@@ -535,16 +375,6 @@ Fix: check the logs for timeout warnings. The timeout is not currently
 configurable; for large datasets, reduce the amount of text processed per
 chunk (for example, shorten text fields or split them into smaller pieces) and
 optionally reduce CPU parallelism so each worker has more resources.
-
-### CPU Parallelism
-
-NER processing uses multiple CPU processes. Control the count with:
-
-```bash
-export SAFE_SYNTHESIZER_CPU_COUNT=4
-```
-
-Defaults to the system CPU count.
 
 ---
 
@@ -570,12 +400,6 @@ metrics:
 1. Check the logs for warnings and exceptions
 2. Verify you have enough records (>= 200) and columns (>= 3)
 3. Verify the SentenceTransformer model downloaded successfully
-
-### SentenceTransformer Downloads
-
-The `distiluse-base-multilingual-cased-v2` model is downloaded from
-Hugging Face Hub. If the download fails, text semantic similarity metrics
-are silently skipped.
 
 ### Report Truncation
 
@@ -657,3 +481,280 @@ example exceeds the available context length"), see
 
 Library bugs. If you encounter this error through documented interfaces,
 please [file an issue on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
+
+---
+
+## Reference
+
+Background information on subsystems referenced by the troubleshooting sections
+above. These sections explain how things work rather than diagnosing problems.
+
+### Attention Backends
+
+Safe Synthesizer uses configurable attention implementations for both training
+and generation.
+
+#### Training: `attn_implementation`
+
+The HuggingFace backend loads models with an attention implementation controlled
+by `training.attn_implementation`. The default is `kernels-community/vllm-flash-attn3`,
+which uses Flash Attention 3 via the
+[HuggingFace Kernels Hub](https://huggingface.co/docs/kernels/index).
+
+If the `kernels` pip package is not installed, the backend automatically falls
+back to `sdpa` (PyTorch scaled dot-product attention) and logs a warning:
+
+```text
+kernels package not installed, cannot use 'kernels-community/vllm-flash-attn3'.
+Falling back to 'sdpa'. Install with: pip install kernels
+```
+
+To explicitly choose a backend:
+
+=== "YAML"
+
+    ```yaml
+    training:
+      attn_implementation: "sdpa"
+    ```
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run --training__attn_implementation sdpa --url data.csv
+    ```
+
+=== "SDK"
+
+    ```python
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_train(attn_implementation="sdpa")
+    )
+    ```
+
+Available values:
+
+| Value | Description | Requires |
+|-------|-------------|----------|
+| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via Kernels Hub (default) | `kernels` pip package |
+| `kernels-community/flash-attn2` | Flash Attention 2 via Kernels Hub | `kernels` pip package |
+| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
+| `sdpa` | PyTorch scaled dot-product attention | None (built-in) |
+| `eager` | Standard PyTorch attention | None (built-in) |
+
+!!! tip
+    If you see compilation errors related to `flash-attn` or CUDA capability
+    mismatches, switch to `sdpa` -- it requires no extra packages and works on
+    all CUDA-capable GPUs.
+
+#### Generation: `attention_backend`
+
+The vLLM generation engine uses a separate attention backend setting. Defaults to
+`"auto"`, which lets vLLM auto-select the best available backend.
+
+In vLLM 0.11.x, this is set via the `VLLM_ATTENTION_BACKEND` environment variable.
+Safe Synthesizer handles this automatically when `generation.attention_backend` is
+configured.
+
+=== "YAML"
+
+    ```yaml
+    generation:
+      attention_backend: "FLASH_ATTN"
+    ```
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run --generation__attention_backend FLASH_ATTN --url data.csv
+    ```
+
+=== "SDK"
+
+    ```python
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_generate(attention_backend="FLASH_ATTN")
+    )
+    ```
+
+=== "Environment"
+
+    ```bash
+    export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+    ```
+
+Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
+
+!!! note
+    Leave this as `"auto"` unless you have a specific reason to override it.
+    vLLM's auto-detection works well in most environments.
+
+### Network and Download Behavior
+
+Safe Synthesizer downloads models, tokenizers, and other artifacts at various
+pipeline stages. All model and tokenizer downloads go through
+[Hugging Face Hub](https://huggingface.co/docs/huggingface_hub/guides/manage-cache).
+
+#### What Gets Downloaded
+
+Training:
+
+- Model weights, config, and tokenizer via `AutoModelForCausalLM.from_pretrained()`,
+  `AutoConfig.from_pretrained()`, and `AutoTokenizer.from_pretrained()` -- all
+  fetched from Hugging Face Hub on first use
+- When `training.attn_implementation` starts with `kernels-community/`, the
+  `kernels` package downloads compiled attention kernels from Hugging Face Hub
+  (see [Attention Backends](#attention-backends))
+- Unsloth backend also downloads models via `FastLanguageModel.from_pretrained()`
+  through Hugging Face Hub
+
+Generation:
+
+- vLLM downloads the base model through Hugging Face Hub on initialization if
+  not already cached
+
+PII replacement:
+
+- GLiNER downloads its NER model on first use via Hugging Face
+- Column classification makes requests to a NIM/OpenAI-compatible endpoint
+  (controlled by `NIM_ENDPOINT_URL`) for entity type detection
+
+Evaluation:
+
+- `SentenceTransformer("distiluse-base-multilingual-cased-v2")` is downloaded
+  for text semantic similarity, attribute inference protection, and membership
+  inference protection components
+- Tiktoken downloads tokenizer encoding files on first use
+
+!!! warning
+    All of these downloads happen silently on first use. If your first run is in
+    an environment without internet access, you will see connection errors at
+    whichever stage tries to download first.
+
+#### Pre-Caching Models
+
+To avoid runtime downloads, run the pipeline once in an environment with internet
+access. All downloaded artifacts are stored under `HF_HOME`
+(defaults to `~/.cache/huggingface`). You can then copy or mount this cache
+directory in your target environment.
+
+```bash
+export HF_HOME=/shared/cache/huggingface
+
+safe-synthesizer run --config config.yaml --url data.csv
+```
+
+### Offline and Air-Gapped Environments
+
+Several environment variables control network behavior:
+
+| Variable | Scope | Effect |
+|----------|-------|--------|
+| `HF_HOME` | All Hugging Face downloads | Set the cache directory for downloaded models |
+| `HF_HUB_OFFLINE` | All Hugging Face downloads | When set to `1`, error instead of attempting downloads |
+| `LOCAL_FILES_ONLY` | Unsloth backend, GLiNER | When set to `true`, skip network downloads and use local files only |
+| `VLLM_CACHE_ROOT` | vLLM | Set the vLLM model cache directory |
+
+!!! warning
+    `LOCAL_FILES_ONLY` is not consistently supported across all backends.
+    The HuggingFace training backend and vLLM do not respect it. Use
+    `HF_HUB_OFFLINE=1` combined with a pre-populated `HF_HOME` cache for
+    the most reliable offline experience.
+
+To avoid the `kernels` package making network calls to the Kernels Hub entirely,
+set the training attention backend to a built-in option:
+
+=== "YAML"
+
+    ```yaml
+    training:
+      attn_implementation: "sdpa"
+    ```
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run --training__attn_implementation sdpa --url data.csv
+    ```
+
+=== "SDK"
+
+    ```python
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_train(attn_implementation="sdpa")
+    )
+    ```
+
+To prevent outbound classification requests, either set `NIM_ENDPOINT_URL`
+to a local endpoint or disable classification:
+
+=== "YAML"
+
+    ```yaml
+    replace_pii:
+      globals:
+        classify:
+          enable_classify: false
+    ```
+
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+
+    pii_config = PiiReplacerConfig.get_default_config()
+    pii_config.globals.classify.enable_classify = False
+
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_replace_pii(config=pii_config)
+    )
+    ```
+
+=== "Environment"
+
+    ```bash
+    # Point to a local endpoint instead of the default
+    export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
+    export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+    ```
+
+### VRAM Management
+
+Both training and generation allocate GPU memory via `get_max_vram()`, which
+defaults to 80% of available VRAM with a 2 GiB safety buffer subtracted.
+
+!!! note
+    `training.max_vram_fraction` exists in config but is not currently wired
+    into either the training or generation paths. Both use the hardcoded 0.8
+    default in `get_max_vram()`.
+
+### Memory Cleanup
+
+After training completes, the pipeline calls `gc.collect()` and
+`torch.cuda.empty_cache()` to free GPU memory before generation starts.
+If you run training and generation in separate invocations, memory is
+managed independently.
+
+### NER CPU Parallelism
+
+NER processing uses multiple CPU processes. Control the count with:
+
+```bash
+export SAFE_SYNTHESIZER_CPU_COUNT=4
+```
+
+Defaults to the system CPU count.
+
+### SentenceTransformer Downloads
+
+The `distiluse-base-multilingual-cased-v2` model is downloaded from
+Hugging Face Hub. If the download fails, text semantic similarity metrics
+are silently skipped.
