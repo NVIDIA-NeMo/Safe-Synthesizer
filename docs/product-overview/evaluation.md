@@ -126,10 +126,6 @@ evaluation:
 - `2.0-3.9`: Moderate -- high leakage/memorization risk. Do not distribute; expand detection coverage, apply stronger transformations, and retune synthesis.
 - `Below 2.0`: Poor -- fails privacy bar. Block release; increase training data, fix detection gaps, or enable strong DP and re-run.
 
-## API Reference
-- [:material-api: `Evaluator`](../reference/nemo_safe_synthesizer/evaluation/evaluator.md)
-- [:material-api: `EvaluationParameters`](../reference/nemo_safe_synthesizer/config/evaluate.md)
-
 ## Related Topics
 
 - {doc}`../tutorials/safe-synthesizer-101`: Get started with Safe Synthesizer
