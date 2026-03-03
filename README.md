@@ -237,7 +237,7 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
 in your data. The endpoint is configured via `NIM_ENDPOINT_URL`; if it is unset,
 classification is skipped and the pipeline falls back to default entity detection,
-logging an error rather than raising it to the user.
+logging an error and falling back rather than raising it to the user.
 
 ### Local Endpoint
 

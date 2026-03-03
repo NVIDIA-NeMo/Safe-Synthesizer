@@ -11,23 +11,23 @@ sections come first; [Reference](#reference) material is at the end.
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| "kernels package not installed" warning | `kernels` pip package missing | `pip install kernels` or set `training.attn_implementation: sdpa` |
-| `ConnectionError` during startup | No internet, model not cached | [Pre-cache models](#pre-caching-models), set `HF_HUB_OFFLINE=1` after caching |
-| `torch.cuda.OutOfMemoryError` in training | VRAM exhausted | [Reduce batch size, enable quantization](#out-of-memory-during-training) |
-| `torch.cuda.OutOfMemoryError` in generation | VRAM exhausted | [Check training cleanup, verify free VRAM](#out-of-memory-during-generation) |
-| `torch.cuda.OutOfMemoryError` in evaluation | Large dataset + PCA/binning | [Disable expensive components or reduce columns](#out-of-memory-during-evaluation) |
-| "Cannot use unsloth without GPU" | No CUDA device | [Use HuggingFace backend or install CUDA drivers](#no-gpu-detected) |
-| "max_sequences_per_example must be set to 1 or 'auto'" | Incompatible DP config | Set `data.max_sequences_per_example: 1` or `"auto"` |
-| "Unsloth is currently not compatible with DP" | Mutual exclusion | Set `use_unsloth: false` for DP training |
-| "Unable to determine a noise multiplier" | Epsilon too low for dataset | [Increase epsilon or add records](#common-dp-errors) |
-| "Generation stopped prematurely due to no valid records" | Model underfitting or schema mismatch | [Increase `num_input_records_to_sample`, check training logs](#generationerror) |
-| "Number of tokens exceeds context length" | Records too long for model | [Reduce record size or increase context window](#context-length-and-record-fitting) |
-| "fraction of invalid records was higher than..." | Generation quality too low | [Lower `invalid_fraction_threshold` or retrain](#generationerror) |
-| Evaluation metrics show UNAVAILABLE | Too few records or columns | [Ensure >= 200 records, >= 3 columns](#minimum-data-requirements) |
-| Low SQS quality scores | Model underfit or too few records | [Review distributions, increase records/epochs](#low-sqs-scores) |
-| PII uses default entities unexpectedly | Column classifier failed | [Check logs, set entities explicitly](#pii-uses-unexpected-entity-types) |
-| "timestamp_column has missing values" | Dirty time series data | Clean NaN/null values from the timestamp column |
-| "groups must have same start timestamp" | Inconsistent time series groups | Align group start/stop timestamps in preprocessing |
+| "kernels package not installed" | `kernels` package missing | `pip install kernels` or set `attn_implementation: sdpa` |
+| `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](#pre-caching-models) |
+| OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
+| OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
+| OOM in evaluation | Large dataset + PCA | [Reduce columns or disable eval](#out-of-memory-during-evaluation) |
+| "Cannot use unsloth without GPU" | No CUDA device | [Switch to HuggingFace backend](#no-gpu-detected) |
+| "max_sequences_per_example must be 1" | Incompatible DP config | Set `data.max_sequences_per_example: 1` |
+| "Unsloth not compatible with DP" | Mutual exclusion | Set `use_unsloth: false` |
+| "Unable to determine noise multiplier" | Epsilon too low | [Increase epsilon or add records](#common-dp-errors) |
+| "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
+| "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
+| "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
+| Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](#minimum-data-requirements) |
+| Low SQS scores | Underfit or too few records | [Review distributions](#low-sqs-scores) |
+| PII uses default entities | Classifier failed | [Set entities explicitly](#pii-uses-unexpected-entity-types) |
+| "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
+| "groups must have same start" | Inconsistent groups | Align group timestamps |
 
 ---
 
@@ -165,9 +165,12 @@ See the [Parameters Reference](parameters.md) for the full list.
   see [Context Length and Record Fitting](#context-length-and-record-fitting)
   for details and caveats
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
-- `training.use_unsloth` -- resolves to `true` unless DP is enabled. Also needs
-  to be set to `false` for Mistral models until we fix issues with Mistral and Unsloth.
+- `training.use_unsloth` -- resolves to `true` unless DP is enabled
 - `privacy.delta` -- computed from record count
+
+!!! warning
+    Mistral models are not currently compatible with Unsloth. Set
+    `training.use_unsloth: false` explicitly when using a Mistral model.
 
 Use `safe-synthesizer config validate` to see how `"auto"` values resolve for
 your configuration:
@@ -341,7 +344,7 @@ is reachable:
       globals:
         classify:
           enable_classify: true
-          entities: ["person", "email", "phone_number"]
+          entities: ["name", "email", "phone_number"]
     ```
 
 === "CLI"
@@ -360,7 +363,7 @@ is reachable:
 
     pii_config = PiiReplacerConfig.get_default_config()
     pii_config.globals.classify.enable_classify = True
-    pii_config.globals.classify.entities = ["person", "email", "phone_number"]
+    pii_config.globals.classify.entities = ["name", "email", "phone_number"]
 
     synthesizer = (
         SafeSynthesizer(config)
@@ -390,9 +393,9 @@ Several evaluation metrics have minimum data requirements:
 | Metric | Minimum | Behavior if Unmet |
 |--------|---------|-------------------|
 | Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
-| Text semantic similarity | 200 records | Silently skipped, warning logged |
-| Attribute Inference Attack | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3) | Skipped if FAISS missing; `UNAVAILABLE` grade if too few columns |
-| PCA (deep structure) | 2x2 matrix | Silently skipped, warning logged |
+| Text semantic similarity | 200 records | Skipped; score marked UNAVAILABLE |
+| Attribute Inference Attack | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
+| PCA (deep structure) | 2x2 matrix | Skipped with warning; score marked UNAVAILABLE |
 
 ### Silent Failures
 
@@ -658,14 +661,14 @@ Several environment variables control network behavior:
 | Variable | Scope | Effect |
 |----------|-------|--------|
 | `HF_HOME` | All Hugging Face downloads | Set the cache directory for downloaded models |
-| `HF_HUB_OFFLINE` | All Hugging Face downloads | When set to `1`, error instead of attempting downloads |
-| `LOCAL_FILES_ONLY` | Unsloth backend, GLiNER | When set to `true`, skip network downloads and use local files only |
+| `HF_HUB_OFFLINE` | All Hugging Face downloads | When set (e.g., `HF_HUB_OFFLINE=1`), errors instead of attempting downloads |
+| `LOCAL_FILES_ONLY` | Unsloth backend, GLiNER | When set (e.g., `LOCAL_FILES_ONLY=true`), skips network downloads; local files only |
 | `VLLM_CACHE_ROOT` | vLLM | Set the vLLM model cache directory |
 
 !!! warning
     `LOCAL_FILES_ONLY` is not consistently supported across all backends.
-    The HuggingFace training backend and vLLM do not respect it. Use
-    `HF_HUB_OFFLINE=1` combined with a pre-populated `HF_HOME` cache for
+    The HuggingFace training backend and vLLM do not respect it. Set
+    `HF_HUB_OFFLINE` combined with a pre-populated `HF_HOME` cache for
     the most reliable offline experience.
 
 To avoid the `kernels` package making network calls to the Kernels Hub entirely,
