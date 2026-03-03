@@ -51,6 +51,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://desfontain.
     ---
 
     Configure and run the pipeline via YAML, CLI, SDK, or environment variables.
+    Configure and run the pipeline via YAML, CLI, SDK, or environment variables.
 
     [:octicons-arrow-right-24: User Guide](user-guide/getting-started.md)
 
