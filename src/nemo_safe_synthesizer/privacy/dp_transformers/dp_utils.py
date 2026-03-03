@@ -6,6 +6,14 @@
 # Original source: https://github.com/microsoft/dp-transformers/blob/main/src/dp_transformers/dp_utils.py
 # See THIRD_PARTY.md for the original MIT license terms.
 
+"""DP training utilities for Hugging Face Trainer and data collation.
+
+Provides ``OpacusDPTrainer`` (DP-aware Trainer with entity-level sampling and
+Opacus optimizer), ``DPCallback`` for Trainer hooks, data collators that
+expose ``position_ids`` for per-sample gradients, and ``GradSampleModule``
+wrapper with ``no_sync`` support.
+"""
+
 import os
 from contextlib import contextmanager
 from typing import Any, Optional, Sequence
@@ -50,10 +58,16 @@ logger = get_logger(__name__)
 
 
 class DPCallback(TrainerCallback):
-    """
-    This class registers all the necessary callbacks to make
-    transformers.Trainer compatible with Opacus for differentially private
-    learning.
+    """Trainer callbacks to integrate Opacus DP-SGD with ``transformers.Trainer``.
+
+    Handles per-step optimizer behavior (skip signal, step, zero_grad), optional
+    RDP step accounting, and early stopping when ``max_epsilon`` is exceeded.
+
+    Args:
+        noise_multiplier: Gaussian noise scale for gradients.
+        sampling_probability: Probability of a record being in a batch.
+        accountant: Privacy accountant for epsilon computation and (if RDP) step tracking.
+        max_epsilon: Stop training when computed epsilon exceeds this value.
     """
 
     def __init__(
@@ -78,6 +92,7 @@ class DPCallback(TrainerCallback):
         optimizer=None,
         **kwargs,
     ):
+        """Signal skip, step, and zero_grad on the DP optimizer after each substep."""
         if optimizer is None:
             raise RuntimeError("Impossible to access optimizer from inside callback")
         if isinstance(optimizer, AcceleratedOptimizer):
@@ -98,6 +113,7 @@ class DPCallback(TrainerCallback):
         optimizer=None,
         **kwargs,
     ):
+        """Zero optimizer gradients and optionally record RDP step."""
         if args.gradient_accumulation_steps > 1 and not self._on_substep_end_was_called:
             raise RuntimeError(
                 "Gradient accumulation was specified but `on_substep_end` wasn't called. "
@@ -125,6 +141,7 @@ class DPCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ):
+        """Stop training if current epsilon exceeds max_epsilon."""
         return self._check_max_epsilon_exceeded(state, control)
 
     def on_evaluate(
@@ -134,9 +151,11 @@ class DPCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ):
+        """Stop training if current epsilon exceeds max_epsilon."""
         return self._check_max_epsilon_exceeded(state, control)
 
     def _check_max_epsilon_exceeded(self, state: TrainerState, control: TrainerControl) -> TrainerControl:
+        """Set should_training_stop if computed epsilon exceeds max_epsilon."""
         eps = self.accountant.compute_epsilon(steps=state.global_step + 1)
         if eps > self._max_epsilon:
             logger.info("Max epsilon exceeded. Stopping training.")
@@ -145,20 +164,30 @@ class DPCallback(TrainerCallback):
 
 
 class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeling):
-    """
-    Trainer automatically uses incrementing integers for position_ids when not
-    provided. This is implemented for model families in the transformers library
-    and the process occurs during the `forward` method of the model. See
-    https://github.com/huggingface/transformers/blob/v4.36.2/src/transformers/models/mistral/modeling_mistral.py#L882
-    for an example. Opacus is unable to access this. This creates a problem with
-    per-sample gradient accumulation. Instead we create `position_ids` during
-    the data collation step so they are accessible to Opacus.
+    """Collator that adds ``position_ids`` for Opacus per-sample gradients.
+
+    Trainer and model code often create ``position_ids`` inside the model
+    forward pass, which Opacus cannot see. This collator builds ``position_ids``
+    during batching so they are present in the batch and available for
+    per-sample gradient computation. See https://github.com/huggingface/transformers/blob/v4.36.2/src/transformers/models/mistral/modeling_mistral.py#L882
+    for an example.
+
+    Args:
+        tokenizer: Tokenizer for padding and encoding.
     """
 
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer, mlm=False)
 
     def __call__(self, examples: list[list[int] | torch.Tensor | dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
+        """Collate examples into a batch and add ``position_ids`` if missing.
+
+        Args:
+            examples: List of tokenized examples (lists, tensors, or dicts).
+
+        Returns:
+            Batch dict with ``input_ids``, ``labels``, and ``position_ids``.
+        """
         batch = super().__call__(examples)
 
         if "position_ids" not in batch:
@@ -170,7 +199,14 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
 
 
 class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassification):
-    """Cf DataCollatorForPrivateCausalLanguageModelling"""
+    """Collator for token classification that adds ``position_ids`` for Opacus.
+
+    Same rationale as ``DataCollatorForPrivateCausalLanguageModeling``: ensures
+    ``position_ids`` are in the batch for per-sample gradient computation.
+
+    Args:
+        tokenizer: Tokenizer for padding and encoding.
+    """
 
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer)
@@ -178,6 +214,14 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
     def __call__(
         self, examples: list[list[int] | torch.Tensor | dict[str, torch.TensorType]]
     ) -> dict[str, torch.Tensor]:
+        """Collate examples into a batch and add ``position_ids`` if missing.
+
+        Args:
+            examples: List of tokenized examples (lists, tensors, or dicts).
+
+        Returns:
+            Batch dict with ``input_ids``, ``labels``, and ``position_ids``.
+        """
         batch = super().__call__(examples)
 
         if "position_ids" not in batch:
@@ -189,18 +233,34 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
 
 
 class GradSampleModule(opacus.GradSampleModule):
-    """
-    Little wrapper to provide `no_sync` context which is assumed by Huggingface trainer.
-    We don't need to do anything in addition here.
+    """Opacus GradSampleModule with ``no_sync`` for Hugging Face Trainer.
+
+    Trainer expects a ``no_sync`` context manager to defer gradient sync in
+    distributed settings. This wrapper provides a no-op ``no_sync`` so the
+    Trainer API is satisfied.
     """
 
     @contextmanager
     def no_sync(self):
+        """Context manager that does nothing; required by Trainer's expected API."""
         yield
 
 
 def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]:
-    """Creates a mapping from entities to samples in a dataset."""
+    """Build a mapping from each entity to its dataset indices.
+
+    Groups rows by the entity column; each group's indices are the dataset
+    positions for that entity. Entity order follows groupby sort; order within
+    a group is preserved.
+
+    Args:
+        entity_column_values: List of entity IDs aligned with dataset rows
+            (e.g. one value per row in the same order).
+
+    Returns:
+        Sequence of sequences: for entity i, result[i] is the list of dataset
+        indices belonging to that entity.
+    """
     entities = pd.DataFrame(data={"entity": entity_column_values})
     # Using `groupby("entity")` - note that the entities returned by groupby are
     # sorted, but the order of records in each group is preserved.
@@ -212,15 +272,30 @@ def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]
 
 
 class OpacusDPTrainer(Trainer):
-    """
-    Wrapper to modify Huggingface Trainer for use with PEFT fine tuning.
-        - remove "loss = loss / self.args.gradient_accumulation_steps" operation
-          in training_step as this is already handled by Opacus package.
-        - enable entity-level DP training by modifing the sampler and the
-           dataloader. In the case of sample-level DP, each sample can be
-           represented by a unique entity.
-        - wrap the optimizer with Opacus DPOptimizer
-        - save only the LoRA adapters (PEFT)
+    """DP-aware Trainer for PEFT/LoRA fine-tuning with Opacus.
+
+    Adapts Hugging Face Trainer for differential privacy: uses entity-level
+    (or record-level) sampling, wraps the model in ``GradSampleModule`` and
+    the optimizer in Opacus ``DPOptimizer``, and avoids double-scaling of
+    loss by gradient accumulation. Saves only the PEFT/LoRA adapter weights.
+
+    Args:
+        train_dataset: Dataset for training.
+        model: Base model (will be wrapped with GradSampleModule).
+        args: Training arguments (e.g. ``TrainingArguments``).
+        privacy_args: DP parameters (epsilon, delta, noise, clipping). Required.
+        data_fraction: If set, scales effective number of epochs for privacy math.
+        true_dataset_size: Override number of entities/records for privacy accounting.
+        entity_column_values: If set, entity-level DP; each value is the entity ID
+            for the corresponding dataset row. If None, record-level DP (one entity
+            per row).
+        callbacks: Additional Trainer callbacks.
+        secure_mode: If True, use secure RNG for noise (recommended).
+        **kwargs: Passed to ``Trainer`` (e.g. eval_dataset, tokenizer, data_collator).
+
+    Attributes:
+        accountant: Privacy accountant used for epsilon computation.
+        entity_mapping: For entity i, list of dataset indices in that entity.
     """
 
     def __init__(
@@ -295,27 +370,18 @@ class OpacusDPTrainer(Trainer):
         )
         self.add_callback(self.dp_callback)
 
-    def get_epsilon(self):
+    def get_epsilon(self) -> float:
         """Calculate the epsilon after model training completes."""
         return self.accountant.compute_epsilon(self.state.global_step)
 
     @property
     def sampling_probability(self) -> float:
-        """
-        Calculate the probability of sampling an entity in a batch.
+        """Probability that an entity is included in a batch (capped at 1.0).
 
-        This is trivial when using record-level DP, i.e. each record is an
-        entity. This simply returns the total number of samples seen before
-        a gradient update.
-
-        When using entity-level DP, the probability of sampling an entity is
-        likely higher (assuming multiple records correspond to an entity).
-        If there is only one entity, then the sampling probability would be
-        > 1 (i.e. we are sampling the same entity multiple times in a
-        batch).
-
-        `sampling_probability` is required to calculate privacy budget
-        utilization during training.
+        For record-level DP (one entity per row) this is batch size over
+        dataset size. For entity-level DP it can be higher; if there is only
+        one entity it may exceed 1 (we cap at 1.0). Used for privacy budget
+        (epsilon) computation.
         """
         return min(
             1.0,
@@ -326,21 +392,20 @@ class OpacusDPTrainer(Trainer):
 
     @property
     def num_steps(self) -> int:
-        """
-        Calculate the number of steps required to train the model. Either this
-        is user supplied, or determined from num_train_epochs.
+        """The number of optimizer steps used for privacy accounting.
 
-        When user specifies num_train_epochs, we determine num_steps based on
-        sampling probability. This is we pass over each entity roughly once per
-        epoch, similarly to how one expects to pass over each record once per
-        epoch in regular record-level training.
+        Either user-supplied (via ``max_steps`` when ``true_num_epochs == -1``)
+        or determined from ``num_train_epochs``. When the user specifies
+        ``num_train_epochs``, we determine ``num_steps`` from
+        ``sampling_probability`` so we pass over each entity roughly once per
+        epoch, similarly to passing over each record once per epoch in
+        record-level training.
 
-        `num_steps` will always be >= 1. This is because we add 1 to
-        1/sampling_probability. This can happen when there are fewer entities
-        than batch_size * gradient_accumulation_steps (typically 4 * 8 = 32).
-
-        This is used to determine the privacy budget utilization during
-        training.
+        Always at least 1, because we add 1 to ``1 / sampling_probability``;
+        this can happen when there are fewer entities than
+        ``batch_size * gradient_accumulation_steps`` (e.g. 4 * 8 = 32).
+        Used to determine the privacy budget (noise multiplier and epsilon)
+        during training.
         """
         if self.true_num_epochs == -1:
             return self.train_args.max_steps
@@ -353,14 +418,15 @@ class OpacusDPTrainer(Trainer):
             return _num_steps
 
     def create_optimizer(self):
+        """Create the base optimizer then wrap it with Opacus DPOptimizer."""
         _ = super().create_optimizer()
 
         class DPOptimizer(opacus.optimizers.DPOptimizer):  # ty: ignore[unresolved-attribute]
-            """HF's AcceleratedOptimizer replaces the original reference to
-            `original_optimizer.param_groups`, and the approach used by Opacus
-            fails when we try to e.g., update the learning rate. We here use
-            the same approach used in accelerate, which makes `param_groups` a
-            proper 'pointer'.
+            """DPOptimizer that delegates ``param_groups`` to the inner optimizer.
+
+            Hugging Face AcceleratedOptimizer replaces ``param_groups``; Opacus
+            expects to mutate it. This subclass forwards get/set to the inner
+            optimizer so learning rate scheduling and other param_group updates work.
             """
 
             @property
@@ -392,10 +458,7 @@ class OpacusDPTrainer(Trainer):
         inputs: dict[str, torch.Tensor | Any],
         num_items_in_batch=None,
     ) -> torch.Tensor:
-        """
-        Perform a training step on a batch of inputs. Overriden to inject custom
-        behavior to scale loss for Opacus.
-        """
+        """Run one training step; scale loss for gradient accumulation only (Opacus handles per-sample scaling)."""
         model.train()
         if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
             self.optimizer.train()
@@ -417,7 +480,7 @@ class OpacusDPTrainer(Trainer):
         return loss.detach() / self.args.gradient_accumulation_steps
 
     def _get_train_sampler(self):
-        """Provides entity sampler."""
+        """Return the entity-level (or record-level) sampler for training."""
         if self.privacy_args.poisson_sampling:
             # NOTE: sample_rate is set s.t. chosen batch size remains the same in average
             sample_rate = min(
@@ -439,7 +502,7 @@ class OpacusDPTrainer(Trainer):
         return train_sampler
 
     def get_train_dataloader(self) -> DataLoader:
-        """Returns a torch DataLoader that uses an entity-level sampler."""
+        """DataLoader with entity-level sampler and DP data collator."""
         train_sampler = self._get_train_sampler()
         return DataLoader(
             self.train_dataset,
@@ -451,10 +514,10 @@ class OpacusDPTrainer(Trainer):
         )
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
-        """
-        Updated function `_save` in Trainer (transformers==4.37.2) to save the
-        PeftModule when wrapping with Opacus GradSampleModule.
-        TODO: When updating transformers, check for changes to this function.
+        """Save the PEFT adapter (unwrap GradSampleModule) and tokenizer.
+
+        Overrides Trainer._save so that when the model is wrapped with
+        GradSampleModule we save the inner PEFT model, not the wrapper.
         """
         if isinstance(self.model, GradSampleModule) and hasattr(self.model, "_module"):
             model_to_save = self.model._module
