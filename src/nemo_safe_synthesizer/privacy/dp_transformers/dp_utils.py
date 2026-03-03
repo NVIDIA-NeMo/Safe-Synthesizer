@@ -58,10 +58,12 @@ logger = get_logger(__name__)
 
 
 class DPCallback(TrainerCallback):
-    """Trainer callbacks to integrate Opacus DP-SGD with ``transformers.Trainer``.
+    """Trainer callback that integrates Opacus DP-SGD with ``transformers.Trainer``.
 
     Handles per-step optimizer behavior (skip signal, step, zero_grad), optional
     RDP step accounting, and early stopping when ``max_epsilon`` is exceeded.
+    Used with ``OpacusDPTrainer``; the trainer injects this callback when
+    privacy arguments are enabled.
 
     Args:
         noise_multiplier: Gaussian noise scale for gradients.
@@ -92,7 +94,23 @@ class DPCallback(TrainerCallback):
         optimizer=None,
         **kwargs,
     ):
-        """Signal skip, step, and zero_grad on the DP optimizer after each substep."""
+        """Run DP optimizer step at the end of each gradient-accumulation substep.
+
+        Signals the Opacus optimizer to skip the step, calls ``step()`` and
+        ``zero_grad()`` on the underlying DP optimizer (or the optimizer itself
+        if not wrapped by Accelerate). Required when using gradient accumulation
+        so that the optimizer step runs once per micro-batch.
+
+        Args:
+            args: HF Trainer arguments.
+            state: Current trainer state.
+            control: Trainer control object (not modified).
+            optimizer: The Trainer's optimizer (Opacus DP optimizer or AcceleratedOptimizer wrapping it).
+            **kwargs: Additional callback keyword arguments.
+
+        Raises:
+            RuntimeError: If optimizer is None (callback cannot access optimizer).
+        """
         if optimizer is None:
             raise RuntimeError("Impossible to access optimizer from inside callback")
         if isinstance(optimizer, AcceleratedOptimizer):
@@ -113,7 +131,23 @@ class DPCallback(TrainerCallback):
         optimizer=None,
         **kwargs,
     ):
-        """Zero optimizer gradients and optionally record RDP step."""
+        """Sync gradients and update RDP accountant at the end of each optimizer step.
+
+        Calls ``zero_grad()`` on the optimizer (Opacus expects this; Trainer does not
+        call it by default). When using the RDP accountant (not PRV), increments the
+        accountant step for accurate epsilon calculation.
+
+        Args:
+            args: Trainer training arguments (used to check gradient_accumulation_steps).
+            state: Current trainer state.
+            control: Trainer control object (not modified).
+            optimizer: The Trainer's optimizer (required for ``zero_grad()``).
+            **kwargs: Additional callback keyword arguments.
+
+        Raises:
+            RuntimeError: If gradient accumulation is used but ``on_substep_end`` was
+                never called (e.g. transformers < 4.10.0), or if optimizer is None.
+        """
         if args.gradient_accumulation_steps > 1 and not self._on_substep_end_was_called:
             raise RuntimeError(
                 "Gradient accumulation was specified but `on_substep_end` wasn't called. "
@@ -141,7 +175,19 @@ class DPCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ):
-        """Stop training if current epsilon exceeds max_epsilon."""
+        """Called when the Trainer is about to save a checkpoint. Ensures training
+        stops before saving if the privacy budget would be exceeded.
+
+        Args:
+            args: HF Trainer arguments.
+            state: Current trainer state (used for global_step).
+            control: Trainer control object; ``should_training_stop`` may be set to True.
+            **kwargs: Additional callback keyword arguments.
+
+        Returns:
+            TrainerControl with ``should_training_stop`` set to True if current
+            epsilon exceeds ``max_epsilon``, otherwise unchanged.
+        """
         return self._check_max_epsilon_exceeded(state, control)
 
     def on_evaluate(
@@ -151,11 +197,34 @@ class DPCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ):
-        """Stop training if current epsilon exceeds max_epsilon."""
+        """Check epsilon budget and stop training if ``max_epsilon`` is exceeded.
+
+        Called when the Trainer runs evaluation. Ensures training stops before
+        further steps if the privacy budget would be exceeded.
+
+        Args:
+            args: HF Trainer arguments.
+            state: Current trainer state (used for global_step).
+            control: Trainer control object; ``should_training_stop`` may be set to True.
+            **kwargs: Additional callback keyword arguments.
+
+        Returns:
+            TrainerControl with ``should_training_stop`` set to True if current
+            epsilon exceeds ``max_epsilon``, otherwise unchanged.
+        """
         return self._check_max_epsilon_exceeded(state, control)
 
     def _check_max_epsilon_exceeded(self, state: TrainerState, control: TrainerControl) -> TrainerControl:
-        """Set should_training_stop if computed epsilon exceeds max_epsilon."""
+        """Set ``control.should_training_stop`` if computed epsilon exceeds ``max_epsilon``.
+
+        Args:
+            state: Current trainer state (uses ``global_step`` for epsilon computation).
+            control: Trainer control object to update.
+
+        Returns:
+            The same ``control`` instance, with ``should_training_stop`` set to True
+            when epsilon exceeds ``max_epsilon``.
+        """
         eps = self.accountant.compute_epsilon(steps=state.global_step + 1)
         if eps > self._max_epsilon:
             logger.info("Max epsilon exceeded. Stopping training.")
@@ -164,7 +233,7 @@ class DPCallback(TrainerCallback):
 
 
 class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeling):
-    """Collator that adds ``position_ids`` for Opacus per-sample gradients.
+    """Adds ``position_ids`` for Opacus per-sample gradients.
 
     Trainer and model code often create ``position_ids`` inside the model
     forward pass, which Opacus cannot see. This collator builds ``position_ids``
@@ -371,17 +440,20 @@ class OpacusDPTrainer(Trainer):
         self.add_callback(self.dp_callback)
 
     def get_epsilon(self) -> float:
-        """Calculate the epsilon after model training completes."""
+        """
+        Uses the trainer's privacy accountant and the current number of
+        optimizer steps to return the epsilon consumed so far.
+        """
         return self.accountant.compute_epsilon(self.state.global_step)
 
     @property
     def sampling_probability(self) -> float:
         """Probability that an entity is included in a batch (capped at 1.0).
 
-        For record-level DP (one entity per row) this is batch size over
-        dataset size. For entity-level DP it can be higher; if there is only
-        one entity it may exceed 1 (we cap at 1.0). Used for privacy budget
-        (epsilon) computation.
+        For record-level DP (one entity per row), it is `min(1, (per_device_batch_size × gradient_accumulation_steps) / n_entities)`.
+        For entity-level DP, n_entities can be small so the ratio may exceed 1;
+        the result is capped at 1.0. Used as the sampling probability in the
+        privacy accountant for ε computation.
         """
         return min(
             1.0,
@@ -458,7 +530,24 @@ class OpacusDPTrainer(Trainer):
         inputs: dict[str, torch.Tensor | Any],
         num_items_in_batch=None,
     ) -> torch.Tensor:
-        """Run one training step; scale loss for gradient accumulation only (Opacus handles per-sample scaling)."""
+        """Run one training step and return the loss scaled for logging.
+
+        Forward pass and backward are performed as usual. Loss is not scaled by
+        batch size or per-sample factors here: Opacus handles per-sample gradient
+        scaling. The returned value is the raw loss divided by
+        ``gradient_accumulation_steps`` so that the logged loss matches the
+        effective per-step loss (averaged over accumulation steps).
+
+        Args:
+            model: The model to train (wrapped in ``GradSampleModule``).
+            inputs: Batch of inputs (e.g. ``input_ids``, ``labels``, ``position_ids``).
+            num_items_in_batch: Unused; passed for API compatibility. Opacus
+                handles scaling; we pass ``None`` to avoid double-scaling.
+
+        Returns:
+            Detached loss tensor scaled by 1 / ``gradient_accumulation_steps``,
+            for logging only (optimizer step is driven by the callback).
+        """
         model.train()
         if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
             self.optimizer.train()

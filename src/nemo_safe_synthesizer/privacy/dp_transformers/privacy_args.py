@@ -85,6 +85,14 @@ class PrivacyArguments:
     Exactly one of ``target_epsilon`` or ``noise_multiplier`` must be set.
     If ``target_epsilon`` is set, ``initialize()`` must be called to solve
     for the noise multiplier before training.
+
+    Args:
+        target_epsilon: Target epsilon at end of training (mutually exclusive with noise multiplier).
+        target_delta: Target delta.
+        per_sample_max_grad_norm: Max L2 norm for per-sample gradient clipping.
+        noise_multiplier: Gaussian noise scale for gradients. Mutually exclusive with target_epsilon.
+        poisson_sampling: Enable Poisson sampling for proper DP accounting.
+        use_prv: If True, use PRV accountant; fallback to RDP if PRV fails to converge.
     """
 
     target_epsilon: Optional[float] = field(

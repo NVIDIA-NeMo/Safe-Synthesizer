@@ -115,8 +115,13 @@ class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
     """Uniform-with-replacement sampler that skips empty batches but counts them.
 
     Same as Opacus ``UniformWithReplacementSampler`` except batches with zero
-    samples are not yielded; they are still counted in ``len()`` so step-based
-    privacy accounting remains correct.
+    samples are not yielded. Empty batches are still counted toward the total
+    number of steps so that step-based privacy accounting (e.g. ε composition)
+    remains correct. Used by ``PoissonEntitySampler`` for Poisson sampling.
+
+    Attributes:
+        empty_batches: Number of empty batches skipped so far (reset at the
+            start of each ``__iter__``; only meaningful during iteration).
     """
 
     def __init__(self, *args, **kwargs):
@@ -125,10 +130,26 @@ class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
         super().__init__(*args, **kwargs)
 
     def __len__(self) -> int:
-        """Number of non-empty batches (steps minus skipped empty batches)."""
+        """Return the number of batches that will be yielded (non-empty only).
+
+        Equal to ``steps - empty_batches`` after a full iteration. Before
+        iteration, ``empty_batches`` is 0 so the value may increase as
+        empty batches are skipped during iteration.
+        """
         return self.steps - self.empty_batches
 
     def __iter__(self) -> Iterator[list[int]]:
+        """Iterate over batches, each drawn uniformly with replacement; skip empty batches.
+
+        Each batch is formed by including each of the ``num_samples`` elements
+        with probability ``sample_rate``. Batches with no samples are not
+        yielded but are counted in ``empty_batches`` so privacy accounting
+        stays correct.
+
+        Yields:
+            List of indices for the current batch (non-empty). Length varies
+            by batch; empty batches are skipped.
+        """
         self.empty_batches = 0
         num_batches = self.steps
         while num_batches > 0:
