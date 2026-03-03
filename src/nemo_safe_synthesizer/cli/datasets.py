@@ -118,7 +118,7 @@ class DatasetInfo(BaseModel):
 class DatasetRegistry(BaseModel):
     """Registry of datasets for easy reference by name.
 
-    Datasets can be looked up by name via ``get_dataset``.  If the name is
+    Datasets can be looked up by name via ``get_dataset``. If the name is
     not in the registry, a new ``DatasetInfo`` is created on-the-fly treating
     the name as a literal URL or path.
     """
@@ -143,7 +143,7 @@ class DatasetRegistry(BaseModel):
         """Look up a dataset by name, creating an ad-hoc entry if not found.
 
         When ``url`` matches a registered name the corresponding entry is
-        returned.  Otherwise a new ``DatasetInfo`` is created with the raw
+        returned. Otherwise a new ``DatasetInfo`` is created with the raw
         ``url`` as both name and path (without a registry back-reference, so
         relative paths resolve against the working directory).
 

@@ -4,7 +4,7 @@
 """Artifact directory structure for Safe Synthesizer.
 
 Defines the on-disk layout produced by each pipeline run using a declarative
-descriptor pattern.  ``FileNode`` and ``DirNode`` descriptors declare the
+descriptor pattern. ``FileNode`` and ``DirNode`` descriptors declare the
 tree shape on ``Workdir``; at runtime they resolve to ``Path`` and ``BoundDir``
 objects respectively, giving typed access to every artifact path without
 hard-coding strings throughout the CLI.
@@ -393,7 +393,7 @@ class Workdir:
     def run_dir(self) -> Path:
         """Run directory path (``$base_path/<config>---<dataset>/<run_name>/``).
 
-        Uses ``_explicit_run_path`` directly when one was provided.
+        Uses ``_explicit_run_path`` directly when one is provided.
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path
