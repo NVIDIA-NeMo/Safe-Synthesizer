@@ -26,30 +26,34 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
 
     ``teardown`` must be idempotent and safe to call multiple times.
     Callers should use ``try/finally`` to guarantee ``teardown`` runs
-    even if ``generate`` raises.
+    even if ``generate`` raises.  Each cleanup step should be isolated
+    so one failure doesn't prevent the next from running.
 
-    Subclasses must implement :meth:`initialize`, :meth:`prepare_params`,
-    :meth:`generate`, and :meth:`teardown`.
-
-    Attributes:
-        gen_method: Callable used internally for LLM generation.
-        gen_results: Results from the most recent generation run.
-        config: Pipeline configuration.
-        model_metadata: Metadata for the fine-tuned model (prompt template,
-            sequence length, adapter path, etc.).
-        remote: Whether the backend calls a remote inference endpoint.
-        elapsed_time: Wall-clock duration of the last generation run in
-            seconds.
-        workdir: Working directory containing model artifacts.
+    Subclasses must implement ``initialize``, ``prepare_params``,
+    ``generate``, and ``teardown``.  The ``_torn_down`` guard flag
+    pattern is recommended for teardown implementations.
     """
 
     gen_method: Callable | None = None
+    """Callable used internally for LLM generation."""
+
     gen_results: GenerateJobResults
+    """Results from the most recent generation run."""
+
     config: SafeSynthesizerParameters
+    """Pipeline configuration."""
+
     model_metadata: ModelMetadata
+    """Metadata for the fine-tuned model (prompt template, sequence length, adapter path, etc.)."""
+
     remote: bool
+    """Whether the backend calls a remote inference endpoint."""
+
     elapsed_time: float
+    """Wall-clock duration of the last generation run in seconds."""
+
     workdir: Workdir
+    """Working directory containing model artifacts."""
 
     @classmethod
     def __subclasshook__(cls, subclass):
@@ -64,12 +68,36 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
         )
 
     @abc.abstractmethod
-    def initialize(self):
-        """Load the model into memory and prepare for generation."""
+    def initialize(self) -> None:
+        """Load the model and any required resources into memory.
+
+        Called once before the first ``generate()`` invocation.
+        Implementations should allocate GPU memory, instantiate the
+        inference engine (e.g. vLLM), load LoRA adapters, and configure
+        backend-specific settings such as attention backends or
+        structured-output support.
+
+        After this method returns, the backend must be ready to accept
+        ``prepare_params()`` and ``generate()`` calls.
+        """
 
     @abc.abstractmethod
-    def prepare_params(self, **kwargs):
-        """Parse sampling parameters and configure the generation method."""
+    def prepare_params(self, **kwargs) -> None:
+        """Translate caller-supplied sampling parameters into a backend-native form.
+
+        Resolves, validates, and transforms high-level generation
+        parameters (temperature, top-p, max tokens, structured-output
+        constraints, etc.) into the format expected by the underlying
+        inference engine.  The result is stored internally so that
+        subsequent ``generate()`` calls use these settings.
+
+        Must be called after ``initialize()`` and before ``generate()``.
+
+        Args:
+            **kwargs: Sampling parameters such as ``temperature``,
+                ``top_p``, ``max_new_tokens``, ``repetition_penalty``,
+                and backend-specific options.
+        """
 
     @abc.abstractmethod
     def generate(
@@ -77,18 +105,40 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
         keep_llm_state: bool = True,
         data_actions_fn: utils.DataActionsFn | None = None,
     ) -> GenerateJobResults:
-        """Run the generation loop and return results.
+        """Run the batch generation loop and return aggregated results.
+
+        Repeatedly prompts the model, processes each batch through the
+        configured
+        [`Processor`][nemo_safe_synthesizer.generation.processors.Processor],
+        and accumulates valid records until the target count is reached
+        or a stopping condition fires (e.g. too many consecutive invalid
+        batches).  Progress and error statistics are logged after each
+        batch.
 
         Args:
-            keep_llm_state: If ``True``, keep the model in memory after
-                generation for potential reuse.
+            keep_llm_state: If ``True``, keep the model in GPU memory
+                after generation for potential reuse.  If ``False``,
+                GPU resources are freed immediately on completion.
             data_actions_fn: Optional post-processing / validation
                 function applied to each batch of generated records.
+                Typically reverses training-time preprocessing and
+                enforces user-specified data constraints.
 
         Returns:
-            Results containing the generated DataFrame and statistics.
+            Results containing the generated DataFrame, validity
+            statistics, and timing information.
         """
 
     @abc.abstractmethod
-    def teardown(self):
-        """Release all resources held by this backend."""
+    def teardown(self) -> None:
+        """Release all resources held by this backend.
+
+        Frees GPU memory, destroys distributed process groups, and
+        cleans up any temporary state.  Must be idempotent -- safe to
+        call multiple times.  Implementations should use the
+        ``_torn_down`` guard flag and isolate each cleanup step so one
+        failure doesn't prevent subsequent cleanup.
+
+        Callers should wrap ``generate()`` in ``try/finally`` to
+        guarantee this runs even when generation raises.
+        """

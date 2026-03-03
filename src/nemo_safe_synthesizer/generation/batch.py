@@ -81,8 +81,10 @@ def _group_error_messages(all_error_messages: list[str], common_error_string: st
 class Batch:
     """Container for the results of a single generation batch.
 
-    Collects :class:`~.processors.ParsedResponse` objects produced by the
-    processor and exposes aggregate counts and error statistics.
+    Collects
+    [`ParsedResponse`][nemo_safe_synthesizer.generation.processors.ParsedResponse]
+    objects produced by the processor and exposes aggregate counts and error
+    statistics.
 
     Args:
         processor: The processor used to parse LLM outputs into records.
@@ -168,14 +170,17 @@ class Batch:
 
     @property
     def stopping_metric(self) -> float:
-        """Invalid record fraction, used by :class:`~.stopping.GenerationStopCondition`."""
+        """Invalid record fraction, used by
+        [`GenerationStopCondition`][nemo_safe_synthesizer.generation.stopping.GenerationStopCondition].
+        """
         return 1.0 - self.valid_record_fraction
 
     def to_dataframe(self) -> pd.DataFrame | None:
-        """Return the valid records as a DataFrame.
+        """Return the valid records as a normalized DataFrame.
 
         Returns:
-            DataFrame of valid records.
+            DataFrame of valid records, or ``None`` if no valid records
+            were generated.
         """
         valid = [resp.valid_records for resp in self._responses]
         flat_records = [record for records in valid for record in records]

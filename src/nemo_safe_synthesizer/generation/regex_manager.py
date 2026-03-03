@@ -116,10 +116,7 @@ def _properties_regex(instance, whitespace_pattern, **kwargs):
 
 
 def _enum_regex(instance, **kwargs):
-    """
-    The enum keyword is used to restrict a value to a fixed set of values. It
-    must be an array with at least one element, where each element is unique.
-    """
+    """Build a regex matching any value in the schema's ``enum`` array."""
     choices = []
     for choice in instance["enum"]:
         if isinstance(choice, bool):
@@ -249,12 +246,11 @@ def _type_int_regex(instance, **kwargs):
 
 
 def _type_regex(instance, whitespace_pattern, **kwargs):
-    """
-    The type keyword may either be a string or an array:
-    - If it's a string, it is the name of one of the basic types.
-    - If it is an array, it must be an array of strings, where each string is
-    the name of one of the basic types, and each element is unique. In this
-    case, the JSON snippet is valid if it matches any of the given types.
+    """Dispatch to the appropriate regex builder based on the ``type`` keyword.
+
+    The ``type`` keyword may be a string naming a single basic type or an
+    array of type strings.  When it is an array, the resulting regex
+    matches any of the listed types.
     """
     instance_type = instance["type"]
     dispatch = {
@@ -294,29 +290,25 @@ def _type_regex(instance, whitespace_pattern, **kwargs):
 
 
 def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
-    """
-    Custom implementation of limited set of json schema to regex.
+    """Convert a JSON schema fragment into a regex string.
 
-    We support what's needed for TabFT schemas, but this should not be
-    considered a generic json to regex method.
+    Supports the subset of JSON Schema needed for TabFT schemas --
+    ``properties``, ``enum``, and ``type`` keywords.  This is not a
+    general-purpose JSON-to-regex converter.
 
-    Notable missing features of JSON schema:
-    - Handle `additionalProperties` keyword
-    - Handle oneOf, anyOf, allOf keywords
-    - Handle $ref keyword
+    Notable unsupported keywords: ``additionalProperties``,
+    ``oneOf``/``anyOf``/``allOf``, and ``$ref``.
 
-
-    Copied with modifications from
-    https://github.com/dottxt-ai/outlines/blob/0b4d12b0b9998a26e9dbde3bd558e695c51b75be/outlines/fsm/json_schema.py#L99
+    Adapted from
+    `outlines <https://github.com/dottxt-ai/outlines/blob/0b4d12b0b/outlines/fsm/json_schema.py#L99>`_.
 
     Args:
-        schema: The dict-based JSON schema used as a base for generating the
-            regular expression.
-        whitespace_pattern: String pattern to match whitespaces while
-            constructing the regex.
+        instance: JSON schema fragment (dict) to compile.
+        whitespace_pattern: Regex fragment for matching whitespace
+            between JSON tokens.
 
     Returns:
-        The constructed regex as a string.
+        Regex string matching values conforming to the schema.
     """
     match instance:
         case {"properties": _, **rest}:  # noqa: F841
