@@ -12,16 +12,9 @@ __all__ = ["SafeSynthesizerJobConfig"]
 
 
 class SafeSynthesizerJobConfig(NSSBaseModel):
-    """
-    Configuration model for Safe Synthesizer jobs. Used primarily to
-    configure ourselves for a run to the NeMo Jobs Microservice.
+    """Configuration model for Safe Synthesizer jobs.
 
-    Attributes:
-        data_source: The data source for the job.
-        config: The Safe Synthesizer parameters configuration.
-        hf_token_secret: Optional name of a platform secret containing the HuggingFace
-            token. The secret should exist in the same workspace as the job. This is
-            used to authenticate with HuggingFace Hub for downloading models.
+    Used primarily to configure a run for the NeMo Jobs Microservice.
     """
 
     data_source: str
