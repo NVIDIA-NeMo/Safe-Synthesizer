@@ -13,6 +13,7 @@ Provides entity-level and record-level samplers: ``ShuffledEntitySampler``
 sampling for proper DP accounting), and ``UniformWithReplacementNonNullSampler``
 (no empty batches).
 """
+
 from typing import Iterator, Sequence
 
 import torch
@@ -141,4 +142,3 @@ class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
 
             # ... but make sure to count it toward steps
             num_batches -= 1
-

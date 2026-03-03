@@ -92,11 +92,13 @@ class PrivacyArguments:
         metadata={"help": "Target epsilon at end of training (mutually exclusive with noise multiplier)"},
     )
     target_delta: float | Literal["auto"] | None = field(default=None, metadata={"help": "Target delta"})
-    per_sample_max_grad_norm: Optional[float] = field(default=None, metadata={"help": "Max L2 norm for per-sample gradient clipping."})
+    per_sample_max_grad_norm: Optional[float] = field(
+        default=None, metadata={"help": "Max L2 norm for per-sample gradient clipping."}
+    )
 
-
-    noise_multiplier: Optional[float] = field(default=None, metadata={"help": "Gaussian noise scale for gradients. Mutually exclusive with target_epsilon."})
-
+    noise_multiplier: Optional[float] = field(
+        default=None, metadata={"help": "Gaussian noise scale for gradients. Mutually exclusive with target_epsilon."}
+    )
 
     poisson_sampling: Optional[bool] = field(
         default=False,
@@ -104,9 +106,7 @@ class PrivacyArguments:
     )
     use_prv: Optional[bool] = field(
         default=True,
-        metadata={
-            "help": "If True, use PRV accountant; fallback to RDP if PRV fails to converge."
-        },
+        metadata={"help": "If True, use PRV accountant; fallback to RDP if PRV fails to converge."},
     )
 
     def initialize(self, sampling_probability: float, num_steps: int) -> None:
