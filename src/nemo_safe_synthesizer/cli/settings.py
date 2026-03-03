@@ -42,26 +42,9 @@ __all__ = ["CLISettings"]
 class CLISettings(BaseSettings):
     """Unified CLI settings composing all sub-settings.
 
-    This class consolidates all configuration sources:
-    - Environment variables (automatic via pydantic-settings)
-    - CLI arguments (passed via from_cli_kwargs)
-    - Composed sub-settings (observability, wandb)
-
-    Attributes:
-        observability: Logging and observability settings
-        wandb: Weights & Biases settings
-        url: Dataset URL or path
-        config_path: Path to YAML config file
-        artifact_path: Base directory for artifacts
-        run_path: Explicit run directory path
-        output_file: Output CSV file path
-        log_format: Log format (json or plain)
-        log_color: Whether to colorize console output
-        verbose: Verbosity level (0=INFO, 1=DEBUG, 2=DEBUG_DEPENDENCIES)
-        wandb_mode: WandB mode override
-        wandb_project: WandB project override
-        synthesis_overrides: Nested dict of SafeSynthesizerParameters overrides
-        dataset_registry: URL or path to a dataset registry YAML file
+    Consolidates environment variables (automatic via pydantic-settings),
+    CLI arguments (passed via `from_cli_kwargs`), and composed sub-settings
+    (observability, wandb).
     """
 
     model_config = SettingsConfigDict(

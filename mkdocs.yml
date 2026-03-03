@@ -54,6 +54,8 @@ extra_css:
   - css/mkdocstrings.css
 
 extra_javascript:
+  - js/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - js/toc-toggle.js
 
 watch:
@@ -91,6 +93,9 @@ plugins:
             show_if_no_docstring: false
             summary: true
             filters: ["!^_"]
+            extensions:
+              - griffe_pydantic:
+                  schema: false
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py

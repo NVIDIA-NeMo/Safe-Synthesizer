@@ -66,18 +66,6 @@ class GenerateParameters(Parameters, BaseModel):
 
     These parameters control how synthetic data is generated after the model is trained.
     They affect the quality, diversity, and validity of the generated synthetic records.
-
-    Attributes:
-        num_records: Number of synthetic records to generate. Maximum is 130,000 records.
-        temperature: Sampling temperature for controlling randomness (higher = more random).
-        repetition_penalty: Penalty for token repetition (≥1.0, higher = less repetition).
-        top_p: Nucleus sampling probability for token selection (0 < value ≤ 1).
-        patience: Number of invalid records fraction before stopping.
-        invalid_fraction_threshold: "The fraction of invalid records that will stop generation after the `patience` limit is reached."
-        use_structured_generation: Whether to use structured generation for better format control.
-        attention_backend: The attention backend for the vLLM engine. If None, vLLM will
-            auto-select the best available backend.
-
     """
 
     num_records: Annotated[
@@ -101,7 +89,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="repetition_penalty",
-            description="The value used to control the likelihood of the model repeating the same token.",
+            description="The value used to control the likelihood of the model repeating the same token. Must be > 0.",
         ),
     ] = 1.0
 
@@ -110,7 +98,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: 0 < v <= 1),
         Field(
             title="top_p",
-            description="Nucleus sampling probability.",
+            description="Nucleus sampling probability. Must be in (0, 1].",
         ),
     ] = 1.0
 
@@ -121,7 +109,7 @@ class GenerateParameters(Parameters, BaseModel):
             title="patience",
             description=(
                 "Number of consecutive generations where the `invalid_fraction_threshold` "
-                "is reached before stopping generation."
+                "is reached before stopping generation. Must be >= 1."
             ),
         ),
     ] = 3
@@ -132,7 +120,8 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="invalid_fraction_threshold",
             description=(
-                "The fraction of invalid records that will stop generation after the `patience` limit is reached."
+                "The fraction of invalid records that will stop generation after the `patience` limit is reached. "
+                "Must be in [0, 1]."
             ),
         ),
     ] = 0.8
