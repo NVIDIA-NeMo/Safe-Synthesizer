@@ -18,17 +18,7 @@ __all__ = [
 
 
 class TimeSeriesParameters(Parameters):
-    """Configuration for time series parameters.
-
-    Attributes:
-        is_timeseries: Whether to treat the dataset as time series. For grouped time series, `group_training_examples_by` must be set.
-        timestamp_column: Name of the column containing timestamps used to order records when `is_timeseries` is True.
-            Required only when `is_timeseries` is True and `timestamp_interval_seconds` is not provided.
-        timestamp_interval_seconds: (Optional) Interval in seconds between timestamps. If not provided, the timestamp column will be used to infer the interval.
-        timestamp_format: Format of the timestamp column using Python strftime format codes. If not provided, the format will be inferred.
-        start_timestamp: (Optional) Start timestamp. If not provided, the first timestamp in the timestamp column will be used.
-        stop_timestamp: (Optional) Stop timestamp. If not provided, the last timestamp in the timestamp column will be used.
-    """
+    """Configuration for time series parameters."""
 
     is_timeseries: Annotated[
         bool,

@@ -66,18 +66,6 @@ class GenerateParameters(Parameters, BaseModel):
 
     These parameters control how synthetic data is generated after the model is trained.
     They affect the quality, diversity, and validity of the generated synthetic records.
-
-    Attributes:
-        num_records: Number of synthetic records to generate. Maximum is 130,000 records.
-        temperature: Sampling temperature for controlling randomness (higher = more random).
-        repetition_penalty: Penalty for token repetition (≥1.0, higher = less repetition).
-        top_p: Nucleus sampling probability for token selection (0 < value ≤ 1).
-        patience: Number of invalid records fraction before stopping.
-        invalid_fraction_threshold: "The fraction of invalid records that will stop generation after the `patience` limit is reached."
-        use_structured_generation: Whether to use structured generation for better format control.
-        attention_backend: The attention backend for the vLLM engine. If None, vLLM will
-            auto-select the best available backend.
-
     """
 
     num_records: Annotated[

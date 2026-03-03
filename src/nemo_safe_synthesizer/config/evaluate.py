@@ -28,18 +28,6 @@ class EvaluationParameters(Parameters):
     This class controls which evaluation metrics are computed and how they are configured.
     It includes privacy attack evaluations, statistical quality metrics, and downstream
     machine learning performance assessments.
-
-    Attributes:
-        enabled: Enable or disable evaluation.
-        quasi_identifier_count: Number of quasi-identifiers to sample for privacy attacks.
-        pii_replay_enabled: Enable PII Replay detection.
-        pii_replay_entities: List of entities for PII Replay. If not provided, default entities will be used.
-        pii_replay_columns: List of columns for PII Replay. If not provided, only entities will be used.
-        mia_enabled: Enable membership inference attack evaluation for privacy assessment.
-        aia_enabled: Enable attribute inference attack evaluation for privacy assessment.
-        sqs_report_columns: Number of columns to include in statistical quality reports.
-        sqs_report_rows: Number of rows to include in statistical quality reports.
-        mandatory_columns: Columns that must be present in generated data.
     """
 
     mia_enabled: Annotated[

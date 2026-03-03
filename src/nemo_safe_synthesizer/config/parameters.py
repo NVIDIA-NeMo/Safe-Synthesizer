@@ -37,16 +37,6 @@ class SafeSynthesizerParameters(Parameters):
     This is the top-level configuration class that orchestrates all aspects of
     synthetic data generation including training, generation, privacy, evaluation,
     and data handling. It provides validation to ensure parameter compatibility.
-
-    Attributes:
-        data: Data parameters.
-        replace_pii: PII replacement parameters.
-        training: Training parameters.
-        generation: Generation parameters.
-        privacy: Privacy parameters.
-        evaluation: Evaluation parameters.
-        enable_synthesis: Enable synthesizing new data by training a model.
-        enable_replace_pii: Enable replacing PII in the data.
     """
 
     data: DataParameters = Field(description="Data parameters.", default_factory=DataParameters)

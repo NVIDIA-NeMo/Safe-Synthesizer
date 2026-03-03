@@ -35,16 +35,7 @@ MIN_HOLDOUT = 10
 
 
 class DataParameters(Parameters):
-    """Configuration for parameters related to how to shape or use the data being passed in.
-
-    Attributes:
-        group_training_examples_by: Column to group training examples by.
-        order_training_examples_by: Column to order training examples by.
-        max_sequences_per_example: Maximum number of sequences per example for training.
-        holdout: Amount of records to holdout for evaluation.
-        max_holdout: Maximum number of records to hold out. Overrides any behavior set by holdout parameter.
-        random_state: Random state for holdout split to ensure reproducibility.
-    """
+    """Configuration for parameters related to how to shape or use the data being passed in."""
 
     group_training_examples_by: Annotated[
         str | None,
