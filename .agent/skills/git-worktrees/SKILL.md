@@ -229,6 +229,27 @@ Lessons from real sessions working in this repo:
 
 - Dependency safety: worktrees default to sharing the main repo's `.venv` via `UV_PROJECT_ENVIRONMENT`. If the worktree changes `pyproject.toml`, unset it and run `uv sync --frozen` to create a local venv. Never run bare `uv sync` in a worktree -- it can silently modify the tracked `uv.lock` file.
 
+## Worktree to Draft PR
+
+Common pattern: make changes in a worktree and open a draft PR in one chain.
+
+```bash
+cd "$SS_WORKTREE_DIR/ss-wt-<name>" \
+  && git add -A && git commit -s -m "feat: description" \
+  && git push -u origin HEAD \
+  && gh pr create --draft --title "feat: description" --body "$(cat <<'EOF'
+## Summary
+- ...
+EOF
+)"
+```
+
+When dispatching this workflow, ask the user whether they want a worktree or a local branch. Worktrees are preferred when:
+
+- The main checkout has uncommitted work or is on a different branch
+- Multiple branches need to be active simultaneously
+- The user explicitly requested a worktree
+
 ## Quick Reference
 
 | Situation | Command |
