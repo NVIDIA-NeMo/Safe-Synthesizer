@@ -85,7 +85,7 @@ class WandbSettings(BaseSettings):
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode:
-        """Coerce string or None to ``WandbMode``, defaulting to DISABLED."""
+        """Coerce string or None to ``WandbMode`` enum, defaulting to DISABLED."""
         if v is None:
             return WandbMode.DISABLED
         if isinstance(v, WandbMode):

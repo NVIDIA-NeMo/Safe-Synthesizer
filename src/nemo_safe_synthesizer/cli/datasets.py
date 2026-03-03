@@ -134,7 +134,11 @@ class DatasetRegistry(BaseModel):
     """
 
     def __init__(self, **data):
-        """Set back-references so each ``DatasetInfo`` can resolve ``base_url``."""
+        """Initialize DatasetRegistry.
+
+        Automatically adds back-references to each entry in ``self.datasets`` so the ``DatasetInfo`` instances can
+        resolve ``base_url``.
+        """
         super().__init__(**data)
         for dataset in self.datasets:
             dataset._registry = self

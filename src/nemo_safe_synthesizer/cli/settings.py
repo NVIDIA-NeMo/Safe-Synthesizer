@@ -131,7 +131,7 @@ class CLISettings(BaseSettings):
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode | None:
-        """Coerce string or None to ``WandbMode``, passing through enum values unchanged."""
+        """Coerce string or None to ``WandbMode`` enum, passing through enum values unchanged."""
         if v is None:
             return None
         if isinstance(v, WandbMode):

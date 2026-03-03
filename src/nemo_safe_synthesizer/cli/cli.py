@@ -4,7 +4,7 @@
 """Top-level CLI group for Safe Synthesizer.
 
 Assembles the ``config``, ``run``, and ``artifacts`` subcommand groups
-into a single Click entry point.
+into a single Python Click entry point.
 """
 
 from __future__ import annotations
