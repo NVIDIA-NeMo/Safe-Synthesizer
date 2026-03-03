@@ -12,8 +12,6 @@ Complete check before merging a PR:
 ```bash
 PR_NUMBER=<number>
 
-# Full status in one call (avoids Projects Classic GraphQL bug with plain `gh pr view`)
-echo "=== PR Summary ==="
 gh pr view $PR_NUMBER \
   --json number,title,state,isDraft,mergeable,reviewDecision,additions,deletions,changedFiles,labels,assignees,author,statusCheckRollup,reviews \
   --jq '{
@@ -23,10 +21,8 @@ gh pr view $PR_NUMBER \
     labels: [.labels[].name],
     checks: [.statusCheckRollup[] | {name: .name, conclusion: .conclusion}],
     reviews: [.reviews[] | {author: .author.login, state: .state}]
-  }'
-
-echo "=== CI Status ==="
-gh pr checks $PR_NUMBER
+  }' \
+  && gh pr checks $PR_NUMBER
 ```
 
 Checklist:
@@ -90,8 +86,7 @@ make test-ci-container
 After fixing locally:
 
 ```bash
-git add -A && git commit -m "fix: resolve CI failure"
-git push
+git add -A && git commit -s -m "fix: resolve CI failure" && git push
 
 # Or re-run failed jobs directly
 gh run rerun $RUN_ID --failed
@@ -113,14 +108,9 @@ The release process uses the `release.yml` manual workflow dispatch.
 ### Step 1: Verify Readiness
 
 ```bash
-# Ensure main is clean and up to date
-git checkout main && git pull
-
-# Check the version in package_info.py
-grep VERSION src/nemo_safe_synthesizer/package_info.py
-
-# Confirm no open blockers
-gh issue list --label "priority:high" --state open
+git checkout main && git pull \
+  && grep VERSION src/nemo_safe_synthesizer/package_info.py \
+  && gh issue list --label "priority:high" --state open
 ```
 
 ### Step 2: Trigger the Release
@@ -171,12 +161,7 @@ gh issue view <number>
 ### Step 2: Label and Assign
 
 ```bash
-# Add appropriate labels
-gh issue edit <number> --add-label "bug"        # or "enhancement", "documentation"
-gh issue edit <number> --add-label "priority:high"
-
-# Assign to someone
-gh issue edit <number> --add-assignee username
+gh issue edit <number> --add-label "bug" --add-label "priority:high" --add-assignee username
 ```
 
 ### Step 3: Link to Milestone (if applicable)
@@ -212,35 +197,19 @@ gh pr checkout <number>
 ### Step 2: Understand the Changes
 
 ```bash
-# See the diff
-gh pr diff
-
-# List changed files
-gh pr view --json files | jq -r '.files[].path'
-
-# Read the PR description
-gh pr view <number>
+gh pr diff && gh pr view --json files -q '[.files[].path]'
 ```
 
 ### Step 3: Run Local Checks
 
 ```bash
-# Format check
-make format
-
-# Lint
-make lint
-
-# Unit tests
-make test
+make format && make lint && make test
 ```
 
 ### Step 4a: Push Fixes (if contributing to the PR)
 
 ```bash
-git add -A
-git commit -m "fix: address lint/format issues"
-git push
+git add -A && git commit -s -m "fix: address lint/format issues" && git push
 ```
 
 ### Step 4b: Leave a Review (if just reviewing)
@@ -264,6 +233,8 @@ git stash pop
 
 End-to-end workflow: create an issue, branch, implement, and open a draft PR.
 
+Before branching, ask the user whether to use a local branch (`git checkout -b`) or a worktree for isolated development. Worktrees are preferred when the main checkout has uncommitted work or when multiple branches need to be active simultaneously. See the [git-worktrees skill](../../git-worktrees/SKILL.md) for the worktree-to-draft-PR workflow.
+
 ### Step 1: Create the Issue
 
 ```bash
@@ -277,24 +248,19 @@ EOF
 )"
 ```
 
-### Step 2: Create Branch and Implement
+### Step 2: Create Branch, Implement, and Open Draft PR
 
 ```bash
 ISSUE=<number-from-step-1>
 git checkout -b $USER/$ISSUE-short-name origin/main
 # ... make changes ...
-git add -A
-git commit -s -m "fix: description (closes #$ISSUE)"
-git push -u origin HEAD
-```
-
-### Step 3: Open Draft PR
-
-```bash
-gh pr create --draft \
-  --title "fix: description" \
-  --body "$(cat <<'EOF'
-Closes #<issue-number>
+git add -A \
+  && git commit -s -m "fix: description (closes #$ISSUE)" \
+  && git push -u origin HEAD \
+  && gh pr create --draft \
+    --title "fix: description" \
+    --body "$(cat <<EOF
+Closes #$ISSUE
 
 - Change 1
 - Change 2
@@ -316,9 +282,7 @@ gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
 Make fixes, commit with signoff:
 
 ```bash
-git add -A
-git commit -s -m "fix: address review feedback"
-git push
+git add -A && git commit -s -m "fix: address review feedback" && git push
 ```
 
 ### Step 3: Update PR Body for Squash Merge
