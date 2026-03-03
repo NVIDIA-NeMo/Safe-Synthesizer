@@ -21,7 +21,7 @@ problem-to-solution structure -- find your symptom, then follow the fix.
 | "Unsloth is currently not compatible with DP" | Mutual exclusion | Set `use_unsloth: false` for DP training |
 | "Unable to determine a noise multiplier" | Epsilon too low for dataset | [Increase epsilon or add records](#common-dp-errors) |
 | "Generation stopped prematurely due to no valid records" | Model underfitting or schema mismatch | [Increase `num_input_records_to_sample`, check training logs](#generationerror) |
-| "Number of tokens exceeds context length" | Records too long for model | [Increase `rope_scaling_factor` or reduce record size](#generationerror) |
+| "Number of tokens exceeds context length" | Records too long for model | [Reduce record size or increase context window](#context-length-and-record-fitting) |
 | "fraction of invalid records was higher than..." | Generation quality too low | [Lower `invalid_fraction_threshold` or retrain](#generationerror) |
 | Evaluation metrics show UNAVAILABLE | Too few records or columns | [Ensure >= 200 records, >= 3 columns](#minimum-data-requirements) |
 | PII uses default entities unexpectedly | Column classifier failed | [Check logs, set entities explicitly](#pii-uses-unexpected-entity-types) |
@@ -235,14 +235,10 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
 
 1. Reduce `training.batch_size` (default is `1`, effective batch size includes
    `gradient_accumulation_steps` which defaults to `8`)
-2. Lower `training.rope_scaling_factor` to reduce the effective context window,
-   or let it auto-resolve to a smaller value. The effective context length
-   (`max_seq_length`) is a computed property on
-   [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata] --
-   `base_max_seq_length * rope_scaling_factor` -- so reducing the rope scaling
-   factor is how you shrink it. When using `data.group_training_examples_by`,
-   multiple records must fit in context, making this constraint tighter.
-   Consider truncating or removing very long training examples.
+2. Reduce the context window -- see
+   [Context Length and Record Fitting](#context-length-and-record-fitting) for
+   how to lower `training.rope_scaling_factor`, truncate records, or simplify
+   grouped examples
 3. Enable quantization by setting `training.quantize_model: true` and choosing
    `training.quantization_bits: 4` (4-bit) or `8` (8-bit)
 
@@ -298,6 +294,52 @@ managed independently.
 
 ---
 
+## Context Length and Record Fitting
+
+The effective context window (`max_seq_length`) is a computed property on
+[`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata] --
+`base_max_seq_length * rope_scaling_factor`. Every training example must
+fit within this window. If it doesn't, data assembly fails with a
+`GenerationError` before training even starts.
+
+### When Records Don't Fit
+
+Two error messages indicate context-length problems during data assembly:
+
+"The number of tokens in an example exceeds the available context length":
+
+: A single training example (schema prompt + records) exceeds
+  `max_seq_length`.
+
+"The dataset schema requires more tokens than the max length of the model":
+
+: The schema prompt alone is wider than `max_seq_length` -- typically
+  because the table has too many columns for the model's context window.
+
+### How to Fix
+
+1. Increase `training.rope_scaling_factor` to extend the context window.
+   When set to `"auto"`, it is estimated from dataset token counts using
+   heuristics (4 chars per token for text, 1 token per digit) -- this can
+   underestimate for complex or multilingual data.
+2. Reduce record size -- shorten text fields, drop unnecessary columns,
+   or simplify the schema.
+3. When using `data.group_training_examples_by`, multiple records must fit
+   in context together, making the limit tighter. Consider reducing
+   `data.max_sequences_per_example` or simplifying the grouped records.
+
+!!! note
+    These errors are typed as `GenerationError` in the codebase even though
+    they fire during data assembly, not during generation proper. They appear
+    in the pipeline before any training or generation occurs.
+
+Context-length issues can also surface as OOM during training (the model
+attempts to process sequences near the limit). See
+[Out of Memory During Training](#out-of-memory-during-training) for
+memory-specific fixes like quantization and batch size reduction.
+
+---
+
 ## Configuration Gotchas
 
 ### Surprising Defaults
@@ -311,7 +353,6 @@ Several defaults may not match your expectations:
 | `data.holdout` | `0.05` | 5% of records held out for evaluation; capped by `data.max_holdout` (2000) |
 | `data.random_state` | `None` | Auto-generates a random seed -- set explicitly for reproducibility |
 | `generation.num_records` | `1000` | May be too small for production use |
-| `generation.temperature` | `0.9` | Relatively high randomness |
 
 ### Auto-Resolved Parameters
 
@@ -324,7 +365,7 @@ See the [Parameters Reference](parameters.md) for the full list.
   for complex or multilingual data.
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
 - `training.use_unsloth` -- resolves to `true` unless DP is enabled. Also needs
-  to be set to `false` for Mistral models until upstream Unsloth support is fixed.
+  to be set to `false` for Mistral models until we fix issues with Mistral and Unsloth.
 - `privacy.delta` -- computed from record count
 
 Use `safe-synthesizer config validate` to see how `"auto"` values resolve for
@@ -542,6 +583,18 @@ SQS reports are limited to `sqs_report_columns=250` columns and
 `sqs_report_rows=5000` rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
 
+### Low SQS Scores
+
+If the SQS (Synthetic Quality Score) report shows low quality scores:
+
+1. Review column distributions in the HTML report -- large divergences
+   indicate the model did not learn the data patterns well
+2. Check that training data is representative and not too small
+3. Consider increasing `generation.num_records` for a larger sample
+4. Increase `training.num_input_records_to_sample` to give the model
+   more context during generation
+5. Verify the model trained for enough epochs (`training.num_epochs`)
+
 ### FAISS
 
 FAISS is included in the `cpu` and `cu128` install extras (`faiss-cpu` and
@@ -581,12 +634,14 @@ Checklist:
 
 ### GenerationError
 
-Generation failures. The most common error messages:
+Generation failures during synthetic data production. The two most common:
 
 "Generation stopped prematurely due to no valid records":
 
-: No valid records were produced. Increase `training.num_input_records_to_sample`
-  to give the model more context, and check training logs for quality issues.
+: The first batch produced zero valid records. The model may be underfitting
+  or the schema may not match the training data. Increase
+  `training.num_input_records_to_sample` to give the model more context,
+  and check training logs for quality issues.
 
 "Generation stopped prematurely because the average fraction of invalid records was higher than...":
 
@@ -594,12 +649,9 @@ Generation failures. The most common error messages:
   lowering `generation.invalid_fraction_threshold`, retraining with more data,
   or increasing `training.rope_scaling_factor` if records are being truncated.
 
-"The number of tokens in an example exceeds the available context length":
-
-: A single training example exceeds `max_seq_length`. Increase
-  `training.rope_scaling_factor` or reduce record size. With
-  `data.group_training_examples_by`, multiple records share context, making
-  this limit tighter.
+For context-length errors during data assembly ("The number of tokens in an
+example exceeds the available context length"), see
+[Context Length and Record Fitting](#context-length-and-record-fitting).
 
 ### InternalError
 
