@@ -66,7 +66,7 @@ We average the first two to provide an overall DPS. We do not factor PII Replay 
 
 ### Membership Inference Protection
 
-This score measures resistance to membership inference attacks -- whether an attacker can tell if a specific record was in the training set. We simulate 360 attacks using a 5% holdout from the input data. The score reflects whether an attacker could infer membership above random chance by exploiting differences in the model's responses to training data versus unseen data. Low scores indicate potential memorization risk.
+This score measures resistance to membership inference attacks -- whether an attacker can tell if a specific record was in the training set. We simulate 360 attacks using a 5% holdout test set from the input data. The score reflects whether an attacker could infer membership above random chance by exploiting differences in the model's responses to training data versus unseen data. Low scores indicate potential memorization risk.
 
 ### Attribute Inference Protection
 
@@ -100,7 +100,13 @@ Every Safe Synthesizer job automatically generates an HTML evaluation report con
 
 ## Configuration
 
-We enable evaluation by default.
+Evaluation is enabled by default but can be customized in your YAML config:
+
+```yaml
+evaluation:
+  mia_enabled: true   # Membership Inference Attack
+  aia_enabled: true   # Attribute Inference Attack
+```
 
 ## Interpreting Scores
 
@@ -120,8 +126,12 @@ We enable evaluation by default.
 - `2.0-3.9`: Moderate -- high leakage/memorization risk. Do not distribute; expand detection coverage, apply stronger transformations, and retune synthesis.
 - `Below 2.0`: Poor -- fails privacy bar. Block release; increase training data, fix detection gaps, or enable strong DP and re-run.
 
+## API Reference
+- [:material-api: `Evaluator`](../reference/nemo_safe_synthesizer/evaluation/evaluator.md)
+- [:material-api: `EvaluationParameters`](../reference/nemo_safe_synthesizer/config/evaluate.md)
+
 ## Related Topics
 
-- {doc}`../tutorials/safe-synthesizer-101`: Get started with evaluation
-- {doc}`../tutorials/differential-privacy`: Learn about privacy metrics
+- {doc}`../tutorials/safe-synthesizer-101`: Get started with Safe Synthesizer
+- {doc}`../tutorials/differential-privacy`: Enable differential privacy
 - {doc}`../tutorials/index`: More tutorials
