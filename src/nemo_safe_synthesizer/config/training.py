@@ -87,7 +87,7 @@ class TrainingHyperparams(Parameters):
         Field(
             title="weight_decay",
             description=(
-                "The weight decay to apply (if not zero) to all layers except all bias and "
+                "The weight decay to apply to all layers except all bias and "
                 "LayerNorm weights in the AdamW optimizer. Must be in (0, 1)."
             ),
         ),
