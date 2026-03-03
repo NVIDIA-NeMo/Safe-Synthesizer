@@ -39,8 +39,8 @@ class InferenceEvalCallback(TrainerCallback):
     """Trainer callback that performs inference-based evaluation during training.
 
     Generates records using the current model and validates them against a
-    schema.  Empirically, the fraction of invalid records generated is a good
-    indicator of model quality.  The callback can stop training early if the
+    schema. Empirically, the fraction of invalid records generated is a good
+    indicator of model quality. The callback can stop training early if the
     invalid fraction satisfies the stopping criteria specified by
     ``invalid_fraction_threshold`` and ``patience``.
 

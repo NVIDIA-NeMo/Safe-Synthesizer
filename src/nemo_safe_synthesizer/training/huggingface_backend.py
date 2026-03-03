@@ -812,7 +812,7 @@ def preprocess_logits_for_metrics(
     """Reduce logits to argmax predictions to avoid OOM during evaluation.
 
     The default Trainer stores full logit tensors across evaluation batches,
-    which can exhaust GPU memory on large datasets.  This callback replaces
+    which can exhaust GPU memory on large datasets. This callback replaces
     them with predicted token IDs immediately after the forward pass.
 
     See: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
@@ -833,7 +833,7 @@ def compute_metrics(eval_preds: EvalPrediction) -> dict[str, float]:
 
     Metrics returned:
 
-    - **mean cross-entropy loss** (``eval_loss``) -- average of per-batch
+    - mean cross-entropy loss (``eval_loss``) -- average of per-batch
       losses collected during the evaluation loop.
 
     The per-batch losses are pre-computed during the forward pass

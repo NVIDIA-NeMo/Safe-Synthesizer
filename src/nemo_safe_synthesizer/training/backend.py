@@ -72,7 +72,7 @@ class NSSTrainerResult:
 class TrainingBackend(metaclass=abc.ABCMeta):
     """Abstract base class for LLM fine-tuning backends.
 
-    Subclasses must implement every abstract method.  Two concrete
+    Subclasses must implement every abstract method. Two concrete
     implementations are provided:
     [`HuggingFaceBackend`][nemo_safe_synthesizer.training.huggingface_backend.HuggingFaceBackend]
     (standard HuggingFace Trainer with full DP-SGD support) and
@@ -85,20 +85,20 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         model_metadata: Pretrained model metadata (prompt template,
             sequence length, RoPE scaling, etc.).
         training_dataset: Raw tabular HuggingFace ``Dataset`` to fine-tune
-            on.  Converted to a DataFrame and run through preprocessing,
+            on. Converted to a DataFrame and run through preprocessing,
             schema inference, and tokenization during
             ``prepare_training_data``.
         data_fraction: Ratio of ``num_input_records_to_sample`` to
-            total training records.  Passed to the Opacus DP trainer
+            total training records. Passed to the Opacus DP trainer
             to compute per-step sampling probability for privacy
             accounting.
         logging_level: Python logging verbosity level.
         true_dataset_size: Total number of records (or groups, when
             grouping is enabled) in the training set before
-            subsampling.  Used by the Opacus DP trainer alongside
+            subsampling. Used by the Opacus DP trainer alongside
             ``data_fraction`` for privacy accounting.
         eval_dataset: Optional raw tabular ``Dataset`` used only as a
-            flag to enable eval-step overrides.  The actual eval split
+            flag to enable eval-step overrides. The actual eval split
             passed to the Trainer is produced by the assembler
             (``training_examples.test``).
         generation_eval: If ``True``, attach the
@@ -106,7 +106,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
             during training.
         callbacks: Extra HuggingFace ``TrainerCallback`` instances.
         action_executor: Executor for user-defined data actions (column
-            transforms, type conversions, etc.).  When provided, its
+            transforms, type conversions, etc.). When provided, its
             ``preprocess`` phase runs on the training DataFrame before
             tokenization in ``prepare_training_data``.
         workdir: Working directory for artifacts; required.
@@ -222,7 +222,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
 
         Runs auto-config resolution, validates groupby/orderby columns,
         applies time-series processing and ``action_executor`` preprocessing,
-        then assembles tokenized training examples.  Populates
+        then assembles tokenized training examples. Populates
         ``training_examples``, ``dataset_schema``, ``df_train``, and
         ``data_fraction``.
         """
@@ -233,7 +233,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
 
         Builds the ``framework_load_params`` dict consumed by
         ``from_pretrained``, including device map, attention implementation,
-        quantization config, and RoPE scaling.  Idempotent -- returns
+        quantization config, and RoPE scaling. Idempotent -- returns
         immediately if parameters are already prepared.
         """
 
@@ -251,7 +251,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         """Apply PEFT / quantization wrapping to the loaded model.
 
         Configures LoRA parameters (rank, alpha, target modules) and wraps
-        ``model`` as a PEFT model.  When quantization is enabled, applies
+        ``model`` as a PEFT model. When quantization is enabled, applies
         k-bit preparation before wrapping.
         """
 
@@ -279,7 +279,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         """Persist the fine-tuned adapter and related artifacts.
 
         Saves the LoRA adapter weights, model metadata, dataset schema,
-        and resolved config to the ``workdir``.  Optionally frees the
+        and resolved config to the ``workdir``. Optionally frees the
         model from GPU memory after saving.
         """
 
