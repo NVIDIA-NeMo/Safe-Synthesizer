@@ -47,13 +47,12 @@ class AttributeInferenceProtection(Component):
     can an adversary use synthetic nearest-neighbors to predict the remaining
     attributes of a training record?  A higher score indicates better
     protection (lower prediction accuracy).
-
-    Attributes:
-        col_accuracy_df: Per-column prediction risk scores and grades.
     """
 
     name: str = Field(default="Attribute Inference Protection")
+
     col_accuracy_df: pd.DataFrame | None = Field(default=None)
+    """Per-column prediction risk scores and grades."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

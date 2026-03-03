@@ -25,16 +25,15 @@ class Component(ABC, BaseModel):
 
     Subclasses should override ``from_evaluation_dataset`` to perform
     their metric-specific computation.
-
-    Attributes:
-        name: Display name used in JSON summaries and the HTML report.
-        score: The computed ``EvaluationScore`` for this component.
     """
 
     name: str = Field(
         description="Override this with the fancy display name of your component. It is used for json summaries and rendering scores."
     )
+    """Display name used in JSON summaries and the HTML report."""
+
     score: EvaluationScore = Field(default=EvaluationScore())
+    """The computed ``EvaluationScore`` for this component."""
 
     @staticmethod
     def from_evaluation_dataset(

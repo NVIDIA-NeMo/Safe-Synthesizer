@@ -31,15 +31,15 @@ class DeepStructure(Component):
 
     Projects reference and output data into a shared principal-component
     space and scores the distributional similarity of the projections.
-
-    Attributes:
-        reference_pca: PCA-projected reference dataframe.
-        output_pca: PCA-projected output dataframe.
     """
 
     name: str = Field(default="Deep Structure Stability")
+
     reference_pca: pd.DataFrame | None = Field(default=None)
+    """PCA-projected reference dataframe."""
+
     output_pca: pd.DataFrame | None = Field(default=None)
+    """PCA-projected output dataframe."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

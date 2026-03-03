@@ -96,16 +96,16 @@ class ColumnDistribution(Component):
     output distributions, averages across all tabular columns, and maps
     the result to a 0--10 score.  Also carries data for the per-column
     histogram figures and the Reference Columns table in the HTML report.
-
-    Attributes:
-        column_statistics: Per-column PII entity and transform metadata.
-        evaluation_fields: Per-column evaluation metadata and distribution scores.
     """
 
     name: str = Field(default="Column Distribution Stability")
+
     # Keep a copy to simplify rendering
     column_statistics: dict[str, ColumnStatistics] | None = Field(default=None)
+    """Per-column PII entity and transform metadata."""
+
     evaluation_fields: list[EvaluationField] = Field(default=list())
+    """Per-column evaluation metadata and distribution scores."""
 
     @cached_property
     def jinja_context(self):

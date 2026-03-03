@@ -50,17 +50,18 @@ class PIIReplay(Component):
     For each classified PII entity, reports total and unique replay counts.
     This component does not produce a numeric score; it surfaces PII
     leakage details for the HTML report.
-
-    Attributes:
-        reference_total_records: Total rows in the reference data.
-        output_total_records: Total rows in the output data.
-        pii_replay_data: Per-column / per-entity replay statistics.
     """
 
     name: str = Field(default="PII Replay")
+
     reference_total_records: int = Field(default=0)
+    """Total rows in the reference data."""
+
     output_total_records: int = Field(default=0)
+    """Total rows in the output data."""
+
     pii_replay_data: list[PIIReplayData] = Field(default=list())
+    """Per-column / per-entity replay statistics."""
 
     @cached_property
     def jinja_context(self):

@@ -43,18 +43,18 @@ class MembershipInferenceProtection(Component):
     whether a specific record was in the training set by comparing it
     to the synthetic data?  The attack is repeated across multiple
     similarity thresholds and data proportions for stability.
-
-    Attributes:
-        name: Name of the component.
-        attack_sum_df: Summary of attack outcomes by protection grade.
-        tps_values: True positive counts per similarity threshold.
-        fps_values: False positive counts per similarity threshold.
     """
 
     name: str = Field(default="Membership Inference Protection")
+
     attack_sum_df: pd.DataFrame | None = Field(default=None)
+    """Summary of attack outcomes by protection grade."""
+
     tps_values: dict[float, int] | None = Field(default=None)
+    """True positive counts per similarity threshold."""
+
     fps_values: dict[float, int] | None = Field(default=None)
+    """False positive counts per similarity threshold."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

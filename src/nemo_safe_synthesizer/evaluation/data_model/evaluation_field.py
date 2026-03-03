@@ -30,13 +30,28 @@ class EvaluationField(BaseModel):
     """Per-column evaluation metadata and distribution scores."""
 
     name: str = Field()
+    """Column name from the original dataframe."""
+
     reference_field_features: FieldFeatures = Field()
+    """Field type and descriptive statistics for the reference column."""
+
     output_field_features: FieldFeatures = Field()
+    """Field type and descriptive statistics for the output column."""
+
     reference_distribution: dict | None = Field()
+    """Binned distribution dict for the reference column."""
+
     output_distribution: dict | None = Field()
+    """Binned distribution dict for the output column."""
+
     distribution_distance: float | None = Field()
+    """Jensen-Shannon distance between the two distributions."""
+
     distribution_stability: EvaluationScore | None = Field()
+    """Graded score derived from the distribution distance."""
+
     column_statistics: ColumnStatistics | None = Field()
+    """PII entity counts and transform metadata, if available."""
 
     @staticmethod
     def from_series(

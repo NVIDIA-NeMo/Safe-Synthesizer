@@ -28,17 +28,18 @@ class Correlation(Component):
     Computes per-column-pair correlations (Pearson, Theil's U, Correlation
     Ratio) for both reference and output dataframes, then scores the mean
     absolute difference.
-
-    Attributes:
-        reference_correlation: Correlation matrix for the reference data.
-        output_correlation: Correlation matrix for the output data.
-        correlation_difference: Element-wise absolute difference of the two matrices.
     """
 
     name: str = Field(default="Column Correlation Stability")
+
     reference_correlation: pd.DataFrame | None = Field(default=None)
+    """Correlation matrix for the reference data."""
+
     output_correlation: pd.DataFrame | None = Field(default=None)
+    """Correlation matrix for the output data."""
+
     correlation_difference: pd.DataFrame | None = Field(default=None)
+    """Element-wise absolute difference of the two matrices."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

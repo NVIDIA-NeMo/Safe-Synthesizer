@@ -23,14 +23,13 @@ class EvaluationReport(BaseModel):
     Subclassed by ``MultimodalReport`` to add report-specific rendering
     logic. Provides serialization helpers and a Jinja2 context property
     consumed by the HTML report template.
-
-    Attributes:
-        evaluation_dataset: The paired reference/output data used for evaluation.
-        components: Ordered list of evaluation components with their scores.
     """
 
     evaluation_dataset: EvaluationDataset = Field()
+    """The paired reference/output data used for evaluation."""
+
     components: list[Component] = Field(default=list())
+    """Ordered list of evaluation components with their scores."""
 
     def get_dict(self) -> dict:
         """Return component scores as a ``{name: score_dict}`` mapping."""
