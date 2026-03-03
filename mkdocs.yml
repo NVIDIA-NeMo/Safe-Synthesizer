@@ -87,12 +87,7 @@ plugins:
             show_symbol_type_toc: true
             members_order: source
             merge_init_into_class: true
-            # Griffe uses static (AST) analysis first and only falls back to
-            # runtime import when source is unavailable. Since all our modules
-            # have source, heavy-dep modules (torch, vllm) are NOT imported --
-            # they are parsed statically. griffe-pydantic's static processor
-            # handles Pydantic models from the AST alone.
-            allow_inspection: true
+            allow_inspection: false
             show_if_no_docstring: false
             summary: true
             filters: ["!^_"]
