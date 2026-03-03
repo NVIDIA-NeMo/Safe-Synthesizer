@@ -11,7 +11,7 @@ hard-coding strings throughout the CLI.
 
 Typical directory tree::
 
-    $base_path/<config>---<dataset>/<run_name>/
+    <base_path>/<config>---<dataset>/<run_name>/
     - safe-synthesizer-config.json
     - train/  ...
     - generate/  ...
@@ -285,7 +285,7 @@ class Workdir:
     for declarative path definitions.
 
     Structure:
-        $base_path/<config>---<dataset>/<run_name>/
+        <base_path>/<config>---<dataset>/<run_name>/
         - safe-synthesizer-config.json
         - train/
           - safe-synthesizer-config.json
@@ -381,7 +381,7 @@ class Workdir:
 
     @property
     def project_dir(self) -> Path:
-        """Project directory path (``$base_path/<config>---<dataset>/``).
+        """Project directory path (``<base_path>/<config>---<dataset>/``).
 
         Falls back to the parent of ``_explicit_run_path`` when one was provided.
         """
@@ -391,7 +391,7 @@ class Workdir:
 
     @property
     def run_dir(self) -> Path:
-        """Run directory path (``$base_path/<config>---<dataset>/<run_name>/``).
+        """Run directory path (``<base_path>/<config>---<dataset>/<run_name>/``).
 
         Uses ``_explicit_run_path`` directly when one is provided.
         """
