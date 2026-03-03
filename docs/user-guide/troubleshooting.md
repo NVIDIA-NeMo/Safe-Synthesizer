@@ -65,13 +65,16 @@ traces. vLLM manages its own memory pool using `get_max_vram()` (defaults to
 
 ### Out of Memory During Evaluation
 
-If evaluation OOMs, disable the expensive components or reduce dataset size:
+If evaluation OOMs, reduce the evaluation scope or dataset size:
 
 1. For wide datasets, PCA computation in deep structure analysis can OOM.
-   Reduce the number of columns or disable the deep structure component.
-2. Histogram binning uses `doane` method to reduce memory, but very large
-   datasets may still cause issues. Reduce `sqs_report_columns` or
-   `sqs_report_rows` to limit the evaluation scope.
+   Reduce the number of columns included in evaluation by lowering
+   `evaluation.sqs_report_columns` or by subsetting the input data. If
+   evaluation is not required for your run, disable it entirely with
+   `evaluation.enabled: false`.
+2. Histogram binning uses the `doane` method to reduce memory, but very large
+   datasets may still cause issues. Reduce `evaluation.sqs_report_columns` or
+   `evaluation.sqs_report_rows` to limit the evaluation scope.
 
 ### No GPU Detected
 
@@ -388,7 +391,7 @@ Several evaluation metrics have minimum data requirements:
 |--------|---------|-------------------|
 | Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
 | Text semantic similarity | 200 records | Silently skipped, warning logged |
-| Attribute Inference Attack | 3+ columns | Silently skipped, warning logged |
+| Attribute Inference Attack | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3) | Skipped if FAISS missing; `UNAVAILABLE` grade if too few columns |
 | PCA (deep structure) | 2x2 matrix | Silently skipped, warning logged |
 
 ### Silent Failures
