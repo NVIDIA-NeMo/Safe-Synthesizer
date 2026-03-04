@@ -484,6 +484,11 @@ make docs-serve
 # Browse to http://127.0.0.1:8000
 ```
 
+In Cursor or VS Code Remote, the port is auto-forwarded. Check the Ports
+panel (`Ctrl+Shift+P` > "Ports: Focus on Ports View") -- port 8000 will
+appear with a local address you can open in the Simple Browser or your
+system browser.
+
 Build the static site (output in `site/`):
 
 ```bash
