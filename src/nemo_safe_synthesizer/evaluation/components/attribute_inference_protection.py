@@ -50,7 +50,9 @@ class AttributeInferenceProtection(Component):
     """
 
     name: str = Field(default="Attribute Inference Protection")
-    col_accuracy_df: pd.DataFrame | None = Field(default=None, description="Per-column prediction risk scores and grades.")
+    col_accuracy_df: pd.DataFrame | None = Field(
+        default=None, description="Per-column prediction risk scores and grades."
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

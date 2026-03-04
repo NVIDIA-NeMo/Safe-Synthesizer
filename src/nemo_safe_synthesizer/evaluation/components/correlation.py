@@ -31,9 +31,13 @@ class Correlation(Component):
     """
 
     name: str = Field(default="Column Correlation Stability")
-    reference_correlation: pd.DataFrame | None = Field(default=None, description="Correlation matrix for the reference data.")
+    reference_correlation: pd.DataFrame | None = Field(
+        default=None, description="Correlation matrix for the reference data."
+    )
     output_correlation: pd.DataFrame | None = Field(default=None, description="Correlation matrix for the output data.")
-    correlation_difference: pd.DataFrame | None = Field(default=None, description="Element-wise absolute difference of the two matrices.")
+    correlation_difference: pd.DataFrame | None = Field(
+        default=None, description="Element-wise absolute difference of the two matrices."
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

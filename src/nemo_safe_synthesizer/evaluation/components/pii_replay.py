@@ -56,7 +56,9 @@ class PIIReplay(Component):
     name: str = Field(default="PII Replay")
     reference_total_records: int = Field(default=0, description="Total rows in the reference data.")
     output_total_records: int = Field(default=0, description="Total rows in the output data.")
-    pii_replay_data: list[PIIReplayData] = Field(default=list(), description="Per-column / per-entity replay statistics.")
+    pii_replay_data: list[PIIReplayData] = Field(
+        default=list(), description="Per-column / per-entity replay statistics."
+    )
 
     @cached_property
     def jinja_context(self):

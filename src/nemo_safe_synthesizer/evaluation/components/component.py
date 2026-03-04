@@ -27,10 +27,10 @@ class Component(ABC, BaseModel):
     their metric-specific computation.
     """
 
-    name: str = Field(
-        description="Display name used in JSON summaries and the HTML report."
+    name: str = Field(description="Display name used in JSON summaries and the HTML report.")
+    score: EvaluationScore = Field(
+        default=EvaluationScore(), description="The computed EvaluationScore for this component."
     )
-    score: EvaluationScore = Field(default=EvaluationScore(), description="The computed EvaluationScore for this component.")
 
     @staticmethod
     def from_evaluation_dataset(

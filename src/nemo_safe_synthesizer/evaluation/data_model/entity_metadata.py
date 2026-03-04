@@ -22,6 +22,8 @@ class Entity(BaseModel):
 class EntityMetadata(BaseModel):
     """Per-column entity detection and transformation metadata for evaluation."""
 
-    entities: list[Entity] | None = Field(default=None, description="Detected PII entities with occurrence counts, if any.")
+    entities: list[Entity] | None = Field(
+        default=None, description="Detected PII entities with occurrence counts, if any."
+    )
     transformed: bool = Field(default=False, description="Whether the column was transformed during PII replacement.")
     transform_function: str | None = Field(default=None, description="Name of the transform function applied, if any.")
