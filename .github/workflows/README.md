@@ -10,7 +10,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 | Workflow                                           | Trigger                               | Description                                          |
 | -------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual           | Format, lint, typecheck, and unit tests (CPU)        |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual           | Format, typecheck, and unit tests (CPU)              |
 | [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual | GPU E2E tests (A100)                               |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
@@ -47,12 +47,11 @@ flowchart LR
     subgraph ci [CI Checks - GitHub-hosted runners]
         changes_ci[Detect Changes]
         format[Format]
-        lint[Lint]
         typecheck[Typecheck]
         unit[Unit Tests]
         ci_status[CI Status]
-        changes_ci --> format & lint & typecheck & unit
-        format & lint & typecheck & unit --> ci_status
+        changes_ci --> format & typecheck & unit
+        format & typecheck & unit --> ci_status
     end
 
     subgraph gpu [GPU Tests - on-prem runners]
@@ -90,16 +89,24 @@ flowchart LR
 
 ## CI Checks Workflow
 
-The `ci-checks.yml` workflow runs on every push to `main` and on pull requests:
+The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a `make` target so the Makefile is the single source of truth for how each check runs.
 
-- Detect Changes: Uses `dorny/paths-filter` to skip jobs when only non-source files change
-- Format: Verifies code formatting with `ruff format --check` and checks SPDX copyright headers
-- Lint: Runs `ruff check` on all tracked Python files
-- Typecheck: Runs `ty check` on all tracked Python files (excludes configured in `pyproject.toml [tool.ty.src]`)
-- Unit Tests: Runs pytest with coverage
-- CI Status: Aggregation job -- single required check for branch protection
+| Job | `make` target | What it checks |
+|---|---|---|
+| Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
+| Format | `lock-check` | `uv.lock` matches `pyproject.toml` |
+| Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
+| Unit Tests | `test-ci` | pytest with coverage |
 
-All format, lint, and typecheck jobs run on all tracked files (not just changed files). `ruff` and `ty` are fast enough to check the entire repo. To replicate CI locally: `make format && make lint && make test`.
+The `changes` detection job (using `dorny/paths-filter`) skips downstream jobs entirely when only non-source files are modified. Within each job, all tracked files are checked -- `ruff` and `ty` are fast enough for this to take seconds. The CI Status aggregation job is the single required check for branch protection.
+
+To replicate CI locally:
+
+```bash
+make check       # format-check + typecheck
+make lock-check  # verify uv.lock
+make test        # unit tests
+```
 
 All jobs run on `ubuntu-latest` (GitHub-hosted).
 

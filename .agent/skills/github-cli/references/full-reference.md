@@ -106,9 +106,8 @@ gh run rerun <run-id> --failed
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `make format` or `bash tools/codestyle/format.sh` |
-| Lint | `make lint` or `bash tools/codestyle/lint.sh` |
-| Typecheck | `bash tools/codestyle/typecheck.sh` |
+| Format | `make format-check` (or `make format` to fix) |
+| Typecheck | `make typecheck` |
 | Unit Tests | `make test` or `make test-ci` |
 
 Or run all CI checks in a container: `make test-ci-container`

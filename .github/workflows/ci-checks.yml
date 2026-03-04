@@ -72,42 +72,14 @@ jobs:
           fetch-depth: 0
           bootstrap-tools: "true"
 
-      - name: Check code formatting
-        run: |
-          make bootstrap-nss dev
-          bash tools/codestyle/format.sh --check
+      - name: Bootstrap
+        run: make bootstrap-nss dev
 
-      - name: Check SPDX copyright headers
-        run: |
-          uv run --script tools/codestyle/copyright_fixer.py --check .
-
-  lint:
-    name: Lint
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python environment
-        id: setup
-        uses: ./.github/actions/setup-python-env
-        with:
-          fetch-depth: 0
-          bootstrap-tools: "true"
-
-      - name: Run ruff linting
-        run: |
-          make bootstrap-nss dev
-          bash tools/codestyle/lint.sh
+      - name: Check formatting, linting, and copyright headers
+        run: make format-check
 
       - name: Check uv.lock is up to date
-        run: |
-          uv lock
-          git diff --exit-code uv.lock
+        run: make lock-check
 
   typecheck:
     name: Typecheck
@@ -127,10 +99,11 @@ jobs:
           fetch-depth: 0
           bootstrap-tools: "true"
 
+      - name: Bootstrap
+        run: make bootstrap-nss cpu
+
       - name: Run ty type checks
-        run: |
-          make bootstrap-nss cpu
-          bash tools/codestyle/typecheck.sh
+        run: make typecheck
 
   unit-test:
     name: Unit Tests - (Python ${{ matrix.python-version }})
@@ -154,10 +127,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
           bootstrap-tools: "true"
 
+      - name: Bootstrap
+        run: make bootstrap-nss cpu
+
       - name: Run unit tests with coverage
-        run: |
-          make bootstrap-nss cpu
-          make test-ci
+        run: make test-ci
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v6
@@ -182,14 +156,13 @@ jobs:
   ci-status:
     name: CI Status
     if: always() && !cancelled()
-    needs: [changes, format, lint, typecheck, unit-test]
+    needs: [changes, format, typecheck, unit-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
           echo "changes:   ${{ needs.changes.result }}"
           echo "format:    ${{ needs.format.result }}"
-          echo "lint:      ${{ needs.lint.result }}"
           echo "typecheck: ${{ needs.typecheck.result }}"
           echo "unit-test: ${{ needs.unit-test.result }}"
 

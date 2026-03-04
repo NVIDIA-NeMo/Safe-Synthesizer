@@ -70,9 +70,8 @@ Match the failed CI job to its local equivalent:
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `make format` or `bash tools/codestyle/format.sh` |
-| Lint | `make lint` or `bash tools/codestyle/lint.sh` |
-| Typecheck | `bash tools/codestyle/typecheck.sh` |
+| Format | `make format-check` (or `make format` to fix) |
+| Typecheck | `make typecheck` |
 | Unit Tests | `make test` or `make test-ci` |
 
 For full CI parity in a container:
@@ -203,7 +202,7 @@ gh pr diff && gh pr view --json files -q '[.files[].path]'
 ### Step 3: Run Local Checks
 
 ```bash
-make format && make lint && make test
+make format && make check && make test
 ```
 
 ### Step 4a: Push Fixes (if contributing to the PR)

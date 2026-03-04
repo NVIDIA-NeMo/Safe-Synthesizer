@@ -6,13 +6,13 @@
 # format.sh -- format (or check formatting of) Python files with ruff
 #
 # Usage:
-#   ./format.sh                          # fix mode, all tracked .py files
-#   ./format.sh --check                  # check mode (exit 1 if unformatted)
+#   ./format.sh                          # fix mode: ruff format + ruff check --fix
+#   ./format.sh --check                  # check mode: ruff format --check (exit 1 if unformatted)
 #   ./format.sh src/foo.py bar.py        # fix specific files
 #   ./format.sh --check src/foo.py       # check mode on specific files
 #
-# Copyright headers are handled separately by copyright_fixer.py
-# (called from `make format`, `make lint`, and the pre-commit copyright-fix hook).
+# Lint-rule violations (ruff check without --fix) are handled by ruff_check.sh.
+# Copyright headers are handled separately by copyright_fixer.py.
 #
 
 set -euo pipefail
@@ -30,5 +30,6 @@ if [[ "$CHECK_MODE" == true ]]; then
     ruff format --check "${PY_FILES[@]}"
 else
     ruff format "${PY_FILES[@]}"
+    # this does import sorting and autofixes
     ruff check --fix "${PY_FILES[@]}"
 fi

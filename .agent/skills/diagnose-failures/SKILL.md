@@ -48,9 +48,8 @@ Map GitHub Actions job names to local commands:
 
 | CI Job | Local Command |
 |--------|---------------|
-| `Format` | `make format` |
-| `Lint` | `make lint` (runs ruff + ty + copyright) |
-| `Typecheck` | `bash tools/codestyle/typecheck.sh` |
+| `Format` | `make format` (fix) or `make format-check` (check) |
+| `Typecheck` | `make typecheck` |
 | `Unit Tests` | `make test-ci` or `make test` |
 | `Config-Dataset e2e` | `make test-nss-<config>-<dataset>-ci` |
 

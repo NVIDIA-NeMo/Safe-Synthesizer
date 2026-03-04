@@ -128,27 +128,32 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 
 ### CODE QUALITY ###
-# `make format` mutates files (same fixers as pre-commit).
-# `make lint` is read-only (same checks as CI, minus format check).
-# `make check` is the full read-only CI equivalent (format + lint + typecheck + copyright).
+# `make format` mutates files (ruff format + ruff check --fix + copyright).
+# `make format-check`, `typecheck`, `lock-check` are atomic read-only targets (used by CI).
+# `make check` runs all read-only checks (format-check + typecheck).
 
 .PHONY: format
-format: ## Format the code (ruff format + fix + copyright headers)
+format: ## Format the code (ruff format + lint fix + copyright headers)
 	bash tools/codestyle/format.sh
 	uv run --script tools/codestyle/copyright_fixer.py .
 
-.PHONY: lint
-lint: ## Lint the code (read-only checks)
-	bash tools/codestyle/lint.sh
-	bash tools/codestyle/typecheck.sh
+.PHONY: format-check
+format-check: ## Check formatting, lint rules, and copyright headers (read-only)
+	bash tools/codestyle/format.sh --check
+	bash tools/codestyle/ruff_check.sh
 	uv run --script tools/codestyle/copyright_fixer.py --check .
 
-.PHONY: check
-check: ## Run all CI checks locally (format check + lint + typecheck + copyright)
-	bash tools/codestyle/format.sh --check
-	bash tools/codestyle/lint.sh
+.PHONY: typecheck
+typecheck: ## Run ty type checks
 	bash tools/codestyle/typecheck.sh
-	uv run --script tools/codestyle/copyright_fixer.py --check .
+
+.PHONY: lock-check
+lock-check: ## Check that uv.lock is up to date
+	uv lock
+	git diff --exit-code uv.lock
+
+.PHONY: check
+check: format-check typecheck ## Run all read-only CI checks locally
 
 
 ### TESTING ###
