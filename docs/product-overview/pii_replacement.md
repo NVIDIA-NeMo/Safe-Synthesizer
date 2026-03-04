@@ -1,43 +1,31 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Privacy
-
-NeMo Safe Synthesizer provides multiple layers of privacy protection for synthetic data generation.
-
-## PII Replacement
+# PII Replacement
 
 PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model has no chance of learning the most sensitive information like names, addresses, and other identifiers.
 
-### How It Works
+## How It Works
 
 The PII replacement pipeline operates in multiple stages:
 
-1. Detection: identifies PII entities using configurable detection methods
-2. Classification: categorizes detected entities by type (name, email, address, etc.)
-3. Transformation: replaces or redacts PII using configurable rules
-4. Validation: verifies that sensitive information has been properly handled
+1. **Detection**: Identifies PII entities using configurable detection methods
+2. **Classification**: Categorizes detected entities by type (name, email, address, etc.)
+3. **Transformation**: Replaces or redacts PII using configurable rules
+4. **Validation**: Verifies that sensitive information has been properly handled
 
-### Detection Methods
+## Detection Methods:
+NeMo Safe Synthesizer supports multiple PII detection approaches:
 
-Safe Synthesizer supports multiple PII detection approaches:
-
-| Method | Best For | Speed | Accuracy |
-|--------|----------|-------|----------|
-| **GLiNER** | General PII detection | Fast | High |
-| **LLM Classification** | Context-aware, custom entities | Slow | Very High |
-| **Regex** | Structured patterns (SSN, phone) | Very Fast | Perfect (for known formats) |
-
-#### GLiNER Detection
-
-Uses the GLiNER model for entity recognition:
+## Nemotron PII Detection
+Uses the Nemotron PII model for entity recognition:
 
 - Zero-shot entity detection
 - Supports custom entity types
 - High accuracy for standard PII categories
 - Configurable confidence thresholds
 
-#### LLM Classification
+### LLM Classification
 
 Leverages language models for PII detection:
 
@@ -46,7 +34,7 @@ Leverages language models for PII detection:
 - Flexible entity definitions
 - Configurable prompts and models
 
-#### Regex Detection
+### Regex Detection
 
 Pattern-based detection for structured PII:
 
@@ -55,47 +43,151 @@ Pattern-based detection for structured PII:
 - Customizable patterns
 - Low computational overhead
 
-### Replacement Strategies
+## Replacement Strategies
 
 After detection, PII can be handled in multiple ways:
+- **Replacement**: Generate realistic replacements using [Faker library](https://faker.readthedocs.io/en/master/) or custom expressions.
+- **Redaction**: Substitute with placeholder tokens.
+- **Hashing**: Convert to a unique digital fingerprint (one-way).
+- **Custom Rules**: Define your own transformation logic.
 
-- Fake Data: generate realistic replacements using the [Faker](https://faker.readthedocs.io/) library
-- Redaction: replace with placeholder tokens
-- Hashing: one-way hashing for consistency
-- Custom Rules: define your own transformation logic
+## Supported Entity Types
 
-### Supported Entity Types
+Nemotron PII has been specifically fine-tuned to recognize many entity types out of the box, organized by category:
 
-Safe Synthesizer recognizes many PII types out of the box:
+### Personal Information
+- `first_name` - Given names
+- `last_name` - Surnames and family names
+- `name` - Full names
+- `email` - Email addresses
+- `phone_number` - Phone numbers in various formats
+- `fax_number` - Fax numbers in various formats
 
-- Personal: names, dates of birth, ages
-- Contact: emails, phone numbers, addresses
-- Identifiers: SSN, passport numbers, license numbers
-- Financial: credit card numbers, bank accounts, IBAN, SWIFT codes
-- Medical: patient IDs, medical record numbers
-- Digital: IP addresses, URLs, UUIDs, API keys, JWTs
-- Custom: define your own entity types
 
-### Configuration
 
-PII replacement is configured through the `replace_pii` section of your YAML config:
+### Addresses
 
-```yaml
-enable_replace_pii: true
-replace_pii:
-  globals:
-    locales:
-      - en_US
-  steps:
-    - rows:
-        update:
-          - entity:
-              - email
-              - phone_number
-            value: "column.entity | fake"
+- `address` - Complete physical addresses (for example, 123 Main Street, Anytown, CA 90210)
+- `street_address` - Street addresses (for example, 123 Main Street)
+- `city` - City names
+- `county` - County names
+- `state` - State/province names
+- `postcode` - Postal/ZIP codes
+- `country` - Country names
+
+### Personal Identifiers
+- `ssn` - Social Security Numbers
+- `national_id` - National ID numbers
+- `tax_id` - Tax ID numbers
+- `certificate_license_number` - Driver’s license numbers
+- `unique_identifier` - Generic unique IDs
+- `customer_id` - Customer identifiers
+- `employee_id` - Employee identifiers
+
+### Financial Information
+
+- `credit_debit_card` - Credit and debit card numbers
+- `cvv` - Credit card verification code
+- `pin` - Personal identification numbers
+- `account_number` - Bank account numbers
+- `bank_routing_number` - Bank routing numbers
+- `swift_bic` - Swift/BIC codes
+- `iban` - International bank account numbers
+
+### Medical Information
+
+- `medical_record_number` - Medical record numbers
+- `health_plan_beneficiary_number` - Insurance IDs
+- `biometric_identifier` - Biometric data references
+
+### Technical Identifiers
+
+- `url` - Web URLs
+- `ipv4` - IPv4 addresses
+- `ipv6` - IPv6 addresses
+- `mac_address` - Hardware MAC addresses
+- `api_key` - API keys and tokens
+- `user_name` - Usernames
+- `password` - Passwords
+- `http_cookie` - HTTP Cookies
+- `device_identifier` - Device IDs
+
+### Vehicle Identifiers
+
+- `vehicle_identifier` - Vehicle identification numbers (VINs)
+- `license_plate` - License plates
+
+### Geographic Information
+
+- `latitude` - Latitude coordinates
+- `longitude` - Longitude coordinates
+- `coordinate` - Coordinate pairs
+
+### Quasi Identifiers
+
+- `date` - Date values
+- `date_time` - Date and time values
+- `date_of_birth` - Birth dates
+- `time` - Time values
+- `age` - Ages
+- `blood_type` - Blood type information
+- `gender` - Gender information
+- `sexuality` - Sexual orientation
+- `political_view` - Political affiliations
+- `race_ethnicity` - Race and ethnicity information
+- `religious_belief` - Religious affiliations
+- `language` - Language preferences
+- `education_level` - Education level
+- `occupation` - Professional titles
+- `employment_status` - Employment information
+- `company_name` - Organization names
+
+### Custom Entity Types
+
+Beyond these built-in types, you can define custom entities using:
+
+- **Nemotron PII**: Fast, accurate zero-shot NER for standard and custom entity types
+- **Regex**: Deterministic pattern matching, best for consistent formats (SSN, credit cards)
+- **LLM**: Contextual understanding, handles complex patterns and ambiguous cases
+
+### Example Custom Entity:
+```json
+{
+    "classify": {
+        "enable": true,
+        "entities": [
+            "first_name", "last_name", "email",
+            "employee_id", "project_code"
+        ]
+    }
+}
 ```
 
-### When to Use PII Replacement
+## Configuration
+
+PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
+
+```json
+{
+    "replace_pii": {
+        "globals": {"locales": ["en_US"]},
+        "steps": [
+            {
+                "rows": {
+                    "update": [
+                        {
+                            "entity": ["email", "phone_number"],
+                            "value": "column.entity | fake"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
+```
+
+## When to Use PII Replacement
 
 Consider using PII replacement when:
 
@@ -104,84 +196,9 @@ Consider using PII replacement when:
 - You want to ensure the model cannot memorize sensitive values
 - You need to share synthetic data with external parties
 
-PII replacement can be used standalone (without synthesis) or as a preprocessing step before synthesis.
+PII replacement is always recommended as a preprocessing step before synthesis.
 
----
+## Related Topics
 
-## Differential Privacy
-
-Safe Synthesizer supports Differential Privacy (DP) training via [Opacus](https://opacus.ai/) integration. DP provides mathematical guarantees that synthetic data doesn't reveal information about individual records in the training data.
-
-### Key Concepts
-
-- Epsilon (epsilon): privacy budget -- lower values mean stronger privacy
-    - epsilon = 1: Very strong privacy
-    - epsilon = 6-10: Moderate privacy
-    - epsilon > 10: Weak privacy
-- Delta (delta): probability of privacy guarantee failure. Typically set to 1/n^2 where n is the dataset size (e.g., 1e-5)
-- Max Gradient Norm: maximum gradient clipping norm, controls the sensitivity of the training process
-
-### How It Works
-
-DP-SGD (Differentially Private Stochastic Gradient Descent) adds calibrated noise to gradients during training, providing a mathematical privacy guarantee that limits what can be learned about any individual record:
-
-1. Gradient Clipping: per-sample gradients are clipped to a maximum norm
-2. Noise Injection: calibrated Gaussian noise is added to the clipped gradients
-3. Privacy Accounting: the total privacy budget (epsilon) is tracked across training
-
-### Configuration
-
-Enable differential privacy in your YAML config:
-
-```yaml
-differential_privacy:
-  dp_enabled: true
-  epsilon: 8.0
-  delta: 1e-5
-  per_sample_max_grad_norm: 1.0
-```
-
-Or via the Python SDK:
-
-```python
-synthesizer = (
-    SafeSynthesizer(config)
-    .with_data_source("data.csv")
-    .with_train(learning_rate=0.0005)
-    .with_differential_privacy(dp_enabled=True, epsilon=8.0, delta=1e-5)
-    .with_generate(num_records=5000)
-)
-synthesizer.run()
-```
-
-### Choosing Epsilon
-
-| Sensitivity | Recommended Epsilon | Use Case |
-|-------------|-------------------|----------|
-| **High** (medical, financial) | 1.0 - 3.0 | Maximum privacy, some utility loss |
-| **Medium** (general business) | 3.0 - 6.0 | Good balance of privacy and utility |
-| **Low** (public-adjacent data) | 6.0 - 10.0 | Better utility, moderate privacy |
-
-### Privacy Budget Management
-
-!!! warning
-    Privacy budget compounds across releases. Each additional synthetic dataset released from the same original data increases the total privacy cost.
-
-Best practices:
-
-1. Single Release: only release one synthetic dataset per original dataset when possible
-2. Composition: if multiple releases are needed, divide the privacy budget accordingly
-3. Documentation: track all data releases and cumulative privacy budget
-4. Renewal: privacy budget doesn't reset -- consider this in your data lifecycle
-
----
-
-## Privacy Evaluation
-
-After generation, the evaluation system measures privacy through several metrics:
-
-- PII Replay Detection -- Checks if original PII values appear in synthetic data
-- Membership Inference Protection -- Measures resistance to membership inference attacks (can an attacker tell if a specific record was in the training data?)
-- Attribute Inference Protection -- Measures resistance to attribute inference attacks (can sensitive attributes be inferred from other known attributes?)
-
-See [Evaluation](evaluation.md) for full details on privacy and quality metrics.
+- {doc}`../tutorials/pii-replacement`: Hands-on PII replacement tutorial
+- {doc}`../tutorials/index`: More tutorials 
