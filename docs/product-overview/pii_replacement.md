@@ -9,15 +9,16 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 
 The PII replacement pipeline operates in multiple stages:
 
-1. **Detection**: Identifies PII entities using configurable detection methods
-2. **Classification**: Categorizes detected entities by type (name, email, address, etc.)
-3. **Transformation**: Replaces or redacts PII using configurable rules
-4. **Validation**: Verifies that sensitive information has been properly handled
+1. Detection: Identifies PII entities using configurable detection methods
+2. Classification: Categorizes detected entities by type (name, email, address, etc.)
+3. Transformation: Replaces or redacts PII using configurable rules
+4. Validation: Verifies that sensitive information has been properly handled
 
-## Detection Methods:
+## Detection Methods
+
 NeMo Safe Synthesizer supports multiple PII detection approaches:
 
-## Nemotron PII Detection
+### Nemotron PII Detection
 Uses the Nemotron PII model for entity recognition:
 
 - Zero-shot entity detection
@@ -46,10 +47,11 @@ Pattern-based detection for structured PII:
 ## Replacement Strategies
 
 After detection, PII can be handled in multiple ways:
-- **Replacement**: Generate realistic replacements using [Faker library](https://faker.readthedocs.io/en/master/) or custom expressions.
-- **Redaction**: Substitute with placeholder tokens.
-- **Hashing**: Convert to a unique digital fingerprint (one-way).
-- **Custom Rules**: Define your own transformation logic.
+
+- Replacement: Generate realistic replacements using [Faker library](https://faker.readthedocs.io/en/master/) or custom expressions.
+- Redaction: Substitute with placeholder tokens.
+- Hashing: Convert to a unique digital fingerprint (one-way).
+- Custom Rules: Define your own transformation logic.
 
 ## Supported Entity Types
 
@@ -146,45 +148,39 @@ Nemotron PII has been specifically fine-tuned to recognize many entity types out
 
 Beyond these built-in types, you can define custom entities using:
 
-- **Nemotron PII**: Fast, accurate zero-shot NER for standard and custom entity types
-- **Regex**: Deterministic pattern matching, best for consistent formats (SSN, credit cards)
-- **LLM**: Contextual understanding, handles complex patterns and ambiguous cases
+- Nemotron PII: Fast, accurate zero-shot NER for standard and custom entity types
+- Regex: Deterministic pattern matching, best for consistent formats (SSN, credit cards)
+- LLM: Contextual understanding, handles complex patterns and ambiguous cases
 
-### Example Custom Entity:
-```json
-{
-    "classify": {
-        "enable": true,
-        "entities": [
-            "first_name", "last_name", "email",
-            "employee_id", "project_code"
-        ]
-    }
-}
+#### Example custom entity
+
+```yaml title="Custom entity configuration"
+classify:
+  enable: true
+  entities:
+    - first_name
+    - last_name
+    - email
+    - employee_id
+    - project_code
 ```
 
 ## Configuration
 
 PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
 
-```json
-{
-    "replace_pii": {
-        "globals": {"locales": ["en_US"]},
-        "steps": [
-            {
-                "rows": {
-                    "update": [
-                        {
-                            "entity": ["email", "phone_number"],
-                            "value": "column.entity | fake"
-                        }
-                    ]
-                }
-            }
-        ]
-    }
-}
+```yaml title="replace_pii section"
+replace_pii:
+  globals:
+    locales:
+      - en_US
+  steps:
+    - rows:
+        update:
+          - entity:
+              - email
+              - phone_number
+            value: "column.entity | fake"
 ```
 
 ## When to Use PII Replacement
@@ -201,4 +197,5 @@ PII replacement is always recommended as a preprocessing step before synthesis.
 ## Related Topics
 
 - {doc}`../tutorials/pii-replacement`: Hands-on PII replacement tutorial
-- {doc}`../tutorials/index`: More tutorials 
+- {doc}`../tutorials/index`: More tutorials
+
