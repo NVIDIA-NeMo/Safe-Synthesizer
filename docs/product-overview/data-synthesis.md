@@ -9,9 +9,9 @@ The synthesizer component is the main component of the NeMo Safe Synthesizer pro
 
 NeMo Safe Synthesizer employs a novel approach to synthetic data generation:
 
-1. **Tabular Fine-Tuning**: Fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties
-2. **Generation**: Uses the fine-tuned model to generate new synthetic records that maintain data utility
-3. **Privacy Protection**: Optionally applies differential privacy during training for mathematical privacy guarantees
+1. Tabular Fine-Tuning: Fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties
+2. Generation: Uses the fine-tuned model to generate new synthetic records that maintain data utility
+3. Privacy Protection: Optionally applies differential privacy during training for mathematical privacy guarantees
 
 Creating synthetic versions of private data allows you to unlock insights without compromising privacy, enabling downstream use cases like AI model training and analytics.
 
@@ -30,10 +30,10 @@ NeMo Safe Synthesizer adapts language models to understand and generate tabular 
 
 NeMo Safe Synthesizer supports diverse tabular data:
 
-- **Numeric**: Continuous and discrete numerical values
-- **Categorical**: Text labels and categories
-- **Text**: Free-form text fields
-- **Temporal**: Event sequences and time series
+- Numeric: Continuous and discrete numerical values
+- Categorical: Text labels and categories
+- Text: Free-form text fields
+- Temporal: Event sequences and time series
 
 ### Differential Privacy
 
@@ -45,7 +45,7 @@ Differential privacy (DP) is the gold standard for privacy protection, providing
 
 DP ensures that the output of an algorithm is nearly identical whether or not any single record is included in the training data:
 
-```output
+```output title="DP guarantee"
 P[M(D1) ∈ S] ≤ exp(ε) × P[M(D2) ∈ S] + δ
 ```
 
@@ -53,7 +53,7 @@ Where:
 
 - `M` is the mechanism (trained model)
 - `D1` and `D2` are datasets differing by one record
-- `ε` (epsilon) controls privacy loss - lower values provide stronger privacy
+- `ε` (epsilon) controls privacy loss -- lower values provide stronger privacy
 - `δ` (delta) is the failure probability
 - `S` is any subset of possible outputs
 
@@ -61,10 +61,10 @@ Where:
 
 NeMo Safe Synthesizer uses Differentially Private Stochastic Gradient Descent (DP-SGD) to add privacy guarantees during model training:
 
-1. **Per-sample gradient computation** - Calculate gradients for each training example individually
-2. **Gradient clipping** - Clip L2 norm to `per_sample_max_grad_norm` to bound sensitivity
-3. **Noise injection** - Add calibrated Gaussian noise to gradients based on privacy budget
-4. **Privacy accounting** - Track cumulative privacy loss using Rényi Differential Privacy (RDP)
+1. Per-sample gradient computation: Calculate gradients for each training example individually
+2. Gradient clipping: Clip L2 norm to `per_sample_max_grad_norm` to bound sensitivity
+3. Noise injection: Add calibrated Gaussian noise to gradients based on privacy budget
+4. Privacy accounting: Track cumulative privacy loss using Rényi Differential Privacy (RDP)
 
 By default, *record-level* differential privacy is used. When `group_training_examples_by` is set, *group-level* privacy applies, meaning guarantees cover entire groups of records rather than individual records.
 
@@ -72,10 +72,10 @@ By default, *record-level* differential privacy is used. When `group_training_ex
 
 Enabling DP provides strong privacy guarantees but affects synthetic data quality:
 
-- **Lower epsilon** = stronger privacy, but more noise and potentially lower utility
-- **Training speed** - DP training is usually 2-4x slower due to per-sample gradient computation
-- **Data requirements** - DP works best with larger datasets (10,000+ records recommended, compared to 1,000+ records without DP)
-- **Quality impact** - Added noise may reduce statistical fidelity of synthetic data
+- Lower epsilon: stronger privacy, but more noise and potentially lower utility
+- Training speed: DP training is usually 2-4x slower due to per-sample gradient computation
+- Data requirements: DP works best with larger datasets (10,000+ records recommended, compared to 1,000+ records without DP)
+- Quality impact: Added noise may reduce statistical fidelity of synthetic data
 
 #### Configuration Parameters
 
@@ -88,27 +88,26 @@ Enabling DP provides strong privacy guarantees but affects synthetic data qualit
 
 #### Guidelines
 
-**Starting point:** Begin with ε ∈ [8, 12] and reduce as needed based on privacy requirements and acceptable quality trade-offs.
+Starting point: Begin with ε ∈ [8, 12] and reduce as needed based on privacy requirements and acceptable quality trade-offs.
 
-**Delta calculation:** Use `"auto"` (recommended), which sets δ = 1/n^1.2 based on dataset size n. Manual values are typically between 1e-6 and 1e-4.
+Delta calculation: Use `"auto"` (recommended), which sets δ = 1/n^1.2 based on dataset size n. Manual values are typically between 1e-6 and 1e-4.
 
-**Data size:** DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
+Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
 
-For hands-on guidance, refer to {doc}`../tutorials/differential-privacy`. For complete parameter documentation, refer to {doc}`reference`.
+For hands-on guidance, refer to [Differential Privacy Tutorial](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/tutorials/differential-privacy.html). For complete parameter documentation, refer to [Parameter Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
 
 ## Configuration
 
 Synthesis behavior is controlled through configuration parameters:
 
-- **Training**: Model selection, training parameters, sequence configuration
-- **Generation**: Number of records, temperature, sampling strategies
-- **Privacy**: Differential privacy parameters (epsilon, delta, clipping)
+- Training: Model selection, training parameters, sequence configuration
+- Generation: Number of records, temperature, sampling strategies
+- Privacy: Differential privacy parameters (epsilon, delta, clipping)
 
-For a complete list of all available parameters and their defaults, refer to {doc}`reference`.
+For a complete list of all available parameters and their defaults, refer to [Parameter Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
 
 ## Related Topics
 
 - {doc}`reference`: Complete parameter reference
 - {doc}`../tutorials/differential-privacy`: Learn about differential privacy in practice
 - {doc}`../tutorials/index`: More tutorials
-
