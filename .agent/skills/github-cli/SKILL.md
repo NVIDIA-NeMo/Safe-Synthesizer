@@ -59,8 +59,10 @@ gh pr view --json number,url 2>/dev/null && echo "PR exists" || echo "No PR yet"
 # Edit an existing PR's title/body
 gh pr edit <number> --title "New title" --body "New body"
 
-# Push and create PR in one call (most common multi-step pattern)
-git push -u origin HEAD && gh pr create --draft --title "feat: short title" --body "$(cat <<'EOF'
+# Commit, push, and create PR in one call
+git add -A && git commit -s -S -m "feat: short title" \
+  && git push -u origin HEAD \
+  && gh pr create --draft --title "feat: short title" --body "$(cat <<'EOF'
 ## Summary
 - ...
 EOF
@@ -78,6 +80,10 @@ gh run view <run-id> --log-failed
 
 # Summary + logs in one call
 gh run view <run-id> && gh run view <run-id> --log-failed
+
+# Find latest failure on current branch (when no run ID given)
+RUN_ID=$(gh run list --branch="$(git branch --show-current)" --status=failure --limit=1 --json databaseId -q '.[0].databaseId') \
+  && [ "$RUN_ID" != "null" ] && gh run view "$RUN_ID" --log-failed
 ```
 
 ## Issues
@@ -137,3 +143,4 @@ Keep bodies concise -- 2-4 bullet summary for PRs, problem + options for issues.
 - Don't propose `gh pr create` without checking if a PR already exists first
 - Don't generate long PR/issue bodies -- users consistently ask agents to cut them down
 - Don't use separate shell calls for `git push` then `gh pr create` -- chain them with `&&`
+- Don't manually write `Signed-off-by` in commit messages -- always use `git commit --signoff --gpg-sign` (`-s -S`) so the trailer matches `git config user.name` / `user.email` and the commit is cryptographically signed; DCO probot and signature verification both require exact identity match
