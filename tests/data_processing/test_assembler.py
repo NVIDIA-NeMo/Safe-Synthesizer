@@ -205,7 +205,7 @@ def test_assembler_schema_tokenization_exception(
     fixture_session_cache_dir,
     fixture_assembler_config: SafeSynthesizerParameters,
 ):
-
+    # Use a small context size so this test exercises the max-token limit (default is 12k for non-tinyllama).
     fixture_llm_metadata.base_max_seq_length = 2048
     with pytest.raises(
         GenerationError,
