@@ -149,3 +149,4 @@ pytest tests/e2e/ -k dp
 - Faker: seed with `fake.seed_instance(seed)` and `random.seed(seed)` for reproducibility.
 - Tests mirror source structure: `tests/training/`, `tests/generation/`, etc.
 - Naming: fixture names use `fixture_` prefix consistently (e.g., `fixture_iris_dataset`).
+- `print()` is allowed in tests (ruff `T201` is suppressed for `tests/`). Use it freely for debug output in test functions.

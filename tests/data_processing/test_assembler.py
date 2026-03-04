@@ -801,7 +801,6 @@ def test_sequential_assembler_initial_prefill(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler returns correct prefill for each group."""
-
     # Create a small, controlled dataset with 2 groups and known values
     df = pd.DataFrame(
         {
@@ -1014,7 +1013,6 @@ def test_sequential_assembler_single_group_with_pseudo_column(
     fixture_autoconfig: PretrainedConfig,
 ):
     """Test SequentialExampleAssembler with a single group using pseudo column."""
-
     # Add pseudo group column to simulate ungrouped time series
     # Adding pseudo group is already tested in test_timeseries_preprocessing.py
     df = fixture_iris_dataset.to_pandas()

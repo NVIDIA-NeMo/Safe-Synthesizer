@@ -7,31 +7,20 @@ hide:
 
 # NeMo Safe Synthesizer
 
-**Generate synthetic data with privacy guarantees.**
-
-NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic data. It uses LLM fine-tuning with optional differential privacy to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting individual privacy.
-
----
+NeMo Safe Synthesizer is a comprehensive package for generating a safe, synthetic version of your tabular data.
+It uses LLM fine-tuning with optional [differential privacy](https://desfontain.es/blog/friendly-intro-to-differential-privacy.html) to produce high-quality synthetic datasets that preserve the statistical properties of your data while protecting sensitive information.
 
 ## Key Features
 
-- **Privacy-first synthetic data** -- PII detection and replacement, optional differential privacy via Opacus
-- **LLM fine-tuning** -- LoRA fine-tuning with HuggingFace or Unsloth backends, quantization support
-- **Fast inference** -- VLLM-powered generation with structured output enforcement
-- **Comprehensive evaluation** -- Privacy metrics, quality scores, distribution analysis, and HTML reports
-- **Flexible interfaces** -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
+- Privacy-first synthetic data -- PII detection and replacement, optional differential privacy via [Opacus](https://github.com/meta-pytorch/opacus)
+- LLM fine-tuning -- LoRA fine-tuning optimized for tabular data, including numeric, categorical, and text columns
+- Fast inference -- [vLLM](https://github.com/vllm-project/vllm)-powered generation with optional structured output enforcement
+- Comprehensive evaluation -- Privacy and quality metrics in an in-depth HTML report
+- Flexible interfaces -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
 
----
+## Next Steps
 
 <div class="grid cards" markdown>
-
--   **Product Overview**
-
-    ---
-
-    Pipeline, data synthesis, PII replacement, and evaluation.
-
-    [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
 
 -   **Getting Started**
 
@@ -41,11 +30,19 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     [:octicons-arrow-right-24: Getting Started](getting-started/installation.md)
 
+-   **Product Overview**
+
+    ---
+
+    Learn about the pipeline steps: replace PII, synthesize data, evaluate.
+
+    [:octicons-arrow-right-24: Product Overview](product-overview/pipeline.md)
+
 -   **Tutorials**
 
     ---
 
-    Step-by-step tutorials to get you up and running.
+    Follow hands-on tutorials to generate synthetic data.
 
     [:octicons-arrow-right-24: Tutorials](tutorials/index.md)
 
@@ -53,7 +50,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     ---
 
-    Python SDK, CLI reference, parameters, and troubleshooting.
+    Understand the Python SDK and CLI, available parameters, and troubleshooting.
 
     [:octicons-arrow-right-24: User Guide](user-guide/sdk.md)
 
@@ -61,7 +58,7 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     ---
 
-    Architecture documentation and auto-generated API reference.
+    Browse the auto-generated API reference and dive into the architecture details.
 
     [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
 
@@ -69,38 +66,18 @@ NeMo Safe Synthesizer is a comprehensive package for generating safe, synthetic 
 
     ---
 
-    Blog posts and release notes.
+    Read developer blog posts and check release notes.
 
     [:octicons-arrow-right-24: Developer Notes](blog/index.md)
 
 </div>
 
----
+## Contact
 
-## Quick Example
-
-```bash
-# Install and bootstrap
-make bootstrap-tools
-make bootstrap-nss cpu
-
-# Run the full pipeline
-safe-synthesizer run --config config.yaml --url data.csv
-```
-
-Or use the Python SDK:
-
-```python
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-
-config = SafeSynthesizerParameters.from_yaml("config.yaml")
-synthesizer = SafeSynthesizer(config).with_data_source(df)
-synthesizer.run()
-results = synthesizer.results
-```
-
----
+- [Need help? Ask us a question](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions)
+- [Report a bug](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=bug-report.yml)
+- [Make a feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=feature-request.yml)
+- [Report a security vulnerability](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/security/policy)
 
 ## License
 

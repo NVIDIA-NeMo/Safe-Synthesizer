@@ -27,16 +27,7 @@ HIGHLY_UNIQUE_TYPES = [FieldType.OTHER, FieldType.TEXT, FieldType.EMPTY]
 
 
 class EvaluationField(BaseModel):
-    """
-    A Report field.  Stores column level stat values.
-
-    Attributes:
-        name: the column name from the original df
-        reference_field_features: FieldFeatures. All the stats etc.
-        output_field_features: FieldFeatures. All the stats etc.
-        distribution_distance: the Jensen Shannon distance between the two distributions.
-        column_statistics: list of entities and their count, whether col was transformed, functions used.
-    """
+    """A report field storing column-level statistical values."""
 
     name: str = Field()
     reference_field_features: FieldFeatures = Field()

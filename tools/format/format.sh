@@ -2,75 +2,35 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
 #
-# format.sh - Format (or check formatting of) changed Python files
+# format.sh -- format (or check formatting of) Python files with ruff
 #
 # Usage:
-#   ./format.sh [MERGE_BASE_SHA]          # fix mode (default) — rewrites files
-#   ./format.sh --check [MERGE_BASE_SHA]  # check mode — exits 1 if unformatted
+#   ./format.sh                          # fix mode, all tracked .py files
+#   ./format.sh --check                  # check mode (exit 1 if unformatted)
+#   ./format.sh src/foo.py bar.py        # fix specific files
+#   ./format.sh --check src/foo.py       # check mode on specific files
+#
+# Copyright headers are handled separately by copyright_fixer.py
+# (called from `make format`, `make lint`, and the pre-commit copyright-fix hook).
 #
 
 set -euo pipefail
 
-NSS_ROOT_PATH="${NSS_ROOT_PATH:-$(git rev-parse --show-toplevel)}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=../lint/_lib.sh
+source "$REPO_ROOT/tools/lint/_lib.sh"
 
-# Parse --check flag
-CHECK_MODE=false
-MERGE_BASE_SHA=""
-for arg in "$@"; do
-    case "$arg" in
-        --check) CHECK_MODE=true ;;
-        *)       MERGE_BASE_SHA="$arg" ;;
-    esac
-done
+require_tool ruff
 
-if [ -z "$MERGE_BASE_SHA" ]; then
-    if git branch -l | grep "main" > /dev/null; then
-        MERGE_BASE_SHA="main"
-    else
-        echo "Merge Base SHA is required"
-        exit 1
-    fi
-fi
+files=$(collect_py_files "$@")
 
-# Get the list of changed Python files
-files=$(git diff "$MERGE_BASE_SHA" --cached --name-only --diff-filter=ACMR | grep '\.py$' || true)
-
-if [ -z "$files" ]; then
-	echo "No Python files to check"
-	exit 0
-fi
-
-# Filter out files excluded in pyproject.toml's [tool.ty.src].exclude
-filtered_files=$(echo "$files" | uv run --frozen python tools/lint/filter_ty_exclusions.py)
-
-if [ -z "$filtered_files" ]; then
-	echo "No Python files to check (all files are excluded)"
-	exit 0
-fi
-
-# Resolve ruff
-if ! which ruff > /dev/null; then
-    echo "ruff not found, falling back to uvx"
-    RUFF="uvx ruff"
-else
-    RUFF="ruff"
-fi
-
-if [ "$CHECK_MODE" = true ]; then
-    echo "Running in check mode (no files will be modified)"
+if [[ "$CHECK_MODE" == true ]]; then
     # shellcheck disable=SC2086
-    $RUFF format --check "$NSS_ROOT_PATH" $filtered_files
-    # shellcheck disable=SC2086
-    $RUFF check "$NSS_ROOT_PATH" $filtered_files
-    # shellcheck disable=SC2086
-    uv run --script tools/lint/copyright_fixer.py --check $filtered_files
+    ruff format --check $files
 else
     # shellcheck disable=SC2086
-    $RUFF format "$NSS_ROOT_PATH" $filtered_files
+    ruff format $files
     # shellcheck disable=SC2086
-    $RUFF check --fix "$NSS_ROOT_PATH" $filtered_files
-    # shellcheck disable=SC2086
-    uv run --script tools/lint/copyright_fixer.py $filtered_files
+    ruff check --fix $files
 fi

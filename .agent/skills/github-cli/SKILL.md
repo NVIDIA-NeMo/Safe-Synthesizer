@@ -18,17 +18,16 @@ Note: The commands below are quick references. For comprehensive detail and mult
 
 Always use `required_permissions: ["all"]` when running `gh` commands. Sandboxed environments fail with TLS certificate errors (`x509: OSStatus -26276`).
 
+## Prefer && Chains
+
+When running multiple sequential commands (pre-flight, commit, push, PR create), chain them with `&&` in a single shell call. Only use separate calls when you need to read intermediate output before deciding the next step.
+
 ## Pre-flight
 
 Before any `gh` operation, verify the binary is available and authenticated:
 
 ```bash
-# Verify gh is available (check PATH, then common install location)
-which gh 2>/dev/null || ls ~/.local/bin/gh 2>/dev/null
-# If found at ~/.local/bin/gh but not on PATH:
-export PATH="$HOME/.local/bin:$PATH"
-# Verify authentication
-gh auth status
+export PATH="$HOME/.local/bin:$PATH" && gh auth status
 ```
 
 ## Pull Requests
@@ -59,22 +58,32 @@ gh pr view --json number,url 2>/dev/null && echo "PR exists" || echo "No PR yet"
 
 # Edit an existing PR's title/body
 gh pr edit <number> --title "New title" --body "New body"
+
+# Commit, push, and create PR in one call
+git add -A && git commit -s -S -m "feat: short title" \
+  && git push -u origin HEAD \
+  && gh pr create --draft --title "feat: short title" --body "$(cat <<'EOF'
+## Summary
+- ...
+EOF
+)"
 ```
 
 ## CI / Actions
 
 ```bash
-# Check CI status for current branch
-gh pr checks
+# Check CI status + recent runs in one call
+gh pr checks && gh run list --limit 5
 
-# List workflow runs
-gh run list --limit 10
-
-# View a failed run
-gh run view <run-id>
-
-# View failed job logs
+# When you already have the run ID (e.g. from a URL the user pasted):
 gh run view <run-id> --log-failed
+
+# Summary + logs in one call
+gh run view <run-id> && gh run view <run-id> --log-failed
+
+# Find latest failure on current branch (when no run ID given)
+RUN_ID=$(gh run list --branch="$(git branch --show-current)" --status=failure --limit=1 --json databaseId -q '.[0].databaseId') \
+  && [ "$RUN_ID" != "null" ] && gh run view "$RUN_ID" --log-failed
 ```
 
 ## Issues
@@ -129,6 +138,9 @@ Keep bodies concise -- 2-4 bullet summary for PRs, problem + options for issues.
 
 ## Common Mistakes
 
+- Don't run `gh run view <id>` and `gh run view <id> --log-failed` as separate calls -- go straight to `--log-failed` when you already have the run ID
 - Don't WebFetch GitHub Actions URLs for private repos -- use `gh run view` instead (auth required)
 - Don't propose `gh pr create` without checking if a PR already exists first
 - Don't generate long PR/issue bodies -- users consistently ask agents to cut them down
+- Don't use separate shell calls for `git push` then `gh pr create` -- chain them with `&&`
+- Don't manually write `Signed-off-by` in commit messages -- always use `git commit --signoff --gpg-sign` (`-s -S`) so the trailer matches `git config user.name` / `user.email` and the commit is cryptographically signed; DCO probot and signature verification both require exact identity match

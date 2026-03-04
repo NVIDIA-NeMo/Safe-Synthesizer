@@ -35,7 +35,13 @@ os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "1"
 
 
 class VllmBackend(GeneratorBackend):
-    def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, workdir: Workdir, **kwargs):
+    def __init__(
+        self,
+        config: SafeSynthesizerParameters,
+        model_metadata: ModelMetadata,
+        workdir: Workdir,
+        **kwargs,
+    ):
         self.model_metadata = model_metadata
         self.config = config
         self.remote = False
@@ -118,9 +124,9 @@ class VllmBackend(GeneratorBackend):
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
             regex = build_json_based_regex(
                 self.schema,
+                self.config,
                 self.model_metadata.prompt_config.bos_token,
                 self.model_metadata.prompt_config.eos_token,
-                group_by=self.config.data.group_training_examples_by is not None,
             )
             params["regex"] = regex
         elif self.config.generation.structured_generation_schema_method == "json_schema":
@@ -239,7 +245,10 @@ class VllmBackend(GeneratorBackend):
         if TYPE_CHECKING:
             assert self.llm is not None
         self._gen_method = partial(
-            self.llm.generate, sampling_params=real_params, lora_request=self.lora_req, use_tqdm=False
+            self.llm.generate,
+            sampling_params=real_params,
+            lora_request=self.lora_req,
+            use_tqdm=False,
         )
 
     def _generate(
@@ -309,7 +318,12 @@ class VllmBackend(GeneratorBackend):
         return batch
 
     def _log_batch_timing_and_progress(
-        self, batch: Batch, duration: float, num_records: int, num_valid_records: int, batches: GenerationBatches
+        self,
+        batch: Batch,
+        duration: float,
+        num_records: int,
+        num_valid_records: int,
+        batches: GenerationBatches,
     ) -> None:
         """Log batch timing and progress information.
 

@@ -187,9 +187,7 @@ def histogram(
 
 
 def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
-    """
-    Get common bin edges for the training and synthetic principal components.
-    """
+    """Get common bin edges for the training and synthetic principal components."""
     data = pd.concat([x1, x2]).to_numpy()
     edges = np.histogram_bin_edges(data, bins="auto")
 

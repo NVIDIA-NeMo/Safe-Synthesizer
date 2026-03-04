@@ -56,6 +56,7 @@ dev = [
 docs = [
   "mkdocs-material",
   "mkdocstrings[python]",
+  "griffe-pydantic",
   "mkdocs-gen-files",
   "mkdocs-literate-nav",
   "mkdocs-jupyter",

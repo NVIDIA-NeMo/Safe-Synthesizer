@@ -109,8 +109,10 @@ class EvaluationDataset(BaseModel):
         output: pd.DataFrame,
         test: pd.DataFrame | None = None,
         target_column_count: int = DEFAULT_SQS_REPORT_COLUMNS,
-        mandatory_columns: list[str] = list(),
+        mandatory_columns: list[str] | None = None,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+        if mandatory_columns is None:
+            mandatory_columns = []
         # Check and subsample columns
         shared_columns = set(reference.columns).intersection(set(output.columns))
         if len(shared_columns) == 0:
@@ -173,7 +175,7 @@ class EvaluationDataset(BaseModel):
         column_statistics: dict[str, ColumnStatistics] | None = None,
         rows: int = DEFAULT_RECORD_COUNT,
         cols: int = DEFAULT_SQS_REPORT_COLUMNS,
-        mandatory_columns: list[str] = list(),
+        mandatory_columns: list[str] | None = None,
         enable_sampling: bool = True,
     ) -> EvaluationDataset:
         # Spot check df's before doing anything.

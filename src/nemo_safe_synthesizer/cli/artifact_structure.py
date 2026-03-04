@@ -109,12 +109,12 @@ class RunName:
 
     @property
     def is_timestamp_based(self) -> bool:
-        """Check if this run name was generated from or parsed as a timestamp."""
+        """Whether this run name was generated from or parsed as a timestamp."""
         return self._timestamp is not None
 
     @property
     def timestamp(self) -> datetime | None:
-        """Get the timestamp if this is a timestamp-based run name."""
+        """The timestamp if this is a timestamp-based run name."""
         return self._timestamp
 
 
@@ -216,7 +216,7 @@ class BoundDir(os.PathLike[str]):
 
     @property
     def path(self) -> Path:
-        """Get the directory path."""
+        """The directory path."""
         return self._path
 
     def __fspath__(self) -> str:
@@ -358,12 +358,12 @@ class Workdir:
 
     @property
     def project_name(self) -> str:
-        """Get the project name (config---dataset)."""
+        """The project name (config---dataset)."""
         return f"{self.config_name}{PROJECT_NAME_DELIMITER}{self.dataset_name}"
 
     @property
     def project_dir(self) -> Path:
-        """Get the project directory path ($base_path/<config>---<dataset>/).
+        """The project directory path ($base_path/<config>---<dataset>/).
 
         If an explicit run path was provided, returns its parent directory.
         Otherwise returns $base_path/<config>---<dataset>/.
@@ -374,7 +374,7 @@ class Workdir:
 
     @property
     def run_dir(self) -> Path:
-        """Get the run directory path.
+        """The run directory path.
 
         If an explicit run path was provided, returns that path directly.
         Otherwise returns $base_path/<config>---<dataset>/<run_name>/.
@@ -397,7 +397,7 @@ class Workdir:
 
     @property
     def log_file(self) -> Path:
-        """Get the log file path for the current phase."""
+        """The log file path for the current phase."""
         phase = self._current_phase or "unknown"
         if phase == "generate":
             return self.generate.logs  # type: ignore[return-value]
@@ -455,14 +455,14 @@ class Workdir:
 
     @property
     def source_run_dir(self) -> Path:
-        """Get the source run directory (parent's run_dir if this is a child generation run)."""
+        """The source run directory (parent's run_dir if this is a child generation run)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.run_dir
         return self.run_dir
 
     @property
     def source_config(self) -> Path:
-        """Get the source config file (from parent workdir if available).
+        """The source config file (from parent workdir if available).
 
         Checks multiple locations for backwards compatibility:
         1. Root level config: <run_dir>/safe-synthesizer-config.json
@@ -485,21 +485,21 @@ class Workdir:
 
     @property
     def source_adapter_path(self) -> Path:
-        """Get the source adapter path (from parent workdir if available)."""
+        """The source adapter path (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.adapter_path
         return self.adapter_path
 
     @property
     def source_dataset(self) -> BoundDir:
-        """Get the source dataset directory (from parent workdir if available)."""
+        """The source dataset directory (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.dataset  # type: ignore[return-value]
         return self.dataset  # type: ignore[return-value]
 
     @property
     def source_schema_file(self) -> Path:
-        """Get the source schema file (from parent workdir if available)."""
+        """The source schema file (from parent workdir if available)."""
         if self._parent_workdir is not None:
             return self._parent_workdir.schema_file
         return self.schema_file

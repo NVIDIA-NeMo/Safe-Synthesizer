@@ -3,47 +3,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #
-# ruff-lint.sh - Lint the code with ruff
+# ruff-lint.sh -- lint Python files with ruff
 #
-# Usage: ./ruff-lint.sh <MERGE_BASE_SHA>
+# Usage:
+#   ./ruff-lint.sh                     # all tracked .py files
+#   ./ruff-lint.sh src/foo.py bar.py   # specific files
 #
 
 set -euo pipefail
 
-MERGE_BASE_SHA="${1:-}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=_lib.sh
+source "$REPO_ROOT/tools/lint/_lib.sh"
 
-if [ -z "$MERGE_BASE_SHA" ]; then
-    if git branch -l | grep "main" > /dev/null; then
-        MERGE_BASE_SHA="main"
-    else
-        echo "Merge Base SHA is required"
-        exit 1
-    fi
-fi
+require_tool ruff
 
-# Get the list of changed Python files
-files=$(git diff "$MERGE_BASE_SHA" --cached --name-only --diff-filter=ACMR | grep '\.py$' || true)
-
-if [ -z "$files" ]; then
-	echo "No Python files to check"
-	exit 0
-fi
-
-# Filter out files excluded in pyproject.toml's [tool.ty.src].exclude
-filtered_files=$(echo "$files" | uv run --frozen python tools/lint/filter_ty_exclusions.py)
-
-if [ -z "$filtered_files" ]; then
-	echo "No Python files to check (all files are excluded)"
-	exit 0
-fi
-
-# Run ruff check on the filtered files
-if ! which ruff > /dev/null; then
-    echo "ruff not found"
-    RUFF="uvx ruff"
-else
-    RUFF="ruff"
-fi
+files=$(collect_py_files "$@")
 
 # shellcheck disable=SC2086
-$RUFF check $filtered_files # no quotes around $filtered_files to preserve newlines
+ruff check $files

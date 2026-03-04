@@ -8,7 +8,7 @@
 
 import os
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Optional, Sequence
 
 import opacus
 import pandas as pd
@@ -158,9 +158,7 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer, mlm=False)
 
-    def __call__(
-        self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.Tensor]]]
-    ) -> Dict[str, torch.Tensor]:
+    def __call__(self, examples: list[list[int] | torch.Tensor | dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
         batch = super().__call__(examples)
 
         if "position_ids" not in batch:
@@ -178,8 +176,8 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
         super().__init__(tokenizer=tokenizer)
 
     def __call__(
-        self, examples: List[Union[List[int], torch.Tensor, Dict[str, torch.TensorType]]]
-    ) -> Dict[str, torch.Tensor]:
+        self, examples: list[list[int] | torch.Tensor | dict[str, torch.TensorType]]
+    ) -> dict[str, torch.Tensor]:
         batch = super().__call__(examples)
 
         if "position_ids" not in batch:
@@ -202,9 +200,7 @@ class GradSampleModule(opacus.GradSampleModule):
 
 
 def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]:
-    """
-    Creates a mapping from entities to samples in a dataset.
-    """
+    """Creates a mapping from entities to samples in a dataset."""
     entities = pd.DataFrame(data={"entity": entity_column_values})
     # Using `groupby("entity")` - note that the entities returned by groupby are
     # sorted, but the order of records in each group is preserved.
@@ -230,15 +226,15 @@ class OpacusDPTrainer(Trainer):
     def __init__(
         self,
         train_dataset: Dataset,
-        model: Union[modeling_utils.PreTrainedModel, torch.nn.Module],
+        model: modeling_utils.PreTrainedModel | torch.nn.Module,
         args=None,
         privacy_args: PrivacyArguments | None = None,
         data_fraction: float | None = None,
         true_dataset_size: int | None = None,
         entity_column_values: list | None = None,
-        callbacks: List[TrainerCallback] | None = None,
+        callbacks: list[TrainerCallback] | None = None,
         secure_mode: bool | None = True,
-        **kwargs: Dict,
+        **kwargs: dict,
     ) -> None:
         self.train_args = args
         self.privacy_args = privacy_args
@@ -300,9 +296,7 @@ class OpacusDPTrainer(Trainer):
         self.add_callback(self.dp_callback)
 
     def get_epsilon(self):
-        """
-        Calculate the epsilon after model training completes.
-        """
+        """Calculate the epsilon after model training completes."""
         return self.accountant.compute_epsilon(self.state.global_step)
 
     @property
@@ -366,7 +360,8 @@ class OpacusDPTrainer(Trainer):
             `original_optimizer.param_groups`, and the approach used by Opacus
             fails when we try to e.g., update the learning rate. We here use
             the same approach used in accelerate, which makes `param_groups` a
-            proper 'pointer'."""
+            proper 'pointer'.
+            """
 
             @property
             def param_groups(self):
@@ -394,7 +389,7 @@ class OpacusDPTrainer(Trainer):
     def training_step(
         self,
         model: nn.Module,
-        inputs: Dict[str, Union[torch.Tensor, Any]],
+        inputs: dict[str, torch.Tensor | Any],
         num_items_in_batch=None,
     ) -> torch.Tensor:
         """
@@ -422,9 +417,7 @@ class OpacusDPTrainer(Trainer):
         return loss.detach() / self.args.gradient_accumulation_steps
 
     def _get_train_sampler(self):
-        """
-        Provides entity sampler.
-        """
+        """Provides entity sampler."""
         if self.privacy_args.poisson_sampling:
             # NOTE: sample_rate is set s.t. chosen batch size remains the same in average
             sample_rate = min(
@@ -446,9 +439,7 @@ class OpacusDPTrainer(Trainer):
         return train_sampler
 
     def get_train_dataloader(self) -> DataLoader:
-        """
-        Returns a torch DataLoader that uses an entity-level sampler.
-        """
+        """Returns a torch DataLoader that uses an entity-level sampler."""
         train_sampler = self._get_train_sampler()
         return DataLoader(
             self.train_dataset,

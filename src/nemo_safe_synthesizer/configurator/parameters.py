@@ -54,9 +54,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     model_config = pydantic_model_config
 
     def _isparams(self):
-        """
-        Marker method for identifying Parameters subclasses. More like a protocol than anything.
-        """
+        """Marker method for identifying Parameters subclasses. More like a protocol than anything."""
         return True
 
     @classmethod

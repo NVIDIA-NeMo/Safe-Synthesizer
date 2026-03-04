@@ -30,9 +30,9 @@ import csv
 import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
-COLUMNS: List[str] = [
+COLUMNS: list[str] = [
     "exp_setting",
     "file_name",
     "dataset_name",
@@ -63,7 +63,7 @@ def _safe_lower(text: Optional[str]) -> str:
     return (text or "").lower()
 
 
-def parse_summary_block(file_text: str) -> Dict[str, str]:
+def parse_summary_block(file_text: str) -> dict[str, str]:
     """Parse the SafeSynthesizer summary block into a dict of raw string values.
 
     Returns an empty dict if the block is not present.
@@ -74,7 +74,7 @@ def parse_summary_block(file_text: str) -> Dict[str, str]:
     if not header_indices:
         return {}
     start_idx = header_indices[-1] + 1
-    values: Dict[str, str] = {}
+    values: dict[str, str] = {}
     for i in range(start_idx, len(lines)):
         line = lines[i]
         # Block lines are indented by two spaces followed by key: value
@@ -143,7 +143,7 @@ def build_row(
     root_dir: Path,
     file_path: Path,
     file_text: str,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Build a CSV row for the given file contents."""
     values = parse_summary_block(file_text)
     dataset = parse_dataset_name(file_text) or ""
@@ -176,7 +176,7 @@ def build_row(
         "evaluation_time",
     ]
 
-    row: Dict[str, str] = {col: "" for col in COLUMNS}
+    row: dict[str, str] = {col: "" for col in COLUMNS}
     row["exp_setting"] = determine_exp_setting(root_dir, file_path)
     row["file_name"] = file_path.name
     row["dataset_name"] = dataset
@@ -293,7 +293,7 @@ def is_low_valid_rate_failure(out_text: str, err_text: str) -> bool:
     return any(tok in lowered_out for tok in tokens) or any(tok in lowered_err for tok in tokens)
 
 
-def fill_timing_metrics_from_text(row: Dict[str, str], text: str) -> None:
+def fill_timing_metrics_from_text(row: dict[str, str], text: str) -> None:
     """Parse *_time_sec fields from arbitrary text and populate row timing columns if missing."""
     if not text:
         return
@@ -378,12 +378,12 @@ def extract_error_message(err_text: str) -> Optional[str]:
     return None
 
 
-def collect_rows(root_dir: Path, skip_incomplete: bool = False) -> List[Dict[str, str]]:
-    rows: List[Dict[str, str]] = []
+def collect_rows(root_dir: Path, skip_incomplete: bool = False) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
     # Scan all .out files; include two-stage and e2e runs uniformly.
     # Training-only logs (slurm_train*.out) are ignored unless their matching .err shows an ERROR.
     all_out_files = sorted(root_dir.rglob("*.out"))
-    candidates: List[Path] = []
+    candidates: list[Path] = []
     for p in all_out_files:
         if p.name.startswith("slurm_train"):
             err_path = p.with_suffix(".err")
@@ -407,7 +407,7 @@ def collect_rows(root_dir: Path, skip_incomplete: bool = False) -> List[Dict[str
     return rows
 
 
-def write_csv(rows: List[Dict[str, str]], output_path: Path) -> None:
+def write_csv(rows: list[dict[str, str]], output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
@@ -416,7 +416,7 @@ def write_csv(rows: List[Dict[str, str]], output_path: Path) -> None:
             writer.writerow({k: row.get(k, "") for k in COLUMNS})
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect SafeSynthesizer metrics from .out logs into a CSV")
     parser.add_argument(
         "--root",
@@ -438,7 +438,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     args = parse_args(argv)
     root_dir: Path = args.root
     if not root_dir.exists() or not root_dir.is_dir():

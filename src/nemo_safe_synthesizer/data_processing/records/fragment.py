@@ -9,7 +9,6 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Tuple, Union
 
 from ...pii_replacer.ner.entity import Score
 from ...pii_replacer.ner.predictor import NERPrediction
@@ -58,7 +57,7 @@ class MetadataFragment:
     def gretel_fragment_datetime(self) -> datetime:
         return datetime.fromtimestamp(self.gretel_fragment_epoch)
 
-    def add_field_data(self, field_name: str, metadata_type: str, field_data: Union[dict, List]):
+    def add_field_data(self, field_name: str, metadata_type: str, field_data: dict | list):
         """
         Adds field data by type to the model_metadata fragment
         Args:
@@ -81,6 +80,7 @@ class MetadataFragment:
 def merge_fragments(*fragments, ts: str | None = None) -> Metadata:
     """
     Reduces a list of fragments to a single `Metadata` object.
+
     Args:
         *fragments: a list of MetadataFragments to merge
     Returns:
@@ -117,11 +117,11 @@ def fragment_for_record(gretel_id: str, fragment_name: str) -> MetadataFragment:
 
 
 def predictions_to_dict(
-    predictions: List[NERPrediction],
+    predictions: list[NERPrediction],
     *,
     high_score: float = Score.HIGH,
     med_score: float = Score.MED,
-) -> Tuple[dict, dict]:
+) -> tuple[dict, dict]:
     """
     Reduces a list of prediction results into a single dict by field key. Also
     creates an entity mapping to easily find entity data about a record.
@@ -134,6 +134,7 @@ def predictions_to_dict(
                 "ip_address": ["conn_str"]
             }
         }
+
     Returns:
         A tuple with a dict of field prediction results by field key and a mapping
         entities to their fields and a list of all entities seen in the record.
@@ -179,9 +180,9 @@ def predictions_to_dict(
 
 def fragment_from_ner_predictions(
     fragment_name: str,
-    predictions: List[NERPrediction],
+    predictions: list[NERPrediction],
     gretel_id: str,
-) -> Tuple[MetadataFragment, dict]:
+) -> tuple[MetadataFragment, dict]:
     epoch = time.time()
     fragment = MetadataFragment(
         gretel_id=gretel_id,
@@ -196,7 +197,7 @@ def fragment_from_ner_predictions(
     return fragment, ent_map
 
 
-def build_ner_metadata(preds: List[dict]) -> Metadata:
+def build_ner_metadata(preds: list[dict]) -> Metadata:
     preds = [NERPrediction.from_dict(p) for p in preds]
     fragment, ent_map = fragment_from_ner_predictions(
         "ner",
@@ -208,7 +209,7 @@ def build_ner_metadata(preds: List[dict]) -> Metadata:
     return meta.as_dict()
 
 
-def create_ner_api_response(records: List[dict], predictions: List[dict], pure_dict: bool = False) -> List[dict]:
+def create_ner_api_response(records: list[dict], predictions: list[dict], pure_dict: bool = False) -> list[dict]:
     out = [
         {"data": record, "model_metadata": build_ner_metadata(prediction)}
         for record, prediction in zip(records, predictions)

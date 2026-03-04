@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import cached_property
-from typing import Any, Union
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -73,13 +73,13 @@ class FieldFeatures(BaseModel):
     Number of times space character (' ') appears in field's values.
     """
 
-    classification: Union[dict, None] = Field(default=None)
+    classification: dict | None = Field(default=None)
     """
     Classification information, based on labels detected in field's values.
     """
 
-    def dict(self, **kwargs) -> dict:
-        return super().model_dump(exclude_unset=True, exclude_none=True)
+    def to_dict(self, **kwargs) -> dict:
+        return self.model_dump(exclude_unset=True, exclude_none=True)
 
 
 class FieldFeaturesInfo:

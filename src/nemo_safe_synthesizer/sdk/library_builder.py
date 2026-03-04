@@ -1,5 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+
+"""Executable pipeline for Safe Synthesizer.
+
+Extends ``ConfigBuilder`` with the ``SafeSynthesizer`` class, which
+adds artifact management (via ``Workdir``) and stepwise pipeline
+execution: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
+"""
+
 from __future__ import annotations
 
 import os
@@ -34,6 +42,19 @@ if TYPE_CHECKING:
 
 
 def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) -> SafeSynthesizerResults:
+    """Run PII replacement without synthesis and return results.
+
+    Applies the PII replacer to ``df``, optionally evaluates, and
+    packages everything into a ``SafeSynthesizerResults``.
+
+    Args:
+        config: Resolved parameters (must have ``replace_pii`` set).
+        df: Source DataFrame to transform.
+
+    Returns:
+        Results containing the PII-replaced DataFrame and optional
+        evaluation report.
+    """
     total_start = time.monotonic()
 
     replacer = NemoPII(config.replace_pii)
@@ -64,19 +85,33 @@ def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) 
 
 
 def _get_unsloth_backend_class() -> type[TrainingBackend]:
-    """Get the Unsloth training backend class."""
+    """Lazily import and return the Unsloth training backend class.
+
+    The import is deferred so that the ``unsloth`` extra is only
+    required when Unsloth is actually selected as the backend.
+
+    Returns:
+        The ``UnslothTrainer`` class.
+    """
     from ..training.unsloth_backend import UnslothTrainer
 
     return UnslothTrainer
 
 
 def get_training_backend_class(config: SafeSynthesizerParameters) -> type[TrainingBackend]:
-    """Get the training backend class for the given configuration.
+    """Select the training backend class based on configuration.
+
+    Returns ``HuggingFaceBackend`` by default, or ``UnslothTrainer``
+    when ``config.training.use_unsloth`` is ``True``.
+
     Args:
-        config: SafeSynthesizerParameters object.
+        config: Resolved pipeline parameters.
 
     Returns:
-        The training backend class.
+        The training backend class to instantiate.
+
+    Raises:
+        ValueError: If the backend identifier is unrecognized.
     """
     class_map = {
         "huggingface": HuggingFaceBackend,
@@ -91,68 +126,49 @@ def get_training_backend_class(config: SafeSynthesizerParameters) -> type[Traini
 
 
 class SafeSynthesizer(ConfigBuilder):
-    """Builder for package-only Safe Synthesizer workflows.
+    """Fluent builder and runner for Safe Synthesizer workflows.
 
-    This class provides a fluent interface for building Safe Synthesizer workflows.
-    It allows you to configure all the parameters needed to create and run a Safe Synthesizer workflow.
+    Extends ``ConfigBuilder`` with artifact management and stepwise
+    pipeline execution.  Run all at once via ``run()``, or step by
+    step::
 
-    Each main parameter group method returns the builder instance to allow for method chaining, and most methods
-    follow a common api:
-        ```python
-            >>> def with_<parameter_group>(self, config: ParamT | ParamDict | None = None, **kwargs) -> SafeSynthesizer: pass
-        ```
-        config: Optional configuration object or dictionary containing <parameter_group> parameters.
-      **kwargs: Configuration parameters for <parameter_group>, that will override any overlapping parameters in config and model defaults.
+        builder = SafeSynthesizer().with_data_source(df)
+        builder.process_data().train().generate().evaluate()
+        results = builder.results
 
-    The workflow can be run either all at once via `run()`, or step-by-step:
-        ```python
-        >>> builder = SafeSynthesizer().with_data_source(df)
-        >>> builder.process_data().train().generate().evaluate()
-        >>> results = builder.results
-        ```
+    Args:
+        config: Optional pre-built parameters that seed every
+            config section.
+        workdir: Explicit artifact directory layout.  When ``None``
+            a default ``Workdir`` is created under ``save_path``.
+        save_path: Root directory for artifacts when ``workdir``
+            is not provided.  Defaults to
+            ``"safe-synthesizer-artifacts"``.
 
-    Examples:
-        ```python
-        >>> from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+    Example::
 
-        >>> builder = (
-        >>>     SafeSynthesizer()
-        >>>     .with_data_source("your_dataframe")
-        >>>     .with_replace_pii()  # Uses default PII replacement settings
-        >>>     .synthesize()  # Enables synthesis; not strictly needed if you are already calling training() or generation()
-        >>>     .with_train(learning_rate=0.0001)  # Custom training settings
-        >>>     .with_generate(num_records=10000)  # Custom generation settings
-        >>>     .with_evaluate(enable=False)  # disable evaluation for this job
-        >>> )
-        >>> builder.run()
-        >>> results = builder.results
-        ```
-
-         ```python
-        >>> from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-
-        >>> builder = (
-        >>>     SafeSynthesizer()
-        >>>     .with_data_source("your_dataframe")
-        >>>     .with_replace_pii()  # Uses default PII replacement settings
-        >>>     .synthesize()  # Enables synthesis; not strictly needed if you are already calling training() or generation()
-        >>>     .with_train(learning_rate=0.0001)  # Custom training settings
-        >>>     .with_generate(num_records=10000)  # Custom generation settings
-        >>>     .with_evaluate(enable=False)  # disable evaluation for this job
-        >>>     .process_data()  # Process data
-        >>>     .train()  # Train the model
-        >>>     .generate()  # Generate synthetic data
-        >>>     .evaluate()  # Evaluate the generated data
-        >>> )
-        >>> builder.run()
-        >>> results = builder.results
-        ```
+        builder = (
+            SafeSynthesizer()
+            .with_data_source(df)
+            .with_replace_pii()
+            .with_train(learning_rate=0.0001)
+            .with_generate(num_records=10000)
+        )
+        builder.run()
+        results = builder.results
     """
 
     trainer: TrainingBackend
+    """Training backend instance, populated after ``train()``."""
+
     generator: GeneratorBackend
+    """Generation backend instance, populated after ``generate()``."""
+
     evaluator: Evaluator
+    """Evaluator instance, populated after ``evaluate()``."""
+
     results: SafeSynthesizerResults
+    """Final pipeline results, populated after ``evaluate()`` or ``run()``."""
 
     def __init__(
         self,
@@ -243,16 +259,14 @@ class SafeSynthesizer(ConfigBuilder):
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self) -> SafeSynthesizer:
-        """Process data: perform train/test split, auto-config resolution, and optional PII replacement.
+        """Perform train/test split, auto-config resolution, and optional PII replacement.
 
-        This method prepares the data for training by:
-        - Splitting data into train/test sets using holdout
-        - Resolving auto-configuration parameters
-        - Applying PII replacement if enabled (on training data only)
+        Splits the data via ``Holdout``, runs ``AutoConfigResolver`` to
+        resolve ``"auto"`` parameters, applies PII replacement to the
+        training set when enabled, and persists the splits to the workdir.
 
         Returns:
             Self for method chaining.
-
         """
         self._total_start = time.monotonic()
         if not os.environ.get("NSS_PHASE"):
@@ -300,20 +314,18 @@ class SafeSynthesizer(ConfigBuilder):
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)
     def train(self) -> SafeSynthesizer:
-        """Train the model on the processed data.
+        """Fine-tune the base model on the processed training data.
 
-        This method:
-        - Creates the training backend (HuggingFace or Unsloth)
-        - Loads the base model
-        - Performs fine-tuning on the training data
+        Creates the training backend (HuggingFace or Unsloth), loads
+        the base model, and runs fine-tuning.  Requires
+        ``process_data()`` to have been called first.
 
         Returns:
             Self for method chaining.
 
         Raises:
-            RuntimeError: If process_data() has not been called first.
+            RuntimeError: If ``process_data()`` has not been called first.
         """
-
         # these are for ty
         if TYPE_CHECKING:
             assert self._train_df is not None
@@ -347,13 +359,12 @@ class SafeSynthesizer(ConfigBuilder):
     def generate(self) -> SafeSynthesizer:
         """Generate synthetic data using the trained model.
 
-        This method:
-        - Initializes the VLLM generation backend
-        - Generates synthetic records based on configuration
+        Selects the appropriate backend (``VllmBackend`` or
+        ``TimeseriesBackend``), initializes it, and generates
+        synthetic records.
 
         Returns:
             Self for method chaining.
-
         """
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "generate"
@@ -384,12 +395,7 @@ class SafeSynthesizer(ConfigBuilder):
 
     @traced("SafeSynthesizer.evaluate", category=LogCategory.RUNTIME)
     def evaluate(self) -> SafeSynthesizer:
-        """Evaluate the generated synthetic data and build final results.
-
-        This method:
-        - Runs quality and privacy evaluations on generated data
-        - Compiles timing information and evaluation reports
-        - Populates the `results` attribute
+        """Run quality and privacy evaluations and populate ``results``.
 
         Returns:
             Self for method chaining.
@@ -435,6 +441,11 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     def _run_pii_replacer_only(self) -> SafeSynthesizerResults:
+        """Execute PII-only mode using the builder's data source.
+
+        Returns:
+            Results containing the PII-replaced DataFrame.
+        """
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
@@ -453,19 +464,11 @@ class SafeSynthesizer(ConfigBuilder):
         )
 
     def run(self) -> None:
-        """Run the Safe Synthesizer workflow end to end.
+        """Run the full pipeline: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
 
-        This method executes the complete pipeline:
-        1. process_data() - Data preparation and PII replacement
-        2. train() - Model fine-tuning
-        3. generate() - Synthetic data generation
-        4. evaluate() - Quality and privacy evaluation
-
-        For PII-replacement-only mode (when enable_synthesis=False),
-        this method handles that workflow directly.
-
-        For step-by-step control, call the individual methods instead:
-            builder.process_data().train().generate().evaluate()
+        When ``enable_synthesis`` is ``False``, runs PII replacement
+        only.  For step-by-step control, call the individual methods
+        instead.
         """
         if TYPE_CHECKING:
             assert self._nss_config is not None
@@ -479,14 +482,11 @@ class SafeSynthesizer(ConfigBuilder):
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> None:
-        """Save synthetic data results and evaluation report to the workdir.
-
-        Saves:
-            - Synthetic data CSV to output_file or workdir.output_file
-            - Evaluation report HTML to workdir.evaluation_report (if available)
+        """Save synthetic data CSV and evaluation report HTML to the workdir.
 
         Args:
-            output_file: Explicit output path for CSV (takes precedence over workdir default)
+            output_file: Explicit output path for the CSV.  Falls back
+                to ``workdir.output_file`` when ``None``.
         """
         if TYPE_CHECKING:
             assert self.results is not None

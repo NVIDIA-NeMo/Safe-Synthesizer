@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Configuration update logic for auto-params for NSS models.
-"""
+"""Configuration update logic for auto-params for NSS models."""
 
 from __future__ import annotations
 
@@ -39,10 +37,7 @@ def choose_num_input_records_to_sample(rope_scaling_factor: int) -> int:
 
 
 def get_max_token_count(data: pd.DataFrame, group_by: list[str] | str | None) -> int:
-    """
-    Estimate the maximum token count needed for the data.
-    """
-
+    """Estimate the maximum token count needed for the data."""
     if data.size == 0:
         return 1
 

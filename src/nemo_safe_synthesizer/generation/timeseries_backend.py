@@ -96,21 +96,21 @@ class TimeseriesBackend(VllmBackend):
     ensuring temporal continuity.
 
     Key Concepts:
-        - **Time-Range Based Generation**: The number of records generated is
+        - Time-Range Based Generation: The number of records generated is
           determined by the configured time range and interval, not by a target
           count. Specifically: (stop_timestamp - start_timestamp) / interval_seconds.
           The `config.generation.num_records` parameter is used only for progress
           tracking, not to limit output.
-        - **Sliding Window**: The backend maintains a window of recent records
+        - Sliding Window: The backend maintains a window of recent records
           (controlled by `_prefill_context_size`) that are included in each prompt
           to provide context for the LLM, ensuring generated records follow the
           established patterns and timestamps.
-        - **Parallel Group Generation**: Multiple time-series groups (e.g., different
+        - Parallel Group Generation: Multiple time-series groups (e.g., different
           devices, customers) are processed in parallel batches for efficiency.
           Even single-sequence data uses this path (treated as 1 group via a
           pseudo-group column added during preprocessing). Groups are the same as
           those seen during training (from `model_metadata.initial_prefill`).
-        - **Chronological Validation**: Each generated record must continue from the
+        - Chronological Validation: Each generated record must continue from the
           previous timestamp at the expected interval. Out-of-order records are
           marked invalid.
 
@@ -136,23 +136,23 @@ class TimeseriesBackend(VllmBackend):
         groups and the overall generation can stop for different reasons:
 
         Per-Group Stopping:
-            - **Completion (success)**: A group completes when any generated record
+            - Completion (success): A group completes when any generated record
               has a timestamp >= `_stop_timestamp_value`. The group is marked as
               completed and removed from active processing.
-            - **Failure (low valid fraction)**: A group fails after
+            - Failure (low valid fraction): A group fails after
               `config.generation.patience` consecutive batches where the invalid
               record fraction >= `config.generation.invalid_fraction_threshold`.
               This prevents infinite loops when the model consistently produces
-              bad output for a particular group. **Failed groups are not retried
-              and produce no synthetic data for that group ID.** The failure is
+              bad output for a particular group. Failed groups are not retried
+              and produce no synthetic data for that group ID. The failure is
               reflected in `all_groups_succeeded` returning False.
 
         Global Stopping:
-            - **Natural completion**: Generation ends when both the pending groups
+            - Natural completion: Generation ends when both the pending groups
               queue and active groups list are empty (all groups processed).
-            - **No records**: If `GenerationBatches` detects too many consecutive
+            - No records: If `GenerationBatches` detects too many consecutive
               batches with no valid records globally, it signals `STOP_NO_RECORDS`.
-            - **Target reached**: If the target number of records is reached,
+            - Target reached: If the target number of records is reached,
               `GenerationBatches` signals `STOP_METRIC_REACHED`.
 
         When global stopping occurs before all groups complete, `all_groups_succeeded`
@@ -809,7 +809,6 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             List of valid records from the retained response.
         """
-
         final_records = []
 
         # Find the index of the response with the most valid records

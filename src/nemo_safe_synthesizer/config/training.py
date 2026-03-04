@@ -107,7 +107,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v >= 1),
         Field(
             title="batch_size",
-            description="The batch size per device for training",
+            description="The batch size per device for training. Must be >= 1.",
         ),
     ] = 1
 
@@ -119,7 +119,7 @@ class TrainingHyperparams(Parameters):
             description=(
                 "Number of update steps to accumulate the gradients for, before "
                 "performing a backward/update pass. This technique increases "
-                "the effective batch size that will fit into GPU memory."
+                "the effective batch size that will fit into GPU memory. Must be >= 1."
             ),
         ),
     ] = 8
@@ -130,8 +130,8 @@ class TrainingHyperparams(Parameters):
         Field(
             title="weight_decay",
             description=(
-                "The weight decay to apply (if not zero) to all layers except all bias and "
-                "LayerNorm weights in the AdamW optimizer."
+                "The weight decay to apply to all layers except all bias and "
+                "LayerNorm weights in the AdamW optimizer. Must be in (0, 1)."
             ),
         ),
     ] = 0.01
@@ -141,7 +141,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="warmup_ratio",
-            description="Ratio of total training steps used for a linear warmup from 0 to the learning rate.",
+            description="Ratio of total training steps used for a linear warmup from 0 to the learning rate. Must be > 0.",
         ),
     ] = 0.05
 
@@ -160,7 +160,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: 0 < v < 1),
         Field(
             title="learning_rate",
-            description="The initial learning rate for `AdamW` optimizer.",
+            description="The initial learning rate for `AdamW` optimizer. Must be in (0, 1).",
         ),
     ] = 0.0005
 
@@ -171,7 +171,8 @@ class TrainingHyperparams(Parameters):
             title="lora_r",
             description=(
                 "The rank of the LoRA update matrices, expressed in int. "
-                "Lower rank results in smaller update matrices with fewer trainable parameters."
+                "Lower rank results in smaller update matrices with fewer trainable parameters. "
+                "Must be > 0."
             ),
         ),
     ] = 32
@@ -183,7 +184,8 @@ class TrainingHyperparams(Parameters):
             title="lora_alpha_over_r",
             description=(
                 "The ratio of the LoRA scaling factor (alpha) to the LoRA rank. "
-                "Empirically, this parameter works well when set to 0.5, 1, or 2."
+                "Empirically, this parameter works well when set to 0.5, 1, or 2. "
+                "Must be in [0.5, 3]."
             ),
         ),
     ] = 1.0
@@ -213,7 +215,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(lambda p: range_validator(p, lambda v: v >= 1)),
         Field(
             title="rope_scaling_factor",
-            description="Scale the base LLM's context length by this factor using RoPE scaling.",
+            description="Scale the base LLM's context length by this factor using RoPE scaling. Must be >= 1 or 'auto'.",
         ),
     ] = AUTO_STR
 
@@ -236,7 +238,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v > 0),
         Field(
             title="validation_steps",
-            description="The number of steps between validation checks for the HF Trainer arguments.",
+            description="The number of steps between validation checks for the HF Trainer arguments. Must be > 0.",
         ),
     ] = 15
 
@@ -286,7 +288,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: 0 <= v <= 1),
         Field(
             title="max_vram_fraction",
-            description="The fraction of the total VRAM to use for training. Default is 0.9. Modify this to allow longer sequences to be used.",
+            description="The fraction of the total VRAM to use for training. Modify this to allow longer sequences to be used. Must be in [0, 1].",
         ),
     ] = 0.80
 

@@ -37,16 +37,6 @@ class SafeSynthesizerParameters(Parameters):
     This is the top-level configuration class that orchestrates all aspects of
     synthetic data generation including training, generation, privacy, evaluation,
     and data handling. It provides validation to ensure parameter compatibility.
-
-    Attributes:
-        data: Data parameters.
-        replace_pii: PII replacement parameters.
-        training: Training parameters.
-        generation: Generation parameters.
-        privacy: Privacy parameters.
-        evaluation: Evaluation parameters.
-        enable_synthesis: Enable synthesizing new data by training a model.
-        enable_replace_pii: Enable replacing PII in the data.
     """
 
     data: DataParameters = Field(description="Data parameters.", default_factory=DataParameters)
@@ -75,9 +65,7 @@ class SafeSynthesizerParameters(Parameters):
     def check_dp_compatibility(
         cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
     ) -> DifferentialPrivacyHyperparams | None:
-        """
-        Ensure that if DP is enabled, max_sequences_per_example is 1 or auto, as well as that use_unsloth is False.
-        """
+        """Ensure that if DP is enabled, max_sequences_per_example is 1 or auto, as well as that use_unsloth is False."""
         if dp_params is None:
             return dp_params
         logger.debug("Checking DP compatibility for privacy parameters. ")

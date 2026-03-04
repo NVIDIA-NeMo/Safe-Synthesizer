@@ -54,7 +54,13 @@ These are the building blocks of this codebase -- the specific types, base class
 
 - Pydantic: `NSSBaseModel` for config/parameter models in `config/` which define the user-facing configuration of NSS. Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
 - `BaseSettings` for env/CLI settings. Prefer `AliasChoices` on individual fields when you need a field to respond to both its Python name and an env var name (e.g., `validation_alias=AliasChoices("config_path", "NSS_CONFIG")`). `env_prefix` is acceptable for simple settings classes where all fields share a common prefix and no per-field aliasing is needed. Note that not all parts of the repo do this yet and we can follow up to ensure this is stable.
-- Always add `description` to `Field()` -- it becomes CLI help text.
+- `Field(description=...)` is the canonical field docstring for Pydantic models. griffe-pydantic extracts it for the API reference; the configurator uses it for CLI help text. Always include it.
+- Assignment style (`type = Field(default=..., description="...")`) is the default for model fields. Prefer it because type checkers (`ty`, `mypy`, `pyright`) understand `default`, `default_factory`, and `alias` in assignment-style `Field()` and synthesize correct `__init__` signatures -- they cannot see these through `Annotated`. `default_factory` has no bare-assignment equivalent, so it only works correctly in assignment style (see the next bullet for how this interacts with `Annotated`).
+- [`Annotated`](https://docs.python.org/3.11/library/typing.html#typing.Annotated) ([PEP 593](https://peps.python.org/pep-0593/)) attaches metadata to a type annotation. Type checkers treat `Annotated[T, ...]` as `T` and ignore the metadata. Pydantic scans the metadata for `Field()` and its own validators (see [Pydantic: The annotated pattern](https://docs.pydantic.dev/latest/concepts/fields/#the-annotated-pattern)).
+- Use `Annotated` only when the field carries additional metadata beyond `Field()` -- `ValueValidator`, `AutoParam`, `DependsOnValidator`, reusable constrained type aliases, nested-type constraints, or discriminated unions. A complex type like `Literal[...]` alone does not qualify; use assignment style for those.
+- Defaults with `Annotated`: put the default as a bare assignment (`= value`), not inside `Field(default=...)`. Exception: `default_factory` has no bare-assignment equivalent, so use assignment-style `Field(default_factory=...)` even when the type is `Annotated[...]`.
+- Within a class where some fields need `Annotated` for validators, using it for all fields is acceptable for local consistency.
+- griffe-pydantic ignores non-`Field` `Annotated` metadata, so include valid ranges in the `description` when constraints won't appear in the rendered API docs (e.g., `"Must be in (0, 1)."`).
 - `@dataclass(frozen=True)` preferred for immutable value objects and validators. Mutable `@dataclass` acceptable for builders, accumulators, and pipeline state.
 - `field(default_factory=list)` for mutable defaults, never `= []`.
 - `StrEnum` for string-valued enums used in configs/serialization. Plain `Enum` for internal-only named constants.
@@ -112,13 +118,17 @@ How to write clear, testable Python -- independent of which library primitives y
 The codebase targets Python 3.11+ and uses native typing syntax throughout. Expect this minimum for the foreseeable future.
 
 ```python
-# After
-from typing import Self
-
-def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
+from typing import Self, Sequence
 
 # Before
 def process(data: pd.DataFrame, columns: Optional[List[str]] = None) -> "SafeSynthesizer":
+
+# After
+def process(data: pd.DataFrame, columns: list[str] | None = None) -> Self:
+
+# Or
+def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self:
+
 ```
 
 - `X | Y` not `Optional[X]` or `Union[X, Y]`
@@ -333,7 +343,7 @@ raise DataError(f"The {column} column could not be processed.")
 
 - Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)
 - Relative imports in `src/` (`from ..observability import get_logger`), absolute imports in `tests/` (`from nemo_safe_synthesizer.observability import get_logger`)
-- `TYPE_CHECKING` blocks for heavy forward references (`pandas`, `torch`, `transformers`)
+- `TYPE_CHECKING` blocks for heavy imports (`pandas`, `torch`, `transformers`)
 - `from __future__ import annotations` -- do not add to modules that don't already have it (adding it can surface subtle type issues in legacy code). New modules may omit it since modern syntax (`X | Y`, `list[str]`) works natively.
 
 ### Resource cleanup
@@ -441,10 +451,59 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
     The base class provides the _torn_down guard flag pattern -- check
     it at the top of teardown() and set it before returning.
 
-    Attributes:
+    Args:
         config: Generation parameters controlling temperature, top_p, etc.
         adapter_path: Path to the trained LoRA adapter directory.
     """
+```
+
+#### Class docstrings: `Args:` and `Attributes:`
+
+Put constructor `Args:` in the class docstring, not on `__init__`. IDEs (Cursor, VS Code) show the class docstring when hovering over constructor calls -- if `Args:` is on `__init__`, users never see it without navigating to the source.
+
+- `Args:` -- constructor parameters (what the caller passes to `__init__`)
+- `Attributes:` -- public instance attributes the caller can read after construction
+
+Include both when a class has nontrivial constructor parameters AND public attributes worth documenting. For simple classes where the args and attributes are the same fields, `Args:` alone is sufficient.
+
+#### Field-level docstrings for Pydantic models and dataclasses
+
+Pydantic models: field documentation follows the rules in [Data modeling](#data-modeling) -- `Field(description=...)` is canonical, inline docstrings only when richer context is needed. Dataclasses: document each field with an inline docstring immediately after the field definition. Both: omit the `Attributes:` section to avoid duplication. Regular classes that set attributes in `__init__` should still use `Attributes:`.
+
+```python
+class RopeScaling(BaseModel):
+    """Rotary Position Embedding (RoPE) scaling configuration.
+
+    Encapsulates the parameters needed to extend a model's context
+    window via RoPE scaling.
+    """
+
+    rope_type: Literal["linear", "dynamic", "default", "yarn", "llama3"] = Field(
+        default="default",
+        description="Scaling algorithm: linear, dynamic, default, yarn, or llama3.",
+    )
+
+    factor: float = Field(
+        default=1.0,
+        description="Multiplier for RoPE scaling to extend the context window; values above MAX_ROPE_SCALING_FACTOR are clamped.",
+    )
+
+    theta: float = Field(default=10000.0, description="Theta for rope scaling.")
+```
+
+See [Data modeling](#data-modeling) for when to use `Field(description=...)` vs inline docstrings vs `Annotated`. For dataclass fields without `Field()`, inline docstrings are sufficient.
+
+Fields without defaults, with defaults, and with `Field()` all follow the same pattern:
+
+```python
+    model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
+
+    is_adapter: bool = Field(default=False, description="Whether an adapter checkpoint is loaded.")
+
+    base_max_seq_length: int | None = Field(
+        default=None,
+        description="Context window size before RoPE scaling.",
+    )
 ```
 
 #### Before and after
@@ -494,16 +553,23 @@ def teardown(self) -> None:
 
     Callers should wrap generate() in try/finally to guarantee this runs.
     """
+    ...
 ```
 
-Class without Attributes section:
+Pydantic model without field documentation:
 
 ```python
 # Before
 class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline."""
+    data: DataParameters = Field(default_factory=DataParameters)
+    evaluation: EvaluationParameters = Field(default_factory=EvaluationParameters)
+    enable_synthesis: bool = Field(default=True)
+    training: TrainingHyperparams = Field(default_factory=TrainingHyperparams)
+    generation: GenerateParameters = Field(default_factory=GenerateParameters)
 
-# After
+
+# After -- Field(description=...) as canonical docstring
 class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline.
 
@@ -511,21 +577,23 @@ class SafeSynthesizerParameters(Parameters):
     generation, privacy, evaluation, and data handling. Provides cross-field
     validation to ensure parameter compatibility.
 
-    Attributes:
-        data: Data parameters (holdout ratio, column config, etc.).
-        replace_pii: PII replacement parameters.
-        training: Training hyperparameters (learning rate, epochs, LoRA config).
-        generation: Generation parameters (temperature, top_p, num_records).
-        privacy: Differential privacy parameters (epsilon, delta).
-        evaluation: Evaluation component toggles and settings.
-        enable_synthesis: Enable synthesizing new data by training a model.
-        enable_replace_pii: Enable replacing PII in the data.
-
     Example:
         config = SafeSynthesizerParameters.from_yaml("config.yaml")
         synthesizer = SafeSynthesizer(config).with_data_source("data.csv")
         synthesizer.run()
     """
+
+    data: DataParameters = Field(description="Data parameters.", default_factory=DataParameters)
+
+    evaluation: EvaluationParameters = Field(default_factory=EvaluationParameters, description="Evaluation parameters.")
+
+    enable_synthesis: bool = Field(description="Enable synthesizing new data by training a model.", default=True)
+
+    training: TrainingHyperparams = Field(description="Training parameters.", default_factory=TrainingHyperparams)
+
+    generation: GenerateParameters = Field(description="Generation parameters.", default_factory=GenerateParameters)
+
+    # ... remaining fields follow the same pattern ...
 ```
 
 Generator with `Yields:` instead of `Returns:`:
@@ -552,6 +620,28 @@ def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
 
     Yields:
         DataFrame of valid synthetic records for the current batch.
+    """
+```
+
+Generator return type -- `Iterator` vs `Generator`:
+
+```python
+# Iterator is correct for simple generators that only yield values
+def generate_batches(self, num_records: int) -> Iterator[pd.DataFrame]:
+    ...
+
+# Generator is needed when send() or return values are used
+def stream_with_feedback(self) -> Generator[pd.DataFrame, str, int]:
+    """Stream records, accept feedback via send(), return final count.
+
+    Yields:
+        DataFrame of records for the current batch.
+
+    Receives:
+        Feedback string from the caller via ``send()``.
+
+    Returns:
+        Total number of records produced.
     """
 ```
 
@@ -595,7 +685,19 @@ The before/after examples above demonstrate most rules. These additional points 
 - Document side effects, thread safety, and idempotency guarantees where applicable
 - Use `Example:` sections with working code for public API methods
 - Complex code deserves proportionally detailed explanation -- err on the side of more context
-- Cross-references in docstrings: use double backticks (` `` `) for inline code, `:meth:`method_name` `, `:class:`ClassName` `, and `:func:`function_name` ` for API cross-links in `MkDocs`/Sphinx
+- Cross-references in docstrings: use double backticks for inline code. For clickable API cross-links, use the `mkdocstrings` autorefs syntax:
+
+  ```
+  [`display`][full.dotted.path]
+  ```
+
+  For example:
+
+  ```
+  [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config]
+  ```
+
+  Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
 
 ### Patterns to avoid
 
@@ -606,7 +708,7 @@ The before/after examples above demonstrate most rules. These additional points 
 - `cast()` / `Any` to paper over type mismatches
 - `os.path` -- use `pathlib.Path` (tolerated only in vendored/tooling scripts)
 - Mutable default arguments -- use `None` and initialize inside the function. Acceptable immutable defaults: `None`, `str`, `int`, `float`, `bool`, `tuple`, `frozenset`, `pathlib.Path`
-- `print()` statements -- use `get_logger(__name__)` from `observability.py` or `click.echo()` for CLI
+- `print()` statements in library code -- use `get_logger(__name__)` from `observability.py` or `click.echo()` for CLI. `print()` is fine in tests, standalone scripts, and tooling (`T201` is suppressed for `tests/`, `tools/`, `script/` in `ruff.toml`).
 - `assert` for validation in library code -- `assert` statements can be stripped by `-O` and must never guard correctness. Use `if/raise` for input validation. `assert` is fine in tests where `pytest` relies on it.
 
 ---
@@ -632,7 +734,7 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 ## Markdown
 
-- No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold acceptable only in table header-like cells.
+- No decorative `**bold**` in body text, list items, or docstrings. Use headers, list markers, colons, and backticks for structure. Bold is acceptable in table header-like cells and MkDocs Material card grid titles (e.g., `docs/index.md`).
 - Use `--` (em-dash) for asides, not `-` (hyphen).
 - Use single backticks for code identifiers, paths, and CLI commands in markdown. In Python docstrings, use double backticks (` `` `) for inline code per reStructuredText convention.
 - Documentation pages (in `docs/`): classify as tutorial, how-to, explanation, or reference per the [Diataxis framework](https://diataxis.fr/). Use `MkDocs Material` syntax -- [admonitions](https://squidfunk.github.io/mkdocs-material/reference/admonitions/) (`!!! note`), tabs (`===`), code blocks with titles and highlights.
@@ -687,7 +789,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 - Colon-space for key-value pairs (`: `)
 - SPDX copyright headers at top
 - Unquoted values unless special characters require them
-- Empty line at end of file
+- Newline at end of file
 - GitHub Actions workflows: `#` with dashes for section dividers
 
 ### TOML
@@ -709,7 +811,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### Copyright headers
 
-Every source file requires an SPDX copyright header - `make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
+Every source file requires an SPDX copyright header, though `make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
 
 E.g., Hash-comments for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 
@@ -736,13 +838,14 @@ title: Page title
 
 ### File endings
 
-- Newline at EOF, no trailing whitespace (enforced by `pre-commit`)
+- Newline at end of file, no trailing whitespace (enforced by `pre-commit`)
+- Single space between sentences, never two
 - Line length: 120 characters for code, comments, and docstrings (configured in [ruff.toml](ruff.toml))
 
 ---
 
 ## Parting words
 
-Be consistent. If the code around you follows a convention, follow it too -- even if this guide says otherwise. Local consistency matters more than global rules.
+Be consistent. If the code around you follows a convention, follow it too -- even if this guide says otherwise. Local consistency matters more than global rules. Please update this guide or file issues if you find inconsistencies.
 
 That said, don't use consistency as an excuse to perpetuate old patterns. When touching legacy code, migrate toward these conventions where practical.

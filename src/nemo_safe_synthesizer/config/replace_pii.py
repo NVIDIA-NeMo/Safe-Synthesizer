@@ -199,16 +199,9 @@ class Globals(NSSBaseModel):
 
 
 class PiiReplacerConfig(Parameters):
-    """
-    Configuration for PII replacer.
-    Used to define how PII data should be detected and replaced in a dataset.
+    """Configuration for PII replacer.
 
-    Attributes:
-        globals Global configuration options.
-        steps: List of transformation steps to perform on input data.
-
-    Methods:
-        get_default_config: Returns a default configuration instance.
+    Defines how PII data should be detected and replaced in a dataset.
     """
 
     globals: Globals = Field(description="Global config options.", default_factory=Globals)

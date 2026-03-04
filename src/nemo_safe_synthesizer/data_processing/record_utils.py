@@ -95,7 +95,7 @@ def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> l
         eos: End-of-sequence token used to identify the end of a group.
 
     Returns:
-
+        Substrings matching complete bos/eos-delimited record groups.
     """
     bos_re = re.escape(rf"{bos}")
     eos_re = re.escape(rf"{eos}")
@@ -373,7 +373,6 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame with missing values normalized, invalid utf-8 characters dropped.
     """
-
     # HACK: Handle NaN/None/NA values with mixed types by
     # normalizing through pandas csv io format, which will match
     # the format in reports generated via the gretel client.

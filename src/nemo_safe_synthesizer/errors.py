@@ -1,15 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Custom error classes
-"""
+"""Custom error classes"""
 
 
 class SafeSynthesizerError(Exception):
-    """
-    Base class for all known errors that can be thrown from nemo_safe_synthesizer.
-    """
+    """Base class for all known errors that can be thrown from nemo_safe_synthesizer."""
 
 
 class UserError(SafeSynthesizerError):
