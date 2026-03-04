@@ -129,18 +129,26 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 ### CODE QUALITY ###
 # `make format` mutates files (same fixers as pre-commit).
-# `make lint` is read-only (same checks as CI).
+# `make lint` is read-only (same checks as CI, minus format check).
+# `make check` is the full read-only CI equivalent (format + lint + typecheck + copyright).
 
 .PHONY: format
 format: ## Format the code (ruff format + fix + copyright headers)
-	bash tools/format/format.sh
-	uv run --script tools/lint/copyright_fixer.py .
+	bash tools/codestyle/format.sh
+	uv run --script tools/codestyle/copyright_fixer.py .
 
 .PHONY: lint
 lint: ## Lint the code (read-only checks)
-	bash tools/lint/ruff-lint.sh
-	bash tools/lint/run-ty-check.sh
-	uv run --script tools/lint/copyright_fixer.py --check .
+	bash tools/codestyle/lint.sh
+	bash tools/codestyle/typecheck.sh
+	uv run --script tools/codestyle/copyright_fixer.py --check .
+
+.PHONY: check
+check: ## Run all CI checks locally (format check + lint + typecheck + copyright)
+	bash tools/codestyle/format.sh --check
+	bash tools/codestyle/lint.sh
+	bash tools/codestyle/typecheck.sh
+	uv run --script tools/codestyle/copyright_fixer.py --check .
 
 
 ### TESTING ###

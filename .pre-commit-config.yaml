@@ -40,21 +40,21 @@ repos:
 
       - id: ruff-format
         name: Run ruff format
-        entry: bash tools/format/format.sh
+        entry: bash tools/codestyle/format.sh
         language: system
         pass_filenames: true
         types: [python]
 
       - id: ruff-lint
         name: Run ruff linting
-        entry: bash tools/lint/ruff-lint.sh
+        entry: bash tools/codestyle/lint.sh
         language: system
         pass_filenames: true
         types: [python]
 
       - id: ty
         name: Run ty typechecks
-        entry: bash tools/lint/run-ty-check.sh
+        entry: bash tools/codestyle/typecheck.sh
         language: system
         pass_filenames: false
         types: [python]
@@ -69,7 +69,7 @@ repos:
 
       - id: copyright-fix
         name: Fix copyright headers
-        entry: uv run --script tools/lint/copyright_fixer.py
+        entry: uv run --script tools/codestyle/copyright_fixer.py
         language: system
         pass_filenames: true
         files: '\.(py|sh|md|yaml|yml)$'

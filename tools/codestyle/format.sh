@@ -18,19 +18,17 @@
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-# shellcheck source=../lint/_lib.sh
-source "$REPO_ROOT/tools/lint/_lib.sh"
+# shellcheck source=_lib.sh
+source "$REPO_ROOT/tools/codestyle/_lib.sh"
 
 require_tool ruff
 
-files=$(collect_py_files "$@")
+collect_py_files "$@"
+[[ ${#PY_FILES[@]} -eq 0 ]] && exit 0
 
 if [[ "$CHECK_MODE" == true ]]; then
-    # shellcheck disable=SC2086
-    ruff format --check $files
+    ruff format --check "${PY_FILES[@]}"
 else
-    # shellcheck disable=SC2086
-    ruff format $files
-    # shellcheck disable=SC2086
-    ruff check --fix $files
+    ruff format "${PY_FILES[@]}"
+    ruff check --fix "${PY_FILES[@]}"
 fi

@@ -449,8 +449,8 @@ These three commands replicate what CI runs. Pre-commit hooks (`prek install`) p
 The wrapper scripts in `tools/` also accept explicit file paths:
 
 ```bash
-bash tools/lint/ruff-lint.sh src/nemo_safe_synthesizer/cli/run.py
-bash tools/format/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/lint.sh src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.

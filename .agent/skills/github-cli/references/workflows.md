@@ -70,9 +70,9 @@ Match the failed CI job to its local equivalent:
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `make format` or `bash tools/format/format.sh` |
-| Lint | `make lint` or `bash tools/lint/ruff-lint.sh` |
-| Typecheck | `bash tools/lint/run-ty-check.sh` |
+| Format | `make format` or `bash tools/codestyle/format.sh` |
+| Lint | `make lint` or `bash tools/codestyle/lint.sh` |
+| Typecheck | `bash tools/codestyle/typecheck.sh` |
 | Unit Tests | `make test` or `make test-ci` |
 
 For full CI parity in a container:

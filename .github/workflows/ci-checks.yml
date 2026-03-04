@@ -75,11 +75,11 @@ jobs:
       - name: Check code formatting
         run: |
           make bootstrap-nss dev
-          bash tools/format/format.sh --check
+          bash tools/codestyle/format.sh --check
 
       - name: Check SPDX copyright headers
         run: |
-          uv run --script tools/lint/copyright_fixer.py --check .
+          uv run --script tools/codestyle/copyright_fixer.py --check .
 
   lint:
     name: Lint
@@ -102,7 +102,7 @@ jobs:
       - name: Run ruff linting
         run: |
           make bootstrap-nss dev
-          bash tools/lint/ruff-lint.sh
+          bash tools/codestyle/lint.sh
 
       - name: Check uv.lock is up to date
         run: |
@@ -130,7 +130,7 @@ jobs:
       - name: Run ty type checks
         run: |
           make bootstrap-nss cpu
-          bash tools/lint/run-ty-check.sh
+          bash tools/codestyle/typecheck.sh
 
   unit-test:
     name: Unit Tests - (Python ${{ matrix.python-version }})
