@@ -183,5 +183,3 @@ After generation, the evaluation system measures privacy through several metrics
 - PII Replay Detection -- Checks if original PII values appear in synthetic data
 - Membership Inference Protection -- Measures resistance to membership inference attacks (can an attacker tell if a specific record was in the training data?)
 - Attribute Inference Protection -- Measures resistance to attribute inference attacks (can sensitive attributes be inferred from other known attributes?)
-
-See [Evaluation](evaluation.md) for full details on privacy and quality metrics.
