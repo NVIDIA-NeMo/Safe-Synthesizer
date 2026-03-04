@@ -29,6 +29,9 @@ class UnslothTrainer(HuggingFaceBackend):
     * ``torch_dtype`` -- Data type for model weights.
     * ``quantization_config`` -- Configuration for model quantization.
 
+    See Also:
+        HuggingFaceBackend: Parent class providing base training functionality.
+
     Raises:
         RuntimeError: If CUDA is not available.
     """

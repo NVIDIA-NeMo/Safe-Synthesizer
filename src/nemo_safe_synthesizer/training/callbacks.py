@@ -4,6 +4,7 @@
 """HuggingFace Trainer callbacks for Safe Synthesizer training."""
 
 import time
+from typing import Optional
 
 from tqdm.auto import tqdm
 from transformers import (
@@ -63,7 +64,7 @@ class InferenceEvalCallback(TrainerCallback):
         metadata: ModelMetadata,
         processor: Processor,
         num_prompts_per_batch: int = 16,
-        num_batches: int | None = None,
+        num_batches: Optional[int] = None,
         patience: int = 3,
         invalid_fraction_threshold: float = 0.8,
         generate_kwargs: dict | None = None,
