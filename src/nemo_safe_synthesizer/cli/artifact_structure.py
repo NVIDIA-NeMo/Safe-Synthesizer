@@ -332,15 +332,15 @@ class Workdir:
     """
 
     # Root-level config file
-    config: FileNode = FileNode("safe-synthesizer-config.json")
+    config = FileNode("safe-synthesizer-config.json")
     """Location for NSS config file."""
 
     # WandB run ID file
-    wandb_run_id_file: FileNode = FileNode("wandb_run_id.txt")
+    wandb_run_id_file = FileNode("wandb_run_id.txt")
     """Location for WandB run ID file."""
 
     # Train directory structure
-    train: DirNode = DirNode(
+    train = DirNode(
         "train",
         config=FileNode("safe-synthesizer-config.json"),
         cache=DirNode(
@@ -356,7 +356,7 @@ class Workdir:
     """Location and contents of train directory structure."""
 
     # Generate directory structure
-    generate: DirNode = DirNode(
+    generate = DirNode(
         "generate",
         config=FileNode("safe-synthesizer-config.json"),
         logs=FileNode("logs.jsonl"),
@@ -367,7 +367,7 @@ class Workdir:
     """Location and contents of generate directory structure."""
 
     # Dataset directory structure
-    dataset: DirNode = DirNode(
+    dataset = DirNode(
         "dataset",
         training=FileNode("training.csv"),
         test=FileNode("test.csv"),
