@@ -31,17 +31,17 @@ class PIIReplayData(BaseModel):
     )
     total_ref_data: int = Field(default=0, description="Total rows in the reference data that contain PII values.")
     unique_ref_data: int = Field(
-        default=0, description="Total rows in the reference data that contain unique PII values."
+        default=0, description="Count of distinct PII values for this entity in the reference column."
     )
     total_synth_data: int = Field(
-        default=0, description="Total output rows that contain PII present in the reference data."
+        default=0, description="Number of output rows whose column value matches a reference PII value."
     )
     unique_synth_data: int = Field(
-        default=0, description="Total output rows that contain unique PII present in the reference data."
+        default=0, description="Count of distinct reference PII values that appear in the output column."
     )
     unique_synth_data_percentage: float = Field(
         default=0,
-        description="Percentage of unique PII in the output data that matches unique entity data in the reference dataset.",
+        description="Percentage of distinct reference PII values replayed in the output (unique_synth_data / unique_ref_data * 100).",
     )
 
 

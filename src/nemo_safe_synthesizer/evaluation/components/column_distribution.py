@@ -25,9 +25,9 @@ logger = get_logger(__name__)
 class ColumnDistributionPlotRow(BaseModel):
     """A pair of side-by-side column distribution plots for the HTML report."""
 
-    name1: str = Field()
-    name2: str | None = Field()
-    figure: str = Field()
+    name1: str = Field(description="Name of the first column in the plot row.")
+    name2: str | None = Field(description="Name of the second column in the plot row, if present.")
+    figure: str = Field(description="Rendered HTML of the side-by-side distribution plot.")
 
     @staticmethod
     def _get_figure_for_field(f: EvaluationField | None, reference: pd.Series, output) -> Figure | None:

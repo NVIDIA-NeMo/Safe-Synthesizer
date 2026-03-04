@@ -24,13 +24,13 @@ class DatasetStatistics(Component):
 
     name: str = Field(default="Dataset Statistics")
     # Copy these out for rendering convenience
-    reference_rows: int = Field(default=0, ge=0)
-    reference_cols: int = Field(default=0, ge=0)
-    reference_missing: int = Field(default=0, ge=0)
-    output_rows: int = Field(default=0, ge=0)
-    output_cols: int = Field(default=0, ge=0)
-    output_missing: int = Field(default=0, ge=0)
-    memorized_lines: int = Field(default=0, ge=0)
+    reference_rows: int = Field(default=0, ge=0, description="Row count of the reference dataframe used for evaluation.")
+    reference_cols: int = Field(default=0, ge=0, description="Column count of the reference dataframe used for evaluation.")
+    reference_missing: int = Field(default=0, ge=0, description="Percentage of missing values in the reference dataframe.")
+    output_rows: int = Field(default=0, ge=0, description="Row count of the output dataframe used for evaluation.")
+    output_cols: int = Field(default=0, ge=0, description="Column count of the output dataframe used for evaluation.")
+    output_missing: int = Field(default=0, ge=0, description="Percentage of missing values in the output dataframe.")
+    memorized_lines: int = Field(default=0, ge=0, description="Number of exact row matches between reference and output.")
 
     @cached_property
     def jinja_context(self):

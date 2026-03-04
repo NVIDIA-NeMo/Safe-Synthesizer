@@ -41,12 +41,18 @@ logger = get_logger(__name__)
 class TextSemanticSimilarityDatum(BaseModel):
     """Per-column text semantic similarity scores and PCA projections."""
 
-    text_semantic_similarity: EvaluationScore = Field(default=EvaluationScore())
-    text_semantic_similarity_underfitting_factor: EvaluationScore = Field(default=EvaluationScore())
-    text_semantic_similarity_overfitting_factor: EvaluationScore = Field(default=EvaluationScore())
+    text_semantic_similarity: EvaluationScore = Field(
+        default=EvaluationScore(), description="Overall semantic similarity score for this column."
+    )
+    text_semantic_similarity_underfitting_factor: EvaluationScore = Field(
+        default=EvaluationScore(), description="Underfitting factor score for this column."
+    )
+    text_semantic_similarity_overfitting_factor: EvaluationScore = Field(
+        default=EvaluationScore(), description="Overfitting factor score for this column."
+    )
 
-    training_pca: pd.DataFrame = Field(default=pd.DataFrame())
-    synthetic_pca: pd.DataFrame = Field(default=pd.DataFrame())
+    training_pca: pd.DataFrame = Field(default=pd.DataFrame(), description="PCA-projected reference embeddings.")
+    synthetic_pca: pd.DataFrame = Field(default=pd.DataFrame(), description="PCA-projected synthetic embeddings.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -61,7 +67,9 @@ class TextSemanticSimilarity(Component):
     """
 
     name: str = Field(default="Text Semantic Similarity")
-    text_semantic_similarity_dict: dict[str, TextSemanticSimilarityDatum] = Field(default=dict())
+    text_semantic_similarity_dict: dict[str, TextSemanticSimilarityDatum] = Field(
+        default=dict(), description="Per-column semantic similarity scores and PCA projections."
+    )
 
     @cached_property
     def jinja_context(self):

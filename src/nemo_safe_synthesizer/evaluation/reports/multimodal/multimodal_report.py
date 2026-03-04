@@ -60,7 +60,7 @@ class MultimodalReport(EvaluationReport):
     Use ``from_dataframes`` to construct a fully populated report.
     """
 
-    config: SafeSynthesizerParameters | None = Field(default=None)
+    config: SafeSynthesizerParameters | None = Field(default=None, description="Pipeline configuration parameters used for this evaluation.")
 
     @cached_property
     def jinja_context(self):

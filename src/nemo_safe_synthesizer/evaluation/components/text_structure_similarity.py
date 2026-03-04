@@ -28,16 +28,25 @@ _WORD_REGEX = re.compile(r"\w+")
 class TextDataSetStatistics(BaseModel):
     """Per-column text structure statistics (sentence count, word length, etc.)."""
 
-    row_count: int = Field(default=0)
-    column_count: int = Field(default=0)
-    duplicate_lines: int = Field(default=0)
-    missing_values: int = Field(default=0)
-    unique_values: int = Field(default=0)
-    per_record_statistics: pd.DataFrame = Field(default=pd.DataFrame())
-    average_sentence_count: float = Field(default=0)
-    average_words_per_sentence: float = Field(default=0)
-    average_characters_per_word: float = Field(default=0)
-    text_statistic_score: EvaluationScore | None = Field(default=None)
+    row_count: int = Field(default=0, description="Number of non-empty records analyzed (after dropping NAs and optional downsampling).")
+    column_count: int = Field(default=0, description="Always 1; each instance describes a single text column.")
+    duplicate_lines: int = Field(
+        default=0,
+        description="Number of text values appearing in both reference and synthetic series. Populated on the synthetic instance only; 0 on reference.",
+    )
+    missing_values: int = Field(default=0, description="Always 0; NAs are dropped during preprocessing before statistics are computed.")
+    unique_values: int = Field(default=0, description="Number of distinct values in the preprocessed text series.")
+    per_record_statistics: pd.DataFrame = Field(
+        default=pd.DataFrame(),
+        description="DataFrame with per-record sentence_count, average_words_per_sentence, and average_characters_per_word.",
+    )
+    average_sentence_count: float = Field(default=0, description="Mean sentence count per record.")
+    average_words_per_sentence: float = Field(default=0, description="Mean per-record words-per-sentence ratio.")
+    average_characters_per_word: float = Field(default=0, description="Mean per-record characters-per-word ratio.")
+    text_statistic_score: EvaluationScore | None = Field(
+        default=None,
+        description="JS-divergence-based similarity score comparing reference and synthetic structure. Populated on the synthetic instance only.",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -51,8 +60,12 @@ class TextStructureSimilarity(Component):
     """
 
     name: str = Field(default="Text Structure Similarity")
-    training_statistics: dict[str, TextDataSetStatistics] = Field(default=dict())
-    synthetic_statistics: dict[str, TextDataSetStatistics] = Field(default=dict())
+    training_statistics: dict[str, TextDataSetStatistics] = Field(
+        default=dict(), description="Per-column text structure statistics for the reference data."
+    )
+    synthetic_statistics: dict[str, TextDataSetStatistics] = Field(
+        default=dict(), description="Per-column text structure statistics for the synthetic data."
+    )
 
     @cached_property
     def jinja_context(self):
