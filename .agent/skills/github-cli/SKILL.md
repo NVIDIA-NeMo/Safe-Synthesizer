@@ -82,8 +82,8 @@ gh run view <run-id> --log-failed
 gh run view <run-id> && gh run view <run-id> --log-failed
 
 # Find latest failure on current branch (when no run ID given)
-RUN_ID=$(gh run list --branch=$(git branch --show-current) --status=failure --limit=1 --json databaseId -q '.[0].databaseId') \
-  && [ -n "$RUN_ID" ] && gh run view "$RUN_ID" --log-failed
+RUN_ID=$(gh run list --branch="$(git branch --show-current)" --status=failure --limit=1 --json databaseId -q '.[0].databaseId') \
+  && [ "$RUN_ID" != "null" ] && gh run view "$RUN_ID" --log-failed
 ```
 
 ## Issues
