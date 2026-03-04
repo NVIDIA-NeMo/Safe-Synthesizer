@@ -47,7 +47,7 @@ check_tool_version() {
 }
 
 # ---------------------------------------------------------------------------
-# require_tool
+# require_tool -- die if tool is missing; warn on version mismatch
 # ---------------------------------------------------------------------------
 require_tool() {
     local name="$1"

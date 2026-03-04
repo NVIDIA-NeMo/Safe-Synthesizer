@@ -94,7 +94,7 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 | Job | `make` target | What it checks |
 |---|---|---|
 | Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
-| Format | `lock-check` | `uv.lock` matches `pyproject.toml` |
+| Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
 | Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
 | Unit Tests | `test-ci` | pytest with coverage |
 

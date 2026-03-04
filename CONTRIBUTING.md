@@ -444,7 +444,7 @@ make format check test
 
 We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates the full CI suite locally (minus `lock-check`). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
+CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
 
 The wrapper scripts in `tools/` also accept explicit file paths for spot-checking individual files:
 
