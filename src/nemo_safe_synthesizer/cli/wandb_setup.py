@@ -67,17 +67,25 @@ class WandbSettings(BaseSettings):
     """
 
     wandb_mode: WandbMode = Field(
-        default=WandbMode.DISABLED, validation_alias=AliasChoices("WANDB_MODE", "NSS_WANDB_MODE")
+        default=WandbMode.DISABLED,
+        description="Run mode, one of online, offline, or disabled.",
+        validation_alias=AliasChoices("WANDB_MODE", "NSS_WANDB_MODE"),
     )
-    """Run mode (online, offline, or disabled)."""
+    """Run mode, one of online, offline, or disabled (env variable: ``WANDB_MODE`` or ``NSS_WANDB_MODE``)."""
 
-    wandb_project: str | None = Field(default=None, validation_alias=AliasChoices("WANDB_PROJECT", "NSS_WANDB_PROJECT"))
-    """WandB project name override."""
+    wandb_project: str | None = Field(
+        default=None,
+        description="WandB project name override.",
+        validation_alias=AliasChoices("WANDB_PROJECT", "NSS_WANDB_PROJECT"),
+    )
+    """WandB project name override (env variable: ``WANDB_PROJECT`` or ``NSS_WANDB_PROJECT``)."""
 
-    exp_name: str = Field(default="nss_experiments")
+    exp_name: str = Field(
+        default="nss_experiments", description="Fallback project name when ``wandb_project`` is not set."
+    )
     """Fallback project name when ``wandb_project`` is not set."""
 
-    phase: WandbPhase = WandbPhase.UNKNOWN
+    phase: WandbPhase = Field(default=WandbPhase.UNKNOWN, description="Current pipeline phase for WandB grouping.")
     """Current pipeline phase for WandB grouping."""
 
     model_config = {"env_prefix": "NSS_", "env_file": ".env", "extra": "ignore"}

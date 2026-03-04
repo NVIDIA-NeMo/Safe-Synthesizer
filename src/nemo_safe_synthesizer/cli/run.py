@@ -4,9 +4,10 @@
 """CLI entry points for Safe Synthesizer.
 
 This module provides the main CLI commands for running the Safe Synthesizer pipeline:
-- `run` (default): Full end-to-end pipeline
-- `run train`: Training stage only
-- `run generate`: Generation stage only (requires trained model)
+
+- ``run`` (default): Full end-to-end pipeline
+- ``run train``: Training stage only
+- ``run generate``: Generation stage only (requires trained model)
 """
 
 from __future__ import annotations

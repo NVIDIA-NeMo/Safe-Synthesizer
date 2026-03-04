@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Artifact management subcommands.
+"""CLI entry points for artifact management.
 
 Provides CLI commands for inspecting and cleaning up artifact directories
 produced by Safe Synthesizer runs.
@@ -20,7 +20,7 @@ from .artifact_structure import BoundDir, PathT, Workdir
 @click.group(invoke_without_command=True)
 @click.pass_context
 def artifacts(ctx: click.Context):
-    """Artifacts management commands."""
+    """Argument management commands."""
     pass
 
 

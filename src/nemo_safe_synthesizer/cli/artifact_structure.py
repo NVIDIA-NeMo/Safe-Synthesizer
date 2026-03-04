@@ -9,7 +9,7 @@ tree shape on ``Workdir``; at runtime they resolve to ``Path`` and ``BoundDir``
 objects respectively, giving typed access to every artifact path without
 hard-coding strings throughout the CLI.
 
-Typical directory tree::
+Typical directory tree:
 
     <base_path>/<config>---<dataset>/<run_name>/
     - safe-synthesizer-config.json
@@ -86,9 +86,8 @@ def _parse_project_name(project_name: str) -> tuple[str, str]:
 class RunName:
     """Run name for artifact directories.
 
-    Supports two modes:
-    - Auto-generated: Creates a timestamp-based name (default when no value provided)
-    - Explicit: Stores an arbitrary string name (from --run-path)
+    Supports two modes: 1) Auto-generated based on timestamp or 2) an arbitrary string name provided by the user
+    (from --run-path).
 
     Examples:
         - Auto-generated: "2026-01-15T12:00:00"
@@ -96,7 +95,10 @@ class RunName:
     """
 
     _value: str = field(default="")
+    """Raw run name string (auto-generated timestamp or user-provided)."""
+
     _timestamp: datetime | None = field(default=None, repr=False)
+    """Parsed timestamp, or ``None`` for non-timestamp-based names."""
 
     def __post_init__(self) -> None:
         """Initialize the run name, auto-generating timestamp if no value provided."""
@@ -116,10 +118,10 @@ class RunName:
         the timestamp is also stored for potential use.
 
         Args:
-            name: Run name string (e.g., "2026-01-15T12:00:00" or "unsloth_adult_0")
+            name: Run name string (e.g., "2026-01-15T12:00:00" or "unsloth_adult_0").
 
         Returns:
-            RunName with the provided name and optional parsed timestamp
+            RunName with the provided name and optional parsed timestamp.
         """
         ts = _try_parse_timestamp(name)
         return cls(_value=name, _timestamp=ts)
@@ -140,14 +142,12 @@ class FileNode:
 
     When accessed on a class, returns the descriptor itself.
     When accessed on an instance, returns the full Path to the file.
+
+    Args:
+        name: The filename (e.g., "config.json").
     """
 
     def __init__(self, name: str):
-        """Initialize a FileNode descriptor.
-
-        Args:
-            name: The filename (e.g., "config.json")
-        """
         self.name = name
         self._attr_name: str | None = None
 
@@ -179,15 +179,13 @@ class DirNode:
     Supports nested children (both FileNode and DirNode).
     When accessed on a class, returns the descriptor itself.
     When accessed on an instance, returns a BoundDir with the resolved path.
+
+    Args:
+        name: The directory name (e.g., "train").
+        **children: Child nodes (FileNode or DirNode instances).
     """
 
     def __init__(self, name: str, **children: FileNode | DirNode):
-        """Initialize a DirNode descriptor.
-
-        Args:
-            name: The directory name (e.g., "train")
-            **children: Child nodes (FileNode or DirNode instances)
-        """
         self.name = name
         self.children: dict[str, FileNode | DirNode] = children
         self._attr_name: str | None = None
@@ -218,16 +216,14 @@ class BoundDir(os.PathLike[str]):
     """Runtime class representing a bound directory path.
 
     Provides access to child FileNode and DirNode descriptors as attributes.
-    Implements os.PathLike[str] so instances can be used wherever paths are expected.
+    Implements ``os.PathLike[str]`` so instances can be used wherever paths are expected.
+
+    Args:
+        path: The resolved directory path.
+        children: Child nodes from the DirNode.
     """
 
     def __init__(self, path: Path, children: dict[str, FileNode | DirNode]):
-        """Initialize a BoundDir.
-
-        Args:
-            path: The resolved directory path
-            children: Child nodes from the DirNode
-        """
         self._path = path
         self._children = children
 
@@ -280,11 +276,11 @@ class BoundDir(os.PathLike[str]):
 class Workdir:
     """Working directory structure for Safe Synthesizer artifacts.
 
-    This class defines the complete directory layout and provides typed access
-    to all paths within the structure. It uses FileNode and DirNode descriptors
-    for declarative path definitions.
+    This class defines the complete directory layout and provides typed access to all paths within the structure.
+    It uses FileNode and DirNode descriptors for declarative path definitions.
 
-    Structure:
+    Full directory structure:
+
         <base_path>/<config>---<dataset>/<run_name>/
         - safe-synthesizer-config.json
         - train/
@@ -303,32 +299,48 @@ class Workdir:
           - test.csv
           - validation.csv
 
-    Args:
-        base_path: The base path for the workdir
-        config_name: The name of the config
-        dataset_name: The name of the dataset
-        run_name: The run name (auto-generated timestamp or explicit name from CLI)
-        _current_phase: The current phase of the workdir
-        _parent_workdir: The parent workdir
     """
 
     base_path: Path
+    """Root directory under which project and run directories are created."""
+
     config_name: str
+    """Stem of the config file name, used in the project directory name."""
+
     dataset_name: str
+    """Stem of the dataset file name, used in the project directory name."""
+
     run_name: str | None = None
+    """Run name (auto-generated timestamp or explicit name from CLI).
+
+    When ``None``, a timestamp-based name is generated in ``__post_init__``.
+    """
+
     _run_name_obj: RunName = field(default_factory=RunName, repr=False)
+    """Parsed ``RunName`` backing ``run_name``."""
+
     _current_phase: str = field(default="unknown", repr=False)
+    """Pipeline phase (``"train"``, ``"generate"``, ``"end_to_end"``, or ``"unknown"``)."""
+
     _parent_workdir: Workdir | None = field(default=None, repr=False)
+    """Parent workdir for generation runs spawned from a training run."""
+
     _explicit_run_path: Path | None = field(default=None, repr=False)
+    """Explicit run directory path provided via ``--run-path``.
+
+    When set, overrides the normal ``<project>/<timestamp>`` directory layout.
+    """
 
     # Root-level config file
-    config = FileNode("safe-synthesizer-config.json")
+    config: FileNode = FileNode("safe-synthesizer-config.json")
+    """Location for NSS config file."""
 
     # WandB run ID file
-    wandb_run_id_file = FileNode("wandb_run_id.txt")
+    wandb_run_id_file: FileNode = FileNode("wandb_run_id.txt")
+    """Location for WandB run ID file."""
 
     # Train directory structure
-    train = DirNode(
+    train: DirNode = DirNode(
         "train",
         config=FileNode("safe-synthesizer-config.json"),
         cache=DirNode(
@@ -341,9 +353,10 @@ class Workdir:
             schema=FileNode("dataset_schema.json"),
         ),
     )
+    """Location and contents of train directory structure."""
 
     # Generate directory structure
-    generate = DirNode(
+    generate: DirNode = DirNode(
         "generate",
         config=FileNode("safe-synthesizer-config.json"),
         logs=FileNode("logs.jsonl"),
@@ -351,17 +364,19 @@ class Workdir:
         report=FileNode("evaluation_report.html"),
         info=FileNode("info.json"),
     )
+    """Location and contents of generate directory structure."""
 
     # Dataset directory structure
-    dataset = DirNode(
+    dataset: DirNode = DirNode(
         "dataset",
         training=FileNode("training.csv"),
         test=FileNode("test.csv"),
         validation=FileNode("validation.csv"),
     )
+    """Location and contents of dataset directory structure."""
 
     def __post_init__(self) -> None:
-        """Initialize the workdir after dataclass fields are set."""
+        """Initialize private attributes after dataclass fields are set."""
         # Convert string base_path to Path
         if isinstance(self.base_path, str):
             self.base_path = Path(self.base_path)
@@ -527,8 +542,8 @@ class Workdir:
     def ensure_directories(self) -> Self:
         """Create directories based on the current phase.
 
-        For training runs: creates train/, generate/, and dataset/ directories
-        For generation-only runs: creates only generate/ directory and writes info.txt
+        For training runs: creates ``train/``, ``generate/``, and ``dataset/`` directories
+        For generation-only runs: creates only ``generate/`` directory and writes info.txt
 
         Returns:
             self for method chaining
@@ -730,7 +745,7 @@ class Workdir:
             config_name, dataset_name = _parse_project_name(project_dir.name)
 
             logger.info(f"Found {len(adapter_files)} runs with adapters across all projects in {path}")
-            logger.info(f"Usig ggmost recent run: {run_dir}")
+            logger.info(f"Using most recent run: {run_dir}")
 
             return cls(
                 base_path=path,
