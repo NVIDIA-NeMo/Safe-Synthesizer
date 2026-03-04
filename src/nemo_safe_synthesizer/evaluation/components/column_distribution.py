@@ -99,13 +99,9 @@ class ColumnDistribution(Component):
     """
 
     name: str = Field(default="Column Distribution Stability")
-
     # Keep a copy to simplify rendering
-    column_statistics: dict[str, ColumnStatistics] | None = Field(default=None)
-    """Per-column PII entity and transform metadata."""
-
-    evaluation_fields: list[EvaluationField] = Field(default=list())
-    """Per-column evaluation metadata and distribution scores."""
+    column_statistics: dict[str, ColumnStatistics] | None = Field(default=None, description="Per-column PII entity and transform metadata.")
+    evaluation_fields: list[EvaluationField] = Field(default=list(), description="Per-column evaluation metadata and distribution scores.")
 
     @cached_property
     def jinja_context(self):

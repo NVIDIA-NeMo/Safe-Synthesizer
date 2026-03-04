@@ -34,12 +34,8 @@ class DeepStructure(Component):
     """
 
     name: str = Field(default="Deep Structure Stability")
-
-    reference_pca: pd.DataFrame | None = Field(default=None)
-    """PCA-projected reference dataframe."""
-
-    output_pca: pd.DataFrame | None = Field(default=None)
-    """PCA-projected output dataframe."""
+    reference_pca: pd.DataFrame | None = Field(default=None, description="PCA-projected reference dataframe.")
+    output_pca: pd.DataFrame | None = Field(default=None, description="PCA-projected output dataframe.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

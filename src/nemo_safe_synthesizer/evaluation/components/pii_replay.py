@@ -19,29 +19,30 @@ UNKNOWN_ENTITY: str = "none"
 
 
 class PIIReplayData(BaseModel):
-    """
-    Contains data for each PII column, listed in the PII Replay section of the SQS report.
+    """Per-column PII data listed in the PII Replay section of the SQS report."""
 
-    Args:
-        column_name: The name of the column with PII data.
-        column_assigned_type: The assigned type for the column, whether it's text, unique identifier, date, email, etc.
-        pii_type: Type of the PII data in the column. For non-text fields, this is the same as column_assigned_type. For text fields, it is the PII entities detected within the text such as race, SSN, address, etc.
-        total_ref_data: Total number of rows in the reference data that contain PII values.
-        unique_ref_data: Total number of rows in the reference data that contain unique PII values.
-        total_synth_data: Total number of output rows that contain PII present in the reference data.
-        unique_synth_data: Total number of output rows that contain unique PII present in the reference data.
-        unique_synth_data_percentage: Percentage of unique PII in the output data that matches unique entity data in the reference dataset.
-
-    """
-
-    column_name: str = Field()
-    column_assigned_type: str = Field()
-    pii_type: str = Field(default=UNKNOWN_ENTITY)
-    total_ref_data: int = Field(default=0)
-    unique_ref_data: int = Field(default=0)
-    total_synth_data: int = Field(default=0)
-    unique_synth_data: int = Field(default=0)
-    unique_synth_data_percentage: float = Field(default=0)
+    column_name: str = Field(description="The name of the column with PII data.")
+    column_assigned_type: str = Field(
+        description="The assigned type for the column (text, unique identifier, date, email, etc.)."
+    )
+    pii_type: str = Field(
+        default=UNKNOWN_ENTITY,
+        description="Type of the PII data in the column. For non-text fields, same as column_assigned_type. For text fields, the PII entities detected within the text (race, SSN, address, etc.).",
+    )
+    total_ref_data: int = Field(default=0, description="Total rows in the reference data that contain PII values.")
+    unique_ref_data: int = Field(
+        default=0, description="Total rows in the reference data that contain unique PII values."
+    )
+    total_synth_data: int = Field(
+        default=0, description="Total output rows that contain PII present in the reference data."
+    )
+    unique_synth_data: int = Field(
+        default=0, description="Total output rows that contain unique PII present in the reference data."
+    )
+    unique_synth_data_percentage: float = Field(
+        default=0,
+        description="Percentage of unique PII in the output data that matches unique entity data in the reference dataset.",
+    )
 
 
 class PIIReplay(Component):
@@ -53,15 +54,9 @@ class PIIReplay(Component):
     """
 
     name: str = Field(default="PII Replay")
-
-    reference_total_records: int = Field(default=0)
-    """Total rows in the reference data."""
-
-    output_total_records: int = Field(default=0)
-    """Total rows in the output data."""
-
-    pii_replay_data: list[PIIReplayData] = Field(default=list())
-    """Per-column / per-entity replay statistics."""
+    reference_total_records: int = Field(default=0, description="Total rows in the reference data.")
+    output_total_records: int = Field(default=0, description="Total rows in the output data.")
+    pii_replay_data: list[PIIReplayData] = Field(default=list(), description="Per-column / per-entity replay statistics.")
 
     @cached_property
     def jinja_context(self):

@@ -28,12 +28,9 @@ class Component(ABC, BaseModel):
     """
 
     name: str = Field(
-        description="Override this with the fancy display name of your component. It is used for json summaries and rendering scores."
+        description="Display name used in JSON summaries and the HTML report."
     )
-    """Display name used in JSON summaries and the HTML report."""
-
-    score: EvaluationScore = Field(default=EvaluationScore())
-    """The computed ``EvaluationScore`` for this component."""
+    score: EvaluationScore = Field(default=EvaluationScore(), description="The computed EvaluationScore for this component.")
 
     @staticmethod
     def from_evaluation_dataset(

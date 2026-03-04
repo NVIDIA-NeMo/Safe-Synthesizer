@@ -25,11 +25,8 @@ class EvaluationReport(BaseModel):
     consumed by the HTML report template.
     """
 
-    evaluation_dataset: EvaluationDataset = Field()
-    """The paired reference/output data used for evaluation."""
-
-    components: list[Component] = Field(default=list())
-    """Ordered list of evaluation components with their scores."""
+    evaluation_dataset: EvaluationDataset = Field(description="The paired reference/output data used for evaluation.")
+    components: list[Component] = Field(default=list(), description="Ordered list of evaluation components with their scores.")
 
     def get_dict(self) -> dict:
         """Return component scores as a ``{name: score_dict}`` mapping."""

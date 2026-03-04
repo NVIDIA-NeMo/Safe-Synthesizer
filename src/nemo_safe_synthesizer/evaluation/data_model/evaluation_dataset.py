@@ -27,35 +27,18 @@ class EvaluationDataset(BaseModel):
     subsampling.
     """
 
-    reference: pd.DataFrame = Field(default=pd.DataFrame())
-    """Training (reference) dataframe."""
+    reference: pd.DataFrame = Field(default=pd.DataFrame(), description="Training (reference) dataframe.")
+    output: pd.DataFrame = Field(default=pd.DataFrame(), description="Synthetic (output) dataframe.")
+    test: pd.DataFrame | None = Field(default=None, description="Optional holdout dataframe for text-similarity and privacy metrics.")
 
-    output: pd.DataFrame = Field(default=pd.DataFrame())
-    """Synthetic (output) dataframe."""
+    reference_rows: int = Field(default=0, ge=0, description="Row count of the reference dataframe.")
+    reference_cols: int = Field(default=0, ge=0, description="Column count of the reference dataframe.")
+    output_rows: int = Field(default=0, ge=0, description="Row count of the output dataframe.")
+    output_cols: int = Field(default=0, ge=0, description="Column count of the output dataframe.")
+    memorized_lines: int = Field(default=0, ge=0, description="Number of exact row matches between reference and output.")
 
-    test: pd.DataFrame | None = Field(default=None)
-    """Optional holdout dataframe for text-similarity and privacy metrics."""
-
-    reference_rows: int = Field(default=0, ge=0)
-    """Row count of the reference dataframe."""
-
-    reference_cols: int = Field(default=0, ge=0)
-    """Column count of the reference dataframe."""
-
-    output_rows: int = Field(default=0, ge=0)
-    """Row count of the output dataframe."""
-
-    output_cols: int = Field(default=0, ge=0)
-    """Column count of the output dataframe."""
-
-    memorized_lines: int = Field(default=0, ge=0)
-    """Number of exact row matches between reference and output."""
-
-    column_statistics: dict[str, ColumnStatistics] | None = Field(default=None)
-    """Per-column PII entity counts and transform metadata."""
-
-    evaluation_fields: list[EvaluationField] = Field(default=list())
-    """Per-column evaluation metadata and distribution scores."""
+    column_statistics: dict[str, ColumnStatistics] | None = Field(default=None, description="Per-column PII entity counts and transform metadata.")
+    evaluation_fields: list[EvaluationField] = Field(default=list(), description="Per-column evaluation metadata and distribution scores.")
 
     # DataFrame fields make pydantic... le sad panda
     model_config = ConfigDict(arbitrary_types_allowed=True)

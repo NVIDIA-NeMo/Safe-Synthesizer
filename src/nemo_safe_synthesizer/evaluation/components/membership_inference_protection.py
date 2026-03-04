@@ -46,15 +46,9 @@ class MembershipInferenceProtection(Component):
     """
 
     name: str = Field(default="Membership Inference Protection")
-
-    attack_sum_df: pd.DataFrame | None = Field(default=None)
-    """Summary of attack outcomes by protection grade."""
-
-    tps_values: dict[float, int] | None = Field(default=None)
-    """True positive counts per similarity threshold."""
-
-    fps_values: dict[float, int] | None = Field(default=None)
-    """False positive counts per similarity threshold."""
+    attack_sum_df: pd.DataFrame | None = Field(default=None, description="Summary of attack outcomes by protection grade.")
+    tps_values: dict[float, int] | None = Field(default=None, description="True positive counts per similarity threshold.")
+    fps_values: dict[float, int] | None = Field(default=None, description="False positive counts per similarity threshold.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
