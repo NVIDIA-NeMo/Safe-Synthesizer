@@ -20,7 +20,7 @@ from .artifact_structure import BoundDir, PathT, Workdir
 @click.group(invoke_without_command=True)
 @click.pass_context
 def artifacts(ctx: click.Context):
-    """Argument management commands."""
+    """Artifact management commands."""
     pass
 
 
