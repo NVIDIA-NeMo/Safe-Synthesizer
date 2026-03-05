@@ -80,7 +80,7 @@ safe-synthesizer artifacts --help
 | `WANDB_MODE` | WandB mode |
 | `WANDB_PROJECT` | WandB project name |
 | `WANDB_API_KEY` | WandB API key |
-| `SAFE_SYNTHESIZER_CPU_COUNT` | Number of CPU processes for NER (default: system CPU count) |
+| `SAFE_SYNTHESIZER_CPU_COUNT` | Number of CPU processes for NER (default: `max(1, cpu_count - 1)`, further limited by record count) |
 | `NIM_ENDPOINT_URL` | NIM endpoint for column classification / external PII detection |
 | `NIM_API_KEY` | NIM API key |
 | `NIM_MODEL_ID` | Model ID for column classification (default: `qwen/qwen2.5-coder-32b-instruct`) |

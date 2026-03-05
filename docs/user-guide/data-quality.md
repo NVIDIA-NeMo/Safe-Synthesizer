@@ -1,0 +1,167 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# Data Quality and Evaluation
+
+Landing page for understanding and diagnosing output quality -- synthetic data
+scores, evaluation metrics, privacy settings, and PII behavior. For runtime
+errors, OOM issues, and configuration problems, see
+[Troubleshooting](troubleshooting.md).
+
+---
+
+## Differential Privacy
+
+DP training has strict requirements. Violating them produces errors that may
+not immediately point to the root cause.
+
+### Requirements
+
+- DP and Unsloth are mutually exclusive. If `privacy.dp_enabled` is `true`,
+  `use_unsloth` must be `false` or `"auto"` (which resolves to `false`).
+- `data.max_sequences_per_example` must be `1` when DP is enabled.
+  Set it to `"auto"` and it will resolve correctly.
+- `data_fraction` and `true_dataset_size` must be available at runtime --
+  these are normally set automatically when running the full pipeline.
+- Gradient checkpointing is disabled when using DP (incompatible with Opacus).
+
+### Common DP Errors
+
+```text
+Unable to automatically determine a noise multiplier
+```
+
+The privacy budget (epsilon) is too low for your dataset size. Either increase
+`privacy.epsilon` or add more training records.
+
+```text
+Discrete mean differs
+```
+
+The [PRV accountant](https://github.com/microsoft/prv_accountant) failed and
+the system is falling back to the [Opacus](https://opacus.ai/) RDP accountant.
+This is handled automatically but may produce slightly different privacy
+guarantees, since the two accountants use different composition methods.
+
+```text
+Number of entities in dataset is low
+```
+
+Small datasets cause poor privacy budget utilization. Consider lowering
+`training.batch_size` or adding more records.
+
+---
+
+## PII Replacement
+
+### PII Uses Unexpected Entity Types
+
+If PII replacement is not detecting the entity types you expect, the column
+classifier may have failed silently. When the classifier fails to initialize
+or classify, it falls back to default entity types. Check logs for classification
+errors if PII replacement seems to use unexpected entity types.
+
+Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
+is reachable. PII classify config is deeply nested -- use YAML or SDK:
+
+=== "YAML"
+
+    ```yaml
+    replace_pii:
+      globals:
+        classify:
+          enable_classify: true
+          entities: ["name", "email", "phone_number"]
+    ```
+
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+
+    pii_config = PiiReplacerConfig.get_default_config()
+    pii_config.globals.classify.enable_classify = True
+    pii_config.globals.classify.entities = ["name", "email", "phone_number"]
+
+    synthesizer = (
+        SafeSynthesizer(config)
+        .with_data_source("data.csv")
+        .with_replace_pii(config=pii_config)
+    )
+    ```
+
+---
+
+## Evaluation
+
+For out-of-memory errors during evaluation, see
+[Troubleshooting > OOM During Evaluation](troubleshooting.md#out-of-memory-during-evaluation).
+
+### Minimum Data Requirements
+
+Several evaluation metrics have minimum data requirements:
+
+| Metric | Minimum | Behavior if Unmet |
+|--------|---------|-------------------|
+| Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
+| Text semantic similarity | 200 records | Skipped; score marked UNAVAILABLE |
+| Attribute Inference Attack | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
+| PCA (deep structure) | 2x2 matrix | Skipped with warning; score marked UNAVAILABLE |
+
+### UNAVAILABLE Metrics
+
+Many evaluation components catch errors and return `UNAVAILABLE` grades instead
+of failing the pipeline. If your evaluation report shows missing or `UNAVAILABLE`
+metrics:
+
+1. Check the logs for warnings and exceptions
+2. Verify you have enough records (>= 200) and columns (>= 3)
+3. Verify the SentenceTransformer model downloaded successfully
+
+### Report Truncation
+
+SQS reports are limited to `sqs_report_columns=250` columns and
+`sqs_report_rows=5000` rows by default. Larger datasets are silently
+truncated in the HTML report. Adjust these in `evaluation` config if needed.
+
+### Low SQS Scores
+
+If the SQS (Synthetic Quality Score) report shows low quality scores:
+
+1. Review column distributions in the HTML report -- large divergences
+   indicate the model did not learn the data patterns well
+2. Check that training data is representative and not too small
+3. Consider increasing `generation.num_records` for a larger sample
+4. Increase `training.num_input_records_to_sample` to give the model
+   more context during generation
+5. Verify the model trained for enough epochs (`training.num_epochs`)
+
+---
+
+## Interpreting Results
+
+### HTML Report
+
+!!! info "Coming soon"
+    How to read the evaluation HTML report: column-level comparisons,
+    distribution charts, and summary statistics.
+
+### SQS Score Ranges
+
+!!! info "Coming soon"
+    What SQS score ranges indicate -- what constitutes a good, acceptable, or
+    poor score for different data types and use cases.
+
+### Privacy Metrics
+
+!!! info "Coming soon"
+    How to interpret the privacy evaluation metrics: epsilon guarantees,
+    attribute inference attack (AIA) scores, and membership inference
+    protection results.
+
+### Column-Level Diagnostics
+
+!!! info "Coming soon"
+    How to diagnose quality issues at the column level: divergence scores,
+    missing value patterns, and distribution mismatches between real and
+    synthetic data.
