@@ -106,10 +106,12 @@ Most contributors already have an SSH key for GitHub authentication. The same ke
 
 4. Configure git to sign commits (see [Telling Git about your signing key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key) for details):
 
+!!! info "git global"
+    You can make this a global default if you'd like by adding the `--global` flag. The following commands are repo scoped.
+
    ```bash
-   git config --global gpg.format ssh
-   git config --global user.signingkey ~/.ssh/id_ed25519.pub
-   git config --global commit.gpgsign true
+   git config gpg.format ssh
+   git config user.signingkey ~/.ssh/id_ed25519.pub
    ```
 
 5. (Optional) Configure local verification:
@@ -138,11 +140,10 @@ If you already have a GPG key or prefer GPG. To generate one, see [Generating a 
 
    Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account) > SSH and GPG keys > New GPG key.
 
-2. Configure git to sign commits:
+2. Configure git to use your key to sign commits:
 
    ```bash
-   git config --global user.signingkey <GPG-KEY-ID>
-   git config --global commit.gpgsign true
+   git config user.signingkey <GPG-KEY-ID>
    ```
 
 #### Verify signing works
@@ -157,13 +158,25 @@ git reset --soft HEAD~1
 
 You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
 
-To avoid forgetting `--signoff` and `--gpg-sign` on future commits, alias `git commit` to always include both. This is scoped to the current repo only:
+
+To avoid forgetting `--signoff` and `--gpg-sign` on future commits, configure this repo to GPG-sign automatically and create a short alias that adds DCO sign-off:
+
+
+!!! info "Git aliases"
+    You can obviously choose your own aliases or set them elsewhere - this is just a suggestion so you do not have to think about it.
+
 
 ```bash
-git config alias.commit "commit --signoff --gpg-sign"
+# Automatic GPG signing on every commit (native git config)
+git config commit.gpgsign true
+
+# Alias -- git aliases can't override built-in commands, so use "commit-sign" instead of "commit"
+git config alias.commit-sign "commit --signoff"
 ```
 
-NVIDIA internal contributors who work primarily on repos that require DCO and signing can set this globally instead: `git config --global alias.commit "commit --signoff --gpg-sign"`.
+Then use `git commit-sign` instead of `git commit`. Since `commit.gpgsign` is active, every commit is both signed and DCO-certified.
+
+NVIDIA internal contributors who work primarily on repos that require DCO and signing can set these globally instead: `git config --global commit.gpgsign true` and `git config --global alias.commit-sign "commit --signoff"`.
 
 #### Re-signing existing commits
 
@@ -483,6 +496,11 @@ Start a local server with live reload:
 make docs-serve
 # Browse to http://127.0.0.1:8000
 ```
+
+In Cursor or VS Code Remote, the port is auto-forwarded. Check the Ports
+panel (`Ctrl+Shift+P` > "Ports: Focus on Ports View") -- port 8000 will
+appear with a local address you can open in the Simple Browser or your
+system browser.
 
 Build the static site (output in `site/`):
 
