@@ -310,7 +310,7 @@ The `main` branch has the following protections:
 | Dismiss stale reviews           | Yes          |
 | Require conversation resolution | Yes          |
 | Signed commits                  | Required     |
-| Required status checks          | Format, Lint |
+| Required status checks          | CI Status    |
 | Linear history                  | Required     |
 | Force pushes                    | Blocked      |
 | Deletions                       | Blocked      |
@@ -436,32 +436,33 @@ Use `make` targets instead of running `ruff` or `ty` directly. The targets use p
 
 ```bash
 make format   # auto-fix: ruff format + import sorting + copyright headers
-make lint     # read-only: ruff lint + ty typecheck + copyright check
+make check    # read-only: all CI checks (format + lint + typecheck + copyright)
 make test     # unit tests
 # or just
-make format lint test
+make format check test
 ```
 
-We use ``ruff`` && ``ty`` to do the majority of this work, and we wrap them with settings for consistency.
+We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-These three commands replicate what CI runs. Pre-commit hooks (`prek install`) provide faster feedback during development but are not a substitute for the `make` targets.
+CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
 
-The wrapper scripts in `tools/` also accept explicit file paths:
+The wrapper scripts in `tools/` also accept explicit file paths for spot-checking individual files:
 
 ```bash
-bash tools/lint/ruff-lint.sh src/nemo_safe_synthesizer/cli/run.py
-bash tools/format/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
 
-| Check | CI | `make format` / `make lint` | Pre-commit (`prek`) |
+All `make` targets check the entire project. Pre-commit scopes checks to staged files. The wrapper scripts also accept explicit file paths when you want to check specific files.
+
+| Check | CI target | `make format` / `make check` | Pre-commit |
 |---|---|---|---|
-| ruff format | read-only | auto-fix | staged files (auto-fix) |
-| ruff lint | read-only | `make lint`: read-only; `make format`: auto-fix | staged files |
-| ty typecheck | all files | all files | all files |
-| copyright headers | read-only | `make lint`: read-only; `make format`: auto-fix | staged files (auto-fix) |
-| uv lock drift | not checked | not checked | on `pyproject.toml` changes |
+| ruff format + lint | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| ty typecheck | `make typecheck` | read-only | all files |
+| copyright headers | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| uv lock drift | `make lock-check` | not checked | on `pyproject.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
@@ -543,7 +544,7 @@ This project supports AI coding assistants. Configuration is layered so that con
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
-Before contributing, run `make format` and `make lint`. See `AGENTS.md` for full conventions.
+Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
 
 ---
 
