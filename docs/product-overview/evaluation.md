@@ -76,27 +76,16 @@ This score measures resistance to attribute inference attacks -- whether sensiti
 
 PII Replay counts the total and unique instances of personally identifiable information (PII) from your training data that show up in your synthetic data. Lower counts indicate higher privacy.
 
-You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling `Replace PII` before synthesis.
-
-## Privacy Guarantees and Evaluation
-
-### Impact of Differential Privacy on Scores
-
-- Enabling DP typically improves DPS by reducing memorization and attack success rates
-- Lower epsilon (stronger privacy) generally yields higher DPS scores
-- Enabling DP can reduce SQS due to the privacy-utility tradeoff (noise affects quality)
-
-For differential privacy configuration and privacy-utility tradeoffs, refer to {doc}`data-synthesis` and {doc}`../tutorials/differential-privacy`.
+You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling [Replace PII](pii_replacement.md) before synthesis.
 
 ## Evaluation Reports
 
-Every Safe Synthesizer job automatically generates an HTML evaluation report containing:
+Every Safe Synthesizer job automatically generates an HTML evaluation report saved to `generate/evaluation_report.html` inside the run directory (by default `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`). The report contains:
 
 - Overall SQS and DPS scores
+- Statistics describing the training and synthetic data
 - Detailed subscores for each metric
 - Visualizations comparing training and synthetic data
-- Statistical test results
-- Recommendations for improvement
 
 ## Configuration
 
@@ -104,6 +93,7 @@ Evaluation is enabled by default but can be customized in your YAML config:
 
 ```yaml
 evaluation:
+  enabled: true       # Enable evaluation
   mia_enabled: true   # Membership Inference Attack
   aia_enabled: true   # Attribute Inference Attack
 ```
@@ -112,22 +102,26 @@ evaluation:
 
 ### SQS Interpretation
 
-- `8.0-10.0`: Excellent -- production-ready utility; differences are negligible. Proceed to privacy review and standard validation.
-- `6.0-7.9`: Very Good -- usable for most analytics/ML with minor drift. Validate key KPIs/models; consider light tuning to close gaps.
-- `4.0-5.9`: Good -- noticeable utility gaps. Limit to exploratory analysis; increase training steps, adjust hyperparameters, or add data coverage; then re-evaluate.
-- `2.0-3.9`: Moderate -- significant quality loss. Do not use for decisions; fix preprocessing/schema typing, address class imbalance, increase model capacity, retrain, then re-evaluate.
-- `Below 2.0`: Poor -- fails utility bar. Block use; audit data quality and configuration, revise modeling approach, and re-run.
+| Score Range | Rating | Guidance |
+|-------------|--------|----------|
+| **8.0-10.0** | Excellent | Production-ready utility; differences are negligible. Proceed to privacy review and standard validation. |
+| **6.0-7.9** | Very Good | Usable for most analytics/ML with minor drift. Validate key KPIs/models; consider light tuning to close gaps. |
+| **4.0-5.9** | Good | Noticeable utility gaps. Limit to exploratory analysis; increase training steps, adjust hyperparameters, or add data coverage; then re-evaluate. |
+| **2.0-3.9** | Moderate | Significant quality loss. Do not use for decisions; fix preprocessing/schema typing, address class imbalance, increase model capacity, retrain, then re-evaluate. |
+| **Below 2.0** | Poor | Fails utility bar. Block use; audit data quality and configuration, revise modeling approach, and re-run. |
 
 ### DPS Interpretation
 
-- `8.0-10.0`: Excellent -- ready for external sharing; residual risk is very low. Proceed with utility review and standard governance.
-- `6.0-7.9`: Very Good -- low risk for most uses. Safe for internal sharing and many external partners; tighten handling for any high-sensitivity columns.
-- `4.0-5.9`: Good -- meaningful privacy risk present. Limit use to controlled internal analysis; strengthen PII replacement or enable DP (lower epsilon if already enabled), then re-evaluate.
-- `2.0-3.9`: Moderate -- high leakage/memorization risk. Do not distribute; expand detection coverage, apply stronger transformations, and retune synthesis.
-- `Below 2.0`: Poor -- fails privacy bar. Block release; increase training data, fix detection gaps, or enable strong DP and re-run.
+| Score Range | Rating | Guidance |
+|-------------|--------|----------|
+| **8.0-10.0** | Excellent | Ready for external sharing; residual risk is very low. Proceed with utility review and standard governance. |
+| **6.0-7.9** | Very Good | Low risk for most uses. Safe for internal sharing and many external partners; tighten handling for any high-sensitivity columns. |
+| **4.0-5.9** | Good | Meaningful privacy risk present. Limit use to controlled internal analysis; strengthen PII replacement or enable DP (lower epsilon if already enabled), then re-evaluate. |
+| **2.0-3.9** | Moderate | High leakage/memorization risk. Do not distribute; expand detection coverage, apply stronger transformations, and retune synthesis. |
+| **Below 2.0** | Poor | Fails privacy bar. Block release; increase training data, fix detection gaps, or enable strong DP and re-run. |
 
 ## Related Topics
 
-- {doc}`../tutorials/safe-synthesizer-101`: Get started with Safe Synthesizer
-- {doc}`../tutorials/differential-privacy`: Enable differential privacy
-- {doc}`../tutorials/index`: More tutorials
+- [Safe Synthesizer 101](../tutorials/safe-synthesizer-101.md): Get started with Safe Synthesizer
+- [Differential Privacy](../tutorials/differential-privacy.md): Enable differential privacy
+- [Tutorials](../tutorials/index.md): More tutorials
