@@ -62,7 +62,7 @@ DPS includes three metrics:
 - Attribute Inference Protection: assesses whether sensitive attributes can be inferred from synthetic data
 - PII Replay: evaluates the frequency with which sensitive values from the original data appear in the synthetic version
 
-We average the first two to provide an overall DPS. We do not factor PII Replay into DPS; you should analyze it separately.
+We average the first two to provide an overall DPS. We do not factor PII Replay into DPS; you should analyze it separately. Read more about these privacy metrics [here](https://arxiv.org/abs/2501.03941).
 
 ### Membership Inference Protection
 
