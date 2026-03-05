@@ -5,8 +5,8 @@
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Data Quality](data-quality.md). For environment variables, model caching, and offline setup, see
-[Environment Variables](environment.md).
+and evaluation metrics, see [Data Quality](data-quality.md). For environment variables, model caching, offline setup, NIM endpoint
+configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 ## Quick Reference
 
@@ -18,9 +18,9 @@ and evaluation metrics, see [Data Quality](data-quality.md). For environment var
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
 | OOM in evaluation | Large dataset + PCA | [Reduce columns or disable eval](#out-of-memory-during-evaluation) |
 | "Cannot use unsloth without GPU" | No CUDA device | [Switch to HuggingFace backend](#no-gpu-detected) |
-| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `max_sequences_per_example: 1`](data-quality.md#requirements) |
-| "Unsloth not compatible with DP" | Mutual exclusion | [Set `use_unsloth: false`](data-quality.md#requirements) |
-| "Unable to determine noise multiplier" | Epsilon too low | [Increase epsilon or add records](data-quality.md#common-dp-errors) |
+| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `data.max_sequences_per_example: 1`](data-quality.md#requirements) |
+| "Unsloth not compatible with DP" | Mutual exclusion | [Set `training.use_unsloth: false`](data-quality.md#requirements) |
+| "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](data-quality.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
 | "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
@@ -34,26 +34,55 @@ and evaluation metrics, see [Data Quality](data-quality.md). For environment var
 
 ## Training
 
+GPU memory, context length, and backend issues during fine-tuning.
+
 ### Out of Memory During Training
 
 Training OOM errors appear during the "Training" phase with HuggingFace Trainer
 stack traces. If you see `torch.cuda.OutOfMemoryError`:
 
-1. Reduce `training.batch_size` (default is `1`, effective batch size includes
-   `gradient_accumulation_steps` which defaults to `8`)
+1. Enable 4-bit quantization -- the single largest memory saver. Set
+   `training.quantize_model: true` and `training.quantization_bits: 4`. QLoRA
+   stores the frozen base model in 4-bit NF4 while training LoRA adapters in
+   full precision, cutting model weight memory by ~4x. Quantization reduces
+   precision in the frozen weights; in practice QLoRA typically produces
+   results close to full-precision LoRA, but verify with your evaluation report
 2. Reduce the context window -- see
    [Context Length and Record Fitting](#context-length-and-record-fitting) for
    how to lower `training.rope_scaling_factor`, truncate records, or simplify
-   grouped examples
-3. Enable quantization by setting `training.quantize_model: true` and choosing
-   `training.quantization_bits: 4` (4-bit) or `8` (8-bit)
+   grouped examples. Longer sequences require more activation memory even with
+   gradient checkpointing enabled
+3. Verify `training.batch_size` is `1` (the default). The effective batch
+   size is `batch_size * gradient_accumulation_steps` (default 1 x 8 = 8).
+   Peak memory is set by the forward/backward pass on one micro-batch --
+   `gradient_accumulation_steps` controls how many micro-batches accumulate
+   before each optimizer step but does not affect peak memory
+4. Lower `training.max_vram_fraction` (default `0.80`) to leave headroom for
+   other GPU consumers on the same device
+
+GPU memory during LoRA SFT breaks down into three components:
+
+- Base model weights (dominant) -- ~14 GiB for a 7B model in fp16, ~3.5 GiB
+  in 4-bit. Quantization targets this component
+- Activations (proportional to sequence length and batch size) --
+  self-attention computes an n x n score matrix, so activation memory scales
+  [quadratically with sequence length](https://huggingface.co/docs/transformers/en/model_memory_anatomy).
+  Gradient checkpointing, which Safe Synthesizer enables by default, reduces
+  this by recomputing activations during the backward pass instead of storing
+  them. Context length and batch size target this component
+- LoRA adapter gradients and optimizer states (small) -- typically < 1 GiB
+  for standard LoRA ranks
+
+For deeper coverage, see
+[Methods and tools for efficient training on a single GPU](https://huggingface.co/docs/transformers/en/perf_train_gpu_one)
+in the HuggingFace documentation.
 
 ### No GPU Detected
 
 If Safe Synthesizer fails to find a GPU, the Unsloth backend raises immediately:
 
 ```text
-RuntimeError: Cannot use unsloth without GPU
+RuntimeError: Cannot use unsloth without GPU.
 ```
 
 The HuggingFace backend will not error but will attempt to use CPU (very slow).
@@ -125,10 +154,14 @@ memory-specific fixes like quantization and batch size reduction.
 
 ## Generation
 
+VRAM, invalid records, and early stopping during synthetic data production.
+
 ### Out of Memory During Generation
 
 Generation OOM errors appear during the "Generation" phase with vLLM.
-Both training and generation cap GPU allocation at 80% of available VRAM minus 2 GiB.
+GPU allocation defaults to 80% of available VRAM. Training exposes
+`training.max_vram_fraction` to override this; generation does not yet have
+an equivalent config field.
 
 1. Ensure no other processes hold GPU memory -- training cleanup should release
    it, but verify with `nvidia-smi`
@@ -152,9 +185,10 @@ Generation stopped prematurely due to no valid records
 Generation stopped prematurely because the average fraction of invalid records was higher than...
 ```
 
-: Too many invalid records across `patience` consecutive batches. Consider
-  lowering `generation.invalid_fraction_threshold`, retraining with more data,
-  or increasing `training.rope_scaling_factor` if records are being truncated.
+: Too many invalid records across `generation.patience` consecutive batches.
+  Consider lowering `generation.invalid_fraction_threshold`, retraining with
+  more data, or increasing `training.rope_scaling_factor` if records are being
+  truncated.
 
 For context-length errors during data assembly (`"The number of tokens in an
 example exceeds the available context length"`), see
@@ -163,6 +197,8 @@ example exceeds the available context length"`), see
 ---
 
 ## Evaluation
+
+Memory and scope issues during quality scoring and report generation.
 
 ### Out of Memory During Evaluation
 
@@ -184,6 +220,8 @@ If evaluation OOMs, reduce the evaluation scope or dataset size:
 ---
 
 ## Configuration
+
+Defaults, auto-resolution, and validation errors for pipeline parameters.
 
 ### Surprising Defaults
 
@@ -237,7 +275,7 @@ your configuration:
 
 Unsupported file extensions:
 
-: The `url` parameter accepts `.csv`, `.txt`, `.json`, `.jsonl`, and `.parquet`
+: The `url` parameter accepts `.csv`, `.json`, `.jsonl`, and `.parquet`
   files. Other formats raise a `ValueError`.
 
 Incompatible DP settings:
@@ -254,6 +292,8 @@ Incompatible DP settings:
 ---
 
 ## PII and NER
+
+Model downloads and processing timeouts for PII detection.
 
 ### GLiNER Download Fails
 
@@ -347,9 +387,10 @@ Interval mismatch:
 
 Groups skipped during generation:
 
-: If a group consistently produces invalid records (exceeding `patience`
-  consecutive batches above `invalid_fraction_threshold`), that group is
-  skipped entirely. Check your training data quality for those groups.
+: If a group consistently produces invalid records (exceeding
+  `generation.patience` consecutive batches above
+  `generation.invalid_fraction_threshold`), that group is skipped entirely.
+  Check your training data quality for those groups.
 
 Out-of-order records:
 
@@ -395,9 +436,3 @@ Checklist:
 Library bugs. If you encounter this error through documented interfaces,
 please [file an issue on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
 
----
-
-## Reference
-
-See [Environment Variables](environment.md) for model caching, offline setup,
-NIM endpoint configuration, and NER parallelism controls.

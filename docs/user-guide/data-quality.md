@@ -6,7 +6,8 @@
 Landing page for understanding and diagnosing output quality -- synthetic data
 scores, evaluation metrics, privacy settings, and PII behavior. For runtime
 errors, OOM issues, and configuration problems, see
-[Troubleshooting](troubleshooting.md).
+[Troubleshooting](troubleshooting.md). For environment variables and model
+caching, see [Environment Variables](environment.md).
 
 ---
 
@@ -53,6 +54,8 @@ Small datasets cause poor privacy budget utilization. Consider lowering
 ---
 
 ## PII Replacement
+
+Entity detection and classification issues during PII replacement.
 
 ### PII Uses Unexpected Entity Types
 
@@ -132,13 +135,15 @@ If the SQS (Synthetic Quality Score) report shows low quality scores:
    indicate the model did not learn the data patterns well
 2. Check that training data is representative and not too small
 3. Consider increasing `generation.num_records` for a larger sample
-4. Increase `training.num_input_records_to_sample` to give the model
-   more context during generation
-5. Verify the model trained for enough epochs (`training.num_epochs`)
+4. Increase `training.num_input_records_to_sample` -- this controls how much
+   data the model sees during training (analogous to training duration) and
+   affects generation quality
 
 ---
 
 ## Interpreting Results
+
+Guides for reading the evaluation report and understanding metric scores.
 
 ### HTML Report
 

@@ -3,7 +3,9 @@
 
 # Environment Variables
 
-All environment variables that affect Safe Synthesizer behavior.
+All environment variables that affect Safe Synthesizer behavior. For runtime
+errors and OOM issues, see [Troubleshooting](troubleshooting.md). For output
+quality and evaluation metrics, see [Data Quality](data-quality.md).
 
 Synthesis parameters (`training.learning_rate`, `generation.num_records`, etc.)
 are set via YAML, CLI flags, or the Python SDK -- not environment variables.
@@ -21,9 +23,9 @@ are cached, and which network endpoints are used.
 | `LOCAL_FILES_ONLY` | unset | Set to `true` to skip network downloads (Unsloth + GLiNER only) |
 | `VLLM_CACHE_ROOT` | vLLM default | vLLM model cache directory |
 | `VLLM_ATTENTION_BACKEND` | `auto` | Generation attention implementation |
-| `NIM_ENDPOINT_URL` | build.nvidia.com | NIM/OpenAI-compatible endpoint for PII column classification |
+| `NIM_ENDPOINT_URL` | `https://build.nvidia.com` | NIM/OpenAI-compatible endpoint for PII column classification |
 | `NIM_API_KEY` | unset | API key for the NIM endpoint |
-| `SAFE_SYNTHESIZER_CPU_COUNT` | `cpu_count - 1` | CPU worker count for NER processing |
+| `SAFE_SYNTHESIZER_CPU_COUNT` | `max(1, cpu_count - 1)` | CPU worker count for NER processing |
 
 ---
 
@@ -107,6 +109,8 @@ export VLLM_CACHE_ROOT=/shared/cache/vllm
 
 ## Attention and Compute
 
+GPU attention backend selection for the vLLM generation engine.
+
 ### `VLLM_ATTENTION_BACKEND`
 
 Controls the attention implementation used by the vLLM generation engine.
@@ -124,6 +128,8 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`,
 ---
 
 ## PII and NER
+
+NIM endpoint, API keys, and CPU parallelism for PII detection.
 
 ### `NIM_ENDPOINT_URL`
 
