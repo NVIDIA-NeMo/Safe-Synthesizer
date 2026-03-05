@@ -9014,8 +9014,7 @@ URLs or file paths.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Short name of the dataset.</p>
-<p>Used to fetch the dataset from the registry.</p>
+        <p>Short name of the dataset. Used to fetch the dataset from the registry by name.</p>
 
     </div>
 
@@ -9037,9 +9036,7 @@ URLs or file paths.</p>
 
     <div class="doc doc-contents ">
 
-        <p>URL or path to the dataset.</p>
-<p>If a relative path, it is joined with the base_url from the registry if
-present.</p>
+        <p>URL or path to the dataset. If a relative path, it is joined with the base_url from the registry if present.</p>
 
     </div>
 
@@ -9061,10 +9058,7 @@ present.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Config overrides for this dataset.</p>
-<p>These overrides take precendence over the values from the config file in
-the CLI, but are themselves overridden by any CLI args specifying config
-parameters.</p>
+        <p>Config overrides for this dataset. These overrides take precedence over the values from the config file in the CLI, but are themselves overridden by any CLI args specifying config parameters.</p>
 
     </div>
 
@@ -9086,7 +9080,7 @@ parameters.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Extra arguments needed by the data reader for a this dataset.</p>
+        <p>Extra arguments needed by the data reader for this dataset.</p>
 
     </div>
 
@@ -9201,6 +9195,53 @@ Otherwise, self.url is returned as is.</p>
     <div class="doc doc-contents ">
 
         <p>Fetch the dataset and return a pandas DataFrame.</p>
+<p>Infers the file format from the URL extension and merges any <code>load_args</code> on top of per-format defaults.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The dataset as a DataFrame.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If the file extension is not supported.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
             <details class="mkdocstrings-source">
@@ -9237,39 +9278,57 @@ Otherwise, self.url is returned as is.</p>
 <span class="normal"><a href="#__codelineno-0-112">112</a></span>
 <span class="normal"><a href="#__codelineno-0-113">113</a></span>
 <span class="normal"><a href="#__codelineno-0-114">114</a></span>
-<span class="normal"><a href="#__codelineno-0-115">115</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="k">def</span><span class="w"> </span><span class="nf">fetch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Fetch the dataset and return a pandas DataFrame.&quot;&quot;&quot;</span>
-</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="n">url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_url</span><span class="p">()</span>
-</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>
-</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Reading dataset from </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>
-</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="c1"># Determine the file extension and appropriate reader</span>
-</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="k">match</span> <span class="n">Path</span><span class="p">(</span><span class="n">url</span><span class="p">)</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
-</span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a>        <span class="k">case</span> <span class="s2">&quot;csv&quot;</span> <span class="o">|</span> <span class="s2">&quot;txt&quot;</span><span class="p">:</span>
-</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span>
-</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a>            <span class="n">default_load_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>        <span class="k">case</span> <span class="s2">&quot;json&quot;</span><span class="p">:</span>
-</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a>            <span class="n">default_load_args</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>        <span class="k">case</span> <span class="s2">&quot;jsonl&quot;</span><span class="p">:</span>
-</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span>
-</span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>            <span class="n">default_load_args</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;lines&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
-</span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="k">case</span> <span class="s2">&quot;parquet&quot;</span><span class="p">:</span>
-</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_parquet</span>
-</span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>            <span class="n">default_load_args</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="k">case</span> <span class="n">extension</span><span class="p">:</span>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">extension</span><span class="p">:</span>
-</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>                <span class="n">extension</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;no extension found on url &#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&#39;&gt;&quot;</span>
-</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported file extension: </span><span class="si">{</span><span class="n">extension</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>
-</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="c1"># Merge load args: user-provided args override defaults</span>
-</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">final_load_args</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">default_load_args</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_args</span> <span class="ow">or</span> <span class="p">{})}</span>
-</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>
-</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>        <span class="k">return</span> <span class="n">reader</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="o">**</span><span class="n">final_load_args</span><span class="p">)</span>
-</span><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error reading dataset from </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>        <span class="k">raise</span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+<span class="normal"><a href="#__codelineno-0-116">116</a></span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span>
+<span class="normal"><a href="#__codelineno-0-120">120</a></span>
+<span class="normal"><a href="#__codelineno-0-121">121</a></span>
+<span class="normal"><a href="#__codelineno-0-122">122</a></span>
+<span class="normal"><a href="#__codelineno-0-123">123</a></span>
+<span class="normal"><a href="#__codelineno-0-124">124</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="k">def</span><span class="w"> </span><span class="nf">fetch</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Fetch the dataset and return a pandas DataFrame.</span>
+</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>
+</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    Infers the file format from the URL extension and merges any ``load_args`` on top of per-format defaults.</span>
+</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>
+</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a><span class="sd">        The dataset as a DataFrame.</span>
+</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>
+</span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a><span class="sd">    Raises:</span>
+</span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">        ValueError: If the file extension is not supported.</span>
+</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="n">url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_url</span><span class="p">()</span>
+</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>
+</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Reading dataset from </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>
+</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a>    <span class="c1"># Determine the file extension and appropriate reader</span>
+</span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a>    <span class="k">match</span> <span class="n">Path</span><span class="p">(</span><span class="n">url</span><span class="p">)</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+</span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>        <span class="k">case</span> <span class="s2">&quot;csv&quot;</span> <span class="o">|</span> <span class="s2">&quot;txt&quot;</span><span class="p">:</span>
+</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span>
+</span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>            <span class="n">default_load_args</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>        <span class="k">case</span> <span class="s2">&quot;json&quot;</span><span class="p">:</span>
+</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span>
+</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>            <span class="n">default_load_args</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>        <span class="k">case</span> <span class="s2">&quot;jsonl&quot;</span><span class="p">:</span>
+</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_json</span>
+</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>            <span class="n">default_load_args</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;lines&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}</span>
+</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>        <span class="k">case</span> <span class="s2">&quot;parquet&quot;</span><span class="p">:</span>
+</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>            <span class="n">reader</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_parquet</span>
+</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>            <span class="n">default_load_args</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>        <span class="k">case</span> <span class="n">extension</span><span class="p">:</span>
+</span><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">extension</span><span class="p">:</span>
+</span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>                <span class="n">extension</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&lt;no extension found on url &#39;</span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">&#39;&gt;&quot;</span>
+</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported file extension: </span><span class="si">{</span><span class="n">extension</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>
+</span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>    <span class="c1"># Merge load args: user-provided args override defaults</span>
+</span><span id="__span-0-118"><a id="__codelineno-0-118" name="__codelineno-0-118"></a>    <span class="n">final_load_args</span> <span class="o">=</span> <span class="p">{</span><span class="o">**</span><span class="n">default_load_args</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">load_args</span> <span class="ow">or</span> <span class="p">{})}</span>
+</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a>
+</span><span id="__span-0-120"><a id="__codelineno-0-120" name="__codelineno-0-120"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-121"><a id="__codelineno-0-121" name="__codelineno-0-121"></a>        <span class="k">return</span> <span class="n">reader</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="o">**</span><span class="n">final_load_args</span><span class="p">)</span>
+</span><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error reading dataset from </span><span class="si">{</span><span class="n">url</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a>        <span class="k">raise</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9303,6 +9362,11 @@ Otherwise, self.url is returned as is.</p>
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
         <p>Registry of datasets for easy reference by name.</p>
+<p>Datasets can be looked up by name via <code>get_dataset</code>. If the name is
+not in the registry, a new <code>DatasetInfo</code> is created on-the-fly treating
+the name as a literal URL or path.</p>
+<p>When constructed, the DatasetRegistry automatically adds back-references to each entry in <code>self.datasets</code> so the
+<code>DatasetInfo</code> instances can resolve <code>base_url</code>.</p>
 
     
 
@@ -9334,13 +9398,13 @@ Otherwise, self.url is returned as is.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/cli/datasets.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-131">131</a></span>
-<span class="normal"><a href="#__codelineno-0-132">132</a></span>
-<span class="normal"><a href="#__codelineno-0-133">133</a></span>
-<span class="normal"><a href="#__codelineno-0-134">134</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">):</span>
-</span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">data</span><span class="p">)</span>
-</span><span id="__span-0-133"><a id="__codelineno-0-133" name="__codelineno-0-133"></a>    <span class="k">for</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">datasets</span><span class="p">:</span>
-</span><span id="__span-0-134"><a id="__codelineno-0-134" name="__codelineno-0-134"></a>        <span class="n">dataset</span><span class="o">.</span><span class="n">_registry</span> <span class="o">=</span> <span class="bp">self</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#__codelineno-0-152">152</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-149"><a id="__codelineno-0-149" name="__codelineno-0-149"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">data</span><span class="p">):</span>
+</span><span id="__span-0-150"><a id="__codelineno-0-150" name="__codelineno-0-150"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-0-151"><a id="__codelineno-0-151" name="__codelineno-0-151"></a>    <span class="k">for</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">datasets</span><span class="p">:</span>
+</span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152"></a>        <span class="n">dataset</span><span class="o">.</span><span class="n">_registry</span> <span class="o">=</span> <span class="bp">self</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -9391,9 +9455,7 @@ Otherwise, self.url is returned as is.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Base URL for the registry.</p>
-<p>Any relative paths will be prepended with the base_url before attempting to load the dataset.
-This only applies to the datasets in the registry which have a relative url.</p>
+        <p>Base URL for the registry. Any relative paths will be prepended with the base_url before attempting to load the dataset. This only applies to the datasets in the registry which have a relative url.</p>
 
     </div>
 
@@ -9413,45 +9475,125 @@ This only applies to the datasets in the registry which have a relative url.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Get a dataset from the registry.</p>
-<p>Automatically adds a new Dataset with name url if it doesn't exist in the registry.</p>
+        <p>Look up a dataset by name, creating an ad-hoc entry if not found.</p>
+<p>When <code>url</code> matches a registered name the corresponding entry is
+returned. Otherwise a new <code>DatasetInfo</code> is created with the raw
+<code>url</code> as both name and path (without a registry back-reference, so
+relative paths resolve against the working directory).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>url</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Dataset name, URL, or file path.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            DatasetInfo
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.cli.datasets.DatasetInfo)" href="#nemo_safe_synthesizer.cli.datasets.DatasetInfo">DatasetInfo</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Matching or newly created <code>DatasetInfo</code>.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/cli/datasets.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-136">136</a></span>
-<span class="normal"><a href="#__codelineno-0-137">137</a></span>
-<span class="normal"><a href="#__codelineno-0-138">138</a></span>
-<span class="normal"><a href="#__codelineno-0-139">139</a></span>
-<span class="normal"><a href="#__codelineno-0-140">140</a></span>
-<span class="normal"><a href="#__codelineno-0-141">141</a></span>
-<span class="normal"><a href="#__codelineno-0-142">142</a></span>
-<span class="normal"><a href="#__codelineno-0-143">143</a></span>
-<span class="normal"><a href="#__codelineno-0-144">144</a></span>
-<span class="normal"><a href="#__codelineno-0-145">145</a></span>
-<span class="normal"><a href="#__codelineno-0-146">146</a></span>
-<span class="normal"><a href="#__codelineno-0-147">147</a></span>
-<span class="normal"><a href="#__codelineno-0-148">148</a></span>
-<span class="normal"><a href="#__codelineno-0-149">149</a></span>
-<span class="normal"><a href="#__codelineno-0-150">150</a></span>
-<span class="normal"><a href="#__codelineno-0-151">151</a></span>
-<span class="normal"><a href="#__codelineno-0-152">152</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-136"><a id="__codelineno-0-136" name="__codelineno-0-136"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DatasetInfo</span><span class="p">:</span>
-</span><span id="__span-0-137"><a id="__codelineno-0-137" name="__codelineno-0-137"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Get a dataset from the registry.</span>
-</span><span id="__span-0-138"><a id="__codelineno-0-138" name="__codelineno-0-138"></a>
-</span><span id="__span-0-139"><a id="__codelineno-0-139" name="__codelineno-0-139"></a><span class="sd">    Automatically adds a new Dataset with name url if it doesn&#39;t exist in the registry.</span>
-</span><span id="__span-0-140"><a id="__codelineno-0-140" name="__codelineno-0-140"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-141"><a id="__codelineno-0-141" name="__codelineno-0-141"></a>    <span class="k">for</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">datasets</span><span class="p">:</span>
-</span><span id="__span-0-142"><a id="__codelineno-0-142" name="__codelineno-0-142"></a>        <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">url</span><span class="p">:</span>
-</span><span id="__span-0-143"><a id="__codelineno-0-143" name="__codelineno-0-143"></a>            <span class="k">return</span> <span class="n">dataset</span>
-</span><span id="__span-0-144"><a id="__codelineno-0-144" name="__codelineno-0-144"></a>
-</span><span id="__span-0-145"><a id="__codelineno-0-145" name="__codelineno-0-145"></a>    <span class="c1"># If the dataset is not already in the registry, create and add a new</span>
-</span><span id="__span-0-146"><a id="__codelineno-0-146" name="__codelineno-0-146"></a>    <span class="c1"># DatasetInfo object to the registry. Deliberately do NOT set the</span>
-</span><span id="__span-0-147"><a id="__codelineno-0-147" name="__codelineno-0-147"></a>    <span class="c1"># registry reference for this new dataset, this ensures its relative</span>
-</span><span id="__span-0-148"><a id="__codelineno-0-148" name="__codelineno-0-148"></a>    <span class="c1"># paths resolve against the current working directory, not the</span>
-</span><span id="__span-0-149"><a id="__codelineno-0-149" name="__codelineno-0-149"></a>    <span class="c1"># registry&#39;s base_url (if set).</span>
-</span><span id="__span-0-150"><a id="__codelineno-0-150" name="__codelineno-0-150"></a>    <span class="n">new_dataset</span> <span class="o">=</span> <span class="n">DatasetInfo</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">url</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">load_args</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-</span><span id="__span-0-151"><a id="__codelineno-0-151" name="__codelineno-0-151"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_dataset</span><span class="p">)</span>
-</span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152"></a>    <span class="k">return</span> <span class="n">new_dataset</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-154">154</a></span>
+<span class="normal"><a href="#__codelineno-0-155">155</a></span>
+<span class="normal"><a href="#__codelineno-0-156">156</a></span>
+<span class="normal"><a href="#__codelineno-0-157">157</a></span>
+<span class="normal"><a href="#__codelineno-0-158">158</a></span>
+<span class="normal"><a href="#__codelineno-0-159">159</a></span>
+<span class="normal"><a href="#__codelineno-0-160">160</a></span>
+<span class="normal"><a href="#__codelineno-0-161">161</a></span>
+<span class="normal"><a href="#__codelineno-0-162">162</a></span>
+<span class="normal"><a href="#__codelineno-0-163">163</a></span>
+<span class="normal"><a href="#__codelineno-0-164">164</a></span>
+<span class="normal"><a href="#__codelineno-0-165">165</a></span>
+<span class="normal"><a href="#__codelineno-0-166">166</a></span>
+<span class="normal"><a href="#__codelineno-0-167">167</a></span>
+<span class="normal"><a href="#__codelineno-0-168">168</a></span>
+<span class="normal"><a href="#__codelineno-0-169">169</a></span>
+<span class="normal"><a href="#__codelineno-0-170">170</a></span>
+<span class="normal"><a href="#__codelineno-0-171">171</a></span>
+<span class="normal"><a href="#__codelineno-0-172">172</a></span>
+<span class="normal"><a href="#__codelineno-0-173">173</a></span>
+<span class="normal"><a href="#__codelineno-0-174">174</a></span>
+<span class="normal"><a href="#__codelineno-0-175">175</a></span>
+<span class="normal"><a href="#__codelineno-0-176">176</a></span>
+<span class="normal"><a href="#__codelineno-0-177">177</a></span>
+<span class="normal"><a href="#__codelineno-0-178">178</a></span>
+<span class="normal"><a href="#__codelineno-0-179">179</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DatasetInfo</span><span class="p">:</span>
+</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Look up a dataset by name, creating an ad-hoc entry if not found.</span>
+</span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a>
+</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a><span class="sd">    When ``url`` matches a registered name the corresponding entry is</span>
+</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a><span class="sd">    returned. Otherwise a new ``DatasetInfo`` is created with the raw</span>
+</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a><span class="sd">    ``url`` as both name and path (without a registry back-reference, so</span>
+</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a><span class="sd">    relative paths resolve against the working directory).</span>
+</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a>
+</span><span id="__span-0-162"><a id="__codelineno-0-162" name="__codelineno-0-162"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-163"><a id="__codelineno-0-163" name="__codelineno-0-163"></a><span class="sd">        url: Dataset name, URL, or file path.</span>
+</span><span id="__span-0-164"><a id="__codelineno-0-164" name="__codelineno-0-164"></a>
+</span><span id="__span-0-165"><a id="__codelineno-0-165" name="__codelineno-0-165"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-166"><a id="__codelineno-0-166" name="__codelineno-0-166"></a><span class="sd">        Matching or newly created ``DatasetInfo``.</span>
+</span><span id="__span-0-167"><a id="__codelineno-0-167" name="__codelineno-0-167"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-168"><a id="__codelineno-0-168" name="__codelineno-0-168"></a>    <span class="k">for</span> <span class="n">dataset</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">datasets</span><span class="p">:</span>
+</span><span id="__span-0-169"><a id="__codelineno-0-169" name="__codelineno-0-169"></a>        <span class="k">if</span> <span class="n">dataset</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">url</span><span class="p">:</span>
+</span><span id="__span-0-170"><a id="__codelineno-0-170" name="__codelineno-0-170"></a>            <span class="k">return</span> <span class="n">dataset</span>
+</span><span id="__span-0-171"><a id="__codelineno-0-171" name="__codelineno-0-171"></a>
+</span><span id="__span-0-172"><a id="__codelineno-0-172" name="__codelineno-0-172"></a>    <span class="c1"># If the dataset is not already in the registry, create and add a new</span>
+</span><span id="__span-0-173"><a id="__codelineno-0-173" name="__codelineno-0-173"></a>    <span class="c1"># DatasetInfo object to the registry. Deliberately do NOT set the</span>
+</span><span id="__span-0-174"><a id="__codelineno-0-174" name="__codelineno-0-174"></a>    <span class="c1"># registry reference for this new dataset, this ensures its relative</span>
+</span><span id="__span-0-175"><a id="__codelineno-0-175" name="__codelineno-0-175"></a>    <span class="c1"># paths resolve against the current working directory, not the</span>
+</span><span id="__span-0-176"><a id="__codelineno-0-176" name="__codelineno-0-176"></a>    <span class="c1"># registry&#39;s base_url (if set).</span>
+</span><span id="__span-0-177"><a id="__codelineno-0-177" name="__codelineno-0-177"></a>    <span class="n">new_dataset</span> <span class="o">=</span> <span class="n">DatasetInfo</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">url</span><span class="o">=</span><span class="n">url</span><span class="p">,</span> <span class="n">overrides</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">load_args</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-0-178"><a id="__codelineno-0-178" name="__codelineno-0-178"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">datasets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_dataset</span><span class="p">)</span>
+</span><span id="__span-0-179"><a id="__codelineno-0-179" name="__codelineno-0-179"></a>    <span class="k">return</span> <span class="n">new_dataset</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9473,26 +9615,123 @@ This only applies to the datasets in the registry which have a relative url.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Load a DatasetRegistry from a YAML file.</p>
+        <p>Load a <code>DatasetRegistry</code> from a YAML file.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>path</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Path to the YAML file.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Self">Self</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Parsed registry with back-references set on each dataset.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="FileNotFoundError">FileNotFoundError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>path</code> does not exist.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/cli/datasets.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-154">154</a></span>
-<span class="normal"><a href="#__codelineno-0-155">155</a></span>
-<span class="normal"><a href="#__codelineno-0-156">156</a></span>
-<span class="normal"><a href="#__codelineno-0-157">157</a></span>
-<span class="normal"><a href="#__codelineno-0-158">158</a></span>
-<span class="normal"><a href="#__codelineno-0-159">159</a></span>
-<span class="normal"><a href="#__codelineno-0-160">160</a></span>
-<span class="normal"><a href="#__codelineno-0-161">161</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154"></a><span class="nd">@classmethod</span>
-</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_yaml</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-</span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a DatasetRegistry from a YAML file.&quot;&quot;&quot;</span>
-</span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158"></a>        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> does not exist&quot;</span><span class="p">)</span>
-</span><span id="__span-0-159"><a id="__codelineno-0-159" name="__codelineno-0-159"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-</span><span id="__span-0-160"><a id="__codelineno-0-160" name="__codelineno-0-160"></a>        <span class="n">data</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
-</span><span id="__span-0-161"><a id="__codelineno-0-161" name="__codelineno-0-161"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-181">181</a></span>
+<span class="normal"><a href="#__codelineno-0-182">182</a></span>
+<span class="normal"><a href="#__codelineno-0-183">183</a></span>
+<span class="normal"><a href="#__codelineno-0-184">184</a></span>
+<span class="normal"><a href="#__codelineno-0-185">185</a></span>
+<span class="normal"><a href="#__codelineno-0-186">186</a></span>
+<span class="normal"><a href="#__codelineno-0-187">187</a></span>
+<span class="normal"><a href="#__codelineno-0-188">188</a></span>
+<span class="normal"><a href="#__codelineno-0-189">189</a></span>
+<span class="normal"><a href="#__codelineno-0-190">190</a></span>
+<span class="normal"><a href="#__codelineno-0-191">191</a></span>
+<span class="normal"><a href="#__codelineno-0-192">192</a></span>
+<span class="normal"><a href="#__codelineno-0-193">193</a></span>
+<span class="normal"><a href="#__codelineno-0-194">194</a></span>
+<span class="normal"><a href="#__codelineno-0-195">195</a></span>
+<span class="normal"><a href="#__codelineno-0-196">196</a></span>
+<span class="normal"><a href="#__codelineno-0-197">197</a></span>
+<span class="normal"><a href="#__codelineno-0-198">198</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-181"><a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-182"><a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_yaml</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+</span><span id="__span-0-183"><a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a ``DatasetRegistry`` from a YAML file.</span>
+</span><span id="__span-0-184"><a id="__codelineno-0-184" name="__codelineno-0-184"></a>
+</span><span id="__span-0-185"><a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-186"><a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">        path: Path to the YAML file.</span>
+</span><span id="__span-0-187"><a id="__codelineno-0-187" name="__codelineno-0-187"></a>
+</span><span id="__span-0-188"><a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-189"><a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">        Parsed registry with back-references set on each dataset.</span>
+</span><span id="__span-0-190"><a id="__codelineno-0-190" name="__codelineno-0-190"></a>
+</span><span id="__span-0-191"><a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">    Raises:</span>
+</span><span id="__span-0-192"><a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">        FileNotFoundError: If ``path`` does not exist.</span>
+</span><span id="__span-0-193"><a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-194"><a id="__codelineno-0-194" name="__codelineno-0-194"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-0-195"><a id="__codelineno-0-195" name="__codelineno-0-195"></a>        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2"> does not exist&quot;</span><span class="p">)</span>
+</span><span id="__span-0-196"><a id="__codelineno-0-196" name="__codelineno-0-196"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-0-197"><a id="__codelineno-0-197" name="__codelineno-0-197"></a>        <span class="n">data</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+</span><span id="__span-0-198"><a id="__codelineno-0-198" name="__codelineno-0-198"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
