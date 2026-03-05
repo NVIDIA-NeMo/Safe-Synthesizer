@@ -53,14 +53,14 @@ class EvaluationDataset(BaseModel):
 
     @staticmethod
     def check_dataframe(df: pd.DataFrame, df_name: str):
-        """Raise ``ValueError`` if *df* is ``None`` or empty."""
+        """Raise ``ValueError`` if ``df`` is ``None`` or empty."""
         if df is None:
             raise ValueError(f"{df_name} is None!")
         if df.empty:
             raise ValueError(f"{df_name} is empty!")
 
     def get_columns_of_type(self, types: set[FieldType], mode="reference") -> list[str]:
-        """Return column names whose ``FieldType`` is in *types*.
+        """Return column names whose ``FieldType`` is in ``types``.
 
         Args:
             types: Set of ``FieldType`` values to match.
@@ -207,7 +207,7 @@ class EvaluationDataset(BaseModel):
         output: pd.DataFrame,
         target_record_count: int = DEFAULT_RECORD_COUNT,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Downsample both dataframes to at most *target_record_count* rows."""
+        """Downsample both dataframes to at most ``target_record_count`` rows."""
         target_record_count = min(target_record_count, reference.shape[0], output.shape[0])
         if target_record_count < reference.shape[0]:
             logger.info(f"Subsampling reference data from {reference.shape[0]} records to {target_record_count}.")

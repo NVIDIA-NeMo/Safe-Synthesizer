@@ -220,7 +220,7 @@ class TextSemanticSimilarity(Component):
 
     @staticmethod
     def _preprocess_text_data(text_data: pd.Series, nrows: int) -> pd.Series:
-        """Helper function to clean and possibly downsample text data."""
+        """Clean and possibly downsample text data."""
         # Use first column only as a pd.Series
         # Longwinded NOTE:
         # take a df with multiple columns and sniff out the best one.
@@ -334,33 +334,35 @@ class TextSemanticSimilarity(Component):
         test_embed: npt.NDArray[np.single],
         warning_message: str | None = None,
     ) -> tuple[EvaluationScore, EvaluationScore, EvaluationScore]:
-        """
-        Compute the semantic similarity between the real and synthetic
-        embeddings (normalized to have length 1). The metric is based on
+        """Compute semantic similarity between real and synthetic embeddings.
+
+        The embeddings are normalized to unit length. The metric is based on
         two one-sided Kolmogorov-Smirnov tests:
 
-        **Overfitting (KS "less")** -- detects whether synthetic samples are
-        *more* similar to the training data than the training data is to
-        itself (i.e. memorisation):
-          - F(x): for each synthetic sample, the max cosine similarity to
-            any training sample.
-          - G(x): for each training sample, the max cosine similarity to
-            any other training sample (self-similarity excluded via zeroed
+        Overfitting (KS "less") -- detects whether synthetic samples are
+        more similar to the training data than the training data is to
+        itself (i.e. memorization):
+
+          - ``F(x)``: for each synthetic sample, the max cosine similarity
+            to any training sample.
+          - ``G(x)``: for each training sample, the max cosine similarity
+            to any other training sample (self-similarity excluded via
+            zeroed diagonal).
+
+        Underfitting (KS "greater") -- detects whether synthetic samples
+        are less similar to the held-out test data than the test data is
+        to itself (i.e. poor generalization):
+
+          - ``F(x)``: for each synthetic sample, the max cosine similarity
+            to any test sample.
+          - ``G(x)``: for each test sample, the max cosine similarity to
+            any other test sample (self-similarity excluded via zeroed
             diagonal).
 
-        **Underfitting (KS "greater")** -- detects whether synthetic samples
-        are *less* similar to the held-out test data than the test data is
-        to itself (i.e. poor generalisation):
-          - F(x): for each synthetic sample, the max cosine similarity to
-            any test sample.
-          - G(x): for each test sample, the max cosine similarity to any
-            other test sample (self-similarity excluded via zeroed
-            diagonal).
-
-        Each KS statistic (in [0, 1]) is mapped to a factor via
-        ``exp(-statistic)`` (in [exp(-1), 1] ≈ [0.37, 1]), and the two
-        factors are multiplied to produce the final raw score, which is
-        then rescaled to [0, 10] and graded.
+        Each KS statistic (in ``[0, 1]``) is mapped to a factor via
+        ``exp(-statistic)`` (in ``[exp(-1), 1] ≈ [0.37, 1]``), and the
+        two factors are multiplied to produce the final raw score, which
+        is then rescaled to ``[0, 10]`` and graded.
         """
         # Compare distributions
 
@@ -378,10 +380,10 @@ class TextSemanticSimilarity(Component):
 
         # KS tests:
         # Using the train set to calculate the overfitting metric and the test
-        # set to calculate the underfitting metric. Overfitting is measured as
-        # the extent the synthetic data is more similar to the training data than
-        # the training data is to itself. Underfitting is measured as the extent
-        # the synthetic data is less similar to the test data than the test data
+        # set to calculate the underfitting metric.
+
+        # Overfitting is measured as the extent to which the synthetic
+        # data is more similar to the training data than the training data
         # is to itself.
 
         # The null hypothesis is that F(x) >= G(x) for all x; the alternative is
@@ -396,10 +398,15 @@ class TextSemanticSimilarity(Component):
             method="auto",
         )
 
+        # Underfitting is measured as the extent to which the synthetic
+        # data is less similar to the test data than the test data is to
+        # itself.
+
         # The null hypothesis is that F(x) <= G(x) for all x; the alternative is
-        # that F(x) > G(x) for at least one x. The statistic is the maximum
-        # (most positive) difference between the empirical distribution
-        # functions of the samples. The range of this statistic is [0, 1].
+        # that F(x) > G(x) for at least one x. The statistic is the magnitude of
+        # the minimum (most negative) difference between the empirical
+        # distribution functions of the samples. The range of this statistic is
+        # [0, 1], where 0 indicates no underfitting.
         ks_test_underfitting = ks_2samp(
             test_synth_similarity_matrix.max(axis=0),  # F(x)
             test_similarity_matrix.max(axis=0),  # G(x)
@@ -407,7 +414,7 @@ class TextSemanticSimilarity(Component):
             method="auto",
         )
 
-        # The overall semantic simlarity score combines underfitting and overfitting
+        # The overall semantic similarity score combines underfitting and overfitting
         # The range of this score is [0.37, 1], where 1 indicates perfect model and
         # exp(-1) = 0.37 indicates extreme underfitting or overfitting.
         # The raw score is the product of the underfitting and overfitting factors.

@@ -28,13 +28,17 @@ _WORD_REGEX = re.compile(r"\w+")
 class TextDataSetStatistics(BaseModel):
     """Per-column text structure statistics (sentence count, word length, etc.)."""
 
-    row_count: int = Field(default=0, description="Number of non-empty records analyzed (after dropping NAs and optional downsampling).")
+    row_count: int = Field(
+        default=0, description="Number of non-empty records analyzed (after dropping NAs and optional downsampling)."
+    )
     column_count: int = Field(default=0, description="Always 1; each instance describes a single text column.")
     duplicate_lines: int = Field(
         default=0,
         description="Number of text values appearing in both reference and synthetic series. Populated on the synthetic instance only; 0 on reference.",
     )
-    missing_values: int = Field(default=0, description="Always 0; NAs are dropped during preprocessing before statistics are computed.")
+    missing_values: int = Field(
+        default=0, description="Always 0; NAs are dropped during preprocessing before statistics are computed."
+    )
     unique_values: int = Field(default=0, description="Number of distinct values in the preprocessed text series.")
     per_record_statistics: pd.DataFrame = Field(
         default=pd.DataFrame(),
@@ -152,7 +156,7 @@ class TextStructureSimilarity(Component):
 
     @staticmethod
     def _preprocess_text_data(text_data: pd.Series, nrows: int) -> pd.Series:
-        """Helper function to clean and possibly downsample text data."""
+        """Clean and possibly downsample text data."""
         # Use first column only as a pd.Series
 
         # Drop na's and cast everything to string first so we are only selecting good rows.

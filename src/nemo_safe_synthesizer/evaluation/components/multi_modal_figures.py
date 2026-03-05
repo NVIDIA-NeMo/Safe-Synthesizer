@@ -461,7 +461,7 @@ def combine_subplots(
 
     Args:
         figures: Figures to combine (one subplot column each).
-        titles: Per-subplot titles (same length as *figures*).
+        titles: Per-subplot titles (same length as ``figures``).
         general_title: Overall figure title.
         subplot_type: Plotly subplot type (e.g. ``"xy"``, ``"domain"``).
         shared_xaxes: Share x-axes across subplots.

@@ -67,7 +67,7 @@ class EvaluationScore(BaseModel):
 
     @staticmethod
     def clip_score(score: float | None) -> float | None:
-        """Clip and round a score to one decimal in [0, 10]."""
+        """Clip and round a score to one decimal in ``[0, 10]``."""
         if score is None:
             return None
         # Cast score to a float with 1 decimal and limit to [0,10]

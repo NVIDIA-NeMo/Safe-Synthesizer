@@ -43,6 +43,9 @@ class MembershipInferenceProtection(Component):
     whether a specific record was in the training set by comparing it
     to the synthetic data?  The attack is repeated across multiple
     similarity thresholds and data proportions for stability.
+
+    See Also:
+        https://arxiv.org/abs/2501.03941 -- Synthetic Data Privacy Metrics.
     """
 
     name: str = Field(default="Membership Inference Protection")
@@ -268,7 +271,7 @@ class MembershipInferenceProtection(Component):
             df_test_norm: Normalized holdout (test) dataframe.
             df_synth_norm: Normalized synthetic dataframe.
             index: Pre-built FAISS L2 index over the tabular columns of
-                the synthetic data, or None if no tabular columns exist.
+                the synthetic data, or ``None`` if no tabular columns exist.
             run: Zero-based run index controlling which training slice to use.
             text_cnt: Number of text columns in the dataset.
             tabular_cnt: Number of tabular columns in the dataset.
@@ -334,7 +337,7 @@ class MembershipInferenceProtection(Component):
             if index is None:
                 raise RuntimeError("faiss index not provided for MIA calculation when expected.")
 
-            # This usage matches documentation despsite type annotation for
+            # This usage matches documentation despite type annotation for
             # IndexFlatL2.search, possibly related to swig handling that ty is
             # not aware of. Similar for other calls for faiss indexes.
             dists, indices = index.search(

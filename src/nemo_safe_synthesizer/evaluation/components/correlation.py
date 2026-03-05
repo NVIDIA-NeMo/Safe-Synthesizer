@@ -64,7 +64,7 @@ class Correlation(Component):
         """Compute correlation matrices and the correlation stability score."""
         # We only want to use these types for correlation.
         tabular_columns = evaluation_dataset.get_tabular_columns()
-        # We use different calculations (Thiel's U) for nominal columns.
+        # We use different calculations (Theil's U) for nominal columns.
         nominal_columns = evaluation_dataset.get_nominal_columns()
 
         (

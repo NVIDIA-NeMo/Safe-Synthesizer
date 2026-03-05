@@ -96,7 +96,7 @@ def get_categorical_field_distribution(field: pd.Series) -> dict:
         field: Column series to analyze.
 
     Returns:
-        Mapping of ``{value_str: percentage}`` where percentages are in [0, 100].
+        Mapping of ``{value_str: percentage}`` where percentages are in ``[0, 100]``.
     """
     distribution = {}
     if len(field) > 0:
@@ -158,7 +158,7 @@ def get_numeric_field_distribution(field: pd.Series, bins) -> dict:
         bins: Bin edges (typically from ``get_numeric_distribution_bins``).
 
     Returns:
-        Mapping of ``{bin_label: proportion}`` where proportions are in [0, 1].
+        Mapping of ``{bin_label: proportion}`` where proportions are in ``[0, 1]``.
     """
     binned_data = pd.cut(field, bins, include_lowest=True)
     distribution = {}
@@ -179,7 +179,7 @@ def compute_distribution_distance(d1: dict, d2: dict) -> float:
         d2: Second distribution dict.
 
     Returns:
-        JS distance in [0, 1]. Returns ``0.5887`` if either distribution
+        JS distance in ``[0, 1]``. Returns ``0.5887`` if either distribution
         sums to zero.
     """
     all_keys = set(d1.keys()).union(set(d2.keys()))
@@ -231,10 +231,10 @@ def calculate_correlation_ratio(x: pd.Series, y: pd.Series, opt: bool) -> float:
     Args:
         x: Categorical input array.
         y: Numeric input array.
-        opt: If ``False``, drop rows where *y* is NaN before computing.
+        opt: If ``False``, drop rows where ``y`` is NaN before computing.
 
     Returns:
-        Correlation ratio in [0, 1].
+        Correlation ratio in ``[0, 1]``.
     """
     if not opt:
         # Drop missing values if y (the numeric column) is null/nan
@@ -256,7 +256,7 @@ def calculate_theils_u(x, y):
         y: Second categorical array.
 
     Returns:
-        Theil's U in [0, 1].
+        Theil's U in ``[0, 1]``.
     """
     # Drop missing values if x or y is null/nan
     df = pd.DataFrame({"x": x, "y": y})
@@ -290,7 +290,7 @@ def calculate_correlation(
             (slightly less accurate).
 
     Returns:
-        Square correlation dataframe indexed and columned by *df.columns*.
+        Square correlation dataframe indexed and columned by ``df.columns``.
     """
     # PLAT-1131 Ensure that all nominal columns are present in df.
     if nominal_columns is not None:
@@ -372,7 +372,7 @@ def calculate_correlation(
         corr[x_index, :] = 0.0
         corr[x_index, x_index] = 1.0
 
-    # Do nominal-nominal exluding any that are 100% unique (Theil's U)
+    # Do nominal-nominal excluding any that are 100% unique (Theil's U)
     scores = Parallel(n_jobs=job_count)(
         delayed(calculate_theils_u)(df_cp[field1], df_cp[field2])
         for field1 in notcompletely_unique_nominal
@@ -593,7 +593,7 @@ def percent_missing(df: pd.DataFrame) -> float:
         df: Dataframe to inspect.
 
     Returns:
-        Percentage of missing values in [0, 100].
+        Percentage of missing values in ``[0, 100]``.
     """
     r, c = df.shape
     total_cells = r * c

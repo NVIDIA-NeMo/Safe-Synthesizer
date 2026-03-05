@@ -47,6 +47,9 @@ class AttributeInferenceProtection(Component):
     can an adversary use synthetic nearest-neighbors to predict the remaining
     attributes of a training record?  A higher score indicates better
     protection (lower prediction accuracy).
+
+    See Also:
+        https://arxiv.org/abs/2501.03941 -- Synthetic Data Privacy Metrics.
     """
 
     name: str = Field(default="Attribute Inference Protection")
@@ -432,7 +435,7 @@ class AttributeInferenceProtection(Component):
             nominal_columns = list(df_train.select_dtypes(include=["object", "category", "bool"]).columns)
             numeric_columns = [column for column in df_train.columns if column not in nominal_columns]
 
-            # Now seperate out the text columns from the nominal
+            # Now separate out the text columns from the nominal
 
             text_columns = []
             for col in nominal_columns:

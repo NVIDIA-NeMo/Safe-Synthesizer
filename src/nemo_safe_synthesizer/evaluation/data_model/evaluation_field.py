@@ -140,7 +140,7 @@ class EvaluationField(BaseModel):
             average_divergence: Mean JS divergence across text fields.
 
         Returns:
-            A score in the range [1.5, 10].
+            A score in the range ``[1.5, 10]``.
         """
         # Scaling with linear equation penalizes the lower range scores drastically, setting the lower values to 15 instead of 0.
         # More explained in this doc.
@@ -160,7 +160,7 @@ class EvaluationField(BaseModel):
             average_divergence: Mean JS divergence across tabular fields.
 
         Returns:
-            A score in the range [0, 10].
+            A score in the range ``[0, 10]``.
         """
         if average_divergence > 0.99:
             score = 0.0

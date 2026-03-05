@@ -91,8 +91,8 @@ class DeepStructure(Component):
             numeric_columns: Columns to retain and fill.
 
         Returns:
-            A dataframe containing only *numeric_columns* with NaNs replaced,
-            or ``None`` if *numeric_columns* is empty.
+            A dataframe containing only ``numeric_columns`` with NaNs replaced,
+            or ``None`` if ``numeric_columns`` is empty.
         """
         df_num = df.reindex(columns=numeric_columns)
         int64_dtypes = df_num.columns[df_num.dtypes == pd.Int64Dtype()]
@@ -115,7 +115,7 @@ class DeepStructure(Component):
     ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
         """Frequency-encode categorical columns, fitted on the reference data.
 
-        New values in *output_df* that were not seen in *reference_df* are
+        New values in ``output_df`` that were not seen in ``reference_df`` are
         encoded as 0.
 
         Args:
@@ -125,7 +125,7 @@ class DeepStructure(Component):
 
         Returns:
             Tuple of (encoded reference, encoded output), or ``(None, None)``
-            if *categorical_columns* is empty.
+            if ``categorical_columns`` is empty.
         """
         if len(categorical_columns) == 0:
             return None, None
@@ -171,7 +171,7 @@ class DeepStructure(Component):
         # now that we are projecting the count encoding to the synthetic set.
         # When we were encoding them separately, every row would get a value of 1 on both dfs
         # and that column effectively would not contribute to the PCA calculation;
-        # in the new joinedvcalculation, the column in the training set would be a 1s,
+        # in the new joined calculation, the column in the training set would be a 1s,
         # but the column in the synth set would be all 0s, because they are all out of distribution.
         categorical_columns = [
             name
