@@ -89,7 +89,6 @@ engine = [
     "langchain-core",
     "json-repair",
     "matplotlib",
-    "numpy<2",
     "outlines_core==0.2.13",
     "outlines>=1.0.0",
     "prv-accountant",
@@ -118,34 +117,34 @@ engine = [
 cpu = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "flashinfer-python==0.5.3; sys_platform=='linux'",
-  "flashinfer-cubin==0.5.3; sys_platform=='linux'",
-  "faiss-cpu==1.9.0",
+  "flashinfer-python==0.6.1; sys_platform=='linux'",
+  "flashinfer-cubin==0.6.1; sys_platform=='linux'",
+  "faiss-cpu==1.13.2",
   "gliner",
   "kernels>=0.12.1",
   "peft",
   "opacus",
   "sentence-transformers",
-  "torch==2.9.0; sys_platform == 'darwin'",
-  "torch==2.9.0+cpu; sys_platform == 'linux'",
-  "torchvision==0.24.0; sys_platform == 'darwin'",
-  "torchvision==0.24.0+cpu; sys_platform == 'linux'",
+  "torch==2.9.1; sys_platform == 'darwin'",
+  "torch==2.9.1+cpu; sys_platform == 'linux'",
+  "torchvision==0.24.1; sys_platform == 'darwin'",
+  "torchvision==0.24.1+cpu; sys_platform == 'linux'",
   "torchao==0.14.1",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
   "unsloth[cu128-torch290]==2025.12.4",
   "unsloth_zoo==2025.12.4",
-  "vllm==0.11.1",
+  "vllm==0.15.0",
 ]
 
 cu128 = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "faiss-gpu-cu12==1.9.0; sys_platform == 'linux'",
-  "flashinfer-python==0.5.3; sys_platform == 'linux'",
-  "flashinfer-cubin==0.5.3; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.5.3+cu128; sys_platform == 'linux'",
+  "faiss-gpu-cu12==1.13.2; sys_platform == 'linux'",
+  "flashinfer-python==0.6.1; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.1; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.1+cu128; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
@@ -153,15 +152,15 @@ cu128 = [
   "opacus",
   "peft",
   "sentence-transformers",
-  "torch==2.9.0+cu128; sys_platform == 'linux'",
-  "torchvision==0.24.0+cu128; sys_platform == 'linux'",
+  "torch==2.9.1+cu128; sys_platform == 'linux'",
+  "torchvision==0.24.1+cu128; sys_platform == 'linux'",
   "torchao==0.14.1; sys_platform == 'linux'",
   "transformers==4.57.3",
   "triton>=2.0.0",
   "trl>=0.23.0",
   "unsloth[cu128-torch290]==2025.12.4",
   "unsloth_zoo==2025.12.4",
-  "vllm==0.11.1",
+  "vllm==0.15.0",
   "xformers==0.0.33.post1; sys_platform == 'linux'",
 ]
 
@@ -188,9 +187,9 @@ dependency-metadata = [
 
 
 override-dependencies = [
-    "outlines_core==0.2.13",                        # there's a conflict with vllm's (nss) pin on outlines_core==0.2.10 but this version works.
-    "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
-    "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
+    "outlines_core==0.2.13",                              # override vllm's pin to align with our tested version
+    "flashinfer-python==0.6.1; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
+    "flashinfer-cubin==0.6.1; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
 ]
 
 environments = [
@@ -203,7 +202,7 @@ environments = [
     "sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 
-constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
+constraint-dependencies = ["torch==2.9.1", "regex==2025.07.34", "pandas<3"]
 
 
 
