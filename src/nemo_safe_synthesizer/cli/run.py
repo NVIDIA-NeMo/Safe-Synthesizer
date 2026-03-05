@@ -4,9 +4,10 @@
 """CLI run commands for Safe Synthesizer.
 
 This module provides the run command group for the Safe Synthesizer pipeline:
-- `run` (default): Full end-to-end pipeline
-- `run train`: Training stage only
-- `run generate`: Generation stage only (requires trained model)
+
+- ``run`` (default): Full end-to-end pipeline
+- ``run train``: Training stage only
+- ``run generate``: Generation stage only (requires trained model)
 """
 
 from __future__ import annotations

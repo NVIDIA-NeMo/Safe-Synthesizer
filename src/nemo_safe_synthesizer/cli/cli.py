@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Top-level CLI group for Safe Synthesizer.
+
+Assembles the ``config``, ``run``, and ``artifacts`` subcommand groups
+into a single Python Click entry point.
+"""
+
 from __future__ import annotations
 
 import click
