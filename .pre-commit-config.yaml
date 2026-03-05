@@ -38,26 +38,26 @@ repos:
   - repo: local
     hooks:
 
-      - id: ruff-format
-        name: Run ruff format
-        entry: bash tools/format/format.sh
+      - id: format
+        name: Run ruff (format + lint fix)
+        entry: bash tools/codestyle/format.sh
         language: system
         pass_filenames: true
         types: [python]
 
-      - id: ruff-lint
-        name: Run ruff linting
-        entry: bash tools/lint/ruff-lint.sh
-        language: system
-        pass_filenames: true
-        types: [python]
-
-      - id: ty
+      - id: typecheck
         name: Run ty typechecks
-        entry: bash tools/lint/run-ty-check.sh
+        entry: bash tools/codestyle/typecheck.sh
         language: system
         pass_filenames: false
         types: [python]
+
+      - id: copyright-fix
+        name: Fix copyright headers
+        entry: uv run --script tools/codestyle/copyright_fixer.py
+        language: system
+        pass_filenames: true
+        files: '\.(py|sh|md|yaml|yml)$'
 
       - id: uv-lock
         name: Run uv lock and check for uv.lock drift
@@ -66,13 +66,6 @@ repos:
         files: 'pyproject\.toml$'
         pass_filenames: false
         verbose: true
-
-      - id: copyright-fix
-        name: Fix copyright headers
-        entry: uv run --script tools/lint/copyright_fixer.py
-        language: system
-        pass_filenames: true
-        files: '\.(py|sh|md|yaml|yml)$'
 
       - id: check-signoff
         name: Check commit is signed off (DCO)

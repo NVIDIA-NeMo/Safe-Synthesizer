@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry points for Safe Synthesizer.
+"""CLI run commands for Safe Synthesizer.
 
-This module provides the main CLI commands for running the Safe Synthesizer pipeline:
+This module provides the run command group for the Safe Synthesizer pipeline:
 - `run` (default): Full end-to-end pipeline
 - `run train`: Training stage only
 - `run generate`: Generation stage only (requires trained model)

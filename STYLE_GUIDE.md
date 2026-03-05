@@ -699,6 +699,10 @@ The before/after examples above demonstrate most rules. These additional points 
 
   Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
 - __init__.py files do not need docstrings.
+- Docstrings on Python Click command methods are used for the --help details on the CLI, so may not fully conform to the general method docstring guidance.
+  They should be written for the CLI user, and not for a developer working on the code.
+  For example, should not include `Args:`, the args are already documented for CLI usage through the `click.options` decorators.
+- Always include a blank line before and after (unless end of docstring) a list of items in docstrings, otherwise it is rendered as part of a paragraph in the API reference.
 
 ### Patterns to avoid
 
@@ -812,7 +816,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### Copyright headers
 
-Every source file requires an SPDX copyright header, though `make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
+Every source file requires an SPDX copyright header and `make format` handles this automatically. See [tools/codestyle/copyright_fixer.py](tools/codestyle/copyright_fixer.py).
 
 E.g., Hash-comments for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 
