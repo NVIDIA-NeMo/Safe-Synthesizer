@@ -815,7 +815,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ### Copyright headers
 
-Every source file requires an SPDX copyright header, though `make format` handles this automatically. See [tools/lint/copyright_fixer.py](tools/lint/copyright_fixer.py).
+Every source file requires an SPDX copyright header and `make format` handles this automatically. See [tools/codestyle/copyright_fixer.py](tools/codestyle/copyright_fixer.py).
 
 E.g., Hash-comments for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 
