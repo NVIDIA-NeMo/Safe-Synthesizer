@@ -9208,7 +9208,7 @@ from LLM output to tabular data.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether to automatically fix non-unique group by values in a sequence by using the first unique value for all records.</p>
+        <p>Whether to automatically fix non-unique group-by values in a sequence by using the first unique value for all records.</p>
 
     </div>
 
@@ -9439,7 +9439,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>Sampling temperature.</p>
+        <p>Sampling temperature for controlling randomness (higher = more random).</p>
 
     </div>
 
@@ -9483,7 +9483,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>Nucleus sampling probability. Must be in (0, 1].</p>
+        <p>Nucleus sampling probability for token selection. Must be in (0, 1].</p>
 
     </div>
 
@@ -9549,7 +9549,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>Use structured generation.</p>
+        <p>Whether to use structured generation for better format control.</p>
 
     </div>
 
@@ -9571,7 +9571,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>The backend used by VLLM when use_structured_generation=True. Supported backends (from vllm) are 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. 'auto' will allow vllm to choose the backend.</p>
+        <p>The backend used by vLLM when <code>use_structured_generation</code> is <code>True</code>. Supported backends: 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. 'auto' will allow vLLM to choose the backend.</p>
 
     </div>
 
@@ -9593,7 +9593,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>The method used to generate the schema from your dataset and pass it to the generation backend. auto will usually default to 'json_schema'. Use 'regex to use our custom regex construction method, which tends to be more comprehensive  than 'json_schema' at the cost of speed.</p>
+        <p>The method used to generate the schema from your dataset and pass it to the generation backend. 'regex' uses a custom regex construction method that tends to be more comprehensive than 'json_schema' at the cost of speed.</p>
 
     </div>
 
@@ -9615,7 +9615,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>Whether to use a regex that matches exactly one sequence or record if max_sequences_per_example is 1.</p>
+        <p>Whether to use a regex that matches exactly one sequence or record if <code>max_sequences_per_example</code> is 1.</p>
 
     </div>
 
@@ -9637,7 +9637,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>Enforce timeseries fidelity by enforcing the time series order, intervals, start and end times of the records.</p>
+        <p>Enforce time-series fidelity by enforcing order, intervals, start and end times of the records.</p>
 
     </div>
 
@@ -9681,7 +9681,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>The attention backend for the vLLM engine. Common values: 'FLASHINFER', 'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. If None or 'auto', vLLM will auto-select the best available backend.</p>
+        <p>The attention backend for the vLLM engine. Common values: 'FLASHINFER', 'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. If <code>None</code> or 'auto', vLLM will auto-select the best available backend.</p>
 
     </div>
 

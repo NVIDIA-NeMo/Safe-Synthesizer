@@ -2527,6 +2527,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" NSSBaseModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.base.NSSBaseModel.dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.base.LRScheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LRScheduler
+      
+    </span>
+  </a>
+  
 </li>
         
       </ul>
@@ -8389,6 +8417,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" NSSBaseModel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.base.NSSBaseModel.dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.base.LRScheduler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LRScheduler
+      
+    </span>
+  </a>
+  
 </li>
         
       </ul>
@@ -8588,6 +8644,8 @@
 
     <div class="doc doc-contents first">
 
+        <p>Shared Pydantic base model and enumerations for NeMo Safe Synthesizer configs.</p>
+
 
 
 
@@ -8615,7 +8673,15 @@
    (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Base model for all NeMo Safe Synthesizer configuration and result models that do not use Parameters.</p>
+                <p>Base model for all Safe Synthesizer configuration and result models.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            LRScheduler (nemo_safe_synthesizer.config.base.LRScheduler)" href="#nemo_safe_synthesizer.config.base.LRScheduler">LRScheduler</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Learning-rate scheduler names accepted by the training pipeline.</p>
               </div>
             </td>
           </tr>
@@ -8657,9 +8723,92 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-        <p>Base model for all NeMo Safe Synthesizer configuration and result models that do not use Parameters.</p>
+        <p>Base model for all Safe Synthesizer configuration and result models.</p>
+<p>Applies <code>pydantic_model_config</code> (strict schema validation, attribute
+construction, and <code>"validation"</code>-only JSON schema mode) so that
+every subclass inherits consistent Pydantic behavior.</p>
 
     
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.config.base.NSSBaseModel.dict" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="nb">dict</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.config.base.NSSBaseModel.dict" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return a dict representation via <code>model_dump</code> for backward compatibility.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/config/base.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="k">def</span><span class="w"> </span><span class="nf">dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a dict representation via ``model_dump`` for backward compatibility.&quot;&quot;&quot;</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="nemo_safe_synthesizer.config.base.LRScheduler" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>LRScheduler</code>
+
+
+<a href="#nemo_safe_synthesizer.config.base.LRScheduler" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>Learning-rate scheduler names accepted by the training pipeline.</p>
+
+
+
+
+
+
+
+
+
+
+
 
 
 

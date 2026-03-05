@@ -8854,7 +8854,7 @@ during training.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Target for epsilon when training completes. Must be &gt; 0.</p>
+        <p>Target privacy budget -- lower values provide stronger privacy. Must be &gt; 0.</p>
 
     </div>
 
@@ -8876,7 +8876,7 @@ during training.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Probability of accidentally leaking information. Setting to 'auto' uses delta of 1/n^1.2, where n is the number of training records. Must be in [0, 1) or 'auto'.</p>
+        <p>Probability of accidentally leaking information. Should be much smaller than 1/n where n is the number of training records. Setting to 'auto' uses delta of 1/n^1.2. Must be in [0, 1) or 'auto'.</p>
 
     </div>
 
@@ -8898,7 +8898,7 @@ during training.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Maximum L2 norm of per sample gradients. Must be &gt; 0.</p>
+        <p>Maximum L2 norm for per-sample gradient clipping. Must be &gt; 0.</p>
 
     </div>
 

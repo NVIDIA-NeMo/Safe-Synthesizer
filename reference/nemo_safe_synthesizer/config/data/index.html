@@ -2624,6 +2624,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_random_state_if_none
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -8530,6 +8541,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_random_state_if_none
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -8759,7 +8781,7 @@
    (nemo_safe_synthesizer.config.data.DataParameters)" href="#nemo_safe_synthesizer.config.data.DataParameters">DataParameters</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Configuration for parameters related to how to shape or use the data being passed in.</p>
+                <p>Configuration for grouping, ordering, and splitting input data for training and evaluation.</p>
               </div>
             </td>
           </tr>
@@ -8806,7 +8828,7 @@
       pydantic-model
    (nemo_safe_synthesizer.configurator.parameters.Parameters)" href="../../configurator/parameters/#nemo_safe_synthesizer.configurator.parameters.Parameters">Parameters</a></code></p>
 
-        <p>Configuration for parameters related to how to shape or use the data being passed in.</p>
+        <p>Configuration for grouping, ordering, and splitting input data for training and evaluation.</p>
 
     
 
@@ -8865,7 +8887,11 @@
         <p>Validators:</p>
         <ul>
             <li>
-              <code><span title="nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none">set_random_state_if_none</span></code>
+              <code><a class="autorefs autorefs-internal" title="            set_random_state_if_none(v)
+
+  
+      pydantic-validator
+   (nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none)" href="#nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none">set_random_state_if_none</a></code>
                 &rarr;
                   <code><a class="autorefs autorefs-internal" title="            random_state
 
@@ -8966,7 +8992,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Amount of records to holdout. If this is a float between 0 and 1, that ratio of records is held out. If an integer greater than 1, that number of records is held out. If the value is equal to zero, no holdout will be performed. Must be &gt;= 0.</p>
+        <p>Amount of records to hold out for evaluation. If this is a float between 0 and 1, that ratio of records is held out. If an integer greater than 1, that number of records is held out. If the value is equal to zero, no holdout will be performed. Must be &gt;= 0.</p>
 
     </div>
 
@@ -8988,7 +9014,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Maximum number of records to hold out. Overrides any behavior set by holdout parameter. Must be &gt;= 0.</p>
+        <p>Maximum number of records to hold out. Overrides any behavior set by <code>holdout</code>. Must be &gt;= 0.</p>
 
     </div>
 
@@ -9010,7 +9036,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Use this random state for holdout split to ensure reproducibility.</p>
+        <p>Random state for holdout split to ensure reproducibility.</p>
 
     </div>
 
@@ -9018,6 +9044,47 @@
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">set_random_state_if_none</span><span class="p">(</span><span class="n">v</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-validator"><code>pydantic-validator</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.data.DataParameters.set_random_state_if_none" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Generate a random state if none was provided.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/config/data.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-105">105</a></span>
+<span class="normal"><a href="#__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;random_state&quot;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;after&quot;</span><span class="p">,</span> <span class="n">check_fields</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_random_state_if_none</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a random state if none was provided.&quot;&quot;&quot;</span>
+</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>
+</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>        <span class="k">return</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000000</span><span class="p">)</span>
+</span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>    <span class="k">return</span> <span class="n">v</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 

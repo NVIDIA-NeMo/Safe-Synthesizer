@@ -2695,6 +2695,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" SafeSynthesizerResults">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;synthetic_data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;evaluation_report_html
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -8389,6 +8428,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" SafeSynthesizerResults">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;synthetic_data
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;evaluation_report_html
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -8588,6 +8666,8 @@
 
     <div class="doc doc-contents first">
 
+        <p>Internal result container used between pipeline stages (not public API).</p>
+
 
 
 
@@ -8615,7 +8695,7 @@
    (nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults)" href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults">SafeSynthesizerResults</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Output object for Safe Synthesizer</p>
+                <p>Full pipeline output including raw data and evaluation artifacts.</p>
               </div>
             </td>
           </tr>
@@ -8662,7 +8742,7 @@
       pydantic-model
    (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
 
-        <p>Output object for Safe Synthesizer</p>
+        <p>Full pipeline output including raw data and evaluation artifacts.</p>
 
     
       <p>Config:</p>
@@ -8673,11 +8753,19 @@
         <p>Fields:</p>
         <ul>
             <li>
-              <code><span title="nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data">synthetic_data</span></code>
+              <code><a class="autorefs autorefs-internal" title="            synthetic_data = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data)" href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data">synthetic_data</a></code>
                 (<code><span title="pandas.DataFrame">DataFrame</span> | None</code>)
             </li>
             <li>
-              <code><span title="nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary">summary</span></code>
+              <code><a class="autorefs autorefs-internal" title="            summary
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary)" href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary">summary</a></code>
                 (<code><a class="autorefs autorefs-internal" title="            SafeSynthesizerSummary
 
 
@@ -8686,7 +8774,11 @@
    (nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary)" href="../external_results/#nemo_safe_synthesizer.config.external_results.SafeSynthesizerSummary">SafeSynthesizerSummary</a></code>)
             </li>
             <li>
-              <code><span title="nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html">evaluation_report_html</span></code>
+              <code><a class="autorefs autorefs-internal" title="            evaluation_report_html = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html)" href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html">evaluation_report_html</a></code>
                 (<code><span title="str">str</span> | None</code>)
             </li>
         </ul>
@@ -8701,6 +8793,72 @@
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">synthetic_data</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.synthetic_data" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Generated synthetic DataFrame, or <code>None</code> if generation was skipped.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">summary</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.summary" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Quality, privacy, and timing metrics.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">evaluation_report_html</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.config.internal_results.SafeSynthesizerResults.evaluation_report_html" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>HTML evaluation report string, or <code>None</code> if evaluation was not run.</p>
+
+    </div>
+
+</div>
 
 
 

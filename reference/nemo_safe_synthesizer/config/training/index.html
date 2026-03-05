@@ -9444,7 +9444,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The initial learning rate for <code>AdamW</code> optimizer. Must be in (0, 1).</p>
+        <p>The initial learning rate for the <code>AdamW</code> optimizer. Must be in (0, 1).</p>
 
     </div>
 
@@ -9466,7 +9466,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The rank of the LoRA update matrices, expressed in int. Lower rank results in smaller update matrices with fewer trainable parameters. Must be &gt; 0.</p>
+        <p>The rank of the LoRA update matrices. Lower rank results in smaller update matrices with fewer trainable parameters. Must be &gt; 0.</p>
 
     </div>
 
@@ -9510,7 +9510,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The list of transformer modules to apply LoRA to. Possible modules: 'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'</p>
+        <p>The list of transformer modules to apply LoRA to. Possible modules: 'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'.</p>
 
     </div>
 
@@ -9532,7 +9532,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether to use unsloth.</p>
+        <p>Whether to use Unsloth for optimized training.</p>
 
     </div>
 
@@ -9576,7 +9576,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The fraction of the training data that will be used for validation.The range should be 0 to 1. If set to 0, no validation will be performed.If set larger than 0, validation loss will be computed and reported throughout training.</p>
+        <p>The fraction of the training data used for validation. Must be in [0, 1]. If set to 0, no validation will be performed. If set larger than 0, validation loss will be computed and reported throughout training.</p>
 
     </div>
 
@@ -9620,7 +9620,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Pretrained model to use for fine tuning. Uses default of TinyLlama.</p>
+        <p>Pretrained model to use for fine-tuning. Defaults to TinyLlama.</p>
 
     </div>
 
@@ -9664,7 +9664,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The number of bits to use for quantization if <code>quantize_model</code> is True. Common values are 8 or 4 bits.</p>
+        <p>The number of bits to use for quantization if <code>quantize_model</code> is <code>True</code>. Accepts 8 or 4.</p>
 
     </div>
 
@@ -9686,7 +9686,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The PEFT (Parameter-Efficient Fine-Tuning) implementation to use. Options include 'lora' for Low-Rank Adaptation or QLoRA for Quantized LoRA. Each method has its own trade-offs in terms of performance and resource requirements.</p>
+        <p>The PEFT (Parameter-Efficient Fine-Tuning) implementation to use. Options: 'lora' for Low-Rank Adaptation, 'QLORA' for Quantized LoRA.</p>
 
     </div>
 
@@ -9708,7 +9708,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The fraction of the total VRAM to use for training. Modify this to allow longer sequences to be used. Must be in [0, 1].</p>
+        <p>The fraction of the total VRAM to use for training. Modify this to allow longer sequences. Must be in [0, 1].</p>
 
     </div>
 
