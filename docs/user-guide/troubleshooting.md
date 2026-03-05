@@ -5,15 +5,14 @@
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Data Quality](data-quality.md). For attention
-backends, downloads, and offline setup, see
-[Environment and Runtime](environment.md).
+and evaluation metrics, see [Data Quality](data-quality.md). For environment variables, model caching, and offline setup, see
+[Environment Variables](environment.md).
 
 ## Quick Reference
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| "kernels package not installed" | No network for Kernels Hub | Set `attn_implementation: sdpa` ([details](environment.md#attention-backends)) |
+| "kernels package not installed" | No network for Kernels Hub | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
@@ -129,7 +128,7 @@ memory-specific fixes like quantization and batch size reduction.
 ### Out of Memory During Generation
 
 Generation OOM errors appear during the "Generation" phase with vLLM.
-See [VRAM Management](environment.md#vram-management) for how memory is allocated.
+Both training and generation cap GPU allocation at 80% of available VRAM minus 2 GiB.
 
 1. Ensure no other processes hold GPU memory -- training cleanup should release
    it, but verify with `nvidia-smi`
@@ -400,5 +399,5 @@ please [file an issue on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer
 
 ## Reference
 
-See [Environment and Runtime](environment.md) for attention backends, model
-downloads, offline setup, VRAM allocation, and NER parallelism.
+See [Environment Variables](environment.md) for model caching, offline setup,
+NIM endpoint configuration, and NER parallelism controls.
