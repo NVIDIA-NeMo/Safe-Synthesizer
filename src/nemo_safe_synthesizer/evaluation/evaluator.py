@@ -2,6 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+"""Evaluator entry point for synthetic data evaluation.
+
+Orchestrates metric computation and report assembly by delegating
+to ``MultimodalReport`` and collecting timing information.
+"""
+
 import time
 
 import pandas as pd
@@ -18,6 +24,24 @@ logger = get_logger(__name__)
 
 
 class Evaluator:
+    """Orchestrates evaluation of synthetic data against reference data.
+
+    Computes quality and privacy metrics by delegating to
+    ``MultimodalReport``, which assembles individual evaluation
+    components (distribution stability, correlation, PCA, text
+    similarity, privacy scores, etc.).
+
+    Args:
+        config: Pipeline configuration controlling which metrics are enabled.
+        generate_results: Synthetic output -- either a ``GenerateJobResults``
+            or a raw ``pd.DataFrame``.
+        pii_replacer_time: Wall-clock seconds spent on PII replacement, if any.
+        column_statistics: Per-column PII entity counts and transform metadata.
+        train_df: Reference (training) dataframe.
+        test_df: Holdout (test) dataframe used by text-similarity and privacy metrics.
+        workdir: Working directory for persisting artifacts.
+    """
+
     summary: SafeSynthesizerSummary
     report: MultimodalReport
     timing: SafeSynthesizerTiming
@@ -45,11 +69,16 @@ class Evaluator:
         self.workdir = workdir
 
     def evaluate(self):
+        """Run all configured evaluation components and store results.
+
+        Populates ``self.report`` with the completed ``MultimodalReport``
+        and ``self.evaluation_time`` with the elapsed wall-clock seconds.
+        """
         logger.info("Performing Evaluation.")
         evaluation_start = time.monotonic()
         output = self.generate_results if isinstance(self.generate_results, pd.DataFrame) else self.generate_results.df
         report = MultimodalReport.from_dataframes(
-            reference=self.train_df,
+            reference=self.train_df,  # ty: ignore[invalid-argument-type]
             output=output,
             test=self.test_df,
             config=self.config,

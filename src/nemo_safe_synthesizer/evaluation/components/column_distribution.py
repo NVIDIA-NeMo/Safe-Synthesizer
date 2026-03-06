@@ -23,9 +23,11 @@ logger = get_logger(__name__)
 
 
 class ColumnDistributionPlotRow(BaseModel):
-    name1: str = Field()
-    name2: str | None = Field()
-    figure: str = Field()
+    """A pair of side-by-side column distribution plots for the HTML report."""
+
+    name1: str = Field(description="Name of the first column in the plot row.")
+    name2: str | None = Field(description="Name of the second column in the plot row, if present.")
+    figure: str = Field(description="Rendered HTML of the side-by-side distribution plot.")
 
     @staticmethod
     def _get_figure_for_field(f: EvaluationField | None, reference: pd.Series, output) -> Figure | None:
@@ -88,21 +90,26 @@ class ColumnDistributionPlotRow(BaseModel):
 
 
 class ColumnDistribution(Component):
-    """
-    This class wears a few hats, not ideal but saves some duplication:
-    * Rendering of each EvaluationFields histogram
-    * Rendering of Reference Columns table
-    * Computation/rendering of Column Distribution Stability score
-    * Field Distribution Stability functions are used for text metrics and (iirc) PCA as well
+    """Column Distribution Stability metric.
+
+    Computes per-column Jensen-Shannon divergence between reference and
+    output distributions, averages across all tabular columns, and maps
+    the result to a 0--10 score.  Also carries data for the per-column
+    histogram figures and the Reference Columns table in the HTML report.
     """
 
     name: str = Field(default="Column Distribution Stability")
     # Keep a copy to simplify rendering
-    column_statistics: dict[str, ColumnStatistics] | None = Field(default=None)
-    evaluation_fields: list[EvaluationField] = Field(default=list())
+    column_statistics: dict[str, ColumnStatistics] | None = Field(
+        default=None, description="Per-column PII entity and transform metadata."
+    )
+    evaluation_fields: list[EvaluationField] = Field(
+        default=list(), description="Per-column evaluation metadata and distribution scores."
+    )
 
     @cached_property
     def jinja_context(self):
+        """Template context with evaluation fields and column statistics for the report."""
         d = super().jinja_context
         d["anchor_link"] = "#distribution-stability"
         if self.evaluation_fields:
@@ -117,6 +124,7 @@ class ColumnDistribution(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> ColumnDistribution:
+        """Compute column distribution stability from the evaluation dataset."""
         tabular_columns = set(evaluation_dataset.get_tabular_columns())
         tabular_fields = [f for f in evaluation_dataset.evaluation_fields if f.name in tabular_columns]
         if tabular_fields:

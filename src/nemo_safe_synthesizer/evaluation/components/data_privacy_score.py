@@ -17,11 +17,15 @@ logger = get_logger(__name__)
 
 
 class DataPrivacyScore(CompositeScore):
+    """Aggregate privacy score -- mean of membership and attribute inference protection."""
+
     name: str = Field(default="Data Privacy Score")
 
-    def from_components(components: list[Component] | Component) -> CompositeScore:
+    @staticmethod
+    def from_components(components: list[Component] | Component, name: str = "Data Privacy Score") -> CompositeScore:
+        """Compute the Data Privacy Score from privacy sub-metric components."""
         if isinstance(components, Component):
-            return CompositeScore(score=components.score)
+            return CompositeScore(score=components.score, name=name)
         if (
             components is None
             or len(components) == 0
