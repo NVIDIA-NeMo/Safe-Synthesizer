@@ -698,6 +698,7 @@ The before/after examples above demonstrate most rules. These additional points 
   ```
 
   Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
+- __init__.py files do not need docstrings.
 - Docstrings on Python Click command methods are used for the --help details on the CLI, so may not fully conform to the general method docstring guidance.
   They should be written for the CLI user, and not for a developer working on the code.
   For example, should not include `Args:`, the args are already documented for CLI usage through the `click.options` decorators.
