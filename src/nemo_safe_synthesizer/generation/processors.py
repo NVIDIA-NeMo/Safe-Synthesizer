@@ -187,7 +187,7 @@ class GroupedDataProcessor(Processor):
             invalid records, non-unique group values, etc.
         bos_token: Token delimiting the beginning of a group sequence.
         eos_token: Token delimiting the end of a group sequence.
-        group_by: Column name(s) that define groups.
+        group_by: Column name that defines groups.
         order_by: Column name to enforce ordering within a group, or
             ``None`` if ordering is not required.
     """
@@ -198,7 +198,7 @@ class GroupedDataProcessor(Processor):
         config: ValidationParameters,
         bos_token: str,
         eos_token: str,
-        group_by: str | list[str],
+        group_by: str | None,
         order_by: str | None = None,
     ):
         super().__init__(schema=schema, config=config)
