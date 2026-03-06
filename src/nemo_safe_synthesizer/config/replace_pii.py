@@ -35,16 +35,24 @@ MAX_32_BIT_INT = 2**31 - 1
 
 
 class Column(NSSBaseModel):
+    """Rule matcher for selecting columns by name, position, condition, entity, or type."""
+
     name: str | None = Field(description="Column name.", default=None)
+
     position: OptionalListOrInt = Field(description="Column position.", default=None)
+
     condition: str | None = Field(description="Column condition.", default=None)
+
     value: str | None = Field(description="Rename to value.", default=None)
+
     entity: OptionalListOrStr = Field(description="Column entity match.", default=None)
+
     type: OptionalListOrStr = Field(description="Column type match.", default=None)
 
     @model_validator(mode="before")
     @classmethod
     def identifier_required(cls, values):
+        """Ensure at least one column identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
             return values
@@ -60,25 +68,39 @@ class Column(NSSBaseModel):
 
 
 class ColumnActions(NSSBaseModel):
+    """Container for column add, drop, and rename operations."""
+
     add: list[Column] | None = Field(description="Columns to add.", default=None)
+
     drop: list[Column] | None = Field(description="Columns to drop.", default=None)
-    rename: list[Column] | None = Field(description="Columns to rename", default=None)
+
+    rename: list[Column] | None = Field(description="Columns to rename.", default=None)
 
 
 class Row(NSSBaseModel):
+    """Rule matcher for selecting rows by name, condition, entity, or type."""
+
     # eg PrimaryKey or [AddressLine1, AddressLine2]
     name: OptionalListOrStr = Field(description="Row name.", default=None)
+
     condition: str | None = Field(description="Row condition match.", default=None)
+
     foreach: str | None = Field(description="Foreach expression.", default=None)
+
     value: str | None = Field(description="Row value definition.", default=None)
+
     entity: OptionalListOrStr = Field(description="Row entity match.", default=None)
+
     type: OptionalListOrStr = Field(description="Row type match.", default=None)
+
     fallback_value: str | None = Field(description="Row fallback value.", default=None)
+
     description: str | None = Field(description="Rule description for human consumption.", default=None)
 
     @model_validator(mode="before")
     @classmethod
     def identifier_required(cls, values):
+        """Ensure at least one row identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
             return values
@@ -99,11 +121,16 @@ class Row(NSSBaseModel):
 
 
 class RowActions(NSSBaseModel):
+    """Container for row drop and update operations."""
+
     drop: list[Row] | None = Field(description="Rows to drop.", default=None)
+
     update: list[Row] | None = Field(description="Rows to update.", default=None)
 
 
 class StepDefinition(NSSBaseModel):
+    """Single transformation step with optional variables, column actions, and row actions."""
+
     vars: dict[str, str | dict | list] | None = Field(description="Variable names and templates.", default=None)
 
     columns: ColumnActions | None = Field(description="Columns transform configuration.", default=None)
@@ -112,7 +139,9 @@ class StepDefinition(NSSBaseModel):
 
 
 class GlinerConfig(NSSBaseModel):
-    enable_gliner: bool = Field(description="Enable GLiNER NER module", default=True)
+    """Configuration for the GLiNER named-entity recognition model."""
+
+    enable_gliner: bool = Field(description="Enable GLiNER NER module.", default=True)
 
     enable_batch_mode: bool = Field(description="Enable GLiNER batch mode.", default=True)
 
@@ -127,10 +156,12 @@ class GlinerConfig(NSSBaseModel):
 
 
 class NERConfig(NSSBaseModel):
+    """Configuration for Named Entity Recognition."""
+
     ner_threshold: float = Field(description="NER model threshold.", default=0.3)
 
     enable_regexps: bool = Field(
-        description="Enable NER regular expressions (experimental)",
+        description="Enable NER regular expressions (experimental).",
         default=False,
     )
 
@@ -146,6 +177,8 @@ class NERConfig(NSSBaseModel):
 
 
 class ClassifyConfig(NSSBaseModel):
+    """Configuration for column classification using an LLM."""
+
     enable_classify: bool | None = Field(default=None, description="Enable column classification.")
 
     entities: OptionalStrList = Field(default=None, description="List of entity types to classify.")
@@ -160,7 +193,9 @@ class ClassifyConfig(NSSBaseModel):
 
 
 class Globals(NSSBaseModel):
-    locales: list[str] | None = Field(description="list of locales.", examples=["en_US"], default=None)
+    """Global settings for the PII replacer including locales, seed, NER, and classification."""
+
+    locales: list[str] | None = Field(description="List of locales.", examples=["en_US"], default=None)
 
     seed: int | None = Field(
         lt=MAX_32_BIT_INT,
@@ -169,9 +204,9 @@ class Globals(NSSBaseModel):
         default=None,
     )
 
-    classify: Annotated[ClassifyConfig, Field(description="Column classification configuration")] = ClassifyConfig()
+    classify: Annotated[ClassifyConfig, Field(description="Column classification configuration.")] = ClassifyConfig()
 
-    ner: Annotated[NERConfig, Field(description="Named Entity Recognition configuration")] = NERConfig()
+    ner: Annotated[NERConfig, Field(description="Named Entity Recognition configuration.")] = NERConfig()
 
     lock_columns: OptionalStrList = Field(
         description="List of columns to preserve as immutable across all transformations.",
@@ -181,6 +216,7 @@ class Globals(NSSBaseModel):
     @field_validator("locales")
     @classmethod
     def _validate_locale(cls, locales: list[str] | None) -> list[str] | None:
+        """Validate locale strings against Faker's supported locales."""
         if locales is None:
             return locales
 
@@ -204,16 +240,17 @@ class PiiReplacerConfig(Parameters):
     Defines how PII data should be detected and replaced in a dataset.
     """
 
-    globals: Globals = Field(description="Global config options.", default_factory=Globals)
+    globals: Globals = Field(description="Global configuration options.", default_factory=Globals)
 
     steps: list[StepDefinition] = Field(
         min_length=1,
         max_length=10,
-        description="list of transform steps to perform on input.",
+        description="List of transformation steps to perform on input data.",
     )
 
     @classmethod
     def get_default_config(cls) -> Self:
+        """Return a default configuration loaded from the embedded YAML template."""
         return cls.from_yaml_str(DEFAULT_PII_TRANSFORM_CONFIG)
 
 
