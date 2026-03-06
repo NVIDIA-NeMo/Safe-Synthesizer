@@ -5067,6 +5067,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" utils">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.utils.GenerationStatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerationStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -8360,6 +8377,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" utils">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.utils.GenerationStatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerationStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -8554,6 +8588,138 @@
 
     <div class="doc doc-contents first">
 
+        <p>Shared constants and enums for the generation pipeline.</p>
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            GenerationStatus (nemo_safe_synthesizer.generation.utils.GenerationStatus)" href="#nemo_safe_synthesizer.generation.utils.GenerationStatus">GenerationStatus</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Status of a generation job.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="nemo_safe_synthesizer.generation.utils.GenerationStatus" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>GenerationStatus</code>
+
+
+<a href="#nemo_safe_synthesizer.generation.utils.GenerationStatus" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="enum.StrEnum">StrEnum</span></code></p>
+
+
+
+        <p>Status of a generation job.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.COMPLETE">COMPLETE</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>All target records were generated successfully.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.INCOMPLETE">INCOMPLETE</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Generation ended before reaching the target count.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.IN_PROGRESS">IN_PROGRESS</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Generation is still running.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.STOP_NO_RECORDS">STOP_NO_RECORDS</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Stopped because a batch produced zero valid records.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.STOP_METRIC_REACHED">STOP_METRIC_REACHED</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Stopped because the invalid-fraction threshold
+was exceeded for too many consecutive batches.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 
 
 
@@ -8577,6 +8743,15 @@
 
 
 
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
 
 
 
