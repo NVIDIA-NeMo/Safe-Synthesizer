@@ -4049,10 +4049,54 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;reference_pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;output_pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.jinja_context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;jinja_context
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.from_evaluation_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.get_principal_component_stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_principal_component_stability
       
     </span>
   </a>
@@ -8410,10 +8454,54 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;reference_pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;output_pca
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.jinja_context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;jinja_context
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.from_evaluation_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.get_principal_component_stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;get_principal_component_stability
       
     </span>
   </a>
@@ -8675,7 +8763,7 @@
    (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure">DeepStructure</a></code></td>
             <td>
               <div class="doc-md-description">
-                
+                <p>Deep Structure Stability metric via joined PCA.</p>
               </div>
             </td>
           </tr>
@@ -8722,6 +8810,10 @@
       pydantic-model
    (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
 
+        <p>Deep Structure Stability metric via joined PCA.</p>
+<p>Projects reference and output data into a shared principal-component
+space and scores the distributional similarity of the projections.</p>
+
     
       <p>Config:</p>
       <ul>
@@ -8731,7 +8823,11 @@
         <p>Fields:</p>
         <ul>
             <li>
-              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.score">score</span></code>
+              <code><a class="autorefs autorefs-internal" title="            score = EvaluationScore()
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.score)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component.score">score</a></code>
                 (<code><a class="autorefs autorefs-internal" title="            EvaluationScore
 
 
@@ -8744,11 +8840,19 @@
                 (<code><span title="str">str</span></code>)
             </li>
             <li>
-              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca">reference_pca</span></code>
+              <code><a class="autorefs autorefs-internal" title="            reference_pca = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca">reference_pca</a></code>
                 (<code><span title="pandas.DataFrame">DataFrame</span> | None</code>)
             </li>
             <li>
-              <code><span title="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca">output_pca</span></code>
+              <code><a class="autorefs autorefs-internal" title="            output_pca = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca">output_pca</a></code>
                 (<code><span title="pandas.DataFrame">DataFrame</span> | None</code>)
             </li>
         </ul>
@@ -8763,6 +8867,73 @@
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">reference_pca</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.reference_pca" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>PCA-projected reference dataframe.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">output_pca</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.output_pca" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>PCA-projected output dataframe.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.jinja_context" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">jinja_context</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-cached"><code>cached</code></small>
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.jinja_context" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Template context with PCA scatter plot figure.</p>
+
+    </div>
+
+</div>
 
 
 
@@ -8782,7 +8953,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Hook into _calculate_pca to get our PCA values and then use these to get the principal_component_stability SQS.</p>
+        <p>Compute PCA projections and the principal component stability score.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8801,11 +8972,16 @@
                 <code>evaluation_dataset</code>
             </td>
             <td>
-                  <code><span title="nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset.EvaluationDataset">EvaluationDataset</span></code>
+                  <code><a class="autorefs autorefs-internal" title="            EvaluationDataset
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset.EvaluationDataset)" href="../../data_model/evaluation_dataset/#nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset.EvaluationDataset">EvaluationDataset</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>EvaluationDataset</p>
+                <p>Paired reference/output data.</p>
               </div>
             </td>
             <td>
@@ -8826,7 +9002,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>the main configuration object</p>
+                <p>Pipeline configuration (unused, reserved for future use).</p>
               </div>
             </td>
             <td>
@@ -8835,20 +9011,39 @@
           </tr>
       </tbody>
     </table>
-        <p>Returns: tuple of reference and output PCA and the principal_component_stability SQS.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            DeepStructure
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure)" href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure">DeepStructure</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>DeepStructure</code> with PCA dataframes and the stability score.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/components/deep_structure.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-48">48</a></span>
-<span class="normal"><a href="#__codelineno-0-49">49</a></span>
-<span class="normal"><a href="#__codelineno-0-50">50</a></span>
-<span class="normal"><a href="#__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#__codelineno-0-52">52</a></span>
-<span class="normal"><a href="#__codelineno-0-53">53</a></span>
-<span class="normal"><a href="#__codelineno-0-54">54</a></span>
-<span class="normal"><a href="#__codelineno-0-55">55</a></span>
-<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-56">56</a></span>
 <span class="normal"><a href="#__codelineno-0-57">57</a></span>
 <span class="normal"><a href="#__codelineno-0-58">58</a></span>
 <span class="normal"><a href="#__codelineno-0-59">59</a></span>
@@ -8868,35 +9063,138 @@
 <span class="normal"><a href="#__codelineno-0-73">73</a></span>
 <span class="normal"><a href="#__codelineno-0-74">74</a></span>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span>
-<span class="normal"><a href="#__codelineno-0-76">76</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_dataset</span><span class="p">(</span>
-</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a>    <span class="n">evaluation_dataset</span><span class="p">:</span> <span class="n">EvaluationDataset</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DeepStructure</span><span class="p">:</span>
-</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">    Hook into _calculate_pca to get our PCA values and then use these to get the principal_component_stability SQS.</span>
-</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>
-</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">        evaluation_dataset: EvaluationDataset</span>
-</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">        config: the main configuration object</span>
-</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a>
-</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">    Returns: tuple of reference and output PCA and the principal_component_stability SQS.</span>
-</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a>    <span class="n">tabular_columns</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_tabular_columns</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
-</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">tabular_columns</span><span class="p">:</span>
-</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a>        <span class="k">return</span> <span class="n">DeepStructure</span><span class="p">(</span><span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">notes</span><span class="o">=</span><span class="s2">&quot;No columns detected for PCA.&quot;</span><span class="p">))</span>
+<span class="normal"><a href="#__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span>
+<span class="normal"><a href="#__codelineno-0-80">80</a></span>
+<span class="normal"><a href="#__codelineno-0-81">81</a></span>
+<span class="normal"><a href="#__codelineno-0-82">82</a></span>
+<span class="normal"><a href="#__codelineno-0-83">83</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_dataset</span><span class="p">(</span>
+</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="n">evaluation_dataset</span><span class="p">:</span> <span class="n">EvaluationDataset</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DeepStructure</span><span class="p">:</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute PCA projections and the principal component stability score.</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        evaluation_dataset: Paired reference/output data.</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">        config: Pipeline configuration (unused, reserved for future use).</span>
 </span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>
-</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="n">reference_pca</span><span class="p">,</span> <span class="n">output_pca</span> <span class="o">=</span> <span class="n">DeepStructure</span><span class="o">.</span><span class="n">_calculate_pca</span><span class="p">(</span>
-</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a>        <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
-</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>        <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="p">)</span>
-</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>
-</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="n">principal_component_stability</span> <span class="o">=</span> <span class="n">DeepStructure</span><span class="o">.</span><span class="n">get_principal_component_stability</span><span class="p">(</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>        <span class="n">reference_pca</span><span class="p">,</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="n">output_pca</span><span class="p">,</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="p">)</span>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>
-</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="k">return</span> <span class="n">DeepStructure</span><span class="p">(</span><span class="n">score</span><span class="o">=</span><span class="n">principal_component_stability</span><span class="p">,</span> <span class="n">reference_pca</span><span class="o">=</span><span class="n">reference_pca</span><span class="p">,</span> <span class="n">output_pca</span><span class="o">=</span><span class="n">output_pca</span><span class="p">)</span>
+</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        A ``DeepStructure`` with PCA dataframes and the stability score.</span>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">tabular_columns</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_tabular_columns</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
+</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">tabular_columns</span><span class="p">:</span>
+</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>        <span class="k">return</span> <span class="n">DeepStructure</span><span class="p">(</span><span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">notes</span><span class="o">=</span><span class="s2">&quot;No columns detected for PCA.&quot;</span><span class="p">))</span>
+</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>
+</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>    <span class="n">reference_pca</span><span class="p">,</span> <span class="n">output_pca</span> <span class="o">=</span> <span class="n">DeepStructure</span><span class="o">.</span><span class="n">_calculate_pca</span><span class="p">(</span>
+</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>        <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
+</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>        <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
+</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="p">)</span>
+</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>
+</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="n">principal_component_stability</span> <span class="o">=</span> <span class="n">DeepStructure</span><span class="o">.</span><span class="n">get_principal_component_stability</span><span class="p">(</span>
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>        <span class="n">reference_pca</span><span class="p">,</span>
+</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>        <span class="n">output_pca</span><span class="p">,</span>
+</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>    <span class="p">)</span>
+</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>
+</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>    <span class="k">return</span> <span class="n">DeepStructure</span><span class="p">(</span><span class="n">score</span><span class="o">=</span><span class="n">principal_component_stability</span><span class="p">,</span> <span class="n">reference_pca</span><span class="o">=</span><span class="n">reference_pca</span><span class="p">,</span> <span class="n">output_pca</span><span class="o">=</span><span class="n">output_pca</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.get_principal_component_stability" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">get_principal_component_stability</span><span class="p">(</span><span class="n">reference_pca</span><span class="p">,</span> <span class="n">output_pca</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure.get_principal_component_stability" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Score the distributional similarity of PCA projections.</p>
+<p>Computes per-component Jensen-Shannon divergence, averages,
+and applies an exponential function to produce a 0--10 score.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/components/deep_structure.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-260">260</a></span>
+<span class="normal"><a href="#__codelineno-0-261">261</a></span>
+<span class="normal"><a href="#__codelineno-0-262">262</a></span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_principal_component_stability</span><span class="p">(</span>
+</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>    <span class="n">reference_pca</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="n">output_pca</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EvaluationScore</span><span class="p">:</span>
+</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Score the distributional similarity of PCA projections.</span>
+</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>
+</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">    Computes per-component Jensen-Shannon divergence, averages,</span>
+</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">    and applies an exponential function to produce a 0--10 score.</span>
+</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="k">if</span> <span class="n">reference_pca</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">output_pca</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>        <span class="k">return</span> <span class="n">EvaluationScore</span><span class="p">(</span><span class="n">notes</span><span class="o">=</span><span class="s2">&quot;Missing input Dataframe.&quot;</span><span class="p">)</span>
+</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>
+</span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a>        <span class="n">sum_pca_distances</span> <span class="o">=</span> <span class="mf">0.0</span>
+</span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>        <span class="n">pca_df_fields</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a>            <span class="n">EvaluationField</span><span class="o">.</span><span class="n">from_series</span><span class="p">(</span><span class="n">field</span><span class="p">,</span> <span class="n">reference_pca</span><span class="p">[</span><span class="n">field</span><span class="p">],</span> <span class="n">output_pca</span><span class="p">[</span><span class="n">field</span><span class="p">])</span>
+</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>            <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">reference_pca</span><span class="o">.</span><span class="n">columns</span>
+</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="p">]</span>
+</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">pca_df_fields</span><span class="p">:</span>
+</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="c1"># field.distribution_distance is None for highly unique fields</span>
+</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a>            <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">distribution_distance</span><span class="p">:</span>
+</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>                <span class="n">sum_pca_distances</span> <span class="o">+=</span> <span class="n">field</span><span class="o">.</span><span class="n">distribution_distance</span>
+</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>
+</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="n">raw_score</span> <span class="o">=</span> <span class="n">sum_pca_distances</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">pca_df_fields</span><span class="p">)</span>
+</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a>
+</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">raw_score</span><span class="p">):</span>
+</span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a>            <span class="k">return</span> <span class="n">EvaluationScore</span><span class="p">()</span>
+</span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="c1"># Scale the raw score to between ~2 and 10</span>
+</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="c1"># The factor of 1.6 is to ensure rough consistency with the legacy score</span>
+</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="n">score</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">1.6</span> <span class="o">*</span> <span class="n">raw_score</span><span class="p">)</span>
+</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="k">return</span> <span class="n">EvaluationScore</span><span class="o">.</span><span class="n">finalize_grade</span><span class="p">(</span><span class="n">raw_score</span><span class="p">,</span> <span class="n">score</span><span class="p">)</span>
+</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span><span class="s2">&quot;Failed to calculate Principal Component Stability SQS&quot;</span><span class="p">)</span>
+</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>        <span class="k">return</span> <span class="n">EvaluationScore</span><span class="p">(</span><span class="n">notes</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

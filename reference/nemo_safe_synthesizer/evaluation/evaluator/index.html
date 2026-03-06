@@ -4479,6 +4479,40 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" evaluator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Evaluator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Evaluator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator.evaluate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;evaluate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -8360,6 +8394,40 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" evaluator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Evaluator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Evaluator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator.evaluate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;evaluate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -8562,6 +8630,9 @@
 
     <div class="doc doc-contents first">
 
+        <p>Evaluator entry point for synthetic data evaluation.</p>
+<p>Orchestrates metric computation and report assembly by delegating
+to <code>MultimodalReport</code> and collecting timing information.</p>
 
 
 
@@ -8569,6 +8640,28 @@
 
 
 
+
+
+
+<p><span class="doc-section-title">Classes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="              Evaluator(config, generate_results, pii_replacer_time=None, column_statistics=None, train_df=None, test_df=None, workdir=None) (nemo_safe_synthesizer.evaluation.evaluator.Evaluator)" href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator">Evaluator</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Orchestrates evaluation of synthetic data against reference data.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
 
@@ -8585,6 +8678,327 @@
 
 
 
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="nemo_safe_synthesizer.evaluation.evaluator.Evaluator" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">Evaluator</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">generate_results</span><span class="p">,</span> <span class="n">pii_replacer_time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">column_statistics</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">train_df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">test_df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">workdir</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Orchestrates evaluation of synthetic data against reference data.</p>
+<p>Computes quality and privacy metrics by delegating to
+<code>MultimodalReport</code>, which assembles individual evaluation
+components (distribution stability, correlation, PCA, text
+similarity, privacy scores, etc.).</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>config</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../../config/parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Pipeline configuration controlling which metrics are enabled.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>generate_results</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None)
+
+  
+      dataclass
+   (nemo_safe_synthesizer.generation.results.GenerateJobResults)" href="../../generation/results/#nemo_safe_synthesizer.generation.results.GenerateJobResults">GenerateJobResults</a> | <span title="pandas.DataFrame">DataFrame</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Synthetic output -- either a <code>GenerateJobResults</code>
+or a raw <code>pd.DataFrame</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>pii_replacer_time</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Wall-clock seconds spent on PII replacement, if any.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>column_statistics</code>
+            </td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <a class="autorefs autorefs-internal" title="            ColumnStatistics
+
+
+  
+      pydantic-model
+   (nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics)" href="../../pii_replacer/transform_result/#nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics">ColumnStatistics</a>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Per-column PII entity counts and transform metadata.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>train_df</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Reference (training) dataframe.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>test_df</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Holdout (test) dataframe used by text-similarity and privacy metrics.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>workdir</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+
+  
+      dataclass
+   (nemo_safe_synthesizer.cli.artifact_structure.Workdir)" href="../../cli/artifact_structure/#nemo_safe_synthesizer.cli.artifact_structure.Workdir">Workdir</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Working directory for persisting artifacts.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            evaluate() (nemo_safe_synthesizer.evaluation.evaluator.Evaluator.evaluate)" href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator.evaluate">evaluate</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Run all configured evaluation components and store results.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/evaluator.py</code></summary>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#__codelineno-0-66">66</a></span>
+<span class="normal"><a href="#__codelineno-0-67">67</a></span>
+<span class="normal"><a href="#__codelineno-0-68">68</a></span>
+<span class="normal"><a href="#__codelineno-0-69">69</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span><span class="p">,</span>
+</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="n">generate_results</span><span class="p">:</span> <span class="n">GenerateJobResults</span> <span class="o">|</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a>    <span class="n">pii_replacer_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="n">column_statistics</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ColumnStatistics</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a>    <span class="n">train_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="n">test_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>    <span class="n">workdir</span><span class="p">:</span> <span class="n">Workdir</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="p">):</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">config</span> <span class="o">=</span> <span class="n">config</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span> <span class="o">=</span> <span class="n">generate_results</span>
+</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">pii_replacer_time</span> <span class="o">=</span> <span class="n">pii_replacer_time</span>
+</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_statistics</span> <span class="o">=</span> <span class="n">column_statistics</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">train_df</span> <span class="o">=</span> <span class="n">train_df</span>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">test_df</span> <span class="o">=</span> <span class="n">test_df</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">workdir</span> <span class="o">=</span> <span class="n">workdir</span>
+</span></code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.evaluation.evaluator.Evaluator.evaluate" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">evaluate</span><span class="p">()</span></code>
+
+<a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator.evaluate" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Run all configured evaluation components and store results.</p>
+<p>Populates <code>self.report</code> with the completed <code>MultimodalReport</code>
+and <code>self.evaluation_time</code> with the elapsed wall-clock seconds.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/evaluator.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-71">71</a></span>
+<span class="normal"><a href="#__codelineno-0-72">72</a></span>
+<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+<span class="normal"><a href="#__codelineno-0-74">74</a></span>
+<span class="normal"><a href="#__codelineno-0-75">75</a></span>
+<span class="normal"><a href="#__codelineno-0-76">76</a></span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span>
+<span class="normal"><a href="#__codelineno-0-80">80</a></span>
+<span class="normal"><a href="#__codelineno-0-81">81</a></span>
+<span class="normal"><a href="#__codelineno-0-82">82</a></span>
+<span class="normal"><a href="#__codelineno-0-83">83</a></span>
+<span class="normal"><a href="#__codelineno-0-84">84</a></span>
+<span class="normal"><a href="#__codelineno-0-85">85</a></span>
+<span class="normal"><a href="#__codelineno-0-86">86</a></span>
+<span class="normal"><a href="#__codelineno-0-87">87</a></span>
+<span class="normal"><a href="#__codelineno-0-88">88</a></span>
+<span class="normal"><a href="#__codelineno-0-89">89</a></span>
+<span class="normal"><a href="#__codelineno-0-90">90</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="k">def</span><span class="w"> </span><span class="nf">evaluate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Run all configured evaluation components and store results.</span>
+</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>
+</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">    Populates ``self.report`` with the completed ``MultimodalReport``</span>
+</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">    and ``self.evaluation_time`` with the elapsed wall-clock seconds.</span>
+</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Performing Evaluation.&quot;</span><span class="p">)</span>
+</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="n">evaluation_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span><span class="o">.</span><span class="n">df</span>
+</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="n">report</span> <span class="o">=</span> <span class="n">MultimodalReport</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
+</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="n">reference</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">train_df</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
+</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>        <span class="n">output</span><span class="o">=</span><span class="n">output</span><span class="p">,</span>
+</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="n">test</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test_df</span><span class="p">,</span>
+</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>        <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>        <span class="n">column_statistics</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">column_statistics</span><span class="p">,</span>
+</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>    <span class="p">)</span>
+</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="n">evaluation_time_sec</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">evaluation_start</span>
+</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Evaluation complete.&quot;</span><span class="p">)</span>
+</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">evaluation_time</span> <span class="o">=</span> <span class="n">evaluation_time_sec</span>
+</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">report</span> <span class="o">=</span> <span class="n">report</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
 
 
 
