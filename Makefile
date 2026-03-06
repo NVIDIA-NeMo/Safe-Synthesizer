@@ -180,8 +180,8 @@ test-ci-slow: ## Run slow tests in CI with coverage
 .PHONY: test-gpu-integration
 test-gpu-integration: ## Run GPU integration tests
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "gpu_integration and not e2e" -k default && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "gpu_integration and not e2e" -k dp
+	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -k "gpu_integration and not e2e and default" && \
+	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -k "gpu_integration and not e2e and dp"
 
 # Please modify these based on updating the e2e tests for NMP CI
 .PHONY: test-e2e
@@ -191,13 +191,13 @@ test-e2e: test-e2e-default test-e2e-dp ## Run all e2e tests (requires CUDA)
 test-e2e-default: ## Run default e2e tests (requires CUDA)
 # -n 0 is a workaround to run the tests in a single process.
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k default
+	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -k "e2e and default"
 
 .PHONY: test-e2e-dp
 test-e2e-dp: ## Run dp e2e tests (requires CUDA)
 # -n 0 is a workaround to run the tests in a single process.
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k dp
+	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -k "e2e and dp"
 
 ### CONTAINER-BASED TESTING ###
 
