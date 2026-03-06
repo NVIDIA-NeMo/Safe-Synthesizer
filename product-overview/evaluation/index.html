@@ -862,10 +862,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#related-topics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API Reference
+        Related Topics
       
     </span>
   </a>
@@ -8743,10 +8743,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#api-reference" class="md-nav__link">
+  <a href="#related-topics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        API Reference
+        Related Topics
       
     </span>
   </a>
@@ -8825,105 +8825,68 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 <h1 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h1>
-<p>Evaluation is a critical component of Safe Synthesizer that helps you understand both the utility and privacy of your synthetic data. The evaluation step is enabled by default and provides comprehensive reports comparing your original and synthetic datasets across multiple dimensions.</p>
+<p>Evaluation is a critical component of Safe Synthesizer that helps you understand both the utility and privacy of your synthetic data. The evaluation step is enabled by default and provides comprehensive reports comparing your training and synthetic datasets across multiple dimensions.</p>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
-<p>The evaluation system compares your original and synthetic datasets using two main frameworks:</p>
+<p>The evaluation system compares your training and synthetic datasets using two main frameworks:</p>
 <ol>
 <li>Synthetic Quality Score (SQS): measures how well the synthetic data preserves statistical properties and utility</li>
 <li>Data Privacy Score (DPS): assesses privacy protection and resistance to various attack vectors</li>
 </ol>
-<p>Each framework consists of multiple metrics that are combined into an overall score.</p>
-<hr />
+<p>We combine multiple metrics from each framework into an overall score.</p>
 <h2 id="synthetic-quality-score-sqs">Synthetic Quality Score (SQS)<a class="headerlink" href="#synthetic-quality-score-sqs" title="Permanent link">&para;</a></h2>
-<p>The SQS measures data utility across several dimensions:</p>
+<p>SQS is a measure of how well the synthetic data matches the training data. It is a score out of 10, where higher is better.</p>
+<p>SQS comprises five metrics:</p>
+<ul>
+<li>Column Correlation Stability: analyzes correlations across every pair of columns</li>
+<li>Deep Structure Stability: uses Principal Component Analysis to reduce dimensionality when comparing the original and synthetic data</li>
+<li>Column Distribution Stability: compares the distribution for each column in the original data to its counterpart in the synthetic data</li>
+<li>Text Structure Similarity: compares sentence, word, and character counts across the two datasets</li>
+<li>Text Semantic Similarity: determines whether the semantic meaning of the text is preserved after synthesis</li>
+</ul>
+<p>The first three metrics apply to numeric and categorical columns; the last two apply to free-text columns. We calculate overall SQS as a weighted average of the five scores based on the number of numeric, categorical, and text columns. We show metrics with no applicable columns as N/A.</p>
 <h3 id="column-correlation-stability">Column Correlation Stability<a class="headerlink" href="#column-correlation-stability" title="Permanent link">&para;</a></h3>
-<p>Analyzes the correlation across every combination of two columns:</p>
-<ul>
-<li>Compares correlation matrices between original and synthetic data</li>
-<li>Ensures relationships between variables are preserved</li>
-<li>Critical for maintaining predictive power in ML models</li>
-</ul>
-<p><img alt="Column Correlation Stability" src="../../assets/images/column-correlation-stability.png" /></p>
+<p>We compute correlations for every numeric and categorical column pair in the training and synthetic data, then average the absolute differences. Lower average difference = higher score.</p>
+<p>The report shows three heatmaps (training, synthetic, and their difference). The difference heatmap is most useful for interpreting results: lighter colors indicate closer correlation matching.</p>
 <h3 id="deep-structure-stability">Deep Structure Stability<a class="headerlink" href="#deep-structure-stability" title="Permanent link">&para;</a></h3>
-<p>Uses Principal Component Analysis to reduce dimensionality when comparing datasets:</p>
-<ul>
-<li>Captures overall data structure and patterns</li>
-<li>Evaluates high-dimensional relationships</li>
-<li>Assesses whether data maintains its fundamental characteristics</li>
-</ul>
-<p><img alt="PCA Deep Structure" src="../../assets/images/pca.png" /></p>
+<p>We assess deep, multi-field structure by running joint Principal Component Analysis (PCA) on the training and synthetic data. PCA reduces dimensionality while capturing maximum variability of the dataset, yielding principal components that summarize the dataset's overall shape.</p>
+<p>We compare the distributional distance between principal components from the training and synthetic data. The closer the principal components are, the higher the Deep Structure Stability score.</p>
 <h3 id="column-distribution-stability">Column Distribution Stability<a class="headerlink" href="#column-distribution-stability" title="Permanent link">&para;</a></h3>
-<p>Compares the distribution for each column in the original data to the matching column in the synthetic data:</p>
-<ul>
-<li>Statistical tests for numeric columns (KS test, Wasserstein distance)</li>
-<li>Frequency comparison for categorical columns</li>
-<li>Identifies distribution drift</li>
-</ul>
-<p><img alt="Column Distribution Stability" src="../../assets/images/column-distribution-stability.png" /></p>
+<p>This score measures how closely each synthetic column's value distribution matches the corresponding training column using Jensen-Shannon Distance. Lower average JS Distance across columns yields a higher score.</p>
 <h3 id="text-structure-similarity">Text Structure Similarity<a class="headerlink" href="#text-structure-similarity" title="Permanent link">&para;</a></h3>
-<p>For text columns, calculates sentence, word, and character counts:</p>
-<ul>
-<li>Compares structural properties of text</li>
-<li>Ensures text length and complexity are preserved</li>
-<li>Validates text generation quality</li>
-</ul>
-<p><img alt="Text Structure Similarity" src="../../assets/images/text-structure-similarity.png" /></p>
+<p>This score measures how well synthetic free-text structure matches the training data by comparing average sentence, word, and character counts. Higher similarity indicates a better match.</p>
 <h3 id="text-semantic-similarity">Text Semantic Similarity<a class="headerlink" href="#text-semantic-similarity" title="Permanent link">&para;</a></h3>
-<p>Understands whether the semantic meaning of the text is maintained after synthesizing:</p>
-<ul>
-<li>Uses embedding-based similarity measures</li>
-<li>Captures contextual and semantic properties</li>
-<li>Ensures text maintains intended meaning</li>
-</ul>
-<p><img alt="Text Semantic Similarity" src="../../assets/images/text-semantic-similarity.png" /></p>
-<hr />
+<p>We assess how well the semantic meaning of any synthetic free text matches that of the training data using cosine similarity of sentence embeddings. To penalize replaying of the training text, we hold out a 5% test set from the input data prior to training the model. We do not report Text Semantic Similarity when there is no test set or when sample sizes are too small.</p>
 <h2 id="data-privacy-score-dps">Data Privacy Score (DPS)<a class="headerlink" href="#data-privacy-score-dps" title="Permanent link">&para;</a></h2>
-<p>The DPS assesses privacy protection through attack simulations:</p>
+<p>DPS analyzes the synthetic data to measure how well protected your training data is from adversarial attacks. It returns a score out of 10, where higher is better.</p>
+<p>DPS includes three metrics:</p>
+<ul>
+<li>Membership Inference Protection: tests whether attackers can determine if specific records were in the training data</li>
+<li>Attribute Inference Protection: assesses whether sensitive attributes can be inferred from synthetic data</li>
+<li>PII Replay: evaluates the frequency with which sensitive values from the original data appear in the synthetic version</li>
+</ul>
+<p>We average the first two to provide an overall DPS. We do not factor PII Replay into DPS; you should analyze it separately. Read more about these privacy metrics <a href="https://arxiv.org/abs/2501.03941">here</a>.</p>
 <h3 id="membership-inference-protection">Membership Inference Protection<a class="headerlink" href="#membership-inference-protection" title="Permanent link">&para;</a></h3>
-<p>Tests whether attackers can determine if specific records were in the training data:</p>
-<ul>
-<li>Simulates membership inference attacks</li>
-<li>Measures how distinguishable training records are</li>
-<li>Higher scores indicate better privacy protection</li>
-</ul>
-<p><img alt="Membership Inference Protection" src="../../assets/images/membership-inference-protection.png" /></p>
+<p>This score measures resistance to membership inference attacks -- whether an attacker can tell if a specific record was in the training set. We simulate 360 attacks using a 5% holdout test set from the input data. The score reflects whether an attacker could infer membership above random chance by exploiting differences in the model's responses to training data versus unseen data. Low scores indicate potential memorization risk.</p>
 <h3 id="attribute-inference-protection">Attribute Inference Protection<a class="headerlink" href="#attribute-inference-protection" title="Permanent link">&para;</a></h3>
-<p>Assesses whether sensitive attributes can be inferred when other attributes are known:</p>
-<ul>
-<li>Tests ability to predict hidden values</li>
-<li>Measures information leakage</li>
-<li>Validates that synthesis doesn't create inference vulnerabilities</li>
-</ul>
-<p><img alt="Attribute Inference Protection" src="../../assets/images/attribute-inference-protection.png" /></p>
+<p>This score measures resistance to attribute inference attacks -- whether sensitive attributes can be predicted based on other attributes in the synthetic data. For a given attribute, a high score indicates that even when other attributes are known, the target attribute is difficult to predict.</p>
 <h3 id="pii-replay">PII Replay<a class="headerlink" href="#pii-replay" title="Permanent link">&para;</a></h3>
-<p>Evaluates the frequency with which sensitive values from the original data appear in the synthetic version:</p>
-<ul>
-<li>Checks for exact matches of PII values</li>
-<li>Identifies potential memorization</li>
-<li>Critical for compliance and privacy guarantees</li>
-</ul>
-<p><img alt="PII Replay" src="../../assets/images/pii-replay.png" /></p>
-<hr />
+<p>PII Replay counts the total and unique instances of personally identifiable information (PII) from your training data that show up in your synthetic data. Lower counts indicate higher privacy.</p>
+<p>You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling <a href="../pii_replacement/">Replace PII</a> before synthesis.</p>
 <h2 id="evaluation-reports">Evaluation Reports<a class="headerlink" href="#evaluation-reports" title="Permanent link">&para;</a></h2>
-<p>Every Safe Synthesizer run automatically generates an HTML evaluation report containing:</p>
+<p>Every Safe Synthesizer job automatically generates an HTML evaluation report saved to <code>generate/evaluation_report.html</code> inside the run directory (by default <code>./safe-synthesizer-artifacts/&lt;config&gt;---&lt;dataset&gt;/&lt;run_name&gt;/</code>). The report contains:</p>
 <ul>
 <li>Overall SQS and DPS scores</li>
+<li>Statistics describing the training and synthetic data</li>
 <li>Detailed subscores for each metric</li>
-<li>Visualizations comparing original and synthetic data</li>
-<li>Statistical test results</li>
+<li>Visualizations comparing training and synthetic data</li>
 </ul>
-<p>The report is saved to the run's <code>generate/</code> directory as <code>evaluation_report.html</code>.</p>
-<p><img alt="Overall SQS and DPS" src="../../assets/images/overall-sqs-dps.png" /></p>
-<p><img alt="SQS Subscores" src="../../assets/images/sqs-subscores.png" /></p>
-<p><img alt="DPS Subscores" src="../../assets/images/dps-subscores.png" /></p>
-<hr />
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <p>Evaluation is enabled by default but can be customized in your YAML config:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">evaluation</span><span class="p">:</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">mia_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># Membership Inference Attack</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">aia_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># Attribute Inference Attack</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">       </span><span class="c1"># Enable evaluation</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">mia_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># Membership Inference Attack</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">aia_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># Attribute Inference Attack</span>
 </span></code></pre></div>
-<hr />
 <h2 id="interpreting-scores">Interpreting Scores<a class="headerlink" href="#interpreting-scores" title="Permanent link">&para;</a></h2>
 <h3 id="sqs-interpretation">SQS Interpretation<a class="headerlink" href="#sqs-interpretation" title="Permanent link">&para;</a></h3>
 <table>
@@ -8936,24 +8899,29 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>90-100</strong></td>
+<td><strong>8.0-10.0</strong></td>
 <td>Excellent</td>
-<td>Synthetic data closely matches original utility</td>
+<td>Production-ready utility; differences are negligible. Proceed to privacy review and standard validation.</td>
 </tr>
 <tr>
-<td><strong>70-89</strong></td>
+<td><strong>6.0-7.9</strong></td>
+<td>Very Good</td>
+<td>Usable for most analytics/ML with minor drift. Validate key KPIs/models; consider light tuning to close gaps.</td>
+</tr>
+<tr>
+<td><strong>4.0-5.9</strong></td>
 <td>Good</td>
-<td>Suitable for most use cases with minor differences</td>
+<td>Noticeable utility gaps. Limit to exploratory analysis; increase training steps, adjust hyperparameters, or add data coverage; then re-evaluate.</td>
 </tr>
 <tr>
-<td><strong>50-69</strong></td>
-<td>Fair</td>
-<td>Noticeable differences, may impact some analyses</td>
+<td><strong>2.0-3.9</strong></td>
+<td>Moderate</td>
+<td>Significant quality loss. Do not use for decisions; fix preprocessing/schema typing, address class imbalance, increase model capacity, retrain, then re-evaluate.</td>
 </tr>
 <tr>
-<td><strong>Below 50</strong></td>
+<td><strong>Below 2.0</strong></td>
 <td>Poor</td>
-<td>Significant utility loss, review configuration</td>
+<td>Fails utility bar. Block use; audit data quality and configuration, revise modeling approach, and re-run.</td>
 </tr>
 </tbody>
 </table>
@@ -8968,32 +8936,37 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>90-100</strong></td>
+<td><strong>8.0-10.0</strong></td>
 <td>Excellent</td>
-<td>Strong privacy protection</td>
+<td>Ready for external sharing; residual risk is very low. Proceed with utility review and standard governance.</td>
 </tr>
 <tr>
-<td><strong>70-89</strong></td>
+<td><strong>6.0-7.9</strong></td>
+<td>Very Good</td>
+<td>Low risk for most uses. Safe for internal sharing and many external partners; tighten handling for any high-sensitivity columns.</td>
+</tr>
+<tr>
+<td><strong>4.0-5.9</strong></td>
 <td>Good</td>
-<td>Adequate privacy for most use cases</td>
+<td>Meaningful privacy risk present. Limit use to controlled internal analysis; strengthen PII replacement or enable DP (lower epsilon if already enabled), then re-evaluate.</td>
 </tr>
 <tr>
-<td><strong>50-69</strong></td>
-<td>Fair</td>
-<td>Some privacy risks, consider enabling differential privacy</td>
+<td><strong>2.0-3.9</strong></td>
+<td>Moderate</td>
+<td>High leakage/memorization risk. Do not distribute; expand detection coverage, apply stronger transformations, and retune synthesis.</td>
 </tr>
 <tr>
-<td><strong>Below 50</strong></td>
+<td><strong>Below 2.0</strong></td>
 <td>Poor</td>
-<td>Insufficient privacy protection</td>
+<td>Fails privacy bar. Block release; increase training data, fix detection gaps, or enable strong DP and re-run.</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
+<h2 id="related-topics">Related Topics<a class="headerlink" href="#related-topics" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../reference/nemo_safe_synthesizer/evaluation/evaluator/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 7H5a2 2 0 0 0-2 2v8h2v-4h2v4h2V9a2 2 0 0 0-2-2m0 4H5V9h2m7-2h-4v10h2v-4h2a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2m0 4h-2V9h2m6 0v6h1v2h-4v-2h1V9h-1V7h4v2Z"/></svg></span> <code>Evaluator</code></a></li>
-<li><a href="../../reference/nemo_safe_synthesizer/config/evaluate/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 7H5a2 2 0 0 0-2 2v8h2v-4h2v4h2V9a2 2 0 0 0-2-2m0 4H5V9h2m7-2h-4v10h2v-4h2a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2m0 4h-2V9h2m6 0v6h1v2h-4v-2h1V9h-1V7h4v2Z"/></svg></span> <code>EvaluationParameters</code></a></li>
+<li><a href="../tutorials/safe-synthesizer-101.md">Safe Synthesizer 101</a>: Get started with Safe Synthesizer</li>
+<li><a href="../tutorials/differential-privacy.md">Differential Privacy</a>: Enable differential privacy</li>
+<li><a href="../../tutorials/">Tutorials</a>: More tutorials</li>
 </ul>
 
 
