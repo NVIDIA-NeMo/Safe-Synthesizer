@@ -107,7 +107,7 @@ class TrainingHyperparams(Parameters):
         Field(
             title="lr_scheduler",
             description=(
-                "The scheduler type to use. See the HuggingFace documentation of `SchedulerType` for all possible values."
+                "The scheduler type to use. See the HuggingFace documentation of ``SchedulerType`` for all possible values."
             ),
         ),
     ] = LRScheduler.COSINE.value
@@ -117,7 +117,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: 0 < v < 1),
         Field(
             title="learning_rate",
-            description="The initial learning rate for `AdamW` optimizer. Must be in (0, 1).",
+            description="The initial learning rate for the ``AdamW`` optimizer. Must be in (0, 1).",
         ),
     ] = 0.0005
 
@@ -127,7 +127,7 @@ class TrainingHyperparams(Parameters):
         Field(
             title="lora_r",
             description=(
-                "The rank of the LoRA update matrices, expressed in int. "
+                "The rank of the LoRA update matrices. "
                 "Lower rank results in smaller update matrices with fewer trainable parameters. "
                 "Must be > 0."
             ),
@@ -153,7 +153,7 @@ class TrainingHyperparams(Parameters):
             title="lora_target_modules",
             description=(
                 "The list of transformer modules to apply LoRA to. Possible modules: "
-                "'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'"
+                "'q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'."
             ),
         ),
     ] = ["q_proj", "k_proj", "v_proj", "o_proj"]
@@ -163,7 +163,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: v is not None),
         Field(
             title="use_unsloth",
-            description="Whether to use unsloth.",
+            description="Whether to use Unsloth for optimized training.",
         ),
     ] = AUTO_STR
 
@@ -182,8 +182,8 @@ class TrainingHyperparams(Parameters):
         Field(
             title="validation_ratio",
             description=(
-                "The fraction of the training data that will be used for validation."
-                "The range should be 0 to 1. If set to 0, no validation will be performed."
+                "The fraction of the training data used for validation. Must be in [0, 1]. "
+                "If set to 0, no validation will be performed. "
                 "If set larger than 0, validation loss will be computed and reported "
                 "throughout training."
             ),
@@ -222,9 +222,7 @@ class TrainingHyperparams(Parameters):
         Literal[4, 8],
         Field(
             title="quantization_bits",
-            description=(
-                "The number of bits to use for quantization if `quantize_model` is True. Common values are 8 or 4 bits."
-            ),
+            description="The number of bits to use for quantization if ``quantize_model`` is ``True``. Accepts 8 or 4.",
         ),
     ] = 8
 
@@ -234,8 +232,7 @@ class TrainingHyperparams(Parameters):
             title="peft_implementation",
             description=(
                 "The PEFT (Parameter-Efficient Fine-Tuning) implementation to use. "
-                "Options include 'lora' for Low-Rank Adaptation or QLoRA for Quantized LoRA. "
-                "Each method has its own trade-offs in terms of performance and resource requirements."
+                "Options: 'lora' for Low-Rank Adaptation, 'QLORA' for Quantized LoRA."
             ),
         ),
     ] = "QLORA"
@@ -245,7 +242,7 @@ class TrainingHyperparams(Parameters):
         ValueValidator(value_func=lambda v: 0 <= v <= 1),
         Field(
             title="max_vram_fraction",
-            description="The fraction of the total VRAM to use for training. Modify this to allow longer sequences to be used. Must be in [0, 1].",
+            description="The fraction of the total VRAM to use for training. Modify this to allow longer sequences. Must be in [0, 1].",
         ),
     ] = 0.80
 

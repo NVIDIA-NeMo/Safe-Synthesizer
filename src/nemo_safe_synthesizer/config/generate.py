@@ -48,7 +48,7 @@ class ValidationParameters(Parameters, BaseModel):
         bool,
         Field(
             title="group_by_fix_non_unique_value",
-            description="Whether to automatically fix non-unique group by values in a sequence by using the first unique value for all records.",
+            description="Whether to automatically fix non-unique group-by values in a sequence by using the first unique value for all records.",
         ),
     ] = False
 
@@ -80,7 +80,7 @@ class GenerateParameters(Parameters, BaseModel):
         float,
         Field(
             title="temperature",
-            description="Sampling temperature.",
+            description="Sampling temperature for controlling randomness (higher = more random).",
         ),
     ] = 0.9
 
@@ -98,7 +98,7 @@ class GenerateParameters(Parameters, BaseModel):
         ValueValidator(value_func=lambda v: 0 < v <= 1),
         Field(
             title="top_p",
-            description="Nucleus sampling probability. Must be in (0, 1].",
+            description="Nucleus sampling probability for token selection. Must be in (0, 1].",
         ),
     ] = 1.0
 
@@ -108,7 +108,7 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="patience",
             description=(
-                "Number of consecutive generations where the `invalid_fraction_threshold` "
+                "Number of consecutive generations where the ``invalid_fraction_threshold`` "
                 "is reached before stopping generation. Must be >= 1."
             ),
         ),
@@ -120,7 +120,7 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="invalid_fraction_threshold",
             description=(
-                "The fraction of invalid records that will stop generation after the `patience` limit is reached. "
+                "The fraction of invalid records that will stop generation after the ``patience`` limit is reached. "
                 "Must be in [0, 1]."
             ),
         ),
@@ -130,7 +130,7 @@ class GenerateParameters(Parameters, BaseModel):
         bool,
         Field(
             title="use_structured_generation",
-            description="Use structured generation.",
+            description="Whether to use structured generation for better format control.",
         ),
     ] = False
 
@@ -139,8 +139,9 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="structured_generation_backend",
             description=(
-                "The backend used by VLLM when use_structured_generation=True. "
-                "Supported backends (from vllm) are 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. 'auto' will allow vllm to choose the backend."
+                "The backend used by vLLM when ``use_structured_generation`` is ``True``. "
+                "Supported backends: 'outlines', 'guidance', 'xgrammar', 'lm-format-enforcer'. "
+                "'auto' will allow vLLM to choose the backend."
             ),
         ),
     ] = "auto"
@@ -151,8 +152,8 @@ class GenerateParameters(Parameters, BaseModel):
             title="structured_generation_schema_method",
             description=(
                 "The method used to generate the schema from your dataset and pass it to the generation backend. "
-                "auto will usually default to 'json_schema'. Use 'regex to use our custom regex construction method, which "
-                "tends to be more comprehensive  than 'json_schema' at the cost of speed."
+                "'regex' uses a custom regex construction method that tends to be more comprehensive "
+                "than 'json_schema' at the cost of speed."
             ),
         ),
     ] = "regex"
@@ -161,7 +162,7 @@ class GenerateParameters(Parameters, BaseModel):
         bool,
         Field(
             title="structured_generation_use_single_sequence",
-            description="Whether to use a regex that matches exactly one sequence or record if max_sequences_per_example is 1.",
+            description="Whether to use a regex that matches exactly one sequence or record if ``max_sequences_per_example`` is 1.",
         ),
     ] = False
 
@@ -170,7 +171,7 @@ class GenerateParameters(Parameters, BaseModel):
         bool,
         Field(
             title="enforce_timeseries_fidelity",
-            description="Enforce timeseries fidelity by enforcing the time series order, intervals, start and end times of the records.",
+            description="Enforce time-series fidelity by enforcing order, intervals, start and end times of the records.",
         ),
     ] = False
 
@@ -186,7 +187,7 @@ class GenerateParameters(Parameters, BaseModel):
             description=(
                 "The attention backend for the vLLM engine. Common values: 'FLASHINFER', "
                 "'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. "
-                "If None or 'auto', vLLM will auto-select the best available backend."
+                "If ``None`` or 'auto', vLLM will auto-select the best available backend."
             ),
         ),
     ] = "auto"

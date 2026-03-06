@@ -422,9 +422,9 @@ make bootstrap-nss cpu    # or: cuda, engine, dev
 # 3. Run tests
 make test
 
-# 4. Format and lint
+# 4. Format and check
 make format
-make lint
+make check
 ```
 
 ### NMP Integration

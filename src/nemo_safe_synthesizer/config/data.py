@@ -35,7 +35,7 @@ MIN_HOLDOUT = 10
 
 
 class DataParameters(Parameters):
-    """Configuration for parameters related to how to shape or use the data being passed in."""
+    """Configuration for grouping, ordering, and splitting input data for training and evaluation."""
 
     group_training_examples_by: Annotated[
         str | None,
@@ -58,7 +58,7 @@ class DataParameters(Parameters):
             description=(
                 "Column to order training examples by. This is useful when you want the model to "
                 "learn sequential relationships for a given ordering of records. If you provide this "
-                "parameter, you must also provide `group_training_examples_by`."
+                "parameter, you must also provide ``group_training_examples_by``."
             ),
         ),
     ] = None
@@ -80,7 +80,7 @@ class DataParameters(Parameters):
         ValueValidator(value_func=lambda v: v >= 0),
         Field(
             description=(
-                "Amount of records to holdout. If this is a float between 0 and 1, that ratio of "
+                "Amount of records to hold out for evaluation. If this is a float between 0 and 1, that ratio of "
                 "records is held out. If an integer greater than 1, that number of records is held out. "
                 "If the value is equal to zero, no holdout will be performed. Must be >= 0."
             ),
@@ -91,19 +91,20 @@ class DataParameters(Parameters):
         int,
         ValueValidator(value_func=lambda v: v >= 0),
         Field(
-            description="Maximum number of records to hold out. Overrides any behavior set by holdout parameter. Must be >= 0.",
+            description="Maximum number of records to hold out. Overrides any behavior set by ``holdout``. Must be >= 0.",
         ),
     ] = DEFAULT_MAX_HOLDOUT
 
     random_state: Annotated[
         int | None,
         Field(
-            description="Use this random state for holdout split to ensure reproducibility.",
+            description="Random state for holdout split to ensure reproducibility.",
         ),
     ] = None
 
     @field_validator("random_state", mode="after", check_fields=False)
     def set_random_state_if_none(cls, v: int | int | None) -> int | None:
+        """Generate a random state if none was provided."""
         import random
 
         if v is None:
