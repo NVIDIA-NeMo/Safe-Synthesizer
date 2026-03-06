@@ -11,8 +11,14 @@ from . import multi_modal_figures as figures
 
 
 class CompositeScore(Component):
+    """A component whose score is the mean of its child component scores.
+
+    Used as the base for aggregate metrics like SQS and Data Privacy Score.
+    """
+
     @cached_property
     def jinja_context(self):
+        """Template context with duplicate gauge figures for overview and detail sections."""
         d = super().jinja_context
         # This is some "plotly magic."  The figure is a div with an id and an inlined script.
         # If you attempt to reuse the figure (we do), it won't render for the second one.
@@ -22,14 +28,15 @@ class CompositeScore(Component):
 
     @staticmethod
     def from_components(components: list[Component] | Component, name: str) -> CompositeScore:
+        """Compute a composite score as the mean of child component scores."""
         if isinstance(components, Component):
-            return CompositeScore(score=components.score)
+            return CompositeScore(score=components.score, name=name)
         if (
             components is None
             or len(components) == 0
             or all([True for c in components if c.score is None or c.score.score is None])
         ):
-            return CompositeScore(score=EvaluationScore())
+            return CompositeScore(score=EvaluationScore(), name=name)
 
         # Take the mean
         total = 0.0
