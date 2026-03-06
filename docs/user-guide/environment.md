@@ -23,8 +23,9 @@ are cached, and which network endpoints are used.
 | `LOCAL_FILES_ONLY` | unset | Set to `true` to skip network downloads (Unsloth + GLiNER only) |
 | `VLLM_CACHE_ROOT` | vLLM default | vLLM model cache directory |
 | `VLLM_ATTENTION_BACKEND` | `auto` | Generation attention implementation |
-| `NIM_ENDPOINT_URL` | `https://build.nvidia.com` | NIM/OpenAI-compatible endpoint for PII column classification |
+| `NIM_ENDPOINT_URL` | unset | NIM/OpenAI-compatible endpoint for PII column classification; classification skipped when unset |
 | `NIM_API_KEY` | unset | API key for the NIM endpoint |
+| `NIM_MODEL_ID` | `qwen/qwen2.5-coder-32b-instruct` | Model ID for PII column classification |
 | `SAFE_SYNTHESIZER_CPU_COUNT` | `max(1, cpu_count - 1)` | CPU worker count for NER processing |
 
 ---
@@ -133,9 +134,9 @@ NIM endpoint, API keys, and CPU parallelism for PII detection.
 
 ### `NIM_ENDPOINT_URL`
 
-The NIM/OpenAI-compatible endpoint used for PII column classification. Defaults
-to the NVIDIA NIM endpoint (`https://build.nvidia.com`). Point this to a
-locally hosted LLM to run classification offline:
+The NIM/OpenAI-compatible endpoint used for PII column classification. When
+unset, classification is skipped silently (the exception is caught and the
+pipeline falls back to `describe_field()`). Set this to enable classification:
 
 ```bash
 export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
@@ -174,6 +175,11 @@ PII classify config is deeply nested -- use YAML or SDK:
 
 API key for the NIM endpoint. Required when `NIM_ENDPOINT_URL` points to an
 authenticated endpoint.
+
+### `NIM_MODEL_ID`
+
+Model ID sent to the NIM endpoint for PII column classification. Defaults to
+`qwen/qwen2.5-coder-32b-instruct`.
 
 ### `SAFE_SYNTHESIZER_CPU_COUNT`
 
