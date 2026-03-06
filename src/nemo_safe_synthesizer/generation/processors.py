@@ -198,7 +198,7 @@ class GroupedDataProcessor(Processor):
         config: ValidationParameters,
         bos_token: str,
         eos_token: str,
-        group_by: str | None,
+        group_by: str | list[str],
         order_by: str | None = None,
     ):
         super().__init__(schema=schema, config=config)
