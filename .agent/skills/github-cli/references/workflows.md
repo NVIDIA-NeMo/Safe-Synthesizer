@@ -71,8 +71,13 @@ Match the failed CI job to its local equivalent:
 | CI Job | Local Command |
 |--------|---------------|
 | Format | `make format-check` (or `make format` to fix) |
+| Format (lock) | `make lock-check` |
 | Typecheck | `make typecheck` |
 | Unit Tests | `make test` or `make test-ci` |
+
+Full job list and path-filter behavior: `.github/workflows/README.md` in the repo. Full Check vs pre-commit table: CONTRIBUTING.md § Formatting, Linting, and Type Checking.
+
+When CI jobs are skipped (path filtering): The `changes` job skips format, typecheck, and unit-test when only non-source files are modified (e.g. workflow YAML, docs, markdown). To get CI to run: run `make check` and `make test` locally and note in the PR, or make a trivial Python change (e.g. docstring) so the pipeline runs.
 
 For full CI parity in a container:
 
@@ -269,14 +274,64 @@ EOF
 
 ## Fetch and Address Review Comments
 
-### Step 1: Get Inline Comments
+For "address PR comments" or "pull comments from PR N", use the **CLI helper** first. It returns a single JSON object (inline + top-level comments) and can post replies without the `gh` binary (GitHub API + `GITHUB_TOKEN`).
+
+### Use the CLI helper (recommended)
+
+From repo root (or skill dir). If `GITHUB_TOKEN` is not set, set it first: `export GITHUB_TOKEN=$(gh auth token)`.
 
 ```bash
-# Inline code review comments (not available via gh pr view --json)
-gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
+# Optional: ensure token for API (helper uses GITHUB_TOKEN or gh auth token)
+export GITHUB_TOKEN=$(gh auth token)
+
+# Fetch all comments (single JSON: pr_number, repo, inline[], top_level[])
+uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]
+
+# Reply to an inline review comment (comment_id from the inline[].id in the JSON above)
+uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Fixed in abc1234"
+# Or from stdin:
+echo "Fixed in abc1234" | uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file -
+# Or from a file (plain text or Markdown; content is sent as the comment body as-is):
+uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file path/to/reply.md
 ```
 
-### Step 2: Address Comments in Code
+Reply file format: plain text or Markdown. The entire file contents become the comment body (no wrapper or front matter). Example `reply.md`:
+
+```markdown
+Fixed in commit `abc1234`. The logic now uses the helper and the test was updated.
+```
+
+Workflow: you can draft the reply with the user in a file (e.g. `reply.md` or `pr-171-reply.md`), edit it until they’re happy, then run `reply <COMMENT_ID> --reply-file path/to/reply.md` to post it. No need to paste a long body on the command line.
+
+- Omit `PR_NUMBER` to use the current branch’s open PR. Optional: `--repo OWNER/REPO`, `--token` / `-t`.
+- In Agent use `required_permissions: ["all"]` (sandbox blocks network; see [Terminal docs](https://cursor.com/docs/agent/tools/terminal)).
+- For batch-verifying many comment locations in parallel, consider an [explore subagent](https://cursor.com/docs/subagents).
+
+### Alternative: raw gh / gh api
+
+When the helper is not available or you need raw API JSON:
+
+**Get all comments (inline + top-level):**
+
+```bash
+# Inline code review comments (not in gh pr view --json comments)
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
+
+# Top-level PR conversation
+gh pr view <number> --json comments -q '.comments[] | "\(.author.login): \(.body)"'
+# Or raw JSON:
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/issues/<number>/comments
+```
+
+**Reply to an inline review comment:**
+
+```bash
+gh issue comment <number> --body "Your reply here."   # top-level only
+# Inline thread (comment-id from pulls/<number>/comments id field):
+gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/comments/<comment-id>/replies -f body="Fixed in <commit-sha>"
+```
+
+### Address Comments in Code
 
 Make fixes, commit with signoff:
 
@@ -284,7 +339,7 @@ Make fixes, commit with signoff:
 git add -A && git commit -s -S -m "fix: address review feedback" && git push
 ```
 
-### Step 3: Update PR Body for Squash Merge
+### Update PR Body for Squash Merge
 
 ```bash
 gh pr edit <number> --body "$(cat <<'EOF'

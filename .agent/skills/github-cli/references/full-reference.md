@@ -107,10 +107,11 @@ gh run rerun <run-id> --failed
 | CI Job | Local Command |
 |--------|---------------|
 | Format | `make format-check` (or `make format` to fix) |
+| Format (lock) | `make lock-check` |
 | Typecheck | `make typecheck` |
 | Unit Tests | `make test` or `make test-ci` |
 
-Or run all CI checks in a container: `make test-ci-container`
+Path filtering may skip format/typecheck/unit-test when only non-source files change; see `.github/workflows/README.md`. Full Check vs pre-commit table: CONTRIBUTING.md § Formatting, Linting, and Type Checking. To run all CI checks in a container: `make test-ci-container`
 
 ## Releases
 

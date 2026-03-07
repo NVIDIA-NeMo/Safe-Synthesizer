@@ -49,9 +49,12 @@ Map GitHub Actions job names to local commands:
 | CI Job | Local Command |
 |--------|---------------|
 | `Format` | `make format` (fix) or `make format-check` (check) |
+| Format (lock) | `make lock-check` |
 | `Typecheck` | `make typecheck` |
 | `Unit Tests` | `make test-ci` or `make test` |
 | `Config-Dataset e2e` | `make test-nss-<config>-<dataset>-ci` |
+
+If format/typecheck/unit-test were skipped: path filtering runs only when `src/` or `tests/` change. For workflow-only or docs-only PRs, run `make check` and `make test` locally or add a trivial Python change to trigger CI.
 
 Fetch CI logs:
 ```bash

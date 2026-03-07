@@ -121,6 +121,8 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 
 The `changes` detection job (using `dorny/paths-filter`) skips downstream jobs entirely when only non-source files are modified. Within each job, all tracked files are checked -- `ruff` and `ty` are fast enough for this to take seconds. The CI Status aggregation job is the single required check for branch protection.
 
+If a PR only touches workflow YAML, docs, or other non-source paths, format/typecheck/unit-test jobs are skipped. To verify new CI logic or satisfy reviewers: run `make check` and `make test` locally and note in the PR, or add a trivial Python change (e.g. docstring) to trigger the pipeline.
+
 To replicate CI locally:
 
 ```bash

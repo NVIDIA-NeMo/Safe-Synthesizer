@@ -10,9 +10,26 @@ description: "Interact with the Safe-Synthesizer GitHub repository using the gh 
 ## Detailed References
 
 - [Full Reference](./references/full-reference.md) - Comprehensive `gh` reference for PRs, issues, Actions/CI, code review, releases, and repo metadata
-- [Workflows](./references/workflows.md) - Pre-merge checklist, debug failed CI, release workflow, triage issues, review PRs locally
+- [Workflows](./references/workflows.md) - Pre-merge checklist, debug failed CI, release workflow, triage issues, review PRs locally, fetch and reply to PR comments
 
 Note: The commands below are quick references. For comprehensive detail and multi-step workflows, see the references above.
+
+## Scripts
+
+**PR comments: use the CLI helper** (PEP 723 + Typer + PyGithub + Pydantic). Run from repo root or from this skill directory. No `gh` binary required for fetch/reply (uses GitHub API with `GITHUB_TOKEN` or `--token`; optional fallback: `gh auth token`). If `GITHUB_TOKEN` is not set, run `export GITHUB_TOKEN=$(gh auth token)` before invoking the helper (or pass `--token`). Requires network; in Agent use `required_permissions: ["all"]` per [sandbox behavior](https://cursor.com/docs/agent/tools/terminal).
+
+Path from repo root: `.agent/skills/github-cli/scripts/gh_pr_helper.py` (or `scripts/gh_pr_helper.py` if symlinked).
+
+| Command | Description |
+|---------|-------------|
+| `uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]` | Fetch all PR comments (inline + top-level). Single JSON object to stdout: `{ "pr_number", "repo", "inline": [...], "top_level": [...] }`. Omit PR to use current branch’s open PR. |
+| `uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Reply body"` | Post a reply to an inline review comment. |
+| `uv run --script ... -- reply <COMMENT_ID> --reply-file -` | Reply body from stdin. |
+| `uv run --script ... -- reply <COMMENT_ID> --reply-file path/to/body.md` | Reply body from file. |
+
+Draft the reply with the user in a file, then run with `--reply-file path` to post (avoids long inline strings).
+
+Options (all commands): `--repo OWNER/REPO` (default: from git remote), `--token` / `-t` (default: `GITHUB_TOKEN` or `gh auth token`). Full workflow: [references/workflows.md](./references/workflows.md) § Fetch and Address Review Comments.
 
 ## Shell Permissions
 
