@@ -16,33 +16,14 @@ The PII replacement pipeline operates in multiple stages:
 
 ## Detection Methods
 
-NeMo Safe Synthesizer supports multiple PII detection approaches:
+NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:
 
-### Nemotron PII Detection
-Uses the Nemotron PII model for entity recognition:
+| Method | Description | Key Features |
+|---|---|---|
+| [Nemotron PII Detection](https://huggingface.co/nvidia/gliner-PII) | Uses the Nemotron PII model for entity recognition | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
+| LLM Classification | Leverages language models for PII detection | - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
+| Regex Detection | Pattern-based detection for structured PII | - Fast and deterministic<br>- Ideal for known formats (SSN, phone numbers)<br>- Customizable patterns<br>- Low computational overhead |
 
-- Zero-shot entity detection
-- Supports custom entity types
-- High accuracy for standard PII categories
-- Configurable confidence thresholds
-
-### LLM Classification
-
-Leverages language models for PII detection:
-
-- Contextual understanding of entities
-- Handles complex PII patterns
-- Flexible entity definitions
-- Configurable prompts and models
-
-### Regex Detection
-
-Pattern-based detection for structured PII:
-
-- Fast and deterministic
-- Ideal for known formats (SSN, phone numbers)
-- Customizable patterns
-- Low computational overhead
 
 ## Replacement Strategies
 
@@ -61,6 +42,7 @@ Nemotron PII has been specifically fine-tuned to recognize many entity types out
 - `first_name` - Given names
 - `last_name` - Surnames and family names
 - `name` - Full names
+- `age` - Ages
 - `email` - Email addresses
 - `phone_number` - Phone numbers in various formats
 - `fax_number` - Fax numbers in various formats
@@ -129,18 +111,16 @@ Nemotron PII has been specifically fine-tuned to recognize many entity types out
 
 - `date` - Date values
 - `date_time` - Date and time values
-- `date_of_birth` - Birth dates
-- `time` - Time values
-- `age` - Ages
 - `blood_type` - Blood type information
 - `gender` - Gender information
 - `sexuality` - Sexual orientation
 - `political_view` - Political affiliations
-- `race_ethnicity` - Race and ethnicity information
+- `race` - Race
+- `ethnicity` - Ethnicity information
 - `religious_belief` - Religious affiliations
 - `language` - Language preferences
-- `education_level` - Education level
-- `occupation` - Professional titles
+- `education` - Education level
+- `job_title` - Professional titles
 - `employment_status` - Employment information
 - `company_name` - Organization names
 
@@ -155,14 +135,15 @@ Beyond these built-in types, you can define custom entities using:
 #### Example custom entity
 
 ```yaml title="Custom entity configuration"
-classify:
-  enable: true
-  entities:
-    - first_name
-    - last_name
-    - email
-    - employee_id
-    - project_code
+globals:
+  classify:
+    enable_classify: true
+    entities:
+      - first_name
+      - last_name
+      - email
+      - employee_id
+      - project_code
 ```
 
 ## Configuration
@@ -192,7 +173,7 @@ Consider using PII replacement when:
 - You want to ensure the model cannot memorize sensitive values
 - You need to share synthetic data with external parties
 
-PII replacement is always recommended as a preprocessing step before synthesis.
+PII replacement is the default preprocessing step before synthesis.
 
 ## Related Topics
 
