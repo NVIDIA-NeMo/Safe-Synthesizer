@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to NeMo Safe Synthesizer! This document provides guidelines and information for contributors.
 
+For the documentation version of this guide (with tabs, search, and same content), see [Contributing](https://nvidia-nemo.github.io/Safe-Synthesizer/developer-guide/contributing/) in the docs.
+
+When updating contributor instructions, update both this file and `docs/developer-guide/contributing.md` so GitHub and the docs stay in sync.
+
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ## Table of Contents

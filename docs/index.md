@@ -59,9 +59,9 @@ It uses LLM fine-tuning with optional [differential privacy](https://desfontain.
 
     ---
 
-    Browse the auto-generated API reference and dive into the architecture details.
+    Contributing, setup, repository rules, and architecture.
 
-    [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
+    [:octicons-arrow-right-24: Developer Guide](developer-guide/contributing.md)
 
 -   **Developer Notes**
 

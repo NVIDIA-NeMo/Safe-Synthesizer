@@ -168,6 +168,7 @@ nav:
           - Configuration: user-guide/configuration.md
           - Environment Variables: user-guide/environment.md
   - Developer Guide:
+      - Contributing: developer-guide/contributing.md
       - Architecture: developer-guide/architecture.md
       - API Reference: reference/
   - Developer Notes:
