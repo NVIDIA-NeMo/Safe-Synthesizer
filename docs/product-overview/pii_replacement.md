@@ -148,7 +148,7 @@ globals:
 
 ## Configuration
 
-PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
+PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/ad08b9066dce95ef23d28d524a197ce89f3db129/docs/user-guide/parameters.md).
 
 ```yaml title="replace_pii section"
 replace_pii:
@@ -177,6 +177,5 @@ PII replacement is the default preprocessing step before synthesis.
 
 ## Related Topics
 
-- {doc}`../tutorials/pii-replacement`: Hands-on PII replacement tutorial
-- {doc}`../tutorials/index`: More tutorials
-
+- [Hands-on PII replacement tutorial](../tutorials/pii-replacement.md)
+- [Tutorials](../tutorials/index.md): More tutorials

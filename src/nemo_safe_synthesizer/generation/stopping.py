@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Patience-based stopping condition for the generation loop."""
+
 from ..observability import get_logger
 
 logger = get_logger()
@@ -28,7 +30,16 @@ class GenerationStopCondition:
         self.last_value = None
 
     def has_been_reached(self, invalid_fraction: float) -> bool:
-        """Returns True if the stopping condition has been reached."""
+        """Check whether the invalid-fraction threshold has been exceeded for ``patience`` consecutive batches.
+
+        Args:
+            invalid_fraction: Running average of the invalid-record
+                fraction for the most recent batch.
+
+        Returns:
+            ``True`` if the threshold was exceeded for ``patience``
+            consecutive batches, ``False`` otherwise.
+        """
         is_reached = False
         self.last_value = invalid_fraction
         if invalid_fraction >= self.invalid_fraction_threshold:

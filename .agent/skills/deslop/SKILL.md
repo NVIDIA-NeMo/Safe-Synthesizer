@@ -27,5 +27,5 @@ See [STYLE_GUIDE.md](../../../STYLE_GUIDE.md) for the complete style conventions
 
 - Keep behavior unchanged unless fixing a clear bug
 - Prefer minimal, focused edits over broad rewrites
-- Run `make format` and `make lint` after changes -- let tools fix style, not manual edits
+- Run `make format` and `make check` after changes -- let tools fix style, not manual edits
 - Keep the final summary concise (1-3 sentences)

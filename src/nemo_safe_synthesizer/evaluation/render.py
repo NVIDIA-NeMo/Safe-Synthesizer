@@ -2,6 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
+"""Jinja2 report rendering for evaluation results.
+
+Loads HTML/Jinja templates from the ``assets/`` directory and renders
+an ``EvaluationReport`` into a self-contained HTML file.
+"""
+
 import datetime
 import pkgutil
 from pathlib import Path
@@ -21,6 +27,17 @@ _TEMPLATE_PATH = str(Path(__file__).parent / "assets/")
 
 
 def _get_template(name):
+    """Load a Jinja template by relative path, falling back to the filesystem.
+
+    Tries ``pkgutil.get_data`` first (works when installed as a package),
+    then falls back to a direct file read (useful in the test suite).
+
+    Args:
+        name: Relative path to the template within the assets directory.
+
+    Returns:
+        The template content as a string, or ``None`` if not found.
+    """
     try:
         # If this module is being used as someone else's dependency, this will work
         data = pkgutil.get_data(__name__, _TEMPLATE_PATH + name)
@@ -43,6 +60,7 @@ def maybe_render_report(
     output_path: str | Path | None = None,
     workdir: "Workdir | None" = None,
 ) -> str | None:
+    """Render the evaluation report if one is provided, otherwise return ``None``."""
     if not evaluation_report:
         return None
     return render_report(evaluation_report, template_name=template_name, output_path=output_path, workdir=workdir)
@@ -54,6 +72,18 @@ def render_report(
     output_path: str | Path | None = None,
     workdir: "Workdir | None" = None,
 ) -> str | None:
+    """Render an evaluation report to HTML using a Jinja2 template.
+
+    Args:
+        evaluation_report: The completed evaluation report to render.
+        template_name: Jinja2 template filename relative to ``assets/jinja/reports/``.
+        output_path: File path to write the rendered HTML. If ``None`` and
+            ``workdir`` is provided, falls back to ``workdir.evaluation_report``.
+        workdir: Working directory structure for output path resolution.
+
+    Returns:
+        The rendered HTML string, or ``None`` if rendering fails.
+    """
     # Resolve output path from workdir if not explicitly provided
     if output_path is None and workdir is not None:
         output_path = workdir.evaluation_report

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""HuggingFace Trainer callbacks for Safe Synthesizer training."""
+
 import time
 from typing import Optional
 
@@ -35,19 +37,24 @@ logger = get_logger(__name__)
 
 
 class InferenceEvalCallback(TrainerCallback):
-    """🤗 Trainer callback that performs inference-based evaluation during training.
+    """Trainer callback that performs inference-based evaluation during training.
 
-    This callback generates records using the current model and validates them against a schema.
-    Empirically, the fraction of invalid records generated is a good indicator of the model's
-    performance. The callback can stop training if the fraction of invalid records satisfies
-    the stopping criteria specified by `invalid_fraction_threshold` and `patience`.
+    Generates records using the current model and validates them against a
+    schema. Empirically, the fraction of invalid records generated is a good
+    indicator of model quality. The callback can stop training early if the
+    invalid fraction satisfies the stopping criteria specified by
+    ``invalid_fraction_threshold`` and ``patience``.
 
     Args:
         schema: Schema to validate the generated records against.
+        metadata: Pretrained model metadata (prompt template, instruction, etc.).
+        processor: Record processor used to parse and validate generated text.
         num_prompts_per_batch: Number of prompts per batch.
         num_batches: Number of batches to generate.
-        invalid_fraction_threshold: The fraction of invalid records that will stop generation after the `patience` limit is reached.
-        patience: Number of consecutive generations where the `invalid_fraction_threshold` is reached before stopping generation.
+        invalid_fraction_threshold: The fraction of invalid records that will
+            stop generation after the ``patience`` limit is reached.
+        patience: Number of consecutive generations where the
+            ``invalid_fraction_threshold`` is reached before stopping.
         generate_kwargs: Keyword arguments to pass to the model's generate method.
     """
 
@@ -97,6 +104,13 @@ class InferenceEvalCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ) -> None:
+        """Generate records with the current model and optionally stop training.
+
+        Runs inference for ``num_batches`` batches, validates each against
+        the schema, and sets ``control.should_training_stop`` if the invalid
+        record fraction exceeds the threshold for ``patience`` consecutive
+        evaluations.
+        """
         if not state.is_world_process_zero:
             return
 
@@ -164,9 +178,10 @@ class InferenceEvalCallback(TrainerCallback):
 
 
 class ProgressBarCallback(TrainerCallback):
-    """A `TrainerCallback` that displays the progress of training or evaluation.
+    """A ``TrainerCallback`` that displays the progress of training or evaluation.
 
-    Note: This callback can only be used during development.
+    Note:
+        This callback can only be used during development.
     """
 
     def __init__(self):
@@ -240,7 +255,14 @@ class ProgressBarCallback(TrainerCallback):
 
 
 class SafeSynthesizerWorkerCallback(TrainerCallback):
-    """Trainer callback to log training information to the worker logs."""
+    """Trainer callback that emits structured progress logs at a fixed interval.
+
+    Logs are written via the ``logger.runtime`` channel as rendered tables
+    containing epoch, step, loss, and progress fraction.
+
+    Args:
+        log_interval: Minimum seconds between successive log emissions.
+    """
 
     _start_ts: float
     _last_log_ts: float
@@ -261,10 +283,13 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
     ):
         self._start_ts = time.monotonic()
 
-    def _checked_log_if(self, cond: bool, state: TrainerState, control: TrainerControl) -> Optional[TrainerControl]:
-        # We need to keep track of the last global_step that was used when logging,
-        # as triggering log handling twice for the same step leads to div by 0.
-        # https://github.com/huggingface/transformers/blob/v4.29.0/src/transformers/trainer.py#L2279
+    def _checked_log_if(self, cond: bool, state: TrainerState, control: TrainerControl) -> TrainerControl | None:
+        """Set ``control.should_log`` when ``cond`` is true, guarding against duplicate steps.
+
+        The HuggingFace Trainer triggers a division-by-zero if the same
+        ``global_step`` is logged twice, so this method tracks the last
+        logged step and skips if it hasn't advanced.
+        """
         if state.is_local_process_zero and state.global_step > self._last_log_global_step and cond:
             control.should_log = True
             return control

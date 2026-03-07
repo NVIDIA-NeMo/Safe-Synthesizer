@@ -260,9 +260,16 @@ class _GroupTimestampStats:
     """Statistics collected from a single group's timestamps."""
 
     group_name: Any
+    """Identifier for the group."""
+
     start_timestamp: Any
+    """First timestamp in the group."""
+
     stop_timestamp: Any
-    interval_seconds: int | None  # None if inconsistent within group
+    """Last timestamp in the group."""
+
+    interval_seconds: int | None
+    """Seconds between consecutive timestamps, or ``None`` if inconsistent within the group."""
 
 
 def _collect_group_timestamp_stats(

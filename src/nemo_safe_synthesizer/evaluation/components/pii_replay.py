@@ -19,39 +19,50 @@ UNKNOWN_ENTITY: str = "none"
 
 
 class PIIReplayData(BaseModel):
-    """
-    Contains data for each PII column, listed in the PII Replay section of the SQS report.
+    """Per-column PII data listed in the PII Replay section of the SQS report."""
 
-    Args:
-        column_name: The name of the column with PII data.
-        column_assigned_type: The assigned type for the column, whether it's text, unique identifier, date, email, etc.
-        pii_type: Type of the PII data in the column. For non-text fields, this is the same as column_assigned_type. For text fields, it is the PII entities detected within the text such as race, SSN, address, etc.
-        total_ref_data: Total number of rows in the reference data that contain PII values.
-        unique_ref_data: Total number of rows in the reference data that contain unique PII values.
-        total_synth_data: Total number of output rows that contain PII present in the reference data.
-        unique_synth_data: Total number of output rows that contain unique PII present in the reference data.
-        unique_synth_data_percentage: Percentage of unique PII in the output data that matches unique entity data in the reference dataset.
-
-    """
-
-    column_name: str = Field()
-    column_assigned_type: str = Field()
-    pii_type: str = Field(default=UNKNOWN_ENTITY)
-    total_ref_data: int = Field(default=0)
-    unique_ref_data: int = Field(default=0)
-    total_synth_data: int = Field(default=0)
-    unique_synth_data: int = Field(default=0)
-    unique_synth_data_percentage: float = Field(default=0)
+    column_name: str = Field(description="The name of the column with PII data.")
+    column_assigned_type: str = Field(
+        description="The assigned type for the column (text, unique identifier, date, email, etc.)."
+    )
+    pii_type: str = Field(
+        default=UNKNOWN_ENTITY,
+        description="Type of the PII data in the column. For non-text fields, same as column_assigned_type. For text fields, the PII entities detected within the text (race, SSN, address, etc.).",
+    )
+    total_ref_data: int = Field(default=0, description="Total rows in the reference data that contain PII values.")
+    unique_ref_data: int = Field(
+        default=0, description="Count of distinct PII values for this entity in the reference column."
+    )
+    total_synth_data: int = Field(
+        default=0, description="Number of output rows whose column value matches a reference PII value."
+    )
+    unique_synth_data: int = Field(
+        default=0, description="Count of distinct reference PII values that appear in the output column."
+    )
+    unique_synth_data_percentage: float = Field(
+        default=0,
+        description="Percentage of distinct reference PII values replayed in the output (unique_synth_data / unique_ref_data * 100).",
+    )
 
 
 class PIIReplay(Component):
+    """PII Replay metric -- counts PII values from the reference data appearing in the output.
+
+    For each classified PII entity, reports total and unique replay counts.
+    This component does not produce a numeric score; it surfaces PII
+    leakage details for the HTML report.
+    """
+
     name: str = Field(default="PII Replay")
-    reference_total_records: int = Field(default=0)
-    output_total_records: int = Field(default=0)
-    pii_replay_data: list[PIIReplayData] = Field(default=list())
+    reference_total_records: int = Field(default=0, description="Total rows in the reference data.")
+    output_total_records: int = Field(default=0, description="Total rows in the output data.")
+    pii_replay_data: list[PIIReplayData] = Field(
+        default=list(), description="Per-column / per-entity replay statistics."
+    )
 
     @cached_property
     def jinja_context(self):
+        """Template context with PII replay statistics and entity type list."""
         d = super().jinja_context
         d["reference_total_records"] = self.reference_total_records
         d["output_total_records"] = self.output_total_records
@@ -61,6 +72,7 @@ class PIIReplay(Component):
 
     @staticmethod
     def from_evaluation_dataset(evaluation_dataset, config: SafeSynthesizerParameters | None = None) -> PIIReplay:
+        """Compute PII replay counts from classified entity metadata."""
         if evaluation_dataset.column_statistics is None or len(evaluation_dataset.column_statistics) == 0:
             logger.warning("No classified entities, skipping PII Replay.")
             return PIIReplay(score=EvaluationScore())

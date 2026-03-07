@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Time-series generation backend with chronological validation."""
+
 from __future__ import annotations
 
 import json
@@ -32,59 +34,76 @@ class ProgressSnapshot:
     """Snapshot configuration for saving partial generation results at progress milestones."""
 
     label: str
+    """Human-readable label for the milestone (e.g. ``"50"``)."""
+
     threshold: int
+    """Record or group count that triggers this snapshot."""
+
     path: Path
+    """File path where the snapshot CSV will be written."""
+
     saved: bool = field(default=False)
+    """Whether this snapshot has already been written to disk."""
 
 
 @dataclass
 class GroupState:
-    """State for tracking a single group during parallel generation.
+    """Mutable state for tracking a single group during parallel generation.
 
-    Each group maintains its own state during time series generation.
-    This allows parallel generation across multiple groups while tracking progress
-    and handling retries independently.
-
-    Attributes:
-        group_id: Unique identifier for this group (e.g., device ID, customer ID).
-        initial_prefill: The original prefill string (first few records) used to
-            seed generation for this group. Preserved for potential resets.
-        current_prefill: The current prefill string, updated as generation progresses
-            to include recently generated records for context continuity.
-        recent_records: List of recently generated records (as dicts) used to build
-            the sliding window context for the next generation batch.
-        expected_records: Target number of records to generate, calculated from
-            (stop_timestamp - start_timestamp) / interval_seconds.
-        last_timestamp_seconds: Timestamp (in seconds) of the most recently generated
-            record, used to validate chronological ordering of new records.
-        low_valid_fraction_count: Counter for consecutive batches with high invalid
-            record fraction. Triggers group failure after `config.generation.patience`
-            consecutive batches exceed the threshold.
-        completed: Whether this group has finished generating (reached stop timestamp).
-        failed: Whether this group failed (e.g., too many retries without progress).
-        total_valid_records: Cumulative count of valid records generated for this group.
-        total_invalid_records: Cumulative count of invalid records generated for this group.
+    Each group maintains its own sliding-window context, timestamp cursor,
+    and retry counters so that multiple groups can be generated in parallel
+    while tracking progress independently.
     """
 
     group_id: str
+    """Unique identifier for this group (e.g., device ID, customer ID)."""
+
     initial_prefill: str
+    """Original prefill string (first few records) used to seed generation.  Preserved for potential resets."""
+
     current_prefill: str
+    """Current prefill string, updated as generation progresses to include recently generated records."""
+
     recent_records: list[dict] = field(default_factory=list)
+    """Sliding window of recently generated records used to build the next prompt context."""
+
     expected_records: int = 0
+    """Target record count, calculated from ``(stop_timestamp - start_timestamp) / interval_seconds``."""
+
     last_timestamp_seconds: int | None = None
+    """Timestamp (in seconds) of the most recently generated record, used for chronological validation."""
+
     low_valid_fraction_count: int = 0
+    """Consecutive batches with high invalid fraction.  Triggers group failure after ``patience`` is exceeded."""
+
     completed: bool = False
+    """Whether this group has reached the stop timestamp."""
+
     failed: bool = False
+    """Whether this group failed (e.g., too many retries without progress)."""
+
     total_valid_records: int = 0
+    """Cumulative count of valid records generated for this group."""
+
     total_invalid_records: int = 0
+    """Cumulative count of invalid records generated for this group."""
 
 
 class GroupProcessingResult(Enum):
-    """Result of processing a batch for a single group."""
+    """Result of processing a generation batch for a single group.
 
-    IN_PROGRESS = auto()  # Group continues, batch should be added
-    COMPLETED = auto()  # Group completed successfully (reached stop timestamp), remove from active
-    FAILED = auto()  # Group failed (e.g., too many retries), remove from active, no batch added
+    Used by ``_process_group_result`` to signal whether a group should
+    remain active, be marked complete, or be removed due to failure.
+    """
+
+    IN_PROGRESS = auto()
+    """Group continues; batch should be added to the accumulator."""
+
+    COMPLETED = auto()
+    """Group reached the stop timestamp; remove from active processing."""
+
+    FAILED = auto()
+    """Group failed (e.g., too many retries); remove from active, no batch added."""
 
 
 class TimeseriesBackend(VllmBackend):
@@ -306,6 +325,7 @@ class TimeseriesBackend(VllmBackend):
             self._write_progress_snapshot(batches, snapshot, is_group_based=is_group_based)
 
     def _format_prompt(self, prefill: str) -> str:
+        """Format a generation prompt using the model's template and the given prefill."""
         return self.model_metadata.prompt_config.template.format(
             instruction=self.model_metadata.instruction,
             schema=self._schema_fragment,
@@ -327,9 +347,11 @@ class TimeseriesBackend(VllmBackend):
             return None
 
     def _advance_expected_time(self, timestamp_seconds: int) -> int:
+        """Return the next expected timestamp by adding the configured interval."""
         return timestamp_seconds + self._timestamp_interval_seconds
 
     def _has_reached_stop_time(self, records: list[dict]) -> bool:
+        """Return ``True`` if any record's timestamp meets or exceeds the stop timestamp."""
         if not records or self._stop_timestamp_value is None:
             return False
         stop_ts = self._parse_timestamp_seconds(self._stop_timestamp_value)
@@ -443,13 +465,16 @@ class TimeseriesBackend(VllmBackend):
         return True
 
     def _check_chronological_for_group(self, batch: Batch, group_state: GroupState) -> None:
-        """Check if the records advance from the last timestamp for a specific group.
-        If not, all records in "valid_records" will be moved to invalid_records
+        """Validate chronological ordering and demote out-of-order records.
+
+        Responses whose first record does not continue from the group's
+        last timestamp have all their valid records moved to
+        ``invalid_records``.
 
         Args:
-            batch: The batch containing responses.
-            group_state: The state of the group.
-
+            batch: The batch containing responses to validate.
+            group_state: Current state of the group (provides the last
+                known timestamp).
         """
         for response in batch._responses:
             if not response.valid_records:

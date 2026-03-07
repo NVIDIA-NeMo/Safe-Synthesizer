@@ -70,9 +70,8 @@ Match the failed CI job to its local equivalent:
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `make format` or `bash tools/format/format.sh` |
-| Lint | `make lint` or `bash tools/lint/ruff-lint.sh` |
-| Typecheck | `bash tools/lint/run-ty-check.sh` |
+| Format | `make format-check` (or `make format` to fix) |
+| Typecheck | `make typecheck` |
 | Unit Tests | `make test` or `make test-ci` |
 
 For full CI parity in a container:
@@ -86,7 +85,7 @@ make test-ci-container
 After fixing locally:
 
 ```bash
-git add -A && git commit -s -m "fix: resolve CI failure" && git push
+git add -A && git commit -s -S -m "fix: resolve CI failure" && git push
 
 # Or re-run failed jobs directly
 gh run rerun $RUN_ID --failed
@@ -203,13 +202,13 @@ gh pr diff && gh pr view --json files -q '[.files[].path]'
 ### Step 3: Run Local Checks
 
 ```bash
-make format && make lint && make test
+make format && make check && make test
 ```
 
 ### Step 4a: Push Fixes (if contributing to the PR)
 
 ```bash
-git add -A && git commit -s -m "fix: address lint/format issues" && git push
+git add -A && git commit -s -S -m "fix: address lint/format issues" && git push
 ```
 
 ### Step 4b: Leave a Review (if just reviewing)
@@ -255,7 +254,7 @@ ISSUE=<number-from-step-1>
 git checkout -b $USER/$ISSUE-short-name origin/main
 # ... make changes ...
 git add -A \
-  && git commit -s -m "fix: description (closes #$ISSUE)" \
+  && git commit -s -S -m "fix: description (closes #$ISSUE)" \
   && git push -u origin HEAD \
   && gh pr create --draft \
     --title "fix: description" \
@@ -282,7 +281,7 @@ gh api repos/NVIDIA-NeMo/Safe-Synthesizer/pulls/<number>/comments
 Make fixes, commit with signoff:
 
 ```bash
-git add -A && git commit -s -m "fix: address review feedback" && git push
+git add -A && git commit -s -S -m "fix: address review feedback" && git push
 ```
 
 ### Step 3: Update PR Body for Squash Merge
@@ -298,16 +297,16 @@ EOF
 )"
 ```
 
-## Retroactive Signoff
+## Retroactive Signoff and Signing
 
-If commits were pushed without `--signoff` (`-s`):
+If commits were pushed without `--signoff` (`-s`) or `--gpg-sign` (`-S`):
 
 ```bash
-# Amend the last commit to add signoff
-git commit --amend --signoff --no-edit
+# Amend the last commit to add signoff + signature
+git commit --amend --signoff --gpg-sign --no-edit
 git push --force-with-lease
 
 # For multiple commits, interactive rebase (careful -- rewrites history)
-git rebase --signoff HEAD~<n>
+git rebase --signoff --gpg-sign HEAD~<n>
 git push --force-with-lease
 ```

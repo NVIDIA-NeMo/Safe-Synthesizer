@@ -51,10 +51,22 @@ logger = get_logger(__name__)
 
 
 class MultimodalReport(EvaluationReport):
-    config: SafeSynthesizerParameters | None = Field(default=None)
+    """Multi-modal evaluation report combining quality and privacy components.
+
+    Assembles all evaluation components (SQS sub-metrics for tabular and/or text columns,
+    privacy scores, PII replay, dataset statistics) from paired reference/output
+    dataframes and renders them into an HTML report via Jinja2 templates.
+
+    Use ``from_dataframes`` to construct a fully populated report.
+    """
+
+    config: SafeSynthesizerParameters | None = Field(
+        default=None, description="Pipeline configuration parameters used for this evaluation."
+    )
 
     @cached_property
     def jinja_context(self):
+        """Template context with tooltips, flags, and per-column distribution figures."""
         try:
             ctx = super().jinja_context
             ctx["tooltips"] = tooltips
@@ -82,8 +94,8 @@ class MultimodalReport(EvaluationReport):
 
             ctx["dp_enabled"] = self.config and self.config.get("dp_enabled")
             if ctx["dp_enabled"]:
-                ctx["delta"] = self.config.get("delta")
-                ctx["epsilon"] = self.config.get("epsilon")
+                ctx["delta"] = self.config.get("delta")  # ty: ignore[unresolved-attribute]
+                ctx["epsilon"] = self.config.get("epsilon")  # ty: ignore[unresolved-attribute]
 
             # Numeric per-column figures require access to the original data, a little hacky.
             if "column_distribution_stability" in ctx:
@@ -98,6 +110,7 @@ class MultimodalReport(EvaluationReport):
 
     @staticmethod
     def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None):
+        """Return a config parameter value, falling back to ``default``."""
         if config and config.get(param):
             return config.get(param)
         return default
@@ -110,6 +123,21 @@ class MultimodalReport(EvaluationReport):
         column_statistics: dict[str, ColumnStatistics] | None = None,
         config: SafeSynthesizerParameters | None = None,
     ) -> MultimodalReport:
+        """Build a complete multi-modal evaluation report from dataframes.
+
+        Constructs an ``EvaluationDataset``, runs all enabled evaluation
+        components (quality and privacy), and assembles them into a report.
+
+        Args:
+            reference: Training (reference) dataframe.
+            output: Synthetic (output) dataframe.
+            test: Optional holdout dataframe for privacy metrics.
+            column_statistics: Per-column PII entity metadata.
+            config: Pipeline configuration controlling which metrics are enabled.
+
+        Returns:
+            A fully populated ``MultimodalReport`` ready for rendering.
+        """
         evaluation_dataset = EvaluationDataset.from_dataframes(
             reference=reference,
             output=output,

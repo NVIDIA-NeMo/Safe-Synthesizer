@@ -4,6 +4,7 @@
 """CLI utility functions for Safe Synthesizer.
 
 This module provides utility functions for CLI commands including:
+
 - Logging initialization
 - Dataset loading
 - Configuration merging
@@ -244,7 +245,7 @@ def common_setup(
 
     # synthesis_overrides collects config overrides from dataset registry and
     # CLI, which is then combined with the config file when calling
-    # merge_overrides(). CLi takes top precedence, then dataset registry, and
+    # merge_overrides(). CLI takes top precedence, then dataset registry, and
     # finally the config file. See test_utils.py and especially
     # test_overrides_config_registry_and_cli for examples of how the resolution
     # is expected to work.
