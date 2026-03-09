@@ -39,8 +39,8 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
             field names.
 
     Returns:
-        A nested dict ready to be passed to ``Parameters.from_yaml_or_overrides``
-        or ``model_copy(update=...)``.
+        A nested dict suitable for ``model_validate()`` or for merging
+        with a loaded config via ``merge_dicts()``.
 
     Raises:
         ValueError: If a key contains more than one separator (only one level

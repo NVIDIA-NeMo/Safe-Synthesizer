@@ -45,7 +45,7 @@ PathT = str | Path
 class Parameters(BaseModel, metaclass=ABCMeta):
     """Abstract base for parameter collections used throughout the config layer.
 
-    Subclasses define typed fields (often ``Parameter[T]`` or ``AutoParam[T]``)
+    Subclasses define typed fields (e.g. ``int``, ``Literal["auto"] | float``)
     and inherit recursive iteration, name-based lookup, and YAML / JSON
     serialization from this class.
     """
@@ -207,22 +207,6 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         if overrides:
             params = params.model_copy(update=overrides)
         return params
-
-    @classmethod
-    def from_yaml_or_overrides(cls, path: PathT | None = None, overrides: dict | None = None) -> Self:
-        """Load from YAML when ``path`` is provided, otherwise build from ``overrides`` alone.
-
-        Args:
-            path: Optional path to a YAML file.
-            overrides: Keyword overrides forwarded to ``from_yaml`` or ``from_params``.
-
-        Returns:
-            A validated ``Parameters`` instance.
-        """
-        if path:
-            return cls.from_yaml(path, overrides)
-        else:
-            return cls.from_params(**overrides)
 
     def to_yaml(self, path: PathT, exclude_unset: bool = True) -> None:
         """Serialize this instance to a YAML file.
