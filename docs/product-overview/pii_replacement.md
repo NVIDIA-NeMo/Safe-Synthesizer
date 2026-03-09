@@ -9,33 +9,32 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 
 The PII replacement pipeline operates in multiple stages:
 
-1. Classification: Categorizes columns with PII laveraging large language models.
-2. Detection: Identifies PII entities using configurable detection methods within columns detected as PII.
-3. Transformation: Replaces or redacts PII using configurable rules
+1. Detection: Classifies entire columns and PII entities within free text.
+2. Replacement: Transform PII using configurable rules
 
 ## Detection Methods
 
 NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:
 
-| Method | Description | Key Features |
-|---|---|---|
-| LLM Classification | Leverages language models for column classification with PII detection| - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
-| [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Uses the GLiNER PII model for entity recognition within each column | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
-| Regex Detection | Pattern-based detection for structured PII | - Fast and deterministic<br>- Ideal for known formats (SSN, phone numbers)<br>- Customizable patterns<br>- Low computational overhead |
+| Method | Scope| Description | Key Features |
+|---|---|---|---|
+| LLM Classification | All columns|  Leverages language models for column classification| - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
+| [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Free text | Uses the GLiNER PII model for entity recognition within free text columns | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
 
 
-## Replacement Strategies
+## Replacement Methods
 
 After detection, PII can be handled in multiple ways:
-
-- Replacement: Generate realistic replacements using [Faker library](https://faker.readthedocs.io/en/master/) or custom expressions.
-- Redaction: Substitute with placeholder tokens.
-- Hashing: Convert to a unique digital fingerprint (one-way).
-- Custom Rules: Define your own transformation logic.
+| Strategy   | Description                                  | Example                     |
+|------------|----------------------------------------------|-----------------------------|
+| Annotate   | Add identified entity to original PII        | Alice -> <Alice; first_name> |
+| Redact     | Replace PII with a generic tag               | Alice -> *****             |
+| Hash       | Replace PII with a hashed value             | Alice -> 3bf676c578641     |
+| Substitute | Replace PII with a context-relevant alternative | Alice -> Erica            |
+| Rewrite    | Rewrite entire phrases while maintaining context | Alice -> A female        |
 
 ## Supported Entity Types
-
-GLiNER PII has been specifically fine-tuned to recognize many entity types out of the box, organized by category:
+GLiNER PII will attempt to identify any custom entity type you provide, but it has specifically been fine-tuned on the following entities, organized by category:
 
 ### Personal Information
 - `first_name` - Given names
