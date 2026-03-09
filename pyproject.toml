@@ -116,7 +116,7 @@ engine = [
 
 cpu = [
   "accelerate",
-  "bitsandbytes==0.49.1",
+  "bitsandbytes==0.49.2",
   "flashinfer-python==0.6.1; sys_platform=='linux'",
   "flashinfer-cubin==0.6.1; sys_platform=='linux'",
   "faiss-cpu==1.13.2",
@@ -140,7 +140,7 @@ cpu = [
 
 cu128 = [
   "accelerate",
-  "bitsandbytes==0.49.1",
+  "bitsandbytes==0.49.2",
   "faiss-gpu-cu12==1.13.2; sys_platform == 'linux'",
   "flashinfer-python==0.6.1; sys_platform == 'linux'",
   "flashinfer-cubin==0.6.1; sys_platform == 'linux'",
