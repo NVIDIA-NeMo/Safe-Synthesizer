@@ -846,6 +846,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1115,6 +1119,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../troubleshooting/" class="md-nav__link">
         
   
@@ -1123,6 +1155,34 @@
     
   
     Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Quality
   
 
     
@@ -8209,7 +8269,7 @@
 </tr>
 <tr>
 <td><code>NSS_LOG_FORMAT</code></td>
-<td>Default log format</td>
+<td>Default log format (<code>json</code> or <code>plain</code>)</td>
 </tr>
 <tr>
 <td><code>NSS_LOG_FILE</code></td>
@@ -8218,6 +8278,26 @@
 <tr>
 <td><code>NSS_DATASET_REGISTRY</code></td>
 <td>Dataset registry YAML path/URL</td>
+</tr>
+<tr>
+<td><code>HF_HOME</code></td>
+<td>Hugging Face cache directory (default <code>~/.cache/huggingface</code>)</td>
+</tr>
+<tr>
+<td><code>HF_HUB_OFFLINE</code></td>
+<td>Set to <code>1</code> to error instead of downloading models</td>
+</tr>
+<tr>
+<td><code>LOCAL_FILES_ONLY</code></td>
+<td>Set to <code>true</code> to skip network downloads (Unsloth, GLiNER only)</td>
+</tr>
+<tr>
+<td><code>VLLM_ATTENTION_BACKEND</code></td>
+<td>Override vLLM attention backend</td>
+</tr>
+<tr>
+<td><code>VLLM_CACHE_ROOT</code></td>
+<td>vLLM model cache directory</td>
 </tr>
 <tr>
 <td><code>WANDB_MODE</code></td>
@@ -8231,8 +8311,14 @@
 <td><code>WANDB_API_KEY</code></td>
 <td>WandB API key</td>
 </tr>
+<tr>
+<td><code>SAFE_SYNTHESIZER_CPU_COUNT</code></td>
+<td>Number of CPU processes for NER (default: <code>max(1, cpu_count - 1)</code>, further limited by record count)</td>
+</tr>
 </tbody>
 </table>
+<p>For NIM endpoint and PII-related variables (<code>NIM_ENDPOINT_URL</code>, <code>NIM_API_KEY</code>, <code>NIM_MODEL_ID</code>),
+see <a href="../environment/#pii-and-ner">Environment Variables &gt; PII and NER</a>.</p>
 
 
 

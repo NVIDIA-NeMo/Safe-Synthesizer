@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/troubleshooting/">
       
       
-        <link rel="prev" href="../parameters/">
+        <link rel="prev" href="../environment/">
       
       
-        <link rel="next" href="../../developer-guide/architecture/">
+        <link rel="next" href="../data-quality/">
       
       
         
@@ -846,6 +846,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -982,6 +986,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../environment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -993,6 +1025,24 @@
       
         
       
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
         
@@ -1011,6 +1061,387 @@
 
       </a>
       
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-during-training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of Memory During Training
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-gpu-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No GPU Detected
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#context-length-and-record-fitting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Length and Record Fitting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context Length and Record Fitting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-records-dont-fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Records Don't Fit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-during-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of Memory During Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generationerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenerationError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Evaluation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-during-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of Memory During Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#surprising-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Surprising Defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-resolved-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Resolved Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-validation-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Validation Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pii-and-ner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PII and NER
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PII and NER">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gliner-download-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GLiNER Download Fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ner-processing-timeouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NER Processing Timeouts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-series" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time Series
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time Series">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dataerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DataError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parametererror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ParameterError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internalerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InternalError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Quality
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -7814,6 +8245,348 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-during-training" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of Memory During Training
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-gpu-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No GPU Detected
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#context-length-and-record-fitting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Length and Record Fitting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context Length and Record Fitting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#when-records-dont-fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When Records Don't Fit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-during-generation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of Memory During Generation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generationerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GenerationError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evaluation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Evaluation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-during-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of Memory During Evaluation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#surprising-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Surprising Defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#auto-resolved-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Auto-Resolved Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-validation-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Validation Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pii-and-ner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PII and NER
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PII and NER">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gliner-download-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GLiNER Download Fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ner-processing-timeouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NER Processing Timeouts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-series" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time Series
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time Series">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dataerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DataError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#parametererror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ParameterError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internalerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InternalError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -7884,7 +8657,492 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 <h1 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h1>
-<p><em>Add troubleshooting content here.</em></p>
+<p>Runtime errors, OOM issues, and configuration problems for NeMo Safe
+Synthesizer. Sections are organized by pipeline phase. For output quality
+and evaluation metrics, see <a href="../data-quality/">Data Quality</a>. For environment variables, model caching, offline setup, NIM endpoint
+configuration, and NER parallelism, see <a href="../environment/">Environment Variables</a>.</p>
+<h2 id="quick-reference">Quick Reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"kernels package not installed"</td>
+<td>No network for Kernels Hub</td>
+<td>Set <code>training.attn_implementation: sdpa</code></td>
+</tr>
+<tr>
+<td><code>ConnectionError</code> during startup</td>
+<td>No internet / model not cached</td>
+<td><a href="../environment/#pre-caching-models">Pre-cache models</a></td>
+</tr>
+<tr>
+<td>OOM in training</td>
+<td>VRAM exhausted</td>
+<td><a href="#out-of-memory-during-training">Reduce batch size, quantize</a></td>
+</tr>
+<tr>
+<td>OOM in generation</td>
+<td>VRAM exhausted</td>
+<td><a href="#out-of-memory-during-generation">Verify training cleanup</a></td>
+</tr>
+<tr>
+<td>OOM in evaluation</td>
+<td>Large dataset + PCA</td>
+<td><a href="#out-of-memory-during-evaluation">Reduce columns or disable eval</a></td>
+</tr>
+<tr>
+<td>"Cannot use unsloth without GPU"</td>
+<td>No CUDA device</td>
+<td><a href="#no-gpu-detected">Switch to HuggingFace backend</a></td>
+</tr>
+<tr>
+<td>"max_sequences_per_example must be 1"</td>
+<td>Incompatible DP config</td>
+<td><a href="../data-quality/#requirements">Set <code>data.max_sequences_per_example: 1</code></a></td>
+</tr>
+<tr>
+<td>"Unsloth not compatible with DP"</td>
+<td>Mutual exclusion</td>
+<td><a href="../data-quality/#requirements">Set <code>training.use_unsloth: false</code></a></td>
+</tr>
+<tr>
+<td>"Unable to automatically determine a noise multiplier"</td>
+<td>Epsilon too low</td>
+<td><a href="../data-quality/#common-dp-errors">Increase epsilon or add records</a></td>
+</tr>
+<tr>
+<td>"no valid records" in generation</td>
+<td>Underfitting / schema mismatch</td>
+<td><a href="#generationerror">See GenerationError</a></td>
+</tr>
+<tr>
+<td>"exceeds context length"</td>
+<td>Records too long</td>
+<td><a href="#context-length-and-record-fitting">Reduce record size</a></td>
+</tr>
+<tr>
+<td>"fraction of invalid records"</td>
+<td>Generation quality too low</td>
+<td><a href="#generationerror">Lower threshold or retrain</a></td>
+</tr>
+<tr>
+<td>Metrics show UNAVAILABLE</td>
+<td>Too few records / columns</td>
+<td><a href="../data-quality/#minimum-data-requirements">Ensure &gt;= 200 records</a></td>
+</tr>
+<tr>
+<td>Low SQS scores</td>
+<td>Underfit or too few records</td>
+<td><a href="../data-quality/#low-sqs-scores">Review distributions</a></td>
+</tr>
+<tr>
+<td>PII uses default entities</td>
+<td>Classifier failed</td>
+<td><a href="../data-quality/#pii-uses-unexpected-entity-types">Set entities explicitly</a></td>
+</tr>
+<tr>
+<td>"timestamp_column has missing values"</td>
+<td>Dirty time series data</td>
+<td>Clean NaN/nulls from timestamp column</td>
+</tr>
+<tr>
+<td>"groups must have same start"</td>
+<td>Inconsistent groups</td>
+<td>Align group timestamps</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>
+<p>GPU memory, context length, and backend issues during fine-tuning.</p>
+<h3 id="out-of-memory-during-training">Out of Memory During Training<a class="headerlink" href="#out-of-memory-during-training" title="Permanent link">&para;</a></h3>
+<p>Training OOM errors appear during the "Training" phase with HuggingFace Trainer
+stack traces. If you see <code>torch.cuda.OutOfMemoryError</code>:</p>
+<ol>
+<li>Enable 4-bit quantization -- the single largest memory saver. Set
+   <code>training.quantize_model: true</code> and <code>training.quantization_bits: 4</code>. QLoRA
+   stores the frozen base model in 4-bit NF4 while training LoRA adapters in
+   full precision, cutting model weight memory by ~4x. Quantization reduces
+   precision in the frozen weights; in practice QLoRA typically produces
+   results close to full-precision LoRA, but verify with your evaluation report</li>
+<li>Reduce the context window -- see
+   <a href="#context-length-and-record-fitting">Context Length and Record Fitting</a> for
+   how to lower <code>training.rope_scaling_factor</code>, truncate records, or simplify
+   grouped examples. Longer sequences require more activation memory even with
+   gradient checkpointing enabled</li>
+<li>Verify <code>training.batch_size</code> is <code>1</code> (the default). The effective batch
+   size is <code>batch_size * gradient_accumulation_steps</code> (default 1 x 8 = 8).
+   Peak memory is set by the forward/backward pass on one micro-batch --
+   <code>gradient_accumulation_steps</code> controls how many micro-batches accumulate
+   before each optimizer step but does not affect peak memory</li>
+<li>Lower <code>training.max_vram_fraction</code> (default <code>0.8</code>) to leave headroom for
+   other GPU consumers on the same device</li>
+</ol>
+<p>GPU memory during LoRA SFT breaks down into three components:</p>
+<ul>
+<li>Base model weights (dominant) -- ~14 GiB for a 7B model in fp16, ~3.5 GiB
+  in 4-bit. Quantization targets this component</li>
+<li>Activations (proportional to sequence length and batch size) --
+  self-attention computes an n x n score matrix, so activation memory scales
+  <a href="https://huggingface.co/docs/transformers/en/model_memory_anatomy">quadratically with sequence length</a>.
+  Gradient checkpointing, which Safe Synthesizer enables by default, reduces
+  this by recomputing activations during the backward pass instead of storing
+  them. Context length and batch size target this component</li>
+<li>LoRA adapter gradients and optimizer states (small) -- typically &lt; 1 GiB
+  for standard LoRA ranks</li>
+</ul>
+<p>For deeper coverage, see
+<a href="https://huggingface.co/docs/transformers/en/perf_train_gpu_one">Methods and tools for efficient training on a single GPU</a>
+in the HuggingFace documentation.</p>
+<h3 id="no-gpu-detected">No GPU Detected<a class="headerlink" href="#no-gpu-detected" title="Permanent link">&para;</a></h3>
+<p>If Safe Synthesizer fails to find a GPU, the Unsloth backend raises immediately:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>RuntimeError: Cannot use unsloth without GPU.
+</span></code></pre></div>
+<p>The HuggingFace backend will not error but will attempt to use CPU (extremely slow).</p>
+<p>To diagnose:</p>
+<ol>
+<li>Verify NVIDIA drivers: <code>nvidia-smi</code></li>
+<li>Verify PyTorch CUDA build: <code>python -c "import torch; print(torch.cuda.is_available())"</code></li>
+<li>
+<p>Ensure you installed the CUDA extras, not the CPU-only package:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu128,engine]&quot;</span>
+</span></code></pre></div>
+</li>
+</ol>
+<p>The Unsloth backend requires a GPU and raises immediately if none is found.
+Switch to the HuggingFace backend for CPU-only environments (useful for
+development, not recommended for production training).</p>
+<h3 id="context-length-and-record-fitting">Context Length and Record Fitting<a class="headerlink" href="#context-length-and-record-fitting" title="Permanent link">&para;</a></h3>
+<p>The effective context window (<code>max_seq_length</code>) is a computed property on
+<a class="autorefs autorefs-internal" title="            ModelMetadata
+
+
+  
+      pydantic-model
+  " href="../../reference/nemo_safe_synthesizer/llm/metadata/#nemo_safe_synthesizer.llm.metadata.ModelMetadata"><code>ModelMetadata</code></a> --
+<code>base_max_seq_length * rope_scaling_factor</code>. Every training example must
+fit within this window. If it doesn't, data assembly fails with a
+<code>GenerationError</code> before training even starts.</p>
+<h4 id="when-records-dont-fit">When Records Don't Fit<a class="headerlink" href="#when-records-dont-fit" title="Permanent link">&para;</a></h4>
+<p>Two error messages indicate context-length problems during data assembly:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>The number of tokens in an example exceeds the available context length
+</span></code></pre></div>
+<p>A single training example (schema prompt + records) exceeds
+<code>max_seq_length</code>.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>The dataset schema requires more tokens than the max length of the model
+</span></code></pre></div>
+<p>The schema prompt alone is wider than <code>max_seq_length</code> -- typically
+because the table has too many columns for the model's context window.</p>
+<h4 id="how-to-fix">How to Fix<a class="headerlink" href="#how-to-fix" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Increase <code>training.rope_scaling_factor</code> to extend the context window.
+   When set to <code>"auto"</code>, it is estimated from dataset token counts using
+   heuristics (4 chars per token for text, 1 token per digit) -- this can
+   underestimate for complex or multilingual data.</li>
+<li>Reduce record size -- shorten text fields, drop unnecessary columns,
+   or simplify the schema.</li>
+<li>When using <code>data.group_training_examples_by</code>, multiple records must fit
+   in context together, making the limit tighter. Consider reducing
+   <code>data.max_sequences_per_example</code> or simplifying the grouped records.</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>These errors are typed as <code>GenerationError</code> in the codebase even though
+they fire during data assembly, not during generation proper. They appear
+in the pipeline before any training or generation occurs.</p>
+</div>
+<p>Context-length issues can also surface as OOM during training (the model
+attempts to process sequences near the limit). See
+<a href="#out-of-memory-during-training">Out of Memory During Training</a> for
+memory-specific fixes like quantization and batch size reduction.</p>
+<hr />
+<h2 id="generation">Generation<a class="headerlink" href="#generation" title="Permanent link">&para;</a></h2>
+<p>VRAM, invalid records, and early stopping during synthetic data production.</p>
+<h3 id="out-of-memory-during-generation">Out of Memory During Generation<a class="headerlink" href="#out-of-memory-during-generation" title="Permanent link">&para;</a></h3>
+<p>Generation OOM errors appear during the "Generation" phase with vLLM.
+GPU allocation defaults to 80% of available VRAM. Training exposes
+<code>training.max_vram_fraction</code> to override this; generation does not yet have
+an equivalent config field.</p>
+<ol>
+<li>Ensure no other processes hold GPU memory -- training cleanup should release
+   it, but verify with <code>nvidia-smi</code></li>
+<li>If the GPU has less memory than expected, check that the training teardown
+   completed before generation started</li>
+</ol>
+<h3 id="generationerror">GenerationError<a class="headerlink" href="#generationerror" title="Permanent link">&para;</a></h3>
+<p>Generation failures during synthetic data production. The two most common:</p>
+<dl>
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Generation stopped prematurely due to no valid records
+</span></code></pre></div></dt>
+<dd>
+<p>The first batch produced zero valid records. The model may be underfitting
+  or the schema may not match the training data. Increase
+  <code>training.num_input_records_to_sample</code> to give the model more context,
+  and check training logs for quality issues.</p>
+</dd>
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
+</span></code></pre></div></dt>
+<dd>
+<p>Too many invalid records across <code>generation.patience</code> consecutive batches.
+  Consider lowering <code>generation.invalid_fraction_threshold</code>, retraining with
+  more data, or increasing <code>training.rope_scaling_factor</code> if records are being
+  truncated.</p>
+</dd>
+</dl>
+<p>For context-length errors during data assembly (<code>"The number of tokens in an
+example exceeds the available context length"</code>), see
+<a href="#context-length-and-record-fitting">Context Length and Record Fitting</a>.</p>
+<hr />
+<h2 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h2>
+<p>Memory and scope issues during quality scoring and report generation.</p>
+<h3 id="out-of-memory-during-evaluation">Out of Memory During Evaluation<a class="headerlink" href="#out-of-memory-during-evaluation" title="Permanent link">&para;</a></h3>
+<p>If evaluation OOMs, reduce the evaluation scope or dataset size:</p>
+<ol>
+<li>For wide datasets, PCA computation in deep structure analysis can OOM.
+   Reduce the number of columns included in evaluation by lowering
+   <code>evaluation.sqs_report_columns</code> or by subsetting the input data. If
+   evaluation is not required for your run, disable it entirely with
+   <code>evaluation.enabled: false</code>.</li>
+<li>Histogram binning uses the <code>doane</code> method to reduce memory, but very large
+   datasets may still cause issues. Reduce <code>evaluation.sqs_report_columns</code> or
+   <code>evaluation.sqs_report_rows</code> to limit the evaluation scope.</li>
+</ol>
+<div class="admonition tip">
+<p class="admonition-title">Evaluation and Data Quality</p>
+<p>SQS scores, UNAVAILABLE metrics, report limits, and low-quality
+diagnostics are covered in <a href="../data-quality/#evaluation">Data Quality &gt; Evaluation</a>.</p>
+</div>
+<hr />
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Defaults, auto-resolution, and validation errors for pipeline parameters.</p>
+<h3 id="surprising-defaults">Surprising Defaults<a class="headerlink" href="#surprising-defaults" title="Permanent link">&para;</a></h3>
+<p>Several defaults may not match your expectations:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>training.batch_size</code></td>
+<td><code>1</code></td>
+<td>Effective batch = <code>batch_size</code> x <code>gradient_accumulation_steps</code> (8)</td>
+</tr>
+<tr>
+<td><code>training.validation_ratio</code></td>
+<td><code>0.0</code></td>
+<td>No validation split by default</td>
+</tr>
+<tr>
+<td><code>data.holdout</code></td>
+<td><code>0.05</code></td>
+<td>5% of records held out for evaluation; capped by <code>data.max_holdout</code> (2000)</td>
+</tr>
+<tr>
+<td><code>data.random_state</code></td>
+<td><code>None</code></td>
+<td>Auto-generates a random seed -- set explicitly for reproducibility</td>
+</tr>
+<tr>
+<td><code>generation.num_records</code></td>
+<td><code>1000</code></td>
+<td>May be too small for production use</td>
+</tr>
+</tbody>
+</table>
+<h3 id="auto-resolved-parameters">Auto-Resolved Parameters<a class="headerlink" href="#auto-resolved-parameters" title="Permanent link">&para;</a></h3>
+<p>Many parameters accept <code>"auto"</code> and are resolved at runtime by the
+<a class="autorefs autorefs-internal" title="              AutoConfigResolver(data, config)" href="../../reference/nemo_safe_synthesizer/config/autoconfig/#nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver"><code>AutoConfigResolver</code></a>.
+See the <a href="../parameters/">Parameters Reference</a> for the full list.</p>
+<ul>
+<li><code>training.rope_scaling_factor</code> -- auto-estimated from dataset token counts;
+  see <a href="#context-length-and-record-fitting">Context Length and Record Fitting</a>
+  for details and caveats</li>
+<li><code>training.num_input_records_to_sample</code> -- derived from <code>rope_scaling_factor * 25000</code></li>
+<li><code>training.use_unsloth</code> -- resolves to <code>true</code> unless DP is enabled.
+  DP uses Opacus per-sample gradients (<code>GradSampleModule</code>), which require
+  standard model layers and disable gradient checkpointing -- Unsloth's
+  custom layers and checkpointing are incompatible</li>
+<li><code>privacy.delta</code> -- computed from record count</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>If you encounter issues when using Unsloth with Mistral models, set
+<code>training.use_unsloth: false</code> explicitly. There is no automatic
+detection for this incompatibility.</p>
+</div>
+<p>Use <code>safe-synthesizer config validate</code> to see how <code>"auto"</code> and default values resolve for
+your configuration. Note that some <code>"auto"</code> fields (such as
+<code>training.rope_scaling_factor</code> and <code>training.num_input_records_to_sample</code>)
+require a dataset to resolve -- they will remain <code>"auto"</code> in the validate
+output and only resolve during an actual run:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:1"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>We might change this behavior in the future to resolve <em>all</em> the <code>"auto"</code> parameters.</p>
+<h3 id="common-validation-errors">Common Validation Errors<a class="headerlink" href="#common-validation-errors" title="Permanent link">&para;</a></h3>
+<dl>
+<dt><code>order_training_examples_by</code> requires <code>group_training_examples_by</code>:</dt>
+<dd>
+<p>If you set <code>data.order_training_examples_by</code> without also setting
+  <code>data.group_training_examples_by</code>, config validation will fail. Ordering only
+  makes sense within groups.</p>
+</dd>
+<dt>Unsupported file extensions:</dt>
+<dd>
+<p>The <code>url</code> parameter accepts <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>, and <code>.parquet</code>
+  files. Other formats raise a <code>ValueError</code>.</p>
+</dd>
+<dt>Incompatible DP settings:</dt>
+<dd>
+<p>If <code>privacy.dp_enabled</code> is <code>true</code> but <code>use_unsloth</code> is <code>true</code> or
+  <code>data.max_sequences_per_example</code> is not <code>1</code>, config validation will fail
+  with a clear error message. Set these to <code>"auto"</code> and they will resolve
+  correctly.</p>
+</dd>
+</dl>
+<div class="admonition tip">
+<p class="admonition-title">Differential Privacy</p>
+<p>DP errors and privacy budget troubleshooting are covered in
+<a href="../data-quality/#differential-privacy">Data Quality &gt; Differential Privacy</a>.</p>
+</div>
+<hr />
+<h2 id="pii-and-ner">PII and NER<a class="headerlink" href="#pii-and-ner" title="Permanent link">&para;</a></h2>
+<p>Model downloads and processing timeouts for PII detection.</p>
+<h3 id="gliner-download-fails">GLiNER Download Fails<a class="headerlink" href="#gliner-download-fails" title="Permanent link">&para;</a></h3>
+<p>The PII replacer downloads the GLiNER NER model on first use. If the download
+fails, it raises an exception immediately.</p>
+<p>Fix: pre-download the model by running PII replacement once in an environment
+with internet access, or set <code>LOCAL_FILES_ONLY=true</code> after the model is cached.</p>
+<h3 id="ner-processing-timeouts">NER Processing Timeouts<a class="headerlink" href="#ner-processing-timeouts" title="Permanent link">&para;</a></h3>
+<p>NER uses an internal <code>max_runtime_seconds</code> timeout. If processing a chunk takes
+too long, it is dropped with a warning in the logs.</p>
+<p>Fix: check the logs for timeout warnings. The timeout is not currently
+configurable; for large datasets, reduce the amount of text processed per
+chunk (for example, shorten text fields or split them into smaller pieces) and
+optionally reduce CPU parallelism so each worker has more resources.</p>
+<hr />
+<h2 id="time-series">Time Series<a class="headerlink" href="#time-series" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Experimental</p>
+<p>Time series synthesis is an experimental feature. APIs and behavior may
+change between releases.</p>
+</div>
+<p>Time series synthesis has additional validation and generation requirements.</p>
+<h3 id="configuration-requirements">Configuration Requirements<a class="headerlink" href="#configuration-requirements" title="Permanent link">&para;</a></h3>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">YAML</label><label for="__tabbed_2_2">CLI</label><label for="__tabbed_2_3">SDK</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">time_series</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">is_timeseries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">timestamp_column</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;timestamp&quot;</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">timestamp_interval_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span><span class="nt">timestamp_format</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;%Y-%m-%d</span><span class="nv"> </span><span class="s">%H:%M:%S&quot;</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--time_series__is_timeseries<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--time_series__timestamp_column<span class="w"> </span>timestamp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--time_series__timestamp_interval_seconds<span class="w"> </span><span class="m">60</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">synthesizer</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="s2">&quot;data.csv&quot;</span><span class="p">)</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="o">.</span><span class="n">with_time_series</span><span class="p">(</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>        <span class="n">is_timeseries</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>        <span class="n">timestamp_column</span><span class="o">=</span><span class="s2">&quot;timestamp&quot;</span><span class="p">,</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>        <span class="n">timestamp_interval_seconds</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>        <span class="n">timestamp_format</span><span class="o">=</span><span class="s2">&quot;%Y-%m-</span><span class="si">%d</span><span class="s2"> %H:%M:%S&quot;</span><span class="p">,</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="p">)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="p">)</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<ul>
+<li>Set <code>time_series.is_timeseries: true</code> and provide at least one of
+  <code>timestamp_column</code> or <code>timestamp_interval_seconds</code></li>
+<li><code>timestamp_format</code> must be a valid strftime string or <code>"elapsed_seconds"</code> --
+  invalid formats are caught at config validation time</li>
+<li>All groups must share the same start and stop timestamps, or preprocessing
+  raises a <code>DataError</code></li>
+</ul>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<dl>
+<dt>Missing timestamp values:</dt>
+<dd>
+<p>Any <code>NaN</code> or <code>null</code> values in the timestamp column raise a <code>DataError</code>.
+  Clean your data before running the pipeline:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span></code></pre></div>
+</dd>
+<dt>Interval mismatch:</dt>
+<dd>
+<p>If <code>timestamp_interval_seconds</code> does not match the actual intervals in your
+  data, a warning is logged but the pipeline continues. Verify your interval
+  setting matches the data.</p>
+</dd>
+<dt>Groups skipped during generation:</dt>
+<dd>
+<p>If a group consistently produces invalid records (exceeding
+  <code>generation.patience</code> consecutive batches above
+  <code>generation.invalid_fraction_threshold</code>), that group is skipped entirely.
+  Check your training data quality for those groups.</p>
+</dd>
+<dt>Out-of-order records:</dt>
+<dd>
+<p>During generation, records are validated for chronological order. Records
+  that arrive out of order are marked invalid.</p>
+</dd>
+</dl>
+<hr />
+<h2 id="error-classes">Error Classes<a class="headerlink" href="#error-classes" title="Permanent link">&para;</a></h2>
+<p>Safe Synthesizer uses a structured error hierarchy. Understanding which error
+class you received helps narrow down the cause.</p>
+<h3 id="dataerror">DataError<a class="headerlink" href="#dataerror" title="Permanent link">&para;</a></h3>
+<p>Bad input data -- NaNs, unsupported types, empty DataFrames, missing values
+in group or timestamp columns.</p>
+<p>Checklist:</p>
+<ol>
+<li>Verify your CSV loads cleanly with <code>pd.read_csv()</code></li>
+<li>Check for mixed types in columns</li>
+<li>Check that column names in your config match the actual data</li>
+<li>For time series, ensure no nulls in timestamp or group columns</li>
+</ol>
+<p>Context-length errors (records too long for the model) raise <code>GenerationError</code>,
+not <code>DataError</code> -- see <a href="#context-length-and-record-fitting">Context Length and Record Fitting</a>.</p>
+<h3 id="parametererror">ParameterError<a class="headerlink" href="#parametererror" title="Permanent link">&para;</a></h3>
+<p>Invalid configuration -- missing columns referenced in config, incompatible
+option combinations, or missing required parameters. The stacktrace should hopefully be informative.</p>
+<p>Checklist:</p>
+<ol>
+<li>Run <code>safe-synthesizer config validate --config config.yaml</code></li>
+<li>Verify column names in <code>group_training_examples_by</code> and
+   <code>order_training_examples_by</code> exist in your data</li>
+<li>For DP, ensure all required privacy parameters are set</li>
+</ol>
+<h3 id="internalerror">InternalError<a class="headerlink" href="#internalerror" title="Permanent link">&para;</a></h3>
+<p>Library bugs. If you encounter this error through documented interfaces,
+please <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues">file an issue on GitHub</a>.</p>
 
 
 
@@ -7922,7 +9180,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../parameters/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Parameters Reference">
+          <a href="../environment/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Environment Variables">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -7932,20 +9190,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Parameters Reference
+                Environment Variables
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../developer-guide/architecture/" class="md-footer__link md-footer__link--next" aria-label="Next: Architecture">
+          <a href="../data-quality/" class="md-footer__link md-footer__link--next" aria-label="Next: Data Quality">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Architecture
+                Data Quality
               </div>
             </div>
             <div class="md-footer__button md-icon">
