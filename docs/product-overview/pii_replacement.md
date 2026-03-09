@@ -10,7 +10,7 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 The PII replacement pipeline operates in multiple stages:
 
 1. Detection: Classifies entire columns and PII entities within free text.
-2. Replacement: Transform PII using configurable rules
+2. Replacement: Transforms PII using configurable rules
 
 ## Detection Methods
 
@@ -146,7 +146,7 @@ globals:
 
 ## Configuration
 
-PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/ad08b9066dce95ef23d28d524a197ce89f3db129/docs/user-guide/parameters.md).
+PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](../user-guide/parameters.md).
 
 ```yaml title="replace_pii section"
 replace_pii:
