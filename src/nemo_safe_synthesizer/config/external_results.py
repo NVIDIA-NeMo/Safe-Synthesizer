@@ -1,8 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Public result models returned by the Safe Synthesizer pipeline."""
+
 import logging
 from typing import TYPE_CHECKING, Optional
+
+from pydantic import Field
 
 from .base import NSSBaseModel
 
@@ -13,21 +17,31 @@ if TYPE_CHECKING:
 
 
 class SafeSynthesizerTiming(NSSBaseModel):
-    """Output object for Safe Synthesizer"""
+    """Wall-clock durations for each pipeline stage."""
 
-    total_time_sec: float | None = None
-    pii_replacer_time_sec: float | None = None
-    training_time_sec: float | None = None
-    generation_time_sec: float | None = None
-    evaluation_time_sec: float | None = None
+    total_time_sec: float | None = Field(default=None, description="Total end-to-end pipeline duration in seconds.")
+
+    pii_replacer_time_sec: float | None = Field(default=None, description="Time spent on PII replacement.")
+
+    training_time_sec: float | None = Field(default=None, description="Time spent on model training.")
+
+    generation_time_sec: float | None = Field(default=None, description="Time spent generating synthetic records.")
+
+    evaluation_time_sec: float | None = Field(default=None, description="Time spent evaluating synthetic data quality.")
 
     def log_timing(self, logger: logging.Logger) -> None:
+        """Emit all timing fields as a structured table via *logger*."""
         logger.info(
             "Safe Synthesizer timing",
             extra={"ctx": {"render_table": True, "tabular_data": self.model_dump(), "title": "Pipeline Timing"}},
         )
 
     def log_wandb(self, run: Optional["wandb.Run"] = None) -> None:
+        """Log timing metrics to an active Weights & Biases run.
+
+        Args:
+            run: W&B run instance. No-op when ``None``.
+        """
         if run is not None:
             run.log(
                 {
@@ -41,33 +55,76 @@ class SafeSynthesizerTiming(NSSBaseModel):
 
 
 class SafeSynthesizerSummary(NSSBaseModel):
-    """Output object for Safe Synthesizer"""
+    """Aggregated quality, privacy, and record-count metrics for a pipeline run."""
 
-    synthetic_data_quality_score: float | None = None
-    column_correlation_stability_score: float | None = None
-    deep_structure_stability_score: float | None = None
-    column_distribution_stability_score: float | None = None
-    text_semantic_similarity_score: float | None = None
-    text_structure_similarity_score: float | None = None
+    synthetic_data_quality_score: float | None = Field(
+        default=None,
+        description="Weighted composite of the five sub-scores below (SQS). Higher is better (0--10 scale).",
+    )
 
-    data_privacy_score: float | None = None
-    membership_inference_protection_score: float | None = None
-    attribute_inference_protection_score: float | None = None
+    column_correlation_stability_score: float | None = Field(
+        default=None,
+        description="How closely pairwise column correlations in synthetic data match the original for numeric and categorical columns.",
+    )
 
-    num_valid_records: int | None = None
-    num_invalid_records: int | None = None
-    num_prompts: int | None = None
-    valid_record_fraction: float | None = None
+    deep_structure_stability_score: float | None = Field(
+        default=None,
+        description="PCA-based comparison of multivariate structure between real and synthetic data for numeric and categorical columns.",
+    )
 
-    timing: SafeSynthesizerTiming
+    column_distribution_stability_score: float | None = Field(
+        default=None,
+        description="Per-column Jensen-Shannon distance between training and synthetic distributions averaged across all numeric and categorical columns.",
+    )
+
+    text_semantic_similarity_score: float | None = Field(
+        default=None,
+        description="Embedding-based semantic closeness between real and synthetic free-text columns.",
+    )
+
+    text_structure_similarity_score: float | None = Field(
+        default=None,
+        description="Jensen-Shannon divergence over sentence count, words-per-sentence, and characters-per-word distributions between real and synthetic free-text columns.",
+    )
+
+    data_privacy_score: float | None = Field(default=None, description="Composite of MIA and AIA protection scores.")
+
+    membership_inference_protection_score: float | None = Field(
+        default=None,
+        description="Resistance to attacks that try to determine whether a record was in the training set.",
+    )
+
+    attribute_inference_protection_score: float | None = Field(
+        default=None,
+        description="Resistance to attacks that try to infer sensitive attributes from quasi-identifiers.",
+    )
+
+    num_valid_records: int | None = Field(
+        default=None, description="Count of synthetic records that passed schema and format validation."
+    )
+
+    num_invalid_records: int | None = Field(
+        default=None, description="Count of synthetic records filtered out during validation."
+    )
+
+    num_prompts: int | None = Field(default=None, description="Total LLM generation prompts issued.")
+
+    valid_record_fraction: float | None = Field(
+        default=None,
+        description="Ratio of valid records: ``num_valid_records / (num_valid_records + num_invalid_records)``.",
+    )
+
+    timing: SafeSynthesizerTiming = Field(description="Per-stage wall-clock durations.")
 
     def log_summary(self, logger: logging.Logger) -> None:
+        """Emit all summary metrics as a structured table via ``logger``."""
         logger.info(
             "Safe Synthesizer Summary",
             extra={"ctx": {"render_table": True, "tabular_data": self.model_dump(), "title": "Quality Metrics"}},
         )
 
     def log_wandb(self) -> None:
+        """Log all summary and timing metrics to the active W&B run."""
         import wandb
 
         if wandb.run is not None:

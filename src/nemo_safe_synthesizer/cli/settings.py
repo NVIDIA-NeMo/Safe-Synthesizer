@@ -7,6 +7,7 @@ This module provides a unified settings model that composes all sub-settings
 (observability, wandb, etc.) into a single pydantic-settings class.
 
 The CLISettings class:
+
 - Automatically loads from environment variables
 - Composes existing settings classes as nested fields
 - Provides a single source of truth for all CLI configuration
@@ -58,80 +59,115 @@ class CLISettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    # Compose existing settings (automatically populated from env vars)
-    # These are NOT loaded from env vars by CLISettings - they load their own
-    # We use default_factory to create fresh instances that read env vars
-    observability: NSSObservabilitySettings = Field(default_factory=NSSObservabilitySettings)
-    wandb: WandbSettings = Field(default_factory=WandbSettings)
+    observability: NSSObservabilitySettings = Field(
+        default_factory=NSSObservabilitySettings, description="Observability sub-settings (log level, format, color)."
+    )
+    """Observability sub-settings (log level, format, color).
 
-    # CLI-specific settings (paths)
-    # Note: AliasChoices allows both the field name (for CLI kwargs) and env var name to work
+    Loaded from its own environment variables; not populated by ``CLISettings``.
+    """
+
+    wandb: WandbSettings = Field(default_factory=WandbSettings, description="WandB settings (mode, project, phase).")
+    """WandB settings (mode, project, phase).
+
+    Loaded from its own environment variables; not populated by ``CLISettings``.
+    """
+
     url: str | None = Field(default=None, description="Dataset URL, name, or path to CSV")
+    """Dataset URL, name, or path to CSV."""
+
     config_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices("config_path", "NSS_CONFIG"),
         description="Path to YAML config file",
     )
+    """Path to YAML config file (env variable: ``NSS_CONFIG``)."""
+
     artifact_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices("artifact_path", "NSS_ARTIFACTS_PATH"),
         description="Base directory for all runs",
     )
+    """Base directory for all runs (env variable: ``NSS_ARTIFACTS_PATH``)."""
+
     run_path: str | None = Field(
         default=None,
         description="Explicit path for this run's output directory",
     )
+    """Explicit path for this run's output directory.
+
+    When specified, overrides ``artifact_path`` and skips the
+    ``<project>/<timestamp>`` directory layout.
+    """
+
     output_file: str | None = Field(
         default=None,
         description="Path to output CSV file",
     )
+    """Path to output CSV file, overriding the default workdir location."""
 
-    # Logging settings (can override observability defaults from CLI)
     log_format: Literal["json", "plain"] | None = Field(
         default=None,
         validation_alias=AliasChoices("log_format", "NSS_LOG_FORMAT"),
         description="Log format for console output",
     )
+    """Log format for console output (env variable: ``NSS_LOG_FORMAT``).
+
+    File logging is always JSON regardless of this setting.
+    """
+
     log_color: bool | None = Field(
         default=None,
         description="Whether to colorize console output",
     )
+    """Whether to colorize console output."""
+
     log_file: str | None = Field(
         default=None,
         validation_alias=AliasChoices("log_file", "NSS_LOG_FILE"),
         description="Path to log file",
     )
+    """Path to log file (env variable: ``NSS_LOG_FILE``)."""
+
     verbose: int = Field(
         default=0,
         description="Verbosity level (0=INFO, 1=DEBUG, 2=DEBUG_DEPENDENCIES)",
     )
+    """Verbosity level (0=INFO, 1=DEBUG, 2=DEBUG_DEPENDENCIES)."""
 
-    # WandB settings (can override wandb defaults from CLI)
     wandb_mode: WandbMode | None = Field(
         default=None,
         description="WandB mode override",
     )
+    """WandB mode override (online, offline, or disabled)."""
+
     wandb_project: str | None = Field(
         default=None,
         description="WandB project override",
     )
+    """WandB project name override."""
 
-    # Synthesis parameter overrides (populated from --data__*, --training__*, etc.)
     synthesis_overrides: dict[str, Any] = Field(
         default_factory=dict,
         description="Nested dict of SafeSynthesizerParameters overrides from CLI",
     )
+    """Nested dict of ``SafeSynthesizerParameters`` overrides from CLI.
+
+    Populated from ``--data__*``, ``--training__*``, etc. options via
+    ``parse_overrides``.
+    """
 
     dataset_registry: str | None = Field(
         default=None,
         validation_alias=AliasChoices("dataset_registry", "NSS_DATASET_REGISTRY"),
         description="URL or path to a dataset registry YAML file",
     )
+    """URL or path to a dataset registry YAML file (env: ``NSS_DATASET_REGISTRY``)."""
 
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode | None:
-        """Convert string to WandbMode enum if needed."""
+        """Coerce string or None to ``WandbMode`` enum, passing through enum values unchanged."""
         if v is None:
             return None
         if isinstance(v, WandbMode):
@@ -141,7 +177,7 @@ class CLISettings(BaseSettings):
     @field_validator("verbose", mode="before")
     @classmethod
     def validate_verbose(cls, v: int | str | None) -> int:
-        """Ensure verbose is an integer."""
+        """Coerce string or None to int, defaulting to 0."""
         if v is None:
             return 0
         if isinstance(v, str):
@@ -167,35 +203,35 @@ class CLISettings(BaseSettings):
 
     @property
     def effective_artifact_path(self) -> Path:
-        """The effective artifact path, using default if not set."""
+        """Effective artifact path, falling back to ``DEFAULT_ARTIFACTS_PATH``."""
         if self.artifact_path:
             return Path(self.artifact_path)
         return DEFAULT_ARTIFACTS_PATH
 
     @property
     def effective_log_format(self) -> Literal["json", "plain"]:
-        """The effective log format, falling back to observability settings."""
+        """Effective log format, falling back to observability settings."""
         if self.log_format is not None:
             return self.log_format
         return self.observability.nss_log_format or "plain"
 
     @property
     def effective_log_color(self) -> bool:
-        """The effective log color setting, falling back to observability settings."""
+        """Effective log color setting, falling back to observability settings."""
         if self.log_color is not None:
             return self.log_color
         return self.observability.nss_log_color
 
     @property
     def effective_wandb_mode(self) -> WandbMode:
-        """The effective wandb mode, falling back to wandb settings."""
+        """Effective wandb mode, falling back to wandb settings."""
         if self.wandb_mode is not None:
             return self.wandb_mode
         return self.wandb.wandb_mode
 
     @property
     def effective_wandb_project(self) -> str | None:
-        """The effective wandb project, falling back to wandb settings."""
+        """Effective wandb project, falling back to wandb settings."""
         if self.wandb_project is not None:
             return self.wandb_project
         return self.wandb.wandb_project

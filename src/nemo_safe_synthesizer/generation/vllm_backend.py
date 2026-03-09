@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""vLLM-based generation backend for tabular data synthesis."""
+
 import os
 import time
 from functools import partial
@@ -35,13 +37,23 @@ os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "1"
 
 
 class VllmBackend(GeneratorBackend):
-    def __init__(
-        self,
-        config: SafeSynthesizerParameters,
-        model_metadata: ModelMetadata,
-        workdir: Workdir,
-        **kwargs,
-    ):
+    """Generation backend using vLLM for high-throughput inference.
+
+    Loads the base model with a LoRA adapter via vLLM and generates
+    synthetic records in batches.  Supports optional structured
+    generation (regex or JSON schema) to constrain outputs.
+
+    Args:
+        config: Pipeline configuration.
+        model_metadata: Model metadata (prompt template, adapter path,
+            sequence length, etc.).
+        workdir: Working directory containing the adapter and schema.
+        **kwargs: Additional options.  ``use_detailed_logs`` (bool)
+            enables verbose error messages (disabled by default to
+            avoid leaking sensitive data).
+    """
+
+    def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, workdir: Workdir, **kwargs):
         self.model_metadata = model_metadata
         self.config = config
         self.remote = False
@@ -65,7 +77,7 @@ class VllmBackend(GeneratorBackend):
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
 
     def teardown(self) -> None:
-        """Clear the LLM state to free up GPU memory. Unloads the model from memory and cleans up any distributed resources."""
+        """Release GPU memory and clean up distributed resources."""
         self._clear_llm_state()
 
     def _clear_llm_state(self) -> None:
@@ -78,7 +90,7 @@ class VllmBackend(GeneratorBackend):
         logger.debug("Cleaned up memory")
 
     def __del__(self) -> None:
-        """Cleanup resources when the object is garbage collected, which prevents warnings during forced shutdowns."""
+        """Clean up resources on garbage collection to prevent shutdown warnings."""
         try:
             self._clear_llm_state()
         except Exception:
@@ -257,9 +269,21 @@ class VllmBackend(GeneratorBackend):
         input_ids: torch.TensorType | list[list[int]] | None = None,
         **kwargs,
     ) -> list[RequestOutput]:
-        # attention_mask is unnecessary in vLLM due to continuous batching.
-        # leaving in here for compatibility.
+        """Dispatch a generation call to the underlying vLLM engine.
 
+        Exactly one of ``prompts`` or ``input_ids`` must be provided.
+
+        Args:
+            prompts: Text prompts to generate from.
+            input_ids: Pre-tokenized prompt IDs (tensor or nested list).
+
+        Returns:
+            List of vLLM ``RequestOutput`` objects.
+
+        Raises:
+            ValueError: If both or neither of ``prompts`` / ``input_ids``
+                are provided, or if the generation method is not configured.
+        """
         if prompts is None and input_ids is None:
             raise ValueError("Either prompts or input_ids must be provided.")
 
@@ -325,11 +349,11 @@ class VllmBackend(GeneratorBackend):
         num_valid_records: int,
         batches: GenerationBatches,
     ) -> None:
-        """Log batch timing and progress information.
+        """Log batch timing and progress as a structured Rich table.
 
-        Outputs:
-            - Console: Automatically rendered as Rich ASCII table by structlog processor
-            - JSON logs: Structured key/value pairs for machine parsing
+        Emits structured data via ``logger.user.info`` that is rendered
+        as a Rich ASCII table on the console and as key/value pairs in
+        JSON logs.
         """
         records_per_second = 0 if duration == 0 else batch.num_valid_records / duration
 
@@ -359,14 +383,21 @@ class VllmBackend(GeneratorBackend):
         keep_llm_state: bool = True,
         data_actions_fn: utils.DataActionsFn | None = None,
     ) -> GenerateJobResults:
-        """Generate tabular data using Nemo Safe Synthesizer.
+        """Generate synthetic tabular data in batches until the target count is reached.
+
+        Iterates over generation batches, applying the processor to each
+        LLM output, until the configured ``num_records`` target is met or
+        a stopping condition fires.
 
         Args:
-            keep_llm_state: If True, keep the model in memory after generation. Note, this will be cleared upon garbage collection of this object.
-            data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
+            keep_llm_state: If ``True``, keep the model in GPU memory after
+                generation for potential reuse.  The model is still freed
+                on garbage collection.
+            data_actions_fn: Optional post-processing / validation function
+                applied to each batch of generated records.
 
         Returns:
-            Generation results object, which includes a DataFrame of generated records.
+            Results containing the generated DataFrame and statistics.
         """
         generation_start = time.monotonic()
 
@@ -445,15 +476,18 @@ class VllmBackend(GeneratorBackend):
 
 
 class TypicalLogitsWarperWrapper:
-    """
-    A wrapper to enable locally typical sampling in vllm.
-    See thread: https://github.com/vllm-project/vllm/issues/1444.
+    """Adapter enabling locally typical sampling in vLLM.
+
+    Wraps the HuggingFace ``TypicalLogitsWarper`` to match the vLLM
+    logits-processor signature.  See
+    `vllm#1444 <https://github.com/vllm-project/vllm/issues/1444>`_.
+
+    Args:
+        mass: Probability mass for typical sampling.
     """
 
     def __init__(self, mass: float):
         self.warper = TypicalLogitsWarper(mass=mass)
 
     def __call__(self, token_ids: list[int], logits: torch.FloatTensor) -> torch.FloatTensor:
-        # transformers warpers assume tensors of shape (batch_size, vocab_size)
-        # and the typical warper doesn't use input_ids
         return self.warper(input_ids=None, scores=logits.reshape((1, -1)))

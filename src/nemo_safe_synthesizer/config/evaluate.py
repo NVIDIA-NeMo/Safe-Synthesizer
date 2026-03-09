@@ -34,7 +34,7 @@ class EvaluationParameters(Parameters):
         bool,
         Field(
             title="mia_enabled",
-            description="Enable membership inference attack evaluation.",
+            description="Enable membership inference attack evaluation for privacy assessment.",
         ),
     ] = True
 
@@ -42,31 +42,37 @@ class EvaluationParameters(Parameters):
         bool,
         Field(
             title="aia_enabled",
-            description="Enable attribute inference attack evaluation.",
+            description="Enable attribute inference attack evaluation for privacy assessment.",
         ),
     ] = True
 
-    sqs_report_columns: int = Field(default=DEFAULT_SQS_REPORT_COLUMNS)
+    sqs_report_columns: int = Field(
+        default=DEFAULT_SQS_REPORT_COLUMNS,
+        description="Number of columns to include in statistical quality reports.",
+    )
 
-    sqs_report_rows: int = Field(default=DEFAULT_RECORD_COUNT)
+    sqs_report_rows: int = Field(
+        default=DEFAULT_RECORD_COUNT,
+        description="Number of rows to include in statistical quality reports.",
+    )
 
     mandatory_columns: Annotated[
         int | None,
-        Field(title="mandatory_columns"),
+        Field(title="mandatory_columns", description="Number of mandatory columns that must be used in evaluation."),
     ] = None
 
     enabled: Annotated[
         bool,
         Field(
             title="enabled",
-            description="Enable evaluation.",
+            description="Enable or disable evaluation.",
         ),
     ] = True
 
     quasi_identifier_count: Annotated[
         int,
         Field(
-            description="Number of quasi-identifiers to sample.",
+            description="Number of quasi-identifiers to sample for privacy attacks.",
         ),
     ] = QUASI_IDENTIFIER_COUNT
 

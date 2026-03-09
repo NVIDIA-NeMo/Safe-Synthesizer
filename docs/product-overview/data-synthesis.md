@@ -33,7 +33,7 @@ NeMo Safe Synthesizer supports diverse tabular data:
 - Numeric: Continuous and discrete numerical values
 - Categorical: Text labels and categories
 - Text: Free-form text fields
-- Temporal: Event sequences and time series
+- Temporal: Event sequences and time series (*Note: Temporal dataset support is currently experimental.*)
 
 ### Differential Privacy
 
@@ -45,17 +45,17 @@ Differential privacy (DP) is the gold standard for privacy protection, providing
 
 DP ensures that the output of an algorithm is nearly identical whether or not any single record is included in the training data:
 
-```output title="DP guarantee"
-P[M(D1) ∈ S] ≤ exp(ε) × P[M(D2) ∈ S] + δ
-```
+$$
+P[M(D_1) \in S] \le \exp(\varepsilon) \cdot P[M(D_2) \in S] + \delta
+$$
 
 Where:
 
-- `M` is the mechanism (trained model)
-- `D1` and `D2` are datasets differing by one record
-- `ε` (epsilon) controls privacy loss -- lower values provide stronger privacy
-- `δ` (delta) is the failure probability
-- `S` is any subset of possible outputs
+- $M$ is the mechanism (trained model)
+- $D_1$ and $D_2$ are datasets differing by one record
+- $\varepsilon$ (epsilon) controls privacy loss — lower values provide stronger privacy
+- $\delta$ (delta) is the failure probability
+- $S$ is any subset of possible outputs
 
 #### DP-SGD Implementation
 
@@ -79,6 +79,8 @@ Enabling DP provides strong privacy guarantees but affects synthetic data qualit
 
 #### Configuration Parameters
 
+For the complete list of configuration parameters, see the [Parameters Reference](../user-guide/parameters.md). Some commonly used parameters are listed below:
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `dp_enabled` | bool | `false` | Enable differential privacy |
@@ -86,15 +88,16 @@ Enabling DP provides strong privacy guarantees but affects synthetic data qualit
 | `delta` | float/auto | `"auto"` | Failure probability (auto = 1/n^1.2 based on dataset size) |
 | `per_sample_max_grad_norm` | float | `1.0` | Gradient clipping threshold |
 
+
 #### Guidelines
 
-Starting point: Begin with ε ∈ [8, 12] and reduce as needed based on privacy requirements and acceptable quality trade-offs.
+Starting point: Begin with $\varepsilon \in [8, 12]$ and reduce as needed based on privacy requirements and acceptable quality trade-offs.
 
-Delta calculation: Use `"auto"` (recommended), which sets δ = 1/n^1.2 based on dataset size n. Manual values are typically between 1e-6 and 1e-4.
+Delta calculation: Use `"auto"` (recommended), which sets $\delta = \frac{1}{n^{1.2}}$ based on dataset size n. Manual values are typically between 1e-6 and 1e-4.
 
 Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
 
-For hands-on guidance, refer to [Differential Privacy Tutorial](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/tutorials/differential-privacy.html). For complete parameter documentation, refer to [Parameter Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
+For hands-on guidance, refer to [Differential Privacy Tutorial](../tutorials/differential-privacy.md). For complete parameter documentation, refer to [Parameters Reference](../user-guide/parameters.md).
 
 ## Configuration
 
@@ -104,10 +107,11 @@ Synthesis behavior is controlled through configuration parameters:
 - Generation: Number of records, temperature, sampling strategies
 - Privacy: Differential privacy parameters (epsilon, delta, clipping)
 
-For a complete list of all available parameters and their defaults, refer to [Parameter Reference](https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/about/reference.html).
+For a complete list of all available parameters and their defaults, refer to [Parameters Reference](../user-guide/parameters.md).
 
 ## Related Topics
 
-- {doc}`reference`: Complete parameter reference
-- {doc}`../tutorials/differential-privacy`: Learn about differential privacy in practice
-- {doc}`../tutorials/index`: More tutorials
+- [Parameters Reference](../user-guide/parameters.md): Complete parameter reference
+- [Differential Privacy](../tutorials/differential-privacy.md): Learn about differential privacy in practice
+- [Tutorials](../tutorials/index.md): More tutorials
+

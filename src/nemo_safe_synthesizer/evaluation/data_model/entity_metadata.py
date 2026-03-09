@@ -6,8 +6,13 @@ from pydantic import BaseModel, Field
 
 
 class Entity(BaseModel):
+    """A named entity detected in a column with its occurrence count."""
+
     name: str
+    """Entity type label (e.g. ``"SSN"``, ``"email"``)."""
+
     count: int
+    """Number of occurrences in the column."""
 
 
 # TODO: write an adapter from nemo_safe_synthesizer.pii_replacer.transform_result.ColumnStatistics
@@ -15,8 +20,10 @@ class Entity(BaseModel):
 
 
 class EntityMetadata(BaseModel):
-    """Info for evaluation and report generation on entities and transformations applied to a column"""
+    """Per-column entity detection and transformation metadata for evaluation."""
 
-    entities: list[Entity] | None = Field(default=None)
-    transformed: bool = Field(default=False)
-    transform_function: str | None = Field(default=None)
+    entities: list[Entity] | None = Field(
+        default=None, description="Detected PII entities with occurrence counts, if any."
+    )
+    transformed: bool = Field(default=False, description="Whether the column was transformed during PII replacement.")
+    transform_function: str | None = Field(default=None, description="Name of the transform function applied, if any.")
