@@ -756,7 +756,7 @@ class SmolLM2(ModelMetadata):
         config = AutoConfig.from_pretrained(model_name_or_path)
         if rope_scaling_factor:
             logger.warning(
-                f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
+                f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
             )
 
         super().__init__(
