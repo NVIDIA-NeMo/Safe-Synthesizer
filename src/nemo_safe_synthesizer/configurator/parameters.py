@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-"""
-parameter validation and collection utilities for Pydantic-based configuration systems.
+"""Abstract base class for parameter collections with serialization helpers.
 
-This module provides validators for field dependencies, custom value validation, and abstract
-base classes for organizing collections of parameters. It extends the basic parameter
-functionality with sophisticated validation logic and YAML serialization support.
+``Parameters`` is the common superclass for every configuration group in
+``config/`` (``DataParameters``, ``TrainingHyperparams``, ``GenerateParameters``,
+etc.).  It extends ``pydantic.BaseModel`` with:
 
+- Recursive iteration over nested parameter groups.
+- Name-based lookup across the full parameter tree (``get()``, ``has()``).
+- YAML / JSON round-trip serialization (``from_yaml()``, ``to_yaml()``,
+  ``from_json()``).
 """
 
 from __future__ import annotations
@@ -40,31 +43,22 @@ PathT = str | Path
 
 
 class Parameters(BaseModel, metaclass=ABCMeta):
-    """
-    Abstract base class for organizing collections of configuration/api parameters.
+    """Abstract base for parameter collections used throughout the config layer.
 
-    This class provides a structured way to define and manage groups of parameters
-    and adds small utilities like iteration, parameter lookup, nested parameter group lookup, etc.
-
-    Features:
-        - Iteration over parameters and nested parameter groups
-        - Parameter lookup by name
+    Subclasses define typed fields (often ``Parameter[T]`` or ``AutoParam[T]``)
+    and inherit recursive iteration, name-based lookup, and YAML / JSON
+    serialization from this class.
     """
 
     model_config = pydantic_model_config
 
     def _isparams(self):
-        """Marker method for identifying Parameters subclasses. More like a protocol than anything."""
+        """Marker method used by ``__subclasshook__`` to identify ``Parameters`` subclasses."""
         return True
 
     @classmethod
     def __subclasshook__(cls, c):
-        """
-        Enable isinstance() checks for Parameters derived classes.
-
-        This allows checking if a class behaves like Parameters by looking for
-        the _isparams marker method, enabling duck typing.
-        """
+        """Enable ``isinstance()`` checks via duck typing on the ``_isparams`` marker."""
         if cls is Parameters:
             mro = c.__mro__
             for B in mro:
@@ -78,12 +72,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         return NotImplemented
 
     def _iter_subparamgroups(self) -> "Generator[Self, None, None]":
-        """
-        Iterate over nested Parameters instances within this collection.
-
-        Yields:
-            Parameters instances that are attributes of this object
-        """
+        """Yield nested ``Parameters`` instances that are direct attributes of this collection."""
         only_params_ = [(x, info) for x, info in self.__class__.model_fields.items()]
 
         for field in only_params_:
@@ -107,14 +96,13 @@ class Parameters(BaseModel, metaclass=ABCMeta):
                 pass
 
     def _iter_parameters(self, recursive: bool = True) -> Generator[Mapping[str, DataT | Parameters], None, None]:
-        """
-        Iterate over all Parameter instances in this collection.
+        """Yield ``{name: value}`` dicts for every parameter in this collection.
 
         Args:
-            recursive: If True, also iterate over parameters in nested groups
+            recursive: If ``True``, also descend into nested ``Parameters`` groups.
 
         Yields:
-            Parameter instances found in this collection and optionally nested groups
+            Single-key dicts mapping field name to serialized value.
         """
         parameters = [{k: v} for k, v in self.model_dump().items()]
         param_groups = self._iter_subparamgroups()
@@ -124,24 +112,20 @@ class Parameters(BaseModel, metaclass=ABCMeta):
                 yield from pg._iter_parameters(recursive=True)
 
     def __iter__(self) -> Iterable[DataT]:
-        """
-        Make Parameters iterable, yielding all contained Parameter instances.
-
-        Returns:
-            Iterator over all parameters including those in nested groups
-        """
+        """Iterate over all parameters, recursing into nested groups."""
         return self._iter_parameters(recursive=True)
 
     def get(self, name: str, default: Any = None) -> DataT | Any | None:
-        """
-        Retrieve a parameter or parameter group by name.
+        """Look up a parameter or sub-group by name across the full tree.
+
+        Checks direct attributes first, then walks nested groups recursively.
 
         Args:
-            name: Name of the parameter or group to find
-            default: Value to return if not found
+            name: Field name to search for.
+            default: Value returned when ``name`` is not found.
 
         Returns:
-            The parameter/group if found, otherwise the default value
+            The parameter value or sub-group if found, otherwise ``default``.
         """
         if (group := getattr(self, name, None)) is not None:
             return group
@@ -151,16 +135,16 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         return default
 
     def has(self, name: str) -> bool:
-        """
-        Check if a parameter or parameter group exists by name. If you check for a parameter
-        with `if group.get("val")` and the value is falsy (0, "", False, None), the check will fail.
-        This method avoids that problem.
+        """Check whether ``name`` exists anywhere in the parameter tree.
+
+        Unlike ``get()``, this does not conflate falsy values (``0``, ``""``,
+        ``False``, ``None``) with absence.
 
         Args:
-            name: Name of the parameter or group to check
+            name: Field name to search for.
 
         Returns:
-            True if the parameter/group exists, False otherwise
+            ``True`` if the parameter or sub-group exists.
         """
         if getattr(self, name, None) is not None:
             return True
@@ -171,28 +155,27 @@ class Parameters(BaseModel, metaclass=ABCMeta):
 
     @classmethod
     def from_yaml_str(cls, raw: str) -> Self:
-        """
-        Load a Parameters instance from a YAML formatted string.
+        """Construct an instance from a YAML-formatted string.
 
         Args:
-            raw: the string
+            raw: YAML content as a string.
 
         Returns:
-            A new Parameters instance with values from the YAML file
+            A validated ``Parameters`` instance.
         """
         data = yaml.safe_load(raw)
         return cls.model_validate(data)
 
     @classmethod
     def from_json(cls, path: PathT, overrides: dict | None = None) -> Self:
-        """
-        Load a Parameters instance from a JSON file.
+        """Load from a JSON file, optionally applying field overrides.
 
         Args:
-            path: Path to the JSON file to load
+            path: Path to the JSON file.
+            overrides: Field-level overrides applied via ``model_copy(update=...)``.
 
         Returns:
-            A new Parameters instance with values from the JSON file
+            A validated ``Parameters`` instance.
         """
         with open(path, "r") as f:
             data = json.load(f)
@@ -203,15 +186,17 @@ class Parameters(BaseModel, metaclass=ABCMeta):
 
     @classmethod
     def from_yaml(cls, path: PathT, overrides: dict | None = None) -> Self:
-        """
-        Load a Parameters instance from a YAML file.
+        """Load from a YAML file, optionally applying field overrides.
 
         Args:
-            path: Path to the YAML file to load
-            overrides: parameters to override after initial loading
+            path: Path to the YAML file.
+            overrides: Field-level overrides applied via ``model_copy(update=...)``.
 
         Returns:
-            A new Parameters instance with values from the YAML file
+            A validated ``Parameters`` instance.
+
+        Raises:
+            FileNotFoundError: If ``path`` does not exist.
         """
         pth = Path(path)
         if not pth.exists():
@@ -225,18 +210,26 @@ class Parameters(BaseModel, metaclass=ABCMeta):
 
     @classmethod
     def from_yaml_or_overrides(cls, path: PathT | None = None, overrides: dict | None = None) -> Self:
+        """Load from YAML when ``path`` is provided, otherwise build from ``overrides`` alone.
+
+        Args:
+            path: Optional path to a YAML file.
+            overrides: Keyword overrides forwarded to ``from_yaml`` or ``from_params``.
+
+        Returns:
+            A validated ``Parameters`` instance.
+        """
         if path:
             return cls.from_yaml(path, overrides)
         else:
             return cls.from_params(**overrides)
 
     def to_yaml(self, path: PathT, exclude_unset: bool = True) -> None:
-        """
-        Save this Parameters instance to a YAML file.
+        """Serialize this instance to a YAML file.
 
         Args:
-            path: Path where the YAML file should be written
-            exclude_unset: If True, only include fields that have been explicitly set
+            path: Destination file path.
+            exclude_unset: If ``True``, omit fields that were never explicitly set.
         """
         with open(path, "w") as f:
             j = json.loads(self.model_dump_json(exclude_unset=exclude_unset))
@@ -244,25 +237,18 @@ class Parameters(BaseModel, metaclass=ABCMeta):
 
     @classmethod
     def from_params(cls, **kwargs) -> Self:
-        """
-        Create a Parameters instance from keyword arguments.
-        small convenience method.
+        """Construct a ``Parameters`` instance from keyword arguments.
 
         Args:
-            **kwargs: Parameter values to set
+            **kwargs: Parameter values passed to ``model_validate``.
 
         Returns:
-            A new Parameters instance with the provided values
+            A validated ``Parameters`` instance.
         """
         return cls.model_validate(kwargs)
 
     def get_auto_params(self) -> Iterable[Any]:
-        """
-        Get all AutoParam instances that can be updated.
-
-        Yields:
-            Tuples of (field_name, AutoParam) for updatable parameters
-        """
+        """Yield parameters whose current value is the ``"auto"`` sentinel."""
         for param in self:
             if param == "auto":
                 yield param

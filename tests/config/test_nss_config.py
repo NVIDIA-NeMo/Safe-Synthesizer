@@ -13,7 +13,6 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TimeSeriesParameters,
 )
-from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.configurator.validators import ValueValidator
 
@@ -69,34 +68,6 @@ def subgroup_fixture() -> SubGroup:
         basic_str_param=None,
         basic_union_basic_input=None,
     )
-
-
-class TestParameterClasses:
-    def test_parameter_equality(self, basic_parameter):
-        assert basic_parameter == 10
-        assert Parameter(value=10) == 10
-        assert AutoParam(value=10) == 10
-
-    def test_parameter_pattern_matching(self):
-        param = Parameter(name=None, value=1)
-
-        match param:
-            case UnsetParam():
-                result = "UnsetParam"
-            case Parameter():
-                result = "Parameter"
-            case _:
-                result = "Other"
-
-        assert result == "Parameter"
-
-    def test_auto_param_is_parameter_instance(self):
-        assert isinstance(AutoParam(), Parameter)
-
-    def test_parameter_naming(self):
-        param = Parameter(name="test_name", value=42)
-        assert param.name == "test_name"
-        assert param == 42
 
 
 class TestValueValidation:

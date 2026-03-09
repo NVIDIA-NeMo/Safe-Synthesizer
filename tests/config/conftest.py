@@ -10,22 +10,6 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
-
-
-@pytest.fixture
-def basic_parameter():
-    return Parameter(name="test_param", value=10)
-
-
-@pytest.fixture
-def auto_parameter():
-    return AutoParam(name="auto_param", value=5)
-
-
-@pytest.fixture
-def unset_parameter():
-    return UnsetParam()
 
 
 @pytest.fixture

@@ -2,9 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-"""
-Generate Click options from a Pydantic model.
-This will recursively add options for nested models to the top level command
+"""Generate Click CLI options from a Pydantic model.
+
+Used by ``cli/run.py`` and ``cli/config.py`` to expose every
+``SafeSynthesizerParameters`` field as a ``--field_name`` CLI option.
+Nested ``BaseModel`` fields are flattened with a separator
+(e.g. ``--data__holdout``).
+
+The companion ``parse_overrides()`` reverses the flattening at runtime,
+converting Click's flat ``{key: value}`` dict back into the nested structure
+Pydantic expects.  The ``field_sep`` argument to ``parse_overrides`` must
+match the ``field_separator`` passed to ``pydantic_options``; otherwise
+nested keys like ``data__holdout`` will not be reconstructed correctly.
 """
 
 import inspect
@@ -18,14 +27,24 @@ __all__ = ["pydantic_options", "parse_overrides"]
 
 
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
-    """Parse Click command line overrides into a nested dictionary.
+    """Convert flat CLI overrides into a nested dict suitable for Pydantic.
+
+    Splits each key on ``field_sep`` to reconstruct nesting.  For example,
+    ``{"data__holdout": 0.1}`` becomes ``{"data": {"holdout": 0.1}}``.
 
     Args:
-        values: Dictionary of command line arguments from Click.
-        field_sep: Separator used in command line arguments to denote nesting.
+        values: Flat dict of CLI arguments from Click (``None``-valued keys
+            are skipped).
+        field_sep: Separator used by ``pydantic_options`` to flatten nested
+            field names.
 
     Returns:
-        A nested dictionary of overrides.
+        A nested dict ready to be passed to ``Parameters.from_yaml_or_overrides``
+        or ``model_copy(update=...)``.
+
+    Raises:
+        ValueError: If a key contains more than one separator (only one level
+            of nesting is supported).
     """
     if values is None:
         return {}
@@ -51,7 +70,22 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
 
 
 def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
-    """Generate Click options from a Pydantic model."""
+    """Click decorator that adds a ``--option`` for every field in ``model_class``.
+
+    Recursively walks ``model_class.model_fields``, flattening nested
+    ``BaseModel`` subfields with ``field_separator``.  Field types are
+    mapped to Click types (``INT``, ``FLOAT``, ``BOOL``, or ``str``).
+    Help text is pulled from ``Field(description=...)``.
+
+    Args:
+        model_class: The Pydantic model to generate options from
+            (typically ``SafeSynthesizerParameters``).
+        field_separator: String used to join parent and child field names
+            in the CLI option (default ``"__"``).
+
+    Returns:
+        A Click decorator that attaches the generated options to a command.
+    """
 
     def get_fields(cls: type[BaseModel], prefix=""):
         fields = []
