@@ -254,11 +254,24 @@ This repository uses GitHub Rulesets to enforce contribution standards. You don'
 1. Create an issue first (if one doesn't exist) to discuss the change.
 2. Create a branch following the [naming convention](#repository-settings): `git checkout -b <username>/<issue-id>-<description>`.
 3. Make your changes and commit using [conventional commits](#repository-settings).
-4. Run tests locally: `make test`.
+4. Complete the pre-review checklist before requesting review:
+    - [ ] `make format && make check` passes (or via pre-commit validation)
+    - [ ] `make test` passes locally
+    - [ ] `make test-e2e` passes locally (requires CUDA)
+    - [ ] `make test-ci-container` passes locally (recommended)
 5. Push: `git push origin <your-branch>`.
-6. Open a Pull Request using the [PR template](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/.github/PULL_REQUEST_TEMPLATE.md).
-7. Address review feedback — [CODEOWNERS](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/.github/CODEOWNERS) assign reviewers automatically. Respond in the GitHub UI, resolve comments when addressed, re-request review after updates, and use Assignees to indicate who should act next.
-8. Merge — once approved, the PR is squash-merged and the branch is auto-deleted. The commit message is set from the PR title.
+6. Open a Pull Request using the [PR template](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/.github/PULL_REQUEST_TEMPLATE.md). You can submit a draft early to signal the issue is being worked on.
+7. Address review feedback — [CODEOWNERS](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/.github/CODEOWNERS) assign reviewers automatically:
+    - Respond to comments in the GitHub UI. Pending comments are only visible to you until submitted.
+    - Resolve a comment when the requested change has been made or otherwise addressed. Leave it unresolved if you're seeking further input from the reviewer.
+    - Reviewers may re-open resolved comments with follow-up questions -- that's normal.
+    - After pushing updates, re-request review using the circular arrow button next to the reviewer's name.
+    - Use the Assignees field to signal whose turn it is to act (author after reviewer comments, reviewer after updates).
+    - Reviewers: mark a PR "Requires changes" when there are errors or significant rework needed -- this helps triage which PRs are nearly ready vs. need more work.
+8. Before merge, ensure the pre-merge checklist is complete:
+    - [ ] New or updated tests for any fix or new behavior
+    - [ ] Updated documentation for new features and behaviors, including docstrings for API docs
+9. Merge -- once approved, the PR is squash-merged and the branch is auto-deleted. The PR title becomes the commit message; review it before merging.
 
 ### CODEOWNERS
 
@@ -291,7 +304,10 @@ Run unit tests before submitting a PR: `make test`. All existing tests must pass
     | `make test` | Unit tests (excludes slow and e2e) |
     | `make test-slow` | All tests including slow (excludes e2e) |
     | `make test-gpu-integration` | GPU integration tests (requires CUDA) |
-    | `make test-e2e` | End-to-end tests (requires CUDA) |
+    | `make test-e2e` | All end-to-end tests (requires CUDA) |
+    | `make test-e2e-default` | Default e2e tests (requires CUDA) |
+    | `make test-e2e-dp` | Differential privacy e2e tests (requires CUDA) |
+    | `make test-e2e-collect` | Dry-run: show which tests e2e targets select |
     | `make test-nss-tinyllama_unsloth-clinc_oos-ci` | Specific e2e combo (see `tests/TESTING.md`) |
     | `make test-ci-container` | CI tests in a Linux container (Docker/Podman) |
     | `uv run pytest tests/cli/test_run.py` | Run specific test files |
@@ -300,15 +316,25 @@ Run unit tests before submitting a PR: `make test`. All existing tests must pass
 
 See [STYLE_GUIDE.md](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md) for Python, markdown, Dockerfiles, shell scripts, testing, and docstrings.
 
-Use `make` targets instead of running `ruff` or `ty` directly:
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `make bootstrap-tools` and check all tracked files:
 
 ```bash
-make format   # auto-fix: ruff format + import sorting + copyright headers
-make check    # read-only: all CI checks (format + lint + typecheck + copyright)
-make test     # unit tests
+make format         # auto-fix: ruff format + import sorting + copyright headers
+make check          # read-only: all CI checks (format + lint + typecheck + copyright)
+make test           # unit tests
+make format check test  # chain them
 ```
 
-Pre-commit hooks (`pre-commit install`) check staged files but are not a substitute for `make` targets. All source files require SPDX copyright headers; `make format` adds them (exclusions in `.copyrightignore`).
+`make check` replicates all CI code-quality checks locally. Pre-commit hooks (`pre-commit install`) provide faster feedback on staged files but are not a substitute for the `make` targets.
+
+The `tools/` wrapper scripts also accept explicit file paths for spot-checking individual files:
+
+```bash
+bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
+```
+
+All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
 
 | Check | CI target | `make format` / `make check` | Pre-commit |
 | ----- | --------- | ---------------------------- | ---------- |
@@ -322,17 +348,84 @@ Pre-commit hooks (`pre-commit install`) check staged files but are not a substit
 
 This site uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/), hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
 
-- Local preview: `uv sync --group docs` (if needed), then `make docs-serve` (browse to http://127.0.0.1:8000).
-- Build: `make docs-build` (output in `site/`).
-- Add or edit a page under `docs/`, then add it to the `nav:` section in `mkdocs.yml`.
-- API reference under `reference/` is auto-generated from Python docstrings at build time.
-- Deployment: GitHub Pages when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main` (`.github/workflows/docs.yml`).
+### Local Preview
 
-See [Installation](../user-guide/installation.md) for environment setup and [Architecture](architecture.md) for design overview.
+Documentation dependencies are included in the `dev` bootstrap profile. If you ran `make bootstrap-nss dev` (or `cpu`/`cuda`), you're already set. Otherwise install them directly:
+
+```bash
+uv sync --group docs
+```
+
+Start a local server with live reload:
+
+```bash
+make docs-serve
+# Browse to http://127.0.0.1:8000
+```
+
+In Cursor or VS Code Remote, the port is auto-forwarded. Check the Ports panel (`Ctrl+Shift+P` > "Ports: Focus on Ports View") -- port 8000 will appear with a local address you can open in the Simple Browser or your system browser.
+
+Build the static site (output in `site/`):
+
+```bash
+make docs-build
+```
+
+### Directory Layout
+
+All documentation lives under `docs/`. The structure follows the [Diataxis](https://diataxis.fr/) framework:
+
+| Directory | Content type | Examples |
+| --- | --- | --- |
+| `getting-started/` | Tutorials | Installation, quick start |
+| `user-guide/` | How-tos & reference | CLI, configuration, SDK |
+| `developer-guide/` | Explanations | Contributing, architecture |
+| `reference/` | API reference | Auto-generated (see below) |
+| `blog/` | Dev notes | Release notes, design posts |
+
+### Adding or Editing a Page
+
+1. Create or edit the `.md` file under the appropriate `docs/` subdirectory.
+2. Add the page to the `nav:` section of `mkdocs.yml` so it appears in the sidebar.
+3. Run `make docs-serve` and verify the page renders correctly.
+
+### MkDocs Material Features
+
+The site configuration (`mkdocs.yml`) enables several useful Markdown extensions:
+
+- Admonitions -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
+- Content tabs -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
+- Code blocks -- syntax highlighting, line numbers, copy button, and annotations
+- Mermaid diagrams -- fenced code blocks with ` ```mermaid `
+- Task lists, footnotes, definition lists, and emoji
+
+See the [MkDocs Material reference](https://squidfunk.github.io/mkdocs-material/reference/) for full syntax.
+
+### API Reference
+
+API reference pages are auto-generated from Python docstrings. The `mkdocstrings` and `gen-files` plugins run `docs/gen_ref_pages.py` at build time to produce pages under `reference/`. Write Google-style docstrings in `src/nemo_safe_synthesizer/` and they will appear on the next build -- no manual edits to `reference/` needed.
+
+### Deployment
+
+Documentation is deployed to GitHub Pages automatically when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main`. The workflow is defined in `.github/workflows/docs.yml`.
 
 ## AI Agents
 
-This project supports AI coding assistants. Conventions live in `AGENTS.md`; tool-specific config in `.cursor/rules/`, `CLAUDE.md`, `.agent/skills/`, and `.cursor/skills/`. Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
+This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format:
+
+| Config file | Read by | Purpose |
+|---|---|---|
+| `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
+| `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
+| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
+| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
+
+Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
+
+Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
 
 ## See also
 
