@@ -115,12 +115,12 @@ class TrainingHyperparams(Parameters):
 
     learning_rate: Annotated[
         AutoFloatParam,
-        ValueValidator(value_func=lambda v: True if v == AUTO_STR else (0 < v < 1)),
+        ValueValidator(lambda p: range_validator(p, lambda v: 0 < v < 1)),
         Field(
             title="learning_rate",
             description=(
-                "The initial learning rate for `AdamW` optimizer. Must be in (0, 1)."
-                "Setting to 'auto' uses learning rate of 0.0005 for all models except for Mistral that is set to 0.0001"
+                "The initial learning rate for `AdamW` optimizer. Must be in (0, 1). "
+                "Setting to 'auto' uses a model-specific default."
             ),
         ),
     ] = AUTO_STR
