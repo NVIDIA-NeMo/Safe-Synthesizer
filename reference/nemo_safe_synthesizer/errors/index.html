@@ -8680,15 +8680,11 @@
 
     <div class="doc doc-contents first">
 
-        <p>Custom error classes</p>
-
-
-
-
-
-
-
-
+        <p>Error hierarchy for Safe Synthesizer.</p>
+<p>All public exceptions inherit from <code>SafeSynthesizerError</code>. Errors on
+the user side (bad data, bad config, generation failure) inherit from
+<code>UserError</code> and a matching built-in (<code>ValueError</code>, <code>RuntimeError</code>)
+so callers can catch either.</p>
 
 
 <p><span class="doc-section-title">Classes:</span></p>
@@ -8704,7 +8700,7 @@
             <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerError (nemo_safe_synthesizer.errors.SafeSynthesizerError)" href="#nemo_safe_synthesizer.errors.SafeSynthesizerError">SafeSynthesizerError</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Base class for all known errors that can be thrown from nemo_safe_synthesizer.</p>
+                <p>Base for all known errors.</p>
               </div>
             </td>
           </tr>
@@ -8712,7 +8708,7 @@
             <td><code><a class="autorefs autorefs-internal" title="            UserError (nemo_safe_synthesizer.errors.UserError)" href="#nemo_safe_synthesizer.errors.UserError">UserError</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Base class for errors that are caused by invalid usage. This is usually caused</p>
+                <p>Invalid usage (bad inputs, uninitialized state).</p>
               </div>
             </td>
           </tr>
@@ -8720,7 +8716,7 @@
             <td><code><a class="autorefs autorefs-internal" title="            InternalError (nemo_safe_synthesizer.errors.InternalError)" href="#nemo_safe_synthesizer.errors.InternalError">InternalError</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Error that indicate invalid internal state.</p>
+                <p>Library bug (equivalent to HTTP 5xx).</p>
               </div>
             </td>
           </tr>
@@ -8728,7 +8724,7 @@
             <td><code><a class="autorefs autorefs-internal" title="            DataError (nemo_safe_synthesizer.errors.DataError)" href="#nemo_safe_synthesizer.errors.DataError">DataError</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Represents problems with training data before work is actually attempted.</p>
+                <p>Problems with training data (NaNs, unsupported types).</p>
               </div>
             </td>
           </tr>
@@ -8736,7 +8732,7 @@
             <td><code><a class="autorefs autorefs-internal" title="            ParameterError (nemo_safe_synthesizer.errors.ParameterError)" href="#nemo_safe_synthesizer.errors.ParameterError">ParameterError</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Represents errors with configurations or parameter input to user-facing methods.</p>
+                <p>Invalid config or parameter input.</p>
               </div>
             </td>
           </tr>
@@ -8744,12 +8740,20 @@
             <td><code><a class="autorefs autorefs-internal" title="            GenerationError (nemo_safe_synthesizer.errors.GenerationError)" href="#nemo_safe_synthesizer.errors.GenerationError">GenerationError</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Represents errors happening during sampling/generation.</p>
+                <p>Sampling/generation failures.</p>
               </div>
             </td>
           </tr>
       </tbody>
     </table>
+
+
+
+
+
+
+
+
 
 
 
@@ -8784,7 +8788,7 @@
 
 
 
-        <p>Base class for all known errors that can be thrown from nemo_safe_synthesizer.</p>
+        <p>Base class for all known Safe Synthesizer errors.</p>
 
 
 
@@ -8820,11 +8824,9 @@
 
 
 
-        <p>Base class for errors that are caused by invalid usage. This is usually caused
-by invalid input parameters, by calling methods on a class that is not initialized,
-etc.
-If you are receiving this error, please see documentation of the corresponding
-classes and check your inputs.</p>
+        <p>Invalid usage -- bad input parameters, uninitialized state, etc.</p>
+<p>If you receive this error, check the documentation for the corresponding
+class and verify your inputs.</p>
 
 
 
@@ -8860,11 +8862,10 @@ classes and check your inputs.</p>
 
 
 
-        <p>Error that indicate invalid internal state.</p>
-<p>If you're using safe_synthesizer through documented interfaces, this usually
-indicates a bug in safe_synthesizer itself.
-If you're using not documented interfaces, this could indicate invalid usage.</p>
-<p>This class of errors is equivalent to 5xx status codes in HTTP protocol.</p>
+        <p>Invalid internal state indicating a bug in Safe Synthesizer.</p>
+<p>When using documented interfaces this usually indicates a library bug.
+When using undocumented interfaces it may indicate invalid usage.
+Equivalent to HTTP 5xx status codes.</p>
 
 
 
@@ -8900,9 +8901,9 @@ If you're using not documented interfaces, this could indicate invalid usage.</p
 
 
 
-        <p>Represents problems with training data before work is actually attempted.
-For example: data contains values that are not supported by the model that is
-being used: infinity, too many NaNs, nested data, etc.</p>
+        <p>Problems with training data before work is attempted.</p>
+<p>Examples: data contains infinity, too many NaNs, nested structures,
+or types unsupported by the model.</p>
 
 
 
@@ -8938,8 +8939,9 @@ being used: infinity, too many NaNs, nested data, etc.</p>
 
 
 
-        <p>Represents errors with configurations or parameter input to user-facing methods.
-For example: config referencing column that is not present in the data.</p>
+        <p>Invalid configuration or parameter input to user-facing methods.</p>
+<p>Examples: config references a column not present in the data, invalid
+combination of parameters.</p>
 
 
 
@@ -8975,8 +8977,8 @@ For example: config referencing column that is not present in the data.</p>
 
 
 
-        <p>Represents errors happening during sampling/generation.
-For example: rejection sampling fails, invalid record threshold met.</p>
+        <p>Errors during sampling or generation.</p>
+<p>Examples: rejection sampling fails, invalid record threshold met.</p>
 
 
 
