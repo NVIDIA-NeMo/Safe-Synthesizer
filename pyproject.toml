@@ -89,7 +89,7 @@ engine = [
     "langchain-core",
     "json-repair",
     "matplotlib",
-    "outlines_core==0.2.13",
+    "outlines_core==0.2.14",
     "outlines>=1.0.0",
     "prv-accountant",
     "smart-open==7.0.5",
@@ -187,7 +187,7 @@ dependency-metadata = [
 
 
 override-dependencies = [
-    "outlines_core==0.2.13",                              # override vllm's pin to align with our tested version
+    "outlines_core==0.2.14",                              # override vllm's pin to align with our tested version
     "flashinfer-python==0.6.1; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
     "flashinfer-cubin==0.6.1; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
 ]
