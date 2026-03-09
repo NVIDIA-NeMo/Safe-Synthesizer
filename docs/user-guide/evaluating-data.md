@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Data Quality and Evaluation
+# Evaluating Output Data from NeMo Safe Synthesizer
 
 Landing page for understanding and diagnosing output quality -- synthetic data
 scores, evaluation metrics, privacy settings, and PII behavior. For runtime
@@ -18,13 +18,13 @@ not immediately point to the root cause.
 
 ### Requirements
 
-- DP and Unsloth are mutually exclusive. If `privacy.dp_enabled` is `true`,
-  `use_unsloth` must be `false` or `"auto"` (which resolves to `false`).
-- `data.max_sequences_per_example` must be `1` when DP is enabled.
-  Set it to `"auto"` and it will resolve correctly.
-- `data_fraction` and `true_dataset_size` must be available at runtime --
-  these are normally set automatically when running the full pipeline.
-- Gradient checkpointing is disabled when using DP (incompatible with Opacus).
+For the full list of DP compatibility constraints (`use_unsloth`,
+`max_sequences_per_example`, gradient checkpointing), see
+[Configuration -- Differential Privacy](configuration.md#differential-privacy).
+
+!!! note
+    `data_fraction` and `true_dataset_size` must be available at runtime --
+    these are set automatically when running the full pipeline.
 
 ### Common DP Errors
 
@@ -147,8 +147,7 @@ shows missing or `UNAVAILABLE` metrics:
 SQS reports are limited to `sqs_report_columns=250` columns and
 `sqs_report_rows=5000` rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
-See the [Parameters Reference](parameters.md) for the full list of `evaluation`
-fields.
+See [Configuration -- Evaluation](configuration.md#evaluation) for the full list of `evaluation` fields.
 
 ### Low SQS Scores
 
@@ -170,28 +169,7 @@ If the SQS (Synthetic Quality Score) report shows low quality scores:
 
 Guides for reading the evaluation report and understanding metric scores.
 
-### HTML Report
-
-!!! info "Coming soon"
-    How to read the evaluation HTML report: column-level comparisons,
-    distribution charts, and summary statistics.
-
-### SQS Score Ranges
-
-!!! info "Coming soon"
-    What SQS score ranges indicate -- what constitutes a good, acceptable, or
-    poor score for different data types and use cases.
-
-### Privacy Metrics
-
-!!! info "Coming soon"
-    How to interpret the privacy evaluation metrics: epsilon guarantees,
-    attribute inference attack (AIA) scores, and membership inference
-    protection results.
-
-### Column-Level Diagnostics
-
-!!! info "Coming soon"
-    How to diagnose quality issues at the column level: divergence scores,
-    missing value patterns, and distribution mismatches between real and
-    synthetic data.
+!!! note "Content in progress"
+    Detailed guides for the HTML report, SQS score ranges, privacy metrics
+    (epsilon, AIA, MIA), and column-level diagnostics are planned for a
+    future release.

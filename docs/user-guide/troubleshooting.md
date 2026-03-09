@@ -5,7 +5,7 @@
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Data Quality](data-quality.md). For environment variables, model caching, offline setup, NIM endpoint
+and evaluation metrics, see [Evaluating Output Data](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
 configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 ## Quick Reference
@@ -18,15 +18,15 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
 | OOM in evaluation | Large dataset + PCA | [Reduce columns or disable eval](#out-of-memory-during-evaluation) |
 | "Cannot use unsloth without GPU" | No CUDA device | [Switch to HuggingFace backend](#no-gpu-detected) |
-| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `data.max_sequences_per_example: 1`](data-quality.md#requirements) |
-| "Unsloth not compatible with DP" | Mutual exclusion | [Set `training.use_unsloth: false`](data-quality.md#requirements) |
-| "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](data-quality.md#common-dp-errors) |
+| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `data.max_sequences_per_example: 1`](evaluating-data.md#requirements) |
+| "Unsloth not compatible with DP" | Mutual exclusion | [Set `training.use_unsloth: false`](evaluating-data.md#requirements) |
+| "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](evaluating-data.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
 | "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
-| Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](data-quality.md#minimum-data-requirements) |
-| Low SQS scores | Underfit or too few records | [Review distributions](data-quality.md#low-sqs-scores) |
-| PII uses default entities | Classifier failed | [Set entities explicitly](data-quality.md#pii-uses-unexpected-entity-types) |
+| Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
+| Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
+| PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | Align group timestamps |
 
@@ -139,7 +139,7 @@ because the table has too many columns for the model's context window.
    in context together, making the limit tighter. Consider reducing
    `data.max_sequences_per_example` or simplifying the grouped records.
 
-!!! note
+!!! note "Error type clarification"
     These errors are typed as `GenerationError` in the codebase even though
     they fire during data assembly, not during generation proper. They appear
     in the pipeline before any training or generation occurs.
@@ -214,7 +214,7 @@ If evaluation OOMs, reduce the evaluation scope or dataset size:
 
 !!! tip "Evaluation and Data Quality"
     SQS scores, UNAVAILABLE metrics, report limits, and low-quality
-    diagnostics are covered in [Data Quality > Evaluation](data-quality.md#evaluation).
+    diagnostics are covered in [Data Quality > Evaluation](evaluating-data.md#evaluation).
 
 ---
 
@@ -238,7 +238,7 @@ Several defaults may not match your expectations:
 
 Many parameters accept `"auto"` and are resolved at runtime by the
 [`AutoConfigResolver`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver].
-See the [Parameters Reference](parameters.md) for the full list.
+See [Configuration](configuration.md) for the full list.
 
 - `training.rope_scaling_factor` -- auto-estimated from dataset token counts;
   see [Context Length and Record Fitting](#context-length-and-record-fitting)
@@ -250,7 +250,7 @@ See the [Parameters Reference](parameters.md) for the full list.
   custom layers and checkpointing are incompatible
 - `privacy.delta` -- computed from record count
 
-!!! warning
+!!! warning "Unsloth and Mistral compatibility"
     If you encounter issues when using Unsloth with Mistral models, set
     `training.use_unsloth: false` explicitly. There is no automatic
     detection for this incompatibility.
@@ -266,7 +266,6 @@ output and only resolve during an actual run:
     ```bash
     safe-synthesizer config validate --config config.yaml
     ```
-We might change this behavior in the future to resolve _all_ the `"auto"` parameters.
 
 ### Common Validation Errors
 
@@ -290,7 +289,7 @@ Incompatible DP settings:
 
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in
-    [Data Quality > Differential Privacy](data-quality.md#differential-privacy).
+    [Data Quality > Differential Privacy](evaluating-data.md#differential-privacy).
 
 ---
 
@@ -325,50 +324,7 @@ optionally reduce CPU parallelism so each worker has more resources.
     change between releases.
 
 Time series synthesis has additional validation and generation requirements.
-
-### Configuration Requirements
-
-=== "YAML"
-
-    ```yaml
-    time_series:
-      is_timeseries: true
-      timestamp_column: "timestamp"
-      timestamp_interval_seconds: 60
-      timestamp_format: "%Y-%m-%d %H:%M:%S"
-    ```
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run \
-      --time_series__is_timeseries true \
-      --time_series__timestamp_column timestamp \
-      --time_series__timestamp_interval_seconds 60 \
-      --url data.csv
-    ```
-
-=== "SDK"
-
-    ```python
-    synthesizer = (
-        SafeSynthesizer(config)
-        .with_data_source("data.csv")
-        .with_time_series(
-            is_timeseries=True,
-            timestamp_column="timestamp",
-            timestamp_interval_seconds=60,
-            timestamp_format="%Y-%m-%d %H:%M:%S",
-        )
-    )
-    ```
-
-- Set `time_series.is_timeseries: true` and provide at least one of
-  `timestamp_column` or `timestamp_interval_seconds`
-- `timestamp_format` must be a valid strftime string or `"elapsed_seconds"` --
-  invalid formats are caught at config validation time
-- All groups must share the same start and stop timestamps, or preprocessing
-  raises a `DataError`
+For configuration examples, see [Configuration -- Time Series](configuration.md#time-series).
 
 ### Common Issues
 

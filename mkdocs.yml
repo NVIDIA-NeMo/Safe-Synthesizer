@@ -159,14 +159,13 @@ nav:
   - Tutorials:
       - tutorials/index.md
   - User Guide:
-      - Overview: user-guide/overview.md
-      - Installation: user-guide/installation.md
-      - Configuration: user-guide/configuration.md
-      - Pipeline Stages: user-guide/pipeline-stages.md
-      - Reference: user-guide/cli.md
-      - Environment Variables: user-guide/environment.md
+      - Getting Started: user-guide/getting-started.md
+      - Running Safe Synthesizer: user-guide/running.md
+      - Evaluating Output Data: user-guide/evaluating-data.md
       - Troubleshooting: user-guide/troubleshooting.md
-      - Data Quality: user-guide/data-quality.md
+      - Reference:
+          - Configuration: user-guide/configuration.md
+          - Environment Variables: user-guide/environment.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - API Reference: reference/
