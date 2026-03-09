@@ -69,67 +69,11 @@
          <lastmod>2026-03-09</lastmod>
     </url>
     <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/data_checks_processor/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/field_features/</loc>
          <lastmod>2026-03-09</lastmod>
     </url>
     <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/base/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/dataset_size/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/high_float_precision/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/missing_data/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/sparse_data/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/surrounding_whitespaces/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/analyzers/data_checks/text_data/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/analyzer/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/data_checks/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/fields/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/manifest/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/metadata/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/metrics/</loc>
-         <lastmod>2026-03-09</lastmod>
-    </url>
-    <url>
-         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/artifacts/base/name_anonymizer/</loc>
          <lastmod>2026-03-09</lastmod>
     </url>
     <url>
