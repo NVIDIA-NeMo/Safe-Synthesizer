@@ -28,25 +28,13 @@ class EvaluationParameters(Parameters):
     This class controls which evaluation metrics are computed and how they are configured.
     It includes privacy attack evaluations, statistical quality metrics, and downstream
     machine learning performance assessments.
-
-    Attributes:
-        enabled: Enable or disable evaluation.
-        quasi_identifier_count: Number of quasi-identifiers to sample for privacy attacks.
-        pii_replay_enabled: Enable PII Replay detection.
-        pii_replay_entities: List of entities for PII Replay. If not provided, default entities will be used.
-        pii_replay_columns: List of columns for PII Replay. If not provided, only entities will be used.
-        mia_enabled: Enable membership inference attack evaluation for privacy assessment.
-        aia_enabled: Enable attribute inference attack evaluation for privacy assessment.
-        sqs_report_columns: Number of columns to include in statistical quality reports.
-        sqs_report_rows: Number of rows to include in statistical quality reports.
-        mandatory_columns: Columns that must be present in generated data.
     """
 
     mia_enabled: Annotated[
         bool,
         Field(
             title="mia_enabled",
-            description="Enable membership inference attack evaluation.",
+            description="Enable membership inference attack evaluation for privacy assessment.",
         ),
     ] = True
 
@@ -54,31 +42,37 @@ class EvaluationParameters(Parameters):
         bool,
         Field(
             title="aia_enabled",
-            description="Enable attribute inference attack evaluation.",
+            description="Enable attribute inference attack evaluation for privacy assessment.",
         ),
     ] = True
 
-    sqs_report_columns: int = Field(default=DEFAULT_SQS_REPORT_COLUMNS)
+    sqs_report_columns: int = Field(
+        default=DEFAULT_SQS_REPORT_COLUMNS,
+        description="Number of columns to include in statistical quality reports.",
+    )
 
-    sqs_report_rows: int = Field(default=DEFAULT_RECORD_COUNT)
+    sqs_report_rows: int = Field(
+        default=DEFAULT_RECORD_COUNT,
+        description="Number of rows to include in statistical quality reports.",
+    )
 
     mandatory_columns: Annotated[
         int | None,
-        Field(title="mandatory_columns"),
+        Field(title="mandatory_columns", description="Number of mandatory columns that must be used in evaluation."),
     ] = None
 
     enabled: Annotated[
         bool,
         Field(
             title="enabled",
-            description="Enable evaluation.",
+            description="Enable or disable evaluation.",
         ),
     ] = True
 
     quasi_identifier_count: Annotated[
         int,
         Field(
-            description="Number of quasi-identifiers to sample.",
+            description="Number of quasi-identifiers to sample for privacy attacks.",
         ),
     ] = QUASI_IDENTIFIER_COUNT
 

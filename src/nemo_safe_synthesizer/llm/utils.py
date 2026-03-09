@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading."""
+
 import gc
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator, Literal, Tuple, Union
+from typing import TYPE_CHECKING, Any, Generator, Literal, Union
 
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -28,17 +30,19 @@ logger = get_logger(__name__)
 
 
 def trust_remote_code_for_model(model_name: str | Path) -> bool:
-    """Determines whether the model should be loaded with
-    trusting remote code.
+    """Determine whether to trust remote code when loading a model.
 
-    Currently, this function only returns true when the model being
-    loaded from HF Hub is a gretelai/nvidia model.
+    Returns ``True`` only for models whose name starts with
+    ``"nvidia/"``.
+
+    Args:
+        model_name: HuggingFace model identifier or local path.
 
     Returns:
-        whether to load the model with trusting remote code.
+        Whether to set ``trust_remote_code=True`` when loading the model.
     """
     mn = str(model_name)
-    return mn.startswith("nvidia/") or mn.startswith("gretel/")
+    return mn.startswith("nvidia/")
 
 
 def cleanup_memory() -> None:
@@ -48,9 +52,11 @@ def cleanup_memory() -> None:
         torch.cuda.empty_cache()
 
 
-def gpu_stats():
-    """
-    Get the GPU stats.
+def gpu_stats() -> None:
+    """Log current GPU memory reservation and total capacity.
+
+    Queries CUDA device 0 and logs the peak reserved memory and total
+    available memory in GiB.
     """
 
     def round_gb(value: float) -> float:
@@ -64,14 +70,17 @@ def gpu_stats():
 
 
 def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
-    """
-    Calculate max memory allocation for each available GPU and CPU as a fraction of total GPU memory.
+    """Calculate maximum memory allocation for each available GPU.
+
+    Reserves a 2 GiB safety buffer on each device, then applies
+    ``max_vram_fraction`` to the remaining free memory.
 
     Args:
-        memory_fraction: Fraction of total GPU memory to allocate (default 0.8 for 80%)
+        max_vram_fraction: Fraction of total GPU memory to allocate.
+            Defaults to ``0.8`` (80 %).
 
     Returns:
-        Dictionary mapping device IDs to memory limits as a fraction of total GPU memory
+        Mapping of CUDA device index to the usable memory fraction.
     """
     if max_vram_fraction is None:
         max_vram_fraction = 0.8
@@ -93,8 +102,17 @@ def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
 
 
 def add_bos_eos_tokens_to_tokenizer(tokenizer: PreTrainedTokenizer) -> PreTrainedTokenizer:
-    """
-    Configure the tokenizer with bos, eos tokens for sample splitting.
+    """Enable BOS/EOS token injection and set a pad token if missing.
+
+    Mutates ``tokenizer`` in-place to set ``add_bos_token`` and
+    ``add_eos_token`` to ``True``.  If no pad token is configured,
+    ``pad_token_id`` is set to ``eos_token_id``.
+
+    Args:
+        tokenizer: The tokenizer to configure.
+
+    Returns:
+        The same tokenizer instance, modified in-place.
     """
     tokenizer.add_bos_token = True
     tokenizer.add_eos_token = True
@@ -110,8 +128,27 @@ def get_param_from_config(
     trust_remote_code: bool | None = None,
     config: AutoConfig | None = None,
 ) -> str | None:
-    """
-    Get a parameter from the model's AutoConfig.
+    """Read a single attribute from a HuggingFace ``AutoConfig``.
+
+    Either an existing ``config`` object or a ``model_name`` (used to
+    load one on the fly) must be provided.
+
+    Args:
+        param: Name of the config attribute to retrieve.
+        default_value: Fallback value when the attribute is absent.
+        model_name: HuggingFace model identifier.  Required when
+            ``config`` is not supplied.
+        trust_remote_code: Passed through to
+            ``AutoConfig.from_pretrained`` when loading a config.
+        config: Pre-loaded ``AutoConfig``.  Takes precedence over
+            ``model_name``.
+
+    Returns:
+        The attribute value, or ``default_value`` if the attribute does
+        not exist on the config.
+
+    Raises:
+        ValueError: If neither ``model_name`` nor ``config`` is provided.
     """
     if config is None:
         if model_name is None:
@@ -125,6 +162,16 @@ def _get_auto_tokenizer(
     model_name: Path | str,
     max_position_embeddings: int,
 ) -> PreTrainedTokenizer:
+    """Load a tokenizer and configure it with BOS/EOS tokens.
+
+    Args:
+        model_name: HuggingFace model identifier or local path.
+        max_position_embeddings: Maximum sequence length to set on the
+            tokenizer via ``model_max_length``.
+
+    Returns:
+        Configured ``PreTrainedTokenizer`` with BOS/EOS tokens enabled.
+    """
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
         model_max_length=max_position_embeddings,
@@ -141,21 +188,24 @@ def get_device_map(
     local_files_only: bool = False,
     force_single_device: int | None = None,
 ):
-    """
-    Fetch the device map for a given model and optionally override.
+    """Infer the device map for a model and optionally pin all layers to one device.
+
+    Uses ``accelerate.infer_auto_device_map`` on an empty-weight model
+    skeleton to determine layer-to-device assignments.
 
     Args:
-        model_target: The name or path of the pre-trained model.
-        revision: The specific model version to use.
-        trust_remote_code: Whether to trust remote code when loading the model.
-        local_files_only: Whether to only use local files when loading the model.
-        force_single_device: If provided, all layers will be set to this device.
+        model_target: HuggingFace model identifier or local path.
+        autoconfig: Pre-loaded ``AutoConfig``.  If ``None``, one is
+            loaded from ``model_target``.
+        revision: Model revision (branch, tag, or commit hash).
+        trust_remote_code: Whether to trust remote code when loading.
+        local_files_only: Restrict loading to local files only.
+        force_single_device: When set, every layer is assigned to this
+            CUDA device index.
 
     Returns:
-        OrderedDict: An ordered dictionary representing the device map,
-            where keys are layers and values are device IDs.
+        Ordered dictionary mapping layer names to device identifiers.
     """
-
     config = autoconfig or AutoConfig.from_pretrained(
         model_target,
         revision=revision,
@@ -172,12 +222,14 @@ def get_device_map(
     return device_map
 
 
-def count_trainable_params(model: PeftModel) -> Tuple[int, int]:
-    """Determines the number of trainable and overall params of a model.
+def count_trainable_params(model: PeftModel) -> tuple[int, int]:
+    """Count trainable and total parameters in a PEFT model.
+
+    Args:
+        model: A ``PeftModel`` (or any ``torch.nn.Module``) to inspect.
 
     Returns:
-        int, int - the number of trainable params, and all parameters,
-            respectively.
+        A tuple of ``(trainable_params, all_params)``.
     """
     trainable_params = 0
     all_params = 0
@@ -192,10 +244,19 @@ def count_trainable_params(model: PeftModel) -> Tuple[int, int]:
 def optimize_for_inference(
     model: Union["FastLanguageModel", "AutoModelForCausalLM"],
 ) -> Generator[None, Any, Any]:
-    """
-    Apply unsloth inference-time optimizations within a context manager,
-    and revert to train-time settings on exiting the with block.
-    Usage: "with optimize_for_inference(model):..."
+    """Context manager that applies Unsloth inference-time optimizations.
+
+    On enter, switches the model to inference mode via
+    ``FastLanguageModel.for_inference``.  On exit, reverts to training
+    mode.  If CUDA is unavailable or the model is not a
+    ``FastLanguageModel``, yields immediately without modification.
+
+    Args:
+        model: The language model to optimize.  Must be an Unsloth
+            ``FastLanguageModel`` for optimizations to take effect.
+
+    Yields:
+        None
     """
     if torch.cuda.is_available() and type(model).__name__ == "FastLanguageModel":
         from unsloth import FastLanguageModel  # noqa: F401  # ty: ignore[unresolved-import]
@@ -207,14 +268,19 @@ def optimize_for_inference(
 
 
 def get_quantization_config(quantization_bits: Literal[4, 8]) -> BitsAndBytesConfig:
-    """
-    Get the quantization config for a given number of bits. Model independent.
+    """Build a ``BitsAndBytesConfig`` for 4-bit or 8-bit quantization.
+
+    Both configurations use NormalFloat quantization with double
+    quantization enabled and ``bfloat16`` as the compute dtype.
 
     Args:
-        quantization_bits: The number of bits to use for quantization.
+        quantization_bits: Number of bits — must be ``4`` or ``8``.
 
     Returns:
-        The quantization config.
+        A ``BitsAndBytesConfig`` ready to pass to model loading.
+
+    Raises:
+        ValueError: If ``quantization_bits`` is not 4 or 8.
     """
     if quantization_bits == 4:
         return BitsAndBytesConfig(

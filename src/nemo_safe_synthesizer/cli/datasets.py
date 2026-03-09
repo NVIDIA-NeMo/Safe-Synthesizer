@@ -24,29 +24,29 @@ logger = get_logger(__name__)
 class DatasetInfo(BaseModel):
     """Entry in the dataset registry."""
 
-    name: str
-    """Short name of the dataset.
+    name: str = Field(description=("Short name of the dataset. Used to fetch the dataset from the registry by name."))
 
-    Used to fetch the dataset from the registry.
-    """
+    url: str = Field(
+        description=(
+            "URL or path to the dataset. "
+            "If a relative path, it is joined with the base_url from the registry if present."
+        )
+    )
 
-    url: str
-    """URL or path to the dataset.
+    overrides: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Config overrides for this dataset. "
+            "These overrides take precedence over the values from the config file in "
+            "the CLI, but are themselves overridden by any CLI args specifying config "
+            "parameters."
+        ),
+    )
 
-    If a relative path, it is joined with the base_url from the registry if
-    present.
-    """
-
-    overrides: dict[str, Any] | None = None
-    """Config overrides for this dataset.
-
-    These overrides take precendence over the values from the config file in
-    the CLI, but are themselves overridden by any CLI args specifying config
-    parameters.
-    """
-
-    load_args: dict[str, Any] | None = None
-    """Extra arguments needed by the data reader for a this dataset."""
+    load_args: dict[str, Any] | None = Field(
+        default=None,
+        description="Extra arguments needed by the data reader for this dataset.",
+    )
 
     _registry: DatasetRegistry | None = None
     """Private attribute to keep a reference to an associated registry.
@@ -81,7 +81,16 @@ class DatasetInfo(BaseModel):
         return self.url
 
     def fetch(self) -> pd.DataFrame:
-        """Fetch the dataset and return a pandas DataFrame."""
+        """Fetch the dataset and return a pandas DataFrame.
+
+        Infers the file format from the URL extension and merges any ``load_args`` on top of per-format defaults.
+
+        Returns:
+            The dataset as a DataFrame.
+
+        Raises:
+            ValueError: If the file extension is not supported.
+        """
         url = self.get_url()
 
         logger.info(f"Reading dataset from {url}")
@@ -116,17 +125,26 @@ class DatasetInfo(BaseModel):
 
 
 class DatasetRegistry(BaseModel):
-    """Registry of datasets for easy reference by name."""
+    """Registry of datasets for easy reference by name.
 
-    datasets: list[DatasetInfo] = Field(default_factory=list)
-    """List of datasets in the registry."""
+    Datasets can be looked up by name via ``get_dataset``. If the name is
+    not in the registry, a new ``DatasetInfo`` is created on-the-fly treating
+    the name as a literal URL or path.
 
-    base_url: str | None = None
-    """Base URL for the registry.
-
-    Any relative paths will be prepended with the base_url before attempting to load the dataset.
-    This only applies to the datasets in the registry which have a relative url.
+    When constructed, the DatasetRegistry automatically adds back-references to each entry in ``self.datasets`` so the
+    ``DatasetInfo`` instances can resolve ``base_url``.
     """
+
+    datasets: list[DatasetInfo] = Field(default_factory=list, description="List of datasets in the registry.")
+
+    base_url: str | None = Field(
+        default=None,
+        description=(
+            "Base URL for the registry. Any relative paths will be prepended with the base_url before "
+            "attempting to load the dataset. This only applies to the datasets in the registry which have "
+            "a relative url."
+        ),
+    )
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -134,11 +152,19 @@ class DatasetRegistry(BaseModel):
             dataset._registry = self
 
     def get_dataset(self, url: str) -> DatasetInfo:
-        """Get a dataset from the registry.
+        """Look up a dataset by name, creating an ad-hoc entry if not found.
 
-        Automatically adds a new Dataset with name url if it doesn't exist in the registry.
+        When ``url`` matches a registered name the corresponding entry is
+        returned. Otherwise a new ``DatasetInfo`` is created with the raw
+        ``url`` as both name and path (without a registry back-reference, so
+        relative paths resolve against the working directory).
+
+        Args:
+            url: Dataset name, URL, or file path.
+
+        Returns:
+            Matching or newly created ``DatasetInfo``.
         """
-
         for dataset in self.datasets:
             if dataset.name == url:
                 return dataset
@@ -154,7 +180,17 @@ class DatasetRegistry(BaseModel):
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> Self:
-        """Load a DatasetRegistry from a YAML file."""
+        """Load a ``DatasetRegistry`` from a YAML file.
+
+        Args:
+            path: Path to the YAML file.
+
+        Returns:
+            Parsed registry with back-references set on each dataset.
+
+        Raises:
+            FileNotFoundError: If ``path`` does not exist.
+        """
         if not Path(path).exists():
             raise FileNotFoundError(f"File {path} does not exist")
         with open(path, "r") as f:

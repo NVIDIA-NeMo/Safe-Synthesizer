@@ -1,27 +1,43 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-This module contains the ModelMetadata class, which is used to store model-family-specific
-information - prompt formats, and our program runtime information. the most problematic
-part of this module is the rope_scaling logic, which is used to scale the context window
-of the model based on the tokens in the dataset.
+"""Model-family metadata for prompt formatting, RoPE scaling, and runtime bookkeeping.
 
-We should probably change how users specify this up front in the parameters, using
-something like "context_window_size" or "max_context_window_size".  and determine if we
-should use rope scaling or not from that, the model, and the data itself.
+Provides ``ModelMetadata`` and its per-family subclasses (``Llama32``,
+``Mistral``, ``Qwen``, etc.) that capture prompt templates, special-token
+settings, and context-window configuration.  The ``RopeScaling`` model
+handles context-window extension via Rotary Position Embeddings.
 
-Currently we're using the global max sequence length of 2048 * 6 to prevent OOM errors
-and underfitting errors.
+A global maximum sequence length (``GLOBAL_MAX_SEQ_LENGTH = 2048 * 6``)
+is applied as a safety cap to prevent OOM and underfitting errors.
+
+Classes:
+    LLMPromptConfig: Prompt template and special-token settings.
+    RopeScaling: RoPE scaling parameters for context-window extension.
+    ModelMetadata: Base container for model-family-specific metadata.
+    Granite: IBM Granite family metadata.
+    Llama32: Meta Llama 3.2 family metadata.
+    Mistral: Mistral AI family metadata.
+    Nemotron: NVIDIA Nemotron family metadata.
+    Qwen: Alibaba Qwen family metadata.
+    SmolLM2: HuggingFace SmolLM2 family metadata.
+    SmolLM3: HuggingFace SmolLM3 family metadata.
+    TinyLlama: TinyLlama family metadata.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, ClassVar, Literal
+from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
-from pydantic.experimental.missing_sentinel import MISSING
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
 
 from ..cli.artifact_structure import Workdir
@@ -41,17 +57,60 @@ GLOBAL_MAX_SEQ_LENGTH = 2048 * 6
 
 
 class LLMPromptConfig(BaseModel):
+    """Prompt template and special-token settings for an LLM.
+
+    Holds the Jinja-style prompt ``template`` together with flags and
+    token values that control how BOS/EOS markers are injected during
+    training and inference.
+    """
+
     template: str
+    """Prompt template with ``{instruction}``, ``{schema}``, and ``{prefill}`` placeholders.
+
+    * ``{instruction}`` -- task directive telling the model what to generate
+      (e.g. "Generate a JSONL dataset with the following columns: ").
+    * ``{schema}`` -- column schema fragment listing expected output fields,
+      typically formatted as ``"col":<unk>,"col2":<unk>``.
+    * ``{prefill}`` -- optional text injected at the start of the model's
+      response to steer generation, currently used for time series data.
+    """
+
     add_bos_token_to_prompt: bool
+    """Whether to prepend the BOS token to the prompt."""
+
     add_eos_token_to_prompt: bool
+    """Whether to append the EOS token to the prompt."""
 
     bos_token: str
+    """Beginning-of-sequence token string."""
+
     bos_token_id: int
+    """Integer id for the BOS token."""
+
     eos_token: str
+    """End-of-sequence token string."""
+
     eos_token_id: int
+    """Integer id for the EOS token."""
 
     @classmethod
     def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
+        """Create a prompt config by reading from settings of a tokenizer.
+
+        If no ``tokenizer`` is supplied one is loaded from ``name``
+        via ``AutoTokenizer.from_pretrained``.  Individual fields can
+        be overridden through ``**kwargs`` (e.g. ``bos_token``,
+        ``template``).
+
+        Args:
+            name: HuggingFace model identifier used to load the
+                tokenizer when ``tokenizer`` is ``None``.
+            tokenizer: Optional pre-loaded tokenizer instance.
+            **kwargs: Overrides for any ``LLMPromptConfig`` field.
+
+        Returns:
+            A new ``LLMPromptConfig`` populated from the tokenizer.
+        """
         tokenizer = tokenizer or AutoTokenizer.from_pretrained(name)
         bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
         bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
@@ -75,9 +134,32 @@ class LLMPromptConfig(BaseModel):
 
 
 def resolve_rope_scaling_factor(
-    factor: float | int | RopeScaling | dict | None = None, autoconfig: PretrainedConfig | None = None
+    factor: float | int | RopeScaling | dict | None = None,
+    autoconfig: PretrainedConfig | None = None,
 ) -> RopeScaling | None:
-    """Resolve the rope scaling factor from a variety of input types."""
+    """Normalize a rope-scaling specification into a ``RopeScaling`` or ``None``.
+
+    Accepts several convenience representations and converts them into a
+    canonical ``RopeScaling`` instance.
+
+    Args:
+        factor: The scaling specification.  Accepted forms:
+
+            * ``None``, ``1``, or ``1.0`` — no scaling (returns ``None``).
+            * ``RopeScaling`` — returned as-is.
+            * ``dict`` — unpacked as ``RopeScaling(**factor)``.
+            * ``int`` / ``float`` — used as the scaling factor; requires
+              ``autoconfig`` to read ``rope_theta`` and ``rope_type``.
+        autoconfig: A HuggingFace ``PretrainedConfig``.  Required when
+            ``factor`` is a bare numeric value.
+
+    Returns:
+        A ``RopeScaling`` instance, or ``None`` when no scaling is needed.
+
+    Raises:
+        ValueError: If a numeric ``factor`` is given without
+            ``autoconfig``, or if the input type is unsupported.
+    """
     match factor, autoconfig:
         case None | 1 | 1.0, _:
             return None
@@ -96,22 +178,29 @@ def resolve_rope_scaling_factor(
 
 
 class RopeScaling(BaseModel):
-    """Parameters for rope scaling.
+    """Rotary Position Embedding (RoPE) scaling configuration.
 
-    Replace this with `from .modeling_rope_utils import RotaryEmbeddingConfigMixin`
-    when that's ready in transformers v5 or something similar.
+    Encapsulates the parameters needed to extend a model's context
+    window via RoPE scaling.  Will be superseded by
+    ``RotaryEmbeddingConfigMixin`` when available in transformers v5.
     """
 
-    rope_type: Annotated[
-        Literal["linear", "dynamic", "default", "yarn", "llama3"],
-        Field(description="Type of rope scaling"),
-    ] = "default"
-    factor: Annotated[float, Field(description="Multiplier for rope scaling to extend context window")] = 1.0
-    theta: Annotated[float, Field(description="Theta for rope scaling")] = 10000.0
+    rope_type: Literal["linear", "dynamic", "default", "yarn", "llama3"] = Field(
+        default="default",
+        description="Scaling algorithm: linear, dynamic, default, yarn, or llama3.",
+    )
+
+    factor: float = Field(
+        default=1.0,
+        description="Multiplier for RoPE scaling to extend the context window; values above MAX_ROPE_SCALING_FACTOR are clamped.",
+    )
+
+    theta: float = Field(default=10000.0, description="Theta for rope scaling.")
 
     @field_validator("factor", mode="after")
     @classmethod
     def validate_factor(cls, v: float | int | None) -> float | int | None:
+        """Clamp ``factor`` to ``MAX_ROPE_SCALING_FACTOR`` and warn if exceeded."""
         if v is None or v <= MAX_ROPE_SCALING_FACTOR:
             return v
         logger.warning(
@@ -121,9 +210,17 @@ class RopeScaling(BaseModel):
 
     @classmethod
     def from_autoconfig(cls, config: PretrainedConfig, factor: float | int | None = None) -> "RopeScaling":
-        """Create RopeScaling from a HuggingFace AutoConfig.
+        """Create a ``RopeScaling`` from a HuggingFace ``PretrainedConfig``.
 
-        Reads the model's native rope configuration and optionally applies a scaling factor.
+        Reads the model's native ``rope_theta`` and ``rope_type`` and
+        optionally overrides the scaling ``factor``.
+
+        Args:
+            config: A loaded HuggingFace model config.
+            factor: Scaling factor override.  Defaults to ``1.0``.
+
+        Returns:
+            A ``RopeScaling`` populated from the config.
         """
         # Try to get theta from config (different models use different attribute names)
         theta = getattr(config, "rope_theta", None) or 10000.0
@@ -142,13 +239,14 @@ class RopeScaling(BaseModel):
         )
 
     def to_hf_dict(self) -> dict | None:
-        """
-        Convert to HuggingFace rope_scaling dict format.
+        """Convert to the HuggingFace ``rope_scaling`` dict format.
 
-        This is used to set the rope_scaling parameter on the HuggingFace model config. Use the new `RotaryEmbeddingConfigMixin`
-        or RopeParameters from HF when that's ready in transformers v5 or something similar.
+        Returns ``None`` when ``factor`` is ``1.0`` (no scaling).
+
+        Returns:
+            A dict with keys ``rope_type``, ``factor``, and ``theta``,
+            or ``None``.
         """
-        """Convert to HuggingFace rope_scaling dict format."""
         if self.factor == 1.0:
             return None
         return {
@@ -159,9 +257,18 @@ class RopeScaling(BaseModel):
 
 
 class ModelMetadata(BaseModel):
-    """
-    Container to hold model-family-specific information - prompt formats,
-    tokens, etc.
+    """Base container for model-family-specific metadata.
+
+    Stores prompt formats, special tokens, RoPE scaling parameters, and
+    runtime bookkeeping needed to load, fine-tune, and generate with a
+    given LLM family.  Each supported model family has a concrete
+    subclass (e.g. ``Llama32``, ``Mistral``) that sets the correct
+    defaults.
+
+    Use the factory methods [`from_str_or_path`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_str_or_path],
+    [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config],
+    or [`from_metadata_json`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_metadata_json]
+    to construct instances rather than calling the constructor directly.
     """
 
     # Learning rate when training.learning_rate is "auto". Override in subclasses (e.g. Mistral).
@@ -169,33 +276,70 @@ class ModelMetadata(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    model_name_or_path: str
-    prompt_config: LLMPromptConfig
-    autoconfig: Annotated[PretrainedConfig, Field(description="PretrainedConfig object for the model", exclude=True)]
-    base_max_seq_length: Annotated[
-        int | None,
-        Field(description="Supported context window for base model, before rope scaling factor adjustment"),
-    ] = None
-    rope_scaling: Annotated[
-        RopeScaling | MISSING | None,  # type: ignore[invalid-type-form]
-        Field(
-            description="RoPE scaling configuration for context window extension. will be auto-populated if not provided. if an integer is provided, it will be used as the factor and theta will be set to 10000.0",
+    model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
+
+    prompt_config: LLMPromptConfig = Field(description="Prompt template and token settings.")
+
+    autoconfig: PretrainedConfig = Field(description="PretrainedConfig object for the model.", exclude=True)
+    """HuggingFace ``PretrainedConfig`` (excluded from serialization)."""
+
+    base_max_seq_length: int | None = Field(
+        default=None,
+        description="Supported context window for base model, before rope scaling factor adjustment.",
+    )
+
+    rope_scaling: RopeScaling | None = Field(
+        default=None,
+        description=(
+            "RoPE scaling configuration for context window extension. "
+            "Accepts a RopeScaling instance, a dict of RopeScaling fields, "
+            "a numeric scale factor (requires autoconfig), or None."
         ),
-    ] = MISSING
-    max_sequences_per_example: Annotated[
-        int | None,
-        Field(description="Maximum number of sequences per training example."),
-    ] = None
-    workdir: Workdir | None = None
-    is_adapter: bool = False
-    instruction: str = DEFAULT_INSTRUCTION
-    rope_parameters_location: Literal["autoconfig", "automodel"] = "automodel"
-    initial_prefill: dict[str, str] | str | None = None
+    )
+
+    max_sequences_per_example: int | None = Field(
+        default=None, description="Maximum number of sequences per training example."
+    )
+    """Cap on sequences packed into one training example.
+
+    Resolved by ``AutoConfigResolver`` to ``1`` when DP is enabled,
+    ``10`` when DP is disabled and set to ``"auto"``, or a
+    user-supplied integer.
+    """
+
+    workdir: Workdir | None = Field(default=None, description="Artifact directory layout.")
+
+    is_adapter: bool = Field(default=False, description="Whether an adapter checkpoint is loaded.")
+
+    instruction: str = Field(default=DEFAULT_INSTRUCTION, description="Default system instruction text.")
+
+    rope_parameters_location: Literal["autoconfig", "automodel"] = Field(
+        default="automodel",
+        description="Where to read RoPE parameters from: autoconfig or automodel.",
+    )
+
+    initial_prefill: dict[str, str] | str | None = Field(
+        default=None, description="Optional prefill text for generation."
+    )
+    """Currently used for time series data. May be a single string or a per-column dict."""
 
     @model_validator(mode="before")
     @classmethod
     def populate_derived_fields(cls, data: dict) -> dict:
-        """Populate autoconfig, rope_scaling, and base_max_seq_length if not provided."""
+        """Auto-populate ``autoconfig``, ``rope_scaling``, and ``base_max_seq_length``.
+
+        Called by Pydantic before field validation.  Loads an
+        ``AutoConfig`` from ``model_name_or_path`` when one is not
+        already present, derives ``base_max_seq_length`` from that
+        config, and resolves the ``rope_scaling`` specification into a
+        ``RopeScaling`` instance (or ``None``).
+
+        Args:
+            data: Raw field values dict supplied to the constructor.
+
+        Returns:
+            The mutated ``data`` dict with derived fields populated.
+        """
         if data.get("autoconfig") is None:
             data["autoconfig"] = AutoConfig.from_pretrained(data["model_name_or_path"])
 
@@ -209,12 +353,19 @@ class ModelMetadata(BaseModel):
 
     @field_serializer("autoconfig")
     def serialize_autoconfig(self, config: PretrainedConfig) -> dict:
-        """Serialize PretrainedConfig to dict for JSON export."""
+        """Serialize ``PretrainedConfig`` to a plain dict for JSON export.
+
+        Args:
+            config: The HuggingFace config to serialize.
+
+        Returns:
+            Dict representation of the config.
+        """
         return config.to_dict()
 
     @property
     def adapter_path(self) -> Path:
-        """Get the path where adapter model files are stored.
+        """The path where adapter model files are stored.
 
         Raises:
             ValueError: If workdir is not set.
@@ -225,10 +376,10 @@ class ModelMetadata(BaseModel):
 
     @property
     def metadata_path(self) -> Path:
-        """Get the path to the metadata JSON file.
+        """The path to the metadata JSON file.
 
-        Uses workdir.metadata_file which automatically resolves to the parent
-        workdir's path when resuming for generation.
+        Uses ``workdir.metadata_file`` which automatically resolves to the
+        parent workdir's path when resuming for generation.
 
         Raises:
             ValueError: If workdir is not set.
@@ -239,7 +390,7 @@ class ModelMetadata(BaseModel):
 
     @property
     def rope_scaling_factor(self) -> float:
-        """Get the rope scaling factor for backwards compatibility."""
+        """The rope scaling factor for backwards compatibility."""
         return self.rope_scaling.factor if self.rope_scaling is not None else 1.0
 
     @property
@@ -261,10 +412,30 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot save metadata: workdir is not set")
-        write_json(self.model_dump(mode="json"), path=self.workdir.train.adapter.metadata, indent=4)
+        write_json(
+            self.model_dump(mode="json"),
+            path=self.workdir.train.adapter.metadata,
+            indent=4,
+        )
 
     @classmethod
     def from_str_or_path(cls: type["ModelMetadata"], model_name_or_path: Path | str, **kwargs) -> ModelMetadata:
+        """Instantiate the correct ``ModelMetadata`` subclass from a model name or path.
+
+        Performs case-insensitive substring matching of each registered
+        subclass name against ``model_name_or_path``.
+
+        Args:
+            model_name_or_path: HuggingFace model identifier or local
+                filesystem path.
+            **kwargs: Forwarded to the matched subclass constructor.
+
+        Returns:
+            An instance of the matched ``ModelMetadata`` subclass.
+
+        Raises:
+            ValueError: If no registered subclass matches.
+        """
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
         for class_ in classes:
             if str(class_.__name__).lower() in str(model_name_or_path).lower():
@@ -277,20 +448,27 @@ class ModelMetadata(BaseModel):
         config: SafeSynthesizerParameters,
         workdir: Workdir | None = None,
     ) -> ModelMetadata:
-        """Create ModelMetadata from SafeSynthesizerParameters.
+        """Create ``ModelMetadata`` from ``SafeSynthesizerParameters``.
 
-        The config should have been resolved with AutoConfigResolver before this is called.
+        The *config* should have been resolved with
+        ``AutoConfigResolver`` before calling this method.
+
+        If ``rope_scaling_factor`` is set, a ``RopeScaling`` object is
+        created with the model's native theta.
+        ``max_sequences_per_example`` is always forwarded from
+        ``config.data`` -- ``AutoConfigResolver`` resolves it to ``1``
+        when DP is enabled, ``10`` when set to ``"auto"`` with DP
+        disabled, or the user-supplied integer.
 
         Args:
-            config: SafeSynthesizerParameters with model and training configuration.
-            workdir: Workdir instance for artifact paths. Required for saving model artifacts.
+            config: Resolved parameters with model and training
+                configuration.
+            workdir: Artifact directory layout.  Required for saving
+                model artifacts.
 
-        If rope_scaling_factor is set in config, it will be used to create a RopeScaling
-        object with the model's native theta value.
-
-        If max_sequences_per_example is set in config.data, it will be passed through
-        to control how many sequences are packed per training example. This is critical
-        for differential privacy where it must be 1.
+        Returns:
+            A ``ModelMetadata`` subclass instance matching the
+            configured pretrained model.
         """
         kwargs: dict = {"workdir": workdir}
 
@@ -326,10 +504,18 @@ class ModelMetadata(BaseModel):
 
 
 def get_base_max_seq_length(config: AutoConfig) -> int:
-    """
-    Get the base max sequence length for the model before rope scaling.
-    In the future, we will use a more dynamic approach based on available VRAM and the tokens in your dataset.
-    For now we have a global max for
+    """Derive the base max sequence length from a model config.
+
+    Reads ``max_position_embeddings`` from the config and clamps it to
+    ``GLOBAL_MAX_SEQ_LENGTH`` to prevent OOM and underfitting errors.
+    Falls back to ``DEFAULT_MAX_SEQ_LENGTH`` when the attribute is
+    absent.
+
+    Args:
+        config: A HuggingFace ``AutoConfig`` for the model.
+
+    Returns:
+        The effective base sequence length (before RoPE scaling).
     """
     if mpe := getattr(config, "max_position_embeddings", None):
         logger.info(f"Using max_position_embeddings from config: {mpe}")
@@ -343,13 +529,22 @@ def get_base_max_seq_length(config: AutoConfig) -> int:
     return DEFAULT_MAX_SEQ_LENGTH
 
 
-# idea: make these classes subclasses of the huggingface class, like `LLamaModel`, and add
-# our ModelMetadata as the additional property.
-# that way we can use the huggingface class's methods, like `from_pretrained`, `from_config`, etc.
-# but this might not work bc of multiple inheritance with torch.nn.Module
 class Granite(ModelMetadata):
+    """Metadata for IBM Granite model family.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Optional RoPE scaling factor.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
+
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
@@ -371,8 +566,24 @@ class Granite(ModelMetadata):
 
 
 class Llama32(ModelMetadata):
+    """Metadata for Meta Llama 3.2 model family.
+
+    Uses ``<|im_start|>`` (id 151644) as the BOS token and disables
+    automatic BOS/EOS injection in prompts.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Optional RoPE scaling factor.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
+
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
@@ -396,7 +607,17 @@ class Llama32(ModelMetadata):
 
 
 class Mistral(ModelMetadata):
-    """Mistral family. Uses lower default learning rate (0.0001) when training.learning_rate is auto."""
+    """Metadata for Mistral AI model family.
+
+    RoPE scaling is not supported for Mistral models. Any supplied
+    ``rope_scaling_factor`` will be ignored with a warning.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Ignored with a warning if provided.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
 
     default_learning_rate: ClassVar[float] = 0.0001
 
@@ -432,8 +653,21 @@ class Mistral(ModelMetadata):
 
 
 class Nemotron(ModelMetadata):
+    """Metadata for NVIDIA Nemotron model family.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Optional RoPE scaling factor.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
+
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
@@ -456,8 +690,21 @@ class Nemotron(ModelMetadata):
 
 
 class Qwen(ModelMetadata):
+    """Metadata for Alibaba Qwen model family.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Optional RoPE scaling factor.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
+
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config = AutoConfig.from_pretrained(model_name_or_path)
@@ -481,11 +728,24 @@ class Qwen(ModelMetadata):
 
 
 class SmolLM2(ModelMetadata):
-    """SmolLM2 models (e.g., HuggingFaceTB/SmolLM2-135M).
-    Potentially used for testing."""
+    """Metadata for HuggingFace SmolLM2 model family (e.g. ``SmolLM2-135M``).
+
+    RoPE scaling is not supported and any supplied ``rope_scaling_factor``
+    will be ignored with a warning.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Ignored with a warning if provided.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
 
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config = AutoConfig.from_pretrained(model_name_or_path)
@@ -514,8 +774,25 @@ class SmolLM2(ModelMetadata):
 
 
 class SmolLM3(ModelMetadata):
+    """Metadata for HuggingFace SmolLM3 model family.
+
+    Uses ``<|im_start|>`` (id 128011) as the BOS token.  RoPE scaling
+    is not supported. Any supplied ``rope_scaling_factor`` will be
+    ignored with a warning.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Ignored with a warning if provided.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
+
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config = AutoConfig.from_pretrained(model_name_or_path)
@@ -551,8 +828,21 @@ class SmolLM3(ModelMetadata):
 
 
 class TinyLlama(ModelMetadata):
+    """Metadata for the TinyLlama model family.
+
+    Args:
+        model_name_or_path: HuggingFace model identifier or local path.
+        tokenizer: Optional pre-loaded tokenizer.
+        rope_scaling_factor: Optional RoPE scaling factor.
+        **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
+    """
+
     def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
+        self,
+        model_name_or_path: str,
+        tokenizer=None,
+        rope_scaling_factor: float | None = None,
+        **kwargs,
     ) -> None:
         tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_name_or_path)
         config = AutoConfig.from_pretrained(model_name_or_path)

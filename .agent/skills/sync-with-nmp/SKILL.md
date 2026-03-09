@@ -68,7 +68,7 @@ What this does:
 2. Calls `tools/sync-from-mr.sh` which:
    - Fetches the MR's squash commit SHA via the GitLab API
    - Checks out that commit in the NMP repo
-   - Rsyncs `src/` and `tests/` with `--delete` (exact mirror)
+   - Copies changed `src/` and `tests/` files from the MR's squash commit
    - Reports files changed in the MR that are outside `src/` and `tests/` (need manual review)
 
 After syncing, follow the post-sync workflow below.
@@ -117,9 +117,9 @@ After any sync operation, always run this sequence:
 git status
 git diff --stat
 
-# 2. Format and lint
+# 2. Format and check
 make format
-make lint
+make check
 
 # 3. Run tests
 make test
@@ -167,7 +167,7 @@ Metafile sync additionally excludes Safe-Synthesizer-specific files: `__init__.p
 | `MR is not merged` | The MR must be merged in NMP before syncing with `sync-from-mr.sh` |
 | `NMP repo not found` | Clone NMP or fix `NMP_REPO_PATH` |
 | On `main` branch | `synchronize-from-nmp-mr` auto-creates a branch; other targets don't |
-| Merge conflicts after sync | Resolve manually, then `make format && make lint && make test` |
+| Merge conflicts after sync | Resolve manually, then `make format && make check && make test` |
 
 ## Detailed Workflows
 

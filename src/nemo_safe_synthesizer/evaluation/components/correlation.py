@@ -23,23 +23,35 @@ logger = get_logger(__name__)
 
 
 class Correlation(Component):
+    """Column Correlation Stability metric.
+
+    Computes per-column-pair correlations (Pearson, Theil's U, Correlation
+    Ratio) for both reference and output dataframes, then scores the mean
+    absolute difference.
+    """
+
     name: str = Field(default="Column Correlation Stability")
-    reference_correlation: pd.DataFrame | None = Field(default=None)
-    output_correlation: pd.DataFrame | None = Field(default=None)
-    correlation_difference: pd.DataFrame | None = Field(default=None)
+    reference_correlation: pd.DataFrame | None = Field(
+        default=None, description="Correlation matrix for the reference data."
+    )
+    output_correlation: pd.DataFrame | None = Field(default=None, description="Correlation matrix for the output data.")
+    correlation_difference: pd.DataFrame | None = Field(
+        default=None, description="Element-wise absolute difference of the two matrices."
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
     def jinja_context(self):
+        """Template context with combined correlation heatmap figure."""
         d = super().jinja_context
         d["anchor_link"] = "#correlation-stability"
 
         if Component.is_nonempty([self.reference_correlation, self.output_correlation, self.correlation_difference]):
             d["figure"] = figures.generate_combined_correlation_figure(
-                reference_correlation=self.reference_correlation,
-                output_correlation=self.output_correlation,
-                correlation_difference=self.correlation_difference,
+                reference_correlation=self.reference_correlation,  # ty: ignore[invalid-argument-type]
+                output_correlation=self.output_correlation,  # ty: ignore[invalid-argument-type]
+                correlation_difference=self.correlation_difference,  # ty: ignore[invalid-argument-type]
             ).to_html(full_html=False, include_plotlyjs=False)
         else:
             d["figure"] = None
@@ -49,9 +61,10 @@ class Correlation(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> Correlation:
+        """Compute correlation matrices and the correlation stability score."""
         # We only want to use these types for correlation.
         tabular_columns = evaluation_dataset.get_tabular_columns()
-        # We use different calculations (Thiel's U) for nominal columns.
+        # We use different calculations (Theil's U) for nominal columns.
         nominal_columns = evaluation_dataset.get_nominal_columns()
 
         (
@@ -80,17 +93,17 @@ class Correlation(Component):
         nominal_columns: list[str],
         fields: list[EvaluationField],
     ):
-        """
-        Calculate everything correlation related -- the actual L and R correlation matrices, their difference
-        and the mean absolute error.
+        """Compute reference and output correlation matrices and their difference.
 
         Args:
-            reference: pd.DataFrame
-            output: pd.DataFrame
-            nominal_columns: nominal columns to pass into correlation methods
+            reference: Tabular reference dataframe.
+            output: Tabular output dataframe.
+            nominal_columns: Columns to treat as categorical in correlation methods.
+            fields: Per-column evaluation metadata (unused, reserved for future use).
 
-        Returns: tuple of reference_correlation, output_correlation, correlation_difference, mean_absolute_error
-
+        Returns:
+            Tuple of (reference_correlation, output_correlation,
+            correlation_difference, mean_absolute_error).
         """
         # Legacy code has constant for default value of 4 and function to see if we can go higher.
         # See what we want to do now that we work for a GPU manufacturer.
@@ -135,14 +148,14 @@ class Correlation(Component):
     def _get_field_correlation_stability(
         mean_absolute_error: float | None,
     ) -> EvaluationScore:
-        """
-        Calculate the field_correlation_stability SQS based on the MAE, one of our correlation calculations.
+        """Convert mean absolute correlation error to a graded stability score.
 
         Args:
-            mean_absolute_error: float, as produced by _get_correlation_calculations
+            mean_absolute_error: Average absolute difference between reference
+                and output correlation matrices. ``None`` if calculation failed.
 
-        Returns: the field_correlation_stability SQS
-
+        Returns:
+            A finalized ``EvaluationScore`` for correlation stability.
         """
         if mean_absolute_error is None or np.isnan(mean_absolute_error):
             return EvaluationScore()

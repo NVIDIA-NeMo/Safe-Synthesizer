@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 name: deslop
 description: "Remove AI-generated code slop and clean up code style. Triggers on: review, clean up, deslop, code quality, remove slop, PR review."
-related-skills: [python-typing, python-observability, python-stdlib-patterns]
+related-skills: [python-observability]
 ---
 
 # Remove AI Code Slop
 
 Check the diff against main and remove AI-generated slop introduced in the branch.
+
+See [STYLE_GUIDE.md](../../../STYLE_GUIDE.md) for the complete style conventions these checks enforce.
 
 ## Focus Areas
 
@@ -17,14 +19,13 @@ Check the diff against main and remove AI-generated slop introduced in the branc
 - Defensive `try`/`except Exception` on trusted internal paths
 - using `# type: ignore` / `# ty: ignore` instead of trying to fix type errors
 - `cast()` / `Any` to paper over type mismatches -- selective use only where truly needed
-- using print statements instead of logging
+- using print statements instead of logging -- see `python-observability` skill
 - modern typing syntax (`list`, `X | None`, `set` not `List`, `Optional`, `Set`)
-
-- decorative `**bold**` in markdown and docstrings -- structural cues (headers, list markers, colons, backticks) suffice
+- decorative `**bold**` in markdown and docstrings -- see `agent-markdown-style` rule
 
 ## Guardrails
 
 - Keep behavior unchanged unless fixing a clear bug
 - Prefer minimal, focused edits over broad rewrites
-- Run `make format` and `make lint` after changes -- let tools fix style, not manual edits
+- Run `make format` and `make check` after changes -- let tools fix style, not manual edits
 - Keep the final summary concise (1-3 sentences)

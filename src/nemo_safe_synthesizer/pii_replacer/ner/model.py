@@ -5,7 +5,7 @@
 """This module provides an interface to Nemo Safe Synthesizer Pii Replacer NER functionality."""
 
 import re
-from typing import Pattern, Tuple
+from typing import Pattern
 
 from ...data_processing.records.fragment import create_ner_api_response
 from ...pii_replacer.ner.entity import Score
@@ -20,7 +20,7 @@ INPUT_ERR = "Input data must be a string, dict, or a list of either"
 _source_validator = re.compile(r"[A-Za-z_]{2,15}$")
 
 
-def _parse_custom_source(source: str) -> Tuple[str, str]:
+def _parse_custom_source(source: str) -> tuple[str, str]:
     """Return a namespace, name str tuple"""
     parts = source.split("/")
     if len(parts) != 2:

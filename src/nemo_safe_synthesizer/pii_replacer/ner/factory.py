@@ -8,7 +8,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import List, Optional, Set, Union
+from typing import Optional
 
 from ...data_processing.records.base import normalize_labels
 from ...observability import get_logger
@@ -24,9 +24,7 @@ logger = get_logger(__name__)
 
 
 class PredictorFilter(ABC):
-    """
-    Used to filter predictors that should be included in the NER.
-    """
+    """Used to filter predictors that should be included in the NER."""
 
     @abstractmethod
     def should_include(self, predictor: Predictor): ...
@@ -52,7 +50,7 @@ class NERPipelineType(StrEnum):
 
 
 class LabelSetPredictorFilter(PredictorFilter):
-    def __init__(self, included_labels: Set[str]):
+    def __init__(self, included_labels: set[str]):
         self._included_labels = normalize_labels(included_labels)
 
     def should_include(self, predictor: Predictor) -> bool:
@@ -92,13 +90,13 @@ class NERFactoryBase(ABC):
         *,
         predictor_filter: Optional[PredictorFilter] = None,
         record_count: Optional[int] = None,
-    ) -> Union[NER, NERParallel]: ...
+    ) -> NER | NERParallel: ...
 
 
 class NERFactory(NERFactoryBase):
     def __init__(
         self,
-        custom_predictors: Optional[List[Predictor]] = None,
+        custom_predictors: Optional[list[Predictor]] = None,
         *,
         parallel: bool = True,
         use_nlp: bool = False,
@@ -118,7 +116,7 @@ class NERFactory(NERFactoryBase):
         *,
         predictor_filter: Optional[PredictorFilter] = None,
         record_count: Optional[int] = None,
-    ) -> Union[NER, NERParallel]:
+    ) -> NER | NERParallel:
         if self._parallel:
             return self._create_parallel_ner(predictor_filter, record_count)
 
@@ -128,7 +126,7 @@ class NERFactory(NERFactoryBase):
         self,
         predictor_filter: Optional[PredictorFilter] = None,
         record_count: Optional[int] = None,
-    ) -> Union[NER, NERParallel]:
+    ) -> NER | NERParallel:
         """
         Determines an optimal number of NER workers and creates NERParallel.
 
@@ -138,7 +136,6 @@ class NERFactory(NERFactoryBase):
             record_count: Estimated number or records to label, which is used to optimize size of
                 the worker pool.
         """
-
         # leave 1 CPU free for other work
         num_proc = max(1, multiprocessing.cpu_count() - 1)
         if record_count:
@@ -186,7 +183,7 @@ class NERFactory(NERFactoryBase):
 
 
 class StaticNERFactory(NERFactoryBase):
-    def __init__(self, ner: Union[NER, NERParallel]):
+    def __init__(self, ner: NER | NERParallel):
         self._ner = ner
 
     def create(
@@ -194,18 +191,16 @@ class StaticNERFactory(NERFactoryBase):
         *,
         predictor_filter: Optional[PredictorFilter] = None,
         record_count: Optional[int] = None,
-    ) -> Union[NER, NERParallel]:
+    ) -> NER | NERParallel:
         return self._ner
 
 
 @dataclass(frozen=True)
 class NERBundle:
-    """
-    Bundle that contains all of the NER-related information that the code running NER may need.
-    """
+    """Bundle that contains all of the NER-related information that the code running NER may need."""
 
     factory: NERFactoryBase = field(default_factory=NERFactory)
 
-    custom_labels: List[str] = field(default_factory=list)
+    custom_labels: list[str] = field(default_factory=list)
 
     field_label_condition: FieldLabelCondition = field(default_factory=FieldLabelCondition)

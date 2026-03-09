@@ -14,11 +14,11 @@ We've launched our documentation site for NeMo Safe Synthesizer. This blog will 
 
 The documentation site includes:
 
-- **Getting Started** guides for installation and your first pipeline run
-- **User Guide** covering the CLI, configuration, Python SDK, evaluation metrics, and privacy features
-- **Architecture** documentation with Mermaid diagrams showing the full pipeline design
-- **API Reference** auto-generated from source code docstrings
-- **Tutorials** section ready for Jupyter notebook walkthroughs
+- Getting Started guides for installation and your first pipeline run
+- User Guide covering the CLI, configuration, Python SDK, evaluation metrics, and privacy features
+- Architecture documentation with Mermaid diagrams showing the full pipeline design
+- API Reference auto-generated from source code docstrings
+- Tutorials section ready for Jupyter notebook walkthroughs
 
 ## What's Next
 

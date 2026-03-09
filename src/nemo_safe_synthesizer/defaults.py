@@ -1,7 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collection of default settings for the Nemo Safe Synthesizer implementation."""
+"""Default constants for the Safe Synthesizer pipeline.
+
+Includes artifact paths, logging parameters, training and generation
+defaults, prompt templates, and miscellaneous constants shared across
+modules.
+"""
 
 from pathlib import Path
 
@@ -68,7 +73,6 @@ DEFAULT_BASE_SEQ_LENGTH = 2048
 MAX_ROPE_SCALING_FACTOR = 6
 DEFAULT_MAX_SEQ_LENGTH = DEFAULT_BASE_SEQ_LENGTH * MAX_ROPE_SCALING_FACTOR
 
-DEFAULT_PRETRAINED_MODEL_NAME = "TinyLlama-1.1B-Chat-v1.0"
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]{prefill}"
 DEFAULT_INSTRUCTION = "Generate a JSONL dataset with the following columns: "
 DEFAULT_SAMPLING_PARAMETERS = {

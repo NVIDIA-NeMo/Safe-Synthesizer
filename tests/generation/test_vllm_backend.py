@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for the VllmBackend class private methods."""
+"""Unit tests for the VllmBackend class private methods and module-level side effects."""
 
 from unittest.mock import MagicMock, patch
 
@@ -146,11 +146,18 @@ class TestBuildStructuredOutputParams:
         assert result is None
 
     def test_returns_params_with_regex_when_regex_method(
-        self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+        self,
+        params_with_structured_generation_regex,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
         """Test that StructuredOutputsParams with regex is returned when regex method is used."""
         backend = create_backend(
-            params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+            params_with_structured_generation_regex,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
         )
 
         with patch(
@@ -158,34 +165,45 @@ class TestBuildStructuredOutputParams:
             return_value="test_regex_pattern",
         ) as mock_build_regex:
             result = backend._build_structured_output_params()
-
             mock_build_regex.assert_called_once_with(
                 mock_schema,
+                params_with_structured_generation_regex,
                 mock_model_metadata.prompt_config.bos_token,
                 mock_model_metadata.prompt_config.eos_token,
-                group_by=False,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"
 
     def test_returns_params_with_json_when_json_schema_method(
-        self, params_with_structured_generation_json, mock_model_metadata, mock_schema, mock_workdir
+        self,
+        params_with_structured_generation_json,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
     ):
         """Test that StructuredOutputsParams with json is returned when json_schema method is used."""
-        backend = create_backend(params_with_structured_generation_json, mock_model_metadata, mock_schema, mock_workdir)
+        backend = create_backend(
+            params_with_structured_generation_json,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
 
         result = backend._build_structured_output_params()
 
         assert result is not None
         assert result.json == mock_schema
 
-    def test_group_by_passed_when_grouping_enabled(
+    def test_config_with_grouping_passed_to_build_regex(
         self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
     ):
-        """Test that group_by=True is passed when group_training_examples_by is set."""
+        """Test that config with group_training_examples_by set is passed to build_json_based_regex."""
         params_with_structured_generation_regex.data.group_training_examples_by = "category"
         backend = create_backend(
-            params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir
+            params_with_structured_generation_regex,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
         )
 
         with patch(
@@ -193,10 +211,9 @@ class TestBuildStructuredOutputParams:
             return_value="test_regex_pattern",
         ) as mock_build_regex:
             backend._build_structured_output_params()
-
             mock_build_regex.assert_called_once()
-            _, kwargs = mock_build_regex.call_args
-            assert kwargs.get("group_by") is True
+            call_args, _ = mock_build_regex.call_args
+            assert call_args[1].data.group_training_examples_by == "category"
 
 
 class TestResolveTemperature:
@@ -354,7 +371,9 @@ class TestGetApiParamMapping:
         assert key == "logits_processors"
         assert len(value) == 1
         # Verify it's a TypicalLogitsWarperWrapper
-        from nemo_safe_synthesizer.generation.vllm_backend import TypicalLogitsWarperWrapper
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            TypicalLogitsWarperWrapper,
+        )
 
         assert isinstance(value[0], TypicalLogitsWarperWrapper)
 
@@ -433,3 +452,71 @@ class TestTransformKwargsToSamplingParams:
         result = backend._transform_kwargs_to_sampling_params(kwargs={}, api_mapping={})
 
         assert result == {}
+
+
+class TestNoopRemoteCacheBackend:
+    """Tests for the _NoopRemoteCacheBackend and conditional installation logic."""
+
+    def test_noop_backend_get_returns_none(self):
+        from nemo_safe_synthesizer.generation.vllm_backend import _NoopRemoteCacheBackend
+
+        backend = _NoopRemoteCacheBackend()
+        assert backend.get("any-key") is None
+
+    def test_noop_backend_put_is_silent(self):
+        from nemo_safe_synthesizer.generation.vllm_backend import _NoopRemoteCacheBackend
+
+        backend = _NoopRemoteCacheBackend()
+        backend.put("key", b"data")  # should not raise
+
+    def test_install_skipped_when_redis_available(self):
+        """When redis is importable, the override must not be installed."""
+        pytest.importorskip("torch._inductor.remote_cache")
+        from torch._inductor.remote_cache import RemoteAutotuneCache
+
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            _install_noop_remote_cache_backends,
+        )
+
+        original = RemoteAutotuneCache.backend_override_cls
+        try:
+            RemoteAutotuneCache.backend_override_cls = None
+            with patch("nemo_safe_synthesizer.generation.vllm_backend._is_redis_available", return_value=True):
+                _install_noop_remote_cache_backends()
+            assert RemoteAutotuneCache.backend_override_cls is None
+        finally:
+            RemoteAutotuneCache.backend_override_cls = original
+
+    def test_install_applies_when_redis_unavailable(self):
+        """When redis is not importable, RemoteAutotuneCache gets the no-op backend."""
+        pytest.importorskip("torch._inductor.remote_cache")
+        from torch._inductor.remote_cache import RemoteAutotuneCache
+
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            _install_noop_remote_cache_backends,
+            _NoopRemoteCacheBackend,
+        )
+
+        original = RemoteAutotuneCache.backend_override_cls
+        try:
+            RemoteAutotuneCache.backend_override_cls = None
+            with patch("nemo_safe_synthesizer.generation.vllm_backend._is_redis_available", return_value=False):
+                _install_noop_remote_cache_backends()
+            assert RemoteAutotuneCache.backend_override_cls is _NoopRemoteCacheBackend
+        finally:
+            RemoteAutotuneCache.backend_override_cls = original
+
+    def test_is_redis_available_returns_false_when_missing(self):
+        """_is_redis_available returns False when redis cannot be imported."""
+        from nemo_safe_synthesizer.generation.vllm_backend import _is_redis_available
+
+        with patch.dict("sys.modules", {"redis": None}):
+            assert _is_redis_available() is False
+
+    def test_is_redis_available_returns_true_when_present(self):
+        """_is_redis_available returns True when redis is importable."""
+        from nemo_safe_synthesizer.generation.vllm_backend import _is_redis_available
+
+        fake_redis = MagicMock()
+        with patch.dict("sys.modules", {"redis": fake_redis}):
+            assert _is_redis_available() is True

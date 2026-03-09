@@ -8,18 +8,17 @@ description: Repo layout - architecture docs, skills, tests, fixtures, config fi
 ## Architecture
 
 - `design.md` -- architecture diagrams (Mermaid), component details, data flow, technology stack
-- `AGENTS.md` -- agent guide with module map, error hierarchy, skill index, conventions
+- `AGENTS.md` -- agent guide with module map and conventions
 
 ## Skills
 
 Canonical location: `.agent/skills/` (each has SKILL.md + optional references/).
 Cursor symlinks: `.cursor/skills/` points to `.agent/skills/` for discoverability.
-Full index: see the "Available Skills" table in AGENTS.md.
 
 ## Tests
 
 - `tests/` -- mirrors `src/` structure
-- Markers defined in `pytest.ini`: `unit`, `slow`, `e2e`, `gpu_integration`, `integration`, `infrastructure`, `skip_in_ci`, `noautouse`
+- Markers defined in `pytest.ini` (`unit`, `slow`, `e2e`, `gpu_integration`, `integration`, `infrastructure`)
 - Tests are auto-marked by directory (`tests/e2e/` -> `e2e`, `tests/gpu_integration/` -> `gpu_integration`, etc.)
 - Shared fixtures: `tests/conftest.py`
 - Stub data: `tests/test_data/`, `tests/stub_datasets/`, `tests/stub_tokenizer/`

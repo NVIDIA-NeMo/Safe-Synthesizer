@@ -42,7 +42,7 @@ class DependsOnValidator:
         >>> validator = DependsOnValidator(
         ...     depends_on="enabled",  # a field
         ...     depends_on_func=lambda x: x is True,
-        ...     value_func=lambda x: isinstance(x, bool)
+        ...     value_func=lambda x: isinstance(x, bool),
         ... )
     """
 
@@ -107,17 +107,13 @@ class ValueValidator:
 
     Example:
         >>> # Validate that a numeric parameter is positive
-        >>> validator = ValueValidator(
-        ...     value_func=lambda x: x > 0 if isinstance(x, (int, float)) else True
-        ... )
+        >>> validator = ValueValidator(value_func=lambda x: x > 0 if isinstance(x, (int, float)) else True)
     """
 
     value_func: Callable[[Parameter[Any]], bool]
 
     def validate(self, value, info: ValidationInfo):
-        """
-        Validate a Parameter using the provided validation function.
-        """
+        """Validate a Parameter using the provided validation function."""
         if (v := getattr(value, "value", None)) is None:
             real_val = value
         else:

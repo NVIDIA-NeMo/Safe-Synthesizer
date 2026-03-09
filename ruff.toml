@@ -33,10 +33,41 @@ line-length = 120
 indent-width = 4
 
 [lint]
-# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
-# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
-select = ["E4", "E7", "E9", "F", "W291", "W292", "W293", "I001", "I002"]
+select = [
+    # pycodestyle
+    "E4",   # import errors
+    "E7",   # statement errors
+    "E9",   # runtime errors
+    # pyflakes
+    "F",
+    # whitespace
+    "W291", # trailing whitespace
+    "W292", # no newline at end of file
+    "W293", # whitespace before comment
+    # isort
+    "I001", # unsorted imports
+    "I002", # missing required import
+    # pyupgrade -- modern Python 3.11+ syntax
+    "UP006", # use builtin generics (list, dict, set, tuple)
+    "UP007", # use X | Y for unions and optionals
+    # flake8-bugbear
+    "B006",  # mutable default argument
+    # flake8-print
+    "T201",  # print() found
+    # pydocstyle -- docstring formatting (convention=google below)
+    "D200",  # single-line docstring should fit on one line
+    "D201",  # no blank line before docstring
+    "D202",  # no blank line after docstring
+    "D209",  # closing quotes on separate line
+    "D210",  # no whitespace surrounding docstring text
+    "D300",  # use triple double quotes
+    "D301",  # use r"" for backslashes
+    "D403",  # capitalize first word
+    "D410",  # blank line after section
+    "D411",  # blank line before section
+    "D414",  # empty docstring section
+    "D419",  # empty docstring
+]
 ignore = []
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -45,6 +76,14 @@ unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.per-file-ignores]
+"tests/**" = ["T201"]    # print() is fine in tests
+"tools/**" = ["T201"]    # print() is fine in tooling scripts
+"script/**" = ["T201"]   # print() is fine in standalone scripts
 
 [format]
 # Like Black, use double quotes for strings.
@@ -64,7 +103,7 @@ line-ending = "auto"
 #
 # This is currently disabled by default, but it is planned for this
 # to be opt-out in the future.
-docstring-code-format = false
+docstring-code-format = true
 
 # Set the line length limit used when formatting code snippets in
 # docstrings.

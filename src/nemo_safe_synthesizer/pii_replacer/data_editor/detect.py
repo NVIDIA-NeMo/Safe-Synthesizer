@@ -287,9 +287,7 @@ class ColumnClassifier(ABC):
 
 
 class ColumnClassifierNoop(ColumnClassifier):
-    """
-    NOOP column classifier
-    """
+    """NOOP column classifier"""
 
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]] = None) -> dict[str, Optional[str]]:
         return {col: UNKNOWN_ENTITY for col in df.columns}
@@ -297,8 +295,7 @@ class ColumnClassifierNoop(ColumnClassifier):
 
 @dataclass
 class IAPIClassifierConfig:
-    """
-    Fields required to communicate"""
+    """Fields required to communicate"""
 
     endpoint: str
     model_key: str
@@ -307,9 +304,7 @@ class IAPIClassifierConfig:
 
 
 class ColumnClassifierLLM(ColumnClassifier):
-    """
-    Classify column types using an LLM
-    """
+    """Classify column types using an LLM"""
 
     _llm: Optional[OpenAI]
     _num_samples: Optional[int]
@@ -323,7 +318,6 @@ class ColumnClassifierLLM(ColumnClassifier):
         Detect column datatypes by sampling column data and asking
         InferenceAPI to classify it.
         """
-
         if self._llm is None:
             raise Exception("InferenceAPI classifier not initialized. Use get_classifier() method.")
 
@@ -346,9 +340,7 @@ class ColumnClassifierLLM(ColumnClassifier):
 
 @dataclass
 class ClassifyConfig:
-    """
-    Configuration options for column classification and NER
-    """
+    """Configuration options for column classification and NER"""
 
     valid_entities: set[str]
     ner_threshold: float
@@ -362,18 +354,14 @@ class ClassifyConfig:
 
 
 class EntityExtractor(ABC):
-    """
-    Object used to extract entity/value pairs from free text.
-    """
+    """Object used to extract entity/value pairs from free text."""
 
     column_report: NerReport
     current_column: str
 
     @abstractmethod
     def extract_entity_values(self, text: str, entities: Optional[set[str]]) -> list[dict[str, str]]:
-        """
-        Return a list of dicts which each contain an entity and its value.
-        """
+        """Return a list of dicts which each contain an entity and its value."""
         ...
 
     @abstractmethod
@@ -421,9 +409,7 @@ class EntityExtractor(ABC):
 
 
 class EntityExtractorNoop(EntityExtractor):
-    """
-    NOOP extractor
-    """
+    """NOOP extractor"""
 
     def extract_entity_values(self, text: str, entities: Optional[set[str]]) -> list[dict[str, str]]:
         return []
@@ -443,9 +429,7 @@ NerReport = dict[str, dict[str, EntityReport]]
 
 
 class EntityExtractorRegexp(EntityExtractor):
-    """
-    Extract entities using regular expressions.
-    """
+    """Extract entities using regular expressions."""
 
     _entity_types: set[str]
 
@@ -488,9 +472,7 @@ class EntityExtractorRegexp(EntityExtractor):
 
 
 class EntityExtractorGliner(EntityExtractor):
-    """
-    Extract entities using GLiNER
-    """
+    """Extract entities using GLiNER"""
 
     _entity_types: set[str]
     _model: Optional[GLiNER]
@@ -547,7 +529,6 @@ class EntityExtractorGliner(EntityExtractor):
 
         Returns a list of dicts in GLiNER return value format, including entity name, value, start/end indices.
         """
-
         last_log = monotonic()
         if entity_labels is None:
             entity_labels = self._entity_types
@@ -676,25 +657,19 @@ class EntityExtractorGliner(EntityExtractor):
 
 
 class EntityExtractorMulti(EntityExtractor):
-    """
-    EntityExtractor which encapsulates multiple extractors.
-    """
+    """EntityExtractor which encapsulates multiple extractors."""
 
     extractors: list[EntityExtractor]
 
     def extract_entity_values(self, text: str, entities: Optional[set[str]] = None) -> list[dict[str, str]]:
-        """
-        Return a list of dicts which each contain an entity and its value.
-        """
+        """Return a list of dicts which each contain an entity and its value."""
         retval = []
         for extractor in self.extractors:
             retval += extractor.extract_entity_values(text, entities)
         return retval
 
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]] = None) -> list[NERPrediction]:
-        """
-        Get entities across all providers and merge
-        """
+        """Get entities across all providers and merge"""
         predictions = []
         for extractor in self.extractors:
             predictions += extractor.extract_ner_predictions(text, entities)
@@ -711,9 +686,7 @@ class EntityExtractorMulti(EntityExtractor):
             extractor.batch_update_cache(texts, entities)
 
     def add_entity_extractor(self, extractor: EntityExtractor):
-        """
-        Add an extractor to the list.
-        """
+        """Add an extractor to the list."""
         self.extractors.append(extractor)
 
 
@@ -745,7 +718,6 @@ def find_best(entities: list[NERPrediction]) -> NERPrediction:
     Given a list of ner predictions, determine which one is "best".
     For now, just pick the one with the largest span.
     """
-
     span_max = 0
     best = entities[0]
     for entity in entities:

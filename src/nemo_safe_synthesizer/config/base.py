@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Shared Pydantic base model and enumerations for NeMo Safe Synthesizer configs."""
+
 from enum import Enum
 from typing import Any
 
@@ -21,17 +23,23 @@ pydantic_model_config = ConfigDict(
 
 
 class NSSBaseModel(BaseModel):
-    """
-    Base model for all NeMo Safe Synthesizer configuration and result models that do not use Parameters.
+    """Base model for all Safe Synthesizer configuration and result models.
+
+    Applies ``pydantic_model_config`` (strict schema validation, attribute
+    construction, and ``"validation"``-only JSON schema mode) so that
+    every subclass inherits consistent Pydantic behavior.
     """
 
     model_config = pydantic_model_config
 
     def dict(self, **kwargs: Any) -> dict[str, Any]:
+        """Return a dict representation via ``model_dump`` for backward compatibility."""
         return self.model_dump(**kwargs)
 
 
 class LRScheduler(str, Enum):
+    """Learning-rate scheduler names accepted by the training pipeline."""
+
     COSINE = "cosine"
     LINEAR = "linear"
     COSINE_WITH_RESTARTS = "cosine_with_restarts"

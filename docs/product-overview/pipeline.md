@@ -9,9 +9,9 @@ NeMo Safe Synthesizer enables you to create private versions of sensitive tabula
 
 Safe Synthesizer employs a novel approach to synthetic data generation:
 
-1. **Tabular Fine-Tuning**: Fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties
-2. **Generation**: Uses the fine-tuned model to generate new synthetic records that maintain data utility
-3. **Privacy Protection**: Optionally applies differential privacy during training for mathematical privacy guarantees
+1. Tabular Fine-Tuning: fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties
+2. Generation: uses the fine-tuned model to generate new synthetic records that maintain data utility
+3. Privacy Protection: optionally applies differential privacy during training for mathematical privacy guarantees
 
 ## Pipeline Stages
 
@@ -65,10 +65,10 @@ The evaluation stage computes privacy and quality metrics, then generates an HTM
 
 Safe Synthesizer supports diverse tabular data:
 
-- **Numeric**: Continuous and discrete numerical values
-- **Categorical**: Text labels and categories
-- **Text**: Free-form text fields
-- **Temporal**: Event sequences and time series
+- Numeric: continuous and discrete numerical values
+- Categorical: text labels and categories
+- Text: free-form text fields
+- Temporal: event sequences and time series
 
 ## Running the Pipeline
 
@@ -121,20 +121,20 @@ results = synthesizer.results
 
 ### Troubleshooting
 
-**GPU Memory Issues**
+GPU Memory Issues
 
 - Reduce `batch_size` in training parameters
 - Use a smaller subset of data for initial testing
 - Increase `gradient_accumulation_steps` to maintain effective batch size with lower memory
 - Check GPU usage with `nvidia-smi`
 
-**Invalid Data Format Errors**
+Invalid Data Format Errors
 
 - Ensure CSV is UTF-8 encoded
 - Validate column names don't contain special characters
 - Check for null values or inconsistent data types
 
-**Generation Quality Issues**
+Generation Quality Issues
 
 - Increase training data or epochs for more training
 - Adjust `temperature` (try 0.7-1.0 range)

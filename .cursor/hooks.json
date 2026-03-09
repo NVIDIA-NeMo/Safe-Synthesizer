@@ -15,6 +15,10 @@
     ],
     "beforeShellExecution": [
       {
+        "command": ".cursor/hooks/enforce-signoff.sh",
+        "matcher": "git commit"
+      },
+      {
         "command": ".cursor/hooks/audit.sh"
       }
     ],

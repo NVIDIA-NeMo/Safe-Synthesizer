@@ -22,8 +22,11 @@ outputs:
     description: "'true' if any file under src/ changed"
     value: ${{ steps.filter.outputs.src }}
   test:
-    description: "'true' if any file under test/ changed"
-    value: ${{ steps.filter.outputs.test }}
+    description: "'true' if any file under tests/ or pytest.ini changed"
+    value: ${{ steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' }}
+  deps:
+    description: "'true' if any dep related files changed"
+    value: ${{ steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' }}
 
 runs:
   using: "composite"
@@ -38,11 +41,11 @@ runs:
         filters: |
           src:
             - 'src/**'
-          test:
-            - 'test/**'
-          pyproject.toml:
+          tests:
+            - 'tests/**'
+          pyproject:
             - 'pyproject.toml'
-          uv.lock:
+          uv_lock:
             - 'uv.lock'
-          pytest.ini:
+          pytest_ini:
             - 'pytest.ini'

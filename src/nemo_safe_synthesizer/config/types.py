@@ -1,10 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Reusable type aliases for configuration fields.
+
+The ``Auto*Param`` and ``Optional*`` aliases let config fields accept the
+sentinel string ``"auto"`` alongside their native type, enabling deferred
+resolution at runtime. Collection and path aliases reduce boilerplate in
+downstream Pydantic models.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, TypeAlias, Union
+from typing import Literal, TypeAlias
 
 __all__ = [
     "AUTO_STR",
@@ -38,13 +46,13 @@ OptionalAutoInt: TypeAlias = AutoStrL | int | None
 OptionalAutoFloat: TypeAlias = AutoStrL | float | None
 OptionalAutoBool: TypeAlias = AutoStrL | bool | None
 
-OptionalListOrStr = Union[str, list[str]] | None
-OptionalListOrInt = Union[int, list[int]] | None
+OptionalListOrStr = str | list[str] | None
+OptionalListOrInt = int | list[int] | None
 
 OptionalStrList: TypeAlias = list[str] | None
 OptionalIntList: TypeAlias = list[int] | None
 
-OptionalDictNestedStr = dict[str, Union[str, dict, list]] | None
+OptionalDictNestedStr = dict[str, str | dict | list] | None
 OptionalStrDict = dict[str, str] | None
 
 PathLike: TypeAlias = str | Path

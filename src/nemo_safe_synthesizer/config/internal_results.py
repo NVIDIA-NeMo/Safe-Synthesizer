@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# Result objects used internally, not part of any external public API
+"""Internal result container used between pipeline stages (not public API)."""
+
 import pandas as pd
+from pydantic import Field
 
 from .base import NSSBaseModel
 from .external_results import SafeSynthesizerSummary
@@ -11,10 +13,14 @@ __all__ = ["SafeSynthesizerResults"]
 
 
 class SafeSynthesizerResults(NSSBaseModel):
-    """
-    Output object for Safe Synthesizer
-    """
+    """Full pipeline output including raw data and evaluation artifacts."""
 
-    synthetic_data: pd.DataFrame | None = None
-    summary: SafeSynthesizerSummary
-    evaluation_report_html: str | None
+    synthetic_data: pd.DataFrame | None = Field(
+        default=None, description="Generated synthetic DataFrame, or ``None`` if generation was skipped."
+    )
+
+    summary: SafeSynthesizerSummary = Field(description="Quality, privacy, and timing metrics.")
+
+    evaluation_report_html: str | None = Field(
+        default=None, description="HTML evaluation report string, or ``None`` if evaluation was not run."
+    )
