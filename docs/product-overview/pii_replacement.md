@@ -9,10 +9,9 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 
 The PII replacement pipeline operates in multiple stages:
 
-1. Detection: Identifies PII entities using configurable detection methods
-2. Classification: Categorizes detected entities by type (name, email, address, etc.)
+1. Classification: Categorizes columns with PII laveraging large language models.
+2. Detection: Identifies PII entities using configurable detection methods within columns detected as PII.
 3. Transformation: Replaces or redacts PII using configurable rules
-4. Validation: Verifies that sensitive information has been properly handled
 
 ## Detection Methods
 
@@ -20,8 +19,8 @@ NeMo Safe Synthesizer supports multiple PII detection approaches described in th
 
 | Method | Description | Key Features |
 |---|---|---|
-| [Nemotron PII Detection](https://huggingface.co/nvidia/gliner-PII) | Uses the Nemotron PII model for entity recognition | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
-| LLM Classification | Leverages language models for PII detection | - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
+| LLM Classification | Leverages language models for column classification with PII detection| - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
+| [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Uses the GLiNER PII model for entity recognition within each column | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
 | Regex Detection | Pattern-based detection for structured PII | - Fast and deterministic<br>- Ideal for known formats (SSN, phone numbers)<br>- Customizable patterns<br>- Low computational overhead |
 
 
@@ -36,7 +35,7 @@ After detection, PII can be handled in multiple ways:
 
 ## Supported Entity Types
 
-Nemotron PII has been specifically fine-tuned to recognize many entity types out of the box, organized by category:
+GLiNER PII has been specifically fine-tuned to recognize many entity types out of the box, organized by category:
 
 ### Personal Information
 - `first_name` - Given names
@@ -128,7 +127,7 @@ Nemotron PII has been specifically fine-tuned to recognize many entity types out
 
 Beyond these built-in types, you can define custom entities using:
 
-- Nemotron PII: Fast, accurate zero-shot NER for standard and custom entity types
+- GLiNER PII: Fast, accurate zero-shot NER for standard and custom entity types
 - Regex: Deterministic pattern matching, best for consistent formats (SSN, credit cards)
 - LLM: Contextual understanding, handles complex patterns and ambiguous cases
 
