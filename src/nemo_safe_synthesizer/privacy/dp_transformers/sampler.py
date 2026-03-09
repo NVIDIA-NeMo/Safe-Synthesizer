@@ -133,7 +133,7 @@ class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
         """Return the number of batches that will be yielded (non-empty only).
 
         Equal to ``steps - empty_batches`` after a full iteration. Before
-        iteration, ``empty_batches`` is 0 so the value may increase as
+        iteration, ``empty_batches`` is 0 so the value may decrease as
         empty batches are skipped during iteration.
         """
         return self.steps - self.empty_batches

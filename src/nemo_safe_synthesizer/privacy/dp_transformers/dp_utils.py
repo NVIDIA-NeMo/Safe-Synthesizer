@@ -131,7 +131,7 @@ class DPCallback(TrainerCallback):
         optimizer=None,
         **kwargs,
     ):
-        """Sync gradients and update RDP accountant at the end of each optimizer step.
+        """Clear gradients and update RDP accountant at the end of each optimizer step.
 
         Calls ``zero_grad()`` on the optimizer (Opacus expects this; Trainer does not
         call it by default). When using the RDP accountant (not PRV), increments the
@@ -238,7 +238,7 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
     Trainer and model code often create ``position_ids`` inside the model
     forward pass, which Opacus cannot see. This collator builds ``position_ids``
     during batching so they are present in the batch and available for
-    per-sample gradient computation. See https://github.com/huggingface/transformers/blob/v4.36.2/src/transformers/models/mistral/modeling_mistral.py#L882
+    per-sample gradient computation. See https://github.com/huggingface/transformers/blob/5c1c72be5f864d10d0efe8ece0768d9ed6ee4fdd/src/transformers/models/mistral/modeling_mistral.py#L379
     for an example.
 
     Args:

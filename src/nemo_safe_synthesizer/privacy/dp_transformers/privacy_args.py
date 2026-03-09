@@ -40,7 +40,7 @@ class SafeSynthesizerAccountant:
         sampling_probability: Probability of a record being in a batch.
         delta: Target delta for (epsilon, delta)-DP.
         num_steps: Maximum number of composition steps (+1 for headroom)
-        (i.e. "would one more step exceed the budget?").
+            (i.e. "would one more step exceed the budget?").
     """
 
     def __init__(self, use_prv: bool, noise_multiplier, sampling_probability, delta, num_steps):
