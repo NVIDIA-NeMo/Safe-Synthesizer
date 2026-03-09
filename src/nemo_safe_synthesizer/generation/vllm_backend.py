@@ -33,7 +33,72 @@ from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
 
-os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "1"
+if torch.cuda.is_available():
+    _gpu_count = torch.cuda.device_count()
+    if _gpu_count <= 1:
+        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+    else:
+        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "1")
+else:
+    # When CUDA is unavailable, avoid triggering CUDA initialization and
+    # default to disabling vLLM v1 multiprocessing.
+    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+
+
+def _is_redis_available() -> bool:
+    """Return True if the ``redis`` package is importable."""
+    try:
+        import redis  # noqa: F401 # type: ignore[unresolved-import]
+
+        return True
+    except ImportError:
+        return False
+
+
+class _NoopRemoteCacheBackend:
+    """No-op stand-in for ``RedisRemoteCacheBackend``.
+
+    All reads return ``None``; all writes are silently dropped.
+    """
+
+    def get(self, key: str) -> bytes | None:
+        return None
+
+    def put(self, key: str, data: bytes) -> None:
+        pass
+
+
+def _install_noop_remote_cache_backends() -> None:
+    """Replace the Inductor ``RemoteAutotuneCache`` backend with a no-op.
+
+    ``torch.compile`` uses ``RemoteAutotuneCache`` (backed by Redis) to share
+    autotuning results across processes.  When the ``redis`` package is not
+    installed the default backend raises at construction time, which breaks
+    ``torch.compile`` in environments that never intended to run Redis.
+
+    This function patches *only* ``RemoteAutotuneCache`` -- the single
+    Redis-backed cache that surfaces errors during normal Safe-Synthesizer
+    runs.  Other Redis caches (``RemoteFxGraphCache``,
+    ``RemoteBundledAutotuneCache``, etc.) are left untouched so they keep
+    working if a future dependency pulls in ``redis``.
+
+    The override is skipped entirely when ``redis`` *is* importable, leaving
+    the default backend intact and avoiding any ``torch.compile`` performance
+    regression.
+    """
+    if _is_redis_available():
+        return
+
+    try:
+        from torch._inductor.remote_cache import RemoteAutotuneCache
+
+        RemoteAutotuneCache.backend_override_cls = _NoopRemoteCacheBackend  # type: ignore[invalid-assignment]
+        logger.debug("Installed no-op backend for RemoteAutotuneCache (redis unavailable)")
+    except ImportError:
+        pass
+
+
+_install_noop_remote_cache_backends()
 
 
 class VllmBackend(GeneratorBackend):
