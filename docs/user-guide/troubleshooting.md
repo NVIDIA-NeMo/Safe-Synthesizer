@@ -57,7 +57,7 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
    Peak memory is set by the forward/backward pass on one micro-batch --
    `gradient_accumulation_steps` controls how many micro-batches accumulate
    before each optimizer step but does not affect peak memory
-4. Lower `training.max_vram_fraction` (default `0.80`) to leave headroom for
+4. Lower `training.max_vram_fraction` (default `0.8`) to leave headroom for
    other GPU consumers on the same device
 
 GPU memory during LoRA SFT breaks down into three components:
@@ -85,17 +85,16 @@ If Safe Synthesizer fails to find a GPU, the Unsloth backend raises immediately:
 RuntimeError: Cannot use unsloth without GPU.
 ```
 
-The HuggingFace backend will not error but will attempt to use CPU (very slow).
+The HuggingFace backend will not error but will attempt to use CPU (extremely slow).
 
 To diagnose:
 
 1. Verify NVIDIA drivers: `nvidia-smi`
 2. Verify PyTorch CUDA build: `python -c "import torch; print(torch.cuda.is_available())"`
-3. Ensure you installed the `cu128` extras, not `cpu`:
+3. Ensure you installed the CUDA extras, not the CPU-only package:
 
     ```bash
-    uv sync --extra cu128 --extra engine
-    # or: make bootstrap-nss cuda
+    pip install "nemo-safe-synthesizer[cu128,engine]"
     ```
 
 The Unsloth backend requires a GPU and raises immediately if none is found.
@@ -256,14 +255,18 @@ See the [Parameters Reference](parameters.md) for the full list.
     `training.use_unsloth: false` explicitly. There is no automatic
     detection for this incompatibility.
 
-Use `safe-synthesizer config validate` to see how `"auto"` values resolve for
-your configuration:
+Use `safe-synthesizer config validate` to see how `"auto"` and default values resolve for
+your configuration. Note that some `"auto"` fields (such as
+`training.rope_scaling_factor` and `training.num_input_records_to_sample`)
+require a dataset to resolve -- they will remain `"auto"` in the validate
+output and only resolve during an actual run:
 
 === "CLI"
 
     ```bash
     safe-synthesizer config validate --config config.yaml
     ```
+We might change this behavior in the future to resolve _all_ the `"auto"` parameters.
 
 ### Common Validation Errors
 

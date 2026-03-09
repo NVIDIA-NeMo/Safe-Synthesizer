@@ -13,7 +13,7 @@ caching, see [Environment Variables](environment.md).
 
 ## Differential Privacy
 
-DP training has strict requirements. Violating them produces errors that may
+Differentially private (DP) training has strict requirements. Violating them produces errors that may
 not immediately point to the root cause.
 
 ### Requirements
@@ -41,8 +41,12 @@ Discrete mean differs
 
 The [PRV accountant](https://github.com/microsoft/prv_accountant) failed and
 the system is falling back to the [Opacus](https://opacus.ai/) RDP accountant.
-This is handled automatically but may produce slightly different privacy
-guarantees, since the two accountants use different composition methods.
+This is handled automatically -- there is no user-facing config to select the
+accountant. The fallback may produce slightly different privacy guarantees,
+since the two accountants use different composition methods: PRV uses privacy
+loss random variables ([Gopi et al. 2021](https://arxiv.org/abs/2106.02848)),
+while RDP uses Rényi divergence
+([Mironov 2017](https://arxiv.org/abs/1702.07476)).
 
 ```text
 Number of entities in dataset is low
@@ -61,8 +65,21 @@ Entity detection and classification issues during PII replacement.
 
 If PII replacement is not detecting the entity types you expect, the column
 classifier may have failed silently. When the classifier fails to initialize
-or classify, it falls back to default entity types. Check logs for classification
-errors if PII replacement seems to use unexpected entity types.
+or classify, it falls back to default entity types.
+
+Look for log lines like:
+
+```text
+Could not initialize column classifier, falling back to default entities.
+```
+
+or
+
+```text
+Could not perform classify, falling back to default entities.
+```
+
+if PII replacement seems to use unexpected entity types.
 
 Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
 is reachable. PII classify config is deeply nested -- use YAML or SDK:
@@ -113,19 +130,25 @@ Several evaluation metrics have minimum data requirements:
 
 ### UNAVAILABLE Metrics
 
-Many evaluation components catch errors and return `UNAVAILABLE` grades instead
-of failing the pipeline. If your evaluation report shows missing or `UNAVAILABLE`
-metrics:
+`UNAVAILABLE` is the literal string that appears in the evaluation report when
+a metric could not be computed. Many evaluation components catch errors and
+return this grade instead of failing the pipeline. If your evaluation report
+shows missing or `UNAVAILABLE` metrics:
 
 1. Check the logs for warnings and exceptions
 2. Verify you have enough records (>= 200) and columns (>= 3)
-3. Verify the SentenceTransformer model downloaded successfully
+3. Verify the SentenceTransformer model downloaded successfully -- check your
+   Hugging Face cache (`$HF_HOME`, default `~/.cache/huggingface`) for the
+   model directory, or run once with internet access before switching to offline
+   mode
 
 ### Report Truncation
 
 SQS reports are limited to `sqs_report_columns=250` columns and
 `sqs_report_rows=5000` rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
+See the [Parameters Reference](parameters.md) for the full list of `evaluation`
+fields.
 
 ### Low SQS Scores
 
@@ -135,9 +158,11 @@ If the SQS (Synthetic Quality Score) report shows low quality scores:
    indicate the model did not learn the data patterns well
 2. Check that training data is representative and not too small
 3. Consider increasing `generation.num_records` for a larger sample
-4. Increase `training.num_input_records_to_sample` -- this controls how much
+4. Modify `training.num_input_records_to_sample` -- this controls how much
    data the model sees during training (analogous to training duration) and
-   affects generation quality
+   affects generation quality. Increasing it is usually the first thing to try,
+   but note that very small input datasets can lead to over-training, so
+   explore both directions if quality remains poor
 
 ---
 
