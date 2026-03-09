@@ -29,6 +29,9 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
 | Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
+| Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
+| Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
+| PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
 
@@ -141,6 +144,7 @@ because the table has too many columns for the model's context window.
    `data.max_sequences_per_example` or simplifying the grouped records.
 
 !!! note "Error type clarification"
+!!! note "Error type clarification"
     These errors are typed as `GenerationError` in the codebase even though
     they fire during data assembly, not during generation proper. They appear
     in the pipeline before any training or generation occurs.
@@ -252,6 +256,7 @@ See [Configuration Reference](configuration.md) for the full list.
 - `privacy.delta` -- computed from record count
 
 !!! warning "Unsloth and Mistral compatibility"
+!!! warning "Unsloth and Mistral compatibility"
     If you encounter issues when using Unsloth with Mistral models, set
     `training.use_unsloth: false` explicitly. There is no automatic
     detection for this incompatibility.
@@ -356,6 +361,7 @@ remove the argument to start a fresh WandB run.
     change between releases.
 
 Time series synthesis has additional validation and generation requirements.
+For configuration examples, see [Configuration -- Time Series](configuration.md#time-series).
 For configuration examples, see [Configuration -- Time Series](configuration.md#time-series).
 
 ### Common Issues

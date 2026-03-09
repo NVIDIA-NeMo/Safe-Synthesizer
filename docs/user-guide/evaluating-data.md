@@ -28,6 +28,13 @@ For the full list of DP compatibility constraints (`use_unsloth`,
 !!! note
     `data_fraction` and `true_dataset_size` must be available at runtime --
     these are set automatically when running the full pipeline.
+For the full list of DP compatibility constraints (`use_unsloth`,
+`max_sequences_per_example`, gradient checkpointing), see
+[Configuration -- Differential Privacy](configuration.md#differential-privacy).
+
+!!! note
+    `data_fraction` and `true_dataset_size` must be available at runtime --
+    these are set automatically when running the full pipeline.
 
 ### Common DP Errors
 
@@ -158,6 +165,7 @@ during the evaluation stage.
 SQS reports are limited to `sqs_report_columns=250` columns and
 `sqs_report_rows=5000` rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
+See [Configuration -- Evaluation](configuration.md#evaluation) for the full list of `evaluation` fields.
 See [Configuration -- Evaluation](configuration.md#evaluation) for the full list of `evaluation` fields.
 
 ### Low SQS Scores

@@ -15,6 +15,7 @@ are cached, and which network endpoints are used.
 ---
 
 ## NSS Variables
+## NSS Variables
 
 | Variable | CLI flag | Purpose |
 |----------|----------|---------|
@@ -73,6 +74,8 @@ All model and tokenizer downloads go through
 The following variables control where downloads are stored and whether the
 network is used. For a step-by-step offline setup guide, see
 [Running in Offline Environments](running.md#running-in-offline-environments).
+network is used. For a step-by-step offline setup guide, see
+[Running in Offline Environments](running.md#running-in-offline-environments).
 
 ### `HF_HOME`
 
@@ -105,6 +108,7 @@ What gets downloaded on first use:
 - vLLM base model (generation)
 
 !!! warning "Silent downloads on first use"
+!!! warning "Silent downloads on first use"
     All downloads happen silently on first use. If the first run is in an
     environment without internet access, connection errors will appear at
     whichever pipeline stage tries to download first.
@@ -130,6 +134,7 @@ the HuggingFace training backend or vLLM.
 export LOCAL_FILES_ONLY=true
 ```
 
+!!! warning "Partial offline support"
 !!! warning "Partial offline support"
     `LOCAL_FILES_ONLY` is not consistently supported across all backends.
     Set `HF_HUB_OFFLINE=1` combined with a pre-populated `HF_HOME` cache
@@ -172,6 +177,8 @@ NIM endpoint, API keys, and CPU parallelism for PII detection.
 ### `NIM_ENDPOINT_URL`
 
 The NIM/OpenAI-compatible endpoint used for PII column classification. When
+unset, an error is logged and the pipeline falls back to NER-only detection.
+Set this to enable LLM-based column classification:
 unset, an error is logged and the pipeline falls back to NER-only detection.
 Set this to enable LLM-based column classification:
 
