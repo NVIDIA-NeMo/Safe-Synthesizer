@@ -203,9 +203,9 @@ class TrainingHyperparams(Parameters):
         str,
         Field(
             title="pretrained_model",
-            description="Pretrained model to use for fine-tuning. Defaults to TinyLlama.",
+            description="Pretrained model to use for fine tuning. Uses default of SmolLM3.",
         ),
-    ] = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    ] = "HuggingFaceTB/SmolLM3-3B"
 
     quantize_model: Annotated[
         bool,
