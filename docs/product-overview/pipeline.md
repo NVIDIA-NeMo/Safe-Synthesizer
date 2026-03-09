@@ -38,11 +38,11 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 If enabled, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses.
 
-See [PII Replacement](pii_replacement.md) for detailed PII documentation.
+See [Privacy](privacy.md) for detailed PII documentation.
 
 ### 3. Example Assembly
 
-Records are converted to JSONL format (one JSON object per line) and tokenized for model training. Records that exceed the model's context window raise a `GenerationError` rather than being silently truncated.
+Records are converted to a JSON format and tokenized for model training. The assembler handles truncation, padding, and proper formatting for the target LLM.
 
 ### 4. Training
 
