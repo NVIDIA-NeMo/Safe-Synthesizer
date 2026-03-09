@@ -409,7 +409,6 @@ class Mistral(ModelMetadata):
     ) -> None:
         tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
-        config.learning_rate = Mistral.default_learning_rate
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
