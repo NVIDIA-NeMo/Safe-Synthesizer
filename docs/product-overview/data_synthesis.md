@@ -3,7 +3,7 @@
 
 # Data Synthesis
 
-The synthesizer component is the main component of the NeMo Safe Synthesizer product. It uses LLM-based fine-tuning to generate realistic synthetic data that maintains the utility of your original dataset while providing privacy protection.
+The synthesizer component is the core of the NeMo Safe Synthesizer product. It uses LLM-based fine-tuning to generate realistic synthetic data that maintains the utility of your original dataset while providing privacy protection.
 
 ## How It Works
 
@@ -33,7 +33,10 @@ NeMo Safe Synthesizer supports diverse tabular data:
 - Numeric: Continuous and discrete numerical values
 - Categorical: Text labels and categories
 - Text: Free-form text fields
-- Temporal: Event sequences and time series (*Note: Temporal dataset support is currently experimental.*)
+- Temporal: Event sequences and time series
+
+!!! note "Experimental"
+    Temporal dataset support is currently experimental.
 
 ### Differential Privacy
 
@@ -51,9 +54,9 @@ $$
 
 Where:
 
-- $M$ is the mechanism (trained model)
+- $M$ is the mechanism (process of training the model)
 - $D_1$ and $D_2$ are datasets differing by one record
-- $\varepsilon$ (epsilon) controls privacy loss — lower values provide stronger privacy
+- $\varepsilon$ (epsilon) controls privacy loss -- lower values provide stronger privacy
 - $\delta$ (delta) is the failure probability
 - $S$ is any subset of possible outputs
 
@@ -66,7 +69,7 @@ NeMo Safe Synthesizer uses Differentially Private Stochastic Gradient Descent (D
 3. Noise injection: Add calibrated Gaussian noise to gradients based on privacy budget
 4. Privacy accounting: Track cumulative privacy loss using Rényi Differential Privacy (RDP)
 
-By default, *record-level* differential privacy is used. When `group_training_examples_by` is set, *group-level* privacy applies, meaning guarantees cover entire groups of records rather than individual records.
+By default, `record-level` differential privacy is used. When `group_training_examples_by` is set, `group-level` privacy applies -- guarantees cover entire groups of records rather than individual records.
 
 #### Privacy vs Utility Trade-off
 
@@ -89,7 +92,7 @@ For the complete list of configuration parameters, see the [Parameters Reference
 | `per_sample_max_grad_norm` | float | `1.0` | Gradient clipping threshold |
 
 
-#### Guidelines
+#### Recommendations
 
 Starting point: Begin with $\varepsilon \in [8, 12]$ and reduce as needed based on privacy requirements and acceptable quality trade-offs.
 
