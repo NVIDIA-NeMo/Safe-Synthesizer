@@ -3,8 +3,8 @@
 
 # Evaluating Output Data from NeMo Safe Synthesizer
 
-Landing page for understanding and diagnosing output quality -- synthetic data
-scores, evaluation metrics, privacy settings, and PII behavior. For runtime
+Landing page for understanding, diagnosing, and improving output quality --
+synthetic data scores, evaluation metrics, privacy settings, and PII behavior. For runtime
 errors, OOM issues, and configuration problems, see
 [Troubleshooting](troubleshooting.md). For environment variables and model
 caching, see [Environment Variables](environment.md).
@@ -172,4 +172,6 @@ Guides for reading the evaluation report and understanding metric scores.
 !!! note "Content in progress"
     Detailed guides for the HTML report, SQS score ranges, privacy metrics
     (epsilon, AIA, MIA), and column-level diagnostics are planned for a
-    future release.
+    future release. For a conceptual overview of evaluation metrics and what
+    they measure, see
+    [Product Overview -- Evaluation](../product-overview/evaluation.md).

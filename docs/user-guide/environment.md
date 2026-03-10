@@ -50,14 +50,14 @@ are cached, and which network endpoints are used.
 ## Precedence
 
 Synthesis parameters (`training.learning_rate`, `generation.num_records`, etc.)
-and infrastructure settings follow separate resolution paths.
+and runtime settings follow separate resolution paths but have a similar order of precedence.
 
 Synthesis parameters:
 
 1. CLI flags (`--training__learning_rate 0.001`)
 2. Dataset registry overrides
 3. YAML config file
-4. Model defaults
+4. Defaults
 
 Infrastructure settings (artifact path, logging, WandB):
 

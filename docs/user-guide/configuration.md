@@ -41,11 +41,24 @@ for the full field list.
     leave it at `0.0` unless you have a specific reason to monitor
     validation loss during fine-tuning.
 
-!!! tip "Recommended models"
-    The default `HuggingFaceTB/SmolLM3-3B` balances quality and speed on a
-    single GPU. For larger-scale use, try `mistralai/Mistral-7B-v0.1`.
-    Any causal LM on HuggingFace Hub works -- larger models produce
-    better results but require more VRAM and training time.
+Safe Synthesizer has explicit support (prompt templates, RoPE scaling,
+tokenizer handling) for these model families. Models outside this list
+will raise a `ValueError` at startup.
+
+| Family | HuggingFace ID |
+|--------|----------------|
+| SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
+| SmolLM2 | `HuggingFaceTB/SmolLM2-135M` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+| Mistral | `mistralai/Mistral-7B-v0.1` |
+| Llama 3.2 | detection requires `Llama32` in the path; standard `meta-llama/Llama-3.2-*` IDs do not match |
+| Qwen | `Qwen/Qwen2.5-7B` |
+| Nemotron | `nvidia/Nemotron-Mini-4B-Instruct` |
+| Granite | `ibm-granite/granite-3.3-2b-instruct` |
+
+Within each family, any size variant on HuggingFace Hub should work,
+though not all have been tested -- larger models generally produce
+better results but require more VRAM and training time.
 
 ---
 
@@ -64,7 +77,7 @@ for the full API reference.
 | `generation.repetition_penalty` | `1.0` | Penalty for repeated tokens; increase slightly if generation produces repetitive output |
 | `generation.patience` | `3` | Consecutive bad batches before stopping |
 | `generation.invalid_fraction_threshold` | `0.8` | Invalid record fraction that triggers the patience counter |
-| `generation.use_structured_generation` | `false` | Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records) |
+| `generation.use_structured_generation` | `false` | Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records and increasing generation time; use when the pipeline struggles to produce valid records) |
 | `generation.structured_generation_backend` | `"auto"` | vLLM guided-decoding backend |
 | `generation.structured_generation_schema_method` | `"regex"` | Schema method (`"regex"` or `"json_schema"`) |
 | `generation.structured_generation_use_single_sequence` | `false` | Match exactly one sequence when `max_sequences_per_example` is 1 |
@@ -109,7 +122,7 @@ Opacus.
 | Field | Default | Description |
 |-------|---------|-------------|
 | `privacy.dp_enabled` | `false` | Enable DP-SGD training |
-| `privacy.epsilon` | `8.0` | Privacy budget -- lower values give stronger privacy (1.0--10.0 typical) |
+| `privacy.epsilon` | `8.0` | Privacy budget -- lower values give stronger privacy (4.0--12.0 typical) |
 | `privacy.delta` | `"auto"` | Privacy failure probability (`"auto"` or float) |
 | `privacy.per_sample_max_grad_norm` | `1.0` | Max L2 norm for per-sample gradients |
 

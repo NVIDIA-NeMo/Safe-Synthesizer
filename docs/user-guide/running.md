@@ -88,13 +88,13 @@ safe-synthesizer run --config config.yaml --url data.csv
 
 #### Common Options
 
-These options apply to `run` and `run generate`. Options
-with `--` as default are required (no built-in default).
+These options apply to `run` and `run generate`. Only `--url` is required;
+all others have defaults or are optional.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
-| `--config` | `NSS_CONFIG` | -- | Path to YAML config file |
-| `--url` | -- | -- | Dataset path, URL, or registry name |
+| `--config` | `NSS_CONFIG` | (model defaults) | Path to YAML config file; omit to use all model defaults |
+| `--url` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
 | `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
 | `--output-file` | -- | -- | Path to output CSV file |
@@ -121,7 +121,7 @@ Train only -- saves the adapter without generating or evaluating.
 safe-synthesizer run train --config config.yaml --url data.csv
 ```
 
-Accepts the same common options as `run`. Does not accept synthesis parameter overrides (`--training__learning_rate`, etc.) -- use `run` or `run generate` for those.
+Accepts the same common options as `run`. Does not accept synthesis parameter overrides (`--training__learning_rate`, `--generation__num_records`, etc.) -- those only work with `run` (end-to-end) or `run generate`.
 
 ### `run generate`
 
@@ -192,8 +192,6 @@ customer ID) so related rows are trained together. Use
     data:
       group_training_examples_by: "customer_id"
       order_training_examples_by: "transaction_date"
-      holdout: 0.1
-      random_state: 42
     ```
 
 === "CLI"
@@ -202,7 +200,6 @@ customer ID) so related rows are trained together. Use
     safe-synthesizer run \
       --data__group_training_examples_by customer_id \
       --data__order_training_examples_by transaction_date \
-      --data__holdout 0.1 \
       --url transactions.csv
     ```
 
@@ -215,7 +212,6 @@ customer ID) so related rows are trained together. Use
         .with_data(
             group_training_examples_by="customer_id",
             order_training_examples_by="transaction_date",
-            holdout=0.1,
         )
     )
     ```
@@ -244,11 +240,14 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-Optional stage that runs before training. Detection works in two steps: GLiNER
-NER scans every cell for named-entity patterns (names, emails, phone numbers,
-etc.) and replaces matches with synthetic placeholders. An optional second step
-uses an LLM to classify which columns are likely to contain sensitive data,
-focusing NER effort where it matters most. PII replacement is on by default
+Optional stage that runs before training. Detection works in two independent
+steps: GLiNER NER scans free-text columns for named-entity patterns (names,
+emails, phone numbers, etc.) and replaces matches with synthetic placeholders.
+An optional second step uses an LLM to classify which columns contain
+exclusively sensitive data of one type (e.g., a column that is always SSNs),
+marking those columns for wholesale replacement before training. The two steps
+are independent -- NER runs on free-text content, LLM classification targets
+structured sensitive columns. PII replacement is on by default
 (`enable_replace_pii: true`).
 
 !!! tip
@@ -406,8 +405,8 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
 
 `training.attn_implementation` controls which attention kernel is used when
 loading the model. The default uses Flash Attention 3 via the HuggingFace
-Kernels Hub and falls back to `sdpa` when the `kernels` package cannot reach
-HuggingFace, either due to network issues or otherwise.
+Kernels Hub and falls back to `sdpa` when the `kernels` package is not
+installed.
 
 Common values:
 
@@ -601,13 +600,9 @@ with interactive visualizations. Two composite scores are reported:
   means the synthetic data leaks less information about individual training
   records.
 
-Three privacy checks contribute to DPS:
-
-| Check | What it measures | Default |
-|-------|-----------------|---------|
-| MIA (Membership Inference Attack) | Whether an attacker can determine if a specific record was in the training set | Enabled |
-| AIA (Attribute Inference Attack) | Whether an attacker can infer a withheld column value from the other columns | Enabled |
-| PII Replay | Whether verbatim PII from training data appears in the synthetic output | Enabled |
+See [Evaluating Output Data](evaluating-data.md) for details on score
+interpretation and the privacy checks (MIA, AIA, PII Replay) that contribute
+to DPS.
 
 === "YAML"
 
@@ -666,7 +661,6 @@ To skip evaluation entirely (e.g., for faster iteration during development):
     )
     ```
 
-See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
 See [Configuration Reference -- Evaluation](configuration.md#evaluation) for the full parameter table.
 
 ---
@@ -801,6 +795,13 @@ Each run writes to a directory named `<config-stem>---<dataset-stem>/<timestamp>
 under the artifact path. The config and dataset stems are derived from the
 filenames you pass to `--config` and `--url`, making it easy to identify runs
 at a glance. The timestamp is ISO 8601 (e.g., `2026-01-15T12:00:00`).
+
+To use an explicit output directory (skipping the auto-generated
+`<config>---<dataset>/<timestamp>` structure), pass `--run-path`:
+
+```bash
+safe-synthesizer run --config config.yaml --url data.csv --run-path ./my-run
+```
 
 ```text
 safe-synthesizer-artifacts/

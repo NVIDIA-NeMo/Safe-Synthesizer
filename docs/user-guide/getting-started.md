@@ -69,27 +69,25 @@ Commands:
 
 ## Quick Start
 
-Get a synthetic dataset in one step:
+Create a synthetic version of an input dataset in one step.
 
-=== "YAML"
+Save the following as `config.yaml`:
 
-    ```yaml
-    training:
-      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-      learning_rate: 0.0005
-    generation:
-      num_records: 1000
-    enable_replace_pii: true
-    ```
+```yaml
+training:
+  pretrained_model: "HuggingFaceTB/SmolLM3-3B"
+  learning_rate: 0.0005
+generation:
+  num_records: 1000
+enable_replace_pii: true
+```
 
-    ```bash
-    safe-synthesizer run --config config.yaml --url data.csv
-    ```
+PII replacement is on by default (shown explicitly here). Set
+`enable_replace_pii: false` to skip it, or see
+[Configuration -- PII Replacement](configuration.md#pii-replacement)
+to customize entity types.
 
-    PII replacement is on by default (shown explicitly here). Set
-    `enable_replace_pii: false` to skip it, or see
-    [Configuration -- PII Replacement](configuration.md#pii-replacement)
-    to customize entity types.
+Then run:
 
 === "CLI"
 
@@ -117,9 +115,7 @@ Get a synthetic dataset in one step:
 
 This fine-tunes a LoRA adapter on your data, generates 1000 synthetic records,
 and produces an evaluation report. Outputs go to
-`<artifact-path>/<config>---<dataset>/<run_name>/` (the default artifact path
-is `./safe-synthesizer-artifacts`; override with `--artifact-path` or
-`NSS_ARTIFACTS_PATH`):
+`./safe-synthesizer-artifacts/<config>---<dataset>/<timestamp>/`:
 
 - `generate/synthetic_data.csv` -- the synthetic dataset
 - `generate/evaluation_report.html` -- quality and privacy scores
