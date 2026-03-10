@@ -273,6 +273,22 @@ endif
 		dist/*.whl
 	@echo "published: $$(ls dist/*.whl)"
 
+.PHONY: publish-pypi
+publish-pypi: build-wheel ## Build and publish wheel to PyPI. Uses TWINE_USERNAME and TWINE_PASSWORD env vars.
+ifndef TWINE_USERNAME
+	$(error TWINE_USERNAME is not set. For PyPI token auth, set TWINE_USERNAME=__token__.)
+endif
+ifndef TWINE_PASSWORD
+	$(error TWINE_PASSWORD is not set. For PyPI token auth, set TWINE_PASSWORD=<your-pypi-token>.)
+endif
+	@echo "~~~~~~"
+	@echo "uploading to PyPI"
+	uvx twine upload \
+		--non-interactive \
+		--verbose \
+		dist/*.whl
+	@echo "published: $$(ls dist/*.whl)"
+
 
 ### NMP SYNCHRONIZATION ###
 
