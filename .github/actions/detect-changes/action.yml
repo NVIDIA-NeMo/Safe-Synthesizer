@@ -27,6 +27,12 @@ outputs:
   deps:
     description: "'true' if any dep related files changed"
     value: ${{ steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' }}
+  ci:
+    description: "'true' if any CI workflow or action files changed"
+    value: ${{ steps.filter.outputs.ci }}
+  any:
+    description: "'true' if any source, test, dependency, or CI file changed"
+    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
 
 runs:
   using: "composite"
@@ -49,3 +55,6 @@ runs:
             - 'uv.lock'
           pytest_ini:
             - 'pytest.ini'
+          ci:
+            - '.github/workflows/**'
+            - '.github/actions/**'

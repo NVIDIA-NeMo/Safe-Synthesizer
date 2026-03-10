@@ -46,9 +46,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      src: ${{ steps.changes.outputs.src }}
-      test: ${{ steps.changes.outputs.test }}
-      deps: ${{ steps.changes.outputs.deps }}
+      any: ${{ steps.changes.outputs.any }}
     steps:
       - uses: actions/checkout@v6
       - name: Detect changes
@@ -58,7 +56,7 @@ jobs:
   format:
     name: Format
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.any == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -85,7 +83,7 @@ jobs:
   typecheck:
     name: Typecheck
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.any == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -109,8 +107,15 @@ jobs:
   unit-test:
     name: Unit Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.any == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - name: checkout
         uses: actions/checkout@v6
@@ -135,13 +140,15 @@ jobs:
           name: coverage-report
           path: coverage.json
           retention-days: 30
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
+        if: matrix.python-version == '3.11'
         with:
           files: coverage.json
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+          comment: true
+          flags: python${{ matrix.python-version }}
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
