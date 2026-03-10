@@ -5,7 +5,7 @@
 
 NeMo Safe Synthesizer generates synthetic tabular data by fine-tuning a
 pretrained LLM on your dataset and sampling from the trained model. This page
-covers installation, a quick first run, and a walkthrough of what the pipeline
+covers installation, a quick-start example, and a walkthrough of what the pipeline
 does at each stage.
 
 ---
@@ -15,7 +15,6 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11+
-- pip
 - CUDA runtime 12.8
 
 ### Install the Package
@@ -84,7 +83,7 @@ enable_replace_pii: true
 
 PII replacement is on by default (shown explicitly here). Set
 `enable_replace_pii: false` to skip it, or see
-[Configuration -- PII Replacement](configuration.md#pii-replacement)
+[Configuration -- Replacing PII](configuration.md#replacing-pii)
 to customize entity types.
 
 Then run:
@@ -114,8 +113,8 @@ Then run:
     ```
 
 This fine-tunes a LoRA adapter on your data, generates 1000 synthetic records,
-and produces an evaluation report. Outputs go to
-`./safe-synthesizer-artifacts/<config>---<dataset>/<timestamp>/`:
+and produces an evaluation report. The default outputs are placed in
+`./safe-synthesizer-artifacts/<config>---<dataset>/<timestamp>/`
 
 - `generate/synthetic_data.csv` -- the synthetic dataset
 - `generate/evaluation_report.html` -- quality and privacy scores
@@ -131,13 +130,13 @@ generate many times).
 
 ```mermaid
 flowchart LR
-    Data["Data Input"] --> PII["PII Replacement\n(optional)"]
+    Data["Data Input"] --> PII["PII Replacement<br/>(optional)"]
     PII --> Train["Training"]
     Train --> Gen["Generation"]
     Gen --> Eval["Evaluation"]
 ```
 
-### 1. Data Preparation
+### 1. Data Input
 
 The pipeline loads your input data (CSV, JSON, JSONL, Parquet, or DataFrame)
 and prepares it for training:
@@ -157,7 +156,7 @@ column classification, then replaces detected entities with synthetic but
 realistic values. This ensures the model never learns the most sensitive
 information -- names, addresses, identifiers -- from the training data.
 
-See [Configuration -- PII Replacement](configuration.md#pii-replacement) for
+See [Configuration -- Replacing PII](configuration.md#replacing-pii) for
 entity types, LLM classification setup, and SDK customization.
 
 ### 3. Training
@@ -170,9 +169,9 @@ available:
 | HuggingFace | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus |
 | Unsloth | Optimized training for faster fine-tuning (auto-selected by default) |
 
-The default model is `HuggingFaceTB/SmolLM3-3B`. Any causal LM on HuggingFace
-Hub works -- larger models produce better results but require more VRAM and
-training time. See [Configuration -- Training](configuration.md#training).
+The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer supports
+specific model families (see [Configuration -- Training](configuration.md#training)
+for the full list).
 
 !!! tip "Differential privacy"
     For formal privacy guarantees, enable DP-SGD via `privacy.dp_enabled: true`.
@@ -190,13 +189,14 @@ See [Configuration -- Generation](configuration.md#generation).
 ### 5. Evaluation
 
 Measures quality and privacy of the synthetic data and produces an HTML report
-with interactive visualizations. Metrics include:
+with interactive visualizations. Two composite scores are reported:
 
 - SQS (Synthetic Quality Score) -- column distributions, correlations, deep
   structure
-- MIA (Membership Inference Attack) -- privacy risk assessment
-- AIA (Attribute Inference Attack) -- quasi-identifier privacy
-- PII replay detection -- checks whether PII from training appears in output
+- DPS (Data Privacy Score) -- composite privacy score with three subscores:
+    - MIA (Membership Inference Attack) -- privacy risk assessment
+    - AIA (Attribute Inference Attack) -- quasi-identifier privacy
+    - PII replay detection -- checks whether PII from training appears in output
 
 See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
 
@@ -213,7 +213,7 @@ See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
     Synthesis parameters for training, generation, PII, DP, evaluation,
     and time series.
 
-    [:octicons-arrow-right-24: Configuration](configuration.md)
+    [→ Configuration](configuration.md)
 
 -   Running Safe Synthesizer
 
@@ -222,7 +222,7 @@ See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
     How to run the pipeline, CLI commands, individual stages, logging,
     and artifacts.
 
-    [:octicons-arrow-right-24: Running Safe Synthesizer](running.md)
+    [→ Running Safe Synthesizer](running.md)
 
 -   Environment Variables
 
@@ -230,7 +230,7 @@ See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
 
     Artifact paths, logging, model caching, NIM endpoints, and WandB.
 
-    [:octicons-arrow-right-24: Environment Variables](environment.md)
+    [→ Environment Variables](environment.md)
 
 -   Troubleshooting
 
@@ -238,7 +238,7 @@ See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
 
     Common errors, OOM fixes, offline setup, and configuration gotchas.
 
-    [:octicons-arrow-right-24: Troubleshooting](troubleshooting.md)
+    [→ Troubleshooting](troubleshooting.md)
 
 -   Evaluating Output Data
 
@@ -247,6 +247,6 @@ See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
     Interpreting SQS and DPS scores, improving generation quality,
     choosing privacy settings.
 
-    [:octicons-arrow-right-24: Evaluating Output Data](evaluating-data.md)
+    [→ Evaluating Output Data](evaluating-data.md)
 
 </div>

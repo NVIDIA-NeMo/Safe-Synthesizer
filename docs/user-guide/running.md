@@ -3,9 +3,10 @@
 
 # Running Safe Synthesizer
 
-How to run the pipeline and configure each stage. For the full parameter
-tables, see [Configuration Reference](configuration.md). For environment
-variables, see [Environment Variables](environment.md).
+Full reference for pipeline execution. For a quick first run, see
+[Getting Started](getting-started.md). For parameter tables, see
+[Configuration Reference](configuration.md). For environment variables, see
+[Environment Variables](environment.md).
 
 ---
 
@@ -15,10 +16,10 @@ The pipeline runs five stages in sequence. Each stage is optional or configurabl
 
 ```mermaid
 flowchart LR
-    data[Data Input] --> pii["PII Replacement\n(optional)"]
-    pii --> train["Training\nLoRA fine-tune"]
-    train --> gen["Generation\nvLLM sampling"]
-    gen --> eval["Evaluation\nSQS + DPS report"]
+    data[Data Input] --> pii["PII Replacement<br/>(optional)"]
+    pii --> train["Training<br/>LoRA fine-tune"]
+    train --> gen["Generation<br/>vLLM sampling"]
+    gen --> eval["Evaluation<br/>SQS + DPS report"]
 ```
 
 Run the full end-to-end pipeline in one step:
@@ -258,11 +259,15 @@ structured sensitive columns. PII replacement is on by default
 
     ```yaml
     enable_replace_pii: true
+    replace_pii:
+      globals:
+        classify:
+          enable_classify: true
+          entities: ["email", "phone_number", "ssn"]
     ```
 
-    To customize entity types or classification, use the SDK builder -- the
-    `replace_pii` config block requires the full `steps` field which is
-    verbose in YAML.
+    The `replace_pii` config block requires the full `steps` field internally;
+    use the SDK builder when you need fine-grained control over individual steps.
 
 === "CLI"
 
@@ -296,12 +301,13 @@ structured sensitive columns. PII replacement is on by default
 
 ### LLM Column Classification
 
-To enable LLM-based column classification (optional), set the endpoint
+To enable LLM-based PII column classification (optional), set the endpoint
 before running the pipeline. Any OpenAI-compatible inference endpoint
 works -- not just NVIDIA NIM:
 
 ```bash
-export NIM_ENDPOINT_URL="https://your-inference-endpoint"
+export NIM_ENDPOINT_URL="https://integrate.api.nvidia.com/v1"  # or your own OpenAI-compatible endpoint
+
 export NIM_API_KEY="your-api-key"  # pragma: allowlist secret  (optional -- only needed for direct endpoints, not inference gateways)
 ```
 
@@ -315,7 +321,7 @@ requires `NIM_ENDPOINT_URL`.
 Set `enable_synthesis: false` with `enable_replace_pii: true` to run PII
 replacement without synthesis.
 
-See [Configuration Reference -- PII Replacement](configuration.md#pii-replacement) for the full parameter reference.
+See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 
 ---
 
@@ -598,11 +604,14 @@ with interactive visualizations. Two composite scores are reported:
   the training data. Higher is better (scale of 0--10).
 - Data Privacy Score (DPS): measures resistance to privacy attacks. Higher
   means the synthetic data leaks less information about individual training
-  records.
+  records. DPS is a composite of three subscores:
+    - MIA (Membership Inference Attack) -- privacy risk assessment
+    - AIA (Attribute Inference Attack) -- quasi-identifier privacy; requires a
+      larger sample size to work well
+    - PII replay detection -- checks whether PII from training appears in output
 
-See [Evaluating Output Data](evaluating-data.md) for details on score
-interpretation and the privacy checks (MIA, AIA, PII Replay) that contribute
-to DPS.
+See [Evaluation](../product-overview/evaluation.md) for details on score
+interpretation.
 
 === "YAML"
 

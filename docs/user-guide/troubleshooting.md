@@ -18,8 +18,8 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
 | OOM in evaluation | Large dataset + PCA | [Reduce columns or disable eval](#out-of-memory-during-evaluation) |
 | "Cannot use unsloth without GPU" | No CUDA device | [Switch to HuggingFace backend](#no-gpu-detected) |
-| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `data.max_sequences_per_example: 1`](evaluating-data.md#requirements) |
-| "Unsloth not compatible with DP" | Mutual exclusion | [Set `training.use_unsloth: false`](evaluating-data.md#requirements) |
+| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `data.max_sequences_per_example: 1`](configuration.md#differential-privacy) |
+| "Unsloth not compatible with DP" | Mutual exclusion | [Set `training.use_unsloth: false`](configuration.md#differential-privacy) |
 | "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](evaluating-data.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
 | "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
@@ -214,7 +214,7 @@ If evaluation OOMs, reduce the evaluation scope or dataset size:
 
 !!! tip "Evaluation and Data Quality"
     SQS scores, UNAVAILABLE metrics, report limits, and low-quality
-    diagnostics are covered in [Data Quality > Evaluation](evaluating-data.md#evaluation).
+    diagnostics are covered in [Evaluating Output Data](evaluating-data.md#evaluation).
 
 ---
 
@@ -289,7 +289,7 @@ Incompatible DP settings:
 
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in
-    [Data Quality > Differential Privacy](evaluating-data.md#differential-privacy).
+    [Evaluating Output Data -- Differential Privacy](evaluating-data.md#differential-privacy).
 
 ---
 

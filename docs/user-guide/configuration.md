@@ -42,8 +42,9 @@ for the full field list.
     validation loss during fine-tuning.
 
 Safe Synthesizer has explicit support (prompt templates, RoPE scaling,
-tokenizer handling) for these model families. Models outside this list
-will raise a `ValueError` at startup.
+tokenizer handling) for the model families listed below. Models outside this
+list will raise a `ValueError` at startup. For quick iteration on a CPU or
+low-VRAM GPU, `TinyLlama/TinyLlama-1.1B-Chat-v1.0` is a fast option.
 
 | Family | HuggingFace ID |
 |--------|----------------|
@@ -93,20 +94,21 @@ for details.
 
 ---
 
-## PII Replacement
+## Replacing PII
 
 PII replacement detects and replaces personally identifiable information in
 your dataset before synthesis. It is on by default (`enable_replace_pii: true`).
 The `replace_pii` block is only needed when customizing entity types or
 classification via the SDK.
 
-Key config structure:
+Key config parameters:
 
-- `replace_pii.globals.classify`: column classification -- which columns contain PII
-- `replace_pii.globals.classify.enable_classify`: enable LLM-based column classification
-- `replace_pii.globals.classify.entities`: entity types to classify (e.g. `["email", "phone_number", "ssn"]`)
-- `replace_pii.globals.ner`: row-level NER via GLiNER
-- `replace_pii.globals.ner.ner_threshold`: confidence threshold (default `0.3`)
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enable_replace_pii` | `true` | Master switch for PII replacement |
+| `replace_pii.globals.classify.enable_classify` | `false` | Enable LLM-based column classification |
+| `replace_pii.globals.classify.entities` | `[]` | Entity types to classify (e.g. `["email", "phone_number", "ssn"]`) |
+| `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection |
 
 See [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
 for the full schema.
@@ -183,8 +185,8 @@ for the full schema. For detailed descriptions and constraints, see the
 | `evaluation.mia_enabled` | `true` | Membership inference attack |
 | `evaluation.aia_enabled` | `true` | Attribute inference attack |
 | `evaluation.pii_replay_enabled` | `true` | PII replay detection |
-| `evaluation.sqs_report_columns` | `250` | Max columns in SQS report |
-| `evaluation.sqs_report_rows` | `5000` | Max rows in SQS report |
+| `evaluation.sqs_report_columns` | `250` | Max columns in the Synthetic Quality Score (SQS) report |
+| `evaluation.sqs_report_rows` | `5000` | Max rows in the SQS report |
 | `evaluation.quasi_identifier_count` | `3` | Number of quasi-identifiers sampled for AIA (auto-reduced for small datasets) |
 | `evaluation.mandatory_columns` | `null` | Number of mandatory columns that must be used in evaluation |
 
