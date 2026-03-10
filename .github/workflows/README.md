@@ -15,7 +15,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)           | Builds and deploys documentation to GitHub Pages     |
-| [internal-release.yml](internal-release.yml)       | Manual dispatch                       | Builds and publishes wheel to NVIDIA Artifactory     |
+| [internal-release.yml](internal-release.yml)       | Tag push (`v[0-9]*`), manual dispatch | Builds and publishes wheel to Artifactory or PyPI    |
 | [release.yml](release.yml)                         | Manual dispatch                       | Builds and publishes package to PyPI (production)    |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                                   | Scans for accidentally committed secrets             |
 
@@ -74,12 +74,19 @@ flowchart LR
         slackNotify[Slack Notification]
     end
 
+    subgraph internalRelease [Internal Release]
+        buildWheelInt[Build Wheel]
+        publishArtifactory[Publish to Artifactory/PyPI]
+    end
+
     push --> ci & gpu
     cpb --> gpu & copyright
     pr --> ci & conventional & secrets
     manual --> release
+    tag[Tag push v[0-9]*] --> internalRelease
 
     buildWheel --> publishPyPI --> ghRelease --> slackNotify
+    buildWheelInt --> publishArtifactory
 
     conventional -.->|reuses| FW-CI-templates
     secrets -.->|reuses| FW-CI-templates
@@ -170,18 +177,35 @@ Validates that Python files have proper NVIDIA copyright headers.
 
 ## Internal Release Workflow
 
-The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory. Use this for testing the release process or distributing internal builds.
+The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory or PyPI.
+
+### Triggers
+
+**Tag push (automatic):** Pushing a `v[0-9]*` tag (e.g. `git tag v0.2.0 && git push --tags`) automatically builds and publishes to Artifactory. This is the primary release mechanism.
+
+**Manual dispatch:** Go to Actions > Internal Release and run with:
+- `release-ref`: Branch, tag, or commit SHA to build (defaults to `main`)
+- `publish-target`: `artifactory` (default) or `pypi`
 
 ### How to Publish Internally
 
-Via GitHub Actions:
+Tag-based (recommended):
+
+```bash
+git tag v0.2.0
+git push --tags
+```
+
+This triggers the workflow automatically and publishes to Artifactory.
+
+Via GitHub Actions (manual):
 
 1. Go to Actions > Internal Release
 2. Click Run workflow
-3. Enter the branch, tag, or commit SHA to build (defaults to `main`)
-4. The workflow builds the wheel, uploads it as an artifact, and publishes to Artifactory
+3. Enter the branch, tag, or commit SHA to build
+4. Select publish target (`artifactory` or `pypi`)
 
-Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets to be configured.
+Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets for Artifactory; `TWINE_USERNAME` and `TWINE_PASSWORD` for PyPI.
 
 Locally (via Makefile):
 
