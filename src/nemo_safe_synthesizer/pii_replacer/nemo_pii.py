@@ -29,28 +29,42 @@ from .data_editor.detect import (
 
 
 class ColumnClassification(BaseModel):
-    """classification info and detected entities in a column prior to transform. entity_count is None and entity_values an empty list if entity is None for non-text fields."""
+    """Classification and detected-entity info for a column prior to transform.
 
-    field_name: str
-    """The name of the field/column."""
+    When ``entity`` is ``None`` (e.g. unclassified), ``entity_count``
+    is ``None`` and ``entity_values`` is an empty list.
+    """
 
-    column_type: str | None
-    """The detected column type (e.g., 'text', 'numeric', etc.)."""
-
-    entity: str | None
-    """The detected entity type (e.g., 'email', 'phone', etc.), or None if no entity detected."""
-
-    entity_count: int | None = None
-    """Number of non-empty values in this field. None if no entity detected."""
-
-    entity_values: list[Any] = Field(default_factory=list)
-    """List of all unique values for this field. Empty list if no entity detected."""
+    field_name: str = Field(description="Name of the field/column.")
+    column_type: str | None = Field(
+        default=None,
+        description="Detected column type (e.g. ``text``, ``numeric``).",
+    )
+    entity: str | None = Field(
+        default=None,
+        description="Detected entity type (e.g. ``email``, ``phone``), or ``None`` if none.",
+    )
+    entity_count: int | None = Field(
+        default=None,
+        description="Number of non-empty values in this field. ``None`` if no entity detected.",
+    )
+    entity_values: list[Any] = Field(
+        default_factory=list,
+        description="Unique values for this field. Empty if no entity detected.",
+    )
 
 
 def classify_config_from_params(
     config: PiiReplacerConfig,
 ) -> ClassifyConfig:
-    """Parse out classification / NER parameters from config"""
+    """Build classification and NER config from PII replacer config.
+
+    Args:
+        config: PII replacer config containing globals for classify and NER.
+
+    Returns:
+        ``ClassifyConfig`` with valid entities, NER settings, and GLiNER options.
+    """
     valid_entities = DEFAULT_ENTITIES
 
     if config.globals.classify.entities is not None:
@@ -76,6 +90,7 @@ def classify_config_from_params(
 
 
 def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
+    """Build a composite entity extractor from classification config."""
     entity_extractor = EntityExtractorMulti.get_entity_extractor(clsfy_cfg)
     if clsfy_cfg.gliner_enabled:
         entity_extractor.add_entity_extractor(EntityExtractorGliner.get_entity_extractor(clsfy_cfg))
@@ -85,15 +100,15 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
 
 
 def _get_classify_endpoint_url() -> str:
-    """Get the inference endpoint URL for column classification.
+    """Return the inference endpoint URL for column classification.
 
-    The endpoint is expected to be set in the NIM_ENDPOINT_URL environment variable.
+    Reads ``NIM_ENDPOINT_URL`` from the environment.
 
     Returns:
-        The inference endpoint URL.
+        The endpoint URL string.
 
     Raises:
-        Exception: If no valid configuration is found.
+        Exception: If ``NIM_ENDPOINT_URL`` is not set.
     """
     endpoint = os.environ.get("NIM_ENDPOINT_URL")
     if endpoint:
@@ -103,6 +118,7 @@ def _get_classify_endpoint_url() -> str:
 
 
 def get_column_classifier() -> ColumnClassifierLLM:
+    """Return a column classifier backed by the NIM endpoint (``NIM_ENDPOINT_URL``, ``NIM_API_KEY``)."""
     classifier = ColumnClassifierLLM()
     classifier._num_samples = 5
 
@@ -135,7 +151,7 @@ ACCOUNTING_FUNCTIONS = [
     "fake_entities",
     "drop",
 ]
-"""Transform functions tracked for report accounting of which functions were used for which columns"""
+"""Transform function names tracked for report accounting (which functions were used per column)."""
 
 
 def _build_column_statistics(
@@ -143,7 +159,16 @@ def _build_column_statistics(
     transform_fn_accounting: TransformFnAccounting,
     column_report: NerReport,
 ) -> dict[str, ColumnStatistics]:
-    """Build statistics for each column from various objects used by Editor."""
+    """Build per-column statistics from classification, accounting, and NER report.
+
+    Args:
+        classifications: Per-column classification (type, entity, counts, values).
+        transform_fn_accounting: Which transform functions were applied per column.
+        column_report: NER report with detected entities for text columns.
+
+    Returns:
+        Map of column name to ``ColumnStatistics``.
+    """
     result = {}
     for field in classifications:
         column_name = field.field_name
@@ -179,27 +204,29 @@ def _build_column_statistics(
 
 
 class NemoPII(object):
-    """Class for performing PII replacement.
+    """PII replacement over DataFrames via classification, NER, and configurable transforms.
 
-    Sample usage:
+    Call ``classify_df`` to get column classifications, then ``transform_df`` to replace
+    PII. The result and per-column statistics are on ``result`` after ``transform_df``.
 
-    ```python
-    nemo_pii = NemoPII()
-    nemo_pii.transform_df(df)
-    result = nemo_pii.result
-    print(result.transformed_df)
-    print(result.column_statistics)
-    ```
+    Args:
+        config: PII replacer config. If ``None``, default config is used.
+
+    Attributes:
+        result: Result of the last ``transform_df`` (``TransformResult`` with ``transformed_df`` and ``column_statistics``).
+
+    Example:
+        >>> nemo_pii = NemoPII()
+        >>> nemo_pii.transform_df(df)
+        >>> result = nemo_pii.result
+        >>> print(result.transformed_df)
+        >>> print(result.column_statistics)
     """
 
     result: TransformResult
 
     def __init__(self, config: PiiReplacerConfig | None = None):
-        """Initialize the NemoPII class.
-
-        Args:
-            config: Optional configuration for the PII replacer. If not provided, a default configuration will be used.
-        """
+        """Initialize the PII replacer from config."""
         if config:
             self.pii_replacer_config = config
         else:
@@ -216,17 +243,14 @@ class NemoPII(object):
         self.elapsed_time = 0.0
 
     def classify_df(self, df: pd.DataFrame) -> list[ColumnClassification]:
-        """Classify the columns of a dataframe.
-
-        Identifies both a column type and entity name for each column.
+        """Classify each column (type and entity) using config and optional LLM classifier.
 
         Args:
-            df: The dataframe to classify.
+            df: DataFrame to classify.
 
         Returns:
-            A list of ColumnClassification objects containing classification info for each field,
-            including field name, column type, entity, entity counts, and a list of unique entity values.
-
+            List of ``ColumnClassification``, one per column, with field name, column type,
+            entity, entity count, and unique entity values.
         """
         # Pre-initialize with defaults
         entities = {}
@@ -295,15 +319,12 @@ class NemoPII(object):
         return field_results
 
     def transform_df(self, df: pd.DataFrame, classifications: list[ColumnClassification] | None = None) -> None:
-        """Transform the dataframe by replacing PII.
+        """Replace PII in the DataFrame and set ``self.result``.
 
         Args:
-            df: The dataframe to transform.
-            classifications: Optional classifications for the columns. If not
-                provided, column classification will be performed.
-
-        Returns:
-            None
+            df: DataFrame to transform.
+            classifications: Optional precomputed classifications. If ``None``,
+                ``classify_df`` is run first.
         """
         pii_replacer_start = time.monotonic()
         try:

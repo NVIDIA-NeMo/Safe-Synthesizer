@@ -27,6 +27,7 @@ from .filters import partial_mask
 
 
 def lookup_country(value: str) -> pycountry.db.Data:
+    """Resolve country name or code to pycountry ``Data`` (with alias map for e.g. Russia, UK)."""
     value = value.strip()
     COUNTRY_MAP: dict[str, str] = {
         "Russia": "Russian Federation",
@@ -37,11 +38,13 @@ def lookup_country(value: str) -> pycountry.db.Data:
 
 
 def lookup_locales(value: str) -> Optional[list[str]]:
+    """Return Faker locales matching the country for ``value`` (e.g. ``en_GB`` for UK), or ``None`` if none."""
     locales = [locale for locale in AVAILABLE_LOCALES if locale.endswith(lookup_country(value).alpha_2)]
     return locales if locales else None
 
 
 def tld(value: str | pycountry.db.Data) -> str:
+    """Return the TLD for the country (e.g. ``.uk`` for GB)."""
     if isinstance(value, str):
         value = lookup_country(value)
     value = value.alpha_2.lower()
@@ -50,19 +53,23 @@ def tld(value: str | pycountry.db.Data) -> str:
     return f".{value}"
 
 
-def normalize(value, allow: str = "") -> str:
+def normalize(value: Any, allow: str = "") -> str:
+    """Transliterate to ASCII and remove characters not in ``\w`` or ``allow``."""
     return re.sub(rf"[^\w{allow}]", "", anyascii(value))
 
 
-def sha256(default_salt: str, value, salt: Optional[str] = None) -> str:
-    """
-    default_salt to be set as a partial from within the Environment. salt param
-    can override it and is available to the user.
+def sha256(default_salt: str, value: Any, salt: Optional[str] = None) -> str:
+    """Return SHA-256 hex digest of ``salt + value``; ``salt`` defaults to ``default_salt`` (e.g. from Environment).
 
-    This way there is a default salt if unspecified in the template:
-    `this | hash`
-    or it can be specified by the user:
-    `this | hash(salt="ABC")`
+    In templates, ``this | hash`` uses the default salt; ``this | hash(salt="ABC")`` overrides it.
+
+    Args:
+        default_salt: Salt used when ``salt`` is not provided.
+        value: Value to hash (stringified).
+        salt: Optional override; if ``None``, use ``default_salt``.
+
+    Returns:
+        Hexadecimal digest string.
     """
     if salt is None:
         salt = default_salt
@@ -70,6 +77,8 @@ def sha256(default_salt: str, value, salt: Optional[str] = None) -> str:
 
 
 class PersonaProvider(BaseProvider):
+    """Faker provider that yields a consistent persona (first/last name, email, gender) per row seed."""
+
     __provider__ = "persona"
 
     def persona(
@@ -78,7 +87,18 @@ class PersonaProvider(BaseProvider):
         email_format: str = "first_name.last_name",
         domain_type: str = "all_domains",
         gender: Optional[str] = None,
-    ):
+    ) -> dict[str, Any]:
+        """Return a dict with ``first_name``, ``last_name``, ``email``, ``gender``.
+
+        Args:
+            row_index: Seed for deterministic persona (default 1).
+            email_format: One of ``first_name``, ``last_name``, ``flast_name``, ``first_name.last_name``.
+            domain_type: ``all_domains`` or ``free_domains``.
+            gender: ``Male``/``Female`` or ``None`` for random.
+
+        Returns:
+            Dict with keys ``first_name``, ``last_name``, ``email``, ``gender``.
+        """
         saved_seed = self.generator._global_seed
         self.generator.seed_instance(row_index)
 
@@ -121,11 +141,23 @@ class PersonaProvider(BaseProvider):
 
 
 class Faker:
+    """Thin wrapper around Faker with optional seeding; supports ``maybe_seed`` for deterministic per-row data.
+
+    Args:
+        locale: Faker locale(s); single locale enables ``PersonaProvider``.
+        seed: Global seed for reproducibility; if set, ``maybe_seed`` uses instance-specific seeds.
+
+    Attributes:
+        global_seed: Seed passed at construction (if any).
+        maybe_seed: Either ``_fake_with_seed`` or ``_fake_without_seed`` depending on constructor seed.
+    """
+
     _fake: VanillaFaker
     global_seed: SeedType
     maybe_seed: Callable[[SeedType], VanillaFaker]
 
-    def __init__(self, locale: Optional[list[str]] = None, seed: Optional[SeedType] = None):
+    def __init__(self, locale: Optional[list[str]] = None, seed: Optional[SeedType] = None) -> None:
+        """Initialize Faker with optional locale and seed; single locale adds ``PersonaProvider``."""
         self._fake = VanillaFaker(locale)
         if locale and len(locale) <= 1:  # Can't proxy multiple locales
             self._fake.add_provider(PersonaProvider)
@@ -136,13 +168,16 @@ class Faker:
             self.maybe_seed = self._fake_without_seed
 
     def _fake_with_seed(self, instance_seed: SeedType) -> VanillaFaker:
+        """Seed Faker from ``global_seed`` + ``instance_seed`` and return it."""
         self._fake.__class__.seed(f"{self.global_seed!r}{instance_seed!r}")
         return self._fake
 
     def _fake_without_seed(self, instance_seed: Optional[SeedType] = None) -> VanillaFaker:
+        """Return the Faker instance unchanged (no seeding)."""
         return self._fake
 
-    def __call__(self, locale: Optional[list[str]] = None, seed: Optional[SeedType] = None):
+    def __call__(self, locale: Optional[list[str]] = None, seed: Optional[SeedType] = None) -> "Faker":
+        """Return a new ``Faker`` instance with optional locale/seed override (for template use)."""
         if locale is None:
             locale = self._fake.locales
         if seed is None:
@@ -153,17 +188,18 @@ class Faker:
             self._fake_with_seed(seed)
         return self.__class__(locale, seed)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
+        """Proxy attribute access to the underlying Faker instance."""
         return getattr(self._fake, name)
 
 
 def redact_entities_fn(entity: NERPrediction) -> str:
-    """Replace entity with its label in angled braces"""
+    """Return the entity label in angle brackets (e.g. ``<first_name>``)."""
     return f"<{entity.label}>"
 
 
 def label_entities_fn(entity: NERPrediction, extended: Optional[bool] = False) -> str:
-    """Replace entity with its text and label in angled braces"""
+    """Return an XML-like tag with ``type`` and ``value`` (and optionally ``source``/``score`` if ``extended``)."""
     extra_attrs = ""
     if extended:
         extra_attrs = f''' source="{entity.source}" score="{entity.score}"'''
@@ -171,12 +207,12 @@ def label_entities_fn(entity: NERPrediction, extended: Optional[bool] = False) -
 
 
 def hash_entities_fn(default_salt: str, entity: NERPrediction, salt: Optional[str] = None) -> str:
-    """Replace entity with a hash of its text"""
+    """Return first 9 chars of SHA-256 hash of entity text (with optional ``salt``)."""
     return sha256(default_salt, entity.text, salt=salt)[:9]
 
 
 class SafeSynthesizerFakerMethodNotFound(Exception):
-    pass
+    """Raised when no Faker method exists for an entity type (e.g. in ``fake_entities_fn`` with ``on_error='raise'``)."""
 
 
 def fake_entities_fn(
@@ -186,12 +222,21 @@ def fake_entities_fn(
     on_error: Optional[str] = None,
     extended: Optional[bool] = False,
 ) -> str:
-    """
-    Replace entity with faked entity of the same type
+    """Replace entity with a faked value of the same type; fall back per ``on_error`` if no Faker method exists.
 
-    If a fake function is not found for a specific entity, on_error param specifies what to do:
-      "redact", "label", and "hash" fall back on associated *_entities_fn
-      "raise" will raise an exception causing execution to stop
+    Args:
+        hash_salt: Salt for hash fallback.
+        fake: Faker instance.
+        entity: NER prediction to fake.
+        on_error: If no Faker method: ``redact``, ``label``, or ``hash`` use that fallback; ``raise`` raises
+            ``SafeSynthesizerFakerMethodNotFound``. Default ``redact``.
+        extended: Passed to ``label_entities_fn`` when ``on_error='label'``.
+
+    Returns:
+        Faked string or fallback (redact/label/hash).
+
+    Raises:
+        SafeSynthesizerFakerMethodNotFound: When ``on_error='raise'`` and no Faker method for ``entity.label``.
     """
     try:
         return getattr(fake, entity.label)()
@@ -216,6 +261,19 @@ def fake_entities_fn(
 
 
 class Environment:
+    """Jinja sandbox with Faker, date filters, and entity filters (detect/redact/label/hash/fake).
+
+    Args:
+        locales: Faker locale(s); passed to ``Faker``.
+        seed: Seed for Faker and hash filter.
+        globals_config: Optional dict exposed as ``globals`` in templates.
+        entity_extractor: Extractor for NER filters; default ``EntityExtractorNoop``.
+
+    Attributes:
+        entity_extractor: The NER extractor used by entity filters.
+        ner_cacheable_filters: Set of filter names that benefit from NER cache prefill.
+    """
+
     _env: SandboxedEnvironment
     _fake: Faker
     entity_extractor: EntityExtractor
@@ -226,7 +284,8 @@ class Environment:
         seed: SeedType,
         globals_config: Optional[dict[str, Any]] = None,
         entity_extractor: Optional[EntityExtractor] = None,
-    ):
+    ) -> None:
+        """Build sandbox and register filters (hash, fake, date_shift, entity filters, etc.)."""
         if entity_extractor is not None:
             self.entity_extractor = entity_extractor
         else:
@@ -289,11 +348,12 @@ class Environment:
             ]
         )
 
-    def maybe_seed(self, instance_seed: SeedType):
+    def maybe_seed(self, instance_seed: SeedType) -> None:
+        """Set Faker instance seed for deterministic output (e.g. per row)."""
         self._fake.maybe_seed(instance_seed)
 
-    def template_to_fnames(self, template_str) -> set[str]:
-        """Parse the template's AST and return set of filter/function names."""
+    def template_to_fnames(self, template_str: str) -> set[str]:
+        """Parse the template's AST and return the set of filter/function names used (e.g. ``fake``, ``hash``)."""
         retval = set()
         ast = self._env.parse(f"{{{{{template_str}}}}}")
         fns = [f for f in ast.find_all((jinja2.nodes.Name, jinja2.nodes.Filter))]
@@ -306,12 +366,14 @@ class Environment:
         return retval
 
     def make_template(self, template_str: str) -> jinja2.Template:
+        """Build a Jinja template from the string (wrapped so empty/missing renders as the literal string)."""
         return self._env.from_string(
             f"{{{{{template_str}|default(__tmp_literal)}}}}",
             globals={"__tmp_literal": template_str},
         )
 
     def _get_delta(self, base: date | datetime | str) -> timedelta:
+        """Return timedelta from ``base`` to today (for date_shift/date_time_shift)."""
         if isinstance(base, str):
             base = dateutil.parser.parse(base)
         elif isinstance(base, date):
@@ -327,13 +389,18 @@ class Environment:
         min_offset: date | datetime | timedelta | str | int = "-30y",
         max_offset: date | datetime | timedelta | str | int = "today",
     ) -> datetime:
-        """
-        Pick a random date from interval. Interval defined by input value
-        and an offset on either side defined by filter params.
+        """Return a random date in the interval defined by ``value`` and offsets, then subtract delta to preserve relative position.
 
-        For instance `2000-01-01 | date_shift('-1y', '+1y')` selects from
-        an interval between 1999-01-01 and 2001-01-01, as defined by faker.
+        E.g. ``2000-01-01 | date_shift('-1y', '+1y')`` picks a date between 1999-01-01 and 2001-01-01 (Faker),
+        then adjusts so the result is in the same relative position from today as ``value``.
 
+        Args:
+            value: Base date (or parseable string).
+            min_offset: Minimum offset (e.g. ``-30y``, ``today``).
+            max_offset: Maximum offset.
+
+        Returns:
+            Shifted date as datetime.
         """
         delta = self._get_delta(value)
         try:
@@ -351,13 +418,17 @@ class Environment:
         min_offset: date | datetime | timedelta | str | int = "-30y",
         max_offset: date | datetime | timedelta | str | int = "now",
     ) -> datetime:
-        """
-        Pick a random datetime from interval. Interval defined by input value
-        and an offset on either side defined by filter params.
+        """Return a random datetime in the interval (like ``date_shift`` but with time); preserves relative position from today.
 
-        For instance `2000-01-01 00:00 | date_time_shift('-1y', '+1y')` selects from
-        an interval between 1999-01-01 00:00 and 2001-01-01 00:00, as defined by faker.
+        E.g. ``2000-01-01 00:00 | date_time_shift('-1y', '+1y')`` picks between 1999-01-01 00:00 and 2001-01-01 00:00.
 
+        Args:
+            value: Base datetime (or parseable string).
+            min_offset: Minimum offset (e.g. ``-30y``, ``now``).
+            max_offset: Maximum offset.
+
+        Returns:
+            Shifted datetime.
         """
         delta = self._get_delta(value)
         try:
@@ -369,15 +440,18 @@ class Environment:
         fake_date = fake_date - delta
         return fake_date
 
-    def date_format(self, value: date | datetime | str, format: str = "%Y-%m-%d"):
+    def date_format(self, value: date | datetime | str, format: str = "%Y-%m-%d") -> str:
+        """Format date/datetime as string; delegates to ``date_time_format`` with default date-only format."""
         return self.date_time_format(value, format=format)
 
-    def date_time_format(self, value: date | datetime | str, format: str = "%Y-%m-%d %H:%M:%S"):
+    def date_time_format(self, value: date | datetime | str, format: str = "%Y-%m-%d %H:%M:%S") -> str:
+        """Parse if string, then return ``strftime`` with the given format."""
         if isinstance(value, str):
             value = dateutil.parser.parse(value)
         return value.strftime(format)
 
     def fake_filter(self, fake_type: str) -> str:
+        """Return a faked value for the given type (e.g. ``birthdate``, ``email_address``); uses mapping or ``getattr(fake, type)``."""
         entity_to_fake_function_mapping = {
             "birthdate": partial(self._fake.date_between, start_date="-100y"),
             "email_address": self._fake.free_email,
