@@ -46,7 +46,6 @@ class TransformFnAccounting:
     column_fns: dict[str, set[str]]
 
     def __init__(self, included_fns: list[str]):
-        """Initialize accounting with the given list of function/filter names to track."""
         self.included_fns = set(included_fns)
         self.column_fns = defaultdict(set)
 
@@ -73,15 +72,25 @@ class ProgressStatus:
     """Mutable progress counters and labels for transformation steps (step, rule, row, column)."""
 
     step_n: int = 0
+    """Current step index (0-based)."""
     step_n_total: int = 0
+    """Total number of steps."""
     update_rule_n: int = 0
+    """Current update rule index (0-based)."""
     update_rule_n_total: int = 0
+    """Total number of update rules in the current step."""
     update_rule_description: str = ""
+    """Description of the current update rule (for logging)."""
     row_n: int = 0
+    """Number of rows processed so far."""
     row_n_total: int = 0
+    """Total number of rows to process for the current column."""
     column_n: int = 0
+    """Current column index (0-based)."""
     column_n_total: int = 0
+    """Total number of columns in the current update rule."""
     column_name: str = ""
+    """Name of the column currently being processed."""
 
 
 class ProgressLog:
@@ -103,7 +112,6 @@ class ProgressLog:
     log_duration: float
 
     def __init__(self, log_duration: float):
-        """Initialize with the given minimum interval between logs."""
         self.status = ProgressStatus()
         self.start_time = monotonic()
         self.last_log = monotonic()
@@ -205,7 +213,39 @@ class Step:
         fnreport: TransformFnAccounting | None = None,
         **kwargs,
     ) -> str:
-        """Render one cell: optionally iterate with ``foreach``, apply template, fallback on error, update progress/fnreport."""
+        """Render one cell with optional foreach iteration, fallback on error, and progress/fnreport updates.
+
+        Evaluates the cell value for the given row and column. If ``foreach`` is provided, the
+        foreach template is rendered first to produce an iterable (parsed as Python literal or
+        JSON); the main template is then applied once per item with ``item`` and ``items`` in
+        context, and the final ``cell`` is the result of the last iteration. If template
+        rendering raises, ``SafeSynthesizerFakerMethodNotFound`` is re-raised; other exceptions
+        are caught and either a fallback template is applied (when ``fallback_template`` is set)
+        or the string ``[Error] <exception>`` is returned. Progress and function accounting
+        (``fnreport``) are updated when provided.
+
+        Args:
+            row: DataFrame row (series) for template context.
+            template: Jinja template for the cell value.
+            column: Dict with at least ``name``; passed to template as ``column``.
+            fallback_template: Optional template used when ``template`` raises (except
+                ``SafeSynthesizerFakerMethodNotFound``).
+            foreach: Optional template that renders to an iterable (e.g. JSON list or Python
+                literal); each element is exposed as ``item``, full list as ``items``.
+            progress: If set, throttled progress logging is called and ``row_n`` is incremented.
+            fn_names: Names to record in ``fnreport`` on success (when ``fnreport`` is set).
+            fallback_fn_names: Names to record in ``fnreport`` when fallback template is used.
+            fnreport: Optional accounting to record which filters/functions were applied.
+            **kwargs: Additional context passed to template render.
+
+        Returns:
+            Rendered cell string. On error without fallback, returns ``[Error] <exception message>``.
+            If ``foreach`` renders to a non-iterable, returns ``[Error] '...' is not iterable...``.
+
+        Raises:
+            SafeSynthesizerFakerMethodNotFound: When template or fallback raises it (e.g. fake
+                entity with ``on_error='raise'``); not caught.
+        """
         if progress is not None:
             progress.log_throttled()
 
@@ -637,7 +677,6 @@ class Editor:
         )
 
     def __init__(self, config: dict[str, dict], entity_extractor: EntityExtractor | None) -> None:
-        """Initialize editor from config and optional entity extractor."""
         self.config = config
         self._config_globals(entity_extractor)
 

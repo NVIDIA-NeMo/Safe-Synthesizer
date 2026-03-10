@@ -226,7 +226,6 @@ class NemoPII(object):
     result: TransformResult
 
     def __init__(self, config: PiiReplacerConfig | None = None):
-        """Initialize the PII replacer from config."""
         if config:
             self.pii_replacer_config = config
         else:

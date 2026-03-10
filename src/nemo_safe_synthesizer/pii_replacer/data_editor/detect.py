@@ -327,8 +327,15 @@ class ColumnClassifier(ABC):
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]]) -> dict[str, Optional[str]]:
         """Classify each column into one of the given entity types.
 
-        Returns:
-            Map of column name to entity type (or ``UNKNOWN_ENTITY``).
+        Implementations may sample column values and use an LLM, lookup table, or
+        other backend to assign exactly one entity type per column. Columns that
+        cannot be classified or are not in ``entities`` should be mapped to
+        ``UNKNOWN_ENTITY``.
+
+        Args:
+            df: DataFrame whose columns are to be classified.
+            entities: Set of valid entity type names to assign; may be ``None``
+                for implementations that use a fixed or default set.
         """
         ...
 
@@ -342,19 +349,16 @@ class ColumnClassifierNoop(ColumnClassifier):
 
 @dataclass
 class IAPIClassifierConfig:
-    """Configuration for an inference-API-based column classifier.
-
-    Args:
-        endpoint: Inference endpoint URL.
-        model_key: Model identifier.
-        job_id: Job identifier.
-        num_samples: Number of value samples per column for classification.
-    """
+    """Configuration for an inference-API-based column classifier."""
 
     endpoint: str
+    """Inference endpoint URL."""
     model_key: str
+    """Model identifier."""
     job_id: str
+    """Job identifier."""
     num_samples: int
+    """Number of value samples per column for classification."""
 
 
 class ColumnClassifierLLM(ColumnClassifier):
@@ -372,7 +376,6 @@ class ColumnClassifierLLM(ColumnClassifier):
     _num_samples: Optional[int]
 
     def __init__(self):
-        """Initialize with no backend; use factory to set ``_llm`` and ``_num_samples``."""
         self._llm = None
         self._num_samples = None
 
@@ -400,29 +403,26 @@ class ColumnClassifierLLM(ColumnClassifier):
 
 @dataclass
 class ClassifyConfig:
-    """Configuration for column classification and NER (entities, thresholds, GLiNER, regex).
-
-    Args:
-        valid_entities: Set of valid entity type names for classification.
-        ner_threshold: Score threshold for NER predictions.
-        ner_regexps_enabled: Whether regex-based NER is enabled.
-        ner_entities: Entity types for NER (or ``None`` to use default).
-        gliner_enabled: Whether GLiNER model is used.
-        gliner_batch_mode_enabled: Whether GLiNER batch mode is enabled.
-        gliner_batch_mode_chunk_length: Chunk length for GLiNER.
-        gliner_batch_mode_batch_size: Batch size for GLiNER.
-        gliner_model: GLiNER model name or path.
-    """
+    """Configuration for column classification and NER (entities, thresholds, GLiNER, regex)."""
 
     valid_entities: set[str]
+    """Set of valid entity type names for classification."""
     ner_threshold: float
+    """Score threshold for NER predictions."""
     ner_regexps_enabled: bool
+    """Whether regex-based NER is enabled."""
     ner_entities: set[str] | None
+    """Entity types for NER (or ``None`` to use default)."""
     gliner_enabled: bool
+    """Whether GLiNER model is used."""
     gliner_batch_mode_enabled: bool
+    """Whether GLiNER batch mode is enabled."""
     gliner_batch_mode_chunk_length: int
+    """Chunk length for GLiNER."""
     gliner_batch_mode_batch_size: int
+    """Batch size for GLiNER."""
     gliner_model: str
+    """GLiNER model name or path."""
 
 
 class EntityExtractor(ABC):
@@ -493,7 +493,9 @@ class EntityReport:
     """Per-entity stats for one column: count of detections and set of unique values."""
 
     count: int
-    values: set()
+    """Number of detections for this entity in the column."""
+    values: set
+    """Set of unique detected values for this entity."""
 
 
 NerReport = dict[str, dict[str, EntityReport]]

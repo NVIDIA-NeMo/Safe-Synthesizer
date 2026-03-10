@@ -144,12 +144,12 @@ class Faker:
     """Thin wrapper around Faker with optional seeding; supports ``maybe_seed`` for deterministic per-row data.
 
     Args:
-        locale: Faker locale(s); single locale enables ``PersonaProvider``.
-        seed: Global seed for reproducibility; if set, ``maybe_seed`` uses instance-specific seeds.
+        locale: Faker locale(s); single locale enables ``PersonaProvider``. Optional.
+        seed: Global seed for reproducibility; if set, ``maybe_seed`` uses instance-specific
+            seeds when called. Optional.
 
     Attributes:
-        global_seed: Seed passed at construction (if any).
-        maybe_seed: Either ``_fake_with_seed`` or ``_fake_without_seed`` depending on constructor seed.
+        global_seed: Seed passed at construction (if any); used when ``maybe_seed`` is invoked.
     """
 
     _fake: VanillaFaker
@@ -157,7 +157,6 @@ class Faker:
     maybe_seed: Callable[[SeedType], VanillaFaker]
 
     def __init__(self, locale: Optional[list[str]] = None, seed: Optional[SeedType] = None) -> None:
-        """Initialize Faker with optional locale and seed; single locale adds ``PersonaProvider``."""
         self._fake = VanillaFaker(locale)
         if locale and len(locale) <= 1:  # Can't proxy multiple locales
             self._fake.add_provider(PersonaProvider)
@@ -285,7 +284,6 @@ class Environment:
         globals_config: Optional[dict[str, Any]] = None,
         entity_extractor: Optional[EntityExtractor] = None,
     ) -> None:
-        """Build sandbox and register filters (hash, fake, date_shift, entity filters, etc.)."""
         if entity_extractor is not None:
             self.entity_extractor = entity_extractor
         else:
