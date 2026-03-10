@@ -8216,6 +8216,12 @@
 
     <div class="doc doc-contents first">
 
+        <p>Samplers for DP batch creation.</p>
+<p>Provides entity-level and record-level samplers: <code>ShuffledEntitySampler</code>
+(shuffle entities, fixed batch size), <code>PoissonEntitySampler</code> (Poisson
+sampling for proper DP accounting), and <code>UniformWithReplacementNonNullSampler</code>
+(no empty batches).</p>
+
 
 
 
@@ -8238,7 +8244,7 @@
             <td><code><a class="autorefs autorefs-internal" title="              ShuffledEntitySampler(entity_mapping, batch_size) (nemo_safe_synthesizer.privacy.dp_transformers.sampler.ShuffledEntitySampler)" href="#nemo_safe_synthesizer.privacy.dp_transformers.sampler.ShuffledEntitySampler">ShuffledEntitySampler</a></code></td>
             <td>
               <div class="doc-md-description">
-                
+                <p>Sample batches of entities at random, one sample per entity per batch.</p>
               </div>
             </td>
           </tr>
@@ -8246,7 +8252,7 @@
             <td><code><a class="autorefs autorefs-internal" title="              PoissonEntitySampler(entity_mapping, sample_rate) (nemo_safe_synthesizer.privacy.dp_transformers.sampler.PoissonEntitySampler)" href="#nemo_safe_synthesizer.privacy.dp_transformers.sampler.PoissonEntitySampler">PoissonEntitySampler</a></code></td>
             <td>
               <div class="doc-md-description">
-                
+                <p>Sample entities with Poisson (per-entity) sampling for correct DP accounting.</p>
               </div>
             </td>
           </tr>
@@ -8254,7 +8260,7 @@
             <td><code><a class="autorefs autorefs-internal" title="              UniformWithReplacementNonNullSampler(*args, **kwargs) (nemo_safe_synthesizer.privacy.dp_transformers.sampler.UniformWithReplacementNonNullSampler)" href="#nemo_safe_synthesizer.privacy.dp_transformers.sampler.UniformWithReplacementNonNullSampler">UniformWithReplacementNonNullSampler</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>This sampler is similar to the <code>UniformWithReplacementSampler</code>, but it</p>
+                <p>Uniform-with-replacement sampler that skips empty batches but counts them.</p>
               </div>
             </td>
           </tr>
@@ -8293,14 +8299,11 @@
 
 
 
-        <p>This Sampler class uses
-    1. RandomSampler to shuffle the entities in dataset, and select
-       <code>batch_size</code> number of entities from the dataset.
-    2. BatchSampler to sample one element from an entity in a given
-       batch.
-Each batch gets one sample from any entity in the dataset. This ensures
-that any training step isn't overly influenced by one entity's data
-(particularly important when training for less than one epoch).</p>
+        <p>Sample batches of entities at random, one sample per entity per batch.</p>
+<p>Uses RandomSampler to shuffle entities and BatchSampler to form batches of
+<code>batch_size</code> entities. Each batch contains one sample from each of the
+chosen entities, so no single entity dominates a step (important for
+entity-level DP and when training for less than one epoch).</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8323,8 +8326,9 @@ that any training step isn't overly influenced by one entity's data
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A mapping where <code>dataset[entity_mapping[i][j]]</code>
-produces the j-th sample of the i-th entity in the dataset.</p>
+                <p>For entity i, entity_mapping[i] is the list of dataset
+indices for that entity; dataset[entity_mapping[i][j]] is the j-th
+sample of entity i.</p>
               </div>
             </td>
             <td>
@@ -8340,7 +8344,7 @@ produces the j-th sample of the i-th entity in the dataset.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Number of examples included in each batch.</p>
+                <p>Number of entities (and thus samples) per batch.</p>
               </div>
             </td>
             <td>
@@ -8364,41 +8368,11 @@ produces the j-th sample of the i-th entity in the dataset.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/privacy/dp_transformers/sampler.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-47">47</a></span>
-<span class="normal"><a href="#__codelineno-0-48">48</a></span>
-<span class="normal"><a href="#__codelineno-0-49">49</a></span>
-<span class="normal"><a href="#__codelineno-0-50">50</a></span>
-<span class="normal"><a href="#__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#__codelineno-0-52">52</a></span>
-<span class="normal"><a href="#__codelineno-0-53">53</a></span>
-<span class="normal"><a href="#__codelineno-0-54">54</a></span>
-<span class="normal"><a href="#__codelineno-0-55">55</a></span>
-<span class="normal"><a href="#__codelineno-0-56">56</a></span>
-<span class="normal"><a href="#__codelineno-0-57">57</a></span>
-<span class="normal"><a href="#__codelineno-0-58">58</a></span>
-<span class="normal"><a href="#__codelineno-0-59">59</a></span>
-<span class="normal"><a href="#__codelineno-0-60">60</a></span>
-<span class="normal"><a href="#__codelineno-0-61">61</a></span>
-<span class="normal"><a href="#__codelineno-0-62">62</a></span>
-<span class="normal"><a href="#__codelineno-0-63">63</a></span>
-<span class="normal"><a href="#__codelineno-0-64">64</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    This Sampler class uses</span>
-</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">        1. RandomSampler to shuffle the entities in dataset, and select</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a><span class="sd">           `batch_size` number of entities from the dataset.</span>
-</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="sd">        2. BatchSampler to sample one element from an entity in a given</span>
-</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="sd">           batch.</span>
-</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="sd">    Each batch gets one sample from any entity in the dataset. This ensures</span>
-</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="sd">    that any training step isn&#39;t overly influenced by one entity&#39;s data</span>
-</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="sd">    (particularly important when training for less than one epoch).</span>
-</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a>
-</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">        entity_mapping: A mapping where `dataset[entity_mapping[i][j]]`</span>
-</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">            produces the j-th sample of the i-th entity in the dataset.</span>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">        batch_size: Number of examples included in each batch.</span>
-</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">BatchSampler</span><span class="p">(</span><span class="n">RandomSampler</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-88">88</a></span>
+<span class="normal"><a href="#__codelineno-0-89">89</a></span>
+<span class="normal"><a href="#__codelineno-0-90">90</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">BatchSampler</span><span class="p">(</span><span class="n">RandomSampler</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -8439,11 +8413,10 @@ produces the j-th sample of the i-th entity in the dataset.</p>
 
 
 
-        <p>This Sampler class uses Poisson sampling, i.e., entities in the
-dataset are added to the batch with a given probability
-<code>sample_rate</code>. Note that, because of that, batch size is not always
-the same, but in average equal to <code>len(dataset) * sample_rate</code>.
-Empty batches are skipped.</p>
+        <p>Sample entities with Poisson (per-entity) sampling for correct DP accounting.</p>
+<p>Each entity is included in a batch with probability <code>sample_rate</code>.
+Batch size varies; on average equals <code>len(entities) * sample_rate</code>.
+Empty batches are skipped but counted toward the step budget.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8466,8 +8439,8 @@ Empty batches are skipped.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>A mapping where <code>dataset[entity_mapping[i][j]]</code>
-produces the j-th sample of the i-th entity in the dataset.</p>
+                <p>For entity i, entity_mapping[i] is the list of dataset
+indices for that entity.</p>
               </div>
             </td>
             <td>
@@ -8483,8 +8456,7 @@ produces the j-th sample of the i-th entity in the dataset.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Probability of any given entity being included in
-the batch.</p>
+                <p>Probability of each entity being included in a batch.</p>
               </div>
             </td>
             <td>
@@ -8508,43 +8480,17 @@ the batch.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/privacy/dp_transformers/sampler.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-68">68</a></span>
-<span class="normal"><a href="#__codelineno-0-69">69</a></span>
-<span class="normal"><a href="#__codelineno-0-70">70</a></span>
-<span class="normal"><a href="#__codelineno-0-71">71</a></span>
-<span class="normal"><a href="#__codelineno-0-72">72</a></span>
-<span class="normal"><a href="#__codelineno-0-73">73</a></span>
-<span class="normal"><a href="#__codelineno-0-74">74</a></span>
-<span class="normal"><a href="#__codelineno-0-75">75</a></span>
-<span class="normal"><a href="#__codelineno-0-76">76</a></span>
-<span class="normal"><a href="#__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#__codelineno-0-78">78</a></span>
-<span class="normal"><a href="#__codelineno-0-79">79</a></span>
-<span class="normal"><a href="#__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#__codelineno-0-81">81</a></span>
-<span class="normal"><a href="#__codelineno-0-82">82</a></span>
-<span class="normal"><a href="#__codelineno-0-83">83</a></span>
-<span class="normal"><a href="#__codelineno-0-84">84</a></span>
-<span class="normal"><a href="#__codelineno-0-85">85</a></span>
-<span class="normal"><a href="#__codelineno-0-86">86</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">sample_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="sd">    This Sampler class uses Poisson sampling, i.e., entities in the</span>
-</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="sd">    dataset are added to the batch with a given probability</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">    `sample_rate`. Note that, because of that, batch size is not always</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">    the same, but in average equal to `len(dataset) * sample_rate`.</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">    Empty batches are skipped.</span>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>
-</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">        entity_mapping: A mapping where `dataset[entity_mapping[i][j]]`</span>
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a><span class="sd">            produces the j-th sample of the i-th entity in the dataset.</span>
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a><span class="sd">        sample_rate: Probability of any given entity being included in</span>
-</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="sd">            the batch.</span>
-</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">UniformWithReplacementNonNullSampler</span><span class="p">(</span>
-</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="n">num_samples</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span>
-</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>        <span class="n">sample_rate</span><span class="o">=</span><span class="n">sample_rate</span><span class="p">,</span>
-</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="p">)</span>
-</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-106">106</a></span>
+<span class="normal"><a href="#__codelineno-0-107">107</a></span>
+<span class="normal"><a href="#__codelineno-0-108">108</a></span>
+<span class="normal"><a href="#__codelineno-0-109">109</a></span>
+<span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">sample_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">UniformWithReplacementNonNullSampler</span><span class="p">(</span>
+</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="n">num_samples</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span>
+</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>        <span class="n">sample_rate</span><span class="o">=</span><span class="n">sample_rate</span><span class="p">,</span>
+</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="p">)</span>
+</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -8585,8 +8531,36 @@ the batch.</p>
 
 
 
-        <p>This sampler is similar to the <code>UniformWithReplacementSampler</code>, but it
-never outputs empty batches, while ensuring they are taken into account.</p>
+        <p>Uniform-with-replacement sampler that skips empty batches but counts them.</p>
+<p>Same as Opacus <code>UniformWithReplacementSampler</code> except batches with zero
+samples are not yielded. Empty batches are still counted toward the total
+number of steps so that step-based privacy accounting (e.g. ε composition)
+remains correct. Used by <code>PoissonEntitySampler</code> for Poisson sampling.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="nemo_safe_synthesizer.privacy.dp_transformers.sampler.UniformWithReplacementNonNullSampler.empty_batches">empty_batches</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Number of empty batches skipped so far (reset at the
+start of each <code>__iter__</code>; only meaningful during iteration).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
 
 
 
@@ -8602,13 +8576,13 @@ never outputs empty batches, while ensuring they are taken into account.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/privacy/dp_transformers/sampler.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-94">94</a></span>
-<span class="normal"><a href="#__codelineno-0-95">95</a></span>
-<span class="normal"><a href="#__codelineno-0-96">96</a></span>
-<span class="normal"><a href="#__codelineno-0-97">97</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-</span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>    <span class="c1"># NOTE: we might want to log empty_batches for debugging purposes</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">empty_batches</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-127">127</a></span>
+<span class="normal"><a href="#__codelineno-0-128">128</a></span>
+<span class="normal"><a href="#__codelineno-0-129">129</a></span>
+<span class="normal"><a href="#__codelineno-0-130">130</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>    <span class="c1"># NOTE: we might want to log empty_batches for debugging purposes</span>
+</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">empty_batches</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
