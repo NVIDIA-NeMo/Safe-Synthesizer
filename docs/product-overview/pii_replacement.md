@@ -9,32 +9,32 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 
 The PII replacement pipeline operates in multiple stages:
 
-1. Detection: Classifies entire columns and PII entities within free text.
-2. Replacement: Transforms PII using configurable rules
+1. Detection: Classifies PII entities within free text and entire columns.
+2. Replacement: Transforms PII using configurable rules.
 
 ## Detection Methods
 
 NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:
 
-| Method | Scope| Description | Key Features |
-|---|---|---|---|
-| LLM Classification | All columns|  Leverages language models for column classification| - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
+| Method | Scope | Description | Key Features |
+|--------|--------|--------------|---------------|
+| LLM Classification | Entire columns | Leverages language models for column classification when the entire column is a single entity | - Contextual understanding of entities<br>- Handles complex PII patterns<br>- Flexible entity definitions<br>- Configurable prompts and models |
 | [GLiNER PII](https://huggingface.co/nvidia/gliner-PII#evaluation-datasets) | Free text | Uses the GLiNER PII model for entity recognition within free text columns | - Zero-shot entity detection<br>- Supports custom entity types<br>- High accuracy for standard PII categories<br>- Configurable confidence thresholds |
 
 
 ## Replacement Methods
 
 After detection, PII can be handled in multiple ways:
+
 | Strategy   | Description                                  | Example                     |
 |------------|----------------------------------------------|-----------------------------|
-| Annotate   | Add identified entity to original PII        | Alice -> <Alice; first_name> |
-| Redact     | Replace PII with a generic tag               | Alice -> *****             |
-| Hash       | Replace PII with a hashed value             | Alice -> 3bf676c578641     |
-| Substitute | Replace PII with a context-relevant alternative | Alice -> Erica            |
-| Rewrite    | Rewrite entire phrases while maintaining context | Alice -> A female        |
+| Annotate   | Add identified entity to original PII        | Alice → &lt;entity type="first_name" value="Alice"&gt; |
+| Redact     | Replace PII with a generic tag               | Alice → &lt;first_name&gt;     |
+| Hash       | Replace PII with a hashed value               | Alice → 3bf676c57     |
+| Substitute | Replace PII with a context-relevant alternative | Alice → Erica            |
 
 ## Supported Entity Types
-GLiNER PII will attempt to identify any custom entity type you provide, but it has specifically been fine-tuned on the following entities, organized by category:
+GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:
 
 ### Personal Information
 - `first_name` - Given names
