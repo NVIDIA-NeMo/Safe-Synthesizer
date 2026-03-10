@@ -1,13 +1,10 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-description: Lint and typecheck code
+description: Check code quality
 ---
-Run linting, type checking, and copyright verification.
+Run all read-only CI checks (formatting, lint rules, type checking, copyright).
 
-* Run with: `make lint`
-* Runs three steps:
-  1. `bash tools/lint/ruff-lint.sh` -- ruff linting
-  2. `bash tools/lint/run-ty-check.sh` -- ty type checking
-  3. `python tools/lint/copyright_fixer.py --check .` -- copyright headers
+* Run with: `make check`
+* Runs `make format-check` (ruff format + ruff check + copyright) + `make typecheck` (ty)
 * Always run after `make format`

@@ -7,6 +7,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+  - [Commit Signing](#commit-signing)
 - [Repository Settings](#repository-settings)
   - [Branch Naming Convention](#branch-naming-convention)
   - [Conventional Commits](#conventional-commits)
@@ -24,21 +25,31 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 ### Prerequisites
 
 - Python 3.11+
-- Git
-- [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
+- Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make bootstrap-tools`.
 
 ### Setup
 
-1. Fork the repository on GitHub
-2. Clone your fork:
+1. Get the code:
+
+> NVIDIA employees have write access and can clone the repo directly. External contributors should fork first, then clone the fork and add an upstream remote.
+
   ```bash
-   git clone https://github.com/<your-username>/safe-synthesizer.git
-   cd safe-synthesizer
+   # NVIDIA internal -- clone directly
+   git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
+
+   # External -- fork on GitHub, then:
+   git clone https://github.com/<your-username>/Safe-Synthesizer.git
+   cd Safe-Synthesizer
+   git remote add upstream https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
   ```
-3. Set up the development environment:
+
+2. Set up the development environment:
+
   ```bash
+   cd Safe-Synthesizer
+
    # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
    make bootstrap-tools
 
@@ -51,15 +62,135 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss engine # Engine dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
-4. Add the upstream remote:
-  ```bash
-   git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
-  ```
-5. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+
+3. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+
   ```bash
    echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
   ```
+
    Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
+
+### Commit Signing
+
+This repository requires [verified commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). The `main` branch Ruleset enforces `required_signatures`, so unsigned commits will block PR merges. This is separate from [DCO sign-off](#developer-certificate-of-origin) -- both are required.
+
+Choose one of the two options below.
+
+#### Option A: SSH signing (recommended)
+
+Most contributors already have an SSH key for GitHub authentication. The same key can also sign commits. If you don't have an SSH key yet, see [Generating a new SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+1. Set scopes on your `gh` cli. We'll remove them later.
+
+   ```bash
+   gh auth refresh -s admin:ssh_signing_key
+   ```
+
+2. Check whether your key is already registered for signing:
+
+   ```bash
+   gh ssh-key list
+   ```
+
+   If your key already appears with type `signing`, skip to step 3.
+
+3. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). This registers the key and then removes the permission scope so it doesn't persist in your token (change this if you want to keep the scope).
+
+   ```bash
+     gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
+     && gh auth refresh -r admin:ssh_signing_key
+   ```
+
+   Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-new-ssh-key-to-your-github-account) > SSH and GPG keys > New SSH key > Key type: "Signing Key".
+
+4. Configure git to sign commits (see [Telling Git about your signing key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key) for details):
+
+!!! info "git global"
+    You can make this a global default if you'd like by adding the `--global` flag. The following commands are repo scoped.
+
+   ```bash
+   git config gpg.format ssh
+   git config user.signingkey ~/.ssh/id_ed25519.pub
+   ```
+
+5. (Optional) Configure local verification:
+
+   To see "Good signature" locally when running `git log --show-signature`, git needs to know which SSH keys to trust.
+
+   ```bash
+   # Create allowed_signers file
+   echo "$(git config --get user.email) $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
+
+   # Tell git to use it
+   git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+   ```
+
+#### Option B: GPG signing
+
+If you already have a GPG key or prefer GPG. To generate one, see [Generating a new GPG key](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key).
+
+1. Register the key on GitHub. The `admin:gpg_key` scope grants write access to your account's GPG keys; the one-liner below adds it, uploads the key, then removes the scope:
+
+   ```bash
+   gh auth refresh -s admin:gpg_key \
+     && gh gpg-key add <public-key-file> \
+     && gh auth refresh -r admin:gpg_key
+   ```
+
+   Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account) > SSH and GPG keys > New GPG key.
+
+2. Configure git to use your key to sign commits:
+
+   ```bash
+   git config user.signingkey <GPG-KEY-ID>
+   ```
+
+#### Verify signing works
+
+```bash
+git commit --allow-empty -s -S -m "test: verify commit signing"
+git log --show-signature -1
+
+# Clean up the test commit
+git reset --soft HEAD~1
+```
+
+You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
+
+
+To avoid forgetting `--signoff` and `--gpg-sign` on future commits, configure this repo to GPG-sign automatically and create a short alias that adds DCO sign-off:
+
+
+!!! info "Git aliases"
+    You can obviously choose your own aliases or set them elsewhere - this is just a suggestion so you do not have to think about it.
+
+
+```bash
+# Automatic GPG signing on every commit (native git config)
+git config commit.gpgsign true
+
+# Alias -- git aliases can't override built-in commands, so use "commit-sign" instead of "commit"
+git config alias.commit-sign "commit --signoff"
+```
+
+Then use `git commit-sign` instead of `git commit`. Since `commit.gpgsign` is active, every commit is both signed and DCO-certified.
+
+NVIDIA internal contributors who work primarily on repos that require DCO and signing can set these globally instead: `git config --global commit.gpgsign true` and `git config --global alias.commit-sign "commit --signoff"`.
+
+#### Re-signing existing commits
+
+If you have unsigned commits on a feature branch that were pushed before signing was configured, rebase to re-create them with signatures. Use the remote that points to the NVIDIA repo (`origin` for internal contributors, `upstream` for external forks):
+
+```bash
+# NVIDIA internal
+git rebase --force-rebase --gpg-sign --signoff origin/main
+
+# External (forked)
+git rebase --force-rebase --gpg-sign --signoff upstream/main
+
+git push --force-with-lease
+```
 
 ### NMP Integration
 
@@ -185,16 +316,18 @@ Examples:
 The `main` branch has the following protections:
 
 
-| Rule                            | Setting     |
-| ------------------------------- | ----------- |
-| Required approvals              | 1           |
-| Code owner review               | Required    |
-| Dismiss stale reviews           | No          |
-| Require conversation resolution | Yes         |
-| Linear history                  | Required    |
-| Force pushes                    | Blocked     |
-| Deletions                       | Blocked     |
-| Merge strategy                  | Squash only |
+| Rule                            | Setting      |
+| ------------------------------- | ------------ |
+| Required approvals              | 1            |
+| Code owner review               | Required     |
+| Dismiss stale reviews           | Yes          |
+| Require conversation resolution | Yes          |
+| Signed commits                  | Required     |
+| Required status checks          | CI Status    |
+| Linear history                  | Required     |
+| Force pushes                    | Blocked      |
+| Deletions                       | Blocked      |
+| Merge strategy                  | Squash only  |
 
 
 ## Pull Request Process
@@ -269,6 +402,8 @@ By signing off, you certify the [Developer Certificate of Origin](DCO):
 
 See the full [DCO](DCO) file for details.
 
+> Note: DCO sign-off (`git commit -s`) adds a text trailer asserting your right to contribute. It is not a cryptographic signature. This repository also requires [commit signing](#commit-signing) -- both are independent requirements.
+
 ## Testing
 
 ### Running Tests
@@ -314,30 +449,33 @@ Use `make` targets instead of running `ruff` or `ty` directly. The targets use p
 
 ```bash
 make format   # auto-fix: ruff format + import sorting + copyright headers
-make lint     # read-only: ruff lint + ty typecheck + copyright check
+make check    # read-only: all CI checks (format + lint + typecheck + copyright)
 make test     # unit tests
+# or just
+make format check test
 ```
 
-We use ``ruff`` && ``ty`` to do the majority of this work, and we wrap them with settings for consistency.
+We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-These three commands replicate what CI runs. Pre-commit hooks (`prek install`) provide faster feedback during development but are not a substitute for the `make` targets.
+CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
 
-The wrapper scripts in `tools/` also accept explicit file paths:
+The wrapper scripts in `tools/` also accept explicit file paths for spot-checking individual files:
 
 ```bash
-bash tools/lint/ruff-lint.sh src/nemo_safe_synthesizer/cli/run.py
-bash tools/format/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
 
-| Check | CI | `make format` / `make lint` | Pre-commit (`prek`) |
+All `make` targets check the entire project. Pre-commit scopes checks to staged files. The wrapper scripts also accept explicit file paths when you want to check specific files.
+
+| Check | CI target | `make format` / `make check` | Pre-commit |
 |---|---|---|---|
-| ruff format | read-only | auto-fix | staged files (auto-fix) |
-| ruff lint | read-only | `make lint`: read-only; `make format`: auto-fix | staged files |
-| ty typecheck | all files | all files | all files |
-| copyright headers | read-only | `make lint`: read-only; `make format`: auto-fix | staged files (auto-fix) |
-| uv lock drift | not checked | not checked | on `pyproject.toml` changes |
+| ruff format + lint | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| ty typecheck | `make typecheck` | read-only | all files |
+| copyright headers | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| uv lock drift | `make lock-check` | not checked | on `pyproject.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
@@ -358,6 +496,11 @@ Start a local server with live reload:
 make docs-serve
 # Browse to http://127.0.0.1:8000
 ```
+
+In Cursor or VS Code Remote, the port is auto-forwarded. Check the Ports
+panel (`Ctrl+Shift+P` > "Ports: Focus on Ports View") -- port 8000 will
+appear with a local address you can open in the Simple Browser or your
+system browser.
 
 Build the static site (output in `site/`):
 
@@ -419,7 +562,7 @@ This project supports AI coding assistants. Configuration is layered so that con
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
-Before contributing, run `make format` and `make lint`. See `AGENTS.md` for full conventions.
+Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
 
 ---
 

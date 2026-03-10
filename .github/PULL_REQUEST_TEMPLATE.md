@@ -13,7 +13,7 @@
 
 Ensure that the following pass:
 
-- [ ] `make format && make lint` or via prek validation.
+- [ ] `make format && make check` or via prek validation.
 - [ ] `make test` passes locally
 - [ ] `make test-e2e` passes locally
 - [ ] `make test-ci-container` passes locally (recommended)

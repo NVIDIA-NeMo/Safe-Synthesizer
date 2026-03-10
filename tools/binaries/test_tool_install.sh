@@ -37,7 +37,8 @@ test_tools_linux() {
             osv-scanner --version &&
             buildctl --version &&
             direnv --version &&
-            uv --version
+            uv --version &&
+            gh --version
             " || {
         echo "Failed to test tool installation"
         exit 1

@@ -85,11 +85,12 @@ The project has 7 GitHub Actions workflows:
 ### Investigating Failures
 
 ```bash
-# Failed runs for current branch
-gh run list --branch=$(git branch --show-current) --status=failure
-
-# View failed job logs
+# When you have a run ID (e.g. from a URL the user pasted), go straight to logs:
 gh run view <run-id> --log-failed
+
+# Find and show logs for the latest failure on this branch in one call:
+RUN_ID=$(gh run list --branch=$(git branch --show-current) --status=failure --limit=1 --json databaseId -q '.[0].databaseId') \
+  && [ "$RUN_ID" != "null" ] && gh run view "$RUN_ID" --log-failed
 
 # Full log for a specific job
 gh run view <run-id> --log --job=<job-id>
@@ -105,9 +106,8 @@ gh run rerun <run-id> --failed
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `make format` or `bash tools/format/format.sh` |
-| Lint | `make lint` or `bash tools/lint/ruff-lint.sh` |
-| Typecheck | `bash tools/lint/run-ty-check.sh` |
+| Format | `make format-check` (or `make format` to fix) |
+| Typecheck | `make typecheck` |
 | Unit Tests | `make test` or `make test-ci` |
 
 Or run all CI checks in a container: `make test-ci-container`

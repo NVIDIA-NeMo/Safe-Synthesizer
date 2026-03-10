@@ -128,19 +128,32 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 
 ### CODE QUALITY ###
-# `make format` mutates files (same fixers as pre-commit).
-# `make lint` is read-only (same checks as CI).
+# `make format` mutates files (ruff format + ruff check --fix + copyright).
+# `make format-check`, `typecheck`, `lock-check` are atomic read-only targets (used by CI).
+# `make check` runs all read-only checks (format-check + typecheck).
 
 .PHONY: format
-format: ## Format the code (ruff format + fix + copyright headers)
-	bash tools/format/format.sh
-	uv run --script tools/lint/copyright_fixer.py .
+format: ## Format the code (ruff format + lint fix + copyright headers)
+	bash tools/codestyle/format.sh
+	uv run --script tools/codestyle/copyright_fixer.py .
 
-.PHONY: lint
-lint: ## Lint the code (read-only checks)
-	bash tools/lint/ruff-lint.sh
-	bash tools/lint/run-ty-check.sh
-	uv run --script tools/lint/copyright_fixer.py --check .
+.PHONY: format-check
+format-check: ## Check formatting, lint rules, and copyright headers (read-only)
+	bash tools/codestyle/format.sh --check
+	bash tools/codestyle/ruff_check.sh
+	uv run --script tools/codestyle/copyright_fixer.py --check .
+
+.PHONY: typecheck
+typecheck: ## Run ty type checks
+	bash tools/codestyle/typecheck.sh
+
+.PHONY: lock-check
+lock-check: ## Check that uv.lock is up to date
+	uv lock
+	git diff --exit-code uv.lock
+
+.PHONY: check
+check: format-check typecheck ## Run all read-only CI checks locally
 
 
 ### TESTING ###
@@ -164,11 +177,13 @@ test-ci-slow: ## Run slow tests in CI with coverage
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "slow"
 
+E2E_TEST_FILE := $(NSS_ROOT_PATH)/tests/e2e/test_safe_synthesizer.py
+
 .PHONY: test-gpu-integration
 test-gpu-integration: ## Run GPU integration tests
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "gpu_integration and not e2e" -k default && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests/e2e/ -m "gpu_integration and not e2e" -k dp
+	$(PYTEST_CMD) $(E2E_TEST_FILE) -k default && \
+	$(PYTEST_CMD) $(E2E_TEST_FILE) -k dp
 
 # Please modify these based on updating the e2e tests for NMP CI
 .PHONY: test-e2e
@@ -178,13 +193,28 @@ test-e2e: test-e2e-default test-e2e-dp ## Run all e2e tests (requires CUDA)
 test-e2e-default: ## Run default e2e tests (requires CUDA)
 # -n 0 is a workaround to run the tests in a single process.
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k default
+	$(PYTEST_CMD) -n 0 $(E2E_TEST_FILE) -k default
 
 .PHONY: test-e2e-dp
 test-e2e-dp: ## Run dp e2e tests (requires CUDA)
 # -n 0 is a workaround to run the tests in a single process.
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) -n 0 $(NSS_ROOT_PATH)/tests/e2e/ -m "e2e" -k dp
+	$(PYTEST_CMD) -n 0 $(E2E_TEST_FILE) -k dp
+
+.PHONY: test-e2e-collect
+test-e2e-collect: ## Dry-run: show which tests e2e/gpu targets select (requires CUDA deps)
+	@echo "--- test-e2e-default ---"
+	-@cd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) -n 0 $(E2E_TEST_FILE) -k default -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null
+	@echo "--- test-e2e-dp ---"
+	-@cd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) -n 0 $(E2E_TEST_FILE) -k dp -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null
+	@echo "--- test-gpu-integration (default) ---"
+	-@cd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) $(E2E_TEST_FILE) -k default -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null
+	@echo "--- test-gpu-integration (dp) ---"
+	-@cd $(NSS_ROOT_PATH) && \
+	$(PYTEST_CMD) $(E2E_TEST_FILE) -k dp -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null
 
 ### CONTAINER-BASED TESTING ###
 

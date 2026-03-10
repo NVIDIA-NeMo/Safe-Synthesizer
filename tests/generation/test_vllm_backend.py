@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for the VllmBackend class private methods."""
+"""Unit tests for the VllmBackend class private methods and module-level side effects."""
 
 from unittest.mock import MagicMock, patch
 
@@ -452,3 +452,71 @@ class TestTransformKwargsToSamplingParams:
         result = backend._transform_kwargs_to_sampling_params(kwargs={}, api_mapping={})
 
         assert result == {}
+
+
+class TestNoopRemoteCacheBackend:
+    """Tests for the _NoopRemoteCacheBackend and conditional installation logic."""
+
+    def test_noop_backend_get_returns_none(self):
+        from nemo_safe_synthesizer.generation.vllm_backend import _NoopRemoteCacheBackend
+
+        backend = _NoopRemoteCacheBackend()
+        assert backend.get("any-key") is None
+
+    def test_noop_backend_put_is_silent(self):
+        from nemo_safe_synthesizer.generation.vllm_backend import _NoopRemoteCacheBackend
+
+        backend = _NoopRemoteCacheBackend()
+        backend.put("key", b"data")  # should not raise
+
+    def test_install_skipped_when_redis_available(self):
+        """When redis is importable, the override must not be installed."""
+        pytest.importorskip("torch._inductor.remote_cache")
+        from torch._inductor.remote_cache import RemoteAutotuneCache
+
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            _install_noop_remote_cache_backends,
+        )
+
+        original = RemoteAutotuneCache.backend_override_cls
+        try:
+            RemoteAutotuneCache.backend_override_cls = None
+            with patch("nemo_safe_synthesizer.generation.vllm_backend._is_redis_available", return_value=True):
+                _install_noop_remote_cache_backends()
+            assert RemoteAutotuneCache.backend_override_cls is None
+        finally:
+            RemoteAutotuneCache.backend_override_cls = original
+
+    def test_install_applies_when_redis_unavailable(self):
+        """When redis is not importable, RemoteAutotuneCache gets the no-op backend."""
+        pytest.importorskip("torch._inductor.remote_cache")
+        from torch._inductor.remote_cache import RemoteAutotuneCache
+
+        from nemo_safe_synthesizer.generation.vllm_backend import (
+            _install_noop_remote_cache_backends,
+            _NoopRemoteCacheBackend,
+        )
+
+        original = RemoteAutotuneCache.backend_override_cls
+        try:
+            RemoteAutotuneCache.backend_override_cls = None
+            with patch("nemo_safe_synthesizer.generation.vllm_backend._is_redis_available", return_value=False):
+                _install_noop_remote_cache_backends()
+            assert RemoteAutotuneCache.backend_override_cls is _NoopRemoteCacheBackend
+        finally:
+            RemoteAutotuneCache.backend_override_cls = original
+
+    def test_is_redis_available_returns_false_when_missing(self):
+        """_is_redis_available returns False when redis cannot be imported."""
+        from nemo_safe_synthesizer.generation.vllm_backend import _is_redis_available
+
+        with patch.dict("sys.modules", {"redis": None}):
+            assert _is_redis_available() is False
+
+    def test_is_redis_available_returns_true_when_present(self):
+        """_is_redis_available returns True when redis is importable."""
+        from nemo_safe_synthesizer.generation.vllm_backend import _is_redis_available
+
+        fake_redis = MagicMock()
+        with patch.dict("sys.modules", {"redis": fake_redis}):
+            assert _is_redis_available() is True

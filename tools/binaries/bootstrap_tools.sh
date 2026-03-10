@@ -133,6 +133,7 @@ install_binary_tool() {
         arch_val=$(yq -r ".tools.${name}.arch_map.${ARCH} // \"${ARCH}\"" "$TOOLS_YAML")
 
         # Substitute placeholders in extract path
+        extract="${extract//\{version\}/$version}"
         extract="${extract//\{os\}/$os_val}"
         extract="${extract//\{arch\}/$arch_val}"
 

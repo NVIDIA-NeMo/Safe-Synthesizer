@@ -18,24 +18,20 @@ __all__ = [
 
 
 class TimeSeriesParameters(Parameters):
-    """Configuration for time series parameters.
+    """Configuration for time-series mode in the Safe Synthesizer pipeline.
 
-    Attributes:
-        is_timeseries: Whether to treat the dataset as time series. For grouped time series, `group_training_examples_by` must be set.
-        timestamp_column: Name of the column containing timestamps used to order records when `is_timeseries` is True.
-            Required only when `is_timeseries` is True and `timestamp_interval_seconds` is not provided.
-        timestamp_interval_seconds: (Optional) Interval in seconds between timestamps. If not provided, the timestamp column will be used to infer the interval.
-        timestamp_format: Format of the timestamp column using Python strftime format codes. If not provided, the format will be inferred.
-        start_timestamp: (Optional) Start timestamp. If not provided, the first timestamp in the timestamp column will be used.
-        stop_timestamp: (Optional) Stop timestamp. If not provided, the last timestamp in the timestamp column will be used.
+    Controls whether a dataset is treated as time-series data, including
+    timestamp column selection, interval inference, and format validation.
+    The time-series pipeline is currently experimental.
     """
 
     is_timeseries: Annotated[
         bool,
         Field(
             description=(
-                "Whether to treat the dataset as time series. When enabled, either `timestamp_column` or `timestamp_interval_seconds` is required. "
-                "For grouped time series, `group_training_examples_by` needs to be set. "
+                "Whether to treat the dataset as time series. When enabled, either ``timestamp_column`` or "
+                "``timestamp_interval_seconds`` is required. "
+                "For grouped time series, ``group_training_examples_by`` needs to be set."
             ),
         ),
     ] = False
@@ -44,8 +40,8 @@ class TimeSeriesParameters(Parameters):
         str | None,
         Field(
             description=(
-                "Name of the column containing timestamps used to order records when `is_timeseries` is True. "
-                "Required only when `is_timeseries` is True and `timestamp_interval_seconds` is not provided."
+                "Name of the column containing timestamps used to order records when ``is_timeseries`` is ``True``. "
+                "Required only when ``is_timeseries`` is ``True`` and ``timestamp_interval_seconds`` is not provided."
             ),
         ),
     ] = None
@@ -53,7 +49,7 @@ class TimeSeriesParameters(Parameters):
     timestamp_interval_seconds: Annotated[
         int | None,
         Field(
-            description="(Optional) Interval in seconds between timestamps. If not provided, the timestamp column will be used to infer the interval.",
+            description="Interval in seconds between timestamps. If not provided, the timestamp column will be used to infer the interval.",
         ),
     ] = None
 
@@ -86,23 +82,20 @@ class TimeSeriesParameters(Parameters):
     start_timestamp: Annotated[
         str | int | None,
         Field(
-            description="(Optional) Start timestamp. If not provided, the first timestamp in the timestamp column will be used.",
+            description="Start timestamp. If not provided, the first timestamp in the timestamp column will be used.",
         ),
     ] = None
 
     stop_timestamp: Annotated[
         str | int | None,
         Field(
-            description="(Optional) Stop timestamp. If not provided, the last timestamp in the timestamp column will be used.",
+            description="Stop timestamp. If not provided, the last timestamp in the timestamp column will be used.",
         ),
     ] = None
 
     @model_validator(mode="after")
     def check_timestamp_column_or_interval_when_timeseries(self):
-        """
-        When is_timeseries is True, require that at least one of timestamp_column or timestamp_interval_seconds is not None.
-        When is_timeseries is False, timestamp_column should not be set.
-        """
+        """Validate that time-series mode has a timestamp source and non-timeseries mode has no `timestamp_column`."""
         if self.is_timeseries:
             if self.timestamp_column is None and self.timestamp_interval_seconds is None:
                 raise ValueError(

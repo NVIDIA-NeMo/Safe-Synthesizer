@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Train/test splitting for evaluation holdout.
+
+Provides two splitting strategies -- naive (random) and grouped (preserving
+group membership) -- and a ``Holdout`` class that selects the appropriate
+strategy based on pipeline configuration.
+"""
+
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
@@ -23,6 +30,20 @@ DataFrameOptionalTuple = tuple[pd.DataFrame, pd.DataFrame] | tuple[pd.DataFrame,
 
 
 def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptionalTuple:
+    """Split a dataframe into train and test sets with a random shuffle.
+
+    Thin wrapper around ``sklearn.model_selection.train_test_split`` that
+    resets the index on both resulting dataframes.
+
+    Args:
+        df: Input dataframe to split.
+        test_size: Number of rows (int) or fraction (float) to hold out.
+        random_state: Seed for reproducibility.
+
+    Returns:
+        Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` if the
+        split produces no test set.
+    """
     train, test = train_test_split(df, test_size=test_size, random_state=random_state)
     if test is None:
         return train, None
@@ -31,6 +52,26 @@ def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptiona
 
 
 def grouped_train_test_split(df, test_size, group_by, random_state=None) -> DataFrameOptionalTuple:
+    """Split a dataframe so that all rows sharing a group stay in the same fold.
+
+    Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
+    whose test-set size is closest to the requested ``test_size``.  If
+    ``test_size`` exceeds the number of groups, equals 0, or equals 1, it
+    falls back to ``DEFAULT_HOLDOUT``.
+
+    Args:
+        df: Input dataframe to split.
+        test_size: Desired number of test rows (int) or fraction (float).
+        group_by: Column name whose values define the groups.
+        random_state: Seed for reproducibility.
+
+    Returns:
+        Tuple of ``(train_df, test_df)``, or ``(df, None)`` if no valid
+        grouped split could be produced.
+
+    Raises:
+        ValueError: If the ``group_by`` column contains missing values.
+    """
     # Do not continue the split process if the groupby column has missing values.
     if df[group_by].isna().any():
         msg = f"Group by column '{group_by}' has missing values. Please remove/replace them."
@@ -62,6 +103,24 @@ def grouped_train_test_split(df, test_size, group_by, random_state=None) -> Data
 
 
 class Holdout:
+    """Config-driven train/test splitter for the evaluation holdout set.
+
+    Reads holdout parameters from the pipeline configuration and delegates
+    to either ``naive_train_test_split`` or ``grouped_train_test_split``
+    depending on whether a ``group_training_examples_by`` column is set.
+
+    The holdout size is resolved as follows:
+
+      - If ``holdout < 1.0``, it is treated as a fraction of the input rows.
+      - If ``holdout >= 1.0``, it is treated as an absolute row count.
+      - The result is clamped to ``max_holdout`` and must be at least
+        ``MIN_HOLDOUT`` rows.
+
+    Args:
+        config: Pipeline parameters providing ``holdout``, ``max_holdout``,
+            ``group_training_examples_by``, and ``random_state``.
+    """
+
     def __init__(self, config: SafeSynthesizerParameters):
         self.holdout = config.get("holdout")
         self.max_holdout = config.get("max_holdout")
@@ -69,6 +128,24 @@ class Holdout:
         self.random_state = config.get("random_state")
 
     def train_test_split(self, input_df: pd.DataFrame) -> DataFrameOptionalTuple:
+        """Split the input dataframe into training and holdout test sets.
+
+        Returns the full dataframe with no test set when holdout is disabled
+        (``holdout == 0`` or ``max_holdout == 0``).
+
+        Args:
+            input_df: The full input dataframe to split.
+
+        Returns:
+            Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` when
+            holdout is disabled or the grouped split fails.
+
+        Raises:
+            ValueError: If the input dataframe has fewer than
+                ``MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS`` rows, if the
+                computed holdout is smaller than ``MIN_HOLDOUT``, or if
+                the ``group_by`` column contains missing values.
+        """
         if self.holdout == 0 or self.max_holdout == 0:
             return input_df, None
 

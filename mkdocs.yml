@@ -54,6 +54,8 @@ extra_css:
   - css/mkdocstrings.css
 
 extra_javascript:
+  - js/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - js/toc-toggle.js
 
 watch:
@@ -91,6 +93,9 @@ plugins:
             show_if_no_docstring: false
             summary: true
             filters: ["!^_"]
+            extensions:
+              - griffe_pydantic:
+                  schema: false
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py
@@ -160,7 +165,9 @@ nav:
       - Python SDK: user-guide/sdk.md
       - CLI Reference: user-guide/cli.md
       - Parameters Reference: user-guide/parameters.md
+      - Environment Variables: user-guide/environment.md
       - Troubleshooting: user-guide/troubleshooting.md
+      - Data Quality: user-guide/data-quality.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - API Reference: reference/

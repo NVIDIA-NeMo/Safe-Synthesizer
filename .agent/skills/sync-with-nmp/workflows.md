@@ -48,11 +48,11 @@ cp "$NMP_REPO_PATH/packages/nemo_safe_synthesizer/design.md" ./design.md
 make synchronize-metafiles-from-nmp
 ```
 
-### Step 6: Format, Lint, Test
+### Step 6: Format, Check, Test
 
 ```bash
 make format
-make lint
+make check
 make test
 ```
 
@@ -80,7 +80,7 @@ Syncs changes from NMP MR !<MR_IID> into Safe-Synthesizer.
 
 ## Testing
 - [x] Tests pass locally (`make test`)
-- [x] Format and lint pass (`make format && make lint`)
+- [x] Format and check pass (`make format && make check`)
 EOF
 )"
 ```
@@ -120,7 +120,7 @@ make synchronize-from-nmp
 ```bash
 git diff --stat
 make format
-make lint
+make check
 make test
 ```
 
