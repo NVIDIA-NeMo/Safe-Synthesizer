@@ -450,7 +450,7 @@ class OpacusDPTrainer(Trainer):
     def sampling_probability(self) -> float:
         """Probability that an entity is included in a batch (capped at 1.0).
 
-        For record-level DP (one entity per row), it is `min(1, (per_device_batch_size × gradient_accumulation_steps) / n_entities)`.
+        For record-level DP (one entity per row), it is $min(1, (per_device_batch_size × gradient_accumulation_steps) / n_entities)$.
         For entity-level DP, n_entities can be small so the ratio may exceed 1;
         the result is capped at 1.0. Used as the sampling probability in the
         privacy accountant for ε computation.
