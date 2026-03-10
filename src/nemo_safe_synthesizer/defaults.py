@@ -1,7 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Collection of default settings for the Nemo Safe Synthesizer implementation."""
+"""Default constants for the Safe Synthesizer pipeline.
+
+Includes artifact paths, logging parameters, training and generation
+defaults, prompt templates, and miscellaneous constants shared across
+modules.
+"""
 
 from pathlib import Path
 

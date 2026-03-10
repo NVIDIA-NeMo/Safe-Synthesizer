@@ -6,11 +6,13 @@
 # Original source: https://github.com/microsoft/dp-transformers/blob/main/research/fine_tune_llm_w_qlora/linear.py
 # See THIRD_PARTY.md for the original MIT license terms.
 
-# This module is included for training with Opacus so that per sample gradients
-# are correctly calculated. It is imported for effects, never directly used.
-# Convert activations and backprops to float for per-sample gradient
-# computation. During mixed precision training it is possible that the
-# activations and/or backprops are not in full precision.
+
+"""Per-sample gradient hook for ``nn.Linear`` (Opacus).
+
+Registering this module with Opacus ensures per-sample gradients are computed
+correctly for Linear layers. Import this module for its side effect; do not
+call ``compute_linear_grad_sample`` directly.
+"""
 
 import torch
 import torch.nn as nn
@@ -22,13 +24,19 @@ from opt_einsum import contract
 def compute_linear_grad_sample(
     layer: nn.Linear, activations: list[torch.Tensor], backprops: torch.Tensor
 ) -> dict[nn.Parameter, torch.Tensor]:
-    """
-    Computes per sample gradients for ``nn.Linear`` layer
+    """Compute per-sample gradients for an ``nn.Linear`` layer.
+
+    Used by Opacus for correct per-sample gradient accumulation. Converts
+    activations and backprops to float for mixed-precision compatibility.
 
     Args:
-        layer: Layer
-        activations: Activations
-        backprops: Backpropagations
+        layer: The Linear layer being sampled.
+        activations: List of activation tensors from the forward pass.
+        backprops: Backpropagated gradient tensor.
+
+    Returns:
+        Dictionary mapping each trainable parameter (weight, bias) to its
+        per-sample gradient tensor of shape ``(batch, ...)``.
     """
     activation = activations[0]
     ret = {}
