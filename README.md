@@ -232,6 +232,35 @@ generation:
 
 Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
 
+## NIM Integration
+
+Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
+in your data. The endpoint is configured via `NIM_ENDPOINT_URL`; if it is unset,
+classification is skipped and the pipeline falls back to default entity detection,
+logging an error and falling back rather than raising it to the user.
+
+### Local Endpoint
+
+To point to a locally hosted LLM:
+
+```bash
+export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
+export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+```
+
+### Disable Classification
+
+To disable classification entirely:
+
+```yaml
+replace_pii:
+  globals:
+    classify:
+      enable_classify: false
+```
+
+When classification is disabled, NSS falls back to default entity types.
+
 ## Artifacts and Workdirs
 
 Safe Synthesizer uses a structured directory format to manage artifacts (trained models, synthetic data, logs).

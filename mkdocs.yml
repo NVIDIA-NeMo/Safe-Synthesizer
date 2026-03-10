@@ -165,7 +165,9 @@ nav:
       - Python SDK: user-guide/sdk.md
       - CLI Reference: user-guide/cli.md
       - Parameters Reference: user-guide/parameters.md
+      - Environment Variables: user-guide/environment.md
       - Troubleshooting: user-guide/troubleshooting.md
+      - Data Quality: user-guide/data-quality.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - API Reference: reference/

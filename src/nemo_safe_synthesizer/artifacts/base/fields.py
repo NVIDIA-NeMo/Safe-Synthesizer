@@ -1,16 +1,29 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Data models for field type classification and per-column statistics.
+
+Classes:
+
+    FieldType: Enum of column types recognized by the field analyzer.
+    FieldFeatures: Statistical profile of a single DataFrame column.
+"""
+
 from __future__ import annotations
 
 from enum import StrEnum
-from functools import cached_property
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
 class FieldType(StrEnum):
+    """Column type classification assigned by the field analyzer.
+
+    Used by ``evaluation`` and ``pii_replacer`` to dispatch type-specific
+    processing logic (e.g., numeric metrics vs. text similarity).
+    """
+
     EMPTY = "empty"
     NUMERIC = "numeric"
     CATEGORICAL = "categorical"
@@ -20,101 +33,60 @@ class FieldType(StrEnum):
 
 
 class FieldFeatures(BaseModel):
-    name: str
-    type: FieldType
+    """Statistical profile of a single DataFrame column.
 
-    count: int
-    """
-    Number of non-empty values.
-    """
-
-    unique_values_list: list[Any]
-    """
-    List of unique values.
+    Captures type classification, value distribution, missing-data rates,
+    string-length statistics, and optional numeric precision. Produced by
+    ``describe_field`` in the ``analyzers.field_features`` module.
     """
 
-    unique_count: int
-    """
-    Number of unique values.
-    """
-    unique_percent: float
+    name: str = Field(description="Column name in the source DataFrame.")
+    type: FieldType = Field(description="Inferred column type.")
 
-    missing_count: int
-    """
-    Number of missing values.
-    It's number of records from the dataset that don't have value set for this field.
-    """
-    missing_percent: float
+    count: int = Field(description="Number of non-null values.")
 
-    min_str_length: int
-    max_str_length: int
+    unique_values_list: list[Any] = Field(description="Deduplicated list of non-null values.")
 
-    avg_str_length: float
-    """
-    Average length of string representation of field's value.
-    Note: this only includes non-missing values (i.e. we don't add 0 for fields that are missing).
-    """
+    unique_count: int = Field(description="Number of unique non-null values.")
+    unique_percent: float = Field(description="Percentage of values that are unique, relative to non-null count.")
 
-    # numeric
-    min_value: int | float | None = Field(default=None)
-    max_value: int | float | None = Field(default=None)
-    min_precision: int | None = Field(default=None)
-    """
-    Min number of decimal spaces from all of the values for this field.
-    E.g. it's 1 for number like "1.1" and 3 for "1.234".
-    """
-    max_precision: int | None = Field(default=None)
-    """
-    Max number of decimal spaces from all of the values for this field.
-    """
+    missing_count: int = Field(description="Number of null/missing values.")
+    missing_percent: float = Field(description="Percentage of values that are missing, relative to total count.")
 
-    space_count: int | None = Field(default=None)
-    """
-    Number of times space character (' ') appears in field's values.
-    """
+    min_str_length: int = Field(description="Minimum string-representation length among non-null values.")
+    max_str_length: int = Field(description="Maximum string-representation length among non-null values.")
 
-    classification: dict | None = Field(default=None)
-    """
-    Classification information, based on labels detected in field's values.
-    """
+    avg_str_length: float = Field(
+        description="Mean string-representation length among non-null values.",
+    )
+
+    min_value: int | float | None = Field(
+        default=None,
+        description="Floor power-of-10 of the column minimum (numeric columns only).",
+    )
+    max_value: int | float | None = Field(
+        default=None,
+        description="Floor power-of-10 of the column maximum (numeric columns only).",
+    )
+    min_precision: int | None = Field(
+        default=None,
+        description="Minimum decimal digit count across float values.",
+    )
+    max_precision: int | None = Field(
+        default=None,
+        description="Maximum decimal digit count across float values.",
+    )
+
+    space_count: int | None = Field(
+        default=None,
+        description="Total number of space characters across all non-null values.",
+    )
+
+    classification: dict | None = Field(
+        default=None,
+        description="NER-based classification metadata, when available.",
+    )
 
     def to_dict(self, **kwargs) -> dict:
+        """Serialize to a dict, excluding unset and None fields."""
         return self.model_dump(exclude_unset=True, exclude_none=True)
-
-
-class FieldFeaturesInfo:
-    """
-    This class provides functionality to analyze field features. It can be used
-    by other libraries instead of having to parse through the dictionaries that
-    are normally stored on a manifest dataclass. This class will be init'd
-    and stored on the `AnalyzerContext`
-    """
-
-    field_features: list[FieldFeatures]
-
-    def __init__(self, field_features: list[FieldFeatures]):
-        self.field_features = field_features
-
-    @cached_property
-    def text_field_count(self) -> int:
-        count = 0
-        for field in self.field_features:
-            if field.type == FieldType.TEXT:
-                count += 1
-        return count
-
-    @cached_property
-    def field_count(self) -> int:
-        return len(self.field_features)
-
-    @cached_property
-    def numeric_ratio(self) -> float:
-        count = 0
-        for field in self.field_features:
-            if field.type == FieldType.NUMERIC:
-                count += 1
-
-        if count == 0:
-            return 0
-
-        return count / self.field_count
