@@ -42,9 +42,7 @@ class EntityExtractorMock(EntityExtractorGliner):
         self._batch_mode_enabled = False
         return self
 
-    def _detect_entities_chunked(
-        self, text: str, entities: set[str] | None = None
-    ) -> list[dict]:
+    def _detect_entities_chunked(self, text: str, entities: set[str] | None = None) -> list[dict]:
         """Return fixed entity dicts for the known test string (first_name, ssn, nofake).
 
         Input is assumed to match the string used in transform tests; indices are

@@ -54,7 +54,7 @@ def tld(value: str | pycountry.db.Data) -> str:
 
 
 def normalize(value: Any, allow: str = "") -> str:
-    """Transliterate to ASCII and remove characters not in ``\w`` or ``allow``."""
+    r"""Transliterate to ASCII and remove characters not in ``\w`` or ``allow``."""
     return re.sub(rf"[^\w{allow}]", "", anyascii(value))
 
 
