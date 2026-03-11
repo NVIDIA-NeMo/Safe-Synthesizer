@@ -46,22 +46,6 @@ For multi-file or long-running sessions, commit after each logical tier of work.
 
 Use `council` (multi-agent parallel exploration) for design decisions, broad codebase exploration, and tasks with multiple valid approaches. For narrow, single-answer questions ("why does this test fail?", "what does this function do?"), use grep/read directly -- council adds latency without benefit for focused lookups.
 
-## Local-only skills
-
-The following skills are not in this repo. They live in agent-stuff and are available when agent-stuff has been bootstrapped locally:
-
-- `skill-audit` -- audit agent transcripts and update skills
-- `council` -- coordinate multi-agent parallel codebase exploration
-- `deslop` -- remove AI-generated code slop
-- `diagnose-deps` -- diagnose transitive dependency changes via lockfile diff
-- `verify-repo-statements` -- verify claims about the repo against source
-- `beautiful-prose` -- hard-edged writing style contract for clean English prose
-- `bulk-edit` -- inline scripts for repetitive mechanical edits across many files
-
-The following skills exist in both this repo and agent-stuff. The repo versions add Safe-Synthesizer-specific content on top of the base:
-
-- `git-worktrees` -- base skill plus Cursor worktree automation, DCO/GPG signing, and venv strategy
-
 ## Hooks and worktree setup
 
 Hook scripts live in `.cursor/hooks/` and are loaded by both Cursor (`.cursor/hooks.json`) and Claude Code (`.claude/settings.json`).
