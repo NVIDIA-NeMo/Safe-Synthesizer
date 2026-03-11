@@ -90,7 +90,7 @@ MODEL_DETECTION_SCENARIOS = [
     ModelDetectionScenario("llama32", "meta-llama/Llama32-1B", Llama32),
     ModelDetectionScenario("smollm2", "HuggingFaceTB/SmolLM2-135M", SmolLM2),
     ModelDetectionScenario("smollm3", "HuggingFaceTB/SmolLM3-3B", SmolLM3),
-    ModelDetectionScenario("mistral", "mistralai/Mistral-7B-v0.1", Mistral),
+    ModelDetectionScenario("mistral", "mistralai/Mistral-7B-Instruct-v0.3", Mistral),
     ModelDetectionScenario("nemotron", "nvidia/Nemotron-4-340B", Nemotron),
 ]
 
@@ -151,7 +151,7 @@ MODEL_INIT_SCENARIOS = [
     ModelInitScenario(
         id="mistral",
         model_class=Mistral,
-        model_path="mistralai/Mistral-7B-v0.1",
+        model_path="mistralai/Mistral-7B-Instruct-v0.3",
         expected_template="[INST] {instruction} \n\n {schema} [/INST]{prefill}",
         expected_add_bos=True,
         expected_add_eos=True,
