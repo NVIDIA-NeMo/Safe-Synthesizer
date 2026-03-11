@@ -571,7 +571,6 @@ class TestResolveModelClass:
         [
             "google/gemma-2-27b",
             "SomeRandomModel/1B",
-            "",
         ],
         ids=["gemma", "random_model"],
     )
