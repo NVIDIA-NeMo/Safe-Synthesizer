@@ -8,7 +8,6 @@ data:
   max_sequences_per_example: null
   order_training_examples_by: null
 enable_replace_pii: true
-enable_synthesis: true
 evaluation:
   aia_enabled: true
   enabled: true
@@ -33,7 +32,6 @@ privacy:
   dp_enabled: false
   epsilon: 1.0
   per_sample_max_grad_norm: 1.0
-replace_pii: null
 training:
   batch_size: 1
   gradient_accumulation_steps: 8

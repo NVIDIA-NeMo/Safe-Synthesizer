@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+from typing import Self
+
 from pydantic import (
     Field,
     field_validator,
+    model_validator,
 )
 from pydantic_core.core_schema import ValidationInfo
 
@@ -47,11 +50,6 @@ class SafeSynthesizerParameters(Parameters):
     evaluation: EvaluationParameters = Field(
         description="Parameters for evaluating the quality of generated synthetic data.",
         default_factory=EvaluationParameters,
-    )
-
-    enable_synthesis: bool = Field(
-        description="Enable synthesizing new data by training a model.",
-        default=True,
     )
 
     enable_replace_pii: bool = Field(description="Enable replacing PII in the data.", default=True)
@@ -138,6 +136,15 @@ class SafeSynthesizerParameters(Parameters):
 
         return dp_params
 
+    @model_validator(mode="after")
+    def enforce_pii_config_consistency(self) -> Self:
+        """Ensure ``replace_pii`` is populated when PII is enabled and cleared when disabled."""
+        if self.enable_replace_pii and self.replace_pii is None:
+            self.replace_pii = PiiReplacerConfig.get_default_config()
+        elif not self.enable_replace_pii:
+            self.replace_pii = None
+        return self
+
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
@@ -169,23 +176,9 @@ class SafeSynthesizerParameters(Parameters):
         dp = DataParameters().model_copy(update=kwargs)
         tsp = TimeSeriesParameters().model_copy(update=kwargs)
 
-        enable_replace_pii = kwargs.pop("enable_replace_pii", False)
+        enable_replace_pii = kwargs.pop("enable_replace_pii", True)
         replace_pii_config = kwargs.get("replace_pii", None)
 
-        match enable_replace_pii, replace_pii_config:
-            case True, None:
-                logger.debug("enable_replace_pii is True but no config provided - using defaults")
-                replace_pii_config = PiiReplacerConfig.get_default_config()
-            case True, dict():
-                logger.debug("enable_replace_pii is True and config provided - using provided config")
-                replace_pii_config = PiiReplacerConfig.get_default_config().model_copy(update=replace_pii_config)
-            case True, PiiReplacerConfig():
-                logger.debug("enable_replace_pii is True and config provided - using provided config")
-            case False, dict() | False, None:
-                replace_pii_config = None
-                logger.debug("enable_replace_pii is False but config provided - ignoring provided config")
-
-        enable_synthesis = kwargs.get("enable_synthesis", True)
         return cls(
             training=thp,
             generation=gp,
@@ -194,6 +187,5 @@ class SafeSynthesizerParameters(Parameters):
             data=dp,
             time_series=tsp,
             replace_pii=replace_pii_config,
-            enable_synthesis=enable_synthesis,
             enable_replace_pii=enable_replace_pii,
         )

@@ -156,7 +156,7 @@ sequenceDiagram
     CLI_SDK->>ConfigBuilder: Build Configuration
     ConfigBuilder->>Holdout: Split Train/Test
     Holdout->>PIIReplacer: Process Training Data
-    Note over PIIReplacer: Optional: Replace PII entities with synthetic values
+    Note over PIIReplacer: On by default: replace PII entities with synthetic values
     PIIReplacer->>Assembler: Tokenize and Assemble
     Note over Assembler: Create training examples with proper formatting
     Assembler->>Training: Training Dataset
@@ -174,7 +174,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     B[("data")]
-    B --> C{"optional PII replacement"}
+    B --> C("PII replacement\non by default")
     C --> D("assemble examples")
     D --> E("Fine-tune")
     E --> F["Generate Samples"]

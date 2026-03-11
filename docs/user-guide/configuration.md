@@ -63,8 +63,7 @@ for more detail on combining config files with runtime overrides.
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `enable_synthesis` | `true` | Run training and generation. Set to `false` to run PII replacement only (requires `enable_replace_pii: true`) | Leave enabled for the full pipeline |
-| `enable_replace_pii` | `true` | Run PII replacement before training | Disable if your data contains no PII |
+| `enable_replace_pii` | `true` | Run PII replacement before training. On by default in both CLI and SDK. | Disable with `--enable_replace_pii false` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII |
 
 ---
 
@@ -318,8 +317,7 @@ safe-synthesizer run --config config.yaml --url data.csv \
 
 | YAML Key | SDK Method | API Reference |
 |----------|-----------|---------------|
-| `enable_synthesis` | (top-level flag) | [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] |
-| `enable_replace_pii` | (top-level flag) | [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] |
+| `enable_replace_pii` | `.with_replace_pii(enable=False)` | [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] |
 | `data` | `with_data()` | [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters] |
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |

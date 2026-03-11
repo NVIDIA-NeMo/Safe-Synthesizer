@@ -18,7 +18,7 @@ Safe Synthesizer employs a novel approach to synthetic data generation:
 ```mermaid
 flowchart LR
     data[("Input Data")]
-    data --> pii{"Optional PII Replacement"}
+    data --> pii("PII Replacement\non by default")
     pii --> assemble("Assemble Examples")
     assemble --> train("Fine-tune LLM")
     train --> generate["Generate Samples"]
@@ -34,9 +34,9 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 - Grouping and ordering (if configured)
 - Train/test split for holdout evaluation
 
-### 2. PII Replacement (Optional)
+### 2. PII Replacement
 
-If enabled, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses.
+On by default, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses. Disable with `--enable_replace_pii false` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
 
 See [Privacy](privacy.md) for detailed PII documentation.
 

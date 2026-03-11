@@ -196,7 +196,6 @@ class TestCLISettings:
         overrides = {
             "training": {"epochs": 10, "batch_size": 32},
             "generation": {"num_samples": 1000},
-            "enable_synthesis": True,
         }
         settings = CLISettings.from_cli_kwargs(synthesis_overrides=overrides)
         assert settings.synthesis_overrides == overrides

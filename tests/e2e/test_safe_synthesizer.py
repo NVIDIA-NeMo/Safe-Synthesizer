@@ -62,7 +62,6 @@ CONFIG_DIR = Path(__file__).parent / "required_configs"
 def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
         enable_replace_pii=False,
         num_input_records_to_sample=1500,
         dp_enabled=True,
@@ -91,7 +90,6 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
         enable_replace_pii=False,
         num_input_records_to_sample=5000,
     )

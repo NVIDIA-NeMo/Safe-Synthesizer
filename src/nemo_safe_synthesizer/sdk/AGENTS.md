@@ -7,7 +7,7 @@ Programmatic API for Safe-Synthesizer using a builder pattern. Provides fluent c
 
 ## Purpose
 
-The SDK is the programmatic entry point for running Safe-Synthesizer pipelines outside the CLI. It supports: config from YAML + builder overrides, DataFrame or URL data sources, optional PII replacement, train/generate/evaluate, and PII-only mode when `enable_synthesis=False`.
+The SDK is the programmatic entry point for running Safe-Synthesizer pipelines outside the CLI. It supports: config from YAML + builder overrides, DataFrame or URL data sources, PII replacement (on by default), and train/generate/evaluate.
 
 ## Builder pattern
 
@@ -15,7 +15,7 @@ Base: `ConfigBuilder` in `config_builder.py` holds `_*_config` attributes (e.g. 
 
 Extension: `SafeSynthesizer` in `library_builder.py` extends `ConfigBuilder`, adds `Workdir`, and implements the executable pipeline (`process_data`, `train`, `generate`, `evaluate`).
 
-Important: `with_train()`, `with_generate()`, and `with_replace_pii()` set `_enable_synthesis` or `_enable_replace_pii`; `synthesize()` only sets `_enable_synthesis`. Use `Self` type hints for method chaining.
+Important: `with_replace_pii(enable=False)` sets `_enable_replace_pii = False` and clears `_replace_pii_config`; PII is enabled by default (`_enable_replace_pii = True`). Use `Self` type hints for method chaining.
 
 ## Dynamic backend selection
 
@@ -45,7 +45,7 @@ Precedence: `kwargs` override `values`; `values` override model defaults. Each `
 - generate(): Chooses `TimeseriesBackend` or `VllmBackend`, initializes, generates.
 - evaluate(): Builds `Evaluator`, compiles `results` via `make_nss_results`.
 
-`run()` either: (1) runs PII-only mode and exits, or (2) calls `process_data().train().generate().evaluate()`.
+`run()` calls `process_data().train().generate().evaluate()`.
 
 ## Gotchas
 

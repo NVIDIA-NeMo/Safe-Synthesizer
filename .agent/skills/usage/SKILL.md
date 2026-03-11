@@ -77,7 +77,7 @@ synthesizer.evaluate()
 
 Sources (highest precedence first): CLI overrides > dataset registry overrides > YAML config file.
 
-Config sections: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`, `enable_synthesis`, `enable_replace_pii`.
+Config sections: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`, `enable_replace_pii`.
 
 Environment variables:
 

@@ -153,7 +153,7 @@ class MultimodalReport(EvaluationReport):
         attribute_inference_protection = AttributeInferenceProtection(
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         )
-        if config and config.get("enable_synthesis") and config.get("aia_enabled"):
+        if config and config.get("aia_enabled"):
             attribute_inference_protection = AttributeInferenceProtection.from_evaluation_dataset(
                 evaluation_dataset, config
             )
@@ -162,7 +162,7 @@ class MultimodalReport(EvaluationReport):
         membership_inference_protection = MembershipInferenceProtection(
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         )
-        if config and config.get("enable_synthesis") and config.get("mia_enabled"):
+        if config and config.get("mia_enabled"):
             membership_inference_protection = MembershipInferenceProtection.from_evaluation_dataset(evaluation_dataset)
         components.append(membership_inference_protection)
 
@@ -198,22 +198,14 @@ class MultimodalReport(EvaluationReport):
 
         dataset_statistics = DatasetStatistics.from_evaluation_dataset(evaluation_dataset)
 
-        # column_distribution = ColumnDistribution(score=EvaluationScore())
         column_distribution = ColumnDistribution.from_evaluation_dataset(evaluation_dataset)
-        correlation = Correlation(score=EvaluationScore())
-        deep_structure = DeepStructure(score=EvaluationScore())
-        text_semantic_similarity = TextSemanticSimilarity(score=EvaluationScore())
-        text_structure_similarity = TextStructureSimilarity(score=EvaluationScore())
-        sqs_score = SQSScore(score=EvaluationScore())
-        if config and config.get("enable_synthesis"):
-            column_distribution = ColumnDistribution.from_evaluation_dataset(evaluation_dataset)
-            correlation = Correlation.from_evaluation_dataset(evaluation_dataset)
-            deep_structure = DeepStructure.from_evaluation_dataset(evaluation_dataset)
-            text_semantic_similarity = TextSemanticSimilarity.from_evaluation_dataset(evaluation_dataset)
-            text_structure_similarity = TextStructureSimilarity.from_evaluation_dataset(evaluation_dataset)
-            sqs_score = SQSScore.from_components(
-                [column_distribution, correlation, deep_structure, text_semantic_similarity, text_structure_similarity]
-            )
+        correlation = Correlation.from_evaluation_dataset(evaluation_dataset)
+        deep_structure = DeepStructure.from_evaluation_dataset(evaluation_dataset)
+        text_semantic_similarity = TextSemanticSimilarity.from_evaluation_dataset(evaluation_dataset)
+        text_structure_similarity = TextStructureSimilarity.from_evaluation_dataset(evaluation_dataset)
+        sqs_score = SQSScore.from_components(
+            [column_distribution, correlation, deep_structure, text_semantic_similarity, text_structure_similarity]
+        )
 
         components += [
             dataset_statistics,

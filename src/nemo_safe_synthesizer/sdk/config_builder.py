@@ -86,7 +86,6 @@ class ConfigBuilder(object):
         self._nss_config: SafeSynthesizerParameters | None = config
         if self._nss_config is not None:
             self._evaluation_config = self._nss_config.evaluation
-            self._enable_synthesis = self._nss_config.enable_synthesis
             self._enable_replace_pii = self._nss_config.enable_replace_pii
             self._replace_pii_config = self._nss_config.replace_pii
             self._privacy_config: DifferentialPrivacyHyperparams | None = self._nss_config.privacy
@@ -95,8 +94,7 @@ class ConfigBuilder(object):
             self._data_config = self._nss_config.data
             self._time_series_config = self._nss_config.time_series
         else:
-            self._enable_synthesis = None
-            self._enable_replace_pii = None
+            self._enable_replace_pii = True
             self._data_config: DataParameters = DataParameters()
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
@@ -154,19 +152,6 @@ class ConfigBuilder(object):
         self._data_source = df_source
         return self
 
-    def synthesize(self) -> Self:
-        """Enable the synthesis pipeline for this run.
-
-        Calling this is not strictly necessary when ``with_train`` or
-        ``with_generate`` are used (they set the flag automatically),
-        but it provides an explicit opt-in when relying on defaults.
-
-        Returns:
-            This builder instance with synthesis enabled.
-        """
-        self._enable_synthesis = True
-        return self
-
     def with_data(self, config: DataParameters | ParamDict | None = None, **kwargs) -> Self:
         """Configure data processing settings.
 
@@ -193,7 +178,6 @@ class ConfigBuilder(object):
         self._training_config: TrainingHyperparams | None = self._resolve_config(
             values=config, cls=TrainingHyperparams, **kwargs
         )
-        self._enable_synthesis = True
         return self
 
     def with_generate(self, config: GenerateParameters | ParamDict | None = None, **kwargs) -> Self:
@@ -209,7 +193,6 @@ class ConfigBuilder(object):
         self._generation_config: GenerateParameters | None = self._resolve_config(
             values=config, cls=GenerateParameters, **kwargs
         )
-        self._enable_synthesis = True
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
@@ -244,18 +227,23 @@ class ConfigBuilder(object):
         )
         return self
 
-    def with_replace_pii(self, config: PiiReplacerConfig | ParamDict | None = None, **kwargs) -> Self:
-        """Configure PII replacement settings and enable PII replacement.
+    def with_replace_pii(
+        self, config: PiiReplacerConfig | ParamDict | None = None, *, enable: bool = True, **kwargs
+    ) -> Self:
+        """Configure PII replacement settings.
 
         Falls back to ``PiiReplacerConfig.get_default_config()`` when
-        ``config`` is ``None``.
+        ``config`` is ``None``.  Pass ``enable=False`` to explicitly
+        disable PII replacement for this run.
 
         Args:
             config: PII replacement configuration object or dict.
+            enable: When ``False``, disables PII replacement entirely
+                and clears any previously set config.
             **kwargs: Field-level overrides (e.g. ``classify``).
 
         Returns:
-            This builder instance with PII replacement configured and enabled.
+            This builder instance with PII replacement configured.
 
         Raises:
             ValueError: If ``config`` is not a ``PiiReplacerConfig``,
@@ -265,6 +253,11 @@ class ConfigBuilder(object):
 
             builder = SafeSynthesizer().with_data_source(your_dataframe).with_replace_pii(config=custom_pii_config)
         """
+        if not enable:
+            self._enable_replace_pii = False
+            self._replace_pii_config = None
+            return self
+
         cfg = None
         match config:
             case PiiReplacerConfig() as m:
@@ -333,10 +326,7 @@ class ConfigBuilder(object):
                     logger.debug(f"Using default values for {pg}")
                 case _:
                     raise ValueError(f"Input must be a BaseModel, dictionary, or None: {type(param)}")
-        params_to_use["enable_replace_pii"] = (
-            self._enable_replace_pii if self._enable_replace_pii is not None else False
-        )
-        params_to_use["enable_synthesis"] = self._enable_synthesis if self._enable_synthesis is not None else False
+        params_to_use["enable_replace_pii"] = self._enable_replace_pii
         self._nss_config = SafeSynthesizerParameters(**params_to_use)
 
         # Inject classify_model_provider into PII replacer config if set

@@ -83,11 +83,11 @@ The same run, three ways -- 10,000 records with DP-SGD:
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. PII replacement is optional; all other stages are configurable. The diagram shows the default full run.
+The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--enable_replace_pii false` (CLI) or `.with_replace_pii(enable=False)` (SDK).
 
 ```mermaid
 flowchart LR
-    data[Data Input] --> pii["PII Replacement<br/>(optional)"]
+    data[Data Input] --> pii["PII Replacement<br/>(on by default)"]
     pii --> train["Training<br/>LoRA fine-tune"]
     train --> gen["Generation<br/>vLLM sampling"]
     gen --> eval["Evaluation<br/>SQS + DPS report"]
@@ -118,7 +118,6 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
-- PII replacement only: `safe-synthesizer run --enable_replace_pii true --enable_synthesis false --url data.csv`
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ---
@@ -182,7 +181,7 @@ safe-synthesizer --help
 ### `run` -- Execute the Pipeline
 
 Without a subcommand, `run` executes the full end-to-end pipeline (data processing,
-optional PII replacement, training, generation, evaluation).
+PII replacement, training, generation, evaluation). PII replacement is on by default.
 
 ```bash
 safe-synthesizer run --config config.yaml --url data.csv
@@ -357,11 +356,14 @@ columns that are exclusively a single entity type (e.g., a column that is
 always SSNs), marking those columns for wholesale replacement before training.
 The two steps are independent -- NER runs on free-text content, LLM
 classification targets structured sensitive columns. PII replacement is on by
-default (`enable_replace_pii: true`).
+default in both the CLI and SDK (`enable_replace_pii: true`).
 
 !!! tip "Skip PII replacement"
-    If your dataset does not contain PII, set `enable_replace_pii: false` to
-    skip this stage entirely and reduce pipeline runtime.
+    If your dataset does not contain PII, disable this stage to reduce pipeline
+    runtime:
+
+    - CLI: `--enable_replace_pii false`
+    - SDK: `.with_replace_pii(enable=False)`
 
 === "CLI"
 
@@ -378,10 +380,17 @@ default (`enable_replace_pii: true`).
 
 === "SDK"
 
+    PII replacement is on by default -- no `with_replace_pii()` call is needed
+    for the standard case.  Call it only to customize the config or to disable:
+
     ```python
     from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
     from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
+    # Default: PII on, no call needed
+    synthesizer = SafeSynthesizer().with_data_source("data.csv").with_train()
+
+    # Customize: enable LLM classification for specific entity types
     pii_config = PiiReplacerConfig.get_default_config()
     pii_config.globals.classify.enable_classify = True
     pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
@@ -445,40 +454,6 @@ When `NIM_ENDPOINT_URL` is unset, the classification step is attempted but
 falls back to NER-only detection (with an error log). No environment
 variables are required for NER-only PII replacement; column classification
 requires `NIM_ENDPOINT_URL`.
-
-### PII-Only Mode
-
-Set `enable_synthesis: false` with `enable_replace_pii: true` to run PII
-replacement without synthesis.
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run \
-      --enable_replace_pii true \
-      --enable_synthesis false \
-      --url data.csv
-    ```
-
-=== "SDK"
-
-    ```python
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-
-    synthesizer = (
-        SafeSynthesizer()
-        .with_data_source("data.csv")
-        .with_replace_pii()
-    )
-    synthesizer.run()
-    ```
-
-=== "Config reference"
-
-    ```yaml
-    enable_replace_pii: true
-    enable_synthesis: false
-    ```
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 

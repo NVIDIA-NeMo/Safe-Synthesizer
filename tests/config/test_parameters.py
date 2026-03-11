@@ -10,11 +10,9 @@ from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
 def test_safe_synthesizer_parameters():
     config = SafeSynthesizerParameters(
-        enable_synthesis=True,
         enable_replace_pii=False,
         replace_pii=None,
     )
-    assert config.enable_synthesis is True
     assert config.enable_replace_pii is False
     assert config.replace_pii is None
     assert config.training.batch_size == 1

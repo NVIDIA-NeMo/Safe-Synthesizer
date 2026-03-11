@@ -131,7 +131,7 @@ generate many times).
 
 ```mermaid
 flowchart LR
-    Data["Data Input"] --> PII["PII Replacement<br/>(optional)"]
+    Data["Data Input"] --> PII["PII Replacement<br/>(on by default)"]
     PII --> Train["Training"]
     Train --> Gen["Generation"]
     Gen --> Eval["Evaluation"]
@@ -149,7 +149,7 @@ and prepares it for training:
   model's context window raise a [`GenerationError`][nemo_safe_synthesizer.errors.GenerationError] rather than being silently
   truncated
 
-### 2. PII Replacement (Optional)
+### 2. PII Replacement
 
 When `enable_replace_pii: true` (the default), the PII replacer detects
 personally identifiable information (PII) using GLiNER NER and optional LLM-based
