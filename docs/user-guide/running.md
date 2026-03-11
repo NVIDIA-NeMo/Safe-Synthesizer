@@ -408,10 +408,26 @@ default (`enable_replace_pii: true`).
         classify:
           enable_classify: true
           entities: ["email", "phone_number", "ssn"]
+      steps:
+        - rows:
+            update:
+              - condition: column.entity == "email" and not (this | isna)
+                value: column.entity | fake
+              - condition: column.entity == "phone_number" and not (this | isna)
+                value: column.entity | fake
+              - condition: column.entity == "ssn" and not (this | isna)
+                value: column.entity | fake
     ```
 
-    The `replace_pii` config block requires the full `steps` field internally;
-    use the SDK builder when you need fine-grained control over individual steps.
+    `steps` is required and has no default. The snippet above shows a minimal
+    single-step config. For the full default ruleset (40+ entity types), use
+    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
+    in the SDK and export it to YAML:
+
+    ```python
+    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+    PiiReplacerConfig.get_default_config().to_yaml("pii_config.yaml")
+    ```
 
 ### LLM Column Classification
 

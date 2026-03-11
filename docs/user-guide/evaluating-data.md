@@ -133,15 +133,25 @@ Several evaluation metrics have minimum data requirements:
 
 `UNAVAILABLE` is the literal string that appears in the evaluation report when
 a metric could not be computed. Many evaluation components catch errors and
-return this grade instead of failing the pipeline. If your evaluation report
-shows missing or `UNAVAILABLE` metrics:
+return this grade instead of failing the pipeline.
 
-1. Check the logs for warnings and exceptions
-2. Verify you have enough records (>= 200) and columns (>= 3)
-3. Verify the SentenceTransformer model downloaded successfully -- check your
-   Hugging Face cache (`$HF_HOME`, default `~/.cache/huggingface`) for the
-   model directory, or run once with internet access before switching to offline
-   mode
+Common reasons a metric shows `UNAVAILABLE`:
+
+- Column type mismatch -- [`ColumnDistribution`][nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution], [`DeepStructure`][nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure] (PCA), and
+  [`Correlation`][nemo_safe_synthesizer.evaluation.components.correlation.Correlation] apply only to numeric and categorical columns; [`TextSemanticSimilarity`][nemo_safe_synthesizer.evaluation.components.text_semantic_similarity.TextSemanticSimilarity]
+  and [`TextStructureSimilarity`][nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity] apply only to text columns. A dataset with no
+  text columns will show `UNAVAILABLE` for text metrics, and vice versa. This is
+  by design.
+- No holdout split -- [`TextSemanticSimilarity`][nemo_safe_synthesizer.evaluation.components.text_semantic_similarity.TextSemanticSimilarity] and [`MembershipInferenceProtection`][nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection]
+  both require a held-out test set. If `data.holdout` is `0` (no holdout), these
+  metrics are skipped and marked `UNAVAILABLE`.
+- Too few records or columns -- see the minimums table above.
+- Model download failure -- the SentenceTransformer model must be present in
+  your Hugging Face cache (`$HF_HOME`, default `~/.cache/huggingface`). Run
+  once with internet access before switching to offline mode.
+
+If the reason is not obvious, check the logs for warnings and exceptions logged
+during the evaluation stage.
 
 ### Report Truncation
 

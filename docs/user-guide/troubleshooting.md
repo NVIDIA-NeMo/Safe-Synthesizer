@@ -388,14 +388,14 @@ Out-of-order records:
 : During generation, records are validated for chronological order. Records
   that arrive out of order are marked invalid.
 
-Groups must have same start:
+#### Groups must have same start
 
-: All groups in the dataset must begin at the same timestamp when
-  `time_series.start_timestamp` is `null` (inferred from data). If group
-  start timestamps differ, the pipeline raises a `DataError`. Either align
-  all group start timestamps in your data, or set
-  `time_series.start_timestamp` to an explicit value that applies to all
-  groups.
+All groups in the dataset must begin at the same timestamp when
+`time_series.start_timestamp` is `null` (inferred from data). If group
+start timestamps differ, the pipeline raises a `DataError`. Either align
+all group start timestamps in your data, or set
+`time_series.start_timestamp` to an explicit value that applies to all
+groups.
 
 ---
 

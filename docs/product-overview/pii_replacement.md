@@ -146,7 +146,7 @@ globals:
 
 ## Configuration
 
-PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Parameters Reference](../user-guide/parameters.md).
+PII replacement is configured through the `replace_pii` section. For the full schema, refer to [Configuration Reference -- Replacing PII](../user-guide/configuration.md#replacing-pii).
 
 ```yaml title="replace_pii section"
 replace_pii:

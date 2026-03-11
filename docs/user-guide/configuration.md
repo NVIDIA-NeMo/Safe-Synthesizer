@@ -54,7 +54,7 @@ synthesizer.run()
     Parameters that accept `"auto"` cannot be set to `"auto"` via CLI flags --
     omit the flag to use the default, or set it in YAML.
 
-See [Using YAML Config Files with the CLI and SDK](running.md#using-yaml-config-files-with-the-cli-and-sdk)
+See [Using YAML Config Files with the CLI and SDK](running.md#using-yaml-config-files)
 for more detail on combining config files with runtime overrides.
 
 ---
