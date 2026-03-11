@@ -4,8 +4,8 @@
 # Environment Variables
 
 All environment variables that affect Safe Synthesizer behavior. For runtime
-errors and OOM issues, see [Troubleshooting](troubleshooting.md). For output
-quality and evaluation metrics, see [Evaluating Output Data](evaluating-data.md).
+errors and OOM issues, see [Program Runtime](troubleshooting.md). For output
+quality and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md).
 
 Synthesis parameters (`training.learning_rate`, `generation.num_records`, etc.)
 are set via YAML, CLI flags, or the Python SDK -- not environment variables.
@@ -233,4 +233,4 @@ there are at least 1,000 records per worker.
 
 - [Running Safe Synthesizer](running.md) -- pipeline execution, CLI commands, and artifacts
 - [Configuration Reference](configuration.md) -- parameter tables
-- [Troubleshooting](troubleshooting.md) -- runtime errors and OOM fixes
+- [Program Runtime](troubleshooting.md) -- runtime errors and OOM fixes

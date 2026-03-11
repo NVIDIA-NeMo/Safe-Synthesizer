@@ -161,8 +161,9 @@ nav:
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md
-      - Evaluating Output Data: user-guide/evaluating-data.md
-      - Troubleshooting: user-guide/troubleshooting.md
+      - Troubleshooting:
+          - Synthetic Data Quality: user-guide/evaluating-data.md
+          - Program Runtime: user-guide/troubleshooting.md
       - Reference:
           - Configuration: user-guide/configuration.md
           - Environment Variables: user-guide/environment.md

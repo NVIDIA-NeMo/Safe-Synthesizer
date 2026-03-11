@@ -1058,7 +1058,7 @@ and environment variables (`HF_HOME`, `HF_HUB_OFFLINE`, `LOCAL_FILES_ONLY`,
 `VLLM_CACHE_ROOT`), see
 [Environment Variables -- Hugging Face Cache](environment.md#hugging-face-cache).
 
-For offline-specific errors, see [Troubleshooting](troubleshooting.md).
+For offline-specific errors, see [Program Runtime](troubleshooting.md).
 
 ---
 

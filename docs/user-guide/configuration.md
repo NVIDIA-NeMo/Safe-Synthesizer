@@ -188,7 +188,7 @@ Compatibility constraints:
 
 See [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams]
 for the full field list. For DP error diagnostics, see
-[Evaluating Output Data -- Common DP Errors](evaluating-data.md#common-dp-errors).
+[Synthetic Data Quality](evaluating-data.md#common-dp-errors).
 
 ---
 
@@ -330,4 +330,4 @@ safe-synthesizer run --config config.yaml --url data.csv \
 
 - [Running Safe Synthesizer](running.md) -- pipeline execution and examples
 - [Environment Variables](environment.md) -- infrastructure and cache settings
-- [Troubleshooting](troubleshooting.md) -- runtime errors and OOM fixes
+- [Program Runtime](troubleshooting.md) -- runtime errors and OOM fixes

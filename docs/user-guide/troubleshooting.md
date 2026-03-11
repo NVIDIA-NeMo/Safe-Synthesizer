@@ -1,11 +1,11 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Troubleshooting
+# Program Runtime
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Evaluating Output Data](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
+and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
 configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 ---
@@ -215,7 +215,7 @@ If evaluation OOMs, reduce the evaluation scope or dataset size:
 
 !!! tip "Evaluation and Data Quality"
     SQS scores, UNAVAILABLE metrics, report limits, and low-quality
-    diagnostics are covered in [Evaluating Output Data](evaluating-data.md#evaluation).
+    diagnostics are covered in [Synthetic Data Quality](evaluating-data.md#evaluation).
 
 ---
 
@@ -288,7 +288,7 @@ Incompatible DP settings:
 
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in
-    [Evaluating Output Data -- Differential Privacy](evaluating-data.md#differential-privacy).
+    [Synthetic Data Quality](evaluating-data.md#differential-privacy).
 
 ---
 
@@ -463,4 +463,4 @@ please [file an issue on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer
 
 - [Running Safe Synthesizer](running.md) -- pipeline execution and CLI commands
 - [Configuration Reference](configuration.md) -- parameter tables
-- [Evaluating Output Data](evaluating-data.md) -- quality and privacy score diagnostics
+- [Synthetic Data Quality](evaluating-data.md) -- quality and privacy score diagnostics

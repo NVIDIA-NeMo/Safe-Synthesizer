@@ -118,7 +118,7 @@ and produces an evaluation report. The default outputs are placed in
 
 To run the same pipeline from Python, see [Running Safe Synthesizer -- SDK](running.md#running-the-pipeline).
 
-→ Next step: read [Evaluating Output Data](evaluating-data.md) to understand
+→ Next step: read [Synthetic Data Quality](evaluating-data.md) to understand
 your first report and how to interpret SQS and DPS scores.
 
 ---
@@ -201,13 +201,13 @@ with interactive visualizations. Two composite scores are reported:
     - AIA (Attribute Inference Attack) -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data
     - PII replay detection -- checks whether PII from training appears in synthetic data
 
-See [Evaluating Output Data](evaluating-data.md) for how to interpret scores.
+See [Synthetic Data Quality](evaluating-data.md) for how to interpret scores.
 
 ---
 
 ## What to Read Next
 
-After your first run, read [Evaluating Output Data](evaluating-data.md) to understand
+After your first run, read [Synthetic Data Quality](evaluating-data.md) to understand
 your SQS and DPS scores and learn how to improve generation quality.
 
 ## Guides
@@ -248,13 +248,13 @@ your SQS and DPS scores and learn how to improve generation quality.
 
     [→ Troubleshooting](troubleshooting.md)
 
--   Evaluating Output Data
+-   Synthetic Data Quality
 
     ---
 
     Interpreting SQS and DPS scores, improving generation quality,
     choosing privacy settings.
 
-    [→ Evaluating Output Data](evaluating-data.md)
+    [→ Synthetic Data Quality](evaluating-data.md)
 
 </div>
