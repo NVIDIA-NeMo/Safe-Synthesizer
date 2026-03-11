@@ -3,7 +3,7 @@
 
 # GitHub CLI Workflows
 
-Detailed multi-step recipes for common GitHub workflows. Referenced from [SKILL.md](../SKILL.md).
+Multi-step recipes for common GitHub workflows. Quick command reference: [SKILL.md](../SKILL.md).
 
 ## Pre-Merge Checklist
 
@@ -66,24 +66,13 @@ gh run view $RUN_ID --log-failed > /tmp/ci-failure.log
 
 ### Step 3: Reproduce Locally
 
-Match the failed CI job to its local equivalent:
-
-| CI Job | Local Command |
-|--------|---------------|
-| Format | `make format-check` (or `make format` to fix) |
-| Format (lock) | `make lock-check` |
-| Typecheck | `make typecheck` |
-| Unit Tests | `make test` or `make test-ci` |
-
-Full job list and path-filter behavior: `.github/workflows/README.md` in the repo. Full Check vs pre-commit table: CONTRIBUTING.md § Formatting, Linting, and Type Checking.
-
-When CI jobs are skipped (path filtering): The `changes` job skips format, typecheck, and unit-test when only non-source files are modified (e.g. workflow YAML, docs, markdown). To get CI to run: run `make check` and `make test` locally and note in the PR, or make a trivial Python change (e.g. docstring) so the pipeline runs.
-
-For full CI parity in a container:
+Match the failed CI job to its local equivalent (see CI job table in SKILL.md). For full CI parity in a container:
 
 ```bash
 make test-ci-container
 ```
+
+When CI jobs are skipped (path filtering): the `changes` job skips format, typecheck, and unit-test when only non-source files are modified. To get CI to run: make a trivial Python change (e.g. docstring) or run `make check` and `make test` locally and note in the PR.
 
 ### Step 4: Fix and Re-run
 
@@ -233,45 +222,6 @@ git checkout -
 git stash pop
 ```
 
-## Issue-to-PR Lifecycle
-
-End-to-end workflow: create an issue, branch, implement, and open a draft PR.
-
-Before branching, ask the user whether to use a local branch (`git checkout -b`) or a worktree for isolated development. Worktrees are preferred when the main checkout has uncommitted work or when multiple branches need to be active simultaneously. See the [git-worktrees skill](../../git-worktrees/SKILL.md) for the worktree-to-draft-PR workflow.
-
-### Step 1: Create the Issue
-
-```bash
-gh issue create \
-  --title "fix: short description of the problem" \
-  --body "$(cat <<'EOF'
-Problem statement in 1-2 sentences.
-
-Proposed fix: brief description.
-EOF
-)"
-```
-
-### Step 2: Create Branch, Implement, and Open Draft PR
-
-```bash
-ISSUE=<number-from-step-1>
-git checkout -b $USER/$ISSUE-short-name origin/main
-# ... make changes ...
-git add -A \
-  && git commit -s -S -m "fix: description (closes #$ISSUE)" \
-  && git push -u origin HEAD \
-  && gh pr create --draft \
-    --title "fix: description" \
-    --body "$(cat <<EOF
-Closes #$ISSUE
-
-- Change 1
-- Change 2
-EOF
-)"
-```
-
 ## Fetch and Address Review Comments
 
 For "address PR comments" or "pull comments from PR N", use the **CLI helper** first. It returns a single JSON object (inline + top-level comments) and can post replies without the `gh` binary (GitHub API + `GITHUB_TOKEN`).
@@ -285,14 +235,14 @@ From repo root (or skill dir). If `GITHUB_TOKEN` is not set, set it first: `expo
 export GITHUB_TOKEN=$(gh auth token)
 
 # Fetch all comments (single JSON: pr_number, repo, inline[], top_level[])
-uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]
+uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]
 
 # Reply to an inline review comment (comment_id from the inline[].id in the JSON above)
-uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Fixed in abc1234"
+uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Fixed in abc1234"
 # Or from stdin:
-echo "Fixed in abc1234" | uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file -
+echo "Fixed in abc1234" | uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file -
 # Or from a file (plain text or Markdown; content is sent as the comment body as-is):
-uv run --script .agent/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file path/to/reply.md
+uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file path/to/reply.md
 ```
 
 Reply file format: plain text or Markdown. The entire file contents become the comment body (no wrapper or front matter). Example `reply.md`:
@@ -352,16 +302,3 @@ EOF
 )"
 ```
 
-## Retroactive Signoff and Signing
-
-If commits were pushed without `--signoff` (`-s`) or `--gpg-sign` (`-S`):
-
-```bash
-# Amend the last commit to add signoff + signature
-git commit --amend --signoff --gpg-sign --no-edit
-git push --force-with-lease
-
-# For multiple commits, interactive rebase (careful -- rewrites history)
-git rebase --signoff --gpg-sign HEAD~<n>
-git push --force-with-lease
-```

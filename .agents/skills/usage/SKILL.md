@@ -1,8 +1,9 @@
----
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+---
 name: usage
 description: "How to run Safe-Synthesizer: CLI commands, SDK builder pattern, configuration, environment variables, and output layout. Triggers on: safe-synthesizer run, CLI, SDK, pipeline, config, generate, train, evaluate, SafeSynthesizer, with_data_source, from_yaml."
+license: Apache-2.0
 ---
 
 # Using Safe-Synthesizer

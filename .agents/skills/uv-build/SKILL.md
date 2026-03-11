@@ -1,8 +1,9 @@
----
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+---
 name: uv-build
 description: "uv package management, dependency groups, PyTorch index handling, hatch build system, and versioning for this repo. Triggers on: uv, uv sync, uv lock, uv add, uv build, dependency, pyproject.toml, extras, cpu, cu128, hatch, wheel, version, publish."
+license: Apache-2.0
 ---
 
 # uv and Build System

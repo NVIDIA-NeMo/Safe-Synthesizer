@@ -1,9 +1,10 @@
----
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+---
 name: diagnose-failures
-description: "Triage test, CI, runtime, GPU, import errors. Triggers on: test failed, CI failed, pytest error, traceback, OOM, CUDA, import error, DataError, ParameterError, GenerationError, InternalError."
+description: "Triage test, CI, runtime, GPU, import errors, and type errors. Triggers on: test failed, CI failed, pytest error, traceback, OOM, CUDA, import error, DataError, ParameterError, GenerationError, InternalError, ty check, ty error, typecheck, unresolved-attribute, unresolved-import, type error."
 related-skills: [diagnose-deps]
+license: Apache-2.0
 ---
 
 # Diagnose Failures
@@ -21,7 +22,7 @@ Source: `src/nemo_safe_synthesizer/errors.py`
 | `GenerationError` | `UserError`, `RuntimeError` | Sampling failures | Check generation config/mocks |
 | `InternalError` | `SafeSynthesizerError`, `RuntimeError` | Library bug | Report/fix in source |
 
-## 1. Test Failures
+## Test Failures
 
 Run the failing test in isolation first:
 
@@ -42,7 +43,26 @@ Conditional-assert pitfall: do not `assert field is not None` for fields that ar
 
 Markers are defined in `pytest.ini`. Run `make test` (unit), `make test-smoke`, `make test-slow` (all), or `uv run pytest -m <marker>` for specific markers.
 
-## 2. CI Pipeline Failures
+## Type Errors (`ty`)
+
+Always run `make typecheck` locally -- not `run-ty-check.sh` directly. The script uses `git diff --cached` (staged files only), which silently checks nothing unless files are staged. `make typecheck` runs against all source files.
+
+```bash
+make typecheck
+```
+
+Common `ty` error patterns:
+
+| Error | Likely cause | Fix |
+|-------|-------------|-----|
+| `unresolved-import` | Missing extra in venv | Run `uv sync --frozen --extra cu128 --extra engine --group dev` |
+| `unresolved-attribute` | Computed property treated as config field | Check if the attribute is a `@property`, not a Pydantic field |
+| `possibly-unbound` | Variable assigned only in one branch | Add an `else` branch or initialise before the conditional |
+| `invalid-argument-type` | Wrong type passed to function | Check the function signature; use `cast()` only as a last resort |
+
+Prefer fixing type errors over adding `# type: ignore`. Use `# type: ignore[<code>]` only when the error is a known `ty` false positive and fixing it would require changing correct code.
+
+## CI Pipeline Failures
 
 Map GitHub Actions job names to local commands:
 
@@ -61,14 +81,14 @@ Fetch CI logs:
 gh run view <run-id> --log-failed
 ```
 
-## 3. Import / Dependency Errors
+## Import / Dependency Errors
 
 - Check if the import requires an extras gate: `cpu`, `cu128`, or `engine`
 - Common: `vllm`, `torch`, `unsloth` need `cpu` or `cu128` extra
 - Use the `diagnose-deps` skill for lockfile diff diagnosis after `uv lock`
 - Run: `uv run tools/diff-lockfile.py` to see what changed
 
-## 4. GPU / CUDA Errors
+## GPU / CUDA Errors
 
 | Error | Likely Cause | Fix |
 |-------|-------------|-----|
@@ -83,7 +103,7 @@ gh run view <run-id> --log-failed
 - Flash Attention requires head_dim >= 64. Tiny test models (e.g. GPT-2) fail with it -- pass `attn_implementation="eager"`.
 - DP `max_compositions` mismatch: usually a `prv_accountant` version issue -- see `diagnose-deps` skill.
 
-## 5. Runtime Errors
+## Runtime Errors
 
 Enable debug logging:
 ```bash

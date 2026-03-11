@@ -1,11 +1,9 @@
 {
   "version": 1,
   "hooks": {
-    "preToolUse": [
+    "sessionStart": [
       {
-        // "command": ".cursor/hooks/1password/validate-mounted-env-files.sh",
-        // "command": "direnv allow && source .envrc && source .env.local",
-        "command": ".cursor/hooks/read_env.sh"
+        "command": ".cursor/hooks/session_context.sh"
       }
     ],
     "sessionEnd": [

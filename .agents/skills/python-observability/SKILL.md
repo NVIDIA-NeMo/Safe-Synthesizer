@@ -1,9 +1,10 @@
----
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+---
 name: python-observability
 description: "Structured logging and tracing patterns for Safe Synthesizer. Triggers on: logging, logger, structlog, traced, observability, log level, log category, get_logger."
 compatibility: "Python 3.11+, structlog, pydantic-settings."
+license: Apache-2.0
 ---
 
 # Python Observability
