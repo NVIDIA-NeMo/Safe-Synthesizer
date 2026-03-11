@@ -257,7 +257,7 @@ class TrainingHyperparams(Parameters):
             description=(
                 "The attention implementation to use for model loading. "
                 "Default uses Flash Attention 3 via the HuggingFace Kernels Hub "
-                "(requires the 'kernels' pip package; falls back to 'sdpa' if unavailable). "
+                "(requires the 'kernels' pip package; falls back to 'sdpa' if the 'kernels' package is not installed). "
                 "Other common values: 'flash_attention_2' (requires flash-attn pip package), "
                 "'sdpa' (PyTorch scaled dot product attention), 'eager' (standard PyTorch). "
                 "Custom HuggingFace Kernels Hub paths (e.g. 'kernels-community/flash-attn2') "
