@@ -47,7 +47,7 @@ does at each stage.
         The bare package includes only the Pydantic configuration models -- no
         training, generation, or CLI engine. Use it in the NeMo Safe Synthesizer
         Service or any Python project that needs to construct or validate
-        `SafeSynthesizerParameters` without pulling in the full ML stack.
+        [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] without pulling in the full ML stack.
 
 ### Verify
 
@@ -146,7 +146,7 @@ and prepares it for training:
 - Grouping and ordering (if configured via `data.group_training_examples_by` and `data.order_training_examples_by`)
 - Train/test split -- a holdout set (default 5%) is reserved for evaluation
 - Records are serialized to JSONL and tokenized; records that exceed the
-  model's context window raise a `GenerationError` rather than being silently
+  model's context window raise a [`GenerationError`][nemo_safe_synthesizer.errors.GenerationError] rather than being silently
   truncated
 
 ### 2. PII Replacement (Optional)

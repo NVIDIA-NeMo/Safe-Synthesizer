@@ -10,6 +10,77 @@ Full reference for pipeline execution. For a quick first run, see
 
 ---
 
+## Configuration Interfaces
+
+NeMo Safe Synthesizer has two ways to run the pipeline and three and a half ways to configure it.
+
+Two ways to run:
+
+- `safe-synthesizer` CLI -- the command-line application
+- Python SDK -- the [`SafeSynthesizer`][nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer] builder, for use in scripts, notebooks, and services
+
+Three and a half ways to configure:
+
+- YAML config file -- a portable, versionable snapshot of parameters; passed to the CLI via `--config` or loaded in the SDK with [`SafeSynthesizerParameters.from_yaml()`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters]
+- CLI flags -- `--generation__num_records 10000`, `--privacy__dp_enabled true`; override the YAML file when both are provided
+- Python SDK builder calls -- `.with_generate(num_records=10000)`, `.with_differential_privacy(dp_enabled=True)`; override the YAML file when both are used
+- Environment variables (the half) -- control infrastructure only: artifact paths, logging, model cache locations, WandB mode. They do not set synthesis parameters like learning rate or record count
+
+The asymmetry matters: YAML and environment variables are *configuration only* -- they don't invoke the pipeline. CLI and SDK are *run and configure* -- they set parameters and execute.
+
+All configuration surfaces share the same underlying [Pydantic](https://docs.pydantic.dev/) parameter models defined in `src/nemo_safe_synthesizer/config/`. The `__` syntax used in CLI flags (e.g. `--privacy__dp_enabled true`) mirrors the nested structure of those models: `privacy` is the config section, `dp_enabled` is the field. Setting a parameter via YAML, CLI flag, or SDK call resolves to the same field in the same model.
+
+When multiple surfaces are used together, later layers override earlier ones:
+
+```text
+CLI flags  >  dataset registry  >  YAML config file  >  model defaults
+```
+
+See [Configuration Precedence](configuration.md#configuration-precedence) for details.
+
+The same run, three ways -- 10,000 records with DP-SGD:
+
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run \
+      --url data.csv \
+      --generation__num_records 10000 \
+      --privacy__dp_enabled true \
+      --privacy__epsilon 8.0
+    ```
+
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+    synthesizer = (
+        SafeSynthesizer()
+        .with_data_source("data.csv")
+        .with_generate(num_records=10000)
+        .with_differential_privacy(dp_enabled=True, epsilon=8.0)
+    )
+    synthesizer.run()
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    # config.yaml
+    generation:
+      num_records: 10000
+    privacy:
+      dp_enabled: true
+      epsilon: 8.0
+    ```
+
+    ```bash
+    safe-synthesizer run --config config.yaml --url data.csv
+    ```
+
+---
+
 ## Running the Pipeline
 
 The pipeline runs five stages in sequence. PII replacement is optional; all other stages are configurable. The diagram shows the default full run.
@@ -43,27 +114,62 @@ Run the full end-to-end pipeline in one step:
     results = synthesizer.results
     ```
 
-=== "Config reference"
-
-    ```yaml
-    training:
-      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-      learning_rate: 0.0005
-    generation:
-      num_records: 1000
-    enable_replace_pii: true
-    ```
-
-    ```bash
-    safe-synthesizer run --config config.yaml --url data.csv
-    ```
-
 You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
 - PII replacement only: `safe-synthesizer run --enable_replace_pii true --enable_synthesis false --url data.csv`
-- SDK stepwise: `process_data()` -> `train()` -> `generate()` -> `evaluate()`
+- SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
+
+---
+
+## Using YAML Config Files
+
+A `config.yaml` file is optional for the CLI and SDK. When omitted, model
+defaults apply. When provided, CLI flags and SDK builder calls override the
+values from the file.
+
+### CLI
+
+Pass `--config` to load a base config, then override individual fields with
+`--key__subkey value` syntax:
+
+```bash
+# All defaults, no config file
+safe-synthesizer run --url data.csv
+
+# Config file as base, override two fields
+safe-synthesizer run \
+  --config config.yaml \
+  --url data.csv \
+  --training__learning_rate 0.001 \
+  --generation__num_records 2000
+```
+
+### SDK
+
+Pass a [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] loaded from YAML as the seed, then use
+`with_*` calls to override specific sections:
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+
+# Load base config from file, override generation settings
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+synthesizer = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .with_generate(num_records=2000, temperature=0.8)
+)
+synthesizer.run()
+```
+
+`with_*` keyword arguments take precedence over whatever is in the YAML file.
+Sections not mentioned in the builder call retain their values from `config`.
+
+See [Configuration Reference -- CLI Override Syntax](configuration.md#cli-override-syntax)
+for the full override precedence rules.
 
 ---
 
@@ -165,56 +271,6 @@ safe-synthesizer artifacts clean --dry-run        # preview what would be delete
 | `--dry-run` | Preview deletions without actually deleting |
 | `--caches-only` | Only delete the training cache, keep everything else |
 | `--force` | Skip confirmation prompt |
-
----
-
-## Using YAML Config Files with the CLI and SDK
-
-A `config.yaml` file is optional for all three interfaces. When omitted, model
-defaults apply. When provided, CLI flags and SDK builder calls override the
-values from the file.
-
-### CLI
-
-Pass `--config` to load a base config, then override individual fields with
-`--key__subkey value` syntax:
-
-```bash
-# All defaults, no config file
-safe-synthesizer run --url data.csv
-
-# Config file as base, override two fields
-safe-synthesizer run \
-  --config config.yaml \
-  --url data.csv \
-  --training__learning_rate 0.001 \
-  --generation__num_records 2000
-```
-
-### SDK
-
-Pass a `SafeSynthesizerParameters` loaded from YAML as the seed, then use
-`with_*` calls to override specific sections:
-
-```python
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-
-# Load base config from file, override generation settings
-config = SafeSynthesizerParameters.from_yaml("config.yaml")
-synthesizer = (
-    SafeSynthesizer(config)
-    .with_data_source("data.csv")
-    .with_generate(num_records=2000, temperature=0.8)
-)
-synthesizer.run()
-```
-
-`with_*` keyword arguments take precedence over whatever is in the YAML file.
-Sections not mentioned in the builder call retain their values from `config`.
-
-See [Configuration Reference -- CLI Override Syntax](configuration.md#cli-override-syntax)
-for the full override precedence rules.
 
 ---
 
@@ -340,7 +396,7 @@ default (`enable_replace_pii: true`).
     ```
 
     The SDK builder merges partial overrides with
-    `PiiReplacerConfig.get_default_config()`, so you don't need to
+    [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig], so you don't need to
     provide the full `steps` list.
 
 === "Config reference"
@@ -717,7 +773,7 @@ with interactive visualizations. Two composite scores are reported:
     - MIA (Membership Inference Attack) -- privacy risk assessment
     - AIA (Attribute Inference Attack) -- quasi-identifier privacy; requires a
       larger sample size to work well
-    - PII replay detection -- checks whether PII from training appears in output
+    - PII replay detection -- checks whether PII from training appears in synthetic data
 
 See [Evaluation](../product-overview/evaluation.md) for details on score
 interpretation.

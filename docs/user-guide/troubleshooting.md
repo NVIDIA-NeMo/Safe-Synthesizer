@@ -415,8 +415,8 @@ SafeSynthesizerError
     └── GenerationError (also RuntimeError)
 ```
 
-SDK callers can catch `UserError` to handle all user-facing errors, or
-`SafeSynthesizerError` to also catch internal errors. Catching the built-in
+SDK callers can catch [`UserError`][nemo_safe_synthesizer.errors.UserError] to handle all user-facing errors, or
+[`SafeSynthesizerError`][nemo_safe_synthesizer.errors.SafeSynthesizerError] to also catch internal errors. Catching the built-in
 base (`ValueError`, `RuntimeError`) also works since each class inherits from
 both.
 
