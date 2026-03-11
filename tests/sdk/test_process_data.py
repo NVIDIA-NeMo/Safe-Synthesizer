@@ -76,6 +76,20 @@ def _patch_process_data_deps(
     return builder, train_split, test_split, pii_replaced_df, mock_replacer_instance
 
 
+def _wire_process_data_mocks(
+    mock_holdout_cls: MagicMock,
+    mock_resolver_cls: MagicMock,
+    mock_metadata_cls: MagicMock,
+    builder: SafeSynthesizer,
+    train_split: pd.DataFrame,
+    test_split: pd.DataFrame,
+) -> None:
+    """Wire common process_data mock behavior used across tests."""
+    mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
+    mock_resolver_cls.return_value.return_value = builder._nss_config
+    mock_metadata_cls.from_config.return_value = MagicMock()
+
+
 # ---------------------------------------------------------------------------
 # Tests: process_data
 # ---------------------------------------------------------------------------
@@ -103,9 +117,9 @@ class TestProcessDataPiiSeparation:
             fixture_workdir,
             enable_replace_pii=False,
         )
-        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
-        mock_resolver_cls.return_value.return_value = builder._nss_config
-        mock_metadata_cls.from_config.return_value = MagicMock()
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
 
         builder.process_data()
 
@@ -134,9 +148,9 @@ class TestProcessDataPiiSeparation:
             fixture_workdir,
             enable_replace_pii=True,
         )
-        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
-        mock_resolver_cls.return_value.return_value = builder._nss_config
-        mock_metadata_cls.from_config.return_value = MagicMock()
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
         mock_pii_cls.return_value = mock_replacer
 
         builder.process_data()
@@ -167,9 +181,9 @@ class TestProcessDataPiiSeparation:
             fixture_workdir,
             enable_replace_pii=True,
         )
-        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
-        mock_resolver_cls.return_value.return_value = builder._nss_config
-        mock_metadata_cls.from_config.return_value = MagicMock()
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
         mock_pii_cls.return_value = mock_replacer
 
         builder.process_data()
@@ -207,9 +221,9 @@ class TestProcessDataPiiSeparation:
             fixture_workdir,
             enable_replace_pii=False,
         )
-        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
-        mock_resolver_cls.return_value.return_value = builder._nss_config
-        mock_metadata_cls.from_config.return_value = MagicMock()
+        _wire_process_data_mocks(
+            mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
+        )
 
         builder.process_data()
 
@@ -230,24 +244,34 @@ class TestProcessDataPiiSeparation:
 class TestEvaluateUsesOriginalTrainDf:
     """Verify that evaluate() passes the original training data to the Evaluator."""
 
+    @pytest.mark.parametrize(
+        ("enable_replace_pii", "redacted_df"),
+        [
+            (True, "fixture"),
+            (False, None),
+        ],
+        ids=["with_pii_replacement", "without_pii_replacement"],
+    )
     @patch("nemo_safe_synthesizer.sdk.library_builder.make_nss_results")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
-    def test_evaluate_with_pii_replacement_uses_original_train_df(
+    def test_evaluate_uses_original_train_df(
         self,
         mock_evaluator_cls,
         mock_make_results,
+        enable_replace_pii,
+        redacted_df,
         fixture_sample_patient_dataframe,
         fixture_sample_patient_redacted_dataframe,
         fixture_workdir,
     ):
-        """When _original_train_df is set, evaluate passes it as train_df."""
+        """Evaluate always passes ``_original_train_df`` as ``train_df``."""
         builder, train_split, test_split, pii_replaced_df, _ = _patch_process_data_deps(
             fixture_sample_patient_dataframe,
-            fixture_sample_patient_redacted_dataframe,
+            fixture_sample_patient_redacted_dataframe if redacted_df == "fixture" else None,
             fixture_workdir,
-            enable_replace_pii=True,
+            enable_replace_pii=enable_replace_pii,
         )
-        builder._train_df = pii_replaced_df
+        builder._train_df = pii_replaced_df if enable_replace_pii else train_split
         builder._original_train_df = train_split
         builder._test_df = test_split
         builder._total_start = 0.0
@@ -262,39 +286,6 @@ class TestEvaluateUsesOriginalTrainDf:
         builder.evaluate()
 
         # The Evaluator should have been called with the original df, not the PII-replaced one
-        call_kwargs = mock_evaluator_cls.call_args[1]
-        pd.testing.assert_frame_equal(call_kwargs["train_df"], train_split)
-
-    @patch("nemo_safe_synthesizer.sdk.library_builder.make_nss_results")
-    @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
-    def test_evaluate_without_pii_replacement_uses_original_train_df(
-        self,
-        mock_evaluator_cls,
-        mock_make_results,
-        fixture_sample_patient_dataframe,
-        fixture_workdir,
-    ):
-        """Without PII, evaluate uses _original_train_df (same content as _train_df)."""
-        builder, train_split, test_split, _, _ = _patch_process_data_deps(
-            fixture_sample_patient_dataframe,
-            None,
-            fixture_workdir,
-            enable_replace_pii=False,
-        )
-        builder._train_df = train_split
-        builder._original_train_df = train_split
-        builder._test_df = test_split
-        builder._total_start = 0.0
-
-        mock_gen = MagicMock()
-        mock_gen.gen_results.elapsed_time = 1.0
-        builder.generator = mock_gen
-
-        mock_evaluator_cls.return_value.evaluation_time = 0.5
-        mock_evaluator_cls.return_value.report = MagicMock()
-
-        builder.evaluate()
-
         call_kwargs = mock_evaluator_cls.call_args[1]
         pd.testing.assert_frame_equal(call_kwargs["train_df"], train_split)
 
