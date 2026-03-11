@@ -586,7 +586,7 @@ class TestResolveModelClass:
     def test_resolve_model_class_returns_class_for_known_model(self):
         """When the model name matches a valid subclass name, return that class (no instantiation)."""
         assert ModelMetadata._resolve_model_class("HuggingFaceTB/SmolLM3-3B") is SmolLM3
-        assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.1") is Mistral
+        assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.3") is Mistral
         assert ModelMetadata._resolve_model_class("TinyLlama/TinyLlama-1.1B-Chat-v1.0") is TinyLlama
 
 
