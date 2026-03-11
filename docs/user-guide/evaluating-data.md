@@ -1,11 +1,14 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Evaluating Output Data from NeMo Safe Synthesizer
+# Evaluating Synthetic Data
 
-Reference for diagnosing and improving output quality. Covers differential
+Reference for diagnosing and improving synthetic data quality. Covers differential
 privacy errors, PII replacement issues, evaluation metric behavior, and score
-interpretation. For runtime errors, OOM issues, and configuration problems, see
+interpretation for operational use. For conceptual explanations of what SQS and
+DPS measure and how to read the HTML report, see
+[Product Overview -- Evaluation](../product-overview/evaluation.md).
+For runtime errors, OOM issues, and configuration problems, see
 [Troubleshooting](troubleshooting.md). For environment variables and model
 caching, see [Environment Variables](environment.md).
 
@@ -67,7 +70,7 @@ If PII replacement is not detecting the entity types you expect, the column
 classifier may have failed silently. When the classifier fails to initialize
 or classify, it falls back to default entity types.
 
-Look for log lines like:
+Look for the following log lines if PII replacement seems to use unexpected entity types:
 
 ```text
 Could not initialize column classifier, falling back to default entities.
@@ -79,12 +82,10 @@ or
 Could not perform classify, falling back to default entities.
 ```
 
-if PII replacement seems to use unexpected entity types.
-
 Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
 is reachable. PII classify config is deeply nested -- use YAML or SDK:
 
-=== "YAML"
+=== "Config reference"
 
     ```yaml
     replace_pii:
@@ -161,7 +162,7 @@ If the SQS (Synthetic Quality Score) report shows low quality scores:
    data the model sees during training (analogous to training duration) and
    affects generation quality. Increasing it is usually the first thing to try,
    but note that very small input datasets can lead to over-training, so
-   explore both directions if quality remains poor
+   try both increasing and decreasing it if quality remains poor
 
 ---
 

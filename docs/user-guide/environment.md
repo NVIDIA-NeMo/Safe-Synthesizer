@@ -33,6 +33,8 @@ are cached, and which network endpoints are used.
 | `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (Unsloth, GLiNER) |
 | `SAFE_SYNTHESIZER_CPU_COUNT` | -- | NER CPU processes |
 
+---
+
 ## Third-Party Variables
 
 | Variable | Read by | Purpose |
@@ -48,9 +50,6 @@ are cached, and which network endpoints are used.
 ---
 
 ## Precedence
-
-Synthesis parameters (`training.learning_rate`, `generation.num_records`, etc.)
-and runtime settings follow separate resolution paths but have a similar order of precedence.
 
 Synthesis parameters:
 
@@ -185,7 +184,7 @@ To disable column classification entirely instead of pointing it at a local
 endpoint, use the `replace_pii.globals.classify.enable_classify` config option.
 PII classify config is deeply nested -- use YAML or SDK:
 
-=== "YAML"
+=== "Config reference"
 
     ```yaml
     replace_pii:
@@ -229,3 +228,9 @@ export SAFE_SYNTHESIZER_CPU_COUNT=4
 
 Defaults to `max(1, cpu_count - 1)` (one CPU left free), further capped so
 there are at least 1,000 records per worker.
+
+---
+
+- [Running Safe Synthesizer](running.md) -- pipeline execution, CLI commands, and artifacts
+- [Configuration Reference](configuration.md) -- parameter tables
+- [Troubleshooting](troubleshooting.md) -- runtime errors and OOM fixes

@@ -12,7 +12,7 @@ Full reference for pipeline execution. For a quick first run, see
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. Each stage is optional or configurable; the diagram shows the default full run.
+The pipeline runs five stages in sequence. PII replacement is optional; all other stages are configurable. The diagram shows the default full run.
 
 ```mermaid
 flowchart LR
@@ -23,21 +23,6 @@ flowchart LR
 ```
 
 Run the full end-to-end pipeline in one step:
-
-=== "YAML"
-
-    ```yaml
-    training:
-      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-      learning_rate: 0.0005
-    generation:
-      num_records: 1000
-    enable_replace_pii: false
-    ```
-
-    ```bash
-    safe-synthesizer run --config config.yaml --url data.csv
-    ```
 
 === "CLI"
 
@@ -52,13 +37,25 @@ Run the full end-to-end pipeline in one step:
 
     ```python
     from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-    from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-
-    config = SafeSynthesizerParameters.from_yaml("config.yaml")
-    synthesizer = SafeSynthesizer(config).with_data_source("data.csv")
+    synthesizer = SafeSynthesizer().with_data_source("data.csv")
     synthesizer.run()
 
     results = synthesizer.results
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    training:
+      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
+      learning_rate: 0.0005
+    generation:
+      num_records: 1000
+    enable_replace_pii: true
+    ```
+
+    ```bash
+    safe-synthesizer run --config config.yaml --url data.csv
     ```
 
 You can also run stages individually:
@@ -72,15 +69,13 @@ You can also run stages individually:
 
 ## CLI Commands
 
-All commands are accessed through `safe-synthesizer`.
-
 ```bash
 safe-synthesizer --help
 ```
 
 ### `run` -- Execute the Pipeline
 
-Without a subcommand, runs the full end-to-end pipeline (data processing,
+Without a subcommand, `run` executes the full end-to-end pipeline (data processing,
 optional PII replacement, training, generation, evaluation).
 
 ```bash
@@ -123,6 +118,11 @@ safe-synthesizer run train --config config.yaml --url data.csv
 ```
 
 Accepts the same common options as `run`. Does not accept synthesis parameter overrides (`--training__learning_rate`, `--generation__num_records`, etc.) -- those only work with `run` (end-to-end) or `run generate`.
+
+!!! note "Known inconsistency"
+    `run train` does not accept synthesis parameter overrides, but `run` and
+    `run generate` do. This inconsistency is a known limitation and will be
+    addressed in a future release.
 
 ### `run generate`
 
@@ -168,6 +168,56 @@ safe-synthesizer artifacts clean --dry-run        # preview what would be delete
 
 ---
 
+## Using YAML Config Files with the CLI and SDK
+
+A `config.yaml` file is optional for all three interfaces. When omitted, model
+defaults apply. When provided, CLI flags and SDK builder calls override the
+values from the file.
+
+### CLI
+
+Pass `--config` to load a base config, then override individual fields with
+`--key__subkey value` syntax:
+
+```bash
+# All defaults, no config file
+safe-synthesizer run --url data.csv
+
+# Config file as base, override two fields
+safe-synthesizer run \
+  --config config.yaml \
+  --url data.csv \
+  --training__learning_rate 0.001 \
+  --generation__num_records 2000
+```
+
+### SDK
+
+Pass a `SafeSynthesizerParameters` loaded from YAML as the seed, then use
+`with_*` calls to override specific sections:
+
+```python
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+
+# Load base config from file, override generation settings
+config = SafeSynthesizerParameters.from_yaml("config.yaml")
+synthesizer = (
+    SafeSynthesizer(config)
+    .with_data_source("data.csv")
+    .with_generate(num_records=2000, temperature=0.8)
+)
+synthesizer.run()
+```
+
+`with_*` keyword arguments take precedence over whatever is in the YAML file.
+Sections not mentioned in the builder call retain their values from `config`.
+
+See [Configuration Reference -- CLI Override Syntax](configuration.md#cli-override-syntax)
+for the full override precedence rules.
+
+---
+
 ## Data Input
 
 Provide your dataset as a file path, URL, DataFrame (SDK), or dataset
@@ -187,14 +237,6 @@ Use `data.group_training_examples_by` to group records by a column (e.g.,
 customer ID) so related rows are trained together. Use
 `data.order_training_examples_by` to sort within groups (requires group_by).
 
-=== "YAML"
-
-    ```yaml
-    data:
-      group_training_examples_by: "customer_id"
-      order_training_examples_by: "transaction_date"
-    ```
-
 === "CLI"
 
     ```bash
@@ -207,14 +249,24 @@ customer ID) so related rows are trained together. Use
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("transactions.csv")
         .with_data(
             group_training_examples_by="customer_id",
             order_training_examples_by="transaction_date",
         )
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    data:
+      group_training_examples_by: "customer_id"
+      order_training_examples_by: "transaction_date"
     ```
 
 ### Dataset Registry
@@ -242,20 +294,56 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 ## PII Replacement
 
 Optional stage that runs before training. Detection works in two independent
-steps: GLiNER NER scans free-text columns for named-entity patterns (names,
-emails, phone numbers, etc.) and replaces matches with synthetic placeholders.
-An optional second step uses an LLM to classify which columns contain
-exclusively sensitive data of one type (e.g., a column that is always SSNs),
-marking those columns for wholesale replacement before training. The two steps
-are independent -- NER runs on free-text content, LLM classification targets
-structured sensitive columns. PII replacement is on by default
-(`enable_replace_pii: true`).
+steps: GLiNER NER is used on columns detected as free text for named-entity
+patterns (names, emails, phone numbers, etc.) and replaces matches with
+synthetic placeholders. An optional second step uses an LLM to identify
+columns that are exclusively a single entity type (e.g., a column that is
+always SSNs), marking those columns for wholesale replacement before training.
+The two steps are independent -- NER runs on free-text content, LLM
+classification targets structured sensitive columns. PII replacement is on by
+default (`enable_replace_pii: true`).
 
-!!! tip
+!!! tip "Skip PII replacement"
     If your dataset does not contain PII, set `enable_replace_pii: false` to
     skip this stage entirely and reduce pipeline runtime.
 
-=== "YAML"
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run \
+      --enable_replace_pii true \
+      --url data.csv
+    ```
+
+    To customize entity types or enable LLM classification from the CLI, use
+    `--replace_pii__globals__classify__enable_classify true` and
+    `--replace_pii__globals__classify__entities '["email","phone_number"]'`.
+    For complex PII configuration, YAML or the SDK is simpler.
+
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+
+    pii_config = PiiReplacerConfig.get_default_config()
+    pii_config.globals.classify.enable_classify = True
+    pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
+
+    synthesizer = (
+        SafeSynthesizer()
+        .with_data_source("data.csv")
+        .with_replace_pii(config=pii_config)
+        .with_train()
+        .with_generate(num_records=5000)
+    )
+    ```
+
+    The SDK builder merges partial overrides with
+    `PiiReplacerConfig.get_default_config()`, so you don't need to
+    provide the full `steps` list.
+
+=== "Config reference"
 
     ```yaml
     enable_replace_pii: true
@@ -268,36 +356,6 @@ structured sensitive columns. PII replacement is on by default
 
     The `replace_pii` config block requires the full `steps` field internally;
     use the SDK builder when you need fine-grained control over individual steps.
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run \
-      --enable_replace_pii true \
-      --url data.csv
-    ```
-
-=== "SDK"
-
-    ```python
-    from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-
-    pii_config = PiiReplacerConfig.get_default_config()
-    pii_config.globals.classify.enable_classify = True
-    pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
-
-    synthesizer = (
-        SafeSynthesizer(config)
-        .with_data_source("data.csv")
-        .with_replace_pii(config=pii_config)
-        .with_train()
-        .with_generate(num_records=5000)
-    )
-    ```
-
-    The SDK builder merges partial overrides with
-    `PiiReplacerConfig.get_default_config()`, so you don't need to
-    provide the full `steps` list.
 
 ### LLM Column Classification
 
@@ -321,6 +379,35 @@ requires `NIM_ENDPOINT_URL`.
 Set `enable_synthesis: false` with `enable_replace_pii: true` to run PII
 replacement without synthesis.
 
+=== "CLI"
+
+    ```bash
+    safe-synthesizer run \
+      --enable_replace_pii true \
+      --enable_synthesis false \
+      --url data.csv
+    ```
+
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+    synthesizer = (
+        SafeSynthesizer()
+        .with_data_source("data.csv")
+        .with_replace_pii()
+    )
+    synthesizer.run()
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    enable_replace_pii: true
+    enable_synthesis: false
+    ```
+
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 
 ---
@@ -340,15 +427,6 @@ Two backends are available:
 | Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
 | HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via Opacus | Required for differential privacy; also the fallback when Unsloth is unavailable |
 
-=== "YAML"
-
-    ```yaml
-    training:
-      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-      learning_rate: 0.001
-      batch_size: 4
-    ```
-
 === "CLI"
 
     ```bash
@@ -361,11 +439,22 @@ Two backends are available:
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_train(learning_rate=0.001, batch_size=4)
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    training:
+      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
+      learning_rate: 0.001
+      batch_size: 4
     ```
 
 ### Quantization
@@ -380,14 +469,6 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
 | 8-bit | ~50% reduction | Near-full | Slightly slower | Good balance for most cases |
 | 4-bit | ~75% reduction | Reduced | Faster | Use when VRAM is tight; may affect output quality |
 
-=== "YAML"
-
-    ```yaml
-    training:
-      quantize_model: true
-      quantization_bits: 4
-    ```
-
 === "CLI"
 
     ```bash
@@ -400,11 +481,21 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_train(quantize_model=True, quantization_bits=4)
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    training:
+      quantize_model: true
+      quantization_bits: 4
     ```
 
 ### Attention Backends
@@ -432,14 +523,6 @@ Differential privacy (DP) provides a formal bound on what an adversary can
 learn about any individual record. Safe Synthesizer implements DP-SGD via
 Opacus.
 
-=== "YAML"
-
-    ```yaml
-    privacy:
-      dp_enabled: true
-      epsilon: 8.0
-    ```
-
 === "CLI"
 
     ```bash
@@ -452,11 +535,21 @@ Opacus.
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_differential_privacy(dp_enabled=True, epsilon=8.0)
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    privacy:
+      dp_enabled: true
+      epsilon: 8.0
     ```
 
 Compatibility constraints when DP is enabled:
@@ -465,7 +558,7 @@ Compatibility constraints when DP is enabled:
 - `data.max_sequences_per_example` must be `1` (or `"auto"`, which resolves to `1` when DP is enabled)
 - Gradient checkpointing is disabled (incompatible with Opacus)
 
-!!! note
+!!! note "DP training trade-offs"
     DP training is slower and typically requires more epochs to reach the same
     loss as non-DP training. Start with `epsilon: 8.0` -- a common practical
     threshold -- and lower it only if your privacy requirements demand it.
@@ -497,14 +590,6 @@ flowchart TD
     enough -- Yes --> done([Done])
 ```
 
-=== "YAML"
-
-    ```yaml
-    generation:
-      num_records: 5000
-      temperature: 0.7
-    ```
-
 === "CLI"
 
     ```bash
@@ -517,11 +602,21 @@ flowchart TD
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_generate(num_records=5000, temperature=0.7)
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    generation:
+      num_records: 5000
+      temperature: 0.7
     ```
 
 ### Structured Generation
@@ -530,14 +625,6 @@ Set `generation.use_structured_generation` to `true` to constrain the model's
 output so every record matches the dataset schema. This reduces the fraction of
 invalid records, typically at the cost of reducing the quality of the generated
 records. Use it when the pipeline struggles to produce valid records.
-
-=== "YAML"
-
-    ```yaml
-    generation:
-      use_structured_generation: true
-      structured_generation_schema_method: "regex"
-    ```
 
 === "CLI"
 
@@ -550,11 +637,21 @@ records. Use it when the pipeline struggles to produce valid records.
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_generate(use_structured_generation=True)
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    generation:
+      use_structured_generation: true
+      structured_generation_schema_method: "regex"
     ```
 
 - `"regex"`: constructs a custom regex from the dataset schema. More comprehensive but slower.
@@ -568,14 +665,6 @@ records. `generation.patience` controls how many bad batches to tolerate;
 pipeline stops early, check the generation logs for the invalid record
 fraction per batch.
 
-=== "YAML"
-
-    ```yaml
-    generation:
-      patience: 5
-      invalid_fraction_threshold: 0.6
-    ```
-
 === "CLI"
 
     ```bash
@@ -585,7 +674,27 @@ fraction per batch.
       --url data.csv
     ```
 
-!!! tip
+=== "SDK"
+
+    ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+    synthesizer = (
+        SafeSynthesizer()
+        .with_data_source("data.csv")
+        .with_generate(patience=5, invalid_fraction_threshold=0.6)
+    )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    generation:
+      patience: 5
+      invalid_fraction_threshold: 0.6
+    ```
+
+!!! tip "Early stopping"
     If the pipeline stops early due to patience, try enabling
     `use_structured_generation: true` to constrain outputs to the dataset
     schema, or lower `temperature` to reduce the chance of malformed records.
@@ -613,15 +722,6 @@ with interactive visualizations. Two composite scores are reported:
 See [Evaluation](../product-overview/evaluation.md) for details on score
 interpretation.
 
-=== "YAML"
-
-    ```yaml
-    evaluation:
-      mia_enabled: true
-      aia_enabled: true
-      pii_replay_enabled: true
-    ```
-
 === "CLI"
 
     ```bash
@@ -634,23 +734,27 @@ interpretation.
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_evaluate(mia_enabled=False, aia_enabled=False)
     )
     ```
 
-### Disable Evaluation
-
-To skip evaluation entirely (e.g., for faster iteration during development):
-
-=== "YAML"
+=== "Config reference"
 
     ```yaml
     evaluation:
-      enabled: false
+      mia_enabled: true
+      aia_enabled: true
+      pii_replay_enabled: true
     ```
+
+### Disable Evaluation
+
+To skip evaluation entirely (e.g., for faster iteration during development):
 
 === "CLI"
 
@@ -663,11 +767,20 @@ To skip evaluation entirely (e.g., for faster iteration during development):
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("data.csv")
         .with_evaluate(enabled=False)
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    evaluation:
+      enabled: false
     ```
 
 See [Configuration Reference -- Evaluation](configuration.md#evaluation) for the full parameter table.
@@ -685,18 +798,6 @@ providing timestamp configuration. Use `data.group_training_examples_by` to
 group records by entity (e.g., sensor ID) and `data.order_training_examples_by`
 to sort within groups.
 
-=== "YAML"
-
-    ```yaml
-    time_series:
-      is_timeseries: true
-      timestamp_column: "timestamp"
-      timestamp_interval_seconds: 60
-    data:
-      group_training_examples_by: "sensor_id"
-      order_training_examples_by: "timestamp"
-    ```
-
 === "CLI"
 
     ```bash
@@ -711,8 +812,10 @@ to sort within groups.
 === "SDK"
 
     ```python
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
     synthesizer = (
-        SafeSynthesizer(config)
+        SafeSynthesizer()
         .with_data_source("sensor_data.csv")
         .with_time_series(
             is_timeseries=True,
@@ -724,6 +827,18 @@ to sort within groups.
             order_training_examples_by="timestamp",
         )
     )
+    ```
+
+=== "Config reference"
+
+    ```yaml
+    time_series:
+      is_timeseries: true
+      timestamp_column: "timestamp"
+      timestamp_interval_seconds: 60
+    data:
+      group_training_examples_by: "sensor_id"
+      order_training_examples_by: "timestamp"
     ```
 
 See [Configuration Reference -- Time Series](configuration.md#time-series) for the full parameter table.
@@ -744,7 +859,9 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
 === "SDK"
 
     ```python
-    synthesizer = SafeSynthesizer(config).with_data_source("data.csv")
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+    synthesizer = SafeSynthesizer().with_data_source("data.csv")
     synthesizer.process_data()
     synthesizer.train()
     ```
@@ -768,14 +885,19 @@ the CLI Commands section for all options.
 
     ```python
     from pathlib import Path
+    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+    from nemo_safe_synthesizer.config import SafeSynthesizerParameters
     from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 
+    config = SafeSynthesizerParameters.from_yaml("config.yaml")
     workdir = Workdir.from_path(
         Path("./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00")
     )
     synthesizer = SafeSynthesizer(config, workdir=workdir)
+    synthesizer.process_data()
     synthesizer.load_from_save_path()
-    synthesizer.generate().evaluate()
+    synthesizer.generate()
+    synthesizer.evaluate()
     ```
 
 ### Stepwise execution (SDK)
@@ -784,7 +906,7 @@ For full control, call each stage individually:
 
 ```python
 synthesizer = (
-    SafeSynthesizer(config)
+    SafeSynthesizer()
     .with_data_source(df)
     .process_data()
     .train()
@@ -800,13 +922,13 @@ synthesizer.save_results()
 
 ## Artifacts and Output
 
-Each run writes to a directory named `<config-stem>---<dataset-stem>/<timestamp>`
+Each run writes to a directory named `<config-stem>---<dataset-stem>/<run_name>`
 under the artifact path. The config and dataset stems are derived from the
 filenames you pass to `--config` and `--url`, making it easy to identify runs
-at a glance. The timestamp is ISO 8601 (e.g., `2026-01-15T12:00:00`).
+at a glance. `<run_name>` defaults to an ISO 8601 timestamp (e.g., `2026-01-15T12:00:00`).
 
 To use an explicit output directory (skipping the auto-generated
-`<config>---<dataset>/<timestamp>` structure), pass `--run-path`:
+`<config>---<dataset>/<run_name>` structure), pass `--run-path`:
 
 ```bash
 safe-synthesizer run --config config.yaml --url data.csv --run-path ./my-run
@@ -825,7 +947,7 @@ safe-synthesizer-artifacts/
         └── dataset/
             ├── training.csv
             ├── test.csv
-            └── validation.csv
+            └── validation.csv  (only when training.validation_ratio > 0.0)
 ```
 
 Key outputs:
@@ -835,7 +957,7 @@ Key outputs:
 - `train/adapter/`: LoRA weights for resuming generation
 - `safe-synthesizer-config.json`: resolved config snapshot
 
-!!! tip
+!!! tip "Clean up artifacts"
     Adapter weights and training caches can consume significant disk space
     during iterative development. Run `safe-synthesizer artifacts clean` to
     remove them when no longer needed. Use `--caches-only` to keep the adapter
@@ -879,7 +1001,7 @@ For offline-specific errors, see [Troubleshooting](troubleshooting.md).
 
 The format auto-detects from the terminal: `plain` when stdout is a TTY, `json` otherwise.
 
-=== "plain"
+=== "Plain"
 
     Human-readable columns separated by `|`. Used by default in interactive terminals.
 
@@ -891,7 +1013,7 @@ The format auto-detects from the terminal: `plain` when stdout is a TTY, `json` 
     Batch complete: {'valid': 48, 'invalid': 2}
     ```
 
-=== "json"
+=== "JSON"
 
     One JSON object per line. Used by default in non-TTY environments (CI, containers, log aggregators).
 
@@ -933,14 +1055,14 @@ config file.
     os.environ["WANDB_API_KEY"] = "your-api-key"  # pragma: allowlist secret
     wandb.init(project="my-experiments", mode="online")
 
-    synthesizer = SafeSynthesizer(config).with_data_source("data.csv")
+    synthesizer = SafeSynthesizer().with_data_source("data.csv")
     synthesizer.run()
     ```
 
     Unlike the CLI, the SDK does not auto-initialize WandB. You must call
     `wandb.init(...)` before `synthesizer.run()`.
 
-=== "Environment"
+=== "Environment variables"
 
     ```bash
     export WANDB_API_KEY="your-api-key"  # pragma: allowlist secret
