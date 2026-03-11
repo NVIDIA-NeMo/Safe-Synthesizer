@@ -41,4 +41,12 @@ Each skill is a self-contained directory with a `SKILL.md` that an agent reads o
 
 Cursor natively scans `.agents/skills/` as a first-class skill location -- no symlinks or duplication needed. Claude Code and other agents also read skills directly from this directory.
 
-Additional skills not stored in this repo (available when `agent-stuff` is bootstrapped locally) are listed in `AGENTS.md`.
+## Adding skills
+
+`.agents/skills/` is listed in `.gitignore`, so new skill directories must be force-added:
+
+```bash
+git add -f .agents/skills/<skill-name>/
+```
+
+For machine-local or personal skills that should never be committed, use `.agents/skills/personal/` -- it is gitignored without needing a force-add, so anything placed there stays local automatically.
