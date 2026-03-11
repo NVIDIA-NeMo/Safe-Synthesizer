@@ -283,7 +283,7 @@ class TestAutoConfigResolver:
     @pytest.mark.parametrize(
         "pretrained_model, expected_lr",
         [
-            pytest.param(None, 0.0005, id="non_mistral_model"),
+            pytest.param(None, 0.0005, id="default_model"),
             pytest.param("HuggingFaceTB/SmolLM3-3B", 0.0005, id="smollm"),
             pytest.param("mistralai/Mistral-7B-Instruct-v0.3", 0.0001, id="mistral"),
         ],

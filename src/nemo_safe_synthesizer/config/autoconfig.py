@@ -237,7 +237,7 @@ class AutoConfigResolver:
         # get the LR from metadata given model name or path:
         lr = ModelMetadata._resolve_model_class(self._config.training.pretrained_model).default_learning_rate
         logger.info(
-            f"`learning_rate` was automatically set to {lr} with pretrained_model={self._config.training.pretrained_model}."
+            f"`learning_rate` was automatically set to {lr} with pretrained_model='{self._config.training.pretrained_model}'."
         )
         return {"learning_rate": lr}
 

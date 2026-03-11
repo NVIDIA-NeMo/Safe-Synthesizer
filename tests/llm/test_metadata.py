@@ -563,6 +563,34 @@ class TestModelMetadata:
             ModelMetadata.from_str_or_path("unknown-model-xyz")
 
 
+class TestResolveModelClass:
+    """Tests for ModelMetadata._resolve_model_class (model name → class, no instantiation)."""
+
+    @pytest.mark.parametrize(
+        "model_name_or_path",
+        [
+            "google/gemma-2-27b",
+            "SomeRandomModel/1B",
+            "",
+        ],
+        ids=["gemma", "random_model"],
+    )
+    def test_resolve_model_class_raises_for_unknown_model(self, model_name_or_path):
+        """When the model name does not match any valid ModelMetadata subclass, raise ValueError.
+
+        Covers failed jobs where the configured model is not in the expected set
+        (TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite).
+        """
+        with pytest.raises(ValueError, match=r"Unknown model name or path"):
+            ModelMetadata._resolve_model_class(model_name_or_path)
+
+    def test_resolve_model_class_returns_class_for_known_model(self):
+        """When the model name matches a valid subclass name, return that class (no instantiation)."""
+        assert ModelMetadata._resolve_model_class("HuggingFaceTB/SmolLM3-3B") is SmolLM3
+        assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.1") is Mistral
+        assert ModelMetadata._resolve_model_class("TinyLlama/TinyLlama-1.1B-Chat-v1.0") is TinyLlama
+
+
 class TestModelDetection:
     """Tests for ModelMetadata.from_str_or_path model detection."""
 

@@ -120,7 +120,7 @@ class TrainingHyperparams(Parameters):
             title="learning_rate",
             description=(
                 "The initial learning rate for `AdamW` optimizer. Must be in (0, 1). "
-                "Setting to 'auto' uses a model-specific default if one exists.
+                "Setting to 'auto' uses a model-specific default if one exists."
             ),
         ),
     ] = AUTO_STR
