@@ -298,6 +298,7 @@ class Workdir:
           - training.csv
           - test.csv
           - validation.csv
+          - transformed_training.csv  (optional inspection artifact)
 
     """
 
@@ -372,6 +373,7 @@ class Workdir:
         training=FileNode("training.csv"),
         test=FileNode("test.csv"),
         validation=FileNode("validation.csv"),
+        transformed_training=FileNode("transformed_training.csv"),
     )
     """Location and contents of dataset directory structure."""
 
@@ -578,7 +580,7 @@ class Workdir:
             },
             "Source Files": {
                 "Config": str(self.source_config),
-                "Training data": str(self.source_dataset.training),
+                "Original training data": str(self.source_dataset.training),
                 "Test data": str(self.source_dataset.test),
                 "Schema": str(self.schema_file),
             },

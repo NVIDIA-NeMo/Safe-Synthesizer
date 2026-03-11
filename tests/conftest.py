@@ -184,6 +184,20 @@ def fixture_sample_patient_dataset() -> Dataset:
     return load_test_dataset("sample-patient-events-12groups-200-records.csv")
 
 
+@pytest.fixture
+def fixture_sample_patient_dataframe() -> pd.DataFrame:
+    return load_test_dataframe("sample-patient-events-12groups-200-records.csv")
+
+
+@pytest.fixture
+def fixture_sample_patient_redacted_dataframe(
+    fixture_sample_patient_dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    redacted = fixture_sample_patient_dataframe.copy()
+    redacted["patient_name"] = "REDACTED"
+    return redacted
+
+
 # Purpose: PEMS-SF sample dataset fixture for time-series like tests.
 # Used by: (no direct test references currently)
 @pytest.fixture

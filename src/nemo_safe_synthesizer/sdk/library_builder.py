@@ -189,6 +189,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._resolve_nss_config()
         # Initialize state for pipeline stages
         self._train_df: pd.DataFrame | None = None
+        self._original_train_df: pd.DataFrame | None = None
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
         self._pii_replacer_time: float | None = None
@@ -230,7 +231,9 @@ class SafeSynthesizer(ConfigBuilder):
         test_path = self._workdir.source_dataset.test
         if training_path.exists() and test_path.exists():
             logger.info("Loading cached train/test split from training run")
-            self._train_df = pd.read_csv(training_path)
+            # training.csv persists the original training split for backward
+            # compatibility with older runs and stable evaluation semantics.
+            self._original_train_df = pd.read_csv(training_path)
             self._test_df = pd.read_csv(test_path)
         elif self._data_source is not None:
             logger.warning(
@@ -276,14 +279,15 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        if self._train_df is not None and self._test_df is not None:
+        if self._original_train_df is not None and self._test_df is not None:
             logger.warning("Data already processed, skipping data processing...")
             return self
 
         holdout = Holdout(self._nss_config)
         original_train_df, self._test_df = holdout.train_test_split(self._data_source)
 
-        self._train_df = original_train_df
+        self._original_train_df = original_train_df  # The original training df that we use for evaluation at the end
+        self._train_df = original_train_df  # The active training df that might go through transformation
         self._column_statistics = None
 
         resolver = AutoConfigResolver(self._train_df, self._nss_config)
@@ -303,9 +307,16 @@ class SafeSynthesizer(ConfigBuilder):
         if self._llm_metadata is None:
             self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
         self._data_processed = True
-        # Ensure dataset directory exists before writing CSV files
+
+        # Always persist the original training split -- this is the version
+        # reloaded by load_from_save_path and used for evaluation metrics.
         self._workdir.ensure_directories()
-        self._train_df.to_csv(self._workdir.dataset.training, index=False)
+        # training.csv is the canonical persisted original training split.
+        self._original_train_df.to_csv(self._workdir.dataset.training, index=False)
+        if not self._train_df.equals(self._original_train_df):
+            # The transformed (e.g. PII-replaced) training data is saved for
+            # inspection only -- it is not reloaded by load_from_save_path.
+            self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)
         else:
@@ -404,7 +415,7 @@ class SafeSynthesizer(ConfigBuilder):
             os.environ["NSS_PHASE"] = "evaluate"
         if TYPE_CHECKING:
             assert self._nss_config is not None
-            assert self._train_df is not None
+            assert self._original_train_df is not None
             assert self._test_df is not None
             assert self._column_statistics is not None
             assert self._pii_replacer_time is not None
@@ -415,7 +426,7 @@ class SafeSynthesizer(ConfigBuilder):
             generate_results=self.generator.gen_results,
             pii_replacer_time=self._pii_replacer_time,
             column_statistics=self._column_statistics,
-            train_df=self._train_df,
+            train_df=self._original_train_df,
             test_df=self._test_df,
             workdir=self._workdir,
         )
