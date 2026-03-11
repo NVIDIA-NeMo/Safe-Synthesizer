@@ -4,8 +4,8 @@
 # Environment Variables
 
 All environment variables that affect Safe Synthesizer behavior. For runtime
-errors and OOM issues, see [Troubleshooting](troubleshooting.md). For output
-quality and evaluation metrics, see [Data Quality](data-quality.md).
+errors and OOM issues, see [Program Runtime](troubleshooting.md). For output
+quality and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md).
 
 Synthesis parameters (`training.learning_rate`, `generation.num_records`, etc.)
 are set via YAML, CLI flags, or the Python SDK -- not environment variables.
@@ -14,19 +14,55 @@ are cached, and which network endpoints are used.
 
 ---
 
-## Quick Reference
+## NSS Variables
 
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `HF_HOME` | `~/.cache/huggingface` | Hugging Face model cache directory |
-| `HF_HUB_OFFLINE` | unset | Set to `1` to error instead of attempting downloads |
-| `LOCAL_FILES_ONLY` | unset | Set to `true` to skip network downloads (Unsloth + GLiNER only) |
-| `VLLM_CACHE_ROOT` | vLLM default | vLLM model cache directory |
-| `VLLM_ATTENTION_BACKEND` | `auto` | Generation attention implementation |
-| `NIM_ENDPOINT_URL` | unset | NIM/OpenAI-compatible endpoint for PII column classification; classification skipped when unset |
-| `NIM_API_KEY` | unset | API key for the NIM endpoint |
-| `NIM_MODEL_ID` | `qwen/qwen2.5-coder-32b-instruct` | Model ID for PII column classification |
-| `SAFE_SYNTHESIZER_CPU_COUNT` | `max(1, cpu_count - 1)` | CPU worker count for NER processing |
+| Variable | CLI flag | Purpose |
+|----------|----------|---------|
+| `NSS_CONFIG` | `--config` | Path to YAML config file |
+| `NSS_ARTIFACTS_PATH` | `--artifact-path` | Default artifact path |
+| `NSS_LOG_FORMAT` | `--log-format` | Log format (`json` or `plain`) |
+| `NSS_LOG_FILE` | `--log-file` | Log file path |
+| `NSS_LOG_COLOR` | `--log-color` / `--no-log-color` | Colorize console output (auto-detected from TTY) |
+| `NSS_LOG_LEVEL` | -- | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, or `DEBUG_DEPENDENCIES` |
+| `NSS_DATASET_REGISTRY` | `--dataset-registry` | Dataset registry YAML path/URL |
+| `NSS_WANDB_MODE` | `--wandb-mode` | WandB mode (alias for `WANDB_MODE`) |
+| `NSS_WANDB_PROJECT` | `--wandb-project` | WandB project name (alias for `WANDB_PROJECT`) |
+| `NIM_ENDPOINT_URL` | -- | LLM endpoint for PII column classification |
+| `NIM_API_KEY` | -- | API key (optional -- only for direct endpoints) |
+| `NIM_MODEL_ID` | -- | Column classification model ID |
+| `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (Unsloth, GLiNER) |
+| `SAFE_SYNTHESIZER_CPU_COUNT` | -- | NER CPU processes |
+
+---
+
+## Third-Party Variables
+
+| Variable | Read by | Purpose |
+|----------|---------|---------|
+| `HF_HOME` | Hugging Face Hub | Cache directory for model downloads |
+| `HF_HUB_OFFLINE` | Hugging Face Hub | Set to `1` to error instead of downloading |
+| `VLLM_ATTENTION_BACKEND` | vLLM | Override attention backend |
+| `VLLM_CACHE_ROOT` | vLLM | vLLM internal cache directory (defaults to `~/.cache/vllm`) |
+| `WANDB_MODE` | WandB | Mode (`online`, `offline`, `disabled`) |
+| `WANDB_PROJECT` | WandB | Project name |
+| `WANDB_API_KEY` | WandB | API key for authentication |
+
+---
+
+## Precedence
+
+Synthesis parameters:
+
+1. CLI flags (`--training__learning_rate 0.001`)
+2. Dataset registry overrides
+3. YAML config file
+4. Defaults
+
+Infrastructure settings (artifact path, logging, WandB):
+
+1. CLI flags (`--artifact-path`, `--log-format`, etc.)
+2. Environment variables (`NSS_ARTIFACTS_PATH`, `NSS_LOG_FORMAT`, etc.)
+3. Built-in defaults
 
 ---
 
@@ -35,7 +71,8 @@ are cached, and which network endpoints are used.
 All model and tokenizer downloads go through
 [Hugging Face Hub](https://huggingface.co/docs/huggingface_hub/guides/manage-cache).
 The following variables control where downloads are stored and whether the
-network is used.
+network is used. For a step-by-step offline setup guide, see
+[Running in Offline Environments](running.md#running-in-offline-environments).
 
 ### `HF_HOME`
 
@@ -67,7 +104,7 @@ What gets downloaded on first use:
 - `distiluse-base-multilingual-cased-v2` (evaluation semantic similarity)
 - vLLM base model (generation)
 
-!!! warning
+!!! warning "Silent downloads on first use"
     All downloads happen silently on first use. If the first run is in an
     environment without internet access, connection errors will appear at
     whichever pipeline stage tries to download first.
@@ -93,7 +130,7 @@ the HuggingFace training backend or vLLM.
 export LOCAL_FILES_ONLY=true
 ```
 
-!!! warning
+!!! warning "Partial offline support"
     `LOCAL_FILES_ONLY` is not consistently supported across all backends.
     Set `HF_HUB_OFFLINE=1` combined with a pre-populated `HF_HOME` cache
     for the most reliable offline experience.
@@ -135,8 +172,8 @@ NIM endpoint, API keys, and CPU parallelism for PII detection.
 ### `NIM_ENDPOINT_URL`
 
 The NIM/OpenAI-compatible endpoint used for PII column classification. When
-unset, classification is skipped silently (the exception is caught and the
-pipeline falls back to `describe_field()`). Set this to enable classification:
+unset, an error is logged and the pipeline falls back to NER-only detection.
+Set this to enable LLM-based column classification:
 
 ```bash
 export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
@@ -147,7 +184,7 @@ To disable column classification entirely instead of pointing it at a local
 endpoint, use the `replace_pii.globals.classify.enable_classify` config option.
 PII classify config is deeply nested -- use YAML or SDK:
 
-=== "YAML"
+=== "Config reference"
 
     ```yaml
     replace_pii:
@@ -191,3 +228,9 @@ export SAFE_SYNTHESIZER_CPU_COUNT=4
 
 Defaults to `max(1, cpu_count - 1)` (one CPU left free), further capped so
 there are at least 1,000 records per worker.
+
+---
+
+- [Running Safe Synthesizer](running.md) -- pipeline execution, CLI commands, and artifacts
+- [Configuration Reference](configuration.md) -- parameter tables
+- [Program Runtime](troubleshooting.md) -- runtime errors and OOM fixes
