@@ -100,8 +100,10 @@ for the full field list.
 
 Safe Synthesizer has explicit support (prompt templates, RoPE scaling,
 tokenizer handling) for the model families listed below. Models outside this
-list will raise a `ValueError` at startup. For quick iteration on a CPU or
-low-VRAM GPU, `TinyLlama/TinyLlama-1.1B-Chat-v1.0` is a fast option.
+list will raise a `ValueError` at startup.
+
+We have extensively tested the following models for synthetic data use in NSS, and encourage you to start with `SmolLM3-3B` (the default).
+
 
 | Family | HuggingFace ID |
 |--------|----------------|
