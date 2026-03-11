@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Date string parsing, formatting, and inference utilities.
+
+Supports ISO8601 timezone offsets (via ``strftime_extra`` / ``strptime_extra``),
+permutation-based format inference (``parse_date``, ``infer_from_series``),
+and date randomization for PII replacement (``randomize``).
+"""
+
 import itertools
 import re
 from collections import Counter
@@ -126,15 +133,16 @@ def strptime_extra(date_string: str, fmt: str) -> datetime:
 
 
 def date_component_permutations() -> list[tuple[str, str, str, str, str]]:
-    """Returns a list of string formats by component type. Each permutation is
-    indexed by y, m, d, hms, tz and can be passed into component formatter from
-    ``date_component_orders``.
+    """Return the Cartesian product of per-component format strings.
+
+    Each tuple is indexed by (year, month, day, hms, tz) and can be
+    passed into a formatter from ``date_component_orders``.
     """
     return list(itertools.product(*component_formats.values()))  # type:ignore
 
 
 def gen_date_str_fmt_permutations() -> set[str]:
-    """Returns a list of unique date string format permutations"""
+    """Return the set of all unique date format permutations."""
     return {order(*str_fmt) for str_fmt in date_component_permutations() for order in date_component_orders}
 
 
@@ -284,6 +292,7 @@ def tokenize_date_str(input: str) -> TokenizedStr:
 
 
 def maybe_match(date, format) -> Optional[datetime]:
+    """Attempt to parse ``date`` with ``format``, returning None on failure."""
     try:
         return strptime_extra(date, format)
     except ValueError:
@@ -294,6 +303,7 @@ def parse_date(
     input_date: str,
     date_str_fmts: list[str] | set[str] = date_str_fmt_permutations,
 ) -> Optional[ParsedDate]:
+    """Parse a date string and return the first matching ``ParsedDate``, or None."""
     return next(parse_date_multiple(input_date, date_str_fmts), None)
 
 
@@ -301,6 +311,7 @@ def parse_date_multiple(
     input_date: str,
     date_str_fmts: list[str] | set[str] = date_str_fmt_permutations,
 ) -> Iterator[ParsedDate]:
+    """Yield all ``ParsedDate`` interpretations of ``input_date`` across known formats."""
     tokenized_date = tokenize_date_str(input_date)
 
     for str_fmt in date_str_fmts:
@@ -335,13 +346,13 @@ def randomize(date: str, days: int) -> Optional[str]:
 
 
 def d_str_to_fmt_multiple(input_date: str) -> Iterator[str]:
-    """Infers all likely date format from a date string."""
+    """Yield all plausible ``strftime`` format strings for a date string."""
     for parsed_date in parse_date_multiple(input_date):
         yield parsed_date.fmt_str
 
 
 def maybe_d_str_to_fmt_multiple(input_date: str) -> Iterator[str]:
-    """Infers all likely date format from a date string or nothing."""
+    """Like ``d_str_to_fmt_multiple`` but silently yields nothing on ``ValueError``."""
     try:
         yield from d_str_to_fmt_multiple(input_date)
     except ValueError:
@@ -349,14 +360,17 @@ def maybe_d_str_to_fmt_multiple(input_date: str) -> Iterator[str]:
 
 
 def d_str_to_fmt(input_date: str) -> Optional[str]:
-    """Infers a date format from a date string."""
+    """Infer the most likely ``strftime`` format string for a date string, or None."""
     return next(d_str_to_fmt_multiple(input_date), None)
 
 
 def infer_from_series(date_series: Iterable[str]) -> Optional[str]:
-    """An inference on a single date string isn't always perfect. Sometimes we mix
-    up format likes %m and %d. ``infer_from_series`` will evaluate a series of dates
-    and return the best date format for the series.
+    """Infer the best ``strftime`` format for a series of date strings.
+
+    Evaluates each date against all known format permutations and returns
+    the most frequently matched format. This is more reliable than
+    single-string inference, which can confuse ambiguous components like
+    ``%m`` and ``%d``.
     """
     fmt_occurrences = Counter()
     for date in date_series:
@@ -371,6 +385,21 @@ def fit_and_transform_dates(
     df: pd.DataFrame,
     inplace: bool = False,
 ) -> tuple[dict[str, dict[str, str]], pd.DataFrame]:
+    """Detect date columns, convert them to elapsed seconds, and record the transformation.
+
+    For each object-typed column, samples values to infer a date format. If
+    successful, converts the column to seconds elapsed since the column minimum
+    and records the format and min date for later reversal.
+
+    Args:
+        df: Input DataFrame.
+        inplace: If True, mutate ``df`` directly instead of copying.
+
+    Returns:
+        A tuple of (date_min_dict, result_df). ``date_min_dict`` maps column
+        names to ``{"format": ..., "min": ...}`` dicts needed by
+        ``transform_dates`` for reversal.
+    """
     date_min_dict = {}
     object_cols = [col for col, col_type in df.dtypes.iteritems() if col_type == "object"]
     result_df = df.copy() if not inplace else df
@@ -396,6 +425,16 @@ def fit_and_transform_dates(
 
 
 def transform_dates(dates: dict[str, dict[str, str]], df: pd.DataFrame) -> pd.DataFrame:
+    """Apply a previously fitted date-to-seconds transformation to a DataFrame.
+
+    Args:
+        dates: Mapping from column names to ``{"format": ..., "min": ...}``
+            dicts as returned by ``fit_and_transform_dates``.
+        df: DataFrame to transform.
+
+    Returns:
+        A copy of ``df`` with date columns converted to elapsed seconds.
+    """
     result_df = df.copy()
     for col, details in dates.items():
         _dates = pd.to_datetime(result_df[col], format=details["format"], errors="coerce")

@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Utilities for extracting, validating, and converting JSONL records.
+
+Provides regex-based JSONL extraction, JSON-schema validation (including
+time-series interval checks), DataFrame normalization, and JSONL serialization.
+"""
+
 from __future__ import annotations
 
 import calendar
@@ -24,11 +30,13 @@ logger = get_logger()
 def is_safe_for_float_conversion(value: str | int | float | None | list | dict) -> bool:
     """Check if a value can be safely converted to float64 without overflow.
 
+    Only ``int`` values can cause overflow; all other types are considered safe.
+
     Args:
-        value: The value to check
+        value: The value to check.
 
     Returns:
-        bool: True if the value can be safely converted to float64
+        True if the value can be safely converted to float64.
     """
     # not considering Decimal because the input of this validation
     # is coming from converting a jsonl string to JSON object.
@@ -45,13 +53,14 @@ def is_safe_for_float_conversion(value: str | int | float | None | list | dict) 
 
 
 def check_record_for_large_numbers(record: dict) -> str | None:
-    """Check if a record contains any numbers that would cause float conversion errors.
+    """Check if a record contains any numbers that would cause float64 overflow.
 
     Args:
-        record: The record to check
+        record: Dictionary of field names to values.
 
     Returns:
-        Tuple[bool, str]: (is_safe, err_msg)
+        An error message describing the first unsafe value found,
+        or None if all values are safe.
     """
     for key, value in record.items():
         if not is_safe_for_float_conversion(value):
@@ -363,15 +372,18 @@ def extract_and_validate_timeseries_records(
 
 
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
-    """Normalize the given pandas dataframe
-    - Convert missing values to consistent pd.NA
-    - Resolve any utf-8 encoding errors
+    """Normalize a DataFrame of generated records via a CSV round-trip.
+
+    Serializes to CSV and reads back to standardize missing-value
+    representations (NaN/None/NA) across mixed-type columns. Falls back
+    to ignoring encoding errors if the initial round-trip fails.
 
     Args:
         dataframe: DataFrame to normalize.
 
     Returns:
-        DataFrame with missing values normalized, invalid utf-8 characters dropped.
+        DataFrame with missing values normalized and invalid UTF-8 characters
+        dropped.
     """
     # HACK: Handle NaN/None/NA values with mixed types by
     # normalizing through pandas csv io format, which will match

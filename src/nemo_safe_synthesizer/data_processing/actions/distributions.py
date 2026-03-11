@@ -11,12 +11,20 @@ from typing import Annotated, Any, Literal, Optional, Union
 import numpy as np
 from pydantic import BaseModel, Field
 
+"""Statistical distribution models for sampling numeric and datetime values.
+
+Provides ``Distribution`` (float-valued) and ``DatetimeDistribution``
+hierarchies, each with Gaussian and Uniform concrete implementations.
+Pydantic discriminated unions (``DistributionT``, ``DatetimeDistributionT``)
+allow YAML/JSON configs to select the distribution type via ``distribution_type``.
+"""
+
 
 class Distribution(BaseModel, ABC):
-    """
-    Abstract base class representing a distribution.
-    Child classes should specify whichever arguments are needed
-    to properly parametrize their distribution.
+    """Abstract base for float-valued distributions.
+
+    Subclasses specify the parameters needed to define their distribution
+    and implement ``sample`` to draw values.
     """
 
     @abstractmethod
@@ -24,19 +32,13 @@ class Distribution(BaseModel, ABC):
 
 
 class DatetimeDistribution(BaseModel, ABC):
-    """
-    This class is separate from the `Distribution` ABC above
-    because datetimes need slightly different handling than floats.
-    Providing this separate class hierarchy also makes it easier
-    in pydantic to specify what datatypes we expect in the distribution
-    parameters (float vs datetime), as well as dt-specific arguments.
+    """Abstract base for datetime-valued distributions.
 
-    In practice, this means creating a "copy" `DatetimeDistribution`
-    for each regular `Distribution` where it makes sense. We could probably
-    automate some of this with generics, but IMO that'd just make it confusing
-    to read. We're still able to reuse the original `Distribution` class most
-    of the time in `DatetimeDistribution`, making the only business logic
-    really be about how we want to translate dates --> floats.
+    Separate from ``Distribution`` because datetime parameters (``datetime``,
+    ``timedelta``) differ from floats, and pydantic validation benefits from
+    distinct type hierarchies. Subclasses implement ``sample_datetimes`` to
+    produce raw datetime samples; universal post-processing (rounding via
+    ``precision``, formatting via ``format``) is applied by ``sample``.
     """
 
     precision: Optional[timedelta] = None
