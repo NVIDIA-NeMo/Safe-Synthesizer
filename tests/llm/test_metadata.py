@@ -90,7 +90,7 @@ MODEL_DETECTION_SCENARIOS = [
     ModelDetectionScenario("llama32", "meta-llama/Llama32-1B", Llama32),
     ModelDetectionScenario("smollm2", "HuggingFaceTB/SmolLM2-135M", SmolLM2),
     ModelDetectionScenario("smollm3", "HuggingFaceTB/SmolLM3-3B", SmolLM3),
-    ModelDetectionScenario("mistral", "mistralai/Mistral-7B-v0.1", Mistral),
+    ModelDetectionScenario("mistral", "mistralai/Mistral-7B-Instruct-v0.3", Mistral),
     ModelDetectionScenario("nemotron", "nvidia/Nemotron-4-340B", Nemotron),
 ]
 
@@ -151,7 +151,7 @@ MODEL_INIT_SCENARIOS = [
     ModelInitScenario(
         id="mistral",
         model_class=Mistral,
-        model_path="mistralai/Mistral-7B-v0.1",
+        model_path="mistralai/Mistral-7B-Instruct-v0.3",
         expected_template="[INST] {instruction} \n\n {schema} [/INST]{prefill}",
         expected_add_bos=True,
         expected_add_eos=True,
@@ -561,6 +561,33 @@ class TestModelMetadata:
         """Test from_str_or_path raises ValueError for unknown model names."""
         with pytest.raises(ValueError, match="Unknown model name or path"):
             ModelMetadata.from_str_or_path("unknown-model-xyz")
+
+
+class TestResolveModelClass:
+    """Tests for ModelMetadata._resolve_model_class (model name → class, no instantiation)."""
+
+    @pytest.mark.parametrize(
+        "model_name_or_path",
+        [
+            "google/gemma-2-27b",
+            "SomeRandomModel/1B",
+        ],
+        ids=["gemma", "random_model"],
+    )
+    def test_resolve_model_class_raises_for_unknown_model(self, model_name_or_path):
+        """When the model name does not match any valid ModelMetadata subclass, raise ValueError.
+
+        Covers failed jobs where the configured model is not in the expected set
+        (TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite).
+        """
+        with pytest.raises(ValueError, match=r"Unknown model name or path"):
+            ModelMetadata._resolve_model_class(model_name_or_path)
+
+    def test_resolve_model_class_returns_class_for_known_model(self):
+        """When the model name matches a valid subclass name, return that class (no instantiation)."""
+        assert ModelMetadata._resolve_model_class("HuggingFaceTB/SmolLM3-3B") is SmolLM3
+        assert ModelMetadata._resolve_model_class("mistralai/Mistral-7B-v0.3") is Mistral
+        assert ModelMetadata._resolve_model_class("TinyLlama/TinyLlama-1.1B-Chat-v1.0") is TinyLlama
 
 
 class TestModelDetection:

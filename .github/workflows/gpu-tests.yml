@@ -39,7 +39,10 @@ concurrency:
 jobs:
   changes:
     name: Detect changes
-    if: github.event_name != 'workflow_dispatch'
+    # No `if` guard here: dorny/paths-filter outputs `true` for all filters on
+    # workflow_dispatch (no base to diff against), so the E2E job always runs.
+    # Guarding this job would skip it, and a skipped `needs` dependency causes
+    # downstream jobs to be skipped even when their own `if` condition passes.
     runs-on: linux-amd64-cpu4
     permissions:
       contents: read

@@ -28,7 +28,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://desfontain.
 
     Install the package, set up your environment, and run your first synthetic data pipeline in minutes.
 
-    [:octicons-arrow-right-24: Getting Started](getting-started/installation.md)
+    [:octicons-arrow-right-24: Getting Started](user-guide/getting-started.md)
 
 -   **Product Overview**
 
@@ -50,9 +50,9 @@ It uses LLM fine-tuning with optional [differential privacy](https://desfontain.
 
     ---
 
-    Understand the Python SDK and CLI, available parameters, and troubleshooting.
+    Configure and run the pipeline via YAML, CLI, SDK, or environment variables.
 
-    [:octicons-arrow-right-24: User Guide](user-guide/sdk.md)
+    [:octicons-arrow-right-24: User Guide](user-guide/getting-started.md)
 
 -   **Developer Guide**
 

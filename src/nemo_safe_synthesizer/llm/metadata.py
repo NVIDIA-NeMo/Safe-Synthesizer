@@ -28,7 +28,7 @@ Classes:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import (
     BaseModel,
@@ -271,6 +271,9 @@ class ModelMetadata(BaseModel):
     to construct instances rather than calling the constructor directly.
     """
 
+    # Learning rate when training.learning_rate is "auto". Override in subclasses.
+    default_learning_rate: ClassVar[float] = 0.0005
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     model_name_or_path: str = Field(description="HuggingFace model identifier or local path.")
@@ -416,6 +419,15 @@ class ModelMetadata(BaseModel):
         )
 
     @classmethod
+    def _resolve_model_class(cls: type["ModelMetadata"], model_name_or_path: Path | str) -> type["ModelMetadata"]:
+        """Resolve model name or path to the matching ``ModelMetadata`` subclass (no instantiation)."""
+        classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
+        for class_ in classes:
+            if class_.__name__.lower() in str(model_name_or_path).lower():
+                return class_
+        raise ValueError(f"Unknown model name or path: {model_name_or_path}")
+
+    @classmethod
     def from_str_or_path(cls: type["ModelMetadata"], model_name_or_path: Path | str, **kwargs) -> ModelMetadata:
         """Instantiate the correct ``ModelMetadata`` subclass from a model name or path.
 
@@ -433,11 +445,7 @@ class ModelMetadata(BaseModel):
         Raises:
             ValueError: If no registered subclass matches.
         """
-        classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
-        for class_ in classes:
-            if str(class_.__name__).lower() in str(model_name_or_path).lower():
-                return class_(model_name_or_path=str(model_name_or_path), **kwargs)
-        raise ValueError(f"Unknown model name or path: {model_name_or_path}")
+        return cls._resolve_model_class(model_name_or_path)(model_name_or_path=str(model_name_or_path), **kwargs)
 
     @classmethod
     def from_config(
@@ -616,6 +624,8 @@ class Mistral(ModelMetadata):
         **kwargs: Forwarded to [`ModelMetadata`][nemo_safe_synthesizer.llm.metadata.ModelMetadata].
     """
 
+    default_learning_rate: ClassVar[float] = 0.0001
+
     def __init__(
         self,
         model_name_or_path: str,
@@ -746,7 +756,7 @@ class SmolLM2(ModelMetadata):
         config = AutoConfig.from_pretrained(model_name_or_path)
         if rope_scaling_factor:
             logger.warning(
-                f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
+                f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
             )
 
         super().__init__(
