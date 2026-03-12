@@ -493,7 +493,25 @@ class Step:
         progress: ProgressLog,
         fnreport: TransformFnAccounting,
     ) -> None:
-        """Update cell values per rules (value/fallback, optional foreach/condition); skip locked columns; update progress and fnreport."""
+        """Apply row-update rules to DataFrame cells; skip locked columns; update progress and fnreport.
+
+        Target columns per rule come from ``name``/``entity``/``type``/``condition``; cells
+        are set by rendering the rule's ``value`` (and optional ``fallback_value``) template.
+        Optional ``condition`` and ``foreach`` narrow rows and enrich context. Locked columns
+        are skipped; NER cache is refreshed when rules use cacheable filters.
+
+        Args:
+            df: DataFrame to modify in place. Target columns must exist.
+            rules: List of row-update rules; each may have ``name``/``entity``/``type``,
+                ``value``, optional ``fallback_value``, ``condition``, and ``foreach``.
+            entities: Map of column name to entity type (used for rule resolution).
+            column_types: Map of column name to column type (used for rule resolution).
+            progress: Progress logger; its status is updated with rule/column/row progress.
+            fnreport: Accounting instance to record which transform functions were applied.
+
+        Returns:
+            None. The DataFrame is modified in place.
+        """
         locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
         progress.status.update_rule_n_total = len(rules)
         for rule_n, rule in enumerate(rules):

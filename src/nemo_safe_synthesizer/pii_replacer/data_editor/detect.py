@@ -367,9 +367,6 @@ class ColumnClassifierLLM(ColumnClassifier):
     Construct via factory; set ``_llm`` and ``_num_samples`` before calling
     ``detect_types``. Not initialized with config in ``__init__``.
 
-    Attributes:
-        _llm: OpenAI client (must be set before ``detect_types``).
-        _num_samples: Number of samples per column for the prompt.
     """
 
     _llm: Optional[OpenAI]
