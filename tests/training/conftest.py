@@ -12,5 +12,5 @@ PreTrainedTokenizer = transformers.PreTrainedTokenizer
 
 
 @pytest.fixture
-def fixture_tokenizer(fixture_stub_tokenizer_path) -> PreTrainedTokenizer:
-    return AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path)
+def fixture_tokenizer(fixture_smollm3_tokenizer) -> PreTrainedTokenizer:
+    return AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer)
