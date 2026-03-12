@@ -33,6 +33,16 @@ Configuration: [`.github/copy-pr-bot.yaml`](../copy-pr-bot.yaml)
 
 CPU checks (`ci-checks.yml`) run on GitHub-hosted `ubuntu-latest` runners and use standard `pull_request` triggers.
 
+### On-demand GPU test runs
+
+To trigger a GPU test run on an open PR without waiting for the auto-sync, comment `/sync` on the PR. copy-pr-bot will push the current HEAD to `pull-request/<number>`, which fires `gpu-tests.yml` and posts the `GPU CI Status` check result back to the PR -- the same check as the automatic trigger.
+
+Use `/sync` when:
+
+- The PR is a draft (auto-sync is disabled for drafts)
+- You want to re-run after a flaky failure without pushing a new commit
+- You want a GPU test result before marking the PR ready for review
+
 ## Workflow Diagram
 
 ```mermaid
@@ -126,11 +136,13 @@ The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branc
 
 The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so the E2E job always runs on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
 
-To trigger manually:
+To trigger manually from the CLI (produces a run but not a PR status check):
 
 ```bash
 gh workflow run gpu-tests.yml --ref <branch-name>
 ```
+
+To trigger from the PR UI and get a status check result, use `/sync` -- see [On-demand GPU test runs](#on-demand-gpu-test-runs) above.
 
 ### Runners
 
