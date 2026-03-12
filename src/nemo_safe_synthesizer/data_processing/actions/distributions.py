@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Statistical distribution models for sampling numeric and datetime values.
+
+Provides ``Distribution`` (float-valued) and ``DatetimeDistribution``
+hierarchies, each with Gaussian and Uniform concrete implementations.
+Pydantic discriminated unions (``DistributionT``, ``DatetimeDistributionT``)
+allow YAML/JSON configs to select the distribution type via ``distribution_type``.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,15 +18,6 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import BaseModel, Field
-
-"""Statistical distribution models for sampling numeric and datetime values.
-
-Provides ``Distribution`` (float-valued) and ``DatetimeDistribution``
-hierarchies, each with Gaussian and Uniform concrete implementations.
-Pydantic discriminated unions (``DistributionT``, ``DatetimeDistributionT``)
-allow YAML/JSON configs to select the distribution type via ``distribution_type``.
-"""
-
 
 class Distribution(BaseModel, ABC):
     """Abstract base for float-valued distributions.

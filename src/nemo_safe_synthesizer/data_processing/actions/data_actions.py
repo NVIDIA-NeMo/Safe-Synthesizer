@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Extensible data action framework for pre/post-processing, validation, and generation.
+
+Defines ``BaseAction`` and its subclasses (``GenerateAction``, ``ColAction``,
+``ValidationAction``) which encapsulate data transformations applied at
+different pipeline phases. ``ActionExecutor`` orchestrates running the
+registered actions in order.
+"""
+
 from __future__ import annotations
 
 import json
@@ -51,14 +59,6 @@ from .utils import (
     guess_datetime_format,
     type_alias_fn,
 )
-
-"""Extensible data action framework for pre/post-processing, validation, and generation.
-
-Defines ``BaseAction`` and its subclasses (``GenerateAction``, ``ColAction``,
-``ValidationAction``) which encapsulate data transformations applied at
-different pipeline phases. ``ActionExecutor`` orchestrates running the
-registered actions in order.
-"""
 
 logger = get_logger(__name__)
 

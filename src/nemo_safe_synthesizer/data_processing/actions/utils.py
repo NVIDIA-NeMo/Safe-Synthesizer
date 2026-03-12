@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Shared utilities for the data actions framework.
+
+Provides ``ActionCtx`` (execution context with state and dependency injection),
+``TransformsUtil`` (wrapper around the transforms_v2 engine), helper types
+(``MetadataColumns``, ``TransformsUpdate``), and subclass-discovery functions.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -32,14 +39,6 @@ from typing_extensions import Self
 from .dates import parse_date
 
 T = TypeVar("T")
-
-
-"""Shared utilities for the data actions framework.
-
-Provides ``ActionCtx`` (execution context with state and dependency injection),
-``TransformsUtil`` (wrapper around the transforms_v2 engine), helper types
-(``MetadataColumns``, ``TransformsUpdate``), and subclass-discovery functions.
-"""
 
 
 def type_alias_fn(field_name: str) -> str:
