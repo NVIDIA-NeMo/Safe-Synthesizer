@@ -88,12 +88,11 @@ For the complete list of configuration parameters, see the [Parameters Reference
 | `delta` | float/auto | `"auto"` | Failure probability (auto = 1/n^1.2 based on dataset size) |
 | `per_sample_max_grad_norm` | float | `1.0` | Gradient clipping threshold |
 
-
 #### Recommendations
 
 Starting point: Begin with $\varepsilon \in [8, 12]$ and reduce as needed based on privacy requirements and acceptable quality trade-offs.
 
-Delta calculation: Use `"auto"` (recommended), which sets $\delta = \frac{1}{n^{1.2}}$ based on dataset size n. Manual values are typically between 1e-6 and 1e-4.
+Delta calculation: Use `"auto"` (recommended), which sets $\delta = \frac{1}{n^{1.2}}$ based on dataset size $n$. Manual values are typically between 1e-6 and 1e-4.
 
 Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
 
@@ -113,5 +112,5 @@ For a complete list of all available parameters and their defaults, refer to [Pa
 
 - [Parameters Reference](../user-guide/parameters.md): Complete parameter reference
 - [Differential Privacy](../tutorials/differential-privacy.md): Learn about differential privacy in practice
-- [Tutorials](../tutorials/index.md): More tutorials
+- [Tutorials](../tutorials/index.md): Run the pipeline
 
