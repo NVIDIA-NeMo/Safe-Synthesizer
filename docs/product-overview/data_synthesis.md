@@ -79,7 +79,7 @@ Enabling DP provides strong privacy guarantees but affects synthetic data qualit
 
 #### Configuration Parameters
 
-For the complete list of configuration parameters, see the [Parameters Reference](../user-guide/parameters.md). Some commonly used parameters are listed below:
+For the complete list of configuration parameters, see the [Parameters Reference](../user-guide/configuration.md). Some commonly used parameters are listed below:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -96,7 +96,7 @@ Delta calculation: Use `"auto"` (recommended), which sets $\delta = \frac{1}{n^{
 
 Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
 
-For hands-on guidance, refer to [Differential Privacy Tutorial](../tutorials/differential-privacy.md). For complete parameter documentation, refer to [Parameters Reference](../user-guide/parameters.md).
+For hands-on guidance, refer to [Differential Privacy Tutorial](../tutorials/differential-privacy.md). For complete parameter documentation, refer to [Parameters Reference](../user-guide/configuration.md).
 
 ## Configuration
 
@@ -106,11 +106,11 @@ Synthesis behavior is controlled through configuration parameters:
 - Generation: Number of records, temperature, sampling strategies
 - Privacy: Differential privacy parameters (epsilon, delta, clipping)
 
-For a complete list of all available parameters and their defaults, refer to [Parameters Reference](../user-guide/parameters.md).
+For a complete list of all available parameters and their defaults, refer to [Parameters Reference](../user-guide/configuration.md).
 
 ## Related Topics
 
-- [Parameters Reference](../user-guide/parameters.md): Complete parameter reference
+- [Parameters Reference](../user-guide/configuration.md): Complete parameter reference
 - [Differential Privacy](../tutorials/differential-privacy.md): Learn about differential privacy in practice
 - [Tutorials](../tutorials/index.md): Run the pipeline
 
