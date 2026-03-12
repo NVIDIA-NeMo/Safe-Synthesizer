@@ -311,7 +311,7 @@ def parse_date_multiple(
     input_date: str,
     date_str_fmts: list[str] | set[str] = date_str_fmt_permutations,
 ) -> Iterator[ParsedDate]:
-    """Yield all ``ParsedDate`` interpretations of ``input_date`` across known formats."""
+    """Yield all valid ``ParsedDate`` interpretations of ``input_date`` across known formats."""
     tokenized_date = tokenize_date_str(input_date)
 
     for str_fmt in date_str_fmts:

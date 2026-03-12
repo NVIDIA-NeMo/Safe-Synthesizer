@@ -36,7 +36,7 @@ def is_safe_for_float_conversion(value: str | int | float | None | list | dict) 
         value: The value to check.
 
     Returns:
-        True if the value can be safely converted to float64.
+        True if the value can be safely converted to float64, False otherwise.
     """
     # not considering Decimal because the input of this validation
     # is coming from converting a jsonl string to JSON object.

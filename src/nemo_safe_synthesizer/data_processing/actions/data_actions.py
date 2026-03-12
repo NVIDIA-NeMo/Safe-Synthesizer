@@ -111,7 +111,7 @@ class Functions:
 
 
 class BaseAction(BaseModel, ABC):
-    """Abstract base for all data actions in the pipeline.
+    """Abstract base class for all data actions in the pipeline.
 
     Subclasses implement one or more phase methods (``preprocess``,
     ``postprocess``, ``validate_batch``, ``generate``) to transform data at
