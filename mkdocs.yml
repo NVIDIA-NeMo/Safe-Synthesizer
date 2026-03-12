@@ -153,21 +153,20 @@ nav:
   - Home: index.md
   - Product Overview:
       - Pipeline: product-overview/pipeline.md
-      - Data Synthesis: product-overview/data_synthesis.md
+      - Data Synthesis: product-overview/data-synthesis.md
       - PII Replacement: product-overview/pii_replacement.md
       - Evaluation: product-overview/evaluation.md
-  - Getting Started:
-      - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quickstart.md
   - Tutorials:
       - tutorials/index.md
   - User Guide:
-      - Python SDK: user-guide/sdk.md
-      - CLI Reference: user-guide/cli.md
-      - Parameters Reference: user-guide/parameters.md
-      - Environment Variables: user-guide/environment.md
-      - Troubleshooting: user-guide/troubleshooting.md
-      - Data Quality: user-guide/data-quality.md
+      - Getting Started: user-guide/getting-started.md
+      - Running Safe Synthesizer: user-guide/running.md
+      - Troubleshooting:
+          - Synthetic Data Quality: user-guide/evaluating-data.md
+          - Program Runtime: user-guide/troubleshooting.md
+      - Reference:
+          - Configuration: user-guide/configuration.md
+          - Environment Variables: user-guide/environment.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
       - API Reference: reference/
