@@ -23,6 +23,7 @@ from .base import LRScheduler
 from .types import (
     AUTO_STR,
     AutoBoolParam,
+    AutoFloatParam,
     AutoIntParam,
     OptionalAutoInt,
 )
@@ -113,13 +114,16 @@ class TrainingHyperparams(Parameters):
     ] = LRScheduler.COSINE.value
 
     learning_rate: Annotated[
-        float,
-        ValueValidator(value_func=lambda v: 0 < v < 1),
+        AutoFloatParam,
+        ValueValidator(lambda p: range_validator(p, lambda v: 0 < v < 1)),
         Field(
             title="learning_rate",
-            description="The initial learning rate for the ``AdamW`` optimizer. Must be in (0, 1).",
+            description=(
+                "The initial learning rate for `AdamW` optimizer. Must be in (0, 1). "
+                "Setting to 'auto' uses a model-specific default if one exists."
+            ),
         ),
-    ] = 0.0005
+    ] = AUTO_STR
 
     lora_r: Annotated[
         int,
