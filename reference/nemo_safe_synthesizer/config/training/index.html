@@ -8722,7 +8722,7 @@ settings. These parameters directly affect training performance and quality.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.config.training.TrainingHyperparams.learning_rate)" href="#nemo_safe_synthesizer.config.training.TrainingHyperparams.learning_rate">learning_rate</a></code>
-                (<code><span title="float">float</span></code>)
+                (<code><span title="nemo_safe_synthesizer.config.types.AutoFloatParam">AutoFloatParam</span></code>)
             </li>
             <li>
               <code><a class="autorefs autorefs-internal" title="            lora_r
@@ -8989,7 +8989,7 @@ settings. These parameters directly affect training performance and quality.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The initial learning rate for the <code>AdamW</code> optimizer. Must be in (0, 1).</p>
+        <p>The initial learning rate for <code>AdamW</code> optimizer. Must be in (0, 1). Setting to 'auto' uses a model-specific default if one exists.</p>
 
     </div>
 
