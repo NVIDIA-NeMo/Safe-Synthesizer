@@ -46,10 +46,8 @@ def type_alias_fn(field_name: str) -> str:
 
 
 class MetadataColumns(StrEnum):
-    INDEX = "__gretel__idx"  # used in validation to maintain a mapping to pre-transformed records
-    REJECT_REASON = (
-        "__gretel_reject_reason"  # used in validation to attach model_metadata about why the row was rejected
-    )
+    INDEX = "__nss__idx"  # used in validation to maintain a mapping to pre-transformed records
+    REJECT_REASON = "__nss_reject_reason"  # used in validation to attach model_metadata about why the row was rejected
 
 
 def remove_metadata_columns_from_df(df: pd.DataFrame):

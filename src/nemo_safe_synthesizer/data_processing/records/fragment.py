@@ -34,7 +34,7 @@ class Metadata:
                 metadata_type: [meta_data]
     """
 
-    gretel_id: str
+    record_id: str
     fields: dict
     entities: dict
     received_at: str
@@ -45,17 +45,17 @@ class Metadata:
 
 @dataclass
 class MetadataFragment:
-    gretel_id: str
-    gretel_fragment_ts: str
-    gretel_fragment_epoch: float
+    record_id: str
+    fragment_ts: str
+    fragment_epoch: float
     fragment_name: str
 
     def __post_init__(self):
         self.fields = defaultdict(lambda: defaultdict(list))
 
     @property
-    def gretel_fragment_datetime(self) -> datetime:
-        return datetime.fromtimestamp(self.gretel_fragment_epoch)
+    def fragment_datetime(self) -> datetime:
+        return datetime.fromtimestamp(self.fragment_epoch)
 
     def add_field_data(self, field_name: str, metadata_type: str, field_data: dict | list):
         """
@@ -89,29 +89,29 @@ def merge_fragments(*fragments, ts: str | None = None) -> Metadata:
         MetadataError if all input fragments don't correspond to the
             same id.
     """
-    if len(set([fragment.gretel_id for fragment in fragments])) != 1:
-        raise MetadataError("cannot merge fragments from different gretel records")
+    if len(set([fragment.record_id for fragment in fragments])) != 1:
+        raise MetadataError("cannot merge fragments from different records")
     else:
-        gretel_id = fragments[0].gretel_id
+        record_id = fragments[0].record_id
 
     # todo(dn): there might be a better way to build up this object
     merged_fragment = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    ts = ts or min([f.gretel_fragment_datetime for f in fragments]).isoformat() + "Z"
+    ts = ts or min([f.fragment_datetime for f in fragments]).isoformat() + "Z"
     fragment: MetadataFragment
     for fragment in fragments:
         for field_name, field_data in fragment.fields.items():
             for meta_type, meta_data in field_data.items():
                 merged_fragment[field_name][fragment.fragment_name][meta_type].extend(meta_data)
-    return Metadata(gretel_id=gretel_id, fields=merged_fragment, received_at=ts, entities={})
+    return Metadata(record_id=record_id, fields=merged_fragment, received_at=ts, entities={})
 
 
-def fragment_for_record(gretel_id: str, fragment_name: str) -> MetadataFragment:
+def fragment_for_record(record_id: str, fragment_name: str) -> MetadataFragment:
     epoch = time.time()
     ts = datetime.fromtimestamp(epoch).isoformat() + "Z"
     return MetadataFragment(
-        gretel_id=gretel_id,
-        gretel_fragment_epoch=epoch,
-        gretel_fragment_ts=ts,
+        record_id=record_id,
+        fragment_epoch=epoch,
+        fragment_ts=ts,
         fragment_name=fragment_name,
     )
 
@@ -181,13 +181,13 @@ def predictions_to_dict(
 def fragment_from_ner_predictions(
     fragment_name: str,
     predictions: list[NERPrediction],
-    gretel_id: str,
+    record_id: str,
 ) -> tuple[MetadataFragment, dict]:
     epoch = time.time()
     fragment = MetadataFragment(
-        gretel_id=gretel_id,
-        gretel_fragment_ts=datetime.fromtimestamp(epoch).isoformat() + "Z",
-        gretel_fragment_epoch=epoch,
+        record_id=record_id,
+        fragment_ts=datetime.fromtimestamp(epoch).isoformat() + "Z",
+        fragment_epoch=epoch,
         fragment_name=fragment_name,
     )
     preds_by_field, ent_map = predictions_to_dict(predictions)

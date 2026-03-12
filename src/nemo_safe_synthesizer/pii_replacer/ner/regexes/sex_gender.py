@@ -11,7 +11,7 @@ from ..regex import (
     create_exact_field_matcher,
 )
 
-# https://github.com/Gretellabs/monogretel/issues/190
+# Relevant issue: detection should support sex/gender header patterns
 SEX_HEADERS = [
     create_exact_field_matcher("sex"),
     create_exact_field_matcher("sexo"),

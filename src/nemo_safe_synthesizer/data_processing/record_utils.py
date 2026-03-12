@@ -375,7 +375,7 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
     """
     # HACK: Handle NaN/None/NA values with mixed types by
     # normalizing through pandas csv io format, which will match
-    # the format in reports generated via the gretel client.
+    # the format in reports generated via the nss client.
     try:
         # try without trying to resolve utf-8 issues first
         return pd.read_csv(StringIO(dataframe.to_csv(index=False, quoting=QUOTE_NONNUMERIC)))
