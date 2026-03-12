@@ -41,49 +41,6 @@ if TYPE_CHECKING:
     from ..training.backend import TrainingBackend
 
 
-def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) -> SafeSynthesizerResults:
-    """Run PII replacement without synthesis and return results.
-
-    Applies the PII replacer to ``df``, optionally evaluates, and
-    packages everything into a ``SafeSynthesizerResults``.
-
-    Args:
-        config: Resolved parameters (must have ``replace_pii`` set).
-        df: Source DataFrame to transform.
-
-    Returns:
-        Results containing the PII-replaced DataFrame and optional
-        evaluation report.
-    """
-    total_start = time.monotonic()
-
-    replacer = NemoPII(config.replace_pii)
-    replacer.transform_df(df)
-
-    evaluator = None
-    if config.evaluation.enabled:
-        evaluator = Evaluator(
-            config=config,
-            generate_results=replacer.result.transformed_df,
-            pii_replacer_time=replacer.elapsed_time if replacer else None,
-            column_statistics=replacer.result.column_statistics,
-            train_df=df,  # Pass the original df as the reference for evaluation
-        )
-        evaluator.evaluate()
-
-    total_time_sec = time.monotonic() - total_start
-    evaluation_time_sec = evaluator.evaluation_time if evaluator else None
-
-    return make_nss_results(
-        total_time=total_time_sec,
-        evaluation_time=evaluation_time_sec,
-        training_time=None,
-        generation_time=None,
-        generate_results=replacer.result.transformed_df,
-        report=evaluator.report if evaluator else None,
-    )
-
-
 def _get_unsloth_backend_class() -> type[TrainingBackend]:
     """Lazily import and return the Unsloth training backend class.
 
@@ -188,8 +145,12 @@ class SafeSynthesizer(ConfigBuilder):
             )
         self._resolve_nss_config()
         # Initialize state for pipeline stages
-        self._train_df: pd.DataFrame | None = None
-        self._original_train_df: pd.DataFrame | None = None
+        self._train_df: pd.DataFrame | None = (
+            None  # The active training df that might go through transformation, eg. pii replacement
+        )
+        self._original_train_df: pd.DataFrame | None = (
+            None  # The original training df that we save for evaluation at the end
+        )
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
         self._pii_replacer_time: float | None = None
@@ -231,8 +192,7 @@ class SafeSynthesizer(ConfigBuilder):
         test_path = self._workdir.source_dataset.test
         if training_path.exists() and test_path.exists():
             logger.info("Loading cached train/test split from training run")
-            # training.csv persists the original training split for backward
-            # compatibility with older runs and stable evaluation semantics.
+            # training_path persists the original training split for evaluation.
             self._original_train_df = pd.read_csv(training_path)
             self._test_df = pd.read_csv(test_path)
         elif self._data_source is not None:
@@ -311,11 +271,11 @@ class SafeSynthesizer(ConfigBuilder):
         # Always persist the original training split -- this is the version
         # reloaded by load_from_save_path and used for evaluation metrics.
         self._workdir.ensure_directories()
-        # training.csv is the canonical persisted original training split.
+        # ``training.csv`` is the canonical persisted original training split.
         self._original_train_df.to_csv(self._workdir.dataset.training, index=False)
         if not self._train_df.equals(self._original_train_df):
             # The transformed (e.g. PII-replaced) training data is saved for
-            # inspection only -- it is not reloaded by load_from_save_path.
+            # inspection only -- we don't need it in the generation or evaluation phase.
             self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)

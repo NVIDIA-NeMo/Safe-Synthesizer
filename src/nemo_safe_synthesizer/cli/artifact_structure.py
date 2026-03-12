@@ -298,7 +298,7 @@ class Workdir:
           - training.csv
           - test.csv
           - validation.csv
-          - transformed_training.csv  (optional inspection artifact)
+          - transformed_training.csv  (inspection artifact, only written if input is transformed and different than training.csv)
 
     """
 
