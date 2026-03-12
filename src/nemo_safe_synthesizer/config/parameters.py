@@ -3,18 +3,10 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import (
-    Field,
-    field_validator,
-    model_validator,
-)
+from pydantic import Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
-from ..configurator.parameters import (
-    Parameters,
-)
+from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
 from .data import DataParameters
@@ -24,9 +16,7 @@ from .generate import GenerateParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
-from .types import (
-    AUTO_STR,
-)
+from .types import AUTO_STR
 
 __all__ = ["SafeSynthesizerParameters"]
 
@@ -52,8 +42,6 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=EvaluationParameters,
     )
 
-    enable_replace_pii: bool = Field(description="Enable replacing PII in the data.", default=True)
-
     training: TrainingHyperparams = Field(
         description="Hyperparameters for model training such as learning rate, batch size, and LoRA adapter settings.",
         default_factory=TrainingHyperparams,
@@ -76,7 +64,7 @@ class SafeSynthesizerParameters(Parameters):
 
     replace_pii: PiiReplacerConfig | None = Field(
         description="PII replacement configuration. When ``None``, PII replacement is skipped.",
-        default=None,
+        default_factory=PiiReplacerConfig.get_default_config,
     )
 
     @field_validator("privacy", mode="after", check_fields=False)
@@ -136,15 +124,6 @@ class SafeSynthesizerParameters(Parameters):
 
         return dp_params
 
-    @model_validator(mode="after")
-    def enforce_pii_config_consistency(self) -> Self:
-        """Ensure ``replace_pii`` is populated when PII is enabled and cleared when disabled."""
-        if self.enable_replace_pii and self.replace_pii is None:
-            self.replace_pii = PiiReplacerConfig.get_default_config()
-        elif not self.enable_replace_pii:
-            self.replace_pii = None
-        return self
-
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
@@ -176,16 +155,14 @@ class SafeSynthesizerParameters(Parameters):
         dp = DataParameters().model_copy(update=kwargs)
         tsp = TimeSeriesParameters().model_copy(update=kwargs)
 
-        enable_replace_pii = kwargs.pop("enable_replace_pii", True)
-        replace_pii_config = kwargs.get("replace_pii", None)
-
-        return cls(
-            training=thp,
-            generation=gp,
-            evaluation=ep,
-            privacy=pp,
-            data=dp,
-            time_series=tsp,
-            replace_pii=replace_pii_config,
-            enable_replace_pii=enable_replace_pii,
-        )
+        extra: dict = {
+            "training": thp,
+            "generation": gp,
+            "evaluation": ep,
+            "privacy": pp,
+            "data": dp,
+            "time_series": tsp,
+        }
+        if "replace_pii" in kwargs:
+            extra["replace_pii"] = kwargs["replace_pii"]
+        return cls(**extra)

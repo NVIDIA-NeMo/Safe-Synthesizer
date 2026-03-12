@@ -83,7 +83,7 @@ The same run, three ways -- 10,000 records with DP-SGD:
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--enable_replace_pii false` (CLI) or `.with_replace_pii(enable=False)` (SDK).
+The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
 
 ```mermaid
 flowchart LR
@@ -222,12 +222,7 @@ Train only -- saves the adapter without generating or evaluating.
 safe-synthesizer run train --config config.yaml --url data.csv
 ```
 
-Accepts the same common options as `run`. Does not accept synthesis parameter overrides (`--training__learning_rate`, `--generation__num_records`, etc.) -- those only work with `run` (end-to-end) or `run generate`.
-
-!!! note "Known inconsistency"
-    `run train` does not accept synthesis parameter overrides, but `run` and
-    `run generate` do. This inconsistency is a known limitation and will be
-    addressed in a future release.
+Accepts the same common options and synthesis parameter overrides as `run`.
 
 ### `run generate`
 
@@ -348,7 +343,7 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-Optional stage that runs before training. Detection works in two independent
+Enabled-by-default stage that runs before training. Detection works in two independent
 steps: GLiNER NER is used on columns detected as free text for named-entity
 patterns (names, emails, phone numbers, etc.) and replaces matches with
 synthetic placeholders. An optional second step uses an LLM to identify
@@ -356,20 +351,19 @@ columns that are exclusively a single entity type (e.g., a column that is
 always SSNs), marking those columns for wholesale replacement before training.
 The two steps are independent -- NER runs on free-text content, LLM
 classification targets structured sensitive columns. PII replacement is on by
-default in both the CLI and SDK (`enable_replace_pii: true`).
+default in both the CLI and SDK. PII on by default means no config flag is needed to enable it.
 
 !!! tip "Skip PII replacement"
     If your dataset does not contain PII, disable this stage to reduce pipeline
     runtime:
 
-    - CLI: `--enable_replace_pii false`
+    - CLI: `--no_replace_pii`
     - SDK: `.with_replace_pii(enable=False)`
 
 === "CLI"
 
     ```bash
     safe-synthesizer run \
-      --enable_replace_pii true \
       --url data.csv
     ```
 
@@ -411,7 +405,6 @@ default in both the CLI and SDK (`enable_replace_pii: true`).
 === "Config reference"
 
     ```yaml
-    enable_replace_pii: true
     replace_pii:
       globals:
         classify:

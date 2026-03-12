@@ -15,7 +15,7 @@ Base: `ConfigBuilder` in `config_builder.py` holds `_*_config` attributes (e.g. 
 
 Extension: `SafeSynthesizer` in `library_builder.py` extends `ConfigBuilder`, adds `Workdir`, and implements the executable pipeline (`process_data`, `train`, `generate`, `evaluate`).
 
-Important: `with_replace_pii(enable=False)` sets `_enable_replace_pii = False` and clears `_replace_pii_config`; PII is enabled by default (`_enable_replace_pii = True`). Use `Self` type hints for method chaining.
+Important: `with_replace_pii(enable=False)` sets `_replace_pii_config = None`; PII is enabled by default (`_replace_pii_config` seeded from `PiiReplacerConfig.get_default_config()`). Use `Self` type hints for method chaining.
 
 ## Dynamic backend selection
 

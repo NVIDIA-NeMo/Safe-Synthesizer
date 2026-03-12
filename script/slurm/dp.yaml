@@ -8,7 +8,6 @@ data:
   max_sequences_per_example: null
   order_training_examples_by: null
   random_state: 329896
-enable_replace_pii: true
 evaluation:
   aia_enabled: true
   enabled: true

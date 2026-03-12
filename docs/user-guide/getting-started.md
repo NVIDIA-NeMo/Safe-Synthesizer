@@ -91,12 +91,10 @@ Create a synthetic version of an input dataset in one step.
       learning_rate: 0.0005
     generation:
       num_records: 1000
-    enable_replace_pii: true
     ```
 
-    PII replacement is on by default (shown explicitly here). Set
-    `enable_replace_pii: false` to skip it, or see
-    [Configuration -- Replacing PII](configuration.md#replacing-pii)
+    PII replacement is on by default. Pass `--no_replace_pii` on the CLI to skip
+    it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
     to customize entity types.
 
 Then run:
@@ -151,7 +149,7 @@ and prepares it for training:
 
 ### 2. PII Replacement
 
-When `enable_replace_pii: true` (the default), the PII replacer detects
+PII replacement is on by default. The PII replacer detects
 personally identifiable information (PII) using GLiNER NER and optional LLM-based
 column classification, then replaces detected entities with synthetic but
 realistic values. This ensures the model never learns the most sensitive

@@ -245,7 +245,7 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        if self._nss_config.enable_replace_pii:
+        if self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_train_df)
             self._train_df = replacer.result.transformed_df

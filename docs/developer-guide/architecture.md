@@ -137,6 +137,112 @@ graph TB
 
 ---
 
+## Configuration System
+
+Two paths produce a `SafeSynthesizerParameters` object: the CLI path (via Click
+decorators and YAML merging) and the SDK path (via the builder pattern). Both
+converge on the same Pydantic model and handle nullable sub-configs
+(`replace_pii`, `privacy`) uniformly -- `None` means disabled.
+
+```mermaid
+flowchart TB
+    subgraph cli [CLI Entry Points]
+        run_cmd["nss run"]
+        train_cmd["nss run train"]
+        gen_cmd["nss run generate"]
+        val_cmd["nss config validate"]
+        mod_cmd["nss config modify"]
+        create_cmd["nss config create"]
+    end
+
+    subgraph decorators [Decorator Layer]
+        common["@common_run_options"]
+        pydantic["@pydantic_options SSP"]
+    end
+
+    subgraph collector ["pydantic_click_options.py"]
+        collect["_collect_params"]
+        leaf["LeafParam"]
+        flag["FlagParam"]
+        parse["parse_overrides"]
+    end
+
+    subgraph settings [CLI Settings]
+        clisettings["CLISettings.from_cli_kwargs"]
+        common_setup["common_setup"]
+    end
+
+    subgraph merge [Config Assembly]
+        merge_overrides["merge_overrides"]
+        model_validate["SSP.model_validate"]
+        from_yaml["SSP.from_yaml"]
+    end
+
+    subgraph sdk [SDK Entry Point]
+        builder["SafeSynthesizer / ConfigBuilder"]
+        with_methods["with_replace_pii / with_privacy / with_train / ..."]
+        resolve["_resolve_nss_config"]
+    end
+
+    subgraph config [SafeSynthesizerParameters]
+        data_p["DataParameters"]
+        training_p["TrainingHyperparams"]
+        gen_p["GenerateParameters"]
+        eval_p["EvaluationParameters"]
+        pii_p["PiiReplacerConfig | None"]
+        dp_p["DifferentialPrivacyHyperparams | None"]
+        ts_p["TimeSeriesParameters"]
+    end
+
+    subgraph runtime [Runtime Checks]
+        pii_check["replace_pii is not None"]
+        dp_check["privacy is not None"]
+    end
+
+    run_cmd & train_cmd & gen_cmd --> common
+    run_cmd & train_cmd & gen_cmd & val_cmd & mod_cmd & create_cmd --> pydantic
+
+    pydantic --> collect
+    collect --> leaf & flag
+
+    flag -->|"--no_replace_pii"| parse
+    flag -->|"--no_privacy"| parse
+    leaf -->|"--training__lr etc"| parse
+
+    parse -->|"overrides dict"| clisettings
+    clisettings --> common_setup
+    common_setup --> merge_overrides
+
+    val_cmd & mod_cmd & create_cmd -->|"direct"| merge_overrides
+
+    merge_overrides --> from_yaml
+    merge_overrides --> model_validate
+    model_validate --> config
+
+    builder --> with_methods
+    with_methods --> resolve
+    resolve -->|"SSP constructor"| config
+
+    config --> data_p & training_p & gen_p & eval_p & pii_p & dp_p & ts_p
+
+    pii_p --> pii_check
+    dp_p --> dp_check
+```
+
+Configuration precedence (highest to lowest):
+
+1. CLI flags / SDK `with_*()` overrides
+2. Dataset registry overrides
+3. YAML config file
+4. Pydantic model defaults (including `default_factory`)
+
+Nullable sub-configs (`PiiReplacerConfig | None`, `DifferentialPrivacyHyperparams | None`)
+use `None` as the sole disabled signal. The `@pydantic_options` decorator auto-generates
+`--no_<field>` is-flags for these fields; `parse_overrides` translates them into
+`{field: None}` in the overrides dict.
+
+---
+
 ## Execution Flow
 
 ```mermaid

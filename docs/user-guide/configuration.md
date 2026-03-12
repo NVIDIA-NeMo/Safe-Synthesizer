@@ -59,14 +59,6 @@ for more detail on combining config files with runtime overrides.
 
 ---
 
-## Top-Level Parameters
-
-| Field | Default | Description | Guidance |
-|-------|---------|-------------|----------|
-| `enable_replace_pii` | `true` | Run PII replacement before training. On by default in both CLI and SDK. | Disable with `--enable_replace_pii false` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII |
-
----
-
 ## Training
 
 NeMo Safe Synthesizer fine-tunes a pretrained language model on your tabular data
@@ -150,7 +142,8 @@ for details.
 ## Replacing PII
 
 PII replacement detects and replaces personally identifiable information in
-your dataset before synthesis. It is on by default (`enable_replace_pii: true`).
+your dataset before synthesis. It is on by default -- set `replace_pii: null`
+in YAML (or use `--no_replace_pii` on the CLI) to disable it.
 The `replace_pii` block is only needed when customizing entity types or
 classification via the SDK.
 
@@ -158,7 +151,6 @@ Key config parameters:
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `enable_replace_pii` | `true` | Master switch for PII replacement | Leave enabled unless your data contains no PII |
 | `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based column classification | Requires `NIM_ENDPOINT_URL`; set to `false` if no LLM endpoint is available |
 | `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 40+ types -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override with a smaller list to limit which column types are classified |
 | `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection | Lower to catch more entities (more false positives); raise to reduce false positives |
@@ -256,17 +248,13 @@ Check your config for errors and display the merged parameters:
 
 ```bash
 safe-synthesizer config validate --config config.yaml
+safe-synthesizer config validate --config config.yaml --training__learning_rate 0.001
 ```
 
 Fields set to `"auto"` remain as `"auto"` in the output -- auto-resolution
 happens at runtime during `process_data()`, not at validation time. To see
 resolved values, check `safe-synthesizer-config.json` in the run directory
 after a pipeline run.
-
-!!! note "Override parsing limitation"
-    `config validate` accepts synthesis parameter overrides (`--training__learning_rate`,
-    etc.) but due to a known parsing issue, overrides are not applied to the validated
-    output. Use `config modify` to test how overrides merge with a config file.
 
 ### `config modify`
 
@@ -317,13 +305,12 @@ safe-synthesizer run --config config.yaml --url data.csv \
 
 | YAML Key | SDK Method | API Reference |
 |----------|-----------|---------------|
-| `enable_replace_pii` | `.with_replace_pii(enable=False)` | [`SafeSynthesizerParameters`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters] |
 | `data` | `with_data()` | [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters] |
 | `training` | `with_train()` | [`TrainingHyperparams`][nemo_safe_synthesizer.config.training.TrainingHyperparams] |
 | `generation` | `with_generate()` | [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters] |
 | `evaluation` | `with_evaluate()` | [`EvaluationParameters`][nemo_safe_synthesizer.config.evaluate.EvaluationParameters] |
-| `replace_pii` | `with_replace_pii()` | [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] |
-| `privacy` | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
+| `replace_pii` (`null` to disable) | `with_replace_pii()` / `with_replace_pii(enable=False)` | [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] |
+| `privacy` (`null` to disable) | `with_differential_privacy()` | [`DifferentialPrivacyHyperparams`][nemo_safe_synthesizer.config.differential_privacy.DifferentialPrivacyHyperparams] |
 | `time_series` | `with_time_series()` | [`TimeSeriesParameters`][nemo_safe_synthesizer.config.time_series.TimeSeriesParameters] |
 
 ---

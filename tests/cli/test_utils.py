@@ -27,7 +27,7 @@ datasets:
       training:
         batch_size: 16
         learning_rate: 0.01
-      enable_replace_pii: false
+      replace_pii: null
 """)
     return registry_path
 
@@ -253,7 +253,7 @@ generation:
         # training:
         #   batch_size: 16
         #   learning_rate: 0.01
-        # enable_replace_pii: false
+        # replace_pii: null
 
         # CLI overrides in synthesis_overrides
         settings = CLISettings.from_cli_kwargs(
@@ -276,7 +276,7 @@ generation:
         assert config.training.num_input_records_to_sample == 150
         assert config.generation.use_structured_generation
         # Only given in registry
-        assert not config.enable_replace_pii
+        assert config.replace_pii is None
         # Only given in CLI
         assert config.generation.num_records == 496
         # Present in config file and registry, registry takes precedence

@@ -59,7 +59,6 @@ data:
   max_sequences_per_example: 2
   order_training_examples_by: null
   random_state: 872602
-enable_replace_pii: false
 evaluation:
   aia_enabled: true
   enabled: true

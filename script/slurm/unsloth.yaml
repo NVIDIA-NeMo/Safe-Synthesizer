@@ -7,7 +7,6 @@ data:
   max_holdout: 2000
   max_sequences_per_example: null
   order_training_examples_by: null
-enable_replace_pii: true
 evaluation:
   aia_enabled: true
   enabled: true

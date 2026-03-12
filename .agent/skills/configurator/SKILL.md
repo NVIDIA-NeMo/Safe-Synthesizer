@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 name: configurator
-description: "Pydantic models and the Pydantic-to-Click configurator for config, CLI, and SDK validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam, Pydantic, BaseModel, NSSBaseModel, BaseSettings, field_validator, model_validator, ConfigDict, TypeAdapter, pydantic-settings, validation."
+description: "Pydantic models and the Pydantic-to-Click configurator for config, CLI, and SDK validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, LeafParam, FlagParam, _collect_params, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam, Pydantic, BaseModel, NSSBaseModel, BaseSettings, field_validator, model_validator, ConfigDict, TypeAdapter, pydantic-settings, validation."
 ---
 
 # Configurator and Pydantic Patterns
@@ -12,14 +12,20 @@ Pydantic v2 is the backbone of config, settings, CLI, and SDK validation. This r
 ## How It Works
 
 ```
-Pydantic model fields  -->  pydantic_options() decorator  -->  Click CLI options
-     (nested)                    (flattens)                   (--data__holdout)
+Pydantic model fields  -->  _collect_params()  -->  LeafParam / FlagParam  -->  Click CLI options
+     (nested)                 (flattens)             (typed params)            (--data__holdout, --no_replace_pii)
 ```
 
-1. `pydantic_options(model_class, field_separator="__")` walks the Pydantic model tree recursively
-2. Each leaf field becomes a `click.option()` with name `--{prefix}{sep}{field_name}`
-3. At runtime, `parse_overrides(kwargs, field_sep="__")` converts flat Click kwargs back into a nested dict
-4. The nested dict is used with `model_copy(update=overrides)` or `model_validate()`
+1. `pydantic_options(model_class, field_separator="__")` walks the Pydantic model tree via `_collect_params()`
+2. Each leaf field becomes a `LeafParam` -> `click.option("--{prefix}{sep}{field_name}")`
+3. Each nullable sub-model field (`SomeModel | None`) becomes a `FlagParam` -> `click.option("--no_{field}", is_flag=True)`
+4. The decorator loop uses `match/case` on `LeafParam` vs `FlagParam` to emit the correct Click option
+5. At runtime, `parse_overrides(kwargs, field_sep="__")` converts flat Click kwargs back into a nested dict, translating `no_<field>=True` into `{field: None}`
+6. The nested dict is used with `model_copy(update=overrides)` or `model_validate()`
+
+### Nullable sub-config pattern
+
+Fields typed as `SomeModel | None` (e.g., `replace_pii: PiiReplacerConfig | None`, `privacy: DifferentialPrivacyHyperparams | None`) use `None` as the sole disabled signal -- no separate boolean. The collector auto-generates `--no_<field>` is-flags for these. This is the canonical pattern for feature toggles on sub-configs.
 
 ## Base Models
 
@@ -235,4 +241,4 @@ result = ta.validate_python(raw_data)
 7. Use `model_validator(mode="after")` for cross-field validation
 8. Use `DependsOnValidator` for fields that are only valid when another field is set
 9. Field separator is `"__"` (`CLI_NESTED_FIELD_SEPARATOR`) -- don't use `.` unless matching existing code
-10. Max nesting depth is 2 -- `parse_overrides` raises `ValueError` for 3+ levels
+10. `parse_overrides` supports arbitrary nesting depth (e.g. `replace_pii__globals__ner__ner_threshold`)

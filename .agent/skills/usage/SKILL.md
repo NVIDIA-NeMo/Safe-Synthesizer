@@ -40,8 +40,7 @@ CLI options map to config fields with `__` as the nested separator:
 ```bash
 safe-synthesizer run --config config.yaml --url data.csv \
     --data__holdout=0.1 \
-    --training__learning_rate=0.0001 \
-    --enable_synthesis=true
+    --training__learning_rate=0.0001
 ```
 
 ## SDK (Programmatic)
@@ -77,7 +76,7 @@ synthesizer.evaluate()
 
 Sources (highest precedence first): CLI overrides > dataset registry overrides > YAML config file.
 
-Config sections: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`, `enable_replace_pii`.
+Config sections: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`.
 
 Environment variables:
 
