@@ -119,10 +119,18 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Tests Workflow
 
-The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot):
+The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
 
 - GPU E2E Tests: Runs end-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 60-minute job timeout and 45-minute step timeout
 - GPU CI Status: Aggregation job -- single required check for branch protection
+
+The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so the E2E job always runs on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
+
+To trigger manually:
+
+```bash
+gh workflow run gpu-tests.yml --ref <branch-name>
+```
 
 ### Runners
 

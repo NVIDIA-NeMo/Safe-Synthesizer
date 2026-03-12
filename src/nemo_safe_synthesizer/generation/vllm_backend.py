@@ -178,12 +178,22 @@ class VllmBackend(GeneratorBackend):
             backend=self.config.generation.structured_generation_backend,
             disable_fallback=True,
         )
+        # Unsloth patches model attention forward functions with torch.compiler.disable().
+        # vLLM compiles TransformersForCausalLM with fullgraph=True via @support_torch_compile.
+        # PyTorch >= 2.9.1 changed fullgraph=True to raise immediately on torch.compiler.disable()
+        # rather than silently breaking the graph (pytorch#8e83e24). This combination produces:
+        #   torch._dynamo.exc.Unsupported: Skip inlining `torch.compiler.disable()`d function
+        # Passing enforce_eager=True skips vLLM's torch.compile pipeline entirely for these runs.
+        # check this when updating unsloth in the future.
+        enforce_eager = self.config.training.use_unsloth is True
+
         self.llm = vLLM(
             model=self.config.training.pretrained_model,
             gpu_memory_utilization=max_vram,
             enable_lora=True,
             max_lora_rank=self.config.training.lora_r,
             structured_outputs_config=structured_outputs_config,
+            enforce_eager=enforce_eager,
         )
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
