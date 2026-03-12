@@ -153,7 +153,7 @@ nav:
   - Home: index.md
   - Product Overview:
       - Pipeline: product-overview/pipeline.md
-      - Data Synthesis: product-overview/data-synthesis.md
+      - Data Synthesis: product-overview/data_synthesis.md
       - PII Replacement: product-overview/pii_replacement.md
       - Evaluation: product-overview/evaluation.md
   - Tutorials:

@@ -109,7 +109,7 @@ We have extensively tested the following models for synthetic data use in NSS, a
 |--------|----------------|
 | SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
-| Mistral | `mistralai/Mistral-7B-Instruct-v0.1` |
+| Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 
 Within each family, any size variant on HuggingFace Hub should work.
 Benchmarking data for additional model families will be added as they are
