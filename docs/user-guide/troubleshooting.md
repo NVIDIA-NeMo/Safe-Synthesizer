@@ -1,12 +1,14 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Troubleshooting
+# Program Runtime
 
 Runtime errors, OOM issues, and configuration problems for NeMo Safe
 Synthesizer. Sections are organized by pipeline phase. For output quality
-and evaluation metrics, see [Data Quality](data-quality.md). For environment variables, model caching, offline setup, NIM endpoint
+and evaluation metrics, see [Synthetic Data Quality](evaluating-data.md). For environment variables, model caching, offline setup, NIM endpoint
 configuration, and NER parallelism, see [Environment Variables](environment.md).
+
+---
 
 ## Quick Reference
 
@@ -18,17 +20,17 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
 | OOM in evaluation | Large dataset + PCA | [Reduce columns or disable eval](#out-of-memory-during-evaluation) |
 | "Cannot use unsloth without GPU" | No CUDA device | [Switch to HuggingFace backend](#no-gpu-detected) |
-| "max_sequences_per_example must be 1" | Incompatible DP config | [Set `data.max_sequences_per_example: 1`](data-quality.md#requirements) |
-| "Unsloth not compatible with DP" | Mutual exclusion | [Set `training.use_unsloth: false`](data-quality.md#requirements) |
-| "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](data-quality.md#common-dp-errors) |
+| "max_sequences_per_example must be 1" | Incompatible DP config | [Configuration Reference -- Differential Privacy](configuration.md#differential-privacy) |
+| "Unsloth not compatible with DP" | Mutual exclusion | [Configuration Reference -- Differential Privacy](configuration.md#differential-privacy) |
+| "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](evaluating-data.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
 | "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
-| Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](data-quality.md#minimum-data-requirements) |
-| Low SQS scores | Underfit or too few records | [Review distributions](data-quality.md#low-sqs-scores) |
-| PII uses default entities | Classifier failed | [Set entities explicitly](data-quality.md#pii-uses-unexpected-entity-types) |
+| Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
+| Low SQS scores | Underfit or too few records | [Review distributions](evaluating-data.md#low-sqs-scores) |
+| PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
-| "groups must have same start" | Inconsistent groups | Align group timestamps |
+| "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
 
 ---
 
@@ -97,7 +99,6 @@ To diagnose:
     pip install "nemo-safe-synthesizer[cu128,engine]"
     ```
 
-The Unsloth backend requires a GPU and raises immediately if none is found.
 Switch to the HuggingFace backend for CPU-only environments (useful for
 development, not recommended for production training).
 
@@ -139,7 +140,7 @@ because the table has too many columns for the model's context window.
    in context together, making the limit tighter. Consider reducing
    `data.max_sequences_per_example` or simplifying the grouped records.
 
-!!! note
+!!! note "Error type clarification"
     These errors are typed as `GenerationError` in the codebase even though
     they fire during data assembly, not during generation proper. They appear
     in the pipeline before any training or generation occurs.
@@ -214,7 +215,7 @@ If evaluation OOMs, reduce the evaluation scope or dataset size:
 
 !!! tip "Evaluation and Data Quality"
     SQS scores, UNAVAILABLE metrics, report limits, and low-quality
-    diagnostics are covered in [Data Quality > Evaluation](data-quality.md#evaluation).
+    diagnostics are covered in [Synthetic Data Quality](evaluating-data.md#evaluation).
 
 ---
 
@@ -238,7 +239,7 @@ Several defaults may not match your expectations:
 
 Many parameters accept `"auto"` and are resolved at runtime by the
 [`AutoConfigResolver`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver].
-See the [Parameters Reference](parameters.md) for the full list.
+See [Configuration Reference](configuration.md) for the full list.
 
 - `training.rope_scaling_factor` -- auto-estimated from dataset token counts;
   see [Context Length and Record Fitting](#context-length-and-record-fitting)
@@ -250,7 +251,7 @@ See the [Parameters Reference](parameters.md) for the full list.
   custom layers and checkpointing are incompatible
 - `privacy.delta` -- computed from record count
 
-!!! warning
+!!! warning "Unsloth and Mistral compatibility"
     If you encounter issues when using Unsloth with Mistral models, set
     `training.use_unsloth: false` explicitly. There is no automatic
     detection for this incompatibility.
@@ -261,12 +262,9 @@ your configuration. Note that some `"auto"` fields (such as
 require a dataset to resolve -- they will remain `"auto"` in the validate
 output and only resolve during an actual run:
 
-=== "CLI"
-
-    ```bash
-    safe-synthesizer config validate --config config.yaml
-    ```
-We might change this behavior in the future to resolve _all_ the `"auto"` parameters.
+```bash
+safe-synthesizer config validate --config config.yaml
+```
 
 ### Common Validation Errors
 
@@ -278,7 +276,7 @@ We might change this behavior in the future to resolve _all_ the `"auto"` parame
 
 Unsupported file extensions:
 
-: The `url` parameter accepts `.csv`, `.json`, `.jsonl`, and `.parquet`
+: The `url` parameter accepts `.csv`, `.json`, `.jsonl`, `.parquet`, and `.txt`
   files. Other formats raise a `ValueError`.
 
 Incompatible DP settings:
@@ -290,7 +288,7 @@ Incompatible DP settings:
 
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in
-    [Data Quality > Differential Privacy](data-quality.md#differential-privacy).
+    [Synthetic Data Quality](evaluating-data.md#differential-privacy).
 
 ---
 
@@ -303,7 +301,7 @@ Model downloads and processing timeouts for PII detection.
 The PII replacer downloads the GLiNER NER model on first use. If the download
 fails, it raises an exception immediately.
 
-Fix: pre-download the model by running PII replacement once in an environment
+Pre-download the model by running PII replacement once in an environment
 with internet access, or set `LOCAL_FILES_ONLY=true` after the model is cached.
 
 ### NER Processing Timeouts
@@ -311,10 +309,43 @@ with internet access, or set `LOCAL_FILES_ONLY=true` after the model is cached.
 NER uses an internal `max_runtime_seconds` timeout. If processing a chunk takes
 too long, it is dropped with a warning in the logs.
 
-Fix: check the logs for timeout warnings. The timeout is not currently
+Check the logs for timeout warnings. The timeout is not currently
 configurable; for large datasets, reduce the amount of text processed per
 chunk (for example, shorten text fields or split them into smaller pieces) and
 optionally reduce CPU parallelism so each worker has more resources.
+
+---
+
+## WandB
+
+### Authentication Failures
+
+WandB requires an API key when running in `online` mode. If the key is missing
+or invalid, training will fail when the WandB run is initialized.
+
+```text
+wandb: ERROR api_key not configured (no-auth)
+```
+
+Set the API key before running:
+
+```bash
+export WANDB_API_KEY="your-api-key"  # pragma: allowlist secret
+```
+
+Or switch to offline mode to avoid network access entirely:
+
+```bash
+safe-synthesizer run --wandb-mode disabled --config config.yaml --url data.csv
+```
+
+See [Running Safe Synthesizer -- WandB Integration](running.md#wandb-integration) for the full WandB setup.
+
+### Resume Errors
+
+If a WandB run fails to resume (e.g., the run ID no longer exists on the WandB server),
+pass `--wandb-resume-job-id` with a valid run ID from the same WandB project, or
+remove the argument to start a fresh WandB run.
 
 ---
 
@@ -325,50 +356,7 @@ optionally reduce CPU parallelism so each worker has more resources.
     change between releases.
 
 Time series synthesis has additional validation and generation requirements.
-
-### Configuration Requirements
-
-=== "YAML"
-
-    ```yaml
-    time_series:
-      is_timeseries: true
-      timestamp_column: "timestamp"
-      timestamp_interval_seconds: 60
-      timestamp_format: "%Y-%m-%d %H:%M:%S"
-    ```
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run \
-      --time_series__is_timeseries true \
-      --time_series__timestamp_column timestamp \
-      --time_series__timestamp_interval_seconds 60 \
-      --url data.csv
-    ```
-
-=== "SDK"
-
-    ```python
-    synthesizer = (
-        SafeSynthesizer(config)
-        .with_data_source("data.csv")
-        .with_time_series(
-            is_timeseries=True,
-            timestamp_column="timestamp",
-            timestamp_interval_seconds=60,
-            timestamp_format="%Y-%m-%d %H:%M:%S",
-        )
-    )
-    ```
-
-- Set `time_series.is_timeseries: true` and provide at least one of
-  `timestamp_column` or `timestamp_interval_seconds`
-- `timestamp_format` must be a valid strftime string or `"elapsed_seconds"` --
-  invalid formats are caught at config validation time
-- All groups must share the same start and stop timestamps, or preprocessing
-  raises a `DataError`
+For configuration examples, see [Configuration -- Time Series](configuration.md#time-series).
 
 ### Common Issues
 
@@ -400,12 +388,37 @@ Out-of-order records:
 : During generation, records are validated for chronological order. Records
   that arrive out of order are marked invalid.
 
+#### Groups must have same start
+
+All groups in the dataset must begin at the same timestamp when
+`time_series.start_timestamp` is `null` (inferred from data). If group
+start timestamps differ, the pipeline raises a `DataError`. Either align
+all group start timestamps in your data, or set
+`time_series.start_timestamp` to an explicit value that applies to all
+groups.
+
 ---
 
 ## Error Classes
 
 Safe Synthesizer uses a structured error hierarchy. Understanding which error
-class you received helps narrow down the cause.
+class you received helps narrow down the cause and write targeted `except` clauses.
+
+Inheritance:
+
+```text
+SafeSynthesizerError
+├── InternalError (also RuntimeError)
+└── UserError
+    ├── DataError (also ValueError)
+    ├── ParameterError (also ValueError)
+    └── GenerationError (also RuntimeError)
+```
+
+SDK callers can catch [`UserError`][nemo_safe_synthesizer.errors.UserError] to handle all user-facing errors, or
+[`SafeSynthesizerError`][nemo_safe_synthesizer.errors.SafeSynthesizerError] to also catch internal errors. Catching the built-in
+base (`ValueError`, `RuntimeError`) also works since each class inherits from
+both.
 
 ### DataError
 
@@ -425,7 +438,7 @@ not `DataError` -- see [Context Length and Record Fitting](#context-length-and-r
 ### ParameterError
 
 Invalid configuration -- missing columns referenced in config, incompatible
-option combinations, or missing required parameters. The stacktrace should hopefully be informative.
+option combinations, or missing required parameters. The stacktrace will indicate which parameter is invalid.
 
 Checklist:
 
@@ -434,8 +447,20 @@ Checklist:
    `order_training_examples_by` exist in your data
 3. For DP, ensure all required privacy parameters are set
 
+### GenerationError
+
+Errors during generation or data assembly. Two common cases:
+
+- Sampling failures (no valid records, patience exceeded) -- see [GenerationError](#generationerror) in the Generation section
+- Context-length errors during data assembly (records too long for the model) -- see [Context Length and Record Fitting](#context-length-and-record-fitting)
+
 ### InternalError
 
 Library bugs. If you encounter this error through documented interfaces,
 please [file an issue on GitHub](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues).
 
+---
+
+- [Running Safe Synthesizer](running.md) -- pipeline execution and CLI commands
+- [Configuration Reference](configuration.md) -- parameter tables
+- [Synthetic Data Quality](evaluating-data.md) -- quality and privacy score diagnostics

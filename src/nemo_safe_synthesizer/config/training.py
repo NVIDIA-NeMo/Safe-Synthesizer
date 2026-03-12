@@ -23,6 +23,7 @@ from .base import LRScheduler
 from .types import (
     AUTO_STR,
     AutoBoolParam,
+    AutoFloatParam,
     AutoIntParam,
     OptionalAutoInt,
 )
@@ -113,13 +114,16 @@ class TrainingHyperparams(Parameters):
     ] = LRScheduler.COSINE.value
 
     learning_rate: Annotated[
-        float,
-        ValueValidator(value_func=lambda v: 0 < v < 1),
+        AutoFloatParam,
+        ValueValidator(lambda p: range_validator(p, lambda v: 0 < v < 1)),
         Field(
             title="learning_rate",
-            description="The initial learning rate for the ``AdamW`` optimizer. Must be in (0, 1).",
+            description=(
+                "The initial learning rate for `AdamW` optimizer. Must be in (0, 1). "
+                "Setting to 'auto' uses a model-specific default if one exists."
+            ),
         ),
-    ] = 0.0005
+    ] = AUTO_STR
 
     lora_r: Annotated[
         int,
@@ -203,9 +207,9 @@ class TrainingHyperparams(Parameters):
         str,
         Field(
             title="pretrained_model",
-            description="Pretrained model to use for fine-tuning. Defaults to TinyLlama.",
+            description="Pretrained model to use for fine-tuning. Defaults to SmolLM3.",
         ),
-    ] = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    ] = "HuggingFaceTB/SmolLM3-3B"
 
     quantize_model: Annotated[
         bool,
@@ -253,7 +257,7 @@ class TrainingHyperparams(Parameters):
             description=(
                 "The attention implementation to use for model loading. "
                 "Default uses Flash Attention 3 via the HuggingFace Kernels Hub "
-                "(requires the 'kernels' pip package; falls back to 'sdpa' if unavailable). "
+                "(requires the 'kernels' pip package; falls back to 'sdpa' if the 'kernels' package is not installed). "
                 "Other common values: 'flash_attention_2' (requires flash-attn pip package), "
                 "'sdpa' (PyTorch scaled dot product attention), 'eager' (standard PyTorch). "
                 "Custom HuggingFace Kernels Hub paths (e.g. 'kernels-community/flash-attn2') "

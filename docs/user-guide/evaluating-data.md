@@ -1,12 +1,15 @@
 <!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Data Quality and Evaluation
+# Synthetic Data Quality
 
-Landing page for understanding and diagnosing output quality -- synthetic data
-scores, evaluation metrics, privacy settings, and PII behavior. For runtime
-errors, OOM issues, and configuration problems, see
-[Troubleshooting](troubleshooting.md). For environment variables and model
+Reference for diagnosing and improving synthetic data quality and privacy. Covers differential
+privacy errors, PII replacement issues, evaluation metric behavior, and score
+interpretation for operational use. For conceptual explanations of what SQS and
+DPS measure and how to read the HTML report, see
+[Product Overview -- Evaluation](../product-overview/evaluation.md).
+For runtime errors, OOM issues, and configuration problems, see
+[Program Runtime](troubleshooting.md). For environment variables and model
 caching, see [Environment Variables](environment.md).
 
 ---
@@ -18,13 +21,13 @@ not immediately point to the root cause.
 
 ### Requirements
 
-- DP and Unsloth are mutually exclusive. If `privacy.dp_enabled` is `true`,
-  `use_unsloth` must be `false` or `"auto"` (which resolves to `false`).
-- `data.max_sequences_per_example` must be `1` when DP is enabled.
-  Set it to `"auto"` and it will resolve correctly.
-- `data_fraction` and `true_dataset_size` must be available at runtime --
-  these are normally set automatically when running the full pipeline.
-- Gradient checkpointing is disabled when using DP (incompatible with Opacus).
+For the full list of DP compatibility constraints (`use_unsloth`,
+`max_sequences_per_example`, gradient checkpointing), see
+[Configuration -- Differential Privacy](configuration.md#differential-privacy).
+
+!!! note
+    `data_fraction` and `true_dataset_size` must be available at runtime --
+    these are set automatically when running the full pipeline.
 
 ### Common DP Errors
 
@@ -67,7 +70,7 @@ If PII replacement is not detecting the entity types you expect, the column
 classifier may have failed silently. When the classifier fails to initialize
 or classify, it falls back to default entity types.
 
-Look for log lines like:
+Look for the following log lines if PII replacement seems to use unexpected entity types:
 
 ```text
 Could not initialize column classifier, falling back to default entities.
@@ -79,12 +82,10 @@ or
 Could not perform classify, falling back to default entities.
 ```
 
-if PII replacement seems to use unexpected entity types.
-
 Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
 is reachable. PII classify config is deeply nested -- use YAML or SDK:
 
-=== "YAML"
+=== "Config reference"
 
     ```yaml
     replace_pii:
@@ -132,23 +133,32 @@ Several evaluation metrics have minimum data requirements:
 
 `UNAVAILABLE` is the literal string that appears in the evaluation report when
 a metric could not be computed. Many evaluation components catch errors and
-return this grade instead of failing the pipeline. If your evaluation report
-shows missing or `UNAVAILABLE` metrics:
+return this grade instead of failing the pipeline.
 
-1. Check the logs for warnings and exceptions
-2. Verify you have enough records (>= 200) and columns (>= 3)
-3. Verify the SentenceTransformer model downloaded successfully -- check your
-   Hugging Face cache (`$HF_HOME`, default `~/.cache/huggingface`) for the
-   model directory, or run once with internet access before switching to offline
-   mode
+Common reasons a metric shows `UNAVAILABLE`:
+
+- Column type mismatch -- [`ColumnDistribution`][nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution], [`DeepStructure`][nemo_safe_synthesizer.evaluation.components.deep_structure.DeepStructure] (PCA), and
+  [`Correlation`][nemo_safe_synthesizer.evaluation.components.correlation.Correlation] apply only to numeric and categorical columns; [`TextSemanticSimilarity`][nemo_safe_synthesizer.evaluation.components.text_semantic_similarity.TextSemanticSimilarity]
+  and [`TextStructureSimilarity`][nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity] apply only to text columns. A dataset with no
+  text columns will show `UNAVAILABLE` for text metrics, and vice versa. This is
+  by design.
+- No holdout split -- [`TextSemanticSimilarity`][nemo_safe_synthesizer.evaluation.components.text_semantic_similarity.TextSemanticSimilarity] and [`MembershipInferenceProtection`][nemo_safe_synthesizer.evaluation.components.membership_inference_protection.MembershipInferenceProtection]
+  both require a held-out test set. If `data.holdout` is `0` (no holdout), these
+  metrics are skipped and marked `UNAVAILABLE`.
+- Too few records or columns -- see the minimums table above.
+- Model download failure -- the SentenceTransformer model must be present in
+  your Hugging Face cache (`$HF_HOME`, default `~/.cache/huggingface`). Run
+  once with internet access before switching to offline mode.
+
+If the reason is not obvious, check the logs for warnings and exceptions logged
+during the evaluation stage.
 
 ### Report Truncation
 
 SQS reports are limited to `sqs_report_columns=250` columns and
 `sqs_report_rows=5000` rows by default. Larger datasets are silently
 truncated in the HTML report. Adjust these in `evaluation` config if needed.
-See the [Parameters Reference](parameters.md) for the full list of `evaluation`
-fields.
+See [Configuration -- Evaluation](configuration.md#evaluation) for the full list of `evaluation` fields.
 
 ### Low SQS Scores
 
@@ -162,36 +172,12 @@ If the SQS (Synthetic Quality Score) report shows low quality scores:
    data the model sees during training (analogous to training duration) and
    affects generation quality. Increasing it is usually the first thing to try,
    but note that very small input datasets can lead to over-training, so
-   explore both directions if quality remains poor
+   try both increasing and decreasing it if quality remains poor
 
 ---
 
 ## Interpreting Results
 
-Guides for reading the evaluation report and understanding metric scores.
-
-### HTML Report
-
-!!! info "Coming soon"
-    How to read the evaluation HTML report: column-level comparisons,
-    distribution charts, and summary statistics.
-
-### SQS Score Ranges
-
-!!! info "Coming soon"
-    What SQS score ranges indicate -- what constitutes a good, acceptable, or
-    poor score for different data types and use cases.
-
-### Privacy Metrics
-
-!!! info "Coming soon"
-    How to interpret the privacy evaluation metrics: epsilon guarantees,
-    attribute inference attack (AIA) scores, and membership inference
-    protection results.
-
-### Column-Level Diagnostics
-
-!!! info "Coming soon"
-    How to diagnose quality issues at the column level: divergence scores,
-    missing value patterns, and distribution mismatches between real and
-    synthetic data.
+For a conceptual overview of evaluation metrics -- what SQS and DPS measure,
+how to read the HTML report, and what score ranges indicate -- see
+[Product Overview -- Evaluation](../product-overview/evaluation.md).

@@ -62,19 +62,18 @@ def test_example_with_special_tokens_in_prompt(
     fixture_llm_metadata.prompt_config.add_bos_token_to_prompt = True
     fixture_llm_metadata.prompt_config.add_eos_token_to_prompt = True
     example = Example(prompt=STUB_PROMPT, tokenizer=fixture_tokenizer, metadata=fixture_llm_metadata)
-
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=True)
     assert example.num_tokens == 8
-    assert example.input_ids == [1, 4321, 9508, 2, 1, 66, 67, 2]
+    assert example.input_ids == [128011, 2323, 10137, 128012, 128011, 66, 67, 128012]
     assert example.attention_mask == [1] * 8
-    assert example.labels == [-100, -100, -100, -100, 1, 66, 67, 2]
+    assert example.labels == [-100, -100, -100, -100, 128011, 66, 67, 128012]
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=False)
     assert example.num_sequences == 2
     assert example.num_tokens == 10
-    assert example.input_ids == [1, 4321, 9508, 2, 1, 66, 67, 2, 66, 67]
+    assert example.input_ids == [128011, 2323, 10137, 128012, 128011, 66, 67, 128012, 66, 67]
     assert example.attention_mask == [1] * 10
-    assert example.labels == [-100, -100, -100, -100, 1, 66, 67, 2, 66, 67]
+    assert example.labels == [-100, -100, -100, -100, 128011, 66, 67, 128012, 66, 67]
     assert set(example.to_dict().keys()) == {"input_ids", "attention_mask", "labels"}
 
 
@@ -87,15 +86,15 @@ def test_example_without_special_tokens_in_prompt(
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=True)
     assert example.num_tokens == 6
-    assert example.input_ids == [4321, 9508, 1, 66, 67, 2]
+    assert example.input_ids == [2323, 10137, 128011, 66, 67, 128012]
     assert example.attention_mask == [1] * 6
-    assert example.labels == [-100, -100, 1, 66, 67, 2]
+    assert example.labels == [-100, -100, 128011, 66, 67, 128012]
 
     example.add_sequence(STUB_SEQUENCE, add_special_tokens=False)
     assert example.num_tokens == 8
-    assert example.input_ids == [4321, 9508, 1, 66, 67, 2, 66, 67]
+    assert example.input_ids == [2323, 10137, 128011, 66, 67, 128012, 66, 67]
     assert example.attention_mask == [1] * 8
-    assert example.labels == [-100, -100, 1, 66, 67, 2, 66, 67]
+    assert example.labels == [-100, -100, 128011, 66, 67, 128012, 66, 67]
 
 
 def test_add_sequence_raising_exception(fixture_llm_metadata: ModelMetadata, fixture_tokenizer: PreTrainedTokenizer):
@@ -150,7 +149,7 @@ def test_tabular_data_assembler(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples()
-    assert examples.train.num_rows == 4
+    assert examples.train.num_rows == 1
     assert examples.test is None
 
 
@@ -175,10 +174,8 @@ def test_tabular_data_assembler_shorter_context_with_test_split(
     assert assembler.num_records_validation == 30
 
     examples = assembler.assemble_training_examples()
-    assert (
-        examples.test.num_rows == 4
-    )  # changed from 30 to 4 because we are filling context with records for the test set as well
-    assert examples.train.num_rows == 14
+    assert examples.test.num_rows == 3  # depends on tokenizer/model: we fill context with records for the test set
+    assert examples.train.num_rows == 11
 
 
 def test_tabular_data_assembler_dp(
@@ -208,6 +205,8 @@ def test_assembler_schema_tokenization_exception(
     fixture_session_cache_dir,
     fixture_assembler_config: SafeSynthesizerParameters,
 ):
+    # Use a small context size so this test exercises the max-token limit (default is 12k for non-tinyllama).
+    fixture_llm_metadata.base_max_seq_length = 2048
     with pytest.raises(
         GenerationError,
         match="The dataset schema requires more tokens than the max length of the model.",
@@ -292,9 +291,9 @@ def test_grouped_data_assembler(
     examples = assembler.assemble_training_examples()
     assert examples.train.num_rows == 7
     assert examples.test is None
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 22.9135
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 264.88
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1949.2857
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1628.1429
     assert round(examples.stats["records_per_example"].mean, 4) == 82.5714
     assert round(examples.stats["groups_per_example"].mean, 4) == 7.1429
 
@@ -343,13 +342,13 @@ def test_grouped_data_assembler_training_examples_low_decimal(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples(data_fraction=1.01)
-    assert examples.train.num_rows == 4
+    assert examples.train.num_rows == 3
     assert examples.test is None
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 27.755
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 462.5833
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1571.0
-    assert round(examples.stats["records_per_example"].mean, 4) == 55.0
-    assert round(examples.stats["groups_per_example"].mean, 4) == 3.25
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 18.88
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 314.6667
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1431.3333
+    assert round(examples.stats["records_per_example"].mean, 4) == 73.3333
+    assert round(examples.stats["groups_per_example"].mean, 4) == 4.3333
 
 
 def test_grouped_data_assembler_training_examples_high_decimal(
@@ -396,13 +395,13 @@ def test_grouped_data_assembler_training_examples_high_decimal(
     assert assembler.num_records_validation == 0
 
     examples = assembler.assemble_training_examples(data_fraction=2.999)
-    assert examples.train.num_rows == 10
+    assert examples.train.num_rows == 7
     assert examples.test is None
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 27.755
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 462.5833
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 1714.5
-    assert round(examples.stats["records_per_example"].mean, 4) == 60.0
-    assert round(examples.stats["groups_per_example"].mean, 4) == 3.6
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 18.88
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 314.6667
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 1667.5714
+    assert round(examples.stats["records_per_example"].mean, 4) == 85.7143
+    assert round(examples.stats["groups_per_example"].mean, 4) == 5.1429
 
 
 def test_grouped_data_assembler_shorter_context_with_test_split(
@@ -459,13 +458,13 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
 
     examples = assembler.assemble_training_examples()
 
-    assert examples.train.num_rows == 39
-    assert examples.test.num_rows == 10
-    assert round(examples.stats["tokens_per_record"].mean, 4) == 22.9135
-    assert round(examples.stats["tokens_per_group"].mean, 4) == 264.88
-    assert round(examples.stats["tokens_per_example"].mean, 4) == 316.8462
-    assert round(examples.stats["records_per_example"].mean, 4) == 11.8718
-    assert round(examples.stats["groups_per_example"].mean, 4) == 1.0256
+    assert examples.train.num_rows == 37
+    assert examples.test.num_rows == 9
+    assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
+    assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
+    assert round(examples.stats["tokens_per_example"].mean, 4) == 284.9189
+    assert round(examples.stats["records_per_example"].mean, 4) == 12.5135
+    assert round(examples.stats["groups_per_example"].mean, 4) == 1.0811
 
 
 def test_grouped_data_assembler_dp(
@@ -533,7 +532,10 @@ def test_grouped_data_assembler_context_width_exception(
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
-        base_max_seq_length=1024,  # as opposed to the actual 2048 because we are using a dataset with shorter sequences
+        # Use a small context so at least one group exceeds it during example generation.
+        # Must be large enough for initial tokenization to pass but small enough that
+        # the generator hits context limit.
+        base_max_seq_length=512,
         prompt_config=LLMPromptConfig(
             template=PROMPT_TEMPLATE,
             add_bos_token_to_prompt=True,
