@@ -518,7 +518,7 @@ class DatetimeCol(ColAction):
 
     format: Optional[str] = None
     """
-    Human-readable format of the datetime (see `strftime` in stdlib).
+    Human-readable format of the datetime (see ``strftime`` in stdlib).
     If not specified, we will attempt to autodetect.
     """
 
@@ -581,10 +581,22 @@ class CategoricalCol(ColAction):
         return batch[self.name].isin(self.values)
 
 
-# ActionT / GenerateActionT / ColT are Annotated discriminated unions whose
-# __origin__ is patched at runtime to include all concrete subclasses.
-# This lets pydantic auto-discover new action subclasses without a manual
-# Union list, while static type checkers see the base type via Annotated.
+# ActionT / GenerateActionT / ColT use a hack to make typing work both
+# statically and dynamically. The Annotated wrapper lets static analysis
+# (mypy/pyright/ty) view ActionT as a BaseAction. However, pydantic's
+# discriminator logic uses the first type argument of Annotated to determine
+# all allowable types. We override __origin__ at runtime to include all
+# concrete subclasses of BaseAction, which gives us:
+#
+# - Auto-registration of new BaseAction subclasses without a manual Union
+#   list or a Registry class / __init_subclass__ pattern.
+# - Exclusion of abstract subclasses, so intermediate ABCs aren't
+#   instantiable or suggested by the pydantic schema.
+# - A proper oneOf JSON schema for any consuming BaseModel.
+#
+# This does not solve dynamic importing -- all actions must be imported
+# before they register with __subclasses__. Currently all actions live in
+# this module, so that isn't an issue.
 ActionT = Annotated[BaseAction, Field(discriminator="type_")]
 ActionT.__origin__ = Union[tuple(concrete_subclasses(BaseAction))]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 

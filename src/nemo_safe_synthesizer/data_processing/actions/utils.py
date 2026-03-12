@@ -52,10 +52,10 @@ def type_alias_fn(field_name: str) -> str:
 class MetadataColumns(StrEnum):
     """Internal column names injected during validation phases."""
 
-    INDEX = "__gretel__idx"
+    INDEX = "__nss__idx"
     """Temporary index for mapping back to pre-transformed records."""
 
-    REJECT_REASON = "__gretel_reject_reason"
+    REJECT_REASON = "__nss_reject_reason"
     """Reason a row was rejected during batch validation."""
 
 
@@ -84,9 +84,9 @@ def remove_metadata_columns_from_records(records: list[dict]) -> list[dict]:
 class TransformsUpdate(BaseModel):
     """Typed wrapper for a single transforms_v2 update step."""
 
-    name: str
-    value: str
-    position: Optional[int] = None
+    name: str = Field(description="Target column name for the update.")
+    value: str = Field(description="Jinja expression evaluated by the transforms_v2 engine.")
+    position: Optional[int] = Field(default=None, description="Column insertion index when adding a new column.")
 
 
 class TransformsUtil:
@@ -250,11 +250,9 @@ class ActionCtx(BaseModel):
     and a lazily-initialized ``TransformsUtil`` for expression evaluation.
     """
 
-    seed: Optional[int] = None
-    """Seed used for all random generation tasks."""
+    seed: Optional[int] = Field(default=None, description="Seed used for all random generation tasks.")
 
-    state: dict[str, str] = {}
-    """Per-action state persisted across phases (keyed by ``BaseAction.hash()``)."""
+    state: dict[str, str] = Field(default={}, description="Per-action state persisted across phases (keyed by BaseAction.hash()).")
 
     def __init__(self, /, **data: Any) -> None:
         super().__init__(**data)

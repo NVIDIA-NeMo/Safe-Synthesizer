@@ -588,7 +588,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
         budget or ``max_sequences_per_example`` is reached.
 
         Args:
-            dataset: Tokenized dataset to assemble examples from.
+            dataset: Tokenized HF dataset to assemble examples from.
 
         Yields:
             Dictionary with ``input_ids``, ``attention_mask``, and ``labels``
@@ -674,6 +674,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
 
         # Build up integer part of shuffled dataset.
         if "is_val" in dataset.info.description:
+            # we do not need to duplicate the dataset for test set
             ds_list.append(dataset.shuffle(generator=rng))
         else:
             for _ in range(int(integer)):
@@ -685,7 +686,8 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
 
         # Flattening indices rewrites to disk and speeds up subsequent data access.
         processed_dataset = concatenate_datasets(ds_list).flatten_indices()
-        return self._run_example_generation(self._fill_context_with_records_generator, processed_dataset)
+        res = self._run_example_generation(self._fill_context_with_records_generator, processed_dataset)
+        return res
 
     def assemble_training_examples(self, data_fraction: float = 1.0) -> TrainingExamples:
         """Build examples with randomly shuffled records.
@@ -812,8 +814,17 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     """
 
     _ROW_INDEX_COLUMN = "__row_idx"
+    """Internal column added to track original row positions. Used to detect
+    dataset restart boundaries when ``data_fraction > 1`` causes duplication
+    (row index wraps from N back to 0)."""
+
     _MIN_FILL_RATIO = 0.7
+    """Minimum token fill ratio for examples. Each example's token budget is
+    sampled uniformly between ``_MIN_FILL_RATIO`` and ``_MAX_FILL_RATIO``
+    times ``max_new_tokens``."""
+
     _MAX_FILL_RATIO = 1.0
+    """Maximum token fill ratio for examples."""
 
     def __init__(
         self,
@@ -1416,7 +1427,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         ``max_sequences_per_example`` is reached.
 
         Args:
-            dataset: Pre-grouped tokenized dataset where each row represents
+            dataset: Pre-grouped tokenized HF dataset where each row represents
                 one group (with flattened ``input_ids`` and ``attention_mask``).
 
         Yields:
@@ -1505,8 +1516,11 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         decimal, integer = math.modf(data_fraction)
 
         if "is_val" in dataset.info.description:
+            # we do not need to duplicate the dataset for test set
             ds_list.append(dataset.shuffle(generator=rng))
         else:
+            # Build up integer part of grouped dataset.
+            # Each integer part is composed of all the groups.
             for _ in range(int(integer)):
                 ds_list.append(dataset.shuffle(generator=rng))
 
