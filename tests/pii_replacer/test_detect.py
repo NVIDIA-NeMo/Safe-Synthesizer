@@ -83,7 +83,7 @@ def test_gliner_pii_detection_recall():
     )
     extractor = EntityExtractorGliner.get_entity_extractor(cfg)
 
-    # Short texts: with clear PII.
+    # Short text with clear PII.
     text_with_pii = "Daniel Martinez, born September 3, 1988, age 38, visited the clinic for a follow-up regarding hypertension. His patient ID is PT30984. He lives at 912 Cedar Avenue, Vernon, CA 90058, and can be reached at 323-555-6724 for appointment reminders. During the visit, the physician reviewed his recent blood pressure readings and confirmed he has been taking his prescribed Lisinopril daily. A follow-up appointment was scheduled in two months to monitor his response to the treatment plan."
 
     all_predictions = []
