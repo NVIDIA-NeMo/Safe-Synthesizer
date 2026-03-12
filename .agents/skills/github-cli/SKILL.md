@@ -66,8 +66,8 @@ gh pr create --draft --title "Title" --body "Description"
 # View PR diff
 gh pr diff <number>
 
-# Check if a PR already exists for the current branch before creating
-gh pr view --json number,url 2>/dev/null && echo "PR exists" || echo "No PR yet"
+# Check if a PR already exists before creating -- use gh pr edit if it does
+gh pr view --json number,url 2>/dev/null && echo "PR exists -- use gh pr edit" || echo "No PR yet"
 
 # Edit an existing PR's title/body
 gh pr edit <number> --title "New title" --body "New body"
@@ -115,7 +115,7 @@ The project has 7 GitHub Actions workflows:
 # Check CI status + recent runs in one call
 gh pr checks && gh run list --limit 5
 
-# When you already have the run ID (e.g. from a URL the user pasted):
+# When you have a run ID (e.g. from a URL like .../actions/runs/<run-id>/job/<job-id>):
 gh run view <run-id> --log-failed
 
 # Find latest failure on current branch (when no run ID given)
@@ -203,16 +203,16 @@ EOF
 )"
 ```
 
-Keep bodies concise -- 2-4 bullet summary for PRs, problem + options for issues. Don't generate long audit dumps or parameter inventories. When the user asks for "succinct" -- 1-3 sentences, no lists.
+Keep bodies concise -- 2-4 bullet summary for PRs, problem + options for issues. Don't generate long audit dumps or parameter inventories. When the user asks for "succinct" -- 1-3 sentences, no lists. For issues meant for team discussion, keep options human-readable and decision-focused, not implementation inventories.
 
 No decorative bold (`**text**`) in PR or issue bodies. No per-file change inventories. No `## Why` sections that restate the commit message. Default to the shortest body that answers "what changed and how to verify it."
 
 ## Common Mistakes
 
 - Don't run `gh run view <id>` and `gh run view <id> --log-failed` as separate calls -- go straight to `--log-failed` when you already have the run ID
-- Don't WebFetch GitHub Actions URLs for private repos -- use `gh run view` instead (auth required)
-- Don't propose `gh pr create` without checking if a PR already exists first
-- Don't generate long PR/issue bodies -- users consistently ask agents to cut them down
+- Don't WebFetch GitHub Actions URLs for private repos -- returns 404; use `gh run view <run-id> --log-failed` instead
+- Don't propose `gh pr create` without checking if a PR already exists first -- use `gh pr edit` if it does
+- Don't generate long PR/issue bodies -- users consistently ask agents to cut them down; 2-4 bullets max, no audit dumps
 - Don't use separate shell calls for `git push` then `gh pr create` -- chain them with `&&`
 - Don't manually write `Signed-off-by` in commit messages -- always use `git commit --signoff --gpg-sign` (`-s -S`) so the trailer matches `git config user.name` / `user.email` and the commit is cryptographically signed; DCO probot and signature verification both require exact identity match
 - Don't use plain `gh pr view <number>` -- use `--json` form to avoid GraphQL errors about deprecated Projects (classic)

@@ -43,10 +43,10 @@ Step-by-step pipeline debugging when CI fails on a PR:
 
 ```bash
 # List recent failed runs for the current branch
-gh run list --branch=$(git branch --show-current) --status=failure
+gh run list --branch="$(git branch --show-current)" --status=failure
 
 # Or list runs for a specific PR
-gh run list --branch=$(gh pr view <number> --json headRefName -q .headRefName)
+gh run list --branch="$(gh pr view <number> --json headRefName -q .headRefName)"
 ```
 
 ### Step 2: View Failed Job Logs
@@ -89,7 +89,7 @@ gh run rerun $RUN_ID --failed
 
 ```bash
 # Watch the new run
-gh run list --branch=$(git branch --show-current) --limit=1
+gh run list --branch="$(git branch --show-current)" --limit=1
 # Get the latest run ID, then:
 gh run watch <new-run-id>
 ```
@@ -235,12 +235,12 @@ From repo root (or skill dir). If `GITHUB_TOKEN` is not set, set it first: `expo
 export GITHUB_TOKEN=$(gh auth token)
 
 # Fetch all comments (single JSON: pr_number, repo, inline[], top_level[])
-uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- comments [PR_NUMBER]
+uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- comments <PR_NUMBER>
 
 # Reply to an inline review comment (comment_id from the inline[].id in the JSON above)
-uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Fixed in abc1234"
+uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> "Fixed in beefcafe"
 # Or from stdin:
-echo "Fixed in abc1234" | uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file -
+echo "Fixed in beefcafe" | uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file -
 # Or from a file (plain text or Markdown; content is sent as the comment body as-is):
 uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMMENT_ID> --reply-file path/to/reply.md
 ```
@@ -248,7 +248,7 @@ uv run --script .agents/skills/github-cli/scripts/gh_pr_helper.py -- reply <COMM
 Reply file format: plain text or Markdown. The entire file contents become the comment body (no wrapper or front matter). Example `reply.md`:
 
 ```markdown
-Fixed in commit `abc1234`. The logic now uses the helper and the test was updated.
+Fixed in commit `beefcafe`. The logic now uses the helper and the test was updated.
 ```
 
 Workflow: you can draft the reply with the user in a file (e.g. `reply.md` or `pr-171-reply.md`), edit it until they’re happy, then run `reply <COMMENT_ID> --reply-file path/to/reply.md` to post it. No need to paste a long body on the command line.

@@ -45,7 +45,7 @@ Markers are defined in `pytest.ini`. Run `make test` (unit), `make test-smoke`, 
 
 ## Type Errors (`ty`)
 
-Always run `make typecheck` locally -- not `run-ty-check.sh` directly. The script uses `git diff --cached` (staged files only), which silently checks nothing unless files are staged. `make typecheck` runs against all source files.
+Always run `make typecheck` -- running `run-ty-check.sh` directly silently checks nothing unless files are staged.
 
 ```bash
 make typecheck
@@ -60,7 +60,11 @@ Common `ty` error patterns:
 | `possibly-unbound` | Variable assigned only in one branch | Add an `else` branch or initialise before the conditional |
 | `invalid-argument-type` | Wrong type passed to function | Check the function signature; use `cast()` only as a last resort |
 
-Prefer fixing type errors over adding `# type: ignore`. Use `# type: ignore[<code>]` only when the error is a known `ty` false positive and fixing it would require changing correct code.
+Prefer fixing type errors over adding `# type: ignore`. Use `# type: ignore[<code>]` only when the error is a known `ty` false positive and fixing it would require changing correct code. Example:
+
+```python
+from vllm import LLM  # type: ignore[unresolved-import]  # vllm has no stubs
+```
 
 ## CI Pipeline Failures
 

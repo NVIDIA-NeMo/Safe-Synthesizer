@@ -68,3 +68,5 @@ git config --global commit.gpgSign true
 ```
 
 GitHub marks commits as "Verified" when the signing key matches a key registered in your GitHub account (Settings → SSH and GPG keys). Commits squash-merged by GitHub are signed by GitHub's own key -- only locally-created commits need your personal key.
+
+Note for agents: you can diagnose a missing or misconfigured signing key and show the commands above, but you cannot generate a key or register it in GitHub on the user's behalf. Key generation and registration (GitHub Settings → SSH and GPG keys) require user action.
