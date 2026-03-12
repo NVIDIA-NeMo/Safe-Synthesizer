@@ -37,11 +37,9 @@ class ColumnClassification(BaseModel):
 
     field_name: str = Field(description="Name of the field/column.")
     column_type: str | None = Field(
-        default=None,
         description="Detected column type (e.g. ``text``, ``numeric``).",
     )
     entity: str | None = Field(
-        default=None,
         description="Detected entity type (e.g. ``email``, ``phone``), or ``None`` if none.",
     )
     entity_count: int | None = Field(
