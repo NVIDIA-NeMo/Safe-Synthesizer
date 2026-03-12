@@ -19,8 +19,8 @@ from nemo_safe_synthesizer.data_processing.record_utils import records_to_jsonl 
 
 
 @pytest.fixture
-def fixture_tokenizer(fixture_stub_tokenizer_path) -> PreTrainedTokenizer:
-    return AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path)
+def fixture_tokenizer(fixture_smollm3_tokenizer) -> PreTrainedTokenizer:
+    return AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer)
 
 
 @pytest.fixture
