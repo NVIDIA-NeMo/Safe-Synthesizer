@@ -252,7 +252,9 @@ class ActionCtx(BaseModel):
 
     seed: Optional[int] = Field(default=None, description="Seed used for all random generation tasks.")
 
-    state: dict[str, str] = Field(default={}, description="Per-action state persisted across phases (keyed by BaseAction.hash()).")
+    state: dict[str, str] = Field(
+        default={}, description="Per-action state persisted across phases (keyed by BaseAction.hash())."
+    )
 
     def __init__(self, /, **data: Any) -> None:
         super().__init__(**data)

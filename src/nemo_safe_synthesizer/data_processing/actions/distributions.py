@@ -19,6 +19,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 import numpy as np
 from pydantic import BaseModel, Field
 
+
 class Distribution(BaseModel, ABC):
     """Abstract base for float-valued distributions.
 
