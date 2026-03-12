@@ -226,7 +226,7 @@ class AutoConfigResolver:
     def _determine_learning_rate(self) -> dict[str, float]:
         """
         Determine the learning rate if set to auto.
-        Uses model-specific default from llm.metadata (e.g. 0.0001 for Mistral, 0.0005 for others).
+        Uses model-specific default from llm.metadata.
 
         Returns:
             Dict with learning_rate if auto-determined, empty dict otherwise.
@@ -234,7 +234,6 @@ class AutoConfigResolver:
         if self._config.training.learning_rate != AUTO_STR:
             logger.info(f"`learning_rate` was set to {self._config.training.learning_rate}, using that value")
             return {}
-        # get the LR from metadata given model name or path:
         lr = ModelMetadata._resolve_model_class(self._config.training.pretrained_model).default_learning_rate
         logger.info(
             f"`learning_rate` was automatically set to {lr} with pretrained_model='{self._config.training.pretrained_model}'."

@@ -289,7 +289,7 @@ class TestAutoConfigResolver:
         ],
     )
     def test_determine_learning_rate(self, sample_data, config, expected, pretrained_model, expected_lr):
-        """Learning rate is auto configured with pretrained model → 0.0001 for Mistral, 0.0005 otherwise; unchanged for explicit."""
+        """Learning rate is auto configured with pretrained model and unchanged for explicit."""
         config_copy = config
         if pretrained_model is not None:
             config_copy = config.model_copy(deep=True)
