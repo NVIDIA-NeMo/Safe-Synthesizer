@@ -1,6 +1,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Pydantic-integrated field validators for parameter models.
+
+Provides two validator types used as ``Annotated`` metadata on fields in
+``config/`` models:
+
+- ``DependsOnValidator`` -- enforces conditional dependencies between fields
+  (e.g. ``order_training_examples_by`` requires ``group_training_examples_by``).
+- ``ValueValidator`` -- applies an arbitrary predicate to the field value
+  (e.g. "learning rate must be in ``(0, 1)``").
+
+Both implement ``__get_pydantic_core_schema__`` so Pydantic runs them as
+after-validators during model construction.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -14,7 +28,6 @@ from pydantic import (
 from pydantic_core import core_schema
 
 from ..observability import get_logger
-from .parameter import Parameter
 
 __all__ = ["DependsOnValidator", "ValueValidator", "AutoParamRangeValidator"]
 
@@ -22,28 +35,34 @@ __all__ = ["DependsOnValidator", "ValueValidator", "AutoParamRangeValidator"]
 logger = get_logger(__name__)
 
 
-# The frozen=True specification makes DependsOnValidator hashable.
-# Without this, a union on the custom type such as X | None will raise an error.
+# frozen=True makes DependsOnValidator hashable, which is required when
+# the annotated type is a union (e.g. X | None).
 @dataclass(frozen=True)
 class DependsOnValidator:
-    """
-    Validator for creating conditional field dependencies in Pydantic models.
+    """Conditional dependency validator for Pydantic fields.
 
-    This validator allows you to define fields that are only valid when another
-    field meets specific conditions. Useful for creating configuration schemas
-    where certain options are only available based on other settings.
+    Rejects a field value when a related field does not satisfy a precondition.
+    Attach via ``Annotated`` metadata on the dependent field.
 
-    Attributes:
-        depends_on: Name of the field this validation depends on
-        depends_on_func: Function that validates the dependency field's value
-        value_func: Optional function to validate the current field's value
+    Args:
+        depends_on: Name of the field that this field depends on.
+        depends_on_func: Predicate applied to the dependency field's value.
+            Must return ``True`` for the dependent field to be accepted.
+        value_func: Optional predicate on the current field's own value.
+            When ``None`` (or when it returns falsy), the dependency check
+            is skipped and the value passes through unchanged.
 
-    Example:
-        >>> validator = DependsOnValidator(
-        ...     depends_on="enabled",  # a field
-        ...     depends_on_func=lambda x: x is True,
-        ...     value_func=lambda x: isinstance(x, bool),
-        ... )
+    Example::
+
+        order_training_examples_by: Annotated[
+            str | None,
+            DependsOnValidator(
+                depends_on="group_training_examples_by",
+                depends_on_func=lambda v: v is not None,
+                value_func=lambda v: v is not None,
+            ),
+            Field(...),
+        ] = None
     """
 
     depends_on: str
@@ -51,18 +70,18 @@ class DependsOnValidator:
     value_func: Callable[[Any], bool] | None
 
     def validate(self, value, info: ValidationInfo):
-        """
-        Validate the field value based on dependency conditions. This is a pydantic construction.
+        """Run the dependency check during Pydantic validation.
 
         Args:
-            value: The value being validated
-            info: Pydantic validation context containing field information
+            value: The value being validated.
+            info: Pydantic validation context containing sibling field data.
 
         Returns:
-            The validated value if all conditions pass
+            The validated value if all conditions pass.
 
         Raises:
-            ValueError: If dependency field is missing or conditions aren't met
+            ValueError: If the dependency field is absent from the model or
+                its value does not satisfy ``depends_on_func``.
         """
         if self.depends_on not in info.data:
             raise ValueError(f"{info.field_name} is only allowed in model with {self.depends_on}")
@@ -81,85 +100,69 @@ class DependsOnValidator:
         return value
 
     def __get_pydantic_core_schema__(self, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
-        """
-        Generate Pydantic core schema for this validator.
-
-        Args:
-            source_type: The source type annotation
-            handler: Pydantic's schema generation handler
-
-        Returns:
-            A core schema that applies the dependency validation
-        """
+        """Register this validator as a Pydantic after-validator on the annotated field."""
         return core_schema.with_info_after_validator_function(self.validate, handler(source_type))
 
 
 @dataclass(frozen=True)
 class ValueValidator:
-    """
-    Custom validator for applying validation functions to Parameter values.
+    """Predicate-based validator for field values.
 
-    This validator allows you to define custom validation logic for Parameter
-    instances by providing a function that examines the parameter's value.
+    Wraps an arbitrary boolean function and raises ``ValueError`` when it
+    returns ``False``.  Commonly used inline:
+    ``ValueValidator(value_func=lambda v: v > 0)``.
 
-    Attributes:
-        value_func: Function that takes a Parameter value and returns True if valid
-
-    Example:
-        >>> # Validate that a numeric parameter is positive
-        >>> validator = ValueValidator(value_func=lambda x: x > 0 if isinstance(x, (int, float)) else True)
+    Args:
+        value_func: Predicate applied to the field value.  Returns True if valid.
     """
 
-    value_func: Callable[[Parameter[Any]], bool]
+    value_func: Callable[[Any], bool]
 
     def validate(self, value, info: ValidationInfo):
-        """Validate a Parameter using the provided validation function."""
-        if (v := getattr(value, "value", None)) is None:
-            real_val = value
-        else:
-            real_val = v
-        logger.debug(f"Parameter {info.field_name}, {value}, passed validation: {real_val}")
-        if self.value_func(real_val):
-            return value
-        else:
-            try:
-                # Sometimes the inspect.getsource() function raises an OSError
-                # for lambda functions defined inline, hence the try/except.
-                src = inspect.getsource(self.value_func)
-                msg = f"Parameter {info.field_name}, {real_val}, did not pass validation: {src}"
-            except OSError:
-                msg = f"Parameter {info.field_name}, {value}, did not pass validation"
-            raise ValueError(msg)
-
-    def __get_pydantic_core_schema__(self, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
-        """
-        Generate Pydantic core schema for this validator.
+        """Apply ``value_func`` to the field value during Pydantic validation.
 
         Args:
-            source_type: The source type annotation
-            handler: Pydantic's schema generation handler
+            value: The raw field value.
+            info: Pydantic validation context.
 
         Returns:
-            A core schema that applies the value validation
+            The original ``value`` if the predicate passes.
+
+        Raises:
+            ValueError: If the predicate returns ``False``.
         """
+        logger.debug(f"Field {info.field_name}, value={value}, validating")
+        if self.value_func(value):
+            return value
+        try:
+            # Sometimes inspect.getsource() raises an OSError for lambda
+            # functions defined inline, hence the try/except.
+            src = inspect.getsource(self.value_func)
+            msg = f"Field {info.field_name}, value={value}, did not pass validation: {src}"
+        except OSError:
+            msg = f"Field {info.field_name}, value={value}, did not pass validation"
+        raise ValueError(msg)
+
+    def __get_pydantic_core_schema__(self, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
+        """Register this validator as a Pydantic after-validator on the annotated field."""
         return core_schema.with_info_after_validator_function(self.validate, handler(source_type))
 
 
 def range_validator(value: int | float, func: Callable) -> bool:
-    """
-    Validate that a numeric parameter falls within a specified range.
+    """Check a numeric value against ``func``, passing ``"auto"`` sentinels unconditionally.
 
-    This utility function provides range validation for Parameter instances
-    containing numeric values, with graceful handling of non-numeric types.
+    ``func`` is typically a predicate that asserts a numeric range (e.g.
+    non-negative, within ``(0, 1)``).
 
     Args:
-        value: The Parameter instance to validate
-        func: A function that takes a numeric value and returns True if valid
+        value: The value to validate -- may be a number or the string ``"auto"``.
+        func: Predicate applied when ``value`` is numeric (e.g. ``lambda v: v >= 0``).
 
     Returns:
-        True if validation passes or if the value is not numeric
+        ``True`` if ``value`` is ``"auto"`` or ``func(value)`` is truthy.
     """
     return True if value == "auto" else func(value)
 
 
 AutoParamRangeValidator = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
+"""Pre-built ``ValueValidator`` that accepts ``"auto"`` or any non-negative number."""

@@ -106,7 +106,7 @@ Load helpers in root `conftest.py`:
 
 8 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/` (currently empty).
 
-Dataset/tokenizer fixtures use the `fixture_` prefix; config/CLI use descriptive names (`mock_workdir`, `basic_parameter`).
+Dataset/tokenizer fixtures use the `fixture_` prefix; config/CLI use descriptive names (`mock_workdir`, `training_hyperparams`).
 
 Key fixtures in root `conftest.py`:
 
@@ -118,7 +118,7 @@ Per-module fixtures:
 
 - Generation/eval/data_processing: shared tokenizer and JSONL fixtures
 - CLI: `mock_workdir(tmp_path)` for tmp_path-based Workdir
-- Config: `basic_parameter`, `training_hyperparams`, `simple_safe_synthesizer_parameters`
+- Config: `training_hyperparams`, `simple_safe_synthesizer_parameters`
 
 ## Fixture Scoping
 
