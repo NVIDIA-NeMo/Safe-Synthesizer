@@ -95,7 +95,7 @@ jobs:
           echo "Built: $WHEEL (version $VERSION)"
 
       - name: Upload wheel as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: nemo-safe-synthesizer-${{ steps.version.outputs.version }}
           path: dist/*.whl
