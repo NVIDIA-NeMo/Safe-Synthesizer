@@ -41,49 +41,6 @@ if TYPE_CHECKING:
     from ..training.backend import TrainingBackend
 
 
-def _run_pii_replacer_only(config: SafeSynthesizerParameters, df: pd.DataFrame) -> SafeSynthesizerResults:
-    """Run PII replacement without synthesis and return results.
-
-    Applies the PII replacer to ``df``, optionally evaluates, and
-    packages everything into a ``SafeSynthesizerResults``.
-
-    Args:
-        config: Resolved parameters (must have ``replace_pii`` set).
-        df: Source DataFrame to transform.
-
-    Returns:
-        Results containing the PII-replaced DataFrame and optional
-        evaluation report.
-    """
-    total_start = time.monotonic()
-
-    replacer = NemoPII(config.replace_pii)
-    replacer.transform_df(df)
-
-    evaluator = None
-    if config.evaluation.enabled:
-        evaluator = Evaluator(
-            config=config,
-            generate_results=replacer.result.transformed_df,
-            pii_replacer_time=replacer.elapsed_time if replacer else None,
-            column_statistics=replacer.result.column_statistics,
-            train_df=df,  # Pass the original df as the reference for evaluation
-        )
-        evaluator.evaluate()
-
-    total_time_sec = time.monotonic() - total_start
-    evaluation_time_sec = evaluator.evaluation_time if evaluator else None
-
-    return make_nss_results(
-        total_time=total_time_sec,
-        evaluation_time=evaluation_time_sec,
-        training_time=None,
-        generation_time=None,
-        generate_results=replacer.result.transformed_df,
-        report=evaluator.report if evaluator else None,
-    )
-
-
 def _get_unsloth_backend_class() -> type[TrainingBackend]:
     """Lazily import and return the Unsloth training backend class.
 
@@ -188,12 +145,18 @@ class SafeSynthesizer(ConfigBuilder):
             )
         self._resolve_nss_config()
         # Initialize state for pipeline stages
-        self._train_df: pd.DataFrame | None = None
+        self._train_df: pd.DataFrame | None = (
+            None  # The active training df that might go through transformation, eg. pii replacement
+        )
+        self._original_train_df: pd.DataFrame | None = (
+            None  # The original training df that we save for evaluation at the end
+        )
         self._test_df: pd.DataFrame | None = None
         self._column_statistics: dict | None = None
         self._pii_replacer_time: float | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
+        self._loaded_from_save_path: bool = False
 
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
     def load_from_save_path(self) -> SafeSynthesizer:
@@ -230,8 +193,11 @@ class SafeSynthesizer(ConfigBuilder):
         test_path = self._workdir.source_dataset.test
         if training_path.exists() and test_path.exists():
             logger.info("Loading cached train/test split from training run")
-            self._train_df = pd.read_csv(training_path)
+            # training_path persists the original training split for evaluation.
+            self._original_train_df = pd.read_csv(training_path)
             self._test_df = pd.read_csv(test_path)
+            # Mark that we have fully loaded from the saved run, including cached splits.
+            self._loaded_from_save_path = True
         elif self._data_source is not None:
             logger.warning(
                 "Cached dataset not found, will use provided data source. "
@@ -243,18 +209,6 @@ class SafeSynthesizer(ConfigBuilder):
                 "Cached train/test split not found and no data source provided. "
                 "Call with_data_source() before load_from_save_path(), or ensure the cached dataset exists."
             )
-        # match run_dir:
-        #     case Path() as p if p.exists():
-        #         if not config_file.exists():
-        #             raise ValueError(f"Config file does not exist: {config_file}")
-        #         self._nss_config = SafeSynthesizerParameters.from_json(config_file)
-        #         self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir_structure)
-        #     case Path() as p if not p.exists():
-        #         raise ValueError(f"Run directory does not exist: {p}")
-        #     case None:
-        #         raise ValueError("save_path is required to load an existing Safe Synthesizer adapter")
-        #     case _:
-        #         raise ValueError(f"Invalid run directory: {run_dir}")
         return self
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
@@ -276,14 +230,15 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        if self._train_df is not None and self._test_df is not None:
-            logger.warning("Data already processed, skipping data processing...")
+        if self._loaded_from_save_path or getattr(self, "_data_processed", False):
+            # Resume path or already-processed data in this builder instance; nothing to do.
             return self
 
         holdout = Holdout(self._nss_config)
         original_train_df, self._test_df = holdout.train_test_split(self._data_source)
 
-        self._train_df = original_train_df
+        self._original_train_df = original_train_df  # The original training df that we use for evaluation at the end
+        self._train_df = original_train_df  # The active training df that might go through transformation
         self._column_statistics = None
 
         resolver = AutoConfigResolver(self._train_df, self._nss_config)
@@ -303,9 +258,16 @@ class SafeSynthesizer(ConfigBuilder):
         if self._llm_metadata is None:
             self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
         self._data_processed = True
-        # Ensure dataset directory exists before writing CSV files
+
+        # Always persist the original training split -- this is the version
+        # reloaded by load_from_save_path and used for evaluation metrics.
         self._workdir.ensure_directories()
-        self._train_df.to_csv(self._workdir.dataset.training, index=False)
+        # ``training.csv`` is the canonical persisted original training split.
+        self._original_train_df.to_csv(self._workdir.dataset.training, index=False)
+        if not self._train_df.equals(self._original_train_df):
+            # The transformed (e.g. PII-replaced) training data is saved for
+            # inspection only -- we don't need it in the generation or evaluation phase.
+            self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)
         else:
@@ -324,8 +286,16 @@ class SafeSynthesizer(ConfigBuilder):
             Self for method chaining.
 
         Raises:
-            RuntimeError: If ``process_data()`` has not been called first.
+            RuntimeError: If called after ``load_from_save_path()`` or
+                before ``process_data()``.
         """
+        if self._loaded_from_save_path:
+            raise RuntimeError(
+                "train() cannot be called after load_from_save_path(). "
+                "The resume path is for generation and evaluation only: "
+                ".load_from_save_path().generate().evaluate()"
+            )
+
         # these are for ty
         if TYPE_CHECKING:
             assert self._train_df is not None
@@ -404,18 +374,19 @@ class SafeSynthesizer(ConfigBuilder):
             os.environ["NSS_PHASE"] = "evaluate"
         if TYPE_CHECKING:
             assert self._nss_config is not None
-            assert self._train_df is not None
+            assert self._original_train_df is not None
             assert self._test_df is not None
-            assert self._column_statistics is not None
-            assert self._pii_replacer_time is not None
             assert self._total_start is not None
+            if self._nss_config.enable_replace_pii:
+                assert self._pii_replacer_time is not None
+                assert self._column_statistics is not None
 
         self.evaluator = Evaluator(
             config=self._nss_config,
             generate_results=self.generator.gen_results,
             pii_replacer_time=self._pii_replacer_time,
             column_statistics=self._column_statistics,
-            train_df=self._train_df,
+            train_df=self._original_train_df,
             test_df=self._test_df,
             workdir=self._workdir,
         )
@@ -469,7 +440,18 @@ class SafeSynthesizer(ConfigBuilder):
         When ``enable_synthesis`` is ``False``, runs PII replacement
         only.  For step-by-step control, call the individual methods
         instead.
+
+        Raises:
+            RuntimeError: If called after ``load_from_save_path()``.
+                Use ``.generate().evaluate()`` for the resume path.
         """
+        if self._loaded_from_save_path:
+            raise RuntimeError(
+                "run() cannot be called after load_from_save_path(). "
+                "The resume path is for generation and evaluation only: "
+                ".load_from_save_path().generate().evaluate()"
+            )
+
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
