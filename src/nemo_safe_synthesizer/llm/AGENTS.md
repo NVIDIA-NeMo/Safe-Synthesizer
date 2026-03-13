@@ -15,7 +15,9 @@ Model metadata, prompt templates, RoPE scaling, memory management, and quantizat
 
 ## Model Subclass Pattern
 
-`ModelMetadata` base → 8 subclasses: TinyLlama, Qwen, Llama32, Mistral, SmolLM2, SmolLM3, Granite, Nemotron. Factory `from_str_or_path(model_name_or_path)` uses case-insensitive substring matching on class name (e.g. "Llama32" in path). Raises `ValueError` if no subclass matches; no fallback to base.
+`ModelMetadata` base → 8 subclasses: TinyLlama, Qwen, Llama32, Mistral, SmolLM2, SmolLM3, Granite, Nemotron. Factory `from_str_or_path(model_name_or_path)` uses case-insensitive substring matching on class name (e.g. "Llama32" in path). Raises `ValueError` if no subclass matches; no fallback to base. `_resolve_model_class(model_name_or_path)` returns the matching subclass type without instantiation; used by `AutoConfigResolver` for learning rate resolution.
+
+Each subclass inherits `default_learning_rate: ClassVar[float] = 0.0005` from the base. Mistral overrides to `0.0001`. When `training.learning_rate` is `"auto"`, `AutoConfigResolver` calls `_resolve_model_class()` and reads this class variable.
 
 ## Prompt Config
 
@@ -51,7 +53,8 @@ Each model sets its own template and BOS/EOS via `LLMPromptConfig.from_tokenizer
 
 1. Create subclass of `ModelMetadata`
 2. Override `__init__()`: load tokenizer + AutoConfig, call `super().__init__()` with `prompt_config=LLMPromptConfig.from_tokenizer(...)`, `rope_scaling`, `rope_parameters_location`
-3. Add class to `classes` tuple in `from_str_or_path()` (match order: substring check uses class name)
+3. Override `default_learning_rate` class variable if the model family needs a non-default learning rate
+4. Add class to `classes` tuple in `_resolve_model_class()` and `from_str_or_path()` (match order: substring check uses class name)
 
 ## Read First
 

@@ -95,7 +95,7 @@ config = SafeSynthesizerParameters.from_yaml("config.yaml")
 synthesizer = (
     SafeSynthesizer(config)
     .with_data_source("data.csv")
-    .with_train(learning_rate=0.0005)
+    .with_train()
     .with_generate(num_records=5000)
     .with_evaluate(enabled=True)
 )

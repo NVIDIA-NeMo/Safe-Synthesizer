@@ -442,7 +442,6 @@ generation:
 training:
   batch_size: 1
   gradient_accumulation_steps: 8
-  learning_rate: 0.0005
   pretrained_model: HuggingFaceTB/SmolLM3-3B
 ```
 
