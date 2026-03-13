@@ -229,8 +229,8 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        if self._loaded_from_save_path:
-            # Resume path already loaded cached splits; nothing to do.
+        if self._loaded_from_save_path or getattr(self, "_data_processed", False):
+            # Resume path or already-processed data in this builder instance; nothing to do.
             return self
 
         holdout = Holdout(self._nss_config)
