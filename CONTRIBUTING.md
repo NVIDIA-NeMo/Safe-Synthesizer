@@ -93,7 +93,7 @@ Most contributors already have an SSH key for GitHub authentication. The same ke
    gh ssh-key list
    ```
 
-   If your key already appears with type `signing`, skip to step 3.
+   If your key already appears with type `signing`, skip to step 4.
 
 3. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). This registers the key and then removes the permission scope so it doesn't persist in your token (change this if you want to keep the scope).
 
