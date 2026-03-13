@@ -27,7 +27,7 @@ def make_df(seed: int, n: int = 100):
         {
             "num": [random.random() for _ in range(n)],
             "num_Int64": [random.randint(1, 100) for _ in range(n)],
-            # Categorical columns according to gretel core arfifact classifier
+            # Categorical columns according to core artifact classifier
             "num_cat": [random.randint(1, 4) for _ in range(n)],
             "num_cat_Int64": [random.randint(1, 4) for _ in range(n)],
             "small_cat": [random.choice(["foo", "bar", "baz", "biff", "barf"]) for _ in range(n)],

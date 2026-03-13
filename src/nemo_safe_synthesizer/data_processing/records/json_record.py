@@ -66,7 +66,7 @@ def flatten(raw, array_marker=base.ARRAY_POS):
     return raw
 
 
-def remove_gretel_array_markers(data: str) -> tuple[str, int, base.ValuePath]:
+def remove_array_markers(data: str) -> tuple[str, int, base.ValuePath]:
     """Strip array-position markers from a composite key and build a ``ValuePath``.
 
     Returns:
@@ -91,7 +91,7 @@ def convert_flat_dict_to_kv_pairs(data: dict) -> list[base.KVPair]:
     out = []
     for k, v in data.items():
         k = str(k)
-        new_key, array_count, value_path = remove_gretel_array_markers(k)
+        new_key, array_count, value_path = remove_array_markers(k)
         flat = base.KVPair(new_key, v, base.get_type_as_string(v), array_count, value_path)
         out.append(flat)
     return out

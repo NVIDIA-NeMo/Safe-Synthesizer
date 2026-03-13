@@ -11,7 +11,7 @@ import re
 from ..entity import Entity
 from ..regex import Pattern, RegexPredictor
 
-# https://github.com/Gretellabs/monogretel/issues/190
+# Relevant issue: detection should support descriptive age terms
 HEADERS = ["age", "ages"]
 
 

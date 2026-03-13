@@ -32,7 +32,7 @@ STRING = "string"
 BOOL = "boolean"
 NUMBER = "number"
 NULL = "null"
-ARRAY_POS = "_gretelarray_"
+ARRAY_POS = "_nssarray_"
 NESTING_DELIM = "*#N#*"
 DELIM = "."
 
