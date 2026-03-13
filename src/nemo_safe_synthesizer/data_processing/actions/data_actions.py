@@ -1,6 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Extensible data action framework for pre/post-processing, validation, and generation.
+
+Defines ``BaseAction`` and its subclasses (``GenerateAction``, ``ColAction``,
+``ValidationAction``) which encapsulate data transformations applied at
+different pipeline phases. ``ActionExecutor`` orchestrates running the
+registered actions in order.
+"""
+
 from __future__ import annotations
 
 import json
@@ -56,20 +64,28 @@ logger = get_logger(__name__)
 
 
 class ProcessFn(Protocol):
+    """Callable that transforms a DataFrame in-place during a processing phase."""
+
     def __call__(self, df: pd.DataFrame) -> pd.DataFrame: ...
 
 
 class ValidateBatchFn(Protocol):
+    """Callable that splits a batch into valid and rejected DataFrames."""
+
     def __call__(self, batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]: ...
 
 
 class ProcessPhase(str, Enum):
+    """Pipeline phases that apply DataFrame-to-DataFrame transformations."""
+
     PREPROCESS = "preprocess"
     POSTPROCESS = "postprocess"
     GENERATE = "generate"
 
 
 class ValidateBatchPhase(str, Enum):
+    """Pipeline phase for batch validation."""
+
     VALIDATE_BATCH = "validate_batch"
 
 
@@ -95,73 +111,71 @@ class Functions:
 
 
 class BaseAction(BaseModel, ABC):
-    """
-    `BaseAction` is the key abstract parent class in the `data_actions` module.
-    This class isn't meant to be instantiated directly, but to be extended
-    in children classes which implement the below methods.
+    """Abstract base class for all data actions in the pipeline.
+
+    Subclasses implement one or more phase methods (``preprocess``,
+    ``postprocess``, ``validate_batch``, ``generate``) to transform data at
+    the corresponding pipeline stage. The ``functions`` method introspects
+    which methods were actually overridden, so only non-default actions run.
+
+    State can be shared across phases via ``set_state`` / ``get_state``,
+    which persist to the ``ActionCtx.state`` dictionary keyed by the
+    action's ``hash``.
     """
 
-    # allows `type` field in yaml to parse into the `type_` field
     model_config = ConfigDict(alias_generator=type_alias_fn)
     _ctx: ActionCtx = PrivateAttr()
 
-    """
-    These are all the functions that a `BaseAction` might implement, with
-    provided default implementations. However, an abstract subclass of `BaseAction` might
-    have requirements that a specific method is implemented, like how `GenerateAction`
-    requires that `generate()` is implemented.
-    """
-
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Process/mutate the input dataset, before being sent into training. This
-        is useful for modifying the shape or contents of the data, which might help
-        if a model is going to use this data to train or finetune.
+        """Transform the input dataset before training.
+
+        Override to modify the shape or contents of the data (e.g., encoding
+        datetimes, dropping columns). The default implementation is a no-op.
         """
         return df
 
     def postprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Process/mutate the dataset, often used as "cleanup" step from whatever transformations
-        occurred during the `preprocess` function.
+        """Transform generated data after generation, often reverting preprocessing.
+
+        The default implementation is a no-op.
         """
         return df
 
     def validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Validate the rows in a `batch` and return the rows that have passed validation, and those rejected.
-        In this instance, the `batch` is some newly generated data that may or may not pass
-        validation, and `df` is some context about the relevant dataset we're trying to validate into.
+        """Split a generated batch into valid and rejected rows.
+
+        Args:
+            batch: Newly generated data to validate.
+            df: Reference dataset providing context for validation.
+
+        Returns:
+            A tuple of (valid_rows, rejected_rows) DataFrames.
         """
         batch_copy = batch.copy()
         valid_mask = self._validate_batch(batch, df)
         return batch_copy[valid_mask], batch_copy[~valid_mask]
 
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
+        """Return a boolean mask indicating valid rows in ``batch``.
+
+        The default implementation marks all rows as valid. Override in
+        subclasses to implement actual validation logic.
         """
-        Validate the rows in a `batch` and return a boolean mask Series indicating
-        valid rows.
-        """
-        # By default, all rows are valid
         return pd.Series(True, index=batch.index)
 
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Generate new data to mutate into the dataframe. This can reference
-        existing data inside the `df`, but in general the spirit of this method is
-        that it is creating net-new data.
+        """Generate new data and merge it into the DataFrame.
+
+        Override to create net-new columns or rows. The default implementation
+        is a no-op.
         """
         return df
 
     def functions(self) -> Functions:
-        """
-        Return all of the functions that this action emits.
+        """Return a ``Functions`` bundle containing only the overridden phase methods.
 
-        If the subclass didn't bother overwriting the method,
-        don't include it in the list of returned `Functions`.
-        This helps make debugging easier by seeing which actions
-        are actually running functions at certain phases, versus having
-        every action run a bunch of noop functions.
+        Methods that were not overridden from ``BaseAction`` are excluded so
+        that only actions with real work appear during debugging.
         """
 
         # We use FunctionType annotation for method rather than Callable
@@ -185,11 +199,7 @@ class BaseAction(BaseModel, ABC):
 
     @model_validator(mode="after")
     def add_ctx(self, info: ValidationInfo) -> "BaseAction":
-        """
-        When pydantic is constructing objects, it can optionally be provided
-        a `context=` kwarg which will be available during deserialization.
-        We use this mechanism to parse out the `action_ctx`
-        """
+        """Inject ``ActionCtx`` from pydantic's validation context, if provided."""
         self._ctx = DEFAULT_ACTION_CTX
         if pydantic_ctx := info.context:
             if action_ctx := pydantic_ctx.get("action_ctx"):
@@ -198,40 +208,28 @@ class BaseAction(BaseModel, ABC):
         return self
 
     def with_ctx(self, ctx: ActionCtx) -> "BaseAction":
+        """Attach an ``ActionCtx`` and return self for chaining."""
         self._ctx = ctx
         return self
 
     def get_type(self) -> str:
-        """
-        This is a simple helper that should just return `type_`.
-        Ideally, we'd be able to make `type_` an abstractproperty on the
-        `BaseAction`, but that doesn't play nice with how pydantic expects
-        discriminators to work, so we don't even define `type_` on the `BaseAction`
-        at all.
+        """Return the discriminator ``type_`` value, or ``"unknown"`` if unset.
 
-        This function is our workaround to ensure callers can still figure out
-        the type of the `BaseAction` that is being called, most likely only for debug
-        purposes.
+        Works around the fact that ``type_`` cannot be an abstract property
+        on ``BaseAction`` due to pydantic discriminator constraints.
         """
         return getattr(self, "type_", "unknown")
 
-    """
-    A few small helpers used to mutate the state of the action's context.
-    This can be useful for actions with multiple functions, where state needs to
-    be remembered across different functions.
-    """
-
     def hash(self) -> str:
-        """
-        Useful as a key in the `ActionCtx`'s state dictionary to store
-        information for later functions.
-        """
+        """Deterministic key for storing per-action state in ``ActionCtx.state``."""
         return str(tuple(sorted(self.model_dump().items())))
 
     def set_state(self, state_obj: BaseModel) -> None:
+        """Persist a Pydantic model as JSON in ``ActionCtx.state``."""
         self._ctx.state[self.hash()] = state_obj.model_dump_json()
 
     def get_state(self, state_obj_type: type[BaseModelT]) -> BaseModelT:
+        """Retrieve and deserialize a previously persisted state object."""
         state_obj_json = self._ctx.state[self.hash()]
         return state_obj_type.model_validate(json.loads(state_obj_json))
 
@@ -240,24 +238,23 @@ DEFAULT_ACTION_CTX = ActionCtx()
 
 
 class GenerateAction(BaseAction, ABC):
-    """
-    `GenerateAction`s are simple actions that take in a dataframe
-    and mutate it to include newly generated data. They generally operate
-    during the `generate` phase, but can be configured via the
-    `phase` instance variable available on all subclasses.
+    """Action that generates net-new data for the DataFrame.
 
-    You might want to create a new GenerateAction if you need to:
-    - synthesize a new column based upon other columns
-    - fill a dataframe with some faker data
+    ``GenerateAction`` subclasses must implement ``generate``. The ``phase``
+    field controls when ``generate`` runs:
 
-    Technically any `BaseAction` can implement `generate` if it wants to, but this subclass
-    is specially denoted so other consumers of `data_actions` (like jarvis tasks) can explicitly
-    allow only tasks that certainly implement this method.
+    - ``GENERATE`` (default) -- after training, during synthetic data creation.
+    - ``PREPROCESS`` -- before training.
+    - ``POSTPROCESS`` -- after generation, for cleanup.
+
+    Create a new ``GenerateAction`` when you need to synthesize a column
+    based on other columns, fill in faker data, etc.
     """
 
     phase: ProcessPhase = ProcessPhase.GENERATE
 
     def functions(self) -> Functions:
+        """Route ``generate`` to the correct phase slot based on ``self.phase``."""
         fns = Functions()
         if self.phase == ProcessPhase.PREPROCESS:
             fns.preprocess = self.generate
@@ -270,13 +267,14 @@ class GenerateAction(BaseAction, ABC):
 
     @abstractmethod
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate new data based on the existing data in the dataframe."""
+        """Generate new data based on the existing data in the DataFrame."""
         ...
 
     def generate_records(self, num_records: int) -> list[dict[Hashable, Any]]:
-        """
-        If you don't have an existing df you want to mutate, this will simply
-        generate you records.
+        """Generate records without an existing DataFrame.
+
+        Creates an empty DataFrame with ``num_records`` rows, runs ``generate``,
+        and returns the result as a list of dicts.
         """
         df = pd.DataFrame(index=range(num_records))
         return self.generate(df).to_dict("records")
@@ -331,13 +329,11 @@ class GenExpression(GenerateAction):
 
 
 class GenRawExpression(GenerateAction):
-    """
-    A "lower-level" action for utilizing transforms_v2 expressions.
-    This action lets you pass in the whole `update` step payload, as opposed
-    to the above action which restricts you into modifications on a singular column.
+    """Low-level action that passes raw transforms_v2 update payloads.
 
-    Chances are you'd be better off using the `gen_expression` above, unless you want to
-    pass more complex payloads into the transforms_v2 engine.
+    Unlike ``GenExpression`` which targets a single column, this action
+    accepts a full list of ``TransformsUpdate`` steps. Prefer
+    ``GenExpression`` for simpler use cases.
     """
 
     type_: Literal["gen_raw_expression"] = "gen_raw_expression"
@@ -507,10 +503,11 @@ class DateConstraint(BaseAction):
 
 
 class ColAction(BaseAction, ABC):
-    """
-    `ColAction`s are actions that act on one singular column. These are useful
-    in describing seralization/deserialization rules, such as adjusting the format
-    of the data before being sent into model training.
+    """Action that operates on a single named column.
+
+    Useful for defining serialization/deserialization rules (e.g., datetime
+    formatting, categorical validation) applied before training or after
+    generation.
     """
 
     name: str
@@ -521,7 +518,7 @@ class DatetimeCol(ColAction):
 
     format: Optional[str] = None
     """
-    Human-readable format of the datetime (see `strftime` in stdlib).
+    Human-readable format of the datetime (see ``strftime`` in stdlib).
     If not specified, we will attempt to autodetect.
     """
 
@@ -584,29 +581,22 @@ class CategoricalCol(ColAction):
         return batch[self.name].isin(self.values)
 
 
-"""
-This is a fun little hack to ensure the typing works both statically
-and dynamically. The definition of `ActionT` below ensures that the static
-analysis (mypy/pyright) views `ActionT` effectively as a `BaseAction`; this is
-what the `Annotated` does in python's `typing`.
-
-However, the `discriminator` logic in pydantic uses the first type argument
-of `Annotated` to determine all of the allowable types. To give pydantic what
-it wants, we can override at runtime the `__origin__` (which is effectively
-the first argument of `Annotated`) to include all subclasses of `BaseAction`.
-
-Doing this gives us a few advantages:
-- Registers all new subclasses of `BaseAction` without having to explicitly
-    add to a Union list. This circumvents the common rigamarole of
-    setting up a new Registry class, __init__subclass__, etc.
-- Excludes subclasses which are abstract, ensuring intermediate
-    subclasses aren't instantiable or suggested by the pydantic schema.
-- Generates a proper `oneOf` json schema for any consuming `BaseModel`s.
-
-It doesn't solve the issue about dynamically importing; we must first import all
-the actions before they register with `__subclasses__`. Currently all the actions
-are in this module, however, so that isn't an issue.
-"""
+# ActionT / GenerateActionT / ColT use a hack to make typing work both
+# statically and dynamically. The Annotated wrapper lets static analysis
+# (mypy/pyright/ty) view ActionT as a BaseAction. However, pydantic's
+# discriminator logic uses the first type argument of Annotated to determine
+# all allowable types. We override __origin__ at runtime to include all
+# concrete subclasses of BaseAction, which gives us:
+#
+# - Auto-registration of new BaseAction subclasses without a manual Union
+#   list or a Registry class / __init_subclass__ pattern.
+# - Exclusion of abstract subclasses, so intermediate ABCs aren't
+#   instantiable or suggested by the pydantic schema.
+# - A proper oneOf JSON schema for any consuming BaseModel.
+#
+# This does not solve dynamic importing -- all actions must be imported
+# before they register with __subclasses__. Currently all actions live in
+# this module, so that isn't an issue.
 ActionT = Annotated[BaseAction, Field(discriminator="type_")]
 ActionT.__origin__ = Union[tuple(concrete_subclasses(BaseAction))]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
@@ -618,14 +608,11 @@ ColT.__origin__ = Union[tuple(concrete_subclasses(ColAction))]  # type: ignore  
 
 
 class ActionExecutor(BaseModel):
-    """
-    This provides an executor for running through user-provided actions.
+    """Orchestrate a sequence of ``BaseAction`` instances across pipeline phases.
 
-    How this class is used will likely differ based upon the context in which we're running:
-    - NavFT might be interested in running all steps at different phases,
-        transforming the data before finetuning (preprocess), reverting the format back after generation (postprocess),
-        validating the rows fit some constraints (validation), and then adding additional model_metadata (generation)
-
+    Groups each action's overridden methods by phase (preprocess, postprocess,
+    validate_batch, generate) and runs them in order. Postprocess functions
+    run in reverse order to properly unwind preprocessing transformations.
     """
 
     actions: list[ActionT]
