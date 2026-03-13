@@ -167,7 +167,7 @@ cu128 = [
 # at some point, do per-subpackage dependencies
 
 [tool.uv]
-required-version = ">=0.9.14,<0.10.0"
+required-version = ">=0.9.14, <0.10.10" # Moved to include a version that works for dependabot
 cache-keys = [
   { file = "pyproject.toml" }, { git = { commit = true, tags = true } },
   { file = "uv.lock" }
