@@ -266,10 +266,10 @@ class TestEvaluateUsesOriginalTrainDf:
     """``evaluate()`` must always pass the original (pre-PII) data to ``Evaluator``."""
 
     @pytest.mark.parametrize(
-        ("fixture_name", "redacted_df"),
+        ("fixture_name",),
         [
-            ("fixture_process_data_setup_with_pii", "fixture"),
-            ("fixture_process_data_setup_without_pii", None),
+            "fixture_process_data_setup_with_pii",
+            "fixture_process_data_setup_without_pii",
         ],
         ids=["with_pii_replacement", "without_pii_replacement"],
     )
@@ -280,7 +280,6 @@ class TestEvaluateUsesOriginalTrainDf:
         mock_evaluator_cls,
         mock_make_results,
         fixture_name,
-        redacted_df,
         request: pytest.FixtureRequest,
     ):
         """Evaluate always passes ``_original_train_df`` as ``train_df``."""
