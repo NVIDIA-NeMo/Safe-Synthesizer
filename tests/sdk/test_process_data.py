@@ -266,7 +266,7 @@ class TestEvaluateUsesOriginalTrainDf:
     """``evaluate()`` must always pass the original (pre-PII) data to ``Evaluator``."""
 
     @pytest.mark.parametrize(
-        ("fixture_name",),
+        "fixture_name",
         [
             "fixture_process_data_setup_with_pii",
             "fixture_process_data_setup_without_pii",
