@@ -8879,7 +8879,7 @@
             <td><code><a class="autorefs autorefs-internal" title="              CacheManager(storage_config=None) (nemo_safe_synthesizer.pii_replacer.ner.models.CacheManager)" href="#nemo_safe_synthesizer.pii_replacer.ner.models.CacheManager">CacheManager</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Handles downloading model files from the gretel "opt" package repo.</p>
+                <p>Handles downloading model files from the "opt" package repo.</p>
               </div>
             </td>
           </tr>
@@ -8923,7 +8923,7 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            DEFAULT_BUCKET = os.getenv('GRETEL_OPT_BUCKET', 'gretel-opt-dev-use2')
+            <td><code><a class="autorefs autorefs-internal" title="            DEFAULT_BUCKET = os.getenv('NSS_OPT_BUCKET', 'nss-opt-dev-use2')
 
   
       module-attribute
@@ -8937,7 +8937,7 @@
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            DEFAULT_CACHE_DIR = os.getenv('GRETEL_OPT_CACHE_DIR', '.optcache')
+            <td><code><a class="autorefs autorefs-internal" title="            DEFAULT_CACHE_DIR = os.getenv('NSS_OPT_CACHE_DIR', '.optcache')
 
   
       module-attribute
@@ -8946,7 +8946,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>StorageConfig</code> default cache directory. Searches the GRETEL_OPT_CACHE_DIR environment</p>
+                <p><code>StorageConfig</code> default cache directory. Searches the NSS_OPT_CACHE_DIR environment</p>
               </div>
             </td>
           </tr>
@@ -8968,7 +8968,7 @@
 
 
 <h3 id="nemo_safe_synthesizer.pii_replacer.ner.models.DEFAULT_BUCKET" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">DEFAULT_BUCKET</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s1">&#39;GRETEL_OPT_BUCKET&#39;</span><span class="p">,</span> <span class="s1">&#39;gretel-opt-dev-use2&#39;</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">DEFAULT_BUCKET</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s1">&#39;NSS_OPT_BUCKET&#39;</span><span class="p">,</span> <span class="s1">&#39;nss-opt-dev-use2&#39;</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -8990,7 +8990,7 @@
 
 
 <h3 id="nemo_safe_synthesizer.pii_replacer.ner.models.DEFAULT_CACHE_DIR" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">DEFAULT_CACHE_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s1">&#39;GRETEL_OPT_CACHE_DIR&#39;</span><span class="p">,</span> <span class="s1">&#39;.optcache&#39;</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">DEFAULT_CACHE_DIR</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s1">&#39;NSS_OPT_CACHE_DIR&#39;</span><span class="p">,</span> <span class="s1">&#39;.optcache&#39;</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
@@ -9001,7 +9001,7 @@
 
     <div class="doc doc-contents ">
 
-        <p><code>StorageConfig</code> default cache directory. Searches the GRETEL_OPT_CACHE_DIR environment
+        <p><code>StorageConfig</code> default cache directory. Searches the NSS_OPT_CACHE_DIR environment
 for a cache directory. By default it will fallback to <code>.optcache</code>. If this is set to
 <code>disabled</code> files wont be cached to disk.</p>
 
@@ -9079,7 +9079,7 @@ for a cache directory. By default it will fallback to <code>.optcache</code>. If
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Packages available to customers via "paywall" behind gretel api key</p>
+                <p>Packages available to customers via "paywall" behind an api key</p>
               </div>
             </td>
           </tr>
@@ -9094,7 +9094,7 @@ for a cache directory. By default it will fallback to <code>.optcache</code>. If
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Only available from internal gretel infrastructure.</p>
+                <p>Only available from internal infrastructure.</p>
               </div>
             </td>
           </tr>
@@ -9152,7 +9152,7 @@ for a cache directory. By default it will fallback to <code>.optcache</code>. If
 
     <div class="doc doc-contents ">
 
-        <p>Packages available to customers via "paywall" behind gretel api key</p>
+        <p>Packages available to customers via "paywall" behind an api key</p>
 
     </div>
 
@@ -9175,7 +9175,7 @@ for a cache directory. By default it will fallback to <code>.optcache</code>. If
 
     <div class="doc doc-contents ">
 
-        <p>Only available from internal gretel infrastructure.</p>
+        <p>Only available from internal infrastructure.</p>
 
     </div>
 
@@ -9775,7 +9775,7 @@ wont be cached through to disk.</p>
     <div class="doc doc-contents ">
 
         <p>Return a default <code>StorageConfig</code> based on a system's environment variables.</p>
-<p>By convention, it looks for the environment variable <code>GRETEL_OPT_BUCKET</code> as
+<p>By convention, it looks for the environment variable <code>NSS_OPT_BUCKET</code> as
 the bucket location. The default settings from this function are appropriate
 for development without additional configuration.</p>
 
@@ -9799,7 +9799,7 @@ for development without additional configuration.</p>
 </span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_system</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StorageConfig</span><span class="p">:</span>
 </span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a default ``StorageConfig`` based on a system&#39;s environment variables.</span>
 </span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>
-</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">    By convention, it looks for the environment variable ``GRETEL_OPT_BUCKET`` as</span>
+</span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">    By convention, it looks for the environment variable ``NSS_OPT_BUCKET`` as</span>
 </span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="sd">    the bucket location. The default settings from this function are appropriate</span>
 </span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a><span class="sd">    for development without additional configuration.</span>
 </span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">    &quot;&quot;&quot;</span>
@@ -9837,7 +9837,7 @@ for development without additional configuration.</p>
 
 
 
-        <p>Handles downloading model files from the gretel "opt" package repo.</p>
+        <p>Handles downloading model files from the "opt" package repo.</p>
 <p>This class will also optionally cache these files to disk. This is useful for
 environments with local persistent state such as a local development laptop.</p>
 

@@ -3153,10 +3153,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_gretel_array_markers" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_array_markers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;remove_gretel_array_markers
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;remove_array_markers
       
     </span>
   </a>
@@ -8075,10 +8075,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_gretel_array_markers" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_array_markers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;remove_gretel_array_markers
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;remove_array_markers
       
     </span>
   </a>
@@ -8359,7 +8359,7 @@ dict using the <code>NESTING_DELIM</code> / <code>ARRAY_POS</code> markers.</p>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            remove_gretel_array_markers(data) (nemo_safe_synthesizer.data_processing.records.json_record.remove_gretel_array_markers)" href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_gretel_array_markers">remove_gretel_array_markers</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="            remove_array_markers(data) (nemo_safe_synthesizer.data_processing.records.json_record.remove_array_markers)" href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_array_markers">remove_array_markers</a></code></td>
               <td>
                 <div class="doc-md-description">
                   <p>Strip array-position markers from a composite key and build a <code>ValuePath</code>.</p>
@@ -8767,10 +8767,10 @@ a None key before flattening.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nemo_safe_synthesizer.data_processing.records.json_record.remove_gretel_array_markers" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">remove_gretel_array_markers</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
+<h3 id="nemo_safe_synthesizer.data_processing.records.json_record.remove_array_markers" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">remove_array_markers</span><span class="p">(</span><span class="n">data</span><span class="p">)</span></code>
 
-<a href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_gretel_array_markers" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nemo_safe_synthesizer.data_processing.records.json_record.remove_array_markers" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
@@ -8824,7 +8824,7 @@ a None key before flattening.</p>
 <span class="normal"><a href="#__codelineno-0-83">83</a></span>
 <span class="normal"><a href="#__codelineno-0-84">84</a></span>
 <span class="normal"><a href="#__codelineno-0-85">85</a></span>
-<span class="normal"><a href="#__codelineno-0-86">86</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_gretel_array_markers</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">base</span><span class="o">.</span><span class="n">ValuePath</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-86">86</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_array_markers</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="n">base</span><span class="o">.</span><span class="n">ValuePath</span><span class="p">]:</span>
 </span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Strip array-position markers from a composite key and build a ``ValuePath``.</span>
 </span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>
 </span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">    Returns:</span>
@@ -8877,7 +8877,7 @@ a None key before flattening.</p>
 </span><span id="__span-0-91"><a id="__codelineno-0-91" name="__codelineno-0-91"></a>    <span class="n">out</span> <span class="o">=</span> <span class="p">[]</span>
 </span><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a>    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a>        <span class="n">k</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
-</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>        <span class="n">new_key</span><span class="p">,</span> <span class="n">array_count</span><span class="p">,</span> <span class="n">value_path</span> <span class="o">=</span> <span class="n">remove_gretel_array_markers</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>        <span class="n">new_key</span><span class="p">,</span> <span class="n">array_count</span><span class="p">,</span> <span class="n">value_path</span> <span class="o">=</span> <span class="n">remove_array_markers</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
 </span><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a>        <span class="n">flat</span> <span class="o">=</span> <span class="n">base</span><span class="o">.</span><span class="n">KVPair</span><span class="p">(</span><span class="n">new_key</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">base</span><span class="o">.</span><span class="n">get_type_as_string</span><span class="p">(</span><span class="n">v</span><span class="p">),</span> <span class="n">array_count</span><span class="p">,</span> <span class="n">value_path</span><span class="p">)</span>
 </span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a>        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">flat</span><span class="p">)</span>
 </span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="k">return</span> <span class="n">out</span>
