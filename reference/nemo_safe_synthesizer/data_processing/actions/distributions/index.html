@@ -8237,6 +8237,12 @@
 
     <div class="doc doc-contents first">
 
+        <p>Statistical distribution models for sampling numeric and datetime values.</p>
+<p>Provides <code>Distribution</code> (float-valued) and <code>DatetimeDistribution</code>
+hierarchies, each with Gaussian and Uniform concrete implementations.
+Pydantic discriminated unions (<code>DistributionT</code>, <code>DatetimeDistributionT</code>)
+allow YAML/JSON configs to select the distribution type via <code>distribution_type</code>.</p>
+
 
 
 
@@ -8264,7 +8270,7 @@
    (nemo_safe_synthesizer.data_processing.actions.distributions.Distribution)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.Distribution">Distribution</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Abstract base class representing a distribution.</p>
+                <p>Abstract base for float-valued distributions.</p>
               </div>
             </td>
           </tr>
@@ -8277,7 +8283,7 @@
    (nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution)" href="#nemo_safe_synthesizer.data_processing.actions.distributions.DatetimeDistribution">DatetimeDistribution</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>This class is separate from the <code>Distribution</code> ABC above</p>
+                <p>Abstract base for datetime-valued distributions.</p>
               </div>
             </td>
           </tr>
@@ -8319,9 +8325,9 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code>, <code><span title="abc.ABC">ABC</span></code></p>
 
-        <p>Abstract base class representing a distribution.
-Child classes should specify whichever arguments are needed
-to properly parametrize their distribution.</p>
+        <p>Abstract base for float-valued distributions.</p>
+<p>Subclasses specify the parameters needed to define their distribution
+and implement <code>sample</code> to draw values.</p>
 
     
 
@@ -8367,17 +8373,12 @@ to properly parametrize their distribution.</p>
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code>, <code><span title="abc.ABC">ABC</span></code></p>
 
-        <p>This class is separate from the <code>Distribution</code> ABC above
-because datetimes need slightly different handling than floats.
-Providing this separate class hierarchy also makes it easier
-in pydantic to specify what datatypes we expect in the distribution
-parameters (float vs datetime), as well as dt-specific arguments.</p>
-<p>In practice, this means creating a "copy" <code>DatetimeDistribution</code>
-for each regular <code>Distribution</code> where it makes sense. We could probably
-automate some of this with generics, but IMO that'd just make it confusing
-to read. We're still able to reuse the original <code>Distribution</code> class most
-of the time in <code>DatetimeDistribution</code>, making the only business logic
-really be about how we want to translate dates &rarr; floats.</p>
+        <p>Abstract base for datetime-valued distributions.</p>
+<p>Separate from <code>Distribution</code> because datetime parameters (<code>datetime</code>,
+<code>timedelta</code>) differ from floats, and pydantic validation benefits from
+distinct type hierarchies. Subclasses implement <code>sample_datetimes</code> to
+produce raw datetime samples; universal post-processing (rounding via
+<code>precision</code>, formatting via <code>format</code>) is applied by <code>sample</code>.</p>
 
     
 
