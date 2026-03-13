@@ -32,21 +32,29 @@ Rule = dict[str, Any]
 
 
 class TransformFnAccounting:
+    """Tracks which transform functions or filters are applied to each column for reporting.
+
+    Args:
+        included_fns: Function/filter names to track; others are ignored (or recorded as ``jinja``).
+
+    Attributes:
+        included_fns: Set of names that are included in accounting.
+        column_fns: Map of column name to set of function/filter names applied to that column.
+    """
+
     included_fns: set[str]
     column_fns: dict[str, set[str]]
 
     def __init__(self, included_fns: list[str]):
-        """included_fns - list of function / filter names that should be included in accounting"""
         self.included_fns = set(included_fns)
         self.column_fns = defaultdict(set)
 
-    def update(self, column_names: str | Iterable[str], fns: str | set[str]):
-        """
-        Records the functions and filters that are being applied to columns.
+    def update(self, column_names: str | Iterable[str], fns: str | set[str]) -> None:
+        """Record that the given functions/filters were applied to the given columns.
 
-        column_names - iterable of column names to record filters / functions on. An individual string
-          column name is also accepted.
-        fns - set of names of filters / functions
+        Args:
+            column_names: Column name(s) to record; a single string or iterable of strings.
+            fns: Name(s) of functions or filters applied; intersected with ``included_fns``.
         """
         if isinstance(fns, str):
             fns = set([fns])
@@ -61,23 +69,47 @@ class TransformFnAccounting:
 
 @dataclass
 class ProgressStatus:
+    """Mutable progress counters and labels for transformation steps (step, rule, row, column)."""
+
     step_n: int = 0
+    """Current step index (0-based)."""
     step_n_total: int = 0
+    """Total number of steps."""
     update_rule_n: int = 0
+    """Current update rule index (0-based)."""
     update_rule_n_total: int = 0
+    """Total number of update rules in the current step."""
     update_rule_description: str = ""
+    """Description of the current update rule (for logging)."""
     row_n: int = 0
+    """Number of rows processed so far."""
     row_n_total: int = 0
+    """Total number of rows to process for the current column."""
     column_n: int = 0
+    """Current column index (0-based)."""
     column_n_total: int = 0
+    """Total number of columns in the current update rule."""
     column_name: str = ""
+    """Name of the column currently being processed."""
 
 
 class ProgressLog:
+    """Throttled progress logging for transformation; logs to ``logger.user`` at most every ``log_duration`` seconds.
+
+    Args:
+        log_duration: Minimum seconds between log emissions.
+
+    Attributes:
+        status: Current progress counters and labels.
+        start_time: Monotonic time when logging started.
+        last_log: Monotonic time of last log.
+        log_duration: Minimum interval between logs in seconds.
+    """
+
     status: ProgressStatus
     start_time: float
     last_log: float
-    log_duration: float  # Minimum number of seconds between logs
+    log_duration: float
 
     def __init__(self, log_duration: float):
         self.status = ProgressStatus()
@@ -85,12 +117,8 @@ class ProgressLog:
         self.last_log = monotonic()
         self.log_duration = log_duration
 
-    def log_throttled(self, force: bool = False):
-        """
-        Log if sufficient time has passed since previous log.
-
-        If `force` is `True`, log regardless of time passed.
-        """
+    def log_throttled(self, force: bool = False) -> None:
+        """Emit a progress log if at least ``log_duration`` seconds have passed, or if ``force`` is ``True``."""
         if force or monotonic() - self.last_log > self.log_duration:
             duration = monotonic() - self.start_time
             rows_per_second = 0 if duration == 0 else (self.status.row_n) / duration
@@ -128,13 +156,20 @@ class ProgressLog:
 
 
 class Step:
+    """Single transformation step: applies column/row add/drop/rename/update rules to a DataFrame.
+
+    Used via ``Step.execute``; holds ``_env`` (Jinja + faker) and ``_vars`` for the step.
+    """
+
     _env: Environment
     _vars: dict[str, str | dict | list]
 
     def do_make_template(self, template_str: str) -> Template:
+        """Build a Jinja template from the string (may raise ``TemplateError``)."""
         return self._env.make_template(template_str)
 
     def make_template(self, template_str: str) -> Template:
+        """Build a Jinja template; raise with ``error_id='param'`` on failure."""
         try:
             return self.do_make_template(template_str)
         except TemplateError as e:
@@ -143,7 +178,8 @@ class Step:
                 error_id="param",
             )
 
-    def template_to_fnames(self, template_str) -> set[str]:
+    def template_to_fnames(self, template_str: str) -> set[str]:
+        """Return the set of filter/function names referenced in the template (e.g. ``fake``, ``re``)."""
         retval = set()
         try:
             retval = self._env.template_to_fnames(template_str)
@@ -158,7 +194,7 @@ class Step:
         column: pd.Series,
         **kwargs,
     ) -> str:
-        """Render the full column into a single string from template"""
+        """Render the full column as a single string from the template with ``column`` and ``vars``."""
         self._env.maybe_seed(column)
         for k, v in kwargs.items():
             setattr(column, k, v)
@@ -177,6 +213,39 @@ class Step:
         fnreport: TransformFnAccounting | None = None,
         **kwargs,
     ) -> str:
+        """Render one cell with optional foreach iteration, fallback on error, and progress/fnreport updates.
+
+        Evaluates the cell value for the given row and column. If ``foreach`` is provided, the
+        foreach template is rendered first to produce an iterable (parsed as Python literal or
+        JSON); the main template is then applied once per item with ``item`` and ``items`` in
+        context, and the final ``cell`` is the result of the last iteration. If template
+        rendering raises, ``SafeSynthesizerFakerMethodNotFound`` is re-raised; other exceptions
+        are caught and either a fallback template is applied (when ``fallback_template`` is set)
+        or the string ``[Error] <exception>`` is returned. Progress and function accounting
+        (``fnreport``) are updated when provided.
+
+        Args:
+            row: DataFrame row (series) for template context.
+            template: Jinja template for the cell value.
+            column: Dict with at least ``name``; passed to template as ``column``.
+            fallback_template: Optional template used when ``template`` raises (except
+                ``SafeSynthesizerFakerMethodNotFound``).
+            foreach: Optional template that renders to an iterable (e.g. JSON list or Python
+                literal); each element is exposed as ``item``, full list as ``items``.
+            progress: If set, throttled progress logging is called and ``row_n`` is incremented.
+            fn_names: Names to record in ``fnreport`` on success (when ``fnreport`` is set).
+            fallback_fn_names: Names to record in ``fnreport`` when fallback template is used.
+            fnreport: Optional accounting to record which filters/functions were applied.
+            **kwargs: Additional context passed to template render.
+
+        Returns:
+            Rendered cell string. On error without fallback, returns ``[Error] <exception message>``.
+            If ``foreach`` renders to a non-iterable, returns ``[Error] '...' is not iterable...``.
+
+        Raises:
+            SafeSynthesizerFakerMethodNotFound: When template or fallback raises it (e.g. fake
+                entity with ``on_error='raise'``); not caught.
+        """
         if progress is not None:
             progress.log_throttled()
 
@@ -253,10 +322,12 @@ class Step:
                 progress.log_throttled()
             return cell
 
-    def _render_row(self, template: Template, row, **kwargs) -> str:
+    def _render_row(self, template: Template, row: pd.Series, **kwargs) -> str:
+        """Render a row through the template with ``row``, ``index``, and ``vars``."""
         return template.render(row=row, index=row.name, vars=self._vars, **kwargs)
 
-    def _add_columns(self, df: pd.DataFrame, rules: list[Rule]):
+    def _add_columns(self, df: pd.DataFrame, rules: list[Rule]) -> None:
+        """Insert new columns into ``df`` per rules (``name`` and optional ``position``)."""
         for col in rules:
             name = col["name"]
             position = col.get("position")
@@ -264,8 +335,8 @@ class Step:
                 position = len(df.columns)
             df.insert(position, name, None)
 
-    def _rename_columns(self, df: pd.DataFrame, rules: list[Rule]):
-        # Keeping it simple for now, renaming columns by name only (not condition).
+    def _rename_columns(self, df: pd.DataFrame, rules: list[Rule]) -> None:
+        """Rename columns per rules (name → value); skip columns in ``lock_columns``."""
         locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
         column_names = {
             col["name"]: col["value"]
@@ -274,7 +345,8 @@ class Step:
         }
         df.rename(columns=column_names, inplace=True)
 
-    def _drop_rows(self, df: pd.DataFrame, rules: list[Rule]):
+    def _drop_rows(self, df: pd.DataFrame, rules: list[Rule]) -> None:
+        """Drop rows for which each rule's condition template renders to ``True``."""
         conditions = [self.make_template(rule["condition"]) for rule in rules]
         for condition in conditions:
             row_filter = df.apply(lambda row: self._render_row(condition, row), axis=1)
@@ -286,7 +358,11 @@ class Step:
         df: pd.DataFrame,
         entities: dict[str, str],
         column_types: dict[str, str],
-    ):
+    ) -> tuple[list[str], Template | None]:
+        """Resolve a drop rule to a list of column names and optional condition template.
+
+        Rule may specify columns by name, entity, type, position, or condition.
+        """
         column_name = rule.get("name")
         rule_entities = rule.get("entity")
         position = rule.get("position")
@@ -328,7 +404,8 @@ class Step:
         entities: dict[str, str],
         column_types: dict[str, str],
         fnreport: TransformFnAccounting | None = None,
-    ):
+    ) -> None:
+        """Drop columns per rules (by name/entity/type/position/condition); respect ``lock_columns``; update ``fnreport``."""
         locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
         try:
             for rule in rules:
@@ -362,7 +439,8 @@ class Step:
                 error_id="param",
             )
 
-    def update_ner_cache(self, texts: pd.Series, entities: set[str] | None = None):
+    def update_ner_cache(self, texts: pd.Series, entities: set[str] | None = None) -> None:
+        """Pre-fill the entity extractor cache for the given text series (e.g. before row updates)."""
         self._env.entity_extractor.batch_update_cache([str(s) for s in texts], entities)
 
     def _parse_update_rows_rule(
@@ -371,7 +449,8 @@ class Step:
         df: pd.DataFrame,
         entities: dict[str, str],
         column_types: dict[str, str],
-    ):
+    ) -> tuple[list[str], Template | None]:
+        """Resolve an update rule to a list of column names and optional condition template."""
         column_name = rule.get("name")
         rule_entities = rule.get("entity")
         condition = rule.get("condition")
@@ -413,7 +492,26 @@ class Step:
         column_types: dict[str, str],
         progress: ProgressLog,
         fnreport: TransformFnAccounting,
-    ):
+    ) -> None:
+        """Apply row-update rules to DataFrame cells; skip locked columns; update progress and fnreport.
+
+        Target columns per rule come from ``name``/``entity``/``type``/``condition``; cells
+        are set by rendering the rule's ``value`` (and optional ``fallback_value``) template.
+        Optional ``condition`` and ``foreach`` narrow rows and enrich context. Locked columns
+        are skipped; NER cache is refreshed when rules use cacheable filters.
+
+        Args:
+            df: DataFrame to modify in place. Target columns must exist.
+            rules: List of row-update rules; each may have ``name``/``entity``/``type``,
+                ``value``, optional ``fallback_value``, ``condition``, and ``foreach``.
+            entities: Map of column name to entity type (used for rule resolution).
+            column_types: Map of column name to column type (used for rule resolution).
+            progress: Progress logger; its status is updated with rule/column/row progress.
+            fnreport: Accounting instance to record which transform functions were applied.
+
+        Returns:
+            None. The DataFrame is modified in place.
+        """
         locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
         progress.status.update_rule_n_total = len(rules)
         for rule_n, rule in enumerate(rules):
@@ -485,7 +583,21 @@ class Step:
         env: Environment,
         progress: ProgressLog,
         fnreport: TransformFnAccounting | None,
-    ):
+    ) -> pd.DataFrame:
+        """Run one transformation step: apply column add/drop/rename and row drop/update from ``step_config``.
+
+        Args:
+            df: DataFrame to transform (modified in place).
+            entities: Column name to entity type.
+            column_types: Column name to column type.
+            step_config: Step config with optional ``vars``, ``columns`` (add/drop/rename), ``rows`` (drop/update).
+            env: Environment (Jinja, faker, entity extractor).
+            progress: Progress logger for throttled output.
+            fnreport: Optional accounting for which functions were applied per column.
+
+        Returns:
+            The same DataFrame after applying the step (index reset).
+        """
         step = cls()
         step._env = env
         step._vars = {}
@@ -511,15 +623,20 @@ class Step:
 
 
 def instantiate_vars(var_name: str, var_value: dict | list | str, step: Step, df: pd.DataFrame) -> Any:
-    """
-    Traverse the var value, render any template strings and attempt to eval
-    as more specific types.
+    """Recursively render template strings in ``var_value`` and eval to Python types.
 
-    This is recursive, but users are not expected to add large, deeply
-    nested structures to the vars list.
+    Strings are rendered with ``step`` and ``df``; then ``ast.literal_eval`` is attempted.
+    Dicts and lists are processed recursively. Template errors for ``var_name`` raise with
+    ``error_id='param'``. Order of vars in config can affect what is available during render.
 
-    A template may reference running vars list, but a given var may or may not be instantiated
-    in time for it to be available.
+    Args:
+        var_name: Name of the variable (used in error messages).
+        var_value: Current value (string, list, or dict) to render and optionally eval.
+        step: Step with ``_env`` and ``_vars`` for template rendering.
+        df: DataFrame available as ``data`` in templates.
+
+    Returns:
+        Rendered value, with strings possibly converted to bool/int/float/list/dict via ``literal_eval``.
     """
     if isinstance(var_value, str):
         try:
@@ -550,7 +667,18 @@ def instantiate_vars(var_name: str, var_value: dict | list | str, step: Step, df
 
 
 class Editor:
-    def _config_globals(self, entity_extractor: EntityExtractor | None):
+    """Applies a sequence of transformation steps to a DataFrame (columns/rows add, drop, rename, update).
+
+    Config is a dict with ``steps``; each step has optional ``vars``, ``columns``, and ``rows``.
+    Uses ``Environment`` for Jinja templates and entity extraction.
+
+    Args:
+        config: Editor config (e.g. from YAML) with ``globals`` and ``steps``.
+        entity_extractor: Optional extractor for NER in templates; ``Environment`` holds it.
+    """
+
+    def _config_globals(self, entity_extractor: EntityExtractor | None) -> None:
+        """Initialize globals (locales, seed, chunksize, entities) and build ``Environment``."""
         globals_config = self.config.get("globals") or {}
         locales: list[str] | None = globals_config.get("locales")
         seed = globals_config.get("seed")
@@ -566,12 +694,13 @@ class Editor:
             entity_extractor=entity_extractor,
         )
 
-    def __init__(self, config: dict[str, dict], entity_extractor: EntityExtractor | None):
+    def __init__(self, config: dict[str, dict], entity_extractor: EntityExtractor | None) -> None:
         self.config = config
         self._config_globals(entity_extractor)
 
     @classmethod
     def load_yaml(cls, yaml_str: str) -> Editor:
+        """Build an ``Editor`` from a YAML string (e.g. ``yaml.safe_load(yaml_str)``)."""
         return cls(yaml.safe_load(yaml_str))
 
     def _process_df(
@@ -581,6 +710,7 @@ class Editor:
         column_types: dict[str, str],
         fnreport: TransformFnAccounting | None = None,
     ) -> pd.DataFrame:
+        """Run all steps in order on ``df`` (in place); progress logged every 30s."""
         progress = ProgressLog(30)
         progress.status.step_n_total = len(self.config["steps"])
         for stepn, step_config in enumerate(self.config["steps"]):
@@ -598,5 +728,16 @@ class Editor:
         column_types: dict[str, str],
         fnreport: TransformFnAccounting | None = None,
     ) -> pd.DataFrame:
+        """Apply all transformation steps to a deep copy of ``df`` and return the result.
+
+        Args:
+            df: Source DataFrame (not modified).
+            entities: Column name to entity type.
+            column_types: Column name to column type.
+            fnreport: Optional accounting for which functions were applied per column.
+
+        Returns:
+            Transformed DataFrame.
+        """
         df_copy = df.copy(deep=True)
         return self._process_df(df_copy, entities, column_types, fnreport)
