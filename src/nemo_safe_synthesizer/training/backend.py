@@ -289,13 +289,3 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         model from GPU memory after saving.
         """
         ...
-
-    def _trust_remote_code_for_model(self) -> bool:
-        """Determine whether the model should be loaded with ``trust_remote_code=True``.
-
-        Currently returns ``True`` only for NVIDIA models on HuggingFace Hub.
-
-        Returns:
-            Whether to trust remote code when loading the model.
-        """
-        return str(self.params.training.pretrained_model).startswith("nvidia/")
