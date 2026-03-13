@@ -21,10 +21,10 @@ classifiers = [
 
 
 dependencies = [
-  # "unsloth[cu128-torch291]==2025.12.4 requires datasets==4.3.0"
+  # "unsloth[cu128-torch291]==2025.12.4 requires datasets==4.7.0"
   # it only has a runtime error of course
   # so we need to pin it here
-  "datasets==4.3.0",
+  "datasets==4.7.0",
   "faker>=20.0",
   "huggingface-hub>=0.34.4,<1",
   "pandas>=2.1.3",
