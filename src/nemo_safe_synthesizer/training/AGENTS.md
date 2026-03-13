@@ -52,7 +52,7 @@ Trainer removes `PrinterCallback`; adds SafeSynthesizerWorkerCallback or Progres
 ## Gotchas
 
 - `rope_parameters_location` — `"autoconfig"` sets rope scaling on `autoconfig.rope_scaling`; `"automodel"` passes it via `framework_params["rope_scaling"]`. Wrong choice can break rope scaling.
-- `_trust_remote_code_for_model()` — returns `True` only for `nvidia/` models. Used for `AutoConfig.from_pretrained(..., trust_remote_code=...)`.
+- `trust_remote_code_for_model()` — from `llm.utils`; returns `True` only for `nvidia/` models. Called directly in `HuggingFaceBackend` for all `from_pretrained` calls.
 - `_apply_eval_dataset_overrides()` — when `eval_dataset` is provided, overrides `eval_steps`, `eval_strategy="steps"`, `do_eval=True`, `include_for_metrics`, `eval_accumulation_steps`.
 - Timeseries preprocessing — `process_timeseries_data()` adds `PSEUDO_GROUP_COLUMN` (`__nss_sequence_id`) when no group column is specified; treats the whole dataset as one sequence.
 
@@ -64,7 +64,7 @@ Trainer removes `PrinterCallback`; adds SafeSynthesizerWorkerCallback or Progres
 
 ## Read First
 
-- `backend.py` — TrainingBackend ABC, NSSTrainerResult, _trust_remote_code_for_model
+- `backend.py` — TrainingBackend ABC, NSSTrainerResult
 - `huggingface_backend.py` — HuggingFaceBackend, FIXED_RUNTIME_TRAINING_ARGS, DP config, LoRA/quantization, _apply_rope_scaling
 - `callbacks.py` — InferenceEvalCallback, ProgressBarCallback, SafeSynthesizerWorkerCallback
 - `timeseries_preprocessing.py` — process_timeseries_data, PSEUDO_GROUP_COLUMN
