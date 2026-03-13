@@ -394,3 +394,47 @@ class TestLoadFromSavePath:
 
         assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_train_after_load_from_save_path_raises(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """``train()`` is not valid in the resume path -- it should fail immediately."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+        builder.load_from_save_path()
+
+        with pytest.raises(RuntimeError, match="train.*cannot be called after load_from_save_path"):
+            builder.train()
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_run_after_load_from_save_path_raises(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """``run()`` includes ``train()`` and is not valid in the resume path."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+        builder.load_from_save_path()
+
+        with pytest.raises(RuntimeError, match="run.*cannot be called after load_from_save_path"):
+            builder.run()

@@ -156,6 +156,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._pii_replacer_time: float | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
+        self._loaded_from_save_path: bool = False
 
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
     def load_from_save_path(self) -> SafeSynthesizer:
@@ -206,18 +207,7 @@ class SafeSynthesizer(ConfigBuilder):
                 "Cached train/test split not found and no data source provided. "
                 "Call with_data_source() before load_from_save_path(), or ensure the cached dataset exists."
             )
-        # match run_dir:
-        #     case Path() as p if p.exists():
-        #         if not config_file.exists():
-        #             raise ValueError(f"Config file does not exist: {config_file}")
-        #         self._nss_config = SafeSynthesizerParameters.from_json(config_file)
-        #         self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir_structure)
-        #     case Path() as p if not p.exists():
-        #         raise ValueError(f"Run directory does not exist: {p}")
-        #     case None:
-        #         raise ValueError("save_path is required to load an existing Safe Synthesizer adapter")
-        #     case _:
-        #         raise ValueError(f"Invalid run directory: {run_dir}")
+        self._loaded_from_save_path = True
         return self
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
@@ -239,8 +229,8 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        if self._original_train_df is not None and self._test_df is not None:
-            logger.warning("Data already processed, skipping data processing...")
+        if self._loaded_from_save_path:
+            # Resume path already loaded cached splits; nothing to do.
             return self
 
         holdout = Holdout(self._nss_config)
@@ -295,8 +285,16 @@ class SafeSynthesizer(ConfigBuilder):
             Self for method chaining.
 
         Raises:
-            RuntimeError: If ``process_data()`` has not been called first.
+            RuntimeError: If called after ``load_from_save_path()`` or
+                before ``process_data()``.
         """
+        if self._loaded_from_save_path:
+            raise RuntimeError(
+                "train() cannot be called after load_from_save_path(). "
+                "The resume path is for generation and evaluation only: "
+                ".load_from_save_path().generate().evaluate()"
+            )
+
         # these are for ty
         if TYPE_CHECKING:
             assert self._train_df is not None
@@ -441,7 +439,18 @@ class SafeSynthesizer(ConfigBuilder):
         When ``enable_synthesis`` is ``False``, runs PII replacement
         only.  For step-by-step control, call the individual methods
         instead.
+
+        Raises:
+            RuntimeError: If called after ``load_from_save_path()``.
+                Use ``.generate().evaluate()`` for the resume path.
         """
+        if self._loaded_from_save_path:
+            raise RuntimeError(
+                "run() cannot be called after load_from_save_path(). "
+                "The resume path is for generation and evaluation only: "
+                ".load_from_save_path().generate().evaluate()"
+            )
+
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
