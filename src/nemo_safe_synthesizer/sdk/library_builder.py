@@ -196,6 +196,8 @@ class SafeSynthesizer(ConfigBuilder):
             # training_path persists the original training split for evaluation.
             self._original_train_df = pd.read_csv(training_path)
             self._test_df = pd.read_csv(test_path)
+            # Mark that we have fully loaded from the saved run, including cached splits.
+            self._loaded_from_save_path = True
         elif self._data_source is not None:
             logger.warning(
                 "Cached dataset not found, will use provided data source. "
@@ -207,7 +209,6 @@ class SafeSynthesizer(ConfigBuilder):
                 "Cached train/test split not found and no data source provided. "
                 "Call with_data_source() before load_from_save_path(), or ensure the cached dataset exists."
             )
-        self._loaded_from_save_path = True
         return self
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
