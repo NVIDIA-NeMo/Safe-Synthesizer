@@ -14,7 +14,7 @@ export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_
 CONFIGS=(unsloth dp dp_usg_guidance) # the jobs will run all datasets with these configs
 export NSS_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer" # where the nss repo is located
 export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
-export CONFIG_DIR="/lustre/fsw/portfolios/llmservice/users/ninaxu/safe_synthesizer/configs/records_3k" # where the config files are located
+export CONFIG_DIR="${NSS_SLURM_DIR}" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files
 export ADAPTER_PATH="${LUSTRE_DIR}/nss_results/adapters" # base path for run directories (each run creates a subdirectory via --run-path)
 export VLLM_CACHE_ROOT="${LUSTRE_DIR}/.cache/vllm/" # where the vllm cache is saved, this is to prevent the login node from blowing up
@@ -23,7 +23,7 @@ export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
 export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
-export WANDB_MODE="online" # "online", "offline" or "disabled"
+export WANDB_MODE="disabled" # "online", "offline" or "disabled"
 
 # NSS CLI environment variables (used by safe-synthesizer CLI via pydantic-settings)
 # These are picked up automatically by CLISettings in the CLI:
