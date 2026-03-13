@@ -3231,7 +3231,7 @@ cpu = [
     { name = "transformers", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "triton", version = "3.5.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "trl", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "unsloth", extra = ["cu128-torch290"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "unsloth", extra = ["cu128-torch291"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "unsloth-zoo", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "vllm", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
@@ -3256,10 +3256,10 @@ cu128 = [
     { name = "triton", version = "3.5.0", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine != 'arm64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "triton", version = "3.5.1", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "trl", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "unsloth", extra = ["cu128-torch290"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "unsloth", extra = ["cu128-torch291"], marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "unsloth-zoo", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "vllm", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "xformers", version = "0.0.33.post1", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "xformers", version = "0.0.33.post2", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
 ]
 engine = [
     { name = "anyascii", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'darwin' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
@@ -3414,15 +3414,15 @@ requires-dist = [
     { name = "triton", marker = "extra == 'cu128'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "nemo-safe-synthesizer", extra = "cu128" } },
     { name = "trl", marker = "extra == 'cpu'", specifier = ">=0.23.0" },
     { name = "trl", marker = "extra == 'cu128'", specifier = ">=0.23.0" },
-    { name = "unsloth", extras = ["cu128-torch290"], marker = "extra == 'cpu'", specifier = "==2025.12.4" },
-    { name = "unsloth", extras = ["cu128-torch290"], marker = "extra == 'cu128'", specifier = "==2025.12.4" },
+    { name = "unsloth", extras = ["cu128-torch291"], marker = "extra == 'cpu'", specifier = "==2025.12.4" },
+    { name = "unsloth", extras = ["cu128-torch291"], marker = "extra == 'cu128'", specifier = "==2025.12.4" },
     { name = "unsloth-zoo", marker = "extra == 'cpu'", specifier = "==2025.12.4" },
     { name = "unsloth-zoo", marker = "extra == 'cu128'", specifier = "==2025.12.4" },
     { name = "urllib3", marker = "extra == 'engine'", specifier = ">=2.6.1" },
     { name = "vllm", marker = "extra == 'cpu'", specifier = "==0.15.0" },
     { name = "vllm", marker = "extra == 'cu128'", specifier = "==0.15.0" },
     { name = "wandb", marker = "extra == 'engine'", specifier = "==0.23.1" },
-    { name = "xformers", marker = "sys_platform == 'linux' and extra == 'cu128'", specifier = "==0.0.33.post1", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "nemo-safe-synthesizer", extra = "cu128" } },
+    { name = "xformers", marker = "sys_platform == 'linux' and extra == 'cu128'", specifier = "==0.0.33.post2", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "nemo-safe-synthesizer", extra = "cu128" } },
 ]
 provides-extras = ["cpu", "cu128", "engine"]
 
@@ -6586,8 +6586,8 @@ dependencies = [
     { name = "tyro", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "unsloth-zoo", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "wheel", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "xformers", version = "0.0.33.post1", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "xformers", version = "0.0.33.post1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "xformers", version = "0.0.33.post2", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "xformers", version = "0.0.33.post2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ab/35/1987026e43640b7c5a04a15d6b28afd67577674ca1f750ca4ab3b9da85ec/unsloth-2025.12.4.tar.gz", hash = "sha256:a2003dcb4e5e8982abc8b93b6512b823f5d68d3aaea14e2ca25396297deb5359", size = 4768756, upload-time = "2025-12-10T14:27:22.363Z" }
 wheels = [
@@ -6595,7 +6595,7 @@ wheels = [
 ]
 
 [package.optional-dependencies]
-cu128-torch290 = [
+cu128-torch291 = [
     { name = "accelerate", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "bitsandbytes", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "datasets", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
@@ -6618,8 +6618,8 @@ cu128-torch290 = [
     { name = "tyro", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "unsloth-zoo", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "wheel", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
-    { name = "xformers", version = "0.0.33.post1", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "xformers", version = "0.0.33.post1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "xformers", version = "0.0.33.post2", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "xformers", version = "0.0.33.post2", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or ('linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
 ]
 
 [[package]]
@@ -7073,7 +7073,7 @@ wheels = [
 
 [[package]]
 name = "xformers"
-version = "0.0.33.post1"
+version = "0.0.33.post2"
 source = { registry = "https://download.pytorch.org/whl/cu128" }
 resolution-markers = [
     "python_full_version >= '3.13' and platform_machine == 'x86_64' and sys_platform == 'linux'",
@@ -7089,13 +7089,13 @@ dependencies = [
     { name = "wheel", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu128/xformers-0.0.33.post1-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:a8d72c6272453450eede2ed9aaa14448e6525569e14217573057ded146090db3" },
-    { url = "https://download.pytorch.org/whl/cu128/xformers-0.0.33.post1-cp39-abi3-win_amd64.whl", hash = "sha256:e20729ca1647d53f86143bd57451af953bb78e72677548c972cd016238a066e3" },
+    { url = "https://download.pytorch.org/whl/cu128/xformers-0.0.33.post2-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:9ea6032defa60395559b6a446c2ae945236707e98daabd88fea57cd08671c174" },
+    { url = "https://download.pytorch.org/whl/cu128/xformers-0.0.33.post2-cp39-abi3-win_amd64.whl", hash = "sha256:4a0a59a0c698a483f13ecad967dbbe71386827985e80cc373bec4cdf9aed59cd" },
 ]
 
 [[package]]
 name = "xformers"
-version = "0.0.33.post1"
+version = "0.0.33.post2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.13' and platform_machine == 'x86_64' and sys_platform == 'linux'",
@@ -7107,10 +7107,10 @@ dependencies = [
     { name = "torch", version = "2.9.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "wheel", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/c1/cd0d6b89da38d8aa174e8eabf29530f8871daf53b886ec6b680ef9d3e71f/xformers-0.0.33.post1.tar.gz", hash = "sha256:e555258249b514ba117b3403523fe0bd7d3e92e930575f0e0dbf5f7db5b42677", size = 14784437, upload-time = "2025-11-13T20:16:14.793Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/69/403e963d35f1b0c52a1b3127e0bc4e94e7e50ecee8c6684a8abe40e6638e/xformers-0.0.33.post2.tar.gz", hash = "sha256:647ddf26578d2b8643230467ef1f0fbfef0bbe556a546bd27a70d4855d3433e1", size = 14783914, upload-time = "2025-12-04T18:52:42.572Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/94/3ad80d1070ddfb280c20a67dfbc094a93579a02910ef41f20631a9b566fe/xformers-0.0.33.post1-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:a8d72c6272453450eede2ed9aaa14448e6525569e14217573057ded146090db3", size = 122884756, upload-time = "2025-11-13T20:16:04.002Z" },
-    { url = "https://files.pythonhosted.org/packages/a9/ef/4f59589fe37e206f5bb6158aa1294cfa0e79d52bca99ea0fd3f5c8a73404/xformers-0.0.33.post1-cp39-abi3-win_amd64.whl", hash = "sha256:e20729ca1647d53f86143bd57451af953bb78e72677548c972cd016238a066e3", size = 105088581, upload-time = "2025-11-13T20:16:11.221Z" },
+    { url = "https://files.pythonhosted.org/packages/7d/c8/2957d8a8bf089a4e57f046867d4c9b31fc2e1d16013bc57cd7ae651a65b5/xformers-0.0.33.post2-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:9ea6032defa60395559b6a446c2ae945236707e98daabd88fea57cd08671c174", size = 122883631, upload-time = "2025-12-04T18:52:35.318Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/72/057e48a3c2187f74202b3cca97e9f8a844342122909c93314fd641daa5d0/xformers-0.0.33.post2-cp39-abi3-win_amd64.whl", hash = "sha256:4a0a59a0c698a483f13ecad967dbbe71386827985e80cc373bec4cdf9aed59cd", size = 105088221, upload-time = "2025-12-04T18:52:39.699Z" },
 ]
 
 [[package]]
