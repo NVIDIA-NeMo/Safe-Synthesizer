@@ -11,15 +11,11 @@ training/privacy parameters.
 
 from __future__ import annotations
 
-import inspect
 import math
 import re
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from pydantic import GetCoreSchemaHandler
-from pydantic_core import core_schema
 
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
 from ..observability import get_logger
