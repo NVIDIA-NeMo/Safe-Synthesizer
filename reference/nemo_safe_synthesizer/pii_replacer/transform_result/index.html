@@ -8403,7 +8403,7 @@
    (nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult)" href="#nemo_safe_synthesizer.pii_replacer.transform_result.TransformResult">TransformResult</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Result object for data and statistics after applying pii replacement.</p>
+                <p>Result of PII replacement: transformed data and per-column statistics.</p>
               </div>
             </td>
           </tr>
@@ -8446,6 +8446,8 @@
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
         <p>Metadata and statistics for transformations and detected entities in a column.</p>
+<p>Tracks assigned type and entity from classification, NER-detected counts and
+values per entity, and which transform functions were applied.</p>
 
     
 
@@ -8572,7 +8574,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Dictionary of entity to count of how many times NER detected it in the column.</p>
+        <p>Entity name to count of times NER detected it in the column.</p>
 
     </div>
 
@@ -8594,7 +8596,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Dictionary of entity to set of detected values.</p>
+        <p>Entity name to set of detected values.</p>
 
     </div>
 
@@ -8638,7 +8640,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Functions that were used to transform the column.</p>
+        <p>Names of transform functions applied to the column.</p>
 
     </div>
 
@@ -8674,7 +8676,8 @@
             <p class="doc doc-class-bases">
               Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-        <p>Result object for data and statistics after applying pii replacement.</p>
+        <p>Result of PII replacement: transformed data and per-column statistics.</p>
+<p>Produced by <code>NemoPII.transform_df</code> and exposed as <code>NemoPII.result</code>.</p>
 
     
       <p>Config:</p>
@@ -8734,7 +8737,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Transformed dataframe with PII replaced.</p>
+        <p>DataFrame with PII replaced according to config.</p>
 
     </div>
 
@@ -8756,7 +8759,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Dictionary of column name to statistics for that column.</p>
+        <p>Column name to <code>ColumnStatistics</code> for that column.</p>
 
     </div>
 
