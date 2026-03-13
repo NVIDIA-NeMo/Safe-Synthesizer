@@ -112,7 +112,7 @@ def _create_process_data_setup(
     mock_replacer_instance.result.column_statistics = {
         "patient_name": MagicMock(),
         "timestamp": MagicMock(),
-        "age": MagicMock(),
+        "patient_age": MagicMock(),
     }
     mock_replacer_instance.elapsed_time = 1.5
 
