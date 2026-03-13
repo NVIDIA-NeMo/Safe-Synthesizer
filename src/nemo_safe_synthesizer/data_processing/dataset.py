@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""DataFrame normalization and JSON schema inference for training data.
+
+Provides utilities for standardizing DataFrames (type coercion, missing-value
+handling) and deriving JSON schemas used for validating generated records.
+"""
+
 import numpy as np
 import pandas as pd
 
@@ -37,7 +43,12 @@ STRING_LENGTH_MULTIPLE = 1.5
 
 
 def _handle_enum_value(v: object) -> None | int | float | bool | str:
-    # TabFT uses None for na
+    """Convert a value to a JSON-safe Python scalar for enum schema entries.
+
+    NumPy scalars and other non-builtin types are narrowed to the most
+    precise builtin equivalent (``bool`` > ``int`` > ``float`` > ``str``).
+    Returns None for NA/NaN values.
+    """
     if pd.isna(v):
         return None
 
@@ -100,14 +111,19 @@ def check_enum_type(
 def make_json_schema(df: pd.DataFrame, string_length_multiple: float = STRING_LENGTH_MULTIPLE) -> dict:
     """Generate a JSON schema from the given DataFrame.
 
-    Info on the schema definition: https://json-schema.org
+    Inspects each column to determine its JSON type, numeric range, string
+    length bounds, or enum values. See https://json-schema.org for the
+    schema specification.
 
     Args:
-        df: Generate a JSON schema for this DataFrame.
-        string_length_multiple: A multiplier to apply to the min and max string
+        df: DataFrame to derive a JSON schema from.
+        string_length_multiple: Multiplier applied to observed string lengths
+            to set ``minLength`` (divided) and ``maxLength`` (multiplied)
+            bounds in the schema.
 
     Returns:
-        A dictionary representing the JSON schema.
+        A dictionary representing the JSON schema with ``type``, ``properties``,
+        and ``required`` keys.
     """
     schema = {"type": "object", "properties": {}, "required": []}
 

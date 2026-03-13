@@ -6,26 +6,32 @@ from typing import Any, Optional
 
 ValuePathItem = str | int
 ValuePath = tuple[ValuePathItem, ...]
-"""
-A tuple representing a path to a value in a document.
-Each item in the tuple represents name of the nested field or array.
+"""A tuple representing a path to a value in a document.
 
-For example: ``("user", "emails", 0, "address")`` represents path to
-the ``test@example.com`` in a structure like:
+Each item is either a field name (``str``) or an array index (``int``).
 
-{"user": {"emails": [{"address": "test@example.com"}]}}
+Example::
+
+    ("user", "emails", 0, "address")
+
+represents the path to ``"test@example.com"`` in::
+
+    {"user": {"emails": [{"address": "test@example.com"}]}}
 """
 
 
 def value_path(*args: ValuePathItem) -> ValuePath:
-    """
-    Convenient way of creating a value path.
-    For example ``value_path("user", "emails", 0)``.
+    """Create a ``ValuePath`` tuple from positional arguments.
+
+    Example::
+
+        value_path("user", "emails", 0)
     """
     return args
 
 
 def value_path_to_field_name(path: ValuePath) -> str:
+    """Join the string components of a ``ValuePath`` with dots, ignoring array indices."""
     return ".".join(item for item in path if isinstance(item, str))
 
 
@@ -33,11 +39,10 @@ _JSON_PATH_ALLOWED_CHARS = set(string.ascii_letters + string.digits + "_")
 
 
 def _needs_json_path_bracket_notation(field_name: str) -> bool:
-    """
-    Returns ``True`` if bracket notation is required for given field_name.
-    For example:
-    - $.my_field - dot notation can be used here
-    - $['my$field'] - contains special char, so need to use bracket notation.
+    """Return True if JSONPath bracket notation is needed for ``field_name``.
+
+    Bracket notation is required when the field name is empty or contains
+    characters outside ``[a-zA-Z0-9_]``.
     """
     # field_name being empty string requires bracket notation
     if field_name == "":
@@ -47,6 +52,7 @@ def _needs_json_path_bracket_notation(field_name: str) -> bool:
 
 
 def value_path_to_json_path(path: ValuePath) -> str:
+    """Convert a ``ValuePath`` to a JSONPath string (e.g., ``$.user.emails[0].address``)."""
     json_path = ["$"]
     for item in path:
         if isinstance(item, int):
@@ -66,6 +72,18 @@ class InvalidPath(Exception): ...
 
 
 def unflatten(data: dict[ValuePath, Any]) -> Optional[dict | list]:
+    """Reconstruct a nested dict/list from a flat ``{ValuePath: value}`` mapping.
+
+    Args:
+        data: Flat mapping of value paths to scalar values.
+
+    Returns:
+        A nested dict or list, or None if ``data`` is empty.
+
+    Raises:
+        InvalidPath: If paths are structurally inconsistent (e.g., a path
+            expects a list where a dict already exists).
+    """
     result = None
     for key, value in data.items():
         try:
