@@ -22,9 +22,10 @@
 name: "Dev Wheel"
 
 on:
-  push:
-    branches:
-      - main
+  # Disabled due to connectivity issues
+  # push:
+  #   branches:
+  #    - main
   workflow_dispatch:
 
 defaults:
