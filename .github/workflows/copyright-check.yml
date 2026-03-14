@@ -17,9 +17,7 @@ name: Copyright check
 on:
   push:
     branches:
-      - main
       - "pull-request/[0-9]+"
-      - "deploy-release/*"
 
 jobs:
   pre-flight:
