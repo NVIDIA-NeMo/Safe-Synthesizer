@@ -21,7 +21,7 @@ classifiers = [
 
 
 dependencies = [
-  # "unsloth[cu128-torch291]==2025.12.4 requires datasets==4.3.0"
+  # "unsloth[cu128-torch291]==2026.3.4 requires datasets==4.3.0"
   # it only has a runtime error of course
   # so we need to pin it here
   "datasets==4.3.0",
@@ -133,7 +133,7 @@ cpu = [
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4",
+  "unsloth[cu128-torch291]==2026.3.4",
   "unsloth_zoo==2025.12.4",
   "vllm==0.15.0",
 ]
@@ -158,7 +158,7 @@ cu128 = [
   "transformers==4.57.3",
   "triton>=2.0.0",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4",
+  "unsloth[cu128-torch291]==2026.3.4",
   "unsloth_zoo==2025.12.4",
   "vllm==0.15.0",
   "xformers==v0.0.33.post2; sys_platform == 'linux'",
