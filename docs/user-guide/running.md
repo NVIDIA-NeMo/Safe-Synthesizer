@@ -354,7 +354,7 @@ classification targets structured sensitive columns. PII replacement is on by
 default in both the CLI and SDK. PII on by default means no config flag is needed to enable it.
 
 !!! tip "Skip PII replacement"
-    If your dataset does not contain PII, disable this stage to reduce pipeline
+    If your dataset does not contain PII, you may disable this stage to reduce pipeline
     runtime:
 
     - CLI: `--no_replace_pii`
