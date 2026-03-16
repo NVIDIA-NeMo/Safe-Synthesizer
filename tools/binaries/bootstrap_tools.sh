@@ -90,11 +90,16 @@ install_binary_tool() {
     check_command=$(yq -r ".tools.${name}.check_command" "$TOOLS_YAML")
     version=$(yq -r ".tools.${name}.version" "$TOOLS_YAML")
 
-    # Check if already installed
+    # Check if already installed at the desired version
     if eval "$check_command" >/dev/null 2>&1; then
-        echo "$name is already installed"
-        eval "$check_command" || true
-        return 0
+        local installed_output version_bare
+        installed_output=$(eval "$check_command" 2>&1 || true)
+        version_bare="${version#v}"
+        if echo "$installed_output" | grep -qF "$version_bare"; then
+            echo "$name ${version} is already installed"
+            return 0
+        fi
+        echo "$name is installed but not at version ${version}, upgrading..."
     fi
 
     # Check for darwin_brew option (use brew on macOS)
