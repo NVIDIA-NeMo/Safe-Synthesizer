@@ -113,4 +113,3 @@ For a complete list of all available parameters and their defaults, refer to [Pa
 - [Parameters Reference](../user-guide/configuration.md): Complete parameter reference
 - [Differential Privacy](../tutorials/differential-privacy.md): Learn about differential privacy in practice
 - [Tutorials](../tutorials/index.md): Run the pipeline
-

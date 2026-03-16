@@ -147,12 +147,12 @@ converge on the same Pydantic model and handle nullable sub-configs
 ```mermaid
 flowchart TB
     subgraph cli [CLI Entry Points]
-        run_cmd["nss run"]
-        train_cmd["nss run train"]
-        gen_cmd["nss run generate"]
-        val_cmd["nss config validate"]
-        mod_cmd["nss config modify"]
-        create_cmd["nss config create"]
+        run_cmd["safe-synthesizer run"]
+        train_cmd["safe-synthesizer run train"]
+        gen_cmd["safe-synthesizer run generate"]
+        val_cmd["safe-synthesizer config validate"]
+        mod_cmd["safe-synthesizer config modify"]
+        create_cmd["safe-synthesizer config create"]
     end
 
     subgraph decorators [Decorator Layer]
