@@ -101,6 +101,7 @@ def _create_process_data_setup(
 
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
+    assert builder._nss_config is not None
     if replace_pii:
         from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
@@ -208,7 +209,7 @@ class TestProcessDataPiiSeparation:
         fixture_process_data_setup_with_pii,
         fixture_workdir,
     ):
-        """``training.csv`` persists the original split; ``transformed_training.csv`` persists the PII-replaced data."""
+        """``training.csv`` persists the original split (pre-PII data)."""
         builder, train_split, test_split, pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
         _wire_process_data_mocks(
             mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
@@ -218,18 +219,11 @@ class TestProcessDataPiiSeparation:
         builder.process_data()
 
         training_csv = fixture_workdir.dataset.training
-        transformed_csv = fixture_workdir.dataset.transformed_training
-
         assert training_csv.exists()
-        assert transformed_csv.exists()
 
         # ``training.csv`` always contains the original training split
         saved_training = pd.read_csv(training_csv)
         pd.testing.assert_frame_equal(saved_training, train_split)
-
-        # ``transformed_training.csv`` contains the PII-replaced data (inspection only)
-        saved_transformed = pd.read_csv(transformed_csv)
-        pd.testing.assert_frame_equal(saved_transformed, pii_replaced_df)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
@@ -242,7 +236,7 @@ class TestProcessDataPiiSeparation:
         fixture_process_data_setup_without_pii,
         fixture_workdir,
     ):
-        """Without PII replacement, no ``transformed_training.csv`` is written."""
+        """Without PII replacement, ``training.csv`` contains the original split."""
         builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
         _wire_process_data_mocks(
             mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
@@ -254,9 +248,6 @@ class TestProcessDataPiiSeparation:
         assert training_csv.exists()
         saved_training = pd.read_csv(training_csv)
         pd.testing.assert_frame_equal(saved_training, train_split)
-
-        transformed_csv = fixture_workdir.dataset.transformed_training
-        assert not transformed_csv.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -370,8 +361,11 @@ class TestLoadFromSavePath:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
-        assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
+        assert builder._original_train_df is not None
+        assert builder._train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        # _train_df is also set so process_data's early-return guard works
+        pd.testing.assert_frame_equal(builder._train_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_process_data_skips_when_cached_splits_loaded(
@@ -393,8 +387,10 @@ class TestLoadFromSavePath:
         builder.load_from_save_path()
         builder.process_data()
 
-        assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
+        assert builder._original_train_df is not None
+        assert builder._train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        pd.testing.assert_frame_equal(builder._train_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_train_after_load_from_save_path_raises(
