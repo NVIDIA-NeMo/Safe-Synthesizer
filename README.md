@@ -6,7 +6,7 @@ This package makes synthetic data, safely.
 
 ### Prerequisites
 
-- Python 3.11+ (see `.python-version`)
+- Python 3.11+ (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any supported 3.11+ interpreter is fine)
 - [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.10.0)
 - Git
 

@@ -14,7 +14,7 @@ does at each stage.
 
 ### Prerequisites
 
-- Python 3.11+ (see `.python-version` in the repo root)
+- Python 3.11+ (dev tooling currently pins 3.11 via `.python-version` in the repo root)
 - CUDA runtime 12.8
 - NVIDIA GPU (A100 or better) for training and generation
 
