@@ -17,6 +17,7 @@ Ensure that the following pass:
 - [ ] `make test` passes locally
 - [ ] `make test-e2e` passes locally
 - [ ] `make test-ci-container` passes locally (recommended)
+- [ ] GPU CI status check passes -- comment `/sync` on this PR to trigger a run (auto-triggers on ready-for-review)
 
 ## Pre-Merge Checklist
 

@@ -8,8 +8,13 @@
 # self-hosted runners. Trusted PRs are automatically copied to pull-request/*
 # branches, which trigger CI workflows via push events.
 #
-# - auto_sync_draft: false  → Draft PRs won't auto-trigger CI (saves GPU resources)
-# - auto_sync_ready: true   → Ready-for-review PRs auto-trigger CI
+# - auto_sync_draft: false  -- Draft PRs won't auto-trigger CI (saves GPU resources)
+# - auto_sync_ready: true   -- Ready-for-review PRs auto-trigger CI on every push
+#
+# On-demand runs: comment `/sync` on any open PR to trigger a GPU test run
+# immediately without pushing a new commit. The bot pushes the current HEAD to
+# pull-request/<number>, which fires gpu-tests.yml and posts the GPU CI Status
+# check result back to the PR. Useful for draft PRs or re-running flaky tests.
 
 enabled: true
 auto_sync_draft: false

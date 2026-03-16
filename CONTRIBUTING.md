@@ -431,6 +431,18 @@ make test-ci-container
 uv run pytest tests/cli/test_run.py
 ```
 
+### GPU E2E Tests (CI)
+
+GPU E2E tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment.
+
+When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
+
+To trigger from the CLI instead (no PR status check):
+
+```bash
+gh workflow run gpu-tests.yml --ref <your-branch>
+```
+
 ### Test Requirements
 
 Before submitting a PR:
