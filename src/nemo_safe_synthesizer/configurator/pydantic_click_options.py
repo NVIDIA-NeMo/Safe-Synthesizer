@@ -108,6 +108,8 @@ def _click_type(annotation: Any) -> Any:
         t = get_args(t)[0]
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
+    if str in args:
+        return click.STRING
     if int in args:
         return click.INT
     if float in args:
