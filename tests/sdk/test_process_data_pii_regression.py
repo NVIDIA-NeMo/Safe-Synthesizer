@@ -159,6 +159,7 @@ class TestLoadFromSavePathGuard:
         loaded = SafeSynthesizer(save_path=tmp_path)
 
         # Patch metadata loading so load_from_save_path doesn't fail
+        assert loaded._workdir is not None
         metadata_file = loaded._workdir.metadata_file
         metadata_file.parent.mkdir(parents=True, exist_ok=True)
         metadata_file.write_text("{}")

@@ -3,6 +3,8 @@
 
 """vLLM-based generation backend for tabular data synthesis."""
 
+from __future__ import annotations
+
 import os
 import time
 from functools import partial
@@ -48,7 +50,7 @@ else:
 def _is_redis_available() -> bool:
     """Return True if the ``redis`` package is importable."""
     try:
-        import redis  # noqa: F401 # type: ignore[unresolved-import]
+        import redis  # noqa: F401  # ty:ignore[unresolved-import]
 
         return True
     except ImportError:
@@ -225,11 +227,12 @@ class VllmBackend(GeneratorBackend):
 
         if self.config.generation.structured_generation_schema_method == "regex":
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
+            pc = self.model_metadata.prompt_config
             regex = build_json_based_regex(
                 self.schema,
                 self.config,
-                self.model_metadata.prompt_config.bos_token,
-                self.model_metadata.prompt_config.eos_token,
+                bos_token=pc.bos_token,
+                eos_token=pc.eos_token,
             )
             params["regex"] = regex
         elif self.config.generation.structured_generation_schema_method == "json_schema":

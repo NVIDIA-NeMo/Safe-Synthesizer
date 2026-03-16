@@ -49,7 +49,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
     precise builtin equivalent (``bool`` > ``int`` > ``float`` > ``str``).
     Returns None for NA/NaN values.
     """
-    if pd.isna(v):
+    if pd.isna(v):  # ty: ignore[no-matching-overload] -- third-party stub mismatch
         return None
 
     if isinstance(v, (float, int, bool, str)):
@@ -64,7 +64,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
         # Convert to python int if possible, but np.float32 and other float
         # types will be truncated by int(v), so check equality to make sure
         # we haven't lost precision.
-        t = int(v)
+        t = int(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
         if t == v:
             return t
     except Exception:
@@ -72,7 +72,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
 
     try:
         # Convert to python float if possible
-        return float(v)
+        return float(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
     except Exception:
         pass
 

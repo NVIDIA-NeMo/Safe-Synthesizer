@@ -29,7 +29,9 @@ def test_attribute_inference_protection(train_df_5k, synth_df_5k, test_df):
     )
 
     logger.info(membership_inference_protection.tps_values)
+    assert membership_inference_protection.tps_values is not None
     assert len(membership_inference_protection.tps_values) > 0
 
     logger.info(membership_inference_protection.fps_values)
+    assert membership_inference_protection.fps_values is not None
     assert len(membership_inference_protection.fps_values) > 0

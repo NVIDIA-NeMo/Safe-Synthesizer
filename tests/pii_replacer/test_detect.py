@@ -29,7 +29,7 @@ from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
 def test_gliner_batch_predict_config():
     # Test batch_update_cache is short-circuited iff batch mode disabled.
     cfg = ClassifyConfig(
-        valid_entities=["name"],
+        valid_entities={"name"},
         ner_threshold=0.8,
         ner_regexps_enabled=False,
         ner_entities=None,
@@ -43,10 +43,11 @@ def test_gliner_batch_predict_config():
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER", MagicMock()):
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
-        entity_extractor._model.batch_predict_entities.assert_not_called()
+        assert entity_extractor._model is not None
+        entity_extractor._model.batch_predict_entities.assert_not_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
     cfg = ClassifyConfig(
-        valid_entities=set(["name"]),
+        valid_entities={"name"},
         ner_threshold=0.8,
         ner_regexps_enabled=False,
         ner_entities=None,
@@ -60,7 +61,8 @@ def test_gliner_batch_predict_config():
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER", MagicMock()):
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
-        entity_extractor._model.batch_predict_entities.assert_called()
+        assert entity_extractor._model is not None
+        entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
 
 def test_gliner_pii_detection_recall():
@@ -137,7 +139,7 @@ def test_column_sample_values():
     cols = sample_columns(df, 3, random_state=random_seed)
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
-        assert_index_equal(expected_col, cols[name], check_names=False)
+        assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
 
 
 def test_column_sample_size_limit():
@@ -160,7 +162,7 @@ def test_column_sample_size_limit():
     cols = sample_columns(df, 3, random_state=random_seed)
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
-        assert_index_equal(expected_col, cols[name], check_names=False)
+        assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
 
 
 def test_column_empty_after_filtered():
@@ -188,7 +190,7 @@ def test_column_empty_after_filtered():
     cols = sample_columns(df, 3, random_state=random_seed)
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
-        assert_index_equal(expected_col, cols[name], check_names=False)
+        assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
 
 
 def test_no_columns_after_filter():
@@ -385,8 +387,8 @@ def test_redact_from_entities_key_almost_adjacent_entities():
 )
 def test_merge_subsume(predictions: list[tuple], expected: list[tuple]):
     def to_ner_prediction(params: tuple):
-        return NERPrediction("na", params[0], params[1], params[2], "na", "na")
+        return NERPrediction("na", params[0], params[1], params[2], "na", None)
 
-    predictions = [to_ner_prediction(v) for v in predictions]
-    expected = [to_ner_prediction(v) for v in expected]
-    assert merge_subsume(predictions) == expected
+    ner_predictions = [to_ner_prediction(v) for v in predictions]
+    ner_expected = [to_ner_prediction(v) for v in expected]
+    assert merge_subsume(ner_predictions) == ner_expected

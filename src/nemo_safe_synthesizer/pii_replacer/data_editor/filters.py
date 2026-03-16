@@ -1,33 +1,27 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
 """Additional filters for Transforms."""
+
+from __future__ import annotations
 
 from typing import Any
 
 
 def partial_mask(value: Any, left: int, mask: str, right: int, tolerance: int = 1) -> str:
-    """Mask the middle of a string, keeping ``left`` chars at the start and ``right`` at the end (MSSQL partial()-style).
+    """
+    Roughly implements the MSSQL partial() DDM function
 
-    If ``left + right`` would exceed the effective length (``len(value) - tolerance``),
-    prefix/suffix sizes are reduced until they fit. Higher ``tolerance`` shrinks the
-    effective length, so more of the value is replaced by ``mask``. Roughly matches
-    MSSQL partial() DDM; see Microsoft docs on dynamic data masking (Custom String).
+    DDDM docs, see the "Custom String" entry in the tabls
     https://learn.microsoft.com/en-us/sql/relational-databases/security/dynamic-data-masking?view=sql-server-ver16#define-a-dynamic-data-mask
 
-    Args:
-        value: String to mask (stringified if not str).
-        left: Number of leading characters to keep.
-        mask: String to use for the middle (replaces the rest).
-        right: Number of trailing characters to keep.
-        tolerance: Subtracted from value length to get effective length; higher = more masking.
+    If the strlen of the prefix and suffix is larger than the
+    original value, the prefix and suffix sizes will be reduced
+    until they are less than the strlen of the original value.
 
-    Returns:
-        ``prefix + mask + suffix``, or just ``mask`` if effective length <= 0 or both left and right are < 1.
-
-    Raises:
-        ValueError: If ``mask`` is empty or ``tolerance`` < 0.
+    The tolerance controls the perceived size of the original value, so
+    the higher the tolerance, the prefix and suffix sizes will be reduced
+    more aggressively.
     """
     value = str(value)
     if not mask:

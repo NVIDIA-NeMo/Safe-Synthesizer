@@ -140,6 +140,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
         return features
 
     # See
+    # - https://github.com/Gretellabs/text_research/blob/main/column_detector.py
     # - https://jeffreymorgan.io/articles/identifying-categorical-data/
     diff = non_na_count - unique_count
     diff_percent = diff / non_na_count

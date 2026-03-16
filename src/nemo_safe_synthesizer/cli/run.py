@@ -13,6 +13,7 @@ This module provides the run command group for the Safe Synthesizer pipeline:
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import click
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from ..sdk.library_builder import SafeSynthesizer
 
 
-def common_run_options(f):
+def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     """Decorator to add common options for run commands.
 
     Note: Environment variable handling is done by CLISettings, not Click's envvar=.
@@ -178,8 +179,8 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
-    **kwargs,
-):
+    **kwargs: object,
+) -> None:
     """Run the Safe Synthesizer end-to-end pipeline.
 
     Without a subcommand, runs the full end-to-end pipeline.
@@ -218,6 +219,7 @@ def run(
     with traced_user("SafeSynthesizer"):
         from ..sdk.library_builder import SafeSynthesizer
 
+        assert df is not None
         ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
         # ss.run() calls train + generate + evaluate. The generate step has its own try/finally,
         # but train or evaluate failures leave the generator loaded; this guard ensures teardown
@@ -249,8 +251,8 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
-    **kwargs,
-):
+    **kwargs: object,
+) -> None:
     """Run the training stage only.
 
     This command processes data and trains the model, saving the adapter to the run directory.
@@ -281,6 +283,7 @@ def run_train(
     from ..sdk.library_builder import SafeSynthesizer
 
     with traced_user("SafeSynthesizer"):
+        assert df is not None
         SafeSynthesizer(config, workdir=workdir).with_data_source(df).process_data().train()
         run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
 
@@ -318,8 +321,8 @@ def run_generate(
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
     dataset_registry: str | None = None,
-    **kwargs,
-):
+    **kwargs: object,
+) -> None:
     """Run the generation stage only.
 
     This command loads a trained adapter and generates synthetic data.

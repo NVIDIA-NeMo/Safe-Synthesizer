@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
 
 import re
 
@@ -11,7 +12,7 @@ from ..regex import (
     create_exact_field_matcher,
 )
 
-# Relevant issue: detection should support sex/gender header patterns
+# https://github.com/Gretellabs/monogretel/issues/190
 SEX_HEADERS = [
     create_exact_field_matcher("sex"),
     create_exact_field_matcher("sexo"),

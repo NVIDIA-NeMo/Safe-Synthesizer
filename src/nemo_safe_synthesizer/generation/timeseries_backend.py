@@ -212,7 +212,7 @@ class TimeseriesBackend(VllmBackend):
         self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
         self._prefill_context_size = 3  # number of records to prefill
         self._time_column = config.time_series.timestamp_column
-        self._time_format = config.time_series.timestamp_format
+        self._time_format: str = config.time_series.timestamp_format or ""
         self._is_elapsed_time = self._time_format == "elapsed_seconds"
         self._start_timestamp_value = config.time_series.start_timestamp
         self._stop_timestamp_value = config.time_series.stop_timestamp
@@ -338,7 +338,7 @@ class TimeseriesBackend(VllmBackend):
         Uses the shared _parse_timestamp_to_seconds from record_utils but wraps
         exceptions to return None instead of raising.
         """
-        if timestamp_value is None:
+        if timestamp_value is None or self._time_format is None:
             return None
 
         try:
@@ -346,8 +346,10 @@ class TimeseriesBackend(VllmBackend):
         except (ValueError, TypeError):
             return None
 
-    def _advance_expected_time(self, timestamp_seconds: int) -> int:
+    def _advance_expected_time(self, timestamp_seconds: int) -> int | None:
         """Return the next expected timestamp by adding the configured interval."""
+        if self._timestamp_interval_seconds is None:
+            return None
         return timestamp_seconds + self._timestamp_interval_seconds
 
     def _has_reached_stop_time(self, records: list[dict]) -> bool:
@@ -459,7 +461,7 @@ class TimeseriesBackend(VllmBackend):
 
         if group_state.last_timestamp_seconds is not None:
             expected_ts = self._advance_expected_time(group_state.last_timestamp_seconds)
-            if timestamp_seconds != expected_ts:
+            if expected_ts is not None and timestamp_seconds != expected_ts:
                 return False
 
         return True
@@ -751,6 +753,8 @@ class TimeseriesBackend(VllmBackend):
             )
 
             # Generate for all prompts at once
+            if self.llm is None:
+                raise RuntimeError("LLM not initialized")
             outputs = self.llm.generate(
                 prompts=prompts,
                 sampling_params=modified_params,

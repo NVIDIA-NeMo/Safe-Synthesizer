@@ -13,7 +13,7 @@ import functools
 import json
 import os
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator, Iterable
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -28,7 +28,7 @@ from .observability import get_logger
 logger = get_logger(__name__)
 
 
-def _get_num_items_pattern(min_items, max_items, whitespace_pattern):
+def _get_num_items_pattern(min_items: int | None, max_items: int | None, whitespace_pattern: str) -> str | None:
     """Return a regex quantifier for JSON array/object item counts.
 
     Patched in because ``outlines_core`` does not export it and ``outlines``
@@ -73,7 +73,7 @@ def create_schema_prompt(
     )
 
 
-def get_random_number_generator(seed: int) -> np.random.Generator:
+def get_random_number_generator(seed: int | None) -> np.random.Generator:
     """Return a random number generator with the given seed."""
     return np.random.default_rng(seed)
 
@@ -129,7 +129,7 @@ def log_training_example_stats(stats_dict: dict[str, Statistics], **kwargs) -> N
     log_stats(title="Training Example Statistics", stats=stats, headers=headers, **kwargs)
 
 
-def round_number_if_float(number, precision=3):
+def round_number_if_float(number: int | float, precision: int = 3) -> int | float:
     """Round the number to the given precision if it is a float."""
     return round(number, precision) if isinstance(number, float) else number
 
@@ -169,16 +169,16 @@ def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def time_function(func):
+def time_function(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to log the time taken by a function to execute."""
 
     @functools.wraps(func)
-    def time_closure(*args, **kwargs):
+    def time_closure(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         time_elapsed = time.perf_counter() - start
         time_elapsed = f"{time_elapsed:.2f} sec" if time_elapsed <= 120 else f"{time_elapsed / 60:.2f} min"
-        logger.info(f"⏱️  Function: {func.__name__}, Time: {time_elapsed}\n")
+        logger.info(f"⏱️  Function: {func.__name__}, Time: {time_elapsed}\n")  # ty: ignore[unresolved-attribute]
         return result
 
     return time_closure
@@ -210,7 +210,7 @@ def grouped_train_test_split(
     # importing like this to avoid a dep for testing on the sdk side
     from .holdout import holdout as nss_holdout
 
-    return nss_holdout.grouped_train_test_split(df=df, test_size=test_size, group_by=group_by, random_state=seed)
+    return nss_holdout.grouped_train_test_split(df=df, test_size=test_size, group_by=group_by, random_state=seed)  # ty: ignore[invalid-argument-type]
 
 
 class DataActionsFn(Protocol):
@@ -234,12 +234,12 @@ def merge_dicts(base: dict, new: dict) -> dict:
     return result
 
 
-def is_iterable(x: Any):
+def is_iterable(x: object) -> bool:
     """Check whether ``x`` has both ``__iter__`` and ``__getitem__``."""
     return hasattr(x, "__iter__") and hasattr(x, "__getitem__")
 
 
-def flatten(iter) -> Generator:
+def flatten(iter: Iterable) -> Generator:
     """Flatten a possibly nested iterable.
 
     Strings are yielded as-is (not broken into characters). Dicts are
@@ -256,7 +256,7 @@ def flatten(iter) -> Generator:
             yield v
 
 
-def all_equal_type(iter, type_, flatten_iter=True) -> bool:
+def all_equal_type(iter: Iterable[object], type_: type, flatten_iter: bool = True) -> bool:
     """Check whether every element in an iterable is an instance of ``type_``.
 
     Args:
@@ -265,7 +265,7 @@ def all_equal_type(iter, type_, flatten_iter=True) -> bool:
         flatten_iter: If ``True``, flatten nested iterables before checking.
     """
 
-    def typecheck(x):
+    def typecheck(x: object) -> bool:
         return isinstance(x, type_)
 
     if flatten_iter:

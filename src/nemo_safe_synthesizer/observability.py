@@ -27,6 +27,8 @@ call ``initialize_observability()`` first. When used as a library,
 application's logging configuration.
 """
 
+from __future__ import annotations
+
 import contextvars
 import inspect
 import logging
@@ -34,15 +36,16 @@ import os
 import sys
 import time
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from datetime import datetime
 from enum import Enum
 from functools import wraps
 from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, cast
 
 import colorama
+from structlog.types import BindableLogger, Processor
 
 if TYPE_CHECKING:
     from .cli.artifact_structure import Workdir
@@ -119,7 +122,7 @@ class NSSObservabilitySettings(BaseSettings):
 
     @field_validator("nss_log_format", mode="before")
     @classmethod
-    def set_log_format_default(cls, value: Any) -> Literal["json", "plain"]:
+    def set_log_format_default(cls, value: str | None) -> str:
         """Set nss_log_format default based on whether stdout is a tty at instantiation time."""
         match value:
             case str():
@@ -129,7 +132,7 @@ class NSSObservabilitySettings(BaseSettings):
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
-    def set_log_color_default(cls, value: Any) -> bool:
+    def set_log_color_default(cls, value: str | bool | None) -> bool:
         """Set nss_log_color default based on whether stdout is a tty at instantiation time."""
         match value:
             case str():
@@ -157,9 +160,8 @@ class LogCategory(str, Enum):
 
 
 # Contextvar to pass category from LoggerAdapter to processor without going through 'extra'
-_current_log_category: contextvars.ContextVar[str | None] = contextvars.ContextVar(  # ty: ignore[invalid-assignment]
-    "_current_log_category", default=None
-)
+_current_log_category: contextvars.ContextVar[str | None]
+_current_log_category = contextvars.ContextVar("_current_log_category", default=None)
 
 
 def _category_log_processor(logger: logging.Logger, method_name: str, event_dict: EventDict) -> EventDict:
@@ -200,7 +202,7 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
         stat_keys = list(first_value.keys()) if first_value else []
         for stat_key in stat_keys:
             row_values = [str(data[col].get(stat_key, "")) for col in data.keys()]
-            table.add_row(stat_key, *row_values)
+            table.add_row(stat_key, *row_values)  # ty: ignore[invalid-argument-type] -- rich stub mismatch
     else:
         # Flat format: render as key-value pairs
         table.add_column("Metric", style="bold")
@@ -489,21 +491,23 @@ def _get_console_columns() -> list:
     ]
 
 
-def _remove_category_before_render(logger: logging.Logger, method_name: str, event_dict: dict) -> dict:
+def _remove_category_before_render(
+    logger: logging.Logger, method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     """Remove category from event_dict right before rendering to prevent duplicate display."""
     event_dict.pop("category", None)
     return event_dict
 
 
 def _prepare_console_logging(
-    shared_processors: list,
-    renderer: structlog.stdlib.ProcessorFormatter | structlog.dev.ConsoleRenderer,
+    shared_processors: list[Processor],
+    renderer: Processor,
     is_plain: bool = False,
 ) -> logging.Handler:
     # Console handler formatter
     # For plain format, add a processor to remove 'category' right before the renderer
     # since it's already displayed in the column header
-    final_processors = [
+    final_processors: list[Processor] = [
         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
     ]
     if is_plain:
@@ -522,10 +526,7 @@ def _prepare_console_logging(
     return console_handler
 
 
-def _prepare_common_processors() -> tuple[
-    list[structlog.stdlib.ProcessorFormatter],
-    Any,
-]:
+def _prepare_common_processors() -> tuple[list, Any]:
     json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
     global SETTINGS
     if SETTINGS and SETTINGS.nss_log_format == "json":
@@ -542,7 +543,7 @@ def _prepare_common_processors() -> tuple[
             return event_dict
 
         timestamp_processor = structlog.processors.TimeStamper()
-        timestamp_processor._stamper = _stamper  # type: ignore[attr-defined]
+        timestamp_processor._stamper = _stamper
         # For console output: render table data as Rich tables, then handle categories
         env_processors = [_category_log_processor, _render_table_data_for_console, _move_category_for_column]
 
@@ -567,10 +568,10 @@ def _prepare_common_processors() -> tuple[
         structlog.processors.EventRenamer(to="message"),
     ]
 
-    return shared_processors, renderer  # type: ignore[return-value]
+    return shared_processors, renderer
 
 
-def _clear_loggers():
+def _clear_loggers() -> None:
     logging.getLogger().handlers.clear()
 
 
@@ -581,7 +582,7 @@ class _CategoryLogAdapter(logging.LoggerAdapter):
         super().__init__(logger, {})
         self.category = category
 
-    def process(self, msg, kwargs):
+    def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         # Set category via contextvar to avoid it appearing in ExtraAdder output
         _current_log_category.set(self.category.value)
         return msg, kwargs
@@ -622,32 +623,32 @@ class CategoryLogger(logging.Logger):
         return self._logger.name
 
     # Delegate standard methods to runtime by default (backwards compatible)
-    def log(self, level: int, msg, *args, **kwargs):
+    def log(self, level: int, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.log(level, msg, *args, **kwargs)
 
-    def debug(self, msg, *args, **kwargs):
+    def debug(self, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.debug(msg, *args, **kwargs)
 
-    def info(self, msg, *args, **kwargs):
+    def info(self, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.info(msg, *args, **kwargs)
 
-    def warning(self, msg, *args, **kwargs):
+    def warning(self, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.warning(msg, *args, **kwargs)
 
-    def error(self, msg, *args, **kwargs):
+    def error(self, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.error(msg, *args, **kwargs)
 
-    def exception(self, msg, *args, **kwargs):
+    def exception(self, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.exception(msg, *args, **kwargs)
 
-    def critical(self, msg, *args, **kwargs):
+    def critical(self, msg: object, *args: object, **kwargs: Any) -> None:
         self.default.critical(msg, *args, **kwargs)
 
     def isEnabledFor(self, level: int) -> bool:
         return self._logger.isEnabledFor(level)
 
 
-def _initialize_logging():
+def _initialize_logging() -> None:
     """Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability()."""
     SETTINGS.__init__()
     program_level, dependencies_level = verbosity_mapping[SETTINGS.nss_log_level.upper()]
@@ -673,7 +674,7 @@ def _initialize_logging():
             *shared_processors,
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
-        wrapper_class=structlog.stdlib.BoundLogger,
+        wrapper_class=cast(type[BindableLogger], structlog.stdlib.BoundLogger),
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
@@ -687,7 +688,7 @@ def _initialize_logging():
 _INITIALIZED_OBSERVABILITY = False
 
 
-def initialize_observability():
+def initialize_observability() -> None:
     """Initialize observability for Safe Synthesizer.
 
     Central entry point for all observability setup -- currently initializes
@@ -918,21 +919,21 @@ def traced(
     )
 
 
-def traced_user(name: str | None = None, **kwargs):
+def traced_user(name: str | None = None, **kwargs) -> TracedContext:
     """Log a user-relevant operation (progress, results)."""
     return traced(name=name, category=LogCategory.USER, **kwargs)
 
 
-def traced_runtime(name: str | None = None, **kwargs):
+def traced_runtime(name: str | None = None, **kwargs) -> TracedContext:
     """Log a runtime/internal operation."""
     return traced(name=name, category=LogCategory.RUNTIME, **kwargs)
 
 
-def traced_system(name: str | None = None, **kwargs):
+def traced_system(name: str | None = None, **kwargs) -> TracedContext:
     """Log a system-level operation."""
     return traced(name=name, category=LogCategory.SYSTEM, **kwargs)
 
 
-def traced_backend(name: str | None = None, **kwargs):
+def traced_backend(name: str | None = None, **kwargs) -> TracedContext:
     """Log a backend operation."""
     return traced(name=name, category=LogCategory.BACKEND, **kwargs)

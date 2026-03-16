@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import typing
 from abc import ABCMeta
-from collections.abc import Generator, Iterable, Mapping
+from collections.abc import Generator, Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any, Self, get_args
 
@@ -95,7 +95,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             else:
                 pass
 
-    def _iter_parameters(self, recursive: bool = True) -> Generator[Mapping[str, DataT | Parameters], None, None]:
+    def _iter_parameters(self, recursive: bool = True) -> Generator[Mapping[str, Any], None, None]:
         """Yield ``{name: value}`` dicts for every parameter in this collection.
 
         Args:
@@ -111,7 +111,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             for pg in param_groups:
                 yield from pg._iter_parameters(recursive=True)
 
-    def __iter__(self) -> Iterable[DataT]:
+    def __iter__(self) -> Iterator[Mapping[str, Any]]:  # ty: ignore[invalid-method-override] -- intentionally overrides pydantic BaseModel.__iter__ with parameter-group semantics
         """Iterate over all parameters, recursing into nested groups."""
         return self._iter_parameters(recursive=True)
 

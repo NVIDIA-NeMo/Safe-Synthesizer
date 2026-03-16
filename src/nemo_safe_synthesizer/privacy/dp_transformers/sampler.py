@@ -14,7 +14,9 @@ sampling for proper DP accounting), and ``UniformWithReplacementNonNullSampler``
 (no empty batches).
 """
 
-from collections.abc import Iterator, Sequence
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence, Sized
 
 import torch
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler
@@ -44,6 +46,8 @@ class _EntitySampler(Sampler):
         self.indices = [0] * len(self.entity_mapping)
 
     def __len__(self) -> int:
+        if not isinstance(self.entity_sampler, Sized):
+            raise TypeError("entity_sampler must implement __len__")
         return len(self.entity_sampler)
 
     def __iter__(self) -> Iterator[list[int]]:

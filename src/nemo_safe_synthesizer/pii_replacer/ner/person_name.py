@@ -3,6 +3,8 @@
 
 """Custom module for Person Name detection."""
 
+from __future__ import annotations
+
 import gzip
 import io
 import itertools

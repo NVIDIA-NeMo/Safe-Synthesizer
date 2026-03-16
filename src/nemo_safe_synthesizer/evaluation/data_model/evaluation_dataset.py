@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import random
+from typing import Self
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -52,14 +53,14 @@ class EvaluationDataset(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @staticmethod
-    def check_dataframe(df: pd.DataFrame, df_name: str):
+    def check_dataframe(df: pd.DataFrame | None, df_name: str) -> None:
         """Raise ``ValueError`` if ``df`` is ``None`` or empty."""
         if df is None:
             raise ValueError(f"{df_name} is None!")
         if df.empty:
             raise ValueError(f"{df_name} is empty!")
 
-    def get_columns_of_type(self, types: set[FieldType], mode="reference") -> list[str]:
+    def get_columns_of_type(self, types: set[FieldType], mode: str = "reference") -> list[str]:
         """Return column names whose ``FieldType`` is in ``types``.
 
         Args:
@@ -83,20 +84,20 @@ class EvaluationDataset(BaseModel):
         else:
             return []
 
-    def get_tabular_columns(self, mode="reference") -> list[str]:
+    def get_tabular_columns(self, mode: str = "reference") -> list[str]:
         """Return columns classified as binary, categorical, or numeric."""
         return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, mode)
 
-    def get_nominal_columns(self, mode="reference") -> list[str]:
+    def get_nominal_columns(self, mode: str = "reference") -> list[str]:
         """Return columns classified as binary or categorical."""
         return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, mode)
 
-    def get_text_columns(self, mode="reference") -> list[str]:
+    def get_text_columns(self, mode: str = "reference") -> list[str]:
         """Return columns classified as free text."""
         return self.get_columns_of_type({FieldType.TEXT}, mode)
 
     @model_validator(mode="after")
-    def validate(self):
+    def validate(self) -> Self:
         # Expected raw input data:
         # reference
         # output
@@ -186,8 +187,8 @@ class EvaluationDataset(BaseModel):
         else:
             # Even without sampling, we only want to use shared columns.
             col_set = shared_columns
-        reference = reference[list(col_set)]  # ty: ignore[invalid-assignment]
-        output = output[list(col_set)]  # ty: ignore[invalid-assignment]
+        reference = reference.reindex(columns=list(col_set))
+        output = output.reindex(columns=list(col_set))
 
         # Check and subsample test columns, or split out a test set if not provided.
         if test is not None and not test.empty:
@@ -197,7 +198,7 @@ class EvaluationDataset(BaseModel):
                     "Test dataframe has no columns in common with Reference and Output dataframes. Please check dataframes for mismatch."
                 )
             else:
-                test = test[list(test_shared_columns)]  # ty: ignore[invalid-assignment]
+                test = test.reindex(columns=list(test_shared_columns))
 
         return reference, output, test
 

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
+from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
 
@@ -61,7 +62,7 @@ class PIIReplay(Component):
     )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with PII replay statistics and entity type list."""
         d = super().jinja_context
         d["reference_total_records"] = self.reference_total_records
@@ -71,7 +72,9 @@ class PIIReplay(Component):
         return d
 
     @staticmethod
-    def from_evaluation_dataset(evaluation_dataset, config: SafeSynthesizerParameters | None = None) -> PIIReplay:
+    def from_evaluation_dataset(
+        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    ) -> PIIReplay:
         """Compute PII replay counts from classified entity metadata."""
         if evaluation_dataset.column_statistics is None or len(evaluation_dataset.column_statistics) == 0:
             logger.warning("No classified entities, skipping PII Replay.")

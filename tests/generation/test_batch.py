@@ -9,6 +9,8 @@ import pandas as pd
 import pytest
 
 import nemo_safe_synthesizer
+import nemo_safe_synthesizer.generation
+import nemo_safe_synthesizer.generation.batch
 from nemo_safe_synthesizer.data_processing.actions.utils import MetadataColumns
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import ParsedResponse
@@ -102,6 +104,7 @@ def test_batch_to_dataframe(fixture_mock_processor):
     batch.process(prompt_number=1, text="stub text")
     batch.process(prompt_number=2, text="stub text")
     df = batch.to_dataframe()
+    assert df is not None
     assert len(df) == 6
 
 
@@ -163,12 +166,14 @@ def test_log_summary(detailed_errors, caplog, fixture_mock_processor_errors):
 
     # First record is the summary
     summary_ctx = ctx_data[0]
+    assert summary_ctx is not None
     assert summary_ctx["tabular_data"]["num_valid_records"] == 2
     assert summary_ctx["tabular_data"]["num_invalid_records"] == 20
     assert summary_ctx["tabular_data"]["valid_record_fraction"] == 0.09
 
     # Second record is the error statistics
     error_ctx = ctx_data[1]
+    assert error_ctx is not None
     error_data = error_ctx["tabular_data"]
     if detailed_errors:
         assert "err2" in error_data
@@ -205,11 +210,13 @@ def test_log_summary_data_config(caplog, fixture_mock_processor_rejected_records
 
     # First record is the summary
     summary_ctx = ctx_data[0]
+    assert summary_ctx is not None
     assert summary_ctx["tabular_data"]["num_valid_records"] == 2
     assert summary_ctx["tabular_data"]["num_invalid_records"] == 25
     assert summary_ctx["tabular_data"]["num_data_config_rejected_records"] == 5
 
     # Second record is the error statistics - check for data_config rejection reason
     error_ctx = ctx_data[1]
+    assert error_ctx is not None
     error_data = error_ctx["tabular_data"]
     assert any("Failed data_config validation due to [reason1]" in key for key in error_data)

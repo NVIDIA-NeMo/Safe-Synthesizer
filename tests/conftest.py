@@ -233,7 +233,7 @@ def fixture_mock_processor():
     mock_processor.return_value = ParsedResponse(
         valid_records=stub_valid_records,
         invalid_records=["invalidjson"],
-        errors=["some error msg"],
+        errors=[("some error msg", "some error msg")],
         prompt_number=1,
     )
     return mock_processor
@@ -253,7 +253,7 @@ def fixture_mock_processor_without_valid_records():
     mock_processor.return_value = ParsedResponse(
         valid_records=[],
         invalid_records=["invalidjson"],
-        errors=["some error msg"],
+        errors=[("some error msg", "some error msg")],
         prompt_number=1,
     )
     return mock_processor

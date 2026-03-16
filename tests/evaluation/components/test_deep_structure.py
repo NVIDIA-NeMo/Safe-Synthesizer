@@ -13,8 +13,10 @@ def test_deep_structure(evaluation_dataset_5k):
     """PCA (Principal Component Analysis) on 5k rows - very computationally expensive."""
     deep_structure = DeepStructure.from_evaluation_dataset(evaluation_dataset_5k)
     assert deep_structure.name == "Deep Structure Stability"
-    assert deep_structure.score.score > 0
+    assert deep_structure.score.score is not None and deep_structure.score.score > 0
+    assert deep_structure.reference_pca is not None
     assert deep_structure.reference_pca.shape == (5000, 2)
+    assert deep_structure.output_pca is not None
     assert deep_structure.output_pca.shape == (5000, 2)
 
 
@@ -29,4 +31,4 @@ def test_too_few_cols(train_df, synth_df, test_df):
     assert deep_structure.reference_pca is None
     assert deep_structure.output_pca is None
     assert deep_structure.score.grade == Grade.UNAVAILABLE
-    assert "Missing input Dataframe." in deep_structure.score.notes
+    assert deep_structure.score.notes is not None and "Missing input Dataframe." in deep_structure.score.notes

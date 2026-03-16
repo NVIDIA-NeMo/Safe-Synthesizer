@@ -47,7 +47,7 @@ class Component(ABC, BaseModel):
         Returns:
             A new component instance with computed scores.
         """
-        return Component()  # ty: ignore[missing-argument]
+        return Component(name="Placeholder")
 
     def get_json(self) -> str:
         """Serialize the component score to a JSON string."""

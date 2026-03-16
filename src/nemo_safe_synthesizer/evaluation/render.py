@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
 """Jinja2 report rendering for evaluation results.
 
 Loads HTML/Jinja templates from the ``assets/`` directory and renders
 an ``EvaluationReport`` into a self-contained HTML file.
 """
+
+from __future__ import annotations
 
 import datetime
 import pkgutil
@@ -26,7 +27,7 @@ logger = get_logger(__name__)
 _TEMPLATE_PATH = str(Path(__file__).parent / "assets/")
 
 
-def _get_template(name):
+def _get_template(name: str) -> str | None:
     """Load a Jinja template by relative path, falling back to the filesystem.
 
     Tries ``pkgutil.get_data`` first (works when installed as a package),

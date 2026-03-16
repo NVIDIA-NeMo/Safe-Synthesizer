@@ -14,19 +14,23 @@ expose ``position_ids`` for per-sample gradients, and ``GradSampleModule``
 wrapper with ``no_sync`` support.
 """
 
+from __future__ import annotations
+
 import os
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, Optional
+from typing import Any, cast
 
 import opacus
 import pandas as pd
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
+from opacus.accountants import RDPAccountant
 from peft import PeftModel
 from torch import nn
 from torch.utils.data import DataLoader
+from torch.utils.data import Dataset as TorchDataset
 from transformers import (
     DataCollatorForLanguageModeling,
     DataCollatorForTokenClassification,
@@ -92,9 +96,9 @@ class DPCallback(TrainerCallback):
         args: training_args.TrainingArguments,
         state: TrainerState,
         control: TrainerControl,
-        optimizer=None,
+        optimizer: torch.optim.Optimizer | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """Run DP optimizer step at the end of each gradient-accumulation substep.
 
         Signals the Opacus optimizer to skip the step, calls ``step()`` and
@@ -118,7 +122,7 @@ class DPCallback(TrainerCallback):
             dp_optimizer = optimizer.optimizer
         else:
             dp_optimizer = optimizer
-        dp_optimizer.signal_skip_step(do_skip=True)
+        dp_optimizer.signal_skip_step(do_skip=True)  # ty: ignore[unresolved-attribute]
         dp_optimizer.step()
         dp_optimizer.zero_grad()
 
@@ -129,9 +133,9 @@ class DPCallback(TrainerCallback):
         args: training_args.TrainingArguments,
         state: TrainerState,
         control: TrainerControl,
-        optimizer=None,
+        optimizer: torch.optim.Optimizer | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """Clear gradients and update RDP accountant at the end of each optimizer step.
 
         Calls ``zero_grad()`` on the optimizer (Opacus expects this; Trainer does not
@@ -164,7 +168,8 @@ class DPCallback(TrainerCallback):
         if not self.accountant.use_prv:
             # Use RDPAccountant, which uses `.step()` to increment number of
             # steps, required for accurate epsilon calculation.
-            self.accountant.accountant.step(
+            acct = cast("RDPAccountant", self.accountant.accountant)
+            acct.step(
                 noise_multiplier=self.noise_multiplier,
                 sample_rate=self.sampling_probability,
             )
@@ -175,7 +180,7 @@ class DPCallback(TrainerCallback):
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
-    ):
+    ) -> TrainerControl:
         """Called when the Trainer is about to save a checkpoint. Ensures training
         stops before saving if the privacy budget would be exceeded.
 
@@ -197,7 +202,7 @@ class DPCallback(TrainerCallback):
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
-    ):
+    ) -> TrainerControl:
         """Check epsilon budget and stop training if ``max_epsilon`` is exceeded.
 
         Called when the Trainer runs evaluation. Ensures training stops before
@@ -249,16 +254,20 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer, mlm=False)
 
-    def __call__(self, examples: list[list[int] | torch.Tensor | dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
+    def __call__(
+        self,
+        features,
+        return_tensors: str | None = None,
+    ) -> dict[str, torch.Tensor]:
         """Collate examples into a batch and add ``position_ids`` if missing.
 
         Args:
-            examples: List of tokenized examples (lists, tensors, or dicts).
+            features: Tokenized examples expected by HF data collators.
 
         Returns:
             Batch dict with ``input_ids``, ``labels``, and ``position_ids``.
         """
-        batch = super().__call__(examples)
+        batch = super().__call__(features, return_tensors=return_tensors)
 
         if "position_ids" not in batch:
             input_ids = batch["input_ids"]
@@ -282,17 +291,19 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
         super().__init__(tokenizer=tokenizer)
 
     def __call__(
-        self, examples: list[list[int] | torch.Tensor | dict[str, torch.TensorType]]
+        self,
+        features,
+        return_tensors: str | None = None,
     ) -> dict[str, torch.Tensor]:
         """Collate examples into a batch and add ``position_ids`` if missing.
 
         Args:
-            examples: List of tokenized examples (lists, tensors, or dicts).
+            features: Tokenized examples expected by HF data collators.
 
         Returns:
             Batch dict with ``input_ids``, ``labels``, and ``position_ids``.
         """
-        batch = super().__call__(examples)
+        batch = super().__call__(features, return_tensors=return_tensors)
 
         if "position_ids" not in batch:
             input_ids = batch["input_ids"]
@@ -311,7 +322,7 @@ class GradSampleModule(opacus.GradSampleModule):
     """
 
     @contextmanager
-    def no_sync(self):
+    def no_sync(self) -> Iterator[None]:
         """Context manager that does nothing; required by Trainer's expected API."""
         yield
 
@@ -337,7 +348,7 @@ def create_entity_mapping(entity_column_values: list) -> Sequence[Sequence[int]]
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.groupby.html
     # TODO: improve for use in sampler.py using a dictionary or such structure
     # with clearly defined entity_ids
-    entity_mapping = [g.index.values for _, g in entities.groupby("entity")]
+    entity_mapping = [g.index.tolist() for _, g in entities.groupby("entity")]
     return entity_mapping
 
 
@@ -372,7 +383,7 @@ class OpacusDPTrainer(Trainer):
         self,
         train_dataset: Dataset,
         model: modeling_utils.PreTrainedModel | torch.nn.Module,
-        args=None,
+        args: training_args.TrainingArguments | None = None,
         privacy_args: PrivacyArguments | None = None,
         data_fraction: float | None = None,
         true_dataset_size: int | None = None,
@@ -381,6 +392,10 @@ class OpacusDPTrainer(Trainer):
         secure_mode: bool | None = True,
         **kwargs: dict,
     ) -> None:
+        if args is None:
+            raise ValueError("TrainingArguments (args) is required for OpacusDPTrainer")
+        if privacy_args is None:
+            raise ValueError("PrivacyArguments is required for OpacusDPTrainer")
         self.train_args = args
         self.privacy_args = privacy_args
         self.secure_mode = secure_mode
@@ -415,6 +430,9 @@ class OpacusDPTrainer(Trainer):
                 sampling_probability=self.sampling_probability,
                 num_steps=self.num_steps,
             )
+        pa = self.privacy_args
+        assert pa.use_prv is not None
+        assert pa.noise_multiplier is not None
 
         model = GradSampleModule(model)
 
@@ -426,25 +444,22 @@ class OpacusDPTrainer(Trainer):
             **kwargs,
         )
         self.accountant = SafeSynthesizerAccountant(
-            use_prv=self.privacy_args.use_prv,
-            noise_multiplier=self.privacy_args.noise_multiplier,
+            use_prv=pa.use_prv,
+            noise_multiplier=pa.noise_multiplier,
             sampling_probability=self.sampling_probability,
             delta=self.privacy_args.target_delta,
             num_steps=self.num_steps,
         )
         self.dp_callback = DPCallback(
-            noise_multiplier=self.privacy_args.noise_multiplier,
+            noise_multiplier=pa.noise_multiplier,
             sampling_probability=self.sampling_probability,
             accountant=self.accountant,
-            max_epsilon=self.privacy_args.target_epsilon,
+            max_epsilon=float("inf") if self.privacy_args.target_epsilon is None else self.privacy_args.target_epsilon,
         )
         self.add_callback(self.dp_callback)
 
     def get_epsilon(self) -> float:
-        """
-        Uses the trainer's privacy accountant and the current number of
-        optimizer steps to return the epsilon consumed so far.
-        """
+        """Calculate the epsilon after model training completes."""
         return self.accountant.compute_epsilon(self.state.global_step)
 
     @property
@@ -494,7 +509,7 @@ class OpacusDPTrainer(Trainer):
         """Create the base optimizer then wrap it with Opacus DPOptimizer."""
         _ = super().create_optimizer()
 
-        class DPOptimizer(opacus.optimizers.DPOptimizer):  # ty: ignore[unresolved-attribute]
+        class DPOptimizer(opacus.optimizers.DPOptimizer):
             """DPOptimizer that delegates ``param_groups`` to the inner optimizer.
 
             Hugging Face AcceleratedOptimizer replaces ``param_groups``; Opacus
@@ -503,11 +518,11 @@ class OpacusDPTrainer(Trainer):
             """
 
             @property
-            def param_groups(self):
+            def param_groups(self) -> list:
                 return self.original_optimizer.param_groups
 
             @param_groups.setter
-            def param_groups(self, param_groups):
+            def param_groups(self, param_groups: list) -> None:
                 self.original_optimizer.param_groups = param_groups
 
         optimizer_generator = DPOptimizer
@@ -515,10 +530,13 @@ class OpacusDPTrainer(Trainer):
         # TODO: explore better mitigation for precision based attacks on finite
         # precision devices
         # https://tpdp.journalprivacyconfidentiality.org/2022/papers/HaneyDHSH22.pdf
+        pa = self.privacy_args
+        assert pa is not None and pa.per_sample_max_grad_norm is not None and pa.noise_multiplier is not None
+        assert self.optimizer is not None
         self.optimizer = optimizer_generator(
             optimizer=self.optimizer,
-            noise_multiplier=self.privacy_args.noise_multiplier,
-            max_grad_norm=self.privacy_args.per_sample_max_grad_norm,
+            noise_multiplier=pa.noise_multiplier,
+            max_grad_norm=pa.per_sample_max_grad_norm,
             expected_batch_size=self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps,
             secure_mode=self.secure_mode,
         )
@@ -529,7 +547,7 @@ class OpacusDPTrainer(Trainer):
         self,
         model: nn.Module,
         inputs: dict[str, torch.Tensor | Any],
-        num_items_in_batch=None,
+        num_items_in_batch: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Run one training step and return the loss scaled for logging.
 
@@ -550,8 +568,7 @@ class OpacusDPTrainer(Trainer):
             for logging only (optimizer step is driven by the callback).
         """
         model.train()
-        if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
-            self.optimizer.train()
+        getattr(self.optimizer, "train", lambda: None)()
 
         # Compared to the original HF implementation (as of 4.48), we use
         # `num_items_in_batch=None` to avoid any extra scaling, since Opacus
@@ -569,33 +586,37 @@ class OpacusDPTrainer(Trainer):
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
-    def _get_train_sampler(self):
+    def _get_train_sampler(self, train_dataset: Dataset | None = None) -> torch.utils.data.Sampler | None:  # ty: ignore[invalid-method-override] -- HF Trainer stub imprecision
         """Return the entity-level (or record-level) sampler for training."""
-        if self.privacy_args.poisson_sampling:
+        ds = train_dataset if train_dataset is not None else self.train_dataset
+        privacy_args = self.privacy_args
+        if privacy_args is not None and privacy_args.poisson_sampling:
+            assert isinstance(ds, Dataset), "train_dataset must be a Dataset"
             # NOTE: sample_rate is set s.t. chosen batch size remains the same in average
+            num_rows = getattr(ds, "num_rows", len(ds))
             sample_rate = min(
                 1.0,
-                self.args.per_device_train_batch_size / self.train_dataset.num_rows,
+                self.args.per_device_train_batch_size / num_rows,
             )
             logger.info(
                 f"Poisson sampling is active, with a sampling rate of {sample_rate}",
             )
-            train_sampler = PoissonEntitySampler(
+            return PoissonEntitySampler(
                 entity_mapping=self.entity_mapping,
                 sample_rate=sample_rate,
             )
-        else:
-            train_sampler = ShuffledEntitySampler(
-                entity_mapping=self.entity_mapping,
-                batch_size=self.args.per_device_train_batch_size,
-            )
-        return train_sampler
+        return ShuffledEntitySampler(
+            entity_mapping=self.entity_mapping,
+            batch_size=self.args.per_device_train_batch_size,
+        )
 
     def get_train_dataloader(self) -> DataLoader:
-        """DataLoader with entity-level sampler and DP data collator."""
-        train_sampler = self._get_train_sampler()
+        """Returns a torch DataLoader that uses an entity-level sampler."""
+        train_dataset = self.train_dataset
+        assert isinstance(train_dataset, Dataset)
+        train_sampler = self._get_train_sampler(train_dataset)
         return DataLoader(
-            self.train_dataset,
+            cast(TorchDataset, train_dataset),
             batch_sampler=train_sampler,
             collate_fn=self.data_collator,
             drop_last=self.args.dataloader_drop_last,
@@ -603,11 +624,12 @@ class OpacusDPTrainer(Trainer):
             pin_memory=self.args.dataloader_pin_memory,
         )
 
-    def _save(self, output_dir: Optional[str] = None, state_dict=None):
+    def _save(self, output_dir: str | None = None, state_dict: dict[str, Any] | None = None) -> None:
         """Save the PEFT adapter (unwrap GradSampleModule) and tokenizer.
 
         Overrides Trainer._save so that when the model is wrapped with
         GradSampleModule we save the inner PEFT model, not the wrapper.
+        TODO: When updating transformers, check for changes to this function.
         """
         if isinstance(self.model, GradSampleModule) and hasattr(self.model, "_module"):
             model_to_save = self.model._module
@@ -616,7 +638,10 @@ class OpacusDPTrainer(Trainer):
         else:
             model_to_save = self.model
 
+        assert model_to_save is not None
         output_dir = output_dir if output_dir is not None else self.args.output_dir
+        if not isinstance(output_dir, str):
+            raise ValueError("output_dir must be a string (neither output_dir nor self.args.output_dir was set)")
         os.makedirs(output_dir, exist_ok=True)
 
         supported_classes = (
@@ -628,6 +653,7 @@ class OpacusDPTrainer(Trainer):
         # They can then be reloaded using `from_pretrained()`
         if not isinstance(model_to_save, supported_classes):
             if state_dict is None:
+                assert model_to_save is not None
                 state_dict = model_to_save.state_dict()
             unwrapped_model = modeling_utils.unwrap_model(model_to_save)
             if isinstance(unwrapped_model, supported_classes):

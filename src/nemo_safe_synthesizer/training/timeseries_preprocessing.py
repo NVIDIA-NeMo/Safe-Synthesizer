@@ -69,7 +69,11 @@ def _create_elapsed_time_column(
     if ts_config.timestamp_column is not None:
         return df, False
 
-    logger.info(f"Adding timestamp column with interval {ts_config.timestamp_interval_seconds} seconds")
+    if ts_config.timestamp_interval_seconds is None:
+        raise ValueError("timestamp_interval_seconds must be set when creating elapsed timestamp column")
+    interval = ts_config.timestamp_interval_seconds
+
+    logger.info(f"Adding timestamp column with interval {interval} seconds")
     timestamp_col_name = "elapsed_seconds"
     if timestamp_col_name in df.columns:
         timestamp_col_name = "_elapsed_seconds"
@@ -78,11 +82,11 @@ def _create_elapsed_time_column(
     # Create elapsed time values (seconds since start of sequence)
     if group_by_col is not None:
         # For grouped data, reset elapsed time at the start of each group
-        df[ts_config.timestamp_column] = df.groupby(group_by_col).cumcount() * ts_config.timestamp_interval_seconds
+        df[ts_config.timestamp_column] = df.groupby(group_by_col).cumcount() * interval
         logger.info("Created elapsed time timestamps per group (in seconds)")
     else:
         # Single sequence - use positional range (not df.index which may be non-contiguous)
-        df[ts_config.timestamp_column] = pd.RangeIndex(len(df)) * ts_config.timestamp_interval_seconds
+        df[ts_config.timestamp_column] = pd.RangeIndex(len(df)) * interval
         logger.info("Created elapsed time timestamps (in seconds)")
 
     # Move the timestamp column to be the first column
@@ -111,7 +115,7 @@ def _validate_timestamp_column(df: pd.DataFrame, timestamp_column: str) -> None:
         raise DataError(f"Timestamp column '{timestamp_column}' has missing values. Please clean the column.")
 
 
-def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str, timestamp_col: str) -> pd.DataFrame:
+def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str | None, timestamp_col: str) -> pd.DataFrame:
     """Sort DataFrame by group and timestamp columns.
 
     Args:

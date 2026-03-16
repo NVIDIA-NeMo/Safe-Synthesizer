@@ -11,7 +11,7 @@ Pydantic v2 core schemas so that configuration values carry metadata
 import operator
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, get_args
+from typing import Any, Generic, TypeVar, cast, get_args
 
 from pydantic import BaseModel, GetCoreSchemaHandler, model_serializer
 from pydantic_core import core_schema
@@ -48,7 +48,7 @@ class Parameter(Generic[DataT]):
     value: DataT | Sequence[DataT] | None = None
 
     @model_serializer
-    def ser_model(self) -> dict[str, DataT] | DataT | Sequence[DataT]:
+    def ser_model(self) -> "dict[str, DataT] | DataT | Sequence[DataT] | Parameter[DataT] | None":
         """Serialize to the bare value for Pydantic ``model_dump`` / ``model_dump_json``."""
         if hasattr(self, "value"):
             return self.value
@@ -96,17 +96,18 @@ class Parameter(Generic[DataT]):
             case _:
                 return NotImplemented
 
-    def __ge__(self, other: "Parameter[DataT] | DataT"):
-        self._comp_helper(other, operator.__ge__)
+    def __ge__(self, other: "Parameter[DataT] | DataT") -> bool | None:
+        return self._comp_helper(other, operator.__ge__)
 
-    def __le__(self, other: "Parameter[DataT] | DataT"):
-        self._comp_helper(other, operator.__le__)
+    def __le__(self, other: "Parameter[DataT] | DataT") -> bool | None:
+        return self._comp_helper(other, operator.__le__)
 
-    def __gt__(self, other: "Parameter[DataT] | DataT") -> bool:
+    def __gt__(self, other: "Parameter[DataT] | DataT") -> bool | None:
         return self._comp_helper(other, operator.__gt__)
 
-    def __lt__(self, other: "Parameter[DataT] | DataT") -> bool:
+    def __lt__(self, other: "Parameter[DataT] | DataT") -> bool | None:
         return self._comp_helper(other, operator.__lt__)
 
-    def __eq__(self, other: "Parameter[DataT] | DataT") -> bool:
-        return self._comp_helper(other, operator.__eq__)
+    def __eq__(self, other: object) -> bool:
+        result = self._comp_helper(cast("Parameter[DataT] | DataT", other), operator.__eq__)
+        return cast(bool, result)

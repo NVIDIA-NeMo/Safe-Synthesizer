@@ -3,6 +3,8 @@
 
 """Patience-based stopping condition for the generation loop."""
 
+from __future__ import annotations
+
 from ..observability import get_logger
 
 logger = get_logger()

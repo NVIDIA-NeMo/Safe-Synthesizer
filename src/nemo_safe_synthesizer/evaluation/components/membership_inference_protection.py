@@ -10,6 +10,7 @@ import category_encoders as ce
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import torch
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics import accuracy_score, precision_score
@@ -62,7 +63,7 @@ class MembershipInferenceProtection(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with the membership-inference pie chart figure."""
         d = super().jinja_context
         d["anchor_link"] = "#mia"
@@ -159,7 +160,7 @@ class MembershipInferenceProtection(Component):
         return true_labels
 
     @staticmethod
-    def _assess_individual_mia(true_labels: list[int], predicted_labels: list[int]):
+    def _assess_individual_mia(true_labels: list[int], predicted_labels: list[int]) -> tuple:
         """Calculate precision, accuracy, true-positive, and false-positive counts."""
         precision = round(precision_score(true_labels, predicted_labels, zero_division=0), 1)
         accuracy = round(accuracy_score(true_labels, predicted_labels), 1)
@@ -213,7 +214,7 @@ class MembershipInferenceProtection(Component):
 
                 for j in range(search_synth_k):
                     text_dist = attack_synth_dist_text[i][j]
-                    synth_index = attack_synth_indices_text[i][j]
+                    synth_index = int(attack_synth_indices_text[i][j])
                     tabular_dist = attack_synth_dist_tabular[i][synth_index]
                     comb_score = tabular_weight * tabular_dist + text_weight * text_dist
                     all_scores.append(comb_score)
@@ -249,7 +250,7 @@ class MembershipInferenceProtection(Component):
         df_train_norm: pd.DataFrame,
         df_test_norm: pd.DataFrame,
         df_synth_norm: pd.DataFrame,
-        index: faiss.IndexFlatL2 | None,  # ty: ignore[possibly-unbound-attribute]
+        index: faiss.IndexFlatL2 | None,
         run: int,
         text_cnt: int,
         tabular_cnt: int,
@@ -305,16 +306,16 @@ class MembershipInferenceProtection(Component):
             else:
                 k = 1
             hits = util.semantic_search(
-                np.array(list(real_data["embedding"])),  # ty: ignore[invalid-argument-type]
-                np.array(list(df_synth_norm["embedding"])),  # ty: ignore[invalid-argument-type]
+                torch.stack(real_data["embedding"].tolist()),
+                torch.stack(df_synth_norm["embedding"].tolist()),
                 top_k=k,
             )
             for i in range(len(real_data)):
                 all_dist = []
                 all_indices = []
                 for j in range(k):
-                    sim = hits[i][j]["score"]
-                    corpus_id = hits[i][j]["corpus_id"]
+                    sim = float(hits[i][j]["score"])
+                    corpus_id = int(hits[i][j]["corpus_id"])
                     dist = 1 - sim
                     all_dist.append(dist)
                     all_indices.append(corpus_id)
@@ -343,7 +344,7 @@ class MembershipInferenceProtection(Component):
             dists, indices = index.search(
                 np.float32(np.ascontiguousarray(np.array(attacker_data_tabular))),
                 len(df_synth_norm),
-            )  # ty: ignore[missing-argument]
+            )
             # Scale the Euclidean distance to [0,1]
             dists = np.sqrt(dists)
             max_dist = np.amax(dists)
@@ -380,8 +381,8 @@ class MembershipInferenceProtection(Component):
 
         attack_synth_dist = MembershipInferenceProtection._get_attack_dist(
             attack_synth_dist_tabular,
-            attack_synth_indices_text,  # ty: ignore[invalid-argument-type]
-            attack_synth_dist_text,  # ty: ignore[invalid-argument-type]
+            np.asarray(attack_synth_indices_text, dtype=np.int64),
+            np.asarray(attack_synth_dist_text, dtype=np.float64),
             text_cnt,
             tabular_cnt,
             search_synth_k,
@@ -447,7 +448,7 @@ class MembershipInferenceProtection(Component):
         for col in df.columns:
             data = df[col].to_list()
             data = [str(r) for r in data]
-            embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_numpy=True)
+            embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_tensor=True)
 
         avg_embeddings = []
         for i in range(len(df)):
@@ -456,7 +457,7 @@ class MembershipInferenceProtection(Component):
             norm = embeddings[df.columns[0]][i]
             for j in range(1, len(df.columns)):
                 field = df.columns[j]
-                norm = np.average([norm, embeddings[field][i]], axis=0)
+                norm = torch.mean(torch.stack([norm, embeddings[field][i]]), dim=0)
 
             avg_embeddings.append(norm)
 
@@ -557,8 +558,8 @@ class MembershipInferenceProtection(Component):
                     )
                 # Create the faiss index on the synthetic tabular data
                 dim = df_synth_norm.shape[1]
-                index = faiss.IndexFlatL2(dim)  # ty: ignore[possibly-unbound-attribute]
-                index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))  # ty: ignore[missing-argument]
+                index = faiss.IndexFlatL2(dim)
+                index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))
             else:
                 df_train_norm = pd.DataFrame()
                 df_test_norm = pd.DataFrame()

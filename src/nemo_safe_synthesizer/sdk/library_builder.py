@@ -115,6 +115,9 @@ class SafeSynthesizer(ConfigBuilder):
         results = builder.results
     """
 
+    _workdir: Workdir | None
+    """Artifact directory layout, always set to a ``Workdir`` instance after ``__init__``."""
+
     trainer: TrainingBackend
     """Training backend instance, populated after ``train()``."""
 
@@ -194,6 +197,7 @@ class SafeSynthesizer(ConfigBuilder):
             Self for method chaining.
         """
         self._ensure_observability()
+        assert self._workdir is not None
         # Use source paths which point to parent workdir when resuming for generation
         config_file = self._workdir.source_config
 
@@ -210,9 +214,9 @@ class SafeSynthesizer(ConfigBuilder):
         # Always prefer cached train/test splits to preserve the exact split from training.
         # This ensures evaluation metrics are consistent and privacy guarantees are maintained.
         # Only fall back to with_data_source() data if cached files are missing.
-        training_path = self._workdir.source_dataset.training
-        test_path = self._workdir.source_dataset.test
-        if training_path.exists() and test_path.exists():
+        training_path = self._workdir.source_dataset.training  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        test_path = self._workdir.source_dataset.test  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        if training_path.exists() and test_path.exists():  # ty: ignore[call-non-callable] -- BoundDir delegates via __getattr__
             logger.info("Loading cached train/test split from training run")
             # training_path persists the original training split for evaluation.
             self._original_train_df = pd.read_csv(training_path)
@@ -274,6 +278,7 @@ class SafeSynthesizer(ConfigBuilder):
         if self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_train_df)
+            assert replacer.result is not None
             self._train_df = replacer.result.transformed_df
             self._column_statistics = replacer.result.column_statistics
             self._pii_replacer_time = replacer.elapsed_time
@@ -287,17 +292,18 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Always persist the original training split -- this is the version
         # reloaded by load_from_save_path and used for evaluation metrics.
+        assert self._workdir is not None
         self._workdir.ensure_directories()
         # ``training.csv`` is the canonical persisted original training split.
-        self._original_train_df.to_csv(self._workdir.dataset.training, index=False)
+        self._original_train_df.to_csv(self._workdir.dataset.training, index=False)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         if not self._train_df.equals(self._original_train_df):
             # The transformed (e.g. PII-replaced) training data is saved for
             # inspection only -- we don't need it in the generation or evaluation phase.
-            self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)
+            self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         if self._test_df is not None:
-            self._test_df.to_csv(self._workdir.dataset.test, index=False)
+            self._test_df.to_csv(self._workdir.dataset.test, index=False)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         else:
-            self._workdir.dataset.test.touch()
+            self._workdir.dataset.test.touch()  # ty: ignore[unresolved-attribute, call-non-callable] -- BoundDir delegates via __getattr__
         return self
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)
@@ -372,8 +378,9 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Clean up trainer model if it exists (only present when train->generate in same session)
         if hasattr(self, "trainer") and self.trainer is not None:
-            self.trainer.delete_trainable_model()
+            self.trainer.delete_trainable_model()  # ty: ignore[unresolved-attribute] -- delete_trainable_model is defined on HuggingFaceBackend/UnslothTrainer but not the abstract TrainingBackend base
 
+        assert self._workdir is not None
         # Select backend based on time_series configuration
         if self._nss_config.time_series and self._nss_config.time_series.is_timeseries:
             self.generator = TimeseriesBackend(
@@ -463,7 +470,7 @@ class SafeSynthesizer(ConfigBuilder):
         self.process_data().train().generate().evaluate()
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
-    def save_results(self, output_file: Path | str | None = None) -> None:
+    def save_results(self, output_file: Path | str | None = None) -> SafeSynthesizer:
         """Save synthetic data CSV and evaluation report HTML to the workdir.
 
         Args:
@@ -474,6 +481,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)
 
+        assert self._workdir is not None
         # Determine output file path for synthetic data
         match output_file:
             case Path() as p:

@@ -6,12 +6,14 @@ months, so we support 4 digits in a row without any digits before/afterwards
 and also descriptive words that can describe the age of an individual.
 """
 
+from __future__ import annotations
+
 import re
 
 from ..entity import Entity
 from ..regex import Pattern, RegexPredictor
 
-# Relevant issue: detection should support descriptive age terms
+# https://github.com/Gretellabs/monogretel/issues/190
 HEADERS = ["age", "ages"]
 
 

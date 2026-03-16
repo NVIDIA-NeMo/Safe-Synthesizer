@@ -217,7 +217,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         )
 
     @abc.abstractmethod
-    def prepare_training_data(self):
+    def prepare_training_data(self) -> None:
         """Load, validate, and tokenize the training dataset.
 
         Runs auto-config resolution, validates groupby/orderby columns,
@@ -229,7 +229,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def prepare_config(self):
+    def prepare_config(self) -> None:
         """Set framework-specific model-loading parameters.
 
         Builds the ``framework_load_params`` dict consumed by
@@ -240,7 +240,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def prepare_params(self):
+    def prepare_params(self) -> None:
         """Build training arguments and instantiate the trainer.
 
         Constructs ``TrainingArguments`` from the resolved config, configures
@@ -250,7 +250,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def maybe_quantize(self, **quant_params: dict):
+    def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply PEFT / quantization wrapping to the loaded model.
 
         Configures LoRA parameters (rank, alpha, target modules) and wraps
@@ -260,7 +260,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def load_model(self):
+    def load_model(self) -> None:
         """Load the pretrained model and tokenizer.
 
         Calls ``prepare_config`` to resolve loading parameters, loads the
@@ -271,7 +271,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def train(self):
+    def train(self) -> None:
         """Run the full training loop and populate ``results``.
 
         Orchestrates the end-to-end pipeline: prepares data, builds
@@ -281,7 +281,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def save_model(self):
+    def save_model(self) -> None:
         """Persist the fine-tuned adapter and related artifacts.
 
         Saves the LoRA adapter weights, model metadata, dataset schema,

@@ -135,7 +135,7 @@ def _unflatten_path(result: Optional[dict | list], path: ValuePath, value: Any) 
         return result
 
 
-def _unflatten_recursive(result: dict | list, prev_item: ValuePathItem, items: list[ValuePathItem], value: Any):
+def _unflatten_recursive(result: Any, prev_item: ValuePathItem, items: list[ValuePathItem], value: Any):
     # Note: result will be a list when working with an array at this level of
     # the path, and thus the first element of path is an integer. Otherwise
     # working with an object at this level of the path, result will be a dict

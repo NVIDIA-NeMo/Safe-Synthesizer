@@ -78,9 +78,9 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 
     assert result.synthetic_data is not None
     assert result.synthetic_data.shape == (config.generation.num_records, df.shape[1])
-    assert result.summary.timing.training_time_sec > 0
-    assert result.summary.timing.generation_time_sec > 0
-    assert result.summary.timing.evaluation_time_sec > 0
+    assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0
+    assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0
+    assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0
 
 
 @pytest.mark.e2e
@@ -101,6 +101,6 @@ def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fix
 
     assert result.synthetic_data is not None
     assert result.synthetic_data.shape == (config.generation.num_records, df.shape[1])
-    assert result.summary.timing.training_time_sec > 0
-    assert result.summary.timing.generation_time_sec > 0
-    assert result.summary.timing.evaluation_time_sec > 0
+    assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0
+    assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0
+    assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0

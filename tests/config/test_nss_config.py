@@ -55,7 +55,8 @@ def parent_fixture() -> ParentGroup:
                 basic_str_param=None,
                 basic_union_basic_input=None,
             )
-        ]
+        ],
+        autoparam_with_auto="auto",
     )
 
 
@@ -80,7 +81,7 @@ class TestValueValidation:
             ]
 
         # These should succeed
-        assert TestParams().validation_ratio == 0.0
+        assert TestParams(validation_ratio=0.0).validation_ratio == 0.0
         assert TestParams(validation_ratio=0.5).validation_ratio == 0.5
 
     def test_value_validator_failure(self):
@@ -117,7 +118,7 @@ class TestParametersClass:
 class TestPiiParameters:
     def test_pii_parameters_create_without_steps(self):
         with pytest.raises(ValidationError):
-            _ = PiiReplacerConfig()
+            _ = PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally omits required field to test that ValidationError is raised
 
     def test_create_default(self):
         params = PiiReplacerConfig.get_default_config()

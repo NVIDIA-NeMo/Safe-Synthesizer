@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from faker.config import AVAILABLE_LOCALES
 from pydantic import Field, field_validator, model_validator
@@ -50,7 +50,7 @@ class Column(NSSBaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def identifier_required(cls, values):
+    def identifier_required(cls, values: Any) -> Any:
         """Ensure at least one column identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
@@ -98,7 +98,7 @@ class Row(NSSBaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def identifier_required(cls, values):
+    def identifier_required(cls, values: Any) -> Any:
         """Ensure at least one row identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
@@ -150,7 +150,7 @@ class GlinerConfig(NSSBaseModel):
 
     gliner_model: str = Field(
         description="GLiNER model name.",
-        default="nvidia/gliner-PII",
+        default="gretelai/gretel-gliner-bi-large-v1.0",
     )
 
 

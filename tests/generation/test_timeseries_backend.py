@@ -53,7 +53,7 @@ def timeseries_model_metadata(fixture_session_cache_dir, fixture_tokenizer, fixt
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
+        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets/pydantic kwarg
         workdir=mock_workdir,
     )
     # TimeseriesBackend requires initial_prefill to be a dict mapping group -> prefill

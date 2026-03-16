@@ -3,6 +3,8 @@
 
 """Evaluation-wide constants and default thresholds."""
 
+from __future__ import annotations
+
 # Placeholder file for evaluation defaults and for maybe eventually configurable values.
 MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS = 200
 MIN_RECORDS_FOR_TEXT_METRICS_WITHOUT_WARNING = 2500

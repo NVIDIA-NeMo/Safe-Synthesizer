@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import pytest
 
 # Skip all tests in this module if torch is not available
@@ -77,8 +79,8 @@ class TestBothifyTransformation(TestCase):
                 "account": ["ABC123", "XYZ789", "DEF456"],
             }
         )
-        entities = {"account": "account_number"}
-        column_types = {"account": None}
+        entities: dict[str, str | None] = {"account": "account_number"}
+        column_types: dict[str, str | None] = {"account": None}
 
         editor = Editor(make_bothify_config(seed=42, entity_type="account_number"), entity_extractor=None)
         result = editor.process_df(df, entities, column_types)
@@ -123,8 +125,8 @@ class TestBothifyTransformation(TestCase):
                 "identifier": ["abc-123_xyz", "foo.bar-456"],
             }
         )
-        entities = {"identifier": "unique_identifier"}
-        column_types = {"identifier": None}
+        entities: dict[str, str | None] = {"identifier": "unique_identifier"}
+        column_types: dict[str, str | None] = {"identifier": None}
 
         editor = Editor(make_bothify_config(seed=42, entity_type="unique_identifier"), entity_extractor=None)
         result = editor.process_df(df, entities, column_types)
@@ -154,8 +156,8 @@ class TestBothifyTransformation(TestCase):
                 "account": ["ABC123", "XYZ789"],
             }
         )
-        entities = {"account": "account_number"}
-        column_types = {"account": None}
+        entities: dict[str, str | None] = {"account": "account_number"}
+        column_types: dict[str, str | None] = {"account": None}
 
         editor1 = Editor(make_bothify_config(seed=42, entity_type="account_number"), entity_extractor=None)
         result1 = editor1.process_df(df.copy(), entities, column_types)
@@ -175,8 +177,8 @@ def test_bothify_for_entity_type(entity_type):
             "col": ["ABC123-xyz", "XY99-abc", "TEST42-data"],
         }
     )
-    entities = {"col": entity_type}
-    column_types = {"col": None}
+    entities: dict[str, str | None] = {"col": entity_type}
+    column_types: dict[str, str | None] = {"col": None}
 
     editor = Editor(make_bothify_config(seed=42, entity_type=entity_type), entity_extractor=None)
     result = editor.process_df(df, entities, column_types)
@@ -200,8 +202,8 @@ def test_bothify_for_entity_type(entity_type):
 def test_bothify_only_uppercase_value():
     """Test bothify with a value containing only uppercase letters."""
     df = pd.DataFrame({"col": ["ABCDEF"]})
-    entities = {"col": "unique_identifier"}
-    column_types = {"col": None}
+    entities: dict[str, str | None] = {"col": "unique_identifier"}
+    column_types: dict[str, str | None] = {"col": None}
 
     editor = Editor(make_bothify_config(seed=42, entity_type="unique_identifier"), entity_extractor=None)
     result = editor.process_df(df, entities, column_types)
@@ -215,8 +217,8 @@ def test_bothify_only_uppercase_value():
 def test_bothify_only_digits_value():
     """Test bothify with a value containing only digits."""
     df = pd.DataFrame({"col": ["123456"]})
-    entities = {"col": "account_number"}
-    column_types = {"col": None}
+    entities: dict[str, str | None] = {"col": "account_number"}
+    column_types: dict[str, str | None] = {"col": None}
 
     editor = Editor(make_bothify_config(seed=42, entity_type="account_number"), entity_extractor=None)
     result = editor.process_df(df, entities, column_types)
@@ -229,8 +231,8 @@ def test_bothify_only_digits_value():
 def test_bothify_mixed_case_preserves_lowercase():
     """Test that lowercase letters are preserved in bothify transformation."""
     df = pd.DataFrame({"col": ["ABCdef123"]})
-    entities = {"col": "employee_id"}
-    column_types = {"col": None}
+    entities: dict[str, str | None] = {"col": "employee_id"}
+    column_types: dict[str, str | None] = {"col": None}
 
     editor = Editor(make_bothify_config(seed=42, entity_type="employee_id"), entity_extractor=None)
     result = editor.process_df(df, entities, column_types)
@@ -247,8 +249,8 @@ def test_bothify_mixed_case_preserves_lowercase():
 def test_bothify_complex_identifier_format():
     """Test bothify with a complex identifier format like 'XX-1234-ABCD-5678'."""
     df = pd.DataFrame({"col": ["XX-1234-ABCD-5678"]})
-    entities = {"col": "device_identifier"}
-    column_types = {"col": None}
+    entities: dict[str, str | None] = {"col": "device_identifier"}
+    column_types: dict[str, str | None] = {"col": None}
 
     editor = Editor(make_bothify_config(seed=42, entity_type="device_identifier"), entity_extractor=None)
     result = editor.process_df(df, entities, column_types)
