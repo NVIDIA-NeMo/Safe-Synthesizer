@@ -24,7 +24,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11+ (pinned in `.python-version` at the repo root)
 - Git 2.34+ (minimum required for SSH commit signing)
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make bootstrap-tools`.
