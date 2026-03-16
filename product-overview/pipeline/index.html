@@ -596,10 +596,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-pii-replacement-optional" class="md-nav__link">
+  <a href="#2-pii-replacement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. PII Replacement (Optional)
+        2. PII Replacement
       
     </span>
   </a>
@@ -8133,10 +8133,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-pii-replacement-optional" class="md-nav__link">
+  <a href="#2-pii-replacement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. PII Replacement (Optional)
+        2. PII Replacement
       
     </span>
   </a>
@@ -8375,7 +8375,7 @@
 <h2 id="pipeline-stages">Pipeline Stages<a class="headerlink" href="#pipeline-stages" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart LR
     data[("Input Data")]
-    data --&gt; pii{"Optional PII Replacement"}
+    data --&gt; pii("PII Replacement\non by default")
     pii --&gt; assemble("Assemble Examples")
     assemble --&gt; train("Fine-tune LLM")
     train --&gt; generate["Generate Samples"]
@@ -8388,8 +8388,8 @@
 <li>Grouping and ordering (if configured)</li>
 <li>Train/test split for holdout evaluation</li>
 </ul>
-<h3 id="2-pii-replacement-optional">2. PII Replacement (Optional)<a class="headerlink" href="#2-pii-replacement-optional" title="Permanent link">&para;</a></h3>
-<p>If enabled, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses.</p>
+<h3 id="2-pii-replacement">2. PII Replacement<a class="headerlink" href="#2-pii-replacement" title="Permanent link">&para;</a></h3>
+<p>On by default, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses. Disable with <code>--no_replace_pii</code> (CLI) or <code>.with_replace_pii(enable=False)</code> (SDK) if your data contains no PII.</p>
 <p>See <a href="privacy.md">Privacy</a> for detailed PII documentation.</p>
 <h3 id="3-example-assembly">3. Example Assembly<a class="headerlink" href="#3-example-assembly" title="Permanent link">&para;</a></h3>
 <p>Records are converted to a JSON format and tokenized for model training. The assembler handles truncation, padding, and proper formatting for the target LLM.</p>

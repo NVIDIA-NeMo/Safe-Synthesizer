@@ -1090,17 +1090,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#top-level-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Top-Level Parameters
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#training" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8127,17 +8116,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#top-level-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Top-Level Parameters
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#training" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8414,32 +8392,6 @@ omit the flag to use the default, or set it in YAML.</p>
 <p>See <a href="../running/#using-yaml-config-files">Using YAML Config Files with the CLI and SDK</a>
 for more detail on combining config files with runtime overrides.</p>
 <hr />
-<h2 id="top-level-parameters">Top-Level Parameters<a class="headerlink" href="#top-level-parameters" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Default</th>
-<th>Description</th>
-<th>Guidance</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>enable_synthesis</code></td>
-<td><code>true</code></td>
-<td>Run training and generation. Set to <code>false</code> to run PII replacement only (requires <code>enable_replace_pii: true</code>)</td>
-<td>Leave enabled for the full pipeline</td>
-</tr>
-<tr>
-<td><code>enable_replace_pii</code></td>
-<td><code>true</code></td>
-<td>Run PII replacement before training</td>
-<td>Disable if your data contains no PII</td>
-</tr>
-</tbody>
-</table>
-<hr />
 <h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>
 <p>NeMo Safe Synthesizer fine-tunes a pretrained language model on your tabular data
 using LoRA (Low-Rank Adaptation). See
@@ -8462,9 +8414,9 @@ for the full field list.</p>
 <tbody>
 <tr>
 <td><code>training.learning_rate</code></td>
-<td><code>0.0005</code></td>
+<td><code>"auto"</code></td>
 <td>Initial learning rate for the AdamW optimizer</td>
-<td>1e-4 to 1e-3 typical; lower for large models</td>
+<td>1e-4 to 1e-3 typical; <code>"auto"</code> picks a model-specific default</td>
 </tr>
 <tr>
 <td><code>training.batch_size</code></td>
@@ -8691,7 +8643,8 @@ for details.</p>
 <hr />
 <h2 id="replacing-pii">Replacing PII<a class="headerlink" href="#replacing-pii" title="Permanent link">&para;</a></h2>
 <p>PII replacement detects and replaces personally identifiable information in
-your dataset before synthesis. It is on by default (<code>enable_replace_pii: true</code>).
+your dataset before synthesis. It is on by default -- set <code>replace_pii: null</code>
+in YAML (or use <code>--no_replace_pii</code> on the CLI) to disable it.
 The <code>replace_pii</code> block is only needed when customizing entity types or
 classification via the SDK.</p>
 <p>Key config parameters:</p>
@@ -8705,12 +8658,6 @@ classification via the SDK.</p>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><code>enable_replace_pii</code></td>
-<td><code>true</code></td>
-<td>Master switch for PII replacement</td>
-<td>Leave enabled unless your data contains no PII</td>
-</tr>
 <tr>
 <td><code>replace_pii.globals.classify.enable_classify</code></td>
 <td><code>true</code></td>
@@ -8992,17 +8939,12 @@ for the full API reference.</p>
 <h3 id="config-validate"><code>config validate</code><a class="headerlink" href="#config-validate" title="Permanent link">&para;</a></h3>
 <p>Check your config for errors and display the merged parameters:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001
 </span></code></pre></div>
 <p>Fields set to <code>"auto"</code> remain as <code>"auto"</code> in the output -- auto-resolution
 happens at runtime during <code>process_data()</code>, not at validation time. To see
 resolved values, check <code>safe-synthesizer-config.json</code> in the run directory
 after a pipeline run.</p>
-<div class="admonition note">
-<p class="admonition-title">Override parsing limitation</p>
-<p><code>config validate</code> accepts synthesis parameter overrides (<code>--training__learning_rate</code>,
-etc.) but due to a known parsing issue, overrides are not applied to the validated
-output. Use <code>config modify</code> to test how overrides merge with a config file.</p>
-</div>
 <h3 id="config-modify"><code>config modify</code><a class="headerlink" href="#config-modify" title="Permanent link">&para;</a></h3>
 <p>Modify a configuration and optionally save the result:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>modify<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span>--output<span class="w"> </span>modified.yaml
@@ -9070,26 +9012,6 @@ CLI flags -- omit the flag to use the default, or set it in YAML.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>enable_synthesis</code></td>
-<td>(top-level flag)</td>
-<td><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
-
-
-  
-      pydantic-model
-  " href="../../reference/nemo_safe_synthesizer/config/parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters"><code>SafeSynthesizerParameters</code></a></td>
-</tr>
-<tr>
-<td><code>enable_replace_pii</code></td>
-<td>(top-level flag)</td>
-<td><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
-
-
-  
-      pydantic-model
-  " href="../../reference/nemo_safe_synthesizer/config/parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters"><code>SafeSynthesizerParameters</code></a></td>
-</tr>
-<tr>
 <td><code>data</code></td>
 <td><code>with_data()</code></td>
 <td><a class="autorefs autorefs-internal" title="            DataParameters
@@ -9130,8 +9052,8 @@ CLI flags -- omit the flag to use the default, or set it in YAML.</p>
   " href="../../reference/nemo_safe_synthesizer/config/evaluate/#nemo_safe_synthesizer.config.evaluate.EvaluationParameters"><code>EvaluationParameters</code></a></td>
 </tr>
 <tr>
-<td><code>replace_pii</code></td>
-<td><code>with_replace_pii()</code></td>
+<td><code>replace_pii</code> (<code>null</code> to disable)</td>
+<td><code>with_replace_pii()</code> / <code>with_replace_pii(enable=False)</code></td>
 <td><a class="autorefs autorefs-internal" title="            PiiReplacerConfig
 
 
@@ -9140,7 +9062,7 @@ CLI flags -- omit the flag to use the default, or set it in YAML.</p>
   " href="../../reference/nemo_safe_synthesizer/config/replace_pii/#nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig"><code>PiiReplacerConfig</code></a></td>
 </tr>
 <tr>
-<td><code>privacy</code></td>
+<td><code>privacy</code> (<code>null</code> to disable)</td>
 <td><code>with_differential_privacy()</code></td>
 <td><a class="autorefs autorefs-internal" title="            DifferentialPrivacyHyperparams
 
