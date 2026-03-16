@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Self
 
 from faker.config import AVAILABLE_LOCALES
 from pydantic import Field, field_validator, model_validator
-from typing_extensions import Self
 
 from ..configurator.parameters import (
     Parameters,

@@ -19,14 +19,14 @@ from __future__ import annotations
 import json
 import typing
 from abc import ABCMeta
+from collections.abc import Generator, Iterable, Mapping
 from pathlib import Path
-from typing import Any, Generator, Iterable, Mapping, get_args
+from typing import Any, Self, get_args
 
 import yaml
 from pydantic import (
     BaseModel,
 )
-from typing_extensions import Self
 
 from ..config.base import (
     pydantic_model_config,

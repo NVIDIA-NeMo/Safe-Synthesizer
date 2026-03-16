@@ -5,7 +5,7 @@
 """This module provides an interface to Nemo Safe Synthesizer Pii Replacer NER functionality."""
 
 import re
-from typing import Pattern
+from re import Pattern
 
 from ...data_processing.records.fragment import create_ner_api_response
 from ...pii_replacer.ner.entity import Score

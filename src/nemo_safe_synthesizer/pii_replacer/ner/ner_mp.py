@@ -4,10 +4,11 @@
 import concurrent.futures as futures
 import multiprocessing as mp
 import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from itertools import islice
 from threading import BoundedSemaphore
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Optional
 
 import joblib.externals.loky as loky
 

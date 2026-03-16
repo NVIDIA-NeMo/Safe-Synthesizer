@@ -14,7 +14,7 @@ sampling for proper DP accounting), and ``UniformWithReplacementNonNullSampler``
 (no empty batches).
 """
 
-from typing import Iterator, Sequence
+from collections.abc import Iterator, Sequence
 
 import torch
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler

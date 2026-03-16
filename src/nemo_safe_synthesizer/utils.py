@@ -13,8 +13,9 @@ import functools
 import json
 import os
 import time
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator, Protocol
+from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd

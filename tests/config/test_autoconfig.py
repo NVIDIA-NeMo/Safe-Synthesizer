@@ -15,9 +15,8 @@ and the Expected values (what AutoConfigResolver should produce)his makes it exp
 """
 
 from collections.abc import Callable
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
-from typing import ContextManager
 
 import pandas as pd
 import pytest
@@ -68,7 +67,7 @@ class Expected:
         return self.raises is not None
 
     @property
-    def contextmanager(self) -> ContextManager:
+    def contextmanager(self) -> AbstractContextManager:
         """Return pytest.raises context if error expected, else nullcontext."""
         if self.raises is not None:
             return pytest.raises(self.raises, match=self.raises_match)

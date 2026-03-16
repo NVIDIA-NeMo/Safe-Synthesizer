@@ -7,10 +7,11 @@ import ast
 import json
 import random
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
-from typing import Any, Iterable
+from typing import Any
 
 import pandas as pd
 import yaml

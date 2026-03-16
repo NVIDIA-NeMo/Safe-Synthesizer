@@ -11,7 +11,8 @@ via fluent ``with_*`` methods before resolving them into a single
 
 from __future__ import annotations
 
-from typing import Mapping, Self, TypeAlias, TypeVar
+from collections.abc import Mapping
+from typing import Self, TypeAlias, TypeVar
 
 import pandas as pd
 from pydantic import BaseModel

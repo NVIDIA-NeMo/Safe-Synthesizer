@@ -5,8 +5,8 @@ import itertools
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
+from re import Pattern as PatternType
 from typing import AnyStr, Optional
-from typing import Pattern as PatternType
 
 # We import as RePattern here separately from PatternType
 # so we can use it for isinstance checks. But if the first
@@ -15,7 +15,7 @@ from typing import Pattern as PatternType
 try:
     from re import Pattern as RePattern
 except ImportError:
-    from typing import Pattern as RePattern
+    from re import Pattern as RePattern
 
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord

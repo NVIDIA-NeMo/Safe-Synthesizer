@@ -9,8 +9,9 @@ Pydantic v2 core schemas so that configuration values carry metadata
 """
 
 import operator
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Sequence, TypeVar, get_args
+from typing import Any, Generic, TypeVar, get_args
 
 from pydantic import BaseModel, GetCoreSchemaHandler, model_serializer
 from pydantic_core import core_schema

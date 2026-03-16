@@ -13,15 +13,15 @@ from __future__ import annotations
 import inspect
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Hashable
 from enum import StrEnum
 from functools import cached_property
 from typing import (
     Annotated,
     Any,
-    Callable,
-    Hashable,
     Literal,
     Optional,
+    Self,
     TypeVar,
     Union,
 )
@@ -34,7 +34,6 @@ from pydantic import (
     Field,
     PrivateAttr,
 )
-from typing_extensions import Self
 
 from .dates import parse_date
 

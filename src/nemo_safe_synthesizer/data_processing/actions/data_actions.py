@@ -15,14 +15,13 @@ import json
 import operator
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from enum import Enum
 from types import FunctionType
 from typing import (
     Annotated,
     Any,
-    Callable,
-    Hashable,
     Literal,
     Optional,
     Protocol,

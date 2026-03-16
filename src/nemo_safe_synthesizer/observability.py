@@ -34,12 +34,13 @@ import os
 import sys
 import time
 import warnings
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
 from functools import wraps
 from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar
 
 import colorama
 

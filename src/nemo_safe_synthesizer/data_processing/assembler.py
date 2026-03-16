@@ -8,10 +8,10 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
-from typing import Callable, Generator
 
 import numpy as np
 import pandas as pd

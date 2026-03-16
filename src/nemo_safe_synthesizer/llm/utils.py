@@ -4,9 +4,10 @@
 """GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading."""
 
 import gc
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator, Literal, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights

@@ -15,8 +15,9 @@ wrapper with ``no_sync`` support.
 """
 
 import os
+from collections.abc import Sequence
 from contextlib import contextmanager
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import opacus
 import pandas as pd

@@ -11,8 +11,8 @@ entries, and helpers for tokenizing field names (``tokenize_header``,
 
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from numbers import Number
-from typing import Iterable
 
 from .value_path import (
     ValuePath,

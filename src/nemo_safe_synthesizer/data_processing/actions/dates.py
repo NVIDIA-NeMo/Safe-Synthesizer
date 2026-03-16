@@ -11,10 +11,11 @@ and date randomization for PII replacement (``randomize``).
 import itertools
 import re
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from random import randint
-from typing import Iterable, Iterator, Optional, cast
+from typing import Optional, cast
 
 import pandas as pd
 
