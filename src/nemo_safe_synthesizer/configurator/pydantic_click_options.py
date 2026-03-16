@@ -7,7 +7,7 @@ Used by ``cli/run.py`` and ``cli/config.py`` to expose every
 ``SafeSynthesizerParameters`` field as a ``--field_name`` CLI option.
 Nested ``BaseModel`` fields are flattened with a separator
 (e.g. ``--data__holdout``).  Fields typed as ``SomeModel | None`` also
-get a ``--no-<field>`` is-flag that sets the field to ``None``.
+get a ``--no_<field>`` is-flag that sets the field to ``None``.
 
 The companion ``parse_overrides()`` reverses the flattening at runtime,
 converting Click's flat ``{key: value}`` dict back into the nested structure
@@ -21,7 +21,7 @@ from __future__ import annotations
 import inspect
 import types
 from dataclasses import dataclass
-from typing import Annotated, Any, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 import click
 from pydantic import BaseModel
@@ -64,9 +64,13 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
                 overrides[key] = v
             case [first, *rest, last] if all(rest) and last:
                 target = overrides
-                target = target.setdefault(first, {})
+                if not isinstance(target.get(first), dict):
+                    target[first] = {}
+                target = target[first]
                 for part in rest:
-                    target = target.setdefault(part, {})
+                    if not isinstance(target.get(part), dict):
+                        target[part] = {}
+                    target = target[part]
                 target[last] = v
             case _:
                 raise ValueError(f"Invalid override key: {k!r}")
@@ -88,7 +92,7 @@ class LeafParam:
 
 @dataclass
 class FlagParam:
-    """A ``--no-<field>`` is-flag that sets the named field to ``None``."""
+    """A ``--no_<field>`` is-flag that sets the named field to ``None``."""
 
     name: str  # CLI param name, e.g. "no_replace_pii"
     field_name: str  # field being disabled, e.g. "replace_pii"
@@ -124,18 +128,27 @@ _CLICK_TYPE_PRIORITY: list[tuple[type, click.ParamType]] = [
 ]
 
 
+def _has_string_literal(args: set) -> bool:
+    """Check if any member is a ``Literal`` containing a string value."""
+    return any(get_origin(a) is Literal and any(isinstance(v, str) for v in get_args(a)) for a in args)
+
+
 def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
     Unwraps ``Annotated[T, ...]`` and ``T | None`` unions, then returns the
-    widest Click type that covers any member of the union. Falls back to
-    ``click.STRING`` for unrecognized types.
+    widest Click type that covers any member of the union.  String-valued
+    ``Literal`` members (e.g. ``Literal["auto"]``) force ``click.STRING``
+    so Click won't reject the sentinel before Pydantic validates it.
+    Falls back to ``click.STRING`` for unrecognized types.
     """
     t = annotation
     if get_origin(t) is Annotated:
         t = get_args(t)[0]
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
+    if _has_string_literal(args):
+        return click.STRING
     for py_type, click_type in _CLICK_TYPE_PRIORITY:
         if py_type in args:
             return click_type
@@ -189,7 +202,7 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
 
     Recurses into nested sub-models, flattening their fields into top-level
     CLI options separated by ``field_separator``.  Fields typed as
-    ``SomeModel | None`` also get a ``--no-<field>`` is-flag that sets the
+    ``SomeModel | None`` also get a ``--no_<field>`` is-flag that sets the
     field to ``None`` when passed.  Field types are mapped to Click types
     via ``_CLICK_TYPE_PRIORITY``; help text is pulled from
     ``Field(description=...)``.

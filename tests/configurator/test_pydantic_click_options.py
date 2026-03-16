@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.configurator.pydantic_click_options import (
     FlagParam,
     LeafParam,
+    _click_type,
     _collect_params,
     parse_overrides,
     pydantic_options,
@@ -116,6 +117,48 @@ def test_parse_overrides_mixed_depth():
 def test_parse_overrides_empty_segment_raises():
     with pytest.raises(ValueError, match="Invalid override key"):
         parse_overrides({"a____b": "x"})
+
+
+def test_parse_overrides_no_flag_then_nested_override():
+    """Nested override takes precedence over --no_ flag for same field."""
+    result = parse_overrides({"no_privacy": True, "privacy__epsilon": 1.0})
+    assert result == {"privacy": {"epsilon": 1.0}}
+
+
+def test_parse_overrides_nested_then_no_flag():
+    """--no_ flag after nested override disables the field."""
+    result = parse_overrides({"privacy__epsilon": 1.0, "no_privacy": True})
+    assert result["privacy"] is None
+
+
+# ---------------------------------------------------------------------------
+# _click_type
+# ---------------------------------------------------------------------------
+
+
+def test_click_type_str_or_int_returns_string():
+    assert _click_type(str | int | None) == click.STRING
+
+
+def test_click_type_literal_auto_int_returns_string():
+    """Literal['auto'] | int must use STRING so Click accepts 'auto'."""
+    from typing import Literal
+
+    assert _click_type(Literal["auto"] | int) == click.STRING
+
+
+def test_click_type_literal_auto_float_returns_string():
+    from typing import Literal
+
+    assert _click_type(Literal["auto"] | float) == click.STRING
+
+
+def test_click_type_plain_int_returns_int():
+    assert _click_type(int) == click.INT
+
+
+def test_click_type_plain_float_returns_float():
+    assert _click_type(float) == click.FLOAT
 
 
 # ---------------------------------------------------------------------------

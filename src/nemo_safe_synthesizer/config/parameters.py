@@ -147,8 +147,7 @@ class SafeSynthesizerParameters(Parameters):
 
         Example:
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-            >>> vals = {"use_structured_generation: True, "pii_replay_enabled": False}}
-            >>> SafeSynthesizerParams.from_params(vals)
+            >>> SafeSynthesizerParameters.from_params(use_structured_generation=True)
         """
         thp = TrainingHyperparams().model_copy(update=kwargs)
         gp = GenerateParameters().model_copy(update=kwargs)

@@ -377,7 +377,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._original_train_df is not None
             assert self._test_df is not None
             assert self._total_start is not None
-            if self._nss_config.enable_replace_pii:
+            if self._nss_config.replace_pii is not None:
                 assert self._pii_replacer_time is not None
                 assert self._column_statistics is not None
 

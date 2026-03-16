@@ -68,7 +68,7 @@ for the full field list.
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
-| `training.learning_rate` | `0.0005` | Initial learning rate for the AdamW optimizer | 1e-4 to 1e-3 typical; lower for large models |
+| `training.learning_rate` | `"auto"` | Initial learning rate for the AdamW optimizer | 1e-4 to 1e-3 typical; `"auto"` picks a model-specific default |
 | `training.batch_size` | `1` | Per-device batch size | Leave at 1; increase `gradient_accumulation_steps` for a larger effective batch |
 | `training.gradient_accumulation_steps` | `8` | Steps to accumulate before a backward pass; effective batch size = `batch_size` x this value | 8--32 typical |
 | `training.num_input_records_to_sample` | `"auto"` | Records the model sees during training -- proxy for training time (`"auto"` or int) | First knob to increase if quality is low |

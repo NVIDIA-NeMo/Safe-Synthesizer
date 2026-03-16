@@ -53,7 +53,7 @@ Precedence: `kwargs` override `values`; `values` override model defaults. Each `
 - Self type hints: All fluent methods return `Self`; subclass overrides must match so chaining preserves the concrete type.
 - Internal config state: `_nss_config` is assembled by `_resolve_nss_config()`. When `config` is passed to `__init__`, it seeds the per-section `_*_config`; later `with_*` calls overwrite those sections.
 - NSS_PHASE env: Set during each stage (`process_data`, `train`, `generate`, `evaluate`) for artifact layout; check `Workdir` / `artifact_structure` if paths change.
-- evaluate() dependencies: Expects `trainer`, `generator`, `_train_df`, `_test_df`, `_column_statistics`, `_pii_replacer_time`, `_total_start` to exist. Call `process_data().train().generate()` before `evaluate()`.
+- evaluate() dependencies: Expects `generator`, `_original_train_df`, `_test_df`, `_column_statistics`, `_pii_replacer_time`, `_total_start` to exist. Call `process_data().train().generate()` before `evaluate()`.
 
 ## Extension points
 

@@ -49,7 +49,7 @@ def validate(config_path: PathT, **kwargs):
     type=str,
     help="path to a yaml config file",
 )
-@click.option("--output", required=False, default=None, help="validate config and exit")
+@click.option("--output", required=False, default=None, help="write modified config to this path")
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def modify(config_path: PathT, output: str, **kwargs):
     """Modify a Safe Synthesizer configuration."""

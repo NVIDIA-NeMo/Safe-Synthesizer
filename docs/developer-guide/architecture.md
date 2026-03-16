@@ -180,7 +180,7 @@ flowchart TB
 
     subgraph sdk [SDK Entry Point]
         builder["SafeSynthesizer / ConfigBuilder"]
-        with_methods["with_replace_pii / with_privacy / with_train / ..."]
+        with_methods["with_replace_pii / with_differential_privacy / with_train / ..."]
         resolve["_resolve_nss_config"]
     end
 
