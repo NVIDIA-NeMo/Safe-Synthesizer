@@ -4,7 +4,7 @@ Thank you for your interest in contributing to NeMo Safe Synthesizer! This docum
 
 For the documentation version of this guide (with tabs, search, and same content), see [Contributing](https://nvidia-nemo.github.io/Safe-Synthesizer/developer-guide/contributing/) in the docs.
 
-When updating contributor instructions, update both this file and `docs/developer-guide/contributing.md` so GitHub and the docs stay in sync.
+This file is the canonical source for contribution process policy. When updating contributor instructions, update `docs/developer-guide/contributing.md` to keep GitHub and docs guidance in sync.
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
@@ -359,7 +359,7 @@ The `main` branch has the following protections:
    - After responding to all comments and pushing changes to the branch, re-request review with the circular arrow button to the right of the reviewer name
    - Use the Assignees list to indicate who's expected to take the next action on the PR, such as PR author after reviewer leaves comments, or the reviewer after updates have been made
    - Reviewers: If there is an error in the PR or something that requires large changes, review and mark it as "requires changes" for explicit feedback. This can give signal for triaging which PRs are mostly ready or those that require more work.
-8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted. Please review the git message, which will automatically be set to the first comment in the PR.
+8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted. The PR title becomes the commit message, so review the title before merging.
 
 ### CODEOWNERS
 
@@ -424,6 +424,12 @@ make test-gpu-integration
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
+
+# Run CI unit tests with coverage (excludes slow, e2e, gpu)
+make test-ci
+
+# Run CI slow tests with coverage
+make test-ci-slow
 
 # Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
 make test-nss-tinyllama_unsloth-clinc_oos-ci
@@ -518,9 +524,10 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 
 | Directory | Content type | Examples |
 | --- | --- | --- |
-| `getting-started/` | Tutorials | Installation, quick start |
+| `tutorials/` | Tutorials | Hands-on walkthroughs |
 | `user-guide/` | How-tos & reference | CLI, configuration, SDK |
-| `architecture/` | Explanations | Design decisions |
+| `developer-guide/` | Explanations | Contributing, architecture |
+| `product-overview/` | Explanations | Pipeline and feature overviews |
 | `reference/` | API reference | Auto-generated (see below) |
 | `blog/` | Dev notes | Release notes, design posts |
 

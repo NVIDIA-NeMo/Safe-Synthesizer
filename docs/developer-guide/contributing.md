@@ -6,7 +6,7 @@
 Thank you for your interest in contributing to NeMo Safe Synthesizer. This page covers setup, repository rules, the pull request process, testing, code style, and documentation. Please read the [Code of Conduct](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/CODE_OF_CONDUCT.md) before contributing.
 
 !!! note "Sync with CONTRIBUTING.md"
-    When updating contributor instructions, update both this page and the repo-root `CONTRIBUTING.md` so GitHub and the docs stay in sync.
+    `CONTRIBUTING.md` is the canonical source for contribution process policy. Keep this page synchronized so GitHub and docs guidance stay aligned.
 
 ## Getting Started
 
@@ -41,6 +41,8 @@ Other tools ([uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruf
 
 2. Set up the development environment:
 
+If you are looking for end-user installation paths instead of contributor setup, see [User Guide -- Getting Started](../user-guide/getting-started.md).
+
 ```bash
 cd Safe-Synthesizer
 
@@ -52,7 +54,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Install Python dependencies (choose one)
 make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-make bootstrap-nss cuda   # CUDA 12.8 (Linux with NVIDIA GPU)
+make bootstrap-nss cuda   # CUDA 12.8 (Linux with NVIDIA GPU; maps to the `cu128` extra)
 make bootstrap-nss engine # Engine dependencies only
 make bootstrap-nss dev    # Minimal dev dependencies only
 ```
@@ -258,6 +260,8 @@ This repository uses GitHub Rulesets to enforce contribution standards. You don'
     - [ ] `make format && make check` passes (or via pre-commit validation)
     - [ ] `make test` passes locally
     - [ ] `make test-e2e` passes locally (requires CUDA)
+    - [ ] `make test-ci` passes locally (recommended)
+    - [ ] `make test-ci-slow` passes locally when touching slow-test areas
     - [ ] `make test-ci-container` passes locally (recommended)
 5. Push: `git push origin <your-branch>`.
 6. Open a Pull Request using the [PR template](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/.github/PULL_REQUEST_TEMPLATE.md). You can submit a draft early to signal the issue is being worked on.
@@ -303,6 +307,8 @@ Run unit tests before submitting a PR: `make test`. All existing tests must pass
     | -------- | ------------ |
     | `make test` | Unit tests (excludes slow and e2e) |
     | `make test-slow` | All tests including slow (excludes e2e) |
+    | `make test-ci` | CI unit tests with coverage (excludes slow, e2e, gpu) |
+    | `make test-ci-slow` | CI slow tests with coverage |
     | `make test-gpu-integration` | GPU integration tests (requires CUDA) |
     | `make test-e2e` | All end-to-end tests (requires CUDA) |
     | `make test-e2e-default` | Default e2e tests (requires CUDA) |
@@ -377,9 +383,10 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 
 | Directory | Content type | Examples |
 | --- | --- | --- |
-| `getting-started/` | Tutorials | Installation, quick start |
+| `tutorials/` | Tutorials | Hands-on walkthroughs |
 | `user-guide/` | How-tos & reference | CLI, configuration, SDK |
 | `developer-guide/` | Explanations | Contributing, architecture |
+| `product-overview/` | Explanations | Pipeline and feature overviews |
 | `reference/` | API reference | Auto-generated (see below) |
 | `blog/` | Dev notes | Release notes, design posts |
 
