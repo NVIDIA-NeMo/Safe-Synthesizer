@@ -367,10 +367,10 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
       --url data.csv
     ```
 
-    To customize entity types or enable LLM classification from the CLI, use
-    `--replace_pii__globals__classify__enable_classify true` and
-    `--replace_pii__globals__classify__entities '["email","phone_number"]'`.
-    For complex PII configuration, YAML or the SDK is simpler.
+    Non-list PII settings can be overridden from the CLI, e.g.
+    `--replace_pii__globals__classify__enable_classify true`.
+    List-typed fields (like `entities`) cannot be set via CLI flags;
+    use YAML or the SDK for those at this time.
 
 === "SDK"
 

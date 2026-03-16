@@ -31,8 +31,8 @@ def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__")
         with a loaded config via ``merge_dicts()``.
 
     Raises:
-        ValueError: If a key contains more than one separator (only one level
-            of nesting is supported).
+        ValueError: If a key contains empty segments (e.g. consecutive
+            separators like ``a____b``).
     """
     if not values:
         return {}

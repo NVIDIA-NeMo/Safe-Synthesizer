@@ -414,9 +414,7 @@ class SafeSynthesizer(ConfigBuilder):
     def run(self) -> None:
         """Run the full pipeline: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
 
-        When ``enable_synthesis`` is ``False``, runs PII replacement
-        only.  For step-by-step control, call the individual methods
-        instead.
+        For step-by-step control, call the individual methods instead.
 
         Raises:
             RuntimeError: If called after ``load_from_save_path()``.
