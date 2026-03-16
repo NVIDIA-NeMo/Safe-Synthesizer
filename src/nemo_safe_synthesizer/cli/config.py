@@ -34,12 +34,11 @@ def config():
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def validate(config_path: PathT, **kwargs):
     """Validate a Safe Synthesizer configuration."""
-    msg = f"Config {config_path}"
-    overrides = parse_overrides(kwargs, field_sep=".")
+    overrides = parse_overrides(kwargs)
     my_config = merge_overrides(config_path, overrides)
 
-    click.echo(f"{msg} \n{my_config.model_dump_json(indent=2)} \n is valid!")
-    return
+    click.echo(my_config.model_dump_json(indent=2))
+    click.echo(f"Config {config_path} is valid!", err=True)
 
 
 @config.command()
@@ -50,7 +49,7 @@ def validate(config_path: PathT, **kwargs):
     type=str,
     help="path to a yaml config file",
 )
-@click.option("--output", required=False, default=None, help="validate config and exit")
+@click.option("--output", required=False, default=None, help="write modified config to this path")
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def modify(config_path: PathT, output: str, **kwargs):
     """Modify a Safe Synthesizer configuration."""

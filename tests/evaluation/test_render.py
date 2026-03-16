@@ -29,21 +29,6 @@ def test_render(train_df_10k, synth_df_10k, test_df, skip_privacy_metrics_config
 
 
 @pytest.mark.slow
-def test_render_pii_replacement_only(train_df_5k, synth_df_5k, test_df, skip_synth_config, column_statistics):
-    report = MultimodalReport.from_dataframes(
-        reference=train_df_5k,
-        output=synth_df_5k,
-        test=test_df,
-        config=skip_synth_config,
-        column_statistics=column_statistics,
-    )
-    output = render_report(report, "multi_modal_report.j2")
-    # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report_pii_only.html")
-    assert output is not None
-    assert len(output) > 0
-
-
-@pytest.mark.slow
 def test_render_dp_enabled(train_df_5k, synth_df_5k, test_df, dp_enabled_config, column_statistics):
     report = MultimodalReport.from_dataframes(
         reference=train_df_5k,

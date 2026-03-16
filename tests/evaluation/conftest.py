@@ -103,20 +103,6 @@ def skip_privacy_metrics_config():
 
 
 @pytest.fixture
-def skip_privacy_metrics_and_synth_config():
-    return SafeSynthesizerParameters(
-        enable_synthesis=False, evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=False)
-    )
-
-
-@pytest.fixture
-def skip_synth_config():
-    return SafeSynthesizerParameters(
-        enable_synthesis=False, evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=True)
-    )
-
-
-@pytest.fixture
 def dp_enabled_config():
     return SafeSynthesizerParameters(
         privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta=0.1, epsilon=0.2),

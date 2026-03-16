@@ -50,7 +50,7 @@ def fixture_process_data_setup_without_pii(
         fixture_sample_patient_dataframe,
         fixture_sample_patient_redacted_dataframe,
         fixture_workdir,
-        enable_replace_pii=False,
+        replace_pii=False,
     )
 
 
@@ -69,7 +69,7 @@ def fixture_process_data_setup_with_pii(
         fixture_sample_patient_dataframe,
         fixture_sample_patient_redacted_dataframe,
         fixture_workdir,
-        enable_replace_pii=True,
+        replace_pii=True,
     )
 
 
@@ -77,7 +77,8 @@ def _create_process_data_setup(
     fixture_sample_patient_dataframe: pd.DataFrame,
     fixture_sample_patient_redacted_dataframe: pd.DataFrame | None,
     fixture_workdir: Workdir,
-    enable_replace_pii: bool,
+    *,
+    replace_pii: bool = True,
 ) -> tuple[SafeSynthesizer, pd.DataFrame, pd.DataFrame, pd.DataFrame | None, MagicMock]:
     """Shared factory for the ``fixture_process_data_setup_*`` fixtures.
 
@@ -100,11 +101,12 @@ def _create_process_data_setup(
 
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
-    builder._nss_config.enable_replace_pii = enable_replace_pii
-    if enable_replace_pii:
+    if replace_pii:
         from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
         builder._nss_config.replace_pii = PiiReplacerConfig.get_default_config()
+    else:
+        builder._nss_config.replace_pii = None
 
     # Stub just enough of NemoPII's interface to satisfy process_data
     mock_replacer_instance = MagicMock()
@@ -285,8 +287,8 @@ class TestEvaluateUsesOriginalTrainDf:
         """Evaluate always passes ``_original_train_df`` as ``train_df``."""
         setup = request.getfixturevalue(fixture_name)
         builder, train_split, test_split, pii_replaced_df, _ = setup
-        enable_replace_pii = fixture_name == "fixture_process_data_setup_with_pii"
-        builder._train_df = pii_replaced_df if enable_replace_pii else train_split
+        has_pii = fixture_name == "fixture_process_data_setup_with_pii"
+        builder._train_df = pii_replaced_df if has_pii else train_split
         builder._original_train_df = train_split
         builder._test_df = test_split
         builder._total_start = 0.0
@@ -330,7 +332,7 @@ class TestLoadFromSavePath:
             fixture_sample_patient_dataframe,
             fixture_sample_patient_redacted_dataframe,
             workdir,
-            enable_replace_pii=False,
+            replace_pii=False,
         )
 
         train_split.to_csv(workdir.dataset.training, index=False)

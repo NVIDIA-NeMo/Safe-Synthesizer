@@ -154,7 +154,6 @@ def common_run_options(f):
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
     )
-
     # Apply each option decorator in reverse order (decorators apply bottom-up)
     for option in reversed(options):
         f = option(f)
@@ -229,6 +228,7 @@ def run(
 
 @run.command("train")
 @common_run_options
+@pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_train(
     config_path: PathT,
     url: str,

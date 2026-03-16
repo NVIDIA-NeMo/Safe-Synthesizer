@@ -83,11 +83,11 @@ The same run, three ways -- 10,000 records with DP-SGD:
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. PII replacement is optional; all other stages are configurable. The diagram shows the default full run.
+The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
 
 ```mermaid
 flowchart LR
-    data[Data Input] --> pii["PII Replacement<br/>(optional)"]
+    data[Data Input] --> pii["PII Replacement<br/>(on by default)"]
     pii --> train["Training<br/>LoRA fine-tune"]
     train --> gen["Generation<br/>vLLM sampling"]
     gen --> eval["Evaluation<br/>SQS + DPS report"]
@@ -118,7 +118,6 @@ You can also run stages individually:
 
 - `safe-synthesizer run train` -- train only, saves the adapter
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
-- PII replacement only: `safe-synthesizer run --enable_replace_pii true --enable_synthesis false --url data.csv`
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
 ---
@@ -182,7 +181,7 @@ safe-synthesizer --help
 ### `run` -- Execute the Pipeline
 
 Without a subcommand, `run` executes the full end-to-end pipeline (data processing,
-optional PII replacement, training, generation, evaluation).
+PII replacement, training, generation, evaluation). PII replacement is on by default.
 
 ```bash
 safe-synthesizer run --config config.yaml --url data.csv
@@ -223,12 +222,7 @@ Train only -- saves the adapter without generating or evaluating.
 safe-synthesizer run train --config config.yaml --url data.csv
 ```
 
-Accepts the same common options as `run`. Does not accept synthesis parameter overrides (`--training__learning_rate`, `--generation__num_records`, etc.) -- those only work with `run` (end-to-end) or `run generate`.
-
-!!! note "Known inconsistency"
-    `run train` does not accept synthesis parameter overrides, but `run` and
-    `run generate` do. This inconsistency is a known limitation and will be
-    addressed in a future release.
+Accepts the same common options and synthesis parameter overrides as `run`.
 
 ### `run generate`
 
@@ -349,7 +343,7 @@ See [Configuration Reference -- Data](configuration.md#data) for the full parame
 
 ## PII Replacement
 
-Optional stage that runs before training. Detection works in two independent
+Enabled-by-default stage that runs before training. Detection works in two independent
 steps: GLiNER NER is used on columns detected as free text for named-entity
 patterns (names, emails, phone numbers, etc.) and replaces matches with
 synthetic placeholders. An optional second step uses an LLM to identify
@@ -357,31 +351,40 @@ columns that are exclusively a single entity type (e.g., a column that is
 always SSNs), marking those columns for wholesale replacement before training.
 The two steps are independent -- NER runs on free-text content, LLM
 classification targets structured sensitive columns. PII replacement is on by
-default (`enable_replace_pii: true`).
+default in both the CLI and SDK. PII on by default means no config flag is needed to enable it.
 
 !!! tip "Skip PII replacement"
-    If your dataset does not contain PII, set `enable_replace_pii: false` to
-    skip this stage entirely and reduce pipeline runtime.
+    If your dataset does not contain PII, you may disable this stage to reduce pipeline
+    runtime:
+
+    - CLI: `--no_replace_pii`
+    - SDK: `.with_replace_pii(enable=False)`
 
 === "CLI"
 
     ```bash
     safe-synthesizer run \
-      --enable_replace_pii true \
       --url data.csv
     ```
 
-    To customize entity types or enable LLM classification from the CLI, use
-    `--replace_pii__globals__classify__enable_classify true` and
-    `--replace_pii__globals__classify__entities '["email","phone_number"]'`.
-    For complex PII configuration, YAML or the SDK is simpler.
+    Non-list PII settings can be overridden from the CLI, e.g.
+    `--replace_pii__globals__classify__enable_classify true`.
+    List-typed fields (like `entities`) cannot be set via CLI flags;
+    use YAML or the SDK for those at this time.
 
 === "SDK"
+
+    PII replacement is on by default -- no `with_replace_pii()` call is needed
+    for the standard case.  Call it only to customize the config or to disable:
 
     ```python
     from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
     from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
+    # Default: PII on, no call needed
+    synthesizer = SafeSynthesizer().with_data_source("data.csv").with_train()
+
+    # Customize: enable LLM classification for specific entity types
     pii_config = PiiReplacerConfig.get_default_config()
     pii_config.globals.classify.enable_classify = True
     pii_config.globals.classify.entities = ["email", "phone_number", "ssn"]
@@ -402,7 +405,6 @@ default (`enable_replace_pii: true`).
 === "Config reference"
 
     ```yaml
-    enable_replace_pii: true
     replace_pii:
       globals:
         classify:
@@ -445,40 +447,6 @@ When `NIM_ENDPOINT_URL` is unset, the classification step is attempted but
 falls back to NER-only detection (with an error log). No environment
 variables are required for NER-only PII replacement; column classification
 requires `NIM_ENDPOINT_URL`.
-
-### PII-Only Mode
-
-Set `enable_synthesis: false` with `enable_replace_pii: true` to run PII
-replacement without synthesis.
-
-=== "CLI"
-
-    ```bash
-    safe-synthesizer run \
-      --enable_replace_pii true \
-      --enable_synthesis false \
-      --url data.csv
-    ```
-
-=== "SDK"
-
-    ```python
-    from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
-
-    synthesizer = (
-        SafeSynthesizer()
-        .with_data_source("data.csv")
-        .with_replace_pii()
-    )
-    synthesizer.run()
-    ```
-
-=== "Config reference"
-
-    ```yaml
-    enable_replace_pii: true
-    enable_synthesis: false
-    ```
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 

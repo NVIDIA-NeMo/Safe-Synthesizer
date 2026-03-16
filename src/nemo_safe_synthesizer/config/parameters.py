@@ -3,15 +3,12 @@
 
 from __future__ import annotations
 
-from pydantic import (
-    Field,
-    field_validator,
-)
+from typing import Any
+
+from pydantic import Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
-from ..configurator.parameters import (
-    Parameters,
-)
+from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
 from .data import DataParameters
@@ -21,9 +18,7 @@ from .generate import GenerateParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
-from .types import (
-    AUTO_STR,
-)
+from .types import AUTO_STR
 
 __all__ = ["SafeSynthesizerParameters"]
 
@@ -49,13 +44,6 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=EvaluationParameters,
     )
 
-    enable_synthesis: bool = Field(
-        description="Enable synthesizing new data by training a model.",
-        default=True,
-    )
-
-    enable_replace_pii: bool = Field(description="Enable replacing PII in the data.", default=True)
-
     training: TrainingHyperparams = Field(
         description="Hyperparameters for model training such as learning rate, batch size, and LoRA adapter settings.",
         default_factory=TrainingHyperparams,
@@ -78,7 +66,7 @@ class SafeSynthesizerParameters(Parameters):
 
     replace_pii: PiiReplacerConfig | None = Field(
         description="PII replacement configuration. When ``None``, PII replacement is skipped.",
-        default=None,
+        default_factory=PiiReplacerConfig.get_default_config,
     )
 
     @field_validator("privacy", mode="after", check_fields=False)
@@ -159,8 +147,7 @@ class SafeSynthesizerParameters(Parameters):
 
         Example:
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
-            >>> vals = {"use_structured_generation: True, "pii_replay_enabled": False}}
-            >>> SafeSynthesizerParams.from_params(vals)
+            >>> SafeSynthesizerParameters.from_params(use_structured_generation=True)
         """
         thp = TrainingHyperparams().model_copy(update=kwargs)
         gp = GenerateParameters().model_copy(update=kwargs)
@@ -169,31 +156,14 @@ class SafeSynthesizerParameters(Parameters):
         dp = DataParameters().model_copy(update=kwargs)
         tsp = TimeSeriesParameters().model_copy(update=kwargs)
 
-        enable_replace_pii = kwargs.pop("enable_replace_pii", False)
-        replace_pii_config = kwargs.get("replace_pii", None)
-
-        match enable_replace_pii, replace_pii_config:
-            case True, None:
-                logger.debug("enable_replace_pii is True but no config provided - using defaults")
-                replace_pii_config = PiiReplacerConfig.get_default_config()
-            case True, dict():
-                logger.debug("enable_replace_pii is True and config provided - using provided config")
-                replace_pii_config = PiiReplacerConfig.get_default_config().model_copy(update=replace_pii_config)
-            case True, PiiReplacerConfig():
-                logger.debug("enable_replace_pii is True and config provided - using provided config")
-            case False, dict() | False, None:
-                replace_pii_config = None
-                logger.debug("enable_replace_pii is False but config provided - ignoring provided config")
-
-        enable_synthesis = kwargs.get("enable_synthesis", True)
-        return cls(
-            training=thp,
-            generation=gp,
-            evaluation=ep,
-            privacy=pp,
-            data=dp,
-            time_series=tsp,
-            replace_pii=replace_pii_config,
-            enable_synthesis=enable_synthesis,
-            enable_replace_pii=enable_replace_pii,
-        )
+        extra: dict[str, Any] = {
+            "training": thp,
+            "generation": gp,
+            "evaluation": ep,
+            "privacy": pp,
+            "data": dp,
+            "time_series": tsp,
+        }
+        if "replace_pii" in kwargs:
+            extra["replace_pii"] = kwargs["replace_pii"]
+        return cls(**extra)

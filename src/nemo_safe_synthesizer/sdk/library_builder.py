@@ -245,7 +245,7 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        if self._nss_config.enable_replace_pii:
+        if self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_train_df)
             self._train_df = replacer.result.transformed_df
@@ -377,7 +377,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._original_train_df is not None
             assert self._test_df is not None
             assert self._total_start is not None
-            if self._nss_config.enable_replace_pii:
+            if self._nss_config.replace_pii is not None:
                 assert self._pii_replacer_time is not None
                 assert self._column_statistics is not None
 
@@ -411,35 +411,10 @@ class SafeSynthesizer(ConfigBuilder):
         )
         return self
 
-    def _run_pii_replacer_only(self) -> SafeSynthesizerResults:
-        """Execute PII-only mode using the builder's data source.
-
-        Returns:
-            Results containing the PII-replaced DataFrame.
-        """
-        if TYPE_CHECKING:
-            assert self._nss_config is not None
-            assert isinstance(self._data_source, pd.DataFrame)
-
-        if self._total_start is None:
-            self._total_start = time.monotonic()
-
-        replacer = NemoPII(self._nss_config.replace_pii)
-        replacer.transform_df(self._data_source)
-        return make_nss_results(
-            total_time=time.monotonic() - self._total_start,
-            evaluation_time=None,
-            training_time=None,
-            generation_time=None,
-            generate_results=replacer.result.transformed_df,
-        )
-
     def run(self) -> None:
         """Run the full pipeline: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
 
-        When ``enable_synthesis`` is ``False``, runs PII replacement
-        only.  For step-by-step control, call the individual methods
-        instead.
+        For step-by-step control, call the individual methods instead.
 
         Raises:
             RuntimeError: If called after ``load_from_save_path()``.
@@ -455,10 +430,6 @@ class SafeSynthesizer(ConfigBuilder):
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
-
-        if not self._nss_config.enable_synthesis:
-            self.results = self._run_pii_replacer_only()
-            return  # Exit after PII-replacer-only mode
 
         self.process_data().train().generate().evaluate()
 

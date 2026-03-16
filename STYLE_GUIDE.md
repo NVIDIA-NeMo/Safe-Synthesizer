@@ -564,7 +564,6 @@ class SafeSynthesizerParameters(Parameters):
     """Main configuration class for the Safe Synthesizer pipeline."""
     data: DataParameters = Field(default_factory=DataParameters)
     evaluation: EvaluationParameters = Field(default_factory=EvaluationParameters)
-    enable_synthesis: bool = Field(default=True)
     training: TrainingHyperparams = Field(default_factory=TrainingHyperparams)
     generation: GenerateParameters = Field(default_factory=GenerateParameters)
 
@@ -586,8 +585,6 @@ class SafeSynthesizerParameters(Parameters):
     data: DataParameters = Field(description="Data parameters.", default_factory=DataParameters)
 
     evaluation: EvaluationParameters = Field(default_factory=EvaluationParameters, description="Evaluation parameters.")
-
-    enable_synthesis: bool = Field(description="Enable synthesizing new data by training a model.", default=True)
 
     training: TrainingHyperparams = Field(description="Training parameters.", default_factory=TrainingHyperparams)
 

@@ -11,6 +11,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
 )
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
+_SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
+
 PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
 
@@ -52,19 +54,8 @@ def test_pii_replacer_only_builder(fixture_base_builder: SafeSynthesizer):
     ).resolve()
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
-    assert builder._nss_config.enable_synthesis is False
     assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.replace_pii.globals.classify.enable_classify is True
-
-
-def test_synthesize_only_builder():
-    builder = SafeSynthesizer().with_data_source(pd.DataFrame({"name": ["John", "Jane", "Jim"]})).synthesize().resolve()
-
-    assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
 
 
 def test_all_builder():
@@ -96,13 +87,10 @@ def test_all_builder():
                 ],
             }
         )
-        .synthesize()
         .resolve()
     )
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
-    assert builder._nss_config.enable_synthesis is True
     assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
 
@@ -119,9 +107,7 @@ def test_builder_change_training_params_with_dict():
         .resolve()
     )
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.batch_size == 128
 
 
@@ -134,9 +120,7 @@ def test_builder_change_training_params_with_kwargs():
     )
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.num_input_records_to_sample == 5000
 
 
@@ -148,9 +132,7 @@ def test_builder_change_generation_params_with_object(fixture_base_builder: Safe
     )
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
     assert builder._nss_config.generation.num_records == 10000
 
@@ -162,9 +144,7 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
         .resolve()
     )
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is False
-    assert builder._nss_config.enable_synthesis is True
-    assert builder._nss_config.replace_pii is None
+    assert builder._nss_config.replace_pii is not None
     assert builder._nss_config.generation.patience == 42
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
     assert builder._nss_config.generation.num_records == 10000
@@ -175,10 +155,8 @@ def test_pii_replacer_with_default_config_object(fixture_base_builder):
     default_config = PiiReplacerConfig.get_default_config()
 
     builder = fixture_base_builder.with_replace_pii(config=default_config).resolve()
-    assert default_config == builder._nss_config.replace_pii
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
-    assert builder._nss_config.replace_pii is not None
+    assert default_config == builder._nss_config.replace_pii
 
 
 def test_builder_with_all_parameters_customized():
@@ -212,15 +190,12 @@ def test_builder_with_all_parameters_customized():
             aia_enabled=True,
             sqs_report_rows=1000,
         )
-        .synthesize()
         .resolve()
     )
     config = builder._nss_config
     assert config is not None
 
-    # Check all customizations were applied
-    assert config.enable_replace_pii is True
-    assert config.enable_synthesis is True
+    assert config.replace_pii is not None
 
     # Training params
     assert config.training.batch_size == 64
@@ -265,24 +240,19 @@ def test_pii_replacer_from_yaml_str(fixture_base_builder):
     builder = fixture_base_builder.with_replace_pii(config=config).resolve()
 
     assert builder._nss_config is not None
-    assert builder._nss_config.enable_replace_pii is True
     assert builder._nss_config.replace_pii is not None
 
 
 def test_builder_with_evaluation_config(fixture_base_builder):
     """Test builder with evaluation configuration"""
-    builder = (
-        fixture_base_builder.with_evaluate(
-            mia_enabled=True,
-            aia_enabled=True,
-            sqs_report_columns=100,
-            sqs_report_rows=2000,
-            pii_replay_enabled=True,
-            pii_replay_entities=["email", "phone_number"],
-        )
-        .synthesize()
-        .resolve()
-    )
+    builder = fixture_base_builder.with_evaluate(
+        mia_enabled=True,
+        aia_enabled=True,
+        sqs_report_columns=100,
+        sqs_report_rows=2000,
+        pii_replay_enabled=True,
+        pii_replay_entities=["email", "phone_number"],
+    ).resolve()
     assert builder._nss_config is not None
     config = builder._nss_config
     assert config.evaluation.mia_enabled is True
@@ -304,7 +274,6 @@ def test_builder_with_data_config():
             random_state=42,
             group_training_examples_by="col",
         )
-        .synthesize()
         .resolve()
     )
 
@@ -314,3 +283,75 @@ def test_builder_with_data_config():
     assert config.data.max_holdout == 1000
     assert config.data.random_state == 42
     assert config.data.group_training_examples_by == "col"
+
+
+def test_default_builder_has_pii_enabled():
+    builder = SafeSynthesizer().with_data_source(_SMALL_DF).resolve()
+    assert builder._nss_config.replace_pii is not None
+
+
+def test_with_replace_pii_enable_false_disables_pii():
+    builder = SafeSynthesizer().with_data_source(_SMALL_DF).with_replace_pii(enable=False).resolve()
+    assert builder._nss_config.replace_pii is None
+
+
+def test_with_train_still_enables_pii_by_default():
+    builder = SafeSynthesizer().with_data_source(_SMALL_DF).with_train().resolve()
+    assert builder._nss_config.replace_pii is not None
+
+
+# Regression tests for https://github.com/NVIDIA/NeMo-Safe-Synthesizer/issues/132
+# Root cause: ConfigBuilder had a stale default that silently skipped PII replacement
+# when no with_replace_pii() call was made.
+
+
+def test_regression_132_sdk_no_with_replace_pii_call_still_enables_pii():
+    """Bare SDK builder with no with_replace_pii() call must resolve to PII enabled.
+
+    This is the exact scenario from issue #132: the old code had a stale default
+    that resolved to None, silently skipping PII.
+    """
+    config = SafeSynthesizer().with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config.replace_pii is not None
+
+
+def test_regression_132_cli_path_no_overrides_enables_pii():
+    """CLI path (model_validate with empty overrides) must also default to PII enabled.
+
+    Ensures SDK and CLI agree on the default: both produce a populated replace_pii
+    config when no PII flags are passed.
+    """
+    config = SafeSynthesizerParameters.model_validate({})
+    assert config.replace_pii is not None
+
+
+def test_builder_seeded_from_config_with_pii_disabled():
+    """SafeSynthesizer(config=existing) must propagate replace_pii=None from the seed config.
+
+    The __init__ branch that reads from an existing SafeSynthesizerParameters
+    seeds _replace_pii_config from config.replace_pii directly. This test
+    confirms that a disabled seed stays disabled after resolve().
+    """
+    existing = SafeSynthesizerParameters(replace_pii=None)
+    config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config.replace_pii is None
+
+
+def test_builder_seeded_from_config_with_pii_enabled():
+    """SafeSynthesizer(config=existing) must propagate a populated replace_pii from the seed config."""
+    existing = SafeSynthesizerParameters()
+    config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config.replace_pii is not None
+
+
+def test_with_replace_pii_reenable_after_disable():
+    """Calling with_replace_pii() after with_replace_pii(enable=False) re-enables PII."""
+    config = (
+        SafeSynthesizer()
+        .with_data_source(_SMALL_DF)
+        .with_replace_pii(enable=False)
+        .with_replace_pii()
+        .resolve()
+        ._nss_config
+    )
+    assert config.replace_pii is not None
