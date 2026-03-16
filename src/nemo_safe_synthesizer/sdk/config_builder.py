@@ -275,7 +275,7 @@ class ConfigBuilder(object):
             case None:
                 cfg = PiiReplacerConfig.get_default_config().model_copy(update=kwargs, deep=True)
             case _:
-                raise ValueError("Config must be a PiiReplacerConfig, dictionary, or None")
+                raise ValueError(f"Config must be a PiiReplacerConfig, dict, or None, got {config!r}")
 
         self._replace_pii_config = cfg
         return self

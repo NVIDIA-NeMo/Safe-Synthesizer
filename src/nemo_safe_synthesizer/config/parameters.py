@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
@@ -155,7 +157,7 @@ class SafeSynthesizerParameters(Parameters):
         dp = DataParameters().model_copy(update=kwargs)
         tsp = TimeSeriesParameters().model_copy(update=kwargs)
 
-        extra: dict = {
+        extra: dict[str, Any] = {
             "training": thp,
             "generation": gp,
             "evaluation": ep,

@@ -1,6 +1,21 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Generate Click CLI options from a Pydantic model.
+
+Used by ``cli/run.py`` and ``cli/config.py`` to expose every
+``SafeSynthesizerParameters`` field as a ``--field_name`` CLI option.
+Nested ``BaseModel`` fields are flattened with a separator
+(e.g. ``--data__holdout``).  Fields typed as ``SomeModel | None`` also
+get a ``--no-<field>`` is-flag that sets the field to ``None``.
+
+The companion ``parse_overrides()`` reverses the flattening at runtime,
+converting Click's flat ``{key: value}`` dict back into the nested structure
+Pydantic expects.  The ``field_sep`` argument to ``parse_overrides`` must
+match the ``field_separator`` passed to ``pydantic_options``; otherwise
+nested keys like ``data__holdout`` will not be reconstructed correctly.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -96,27 +111,35 @@ def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
     return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
 
 
-def _click_type(annotation: Any) -> Any:
+# Click types ordered from widest to narrowest acceptance. When a union
+# contains multiple scalar types (e.g. ``str | int``), the widest type
+# that won't reject valid input is chosen. Click validates *before*
+# Pydantic, so a narrow Click type (INT) would reject values that
+# Pydantic could accept (a date string for ``str | int``).
+_CLICK_TYPE_PRIORITY: list[tuple[type, click.ParamType]] = [
+    (str, click.STRING),
+    (float, click.FLOAT),
+    (int, click.INT),
+    (bool, click.BOOL),
+]
+
+
+def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
-    Handles ``Annotated[T, ...]``, ``T | None``, and ``Literal["auto"] | T``
-    by collecting the set of non-None args and checking for ``int``, ``float``,
-    or ``bool`` membership.
+    Unwraps ``Annotated[T, ...]`` and ``T | None`` unions, then returns the
+    widest Click type that covers any member of the union. Falls back to
+    ``click.STRING`` for unrecognized types.
     """
     t = annotation
     if get_origin(t) is Annotated:
         t = get_args(t)[0]
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
-    if str in args:
-        return click.STRING
-    if int in args:
-        return click.INT
-    if float in args:
-        return click.FLOAT
-    if bool in args:
-        return click.BOOL
-    return str
+    for py_type, click_type in _CLICK_TYPE_PRIORITY:
+        if py_type in args:
+            return click_type
+    return click.STRING
 
 
 def _option_names(name: str, field_separator: str) -> tuple[str, ...]:
@@ -137,26 +160,21 @@ def _collect_params(cls: type[BaseModel], prefix: str = "") -> list[ClickParam]:
         full = f"{prefix}{name}"
         ft = field.annotation
 
-        if _is_basemodel(ft):
-            params.extend(_collect_params(ft, f"{full}."))
+        # Unwrap Annotated[T, ...] to its inner type.
+        inner = get_args(ft)[0] if get_origin(ft) is Annotated else ft
 
-        elif get_origin(ft) is Annotated:
-            inner = get_args(ft)[0]
-            if _is_basemodel(inner):
-                params.extend(_collect_params(inner, f"{full}."))
-            else:
+        match inner:
+            case t if _is_basemodel(t):
+                params.extend(_collect_params(t, f"{full}."))
+            case t if get_origin(t) is types.UnionType:
+                model_arg = _nullable_model_arg(get_args(t))
+                if model_arg is not None:
+                    params.extend(_collect_params(model_arg, f"{full}."))
+                    params.append(FlagParam(f"no_{full}", full))
+                else:
+                    params.append(LeafParam(full, field))
+            case _:
                 params.append(LeafParam(full, field))
-
-        elif get_origin(ft) is types.UnionType:
-            model_arg = _nullable_model_arg(get_args(ft))
-            if model_arg is not None:
-                params.extend(_collect_params(model_arg, f"{full}."))
-                params.append(FlagParam(f"no_{full}", full))
-            else:
-                params.append(LeafParam(full, field))
-
-        else:
-            params.append(LeafParam(full, field))
 
     return params
 
@@ -172,7 +190,18 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
     Recurses into nested sub-models, flattening their fields into top-level
     CLI options separated by ``field_separator``.  Fields typed as
     ``SomeModel | None`` also get a ``--no-<field>`` is-flag that sets the
-    field to ``None`` when passed.
+    field to ``None`` when passed.  Field types are mapped to Click types
+    via ``_CLICK_TYPE_PRIORITY``; help text is pulled from
+    ``Field(description=...)``.
+
+    Args:
+        model_class: The Pydantic model to generate options from
+            (typically ``SafeSynthesizerParameters``).
+        field_separator: String used to join parent and child field names
+            in the CLI option (default ``"__"``).
+
+    Returns:
+        A Click decorator that attaches the generated options to a command.
     """
 
     def decorator(f):

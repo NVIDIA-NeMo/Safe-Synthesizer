@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import click
+import pytest
 from click.testing import CliRunner
 from pydantic import BaseModel, Field
 from pydantic.fields import FieldInfo
@@ -113,8 +114,6 @@ def test_parse_overrides_mixed_depth():
 
 
 def test_parse_overrides_empty_segment_raises():
-    import pytest
-
     with pytest.raises(ValueError, match="Invalid override key"):
         parse_overrides({"a____b": "x"})
 

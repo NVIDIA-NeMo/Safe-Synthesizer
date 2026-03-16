@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import tempfile
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -56,21 +56,19 @@ def test_old_yaml_with_enable_replace_pii_loads_cleanly():
     assert c.replace_pii is not None
 
 
-def test_to_yaml_from_yaml_round_trip_enabled():
+def test_to_yaml_from_yaml_round_trip_enabled(tmp_path: Path):
     c1 = SafeSynthesizerParameters()
-    with tempfile.NamedTemporaryFile(suffix=".yaml", delete=True) as f:
-        fname = f.name
-    c1.to_yaml(fname, exclude_unset=False)
-    c2 = SafeSynthesizerParameters.from_yaml(fname)
+    yaml_path = tmp_path / "config.yaml"
+    c1.to_yaml(str(yaml_path), exclude_unset=False)
+    c2 = SafeSynthesizerParameters.from_yaml(str(yaml_path))
     assert c2.replace_pii is not None
 
 
-def test_to_yaml_from_yaml_round_trip_disabled():
+def test_to_yaml_from_yaml_round_trip_disabled(tmp_path: Path):
     c1 = SafeSynthesizerParameters(replace_pii=None)
-    with tempfile.NamedTemporaryFile(suffix=".yaml", delete=True) as f:
-        fname = f.name
-    c1.to_yaml(fname, exclude_unset=False)
-    c2 = SafeSynthesizerParameters.from_yaml(fname)
+    yaml_path = tmp_path / "config.yaml"
+    c1.to_yaml(str(yaml_path), exclude_unset=False)
+    c2 = SafeSynthesizerParameters.from_yaml(str(yaml_path))
     assert c2.replace_pii is None
 
 
