@@ -79,7 +79,7 @@ verify-python-version: ## Verify Python version and install if necessary
 	@uv python find 3.11 || uv python install 3.11
 
 .venv: verify-python-version ## Create a Python virtual environment
-	uv venv --seed --allow-existing
+	uv venv --seed --allow-existing --python 3.11
 
 .PHONY: bootstrap-python
 bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu128'. Here mostly for legacy usage.
