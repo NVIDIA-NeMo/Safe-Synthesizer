@@ -7,18 +7,18 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 ## Workflows Overview
 
+All workflows that use `.github/actions/setup-python-env` now default to the version in `../../.python-version`. Set the action input `python-version` only when a job intentionally needs an override.
 
-| Workflow                                           | Trigger                               | Description                                          |
-| -------------------------------------------------- | ------------------------------------- | ---------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual           | Format, typecheck, and unit tests (CPU)              |
-| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual | GPU E2E tests (A100)                               |
-| [conventional-commit.yml](conventional-commit.yml) | PRs                                   | Validates PR titles follow conventional commit format |
-| [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`        | Validates NVIDIA copyright headers on Python files   |
-| [docs.yml](docs.yml)                               | Push to `main` (docs paths)           | Builds and deploys documentation to GitHub Pages     |
-| [internal-release.yml](internal-release.yml)       | Tag push (`v[0-9]*`), manual dispatch | Builds and publishes wheel to Artifactory or PyPI    |
-| [release.yml](release.yml)                         | Manual dispatch                       | Builds and publishes package to PyPI (production)    |
-| [secrets-detector.yml](secrets-detector.yml)       | PRs                                   | Scans for accidentally committed secrets             |
-
+| Workflow                                           | Trigger                                  | Description                                           |
+| -------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, and unit tests (CPU)               |
+| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual  | GPU E2E tests (A100)                                  |
+| [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
+| [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`          | Validates NVIDIA copyright headers on Python files    |
+| [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
+| [internal-release.yml](internal-release.yml)       | Tag push (`v[0-9]*`), manual dispatch    | Builds and publishes wheel to Artifactory or PyPI     |
+| [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to PyPI (production)     |
+| [secrets-detector.yml](secrets-detector.yml)       | PRs                                      | Scans for accidentally committed secrets              |
 
 ## Pull Request Testing (copy-pr-bot)
 
@@ -109,7 +109,7 @@ flowchart LR
 The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a `make` target so the Makefile is the single source of truth for how each check runs.
 
 | Job | `make` target | What it checks |
-|---|---|---|
+| --- | --- | --- |
 | Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
 | Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
 | Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
@@ -204,6 +204,7 @@ The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Ar
 **Tag push (automatic):** Pushing a `v[0-9]*` tag (e.g. `git tag v0.2.0 && git push --tags`) automatically builds and publishes to Artifactory. This is the primary release mechanism.
 
 **Manual dispatch:** Go to Actions > Internal Release and run with:
+
 - `release-ref`: Branch, tag, or commit SHA to build (defaults to `main`)
 - `publish-target`: `artifactory` (default) or `pypi`
 
@@ -258,10 +259,11 @@ this is placeholder information until we do a real release. will update then.
 1. Go to Actions > Release NeMo Safe Synthesizer
 2. Click Run workflow
 3. Fill in the required inputs:
-  - `release-ref`: Full SHA or tag of the commit to release
-  - `dry-run`: Set to `false` for production release (publishes to PyPI)
-  - `create-gh-release`: Whether to create a GitHub release
-  - `version-bump-branch`: Branch to push the version bump PR (usually `main`)
+
+- `release-ref`: Full SHA or tag of the commit to release
+- `dry-run`: Set to `false` for production release (publishes to PyPI)
+- `create-gh-release`: Whether to create a GitHub release
+- `version-bump-branch`: Branch to push the version bump PR (usually `main`)
 
 ### Release Process
 
@@ -293,27 +295,23 @@ The release workflow automatically bumps the PATCH version (or PRE_RELEASE for r
 
 The following secrets must be configured in GitHub repository settings:
 
-
-| Secret                   | Purpose                      |
-| ------------------------ | ---------------------------- |
-| `TWINE_USERNAME`         | PyPI username                |
-| `TWINE_PASSWORD`         | PyPI API token               |
-| `SLACK_WEBHOOK_ADMIN`    | Slack admin notifications    |
-| `SLACK_RELEASE_ENDPOINT` | Slack release notifications  |
-| `PAT`                    | GitHub Personal Access Token |
-| `SSH_KEY`                | GPG signing key              |
-| `SSH_PWD`                | GPG key passphrase           |
-| `BOT_KEY`                | GitHub App private key       |
-| `ARTIFACTORY_USERNAME`     | NVIDIA Artifactory username  |
-| `ARTIFACTORY_TOKEN`       | NVIDIA Artifactory API key   |
-| `ARTIFACTORY_INTERNAL_URL`| NVIDIA Artifactory repo URL  |
-
-
+| Secret                      | Purpose                      |
+| --------------------------- | ---------------------------- |
+| `TWINE_USERNAME`            | PyPI username                |
+| `TWINE_PASSWORD`            | PyPI API token               |
+| `SLACK_WEBHOOK_ADMIN`       | Slack admin notifications    |
+| `SLACK_RELEASE_ENDPOINT`    | Slack release notifications  |
+| `PAT`                       | GitHub Personal Access Token |
+| `SSH_KEY`                   | GPG signing key              |
+| `SSH_PWD`                   | GPG key passphrase           |
+| `BOT_KEY`                   | GitHub App private key       |
+| `ARTIFACTORY_USERNAME`      | NVIDIA Artifactory username  |
+| `ARTIFACTORY_TOKEN`         | NVIDIA Artifactory API key   |
+| `ARTIFACTORY_INTERNAL_URL`  | NVIDIA Artifactory repo URL  |
 
 | Variable | Purpose       |
 | -------- | ------------- |
 | `BOT_ID` | GitHub App ID |
-
 
 ## Reusable Workflows
 
@@ -326,9 +324,8 @@ All compliance and release workflows reuse templates from [NVIDIA-NeMo/FW-CI-tem
 
 ## Configuration Files
 
-
-| File                                              | Purpose                              |
-| ------------------------------------------------- | ------------------------------------ |
-| `config/.secrets.baseline`                        | False positives for secrets detector |
-| `../../.python-version`                           | Python version for uv packaging      |
-| `../../src/nemo_safe_synthesizer/package_info.py` | Version information                  |
+| File | Purpose |
+| --- | --- |
+| `config/.secrets.baseline` | False positives for secrets detector |
+| `../../.python-version` | Python version source for CI |
+| `../../src/nemo_safe_synthesizer/package_info.py` | Version information |

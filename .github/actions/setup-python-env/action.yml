@@ -21,9 +21,9 @@ inputs:
     required: false
     default: ""
   python-version:
-    description: "Python version to use"
+    description: "Python version to use (defaults to .python-version when empty)"
     required: false
-    default: "3.11"  # keep in sync with .python-version
+    default: ""
   fetch-depth:
     description: "Number of commits to fetch (0 for all history)"
     required: false
@@ -69,9 +69,16 @@ runs:
         enable-cache: true
 
     - name: Set up Python ${{ inputs.python-version }}
+      if: inputs.python-version != ''
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
+
+    - name: Set up Python from .python-version
+      if: inputs.python-version == ''
+      uses: actions/setup-python@v5
+      with:
+        python-version-file: ".python-version"
 
     - name: Install tools
       if: inputs.bootstrap-tools == 'true'
