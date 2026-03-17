@@ -244,6 +244,77 @@ test-ci-container: container-build-test ## Run CI unit tests in a Linux containe
 		make test-ci
 
 
+### CONTAINER GPU (CUDA) ###
+
+CONTAINER_GPU_FILE := containers/Dockerfile.cuda
+CONTAINER_GPU_IMAGE ?= nss-gpu:latest
+CONTAINER_GPU_IMAGE_DEV ?= nss-gpu-dev:latest
+CONTAINER_GPU_PLATFORM ?= linux/amd64
+
+# GPU access flag. Docker and Podman 4.x+ support --gpus all.
+# Override for older Podman: CONTAINER_GPU_FLAG="--device nvidia.com/gpu=all"
+CONTAINER_GPU_FLAG ?= --gpus all
+
+# Bind-mount the host HF cache so model downloads persist across container runs.
+CONTAINER_HF_CACHE ?= $(HOME)/.cache/huggingface
+
+CONTAINER_GPU_RUN_OPTS := \
+	--rm \
+	--platform $(CONTAINER_GPU_PLATFORM) \
+	--mount type=bind,source=$(NSS_ROOT_PATH),target=/workspace \
+	--mount type=bind,source=$(CONTAINER_HF_CACHE),target=/workspace/.hf_cache \
+	-e HF_HOME=/workspace/.hf_cache \
+	-e DEBIAN_FRONTEND=noninteractive \
+	$(CONTAINER_GPU_FLAG)
+
+CONTAINER_GPU_BUILD_RUNTIME := --platform $(CONTAINER_GPU_PLATFORM) \
+	--tag $(CONTAINER_GPU_IMAGE) \
+	--target runtime \
+	--progress=plain \
+	-f $(CONTAINER_GPU_FILE)
+
+CONTAINER_GPU_BUILD_DEV := --platform $(CONTAINER_GPU_PLATFORM) \
+	--tag $(CONTAINER_GPU_IMAGE_DEV) \
+	--target dev \
+	--progress=plain \
+	-f $(CONTAINER_GPU_FILE)
+
+.PHONY: container-build-gpu
+container-build-gpu: ## Build CUDA runtime container (CLI wrapper)
+	$(CONTAINER_CMD) build $(CONTAINER_GPU_BUILD_RUNTIME) .
+
+.PHONY: container-build-gpu-dev
+container-build-gpu-dev: ## Build CUDA dev container (tools + test deps)
+	$(CONTAINER_CMD) build $(CONTAINER_GPU_BUILD_DEV) .
+
+.PHONY: container-run-gpu
+container-run-gpu: container-build-gpu ## Run command in GPU container. Usage: make container-run-gpu CMD="run --config ..."
+	$(CONTAINER_CMD) run $(CONTAINER_GPU_RUN_OPTS) \
+		-w /workspace \
+		$(CONTAINER_GPU_IMAGE) \
+		$(or $(CMD),--help)
+
+.PHONY: container-shell-gpu
+container-shell-gpu: container-build-gpu ## Interactive shell in GPU runtime container
+	$(CONTAINER_CMD) run -it $(CONTAINER_GPU_RUN_OPTS) \
+		-w /workspace \
+		--entrypoint /bin/bash \
+		$(CONTAINER_GPU_IMAGE)
+
+.PHONY: container-run-gpu-dev
+container-run-gpu-dev: container-build-gpu-dev ## Run command in GPU dev container. Usage: make container-run-gpu-dev CMD="make test"
+	$(CONTAINER_CMD) run $(CONTAINER_GPU_RUN_OPTS) \
+		-w /workspace \
+		$(CONTAINER_GPU_IMAGE_DEV) \
+		$(or $(CMD),make test)
+
+.PHONY: container-shell-gpu-dev
+container-shell-gpu-dev: container-build-gpu-dev ## Interactive shell in GPU dev container
+	$(CONTAINER_CMD) run -it $(CONTAINER_GPU_RUN_OPTS) \
+		-w /workspace \
+		$(CONTAINER_GPU_IMAGE_DEV)
+
+
 ### BUILD AND PUBLISH ###
 
 .PHONY: build-wheel

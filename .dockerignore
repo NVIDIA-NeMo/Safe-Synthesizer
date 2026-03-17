@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Version control
+.git/
+.github/
+
+# IDE and agent config
+.cursor/
+.agent/
+.vscode/
+.idea/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.uv_cache/
+
+# Virtual environments
+.venv/
+
+# Build artifacts
+dist/
+htmlcov/
+unsloth_compiled_cache/
+coverage.json
+coverage.xml
+
+# NMP sync
+.nmp_repo
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Documentation build
+site/
+
+# Agent transcripts
+agent-transcripts/
