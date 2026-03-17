@@ -287,16 +287,19 @@ def test_builder_with_data_config():
 
 def test_default_builder_has_pii_enabled():
     builder = SafeSynthesizer().with_data_source(_SMALL_DF).resolve()
+    assert builder._nss_config is not None
     assert builder._nss_config.replace_pii is not None
 
 
 def test_with_replace_pii_enable_false_disables_pii():
     builder = SafeSynthesizer().with_data_source(_SMALL_DF).with_replace_pii(enable=False).resolve()
+    assert builder._nss_config is not None
     assert builder._nss_config.replace_pii is None
 
 
 def test_with_train_still_enables_pii_by_default():
     builder = SafeSynthesizer().with_data_source(_SMALL_DF).with_train().resolve()
+    assert builder._nss_config is not None
     assert builder._nss_config.replace_pii is not None
 
 
@@ -312,6 +315,7 @@ def test_regression_132_sdk_no_with_replace_pii_call_still_enables_pii():
     that resolved to None, silently skipping PII.
     """
     config = SafeSynthesizer().with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config is not None
     assert config.replace_pii is not None
 
 
@@ -334,6 +338,7 @@ def test_builder_seeded_from_config_with_pii_disabled():
     """
     existing = SafeSynthesizerParameters(replace_pii=None)
     config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config is not None
     assert config.replace_pii is None
 
 
@@ -341,6 +346,7 @@ def test_builder_seeded_from_config_with_pii_enabled():
     """SafeSynthesizer(config=existing) must propagate a populated replace_pii from the seed config."""
     existing = SafeSynthesizerParameters()
     config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
+    assert config is not None
     assert config.replace_pii is not None
 
 
@@ -354,4 +360,5 @@ def test_with_replace_pii_reenable_after_disable():
         .resolve()
         ._nss_config
     )
+    assert config is not None
     assert config.replace_pii is not None

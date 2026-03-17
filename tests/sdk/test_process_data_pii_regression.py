@@ -93,7 +93,6 @@ class TestProcessDataPreservesOriginalForEvaluation:
             SafeSynthesizer(save_path=tmp_path)
             .with_data_source(original)
             .with_replace_pii(config=PiiReplacerConfig.get_default_config())
-            .synthesize()
             .resolve()
         )
         builder.process_data()
@@ -147,7 +146,6 @@ class TestLoadFromSavePathGuard:
             SafeSynthesizer(save_path=tmp_path)
             .with_data_source(original)
             .with_replace_pii(config=PiiReplacerConfig.get_default_config())
-            .synthesize()
             .resolve()
         )
         # Run process_data to create the workdir artifacts
