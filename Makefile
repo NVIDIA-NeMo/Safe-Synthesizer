@@ -249,7 +249,14 @@ test-ci-container: container-build-test ## Run CI unit tests in a Linux containe
 CONTAINER_GPU_FILE := containers/Dockerfile.cuda
 CONTAINER_GPU_IMAGE ?= nss-gpu:latest
 CONTAINER_GPU_IMAGE_DEV ?= nss-gpu-dev:latest
+# Multi-arch: override for arm64 builds (e.g., Blackwell).
+#   make container-build-gpu CONTAINER_GPU_PLATFORM=linux/arm64
 CONTAINER_GPU_PLATFORM ?= linux/amd64
+# Registry for multi-arch manifest pushes (required by container-build-gpu-multiarch).
+# The tag is built as CONTAINER_GPU_REGISTRY/CONTAINER_GPU_IMAGE, so
+# CONTAINER_GPU_IMAGE should be a bare name:tag (e.g., nss-gpu:latest),
+# not a fully-qualified registry path.
+CONTAINER_GPU_REGISTRY ?=
 
 # GPU access flag. Docker and Podman 4.x+ support --gpus all.
 # Override for older Podman: CONTAINER_GPU_FLAG="--device nvidia.com/gpu=all"
@@ -258,14 +265,20 @@ CONTAINER_GPU_FLAG ?= --gpus all
 # Bind-mount the host HF cache so model downloads persist across container runs.
 CONTAINER_HF_CACHE ?= $(HOME)/.cache/huggingface
 
+# Extra mounts for data outside the repo tree.
+#   make container-run-gpu CONTAINER_EXTRA_MOUNTS="-v /data/input:/workspace/data" CMD="run --url /workspace/data/input.csv"
+CONTAINER_EXTRA_MOUNTS ?=
+
 CONTAINER_GPU_RUN_OPTS := \
 	--rm \
 	--platform $(CONTAINER_GPU_PLATFORM) \
+	--shm-size=1g \
 	--mount type=bind,source=$(NSS_ROOT_PATH),target=/workspace \
 	--mount type=bind,source=$(CONTAINER_HF_CACHE),target=/workspace/.hf_cache \
 	-e HF_HOME=/workspace/.hf_cache \
 	-e DEBIAN_FRONTEND=noninteractive \
-	$(CONTAINER_GPU_FLAG)
+	$(CONTAINER_GPU_FLAG) \
+	$(CONTAINER_EXTRA_MOUNTS)
 
 CONTAINER_GPU_BUILD_RUNTIME := --platform $(CONTAINER_GPU_PLATFORM) \
 	--tag $(CONTAINER_GPU_IMAGE) \
@@ -289,30 +302,35 @@ container-build-gpu-dev: ## Build CUDA dev container (tools + test deps)
 
 .PHONY: container-run-gpu
 container-run-gpu: container-build-gpu ## Run command in GPU container. Usage: make container-run-gpu CMD="run --config ..."
+	@mkdir -p $(CONTAINER_HF_CACHE)
 	$(CONTAINER_CMD) run $(CONTAINER_GPU_RUN_OPTS) \
 		-w /workspace \
 		$(CONTAINER_GPU_IMAGE) \
 		$(or $(CMD),--help)
 
-.PHONY: container-shell-gpu
-container-shell-gpu: container-build-gpu ## Interactive shell in GPU runtime container
-	$(CONTAINER_CMD) run -it $(CONTAINER_GPU_RUN_OPTS) \
-		-w /workspace \
-		--entrypoint /bin/bash \
-		$(CONTAINER_GPU_IMAGE)
-
 .PHONY: container-run-gpu-dev
 container-run-gpu-dev: container-build-gpu-dev ## Run command in GPU dev container. Usage: make container-run-gpu-dev CMD="make test"
+	@mkdir -p $(CONTAINER_HF_CACHE)
 	$(CONTAINER_CMD) run $(CONTAINER_GPU_RUN_OPTS) \
 		-w /workspace \
 		$(CONTAINER_GPU_IMAGE_DEV) \
 		$(or $(CMD),make test)
 
-.PHONY: container-shell-gpu-dev
-container-shell-gpu-dev: container-build-gpu-dev ## Interactive shell in GPU dev container
-	$(CONTAINER_CMD) run -it $(CONTAINER_GPU_RUN_OPTS) \
-		-w /workspace \
-		$(CONTAINER_GPU_IMAGE_DEV)
+.PHONY: container-build-gpu-multiarch
+container-build-gpu-multiarch: ## Build multi-arch GPU image (requires docker + registry). Usage: make container-build-gpu-multiarch CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo
+ifeq ($(strip $(CONTAINER_GPU_REGISTRY)),)
+	$(error CONTAINER_GPU_REGISTRY is required for multi-arch builds. Multi-platform manifests must be pushed to a registry.)
+endif
+ifeq (,$(shell command -v docker 2>/dev/null))
+	$(error Multi-arch builds require Docker with buildx. Podman does not support buildx.)
+endif
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		--tag $(CONTAINER_GPU_REGISTRY)/$(CONTAINER_GPU_IMAGE) \
+		--target runtime \
+		--progress=plain \
+		--push \
+		-f $(CONTAINER_GPU_FILE) .
 
 
 ### BUILD AND PUBLISH ###

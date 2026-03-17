@@ -42,7 +42,7 @@ does at each stage.
     ```bash
     make container-build-gpu
 
-    docker run --gpus all \
+    docker run --gpus all --shm-size=1g \
       -v $(pwd):/workspace \
       -v ~/.cache/huggingface:/workspace/.hf_cache \
       -e HF_HOME=/workspace/.hf_cache \

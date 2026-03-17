@@ -26,64 +26,148 @@ docker run --rm --gpus all nvidia/cuda:12.8.1-runtime-ubuntu22.04 nvidia-smi
 
 ## Quick Start
 
-```bash
-# Build the container (one-time, ~15 min on first build)
-make container-build-gpu
+The container wraps the `safe-synthesizer` CLI. Mount your data and
+Hugging Face cache, then pass CLI arguments after the image name:
 
-# Run the full pipeline
-docker run --gpus all \
-  -v $(pwd):/workspace \
+```bash
+docker run --gpus all --shm-size=1g \
+  -v /path/to/your/data:/workspace/data \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --config /workspace/config.yaml --url /workspace/data.csv
+  run --config /workspace/data/config.yaml --url /workspace/data/input.csv
 ```
 
-The container wraps the `safe-synthesizer` CLI. Arguments after the image
-name are passed directly:
+The entrypoint prints helpful warnings if it detects common mistakes
+(empty `/workspace`, missing `HF_HOME`, no GPU access).
+
+More examples:
 
 ```bash
 # Train only
-docker run --gpus all -v $(pwd):/workspace nss-gpu:latest run train --url /workspace/data.csv
+docker run --gpus all --shm-size=1g \
+  -v /path/to/data:/workspace/data \
+  -v ~/.cache/huggingface:/workspace/.hf_cache \
+  -e HF_HOME=/workspace/.hf_cache \
+  nss-gpu:latest run train --url /workspace/data/input.csv
 
 # Generate from a trained adapter
-docker run --gpus all -v $(pwd):/workspace nss-gpu:latest \
-  run generate --url /workspace/data.csv --auto-discover-adapter
+docker run --gpus all --shm-size=1g \
+  -v /path/to/data:/workspace/data \
+  -v ~/.cache/huggingface:/workspace/.hf_cache \
+  -e HF_HOME=/workspace/.hf_cache \
+  nss-gpu:latest run generate --url /workspace/data/input.csv --auto-discover-adapter
 
 # Validate a config file (no GPU needed)
-docker run -v $(pwd):/workspace nss-gpu:latest config validate --config /workspace/config.yaml
+docker run \
+  -v /path/to/data:/workspace/data \
+  nss-gpu:latest config validate --config /workspace/data/config.yaml
 ```
 
 ---
 
-## Volume Mounts
+## Mounting Your Data
 
-Bind-mount host directories to make data, config, and caches available
-inside the container.
+The container starts with an empty `/workspace`. You bring your own data
+by bind-mounting host directories with `-v`:
 
-| Host path | Container path | Purpose |
-|-----------|---------------|---------|
-| Your data directory | `/workspace` | Input data, config files, output artifacts |
-| `~/.cache/huggingface` | `/workspace/.hf_cache` | Model downloads (persists across runs) |
+```bash
+docker run --gpus all --shm-size=1g \
+  -v /home/user/project:/workspace/data \
+  ...
+  nss-gpu:latest run --url /workspace/data/input.csv
+```
 
-Set `HF_HOME` inside the container to point at the mounted cache:
+Docker requires absolute paths for bind mounts. Relative paths like
+`-v data:/workspace/data` are silently interpreted as named volumes --
+Docker won't error, but you'll get an empty mount instead of your host
+directory. Use `$(pwd)` to expand relative paths:
+
+```bash
+-v $(pwd)/my_data:/workspace/data    # correct
+-v my_data:/workspace/data           # wrong -- Docker treats this as a named volume
+```
+
+You can mount multiple directories at different paths:
 
 ```bash
 docker run --gpus all \
-  -v /path/to/data:/workspace \
-  -v /shared/hf_cache:/workspace/.hf_cache \
-  -e HF_HOME=/workspace/.hf_cache \
-  nss-gpu:latest run --config /workspace/config.yaml --url /workspace/input.csv
+  -v /data/inputs:/workspace/inputs \
+  -v /data/configs:/workspace/configs \
+  -v /data/output:/workspace/output \
+  -e NSS_ARTIFACTS_PATH=/workspace/output \
+  ...
+  nss-gpu:latest run --config /workspace/configs/my_config.yaml --url /workspace/inputs/data.csv
 ```
 
-Artifacts are written to `/workspace/safe-synthesizer-artifacts/` by default.
-Mount a host directory at `/workspace` to retrieve them after the run.
+Artifacts are written to `/workspace/safe-synthesizer-artifacts/` by default
+(override with `NSS_ARTIFACTS_PATH`). Make sure to mount a host directory
+there if you want to retrieve results after the container exits.
+
+---
+
+## Secrets and API Keys
+
+Pass secrets as environment variables at runtime -- never bake them into the
+image. The most common ones:
+
+```bash
+docker run --gpus all --shm-size=1g \
+  -v /path/to/data:/workspace/data \
+  -v ~/.cache/huggingface:/workspace/.hf_cache \
+  -e HF_HOME=/workspace/.hf_cache \
+  -e HF_TOKEN="hf_..." \
+  nss-gpu:latest run --url /workspace/data/input.csv
+```
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `HF_TOKEN` | For gated models | Hugging Face token for downloading gated models (Llama, Mistral, etc.). Get one at [hf.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| `NIM_API_KEY` | For PII classification | API key for the NIM endpoint used by PII column classification. Only needed when `NIM_ENDPOINT_URL` is set |
+| `NIM_ENDPOINT_URL` | For PII classification | NIM/OpenAI-compatible endpoint URL for PII column classification |
+| `WANDB_API_KEY` | For experiment tracking | WandB API key. Only needed when `--wandb-mode online` is used |
+
+If `HF_TOKEN` is already stored in your HF cache (`~/.cache/huggingface/token`),
+mounting the cache directory is sufficient -- the Hub library reads the token
+file automatically.
+
+See [Environment Variables](environment.md) for the full reference.
+
+---
+
+## Hugging Face Model Cache
+
+Safe Synthesizer downloads models from Hugging Face Hub on first use.
+Mount a host directory to persist downloads across container runs:
+
+```bash
+docker run --gpus all \
+  -v ~/.cache/huggingface:/workspace/.hf_cache \
+  -e HF_HOME=/workspace/.hf_cache \
+  ...
+```
+
+| Host path | Container path | Env var | Purpose |
+|-----------|---------------|---------|---------|
+| `~/.cache/huggingface` | `/workspace/.hf_cache` | `HF_HOME` | Model weights, tokenizers, configs |
+
+Without this mount, models are downloaded into the container's ephemeral
+filesystem and lost when it exits.
+
+For shared environments (team servers, CI), point at a shared cache:
+
+```bash
+-v /shared/hf_cache:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache
+```
 
 ---
 
 ## GPU Access
 
-Docker uses the `--gpus` flag to expose NVIDIA GPUs:
+The image declares `NVIDIA_VISIBLE_DEVICES=all` and
+`NVIDIA_DRIVER_CAPABILITIES=compute,utility`, so the NVIDIA Container Toolkit
+knows it needs GPU access. You still need `--gpus` to tell Docker to inject
+the GPU devices:
 
 ```bash
 # All GPUs
@@ -93,11 +177,48 @@ docker run --gpus all ...
 docker run --gpus '"device=0,1"' ...
 ```
 
-Alternatively, set `NVIDIA_VISIBLE_DEVICES`:
+To restrict which GPUs are visible inside the container, override the
+environment variable:
 
 ```bash
 docker run --gpus all -e NVIDIA_VISIBLE_DEVICES=0,1 ...
 ```
+
+---
+
+## Shared Memory (`--shm-size`)
+
+PyTorch uses `/dev/shm` for inter-process communication during training
+(multi-worker data loading). Docker defaults to 64 MB, which causes
+"Bus error" crashes. Always pass `--shm-size=1g` (or `--ipc=host`) when
+running training workloads:
+
+```bash
+docker run --gpus all --shm-size=1g ...
+```
+
+The entrypoint script warns if `/dev/shm` is below 256 MB.
+Generation-only runs are typically fine without it.
+
+---
+
+## File Permissions
+
+The container runs as `appuser` (uid 1000). When bind-mounting host
+directories, Docker preserves host ownership. If your host user has a
+different uid, writes to the mounted directory (artifacts, outputs) will
+fail with "Permission denied".
+
+Fix by matching the container user to your host uid:
+
+```bash
+docker run --gpus all --user "$(id -u):$(id -g)" \
+  -v /path/to/data:/workspace/data \
+  ...
+```
+
+This overrides `appuser` with your host identity. The `--user` flag also
+works with the dev image and interactive shells.
 
 ---
 
@@ -108,17 +229,19 @@ reuse the populated cache in the target environment:
 
 ```bash
 # Step 1: populate cache (internet required)
-docker run --gpus all \
+docker run --gpus all --shm-size=1g \
+  -v /path/to/data:/workspace/data \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
-  nss-gpu:latest run --config /workspace/config.yaml --url /workspace/data.csv
+  nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv
 
 # Step 2: use in offline environment
-docker run --gpus all \
+docker run --gpus all --shm-size=1g \
+  -v /path/to/data:/workspace/data \
   -v /shared/hf_cache:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   -e HF_HUB_OFFLINE=1 \
-  nss-gpu:latest run --config /workspace/config.yaml --url /workspace/data.csv
+  nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv
 ```
 
 See [Environment Variables -- Hugging Face Cache](environment.md#hugging-face-cache)
@@ -149,21 +272,53 @@ build stages, ARG reference, and customization details.
 
 ---
 
+## Interactive Shell
+
+To explore the container or debug issues, override the entrypoint to get
+a bash shell. Mount your data the same way as a normal run:
+
+```bash
+docker run -it --gpus all --shm-size=1g \
+  -v $(pwd)/my_data:/workspace/data \
+  -v ~/.cache/huggingface:/workspace/.hf_cache \
+  -e HF_HOME=/workspace/.hf_cache \
+  --entrypoint /bin/bash \
+  nss-gpu:latest
+```
+
+Inside the container you can run `safe-synthesizer` commands directly:
+
+```bash
+appuser@container:/workspace$ safe-synthesizer run --url /workspace/data/input.csv
+appuser@container:/workspace$ safe-synthesizer config validate --config /workspace/data/config.yaml
+```
+
+---
+
 ## Makefile Shortcuts
+
+For developers with the repo checked out, the Makefile provides convenience
+targets that handle GPU flags, HF cache mounts, and workspace bind mounts:
 
 | Command | What it does |
 |---------|-------------|
 | `make container-build-gpu` | Build the runtime image |
 | `make container-run-gpu CMD="run --config ..."` | Run a pipeline command |
-| `make container-shell-gpu` | Interactive bash in the runtime container |
 | `make container-build-gpu-dev` | Build the dev image |
-| `make container-shell-gpu-dev` | Interactive bash in the dev container |
+| `make container-run-gpu-dev CMD="make test"` | Run a command in the dev container |
 
-The Makefile handles GPU flags, HF cache mounts, and workspace bind mounts.
 Override variables as needed:
 
 ```bash
 make container-run-gpu CONTAINER_HF_CACHE=/shared/hf_cache CMD="run --url /workspace/data.csv"
+```
+
+Mount data from outside the repo tree with `CONTAINER_EXTRA_MOUNTS`:
+
+```bash
+make container-run-gpu \
+  CONTAINER_EXTRA_MOUNTS="-v /data/sensitive:/workspace/data" \
+  CMD="run --url /workspace/data/customers.csv"
 ```
 
 ---
