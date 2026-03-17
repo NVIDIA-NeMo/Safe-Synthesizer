@@ -92,10 +92,18 @@ install_binary_tool() {
 
     # Check if already installed at the desired version
     if eval "$check_command" >/dev/null 2>&1; then
-        local installed_output version_bare
+        local installed_output version_bare version_token matched_version
         installed_output=$(eval "$check_command" 2>&1 || true)
         version_bare="${version#v}"
-        if echo "$installed_output" | grep -qF "$version_bare"; then
+        matched_version=false
+        while IFS= read -r version_token; do
+            if [[ "$version_token" == "$version" || "$version_token" == "$version_bare" || "$version_token" == "v$version_bare" ]]; then
+                matched_version=true
+                break
+            fi
+        done < <(echo "$installed_output" | grep -Eo 'v?[0-9]+(\.[0-9]+){0,3}' || true)
+
+        if [[ "$matched_version" == "true" ]]; then
             echo "$name ${version} is already installed"
             return 0
         fi
@@ -192,6 +200,7 @@ install_custom_script() {
 
 bootstrap_tools() {
     validate_platform
+    print_tool_manager_transition_warning
     mkdir -p "$HOME/.local/bin"
     add_to_path "$HOME/.local/bin"
 

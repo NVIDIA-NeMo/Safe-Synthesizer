@@ -28,4 +28,38 @@ add_to_path() {
   fi
 }
 
+version_at_least() {
+  local current="${1}"
+  local required="${2}"
+  [[ "$(printf '%s\n' "${required}" "${current}" | sort -V | head -n1)" == "${required}" ]]
+}
+
+version_less_than() {
+  local current="${1}"
+  local upper_bound="${2}"
+  [[ "$(printf '%s\n' "${current}" "${upper_bound}" | sort -V | head -n1)" == "${current}" ]] && [[ "${current}" != "${upper_bound}" ]]
+}
+
+version_in_range() {
+  local current="${1}"
+  local min_version="${2}"
+  local max_version="${3:-}"
+
+  version_at_least "${current}" "${min_version}" || return 1
+  if [[ -n "${max_version}" ]]; then
+    version_less_than "${current}" "${max_version}" || return 1
+  fi
+}
+
+version_matches_exact() {
+  local current="${1}"
+  local required="${2}"
+  [[ "${current}" == "${required}" ]]
+}
+
+print_tool_manager_transition_warning() {
+  echo "warning: bootstrap tooling may migrate to Mise en place in a future update."
+  echo "warning: these scripts remain supported for now and are the current source of truth."
+}
+
 set +ue
