@@ -23,6 +23,17 @@ _install_uv() {
     echo "Installed: $(uv --version)"
 }
 
+_find_non_venv_uv() {
+  local venv="${VIRTUAL_ENV:-}"
+  type -a -P uv 2>/dev/null | awk -v venv="${venv}" '
+    seen[$0]++          { next }   # skip duplicates
+    /\/\//              { next }   # skip malformed double-slash paths
+    venv != "" &&
+      index($0, venv)  { next }   # skip paths inside the active virtualenv
+                        { print; exit }
+  ' || true
+}
+
 install_uv() {
   print_tool_manager_transition_warning
   echo "installing uv..."
@@ -52,11 +63,7 @@ install_uv() {
   else
     echo "found the following uv installations:"
     echo "${uvs}"
-    virtualenv=${VIRTUAL_ENV:-""}
-    # we want the uv that is not in a virtual environment
-    # so we filter out the ones that contain the virtualenv path
-    # and any that show up like `<path>//uv` which are usually because of a duplicate in PATH
-    non_venv_uv=$(grep --invert-match '//' <<< "$uvs" | { [[ -n "${virtualenv}" ]] && grep --invert-match "$virtualenv" || cat; } | head -n1)
+    non_venv_uv=$(_find_non_venv_uv)
     if [[ -n "$non_venv_uv" ]]; then
       current_version=$("$non_venv_uv" --version | awk '{print $2}')
       if version_in_range "${current_version}" "${uv_min_version}" "${uv_max_version}"; then
@@ -71,7 +78,7 @@ install_uv() {
     fi
   fi
 
-  selected_uv="$(type -a -P uv 2>/dev/null | awk '!seen[$0]++' | grep --invert-match '//' | { [[ -n "${VIRTUAL_ENV:-}" ]] && grep --invert-match "${VIRTUAL_ENV}" || cat; } | head -n1 || true)"
+  selected_uv="$(_find_non_venv_uv)"
   if [[ -z "${selected_uv}" ]]; then
     echo "error: no non-venv uv executable found in PATH after installation"
     exit 1

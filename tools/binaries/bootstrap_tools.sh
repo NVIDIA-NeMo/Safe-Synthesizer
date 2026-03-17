@@ -101,7 +101,7 @@ install_binary_tool() {
                 matched_version=true
                 break
             fi
-        done < <(echo "$installed_output" | grep -Eo 'v?[0-9]+(\.[0-9]+){0,3}' || true)
+        done < <(echo "$installed_output" | grep -Eo 'v?[0-9]+(\.[0-9]+){0,3}(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?' || true)
 
         if [[ "$matched_version" == "true" ]]; then
             echo "$name ${version} is already installed"

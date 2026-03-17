@@ -13,14 +13,14 @@ maybe_install_brew_dep() {
     fi
 }
 
-set -ue
 ## adds a directory to the PATH if it exists and is not already in the PATH
 # If the second argument is "after", it adds the directory to the end of the PATH
 # Otherwise, it adds the directory to the beginning of the PATH.
 add_to_path() {
   new_path=${1%/}
+  local position="${2:-before}"
   if [ -d "$1" ] && ! echo "$PATH" | grep -E -q "(^|:)$new_path($|:)" ; then
-      if [ "$2" = "after" ] ; then
+      if [ "$position" = "after" ] ; then
           PATH="${PATH:+${PATH}:}$new_path"
       else
           PATH="$new_path:${PATH:+${PATH}:}"
@@ -28,16 +28,31 @@ add_to_path() {
   fi
 }
 
+_version_compare() {
+  local a="${1}" b="${2}"
+  if [[ "${a}" == "${b}" ]]; then printf '='; return; fi
+  local IFS=.
+  local -a va=( ${a%%[-+]*} ) vb=( ${b%%[-+]*} )
+  local i len=${#va[@]}
+  (( ${#vb[@]} > len )) && len=${#vb[@]}
+  for (( i=0; i<len; i++ )); do
+    local ai=${va[i]:-0} bi=${vb[i]:-0}
+    if (( ai < bi )); then printf '<'; return; fi
+    if (( ai > bi )); then printf '>'; return; fi
+  done
+  printf '='
+}
+
 version_at_least() {
-  local current="${1}"
-  local required="${2}"
-  [[ "$(printf '%s\n' "${required}" "${current}" | sort -V | head -n1)" == "${required}" ]]
+  local cmp
+  cmp=$(_version_compare "${1}" "${2}")
+  [[ "${cmp}" == '>' || "${cmp}" == '=' ]]
 }
 
 version_less_than() {
-  local current="${1}"
-  local upper_bound="${2}"
-  [[ "$(printf '%s\n' "${current}" "${upper_bound}" | sort -V | head -n1)" == "${current}" ]] && [[ "${current}" != "${upper_bound}" ]]
+  local cmp
+  cmp=$(_version_compare "${1}" "${2}")
+  [[ "${cmp}" == '<' ]]
 }
 
 version_in_range() {
@@ -62,4 +77,3 @@ print_tool_manager_transition_warning() {
   echo "warning: these scripts remain supported for now and are the current source of truth."
 }
 
-set +ue

@@ -16,11 +16,21 @@ test_tools_linux() {
         exit 1
     }
 
+    local worktree_volumes=()
+    local git_common_dir
+    git_common_dir="$(cd "$REPO_ROOT" && git rev-parse --git-common-dir)"
+    if [[ "$git_common_dir" != ".git" ]]; then
+        git_common_dir="$(cd "$REPO_ROOT" && cd "$git_common_dir" && pwd)"
+        echo "Worktree detected, mounting git dir: $git_common_dir"
+        worktree_volumes=(--volume "$git_common_dir:$git_common_dir:ro")
+    fi
+
     docker run \
         --rm \
         --interactive \
         --name test_tool_install \
         --volume "$REPO_ROOT":/safe-synthesizer \
+        "${worktree_volumes[@]}" \
         -e DEBIAN_FRONTEND=noninteractive \
         -e REPO_ROOT=/safe-synthesizer \
         --platform linux/amd64 \
