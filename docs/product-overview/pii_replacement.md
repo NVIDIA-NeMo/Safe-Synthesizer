@@ -10,7 +10,7 @@ PII (Personally Identifiable Information) replacement is a critical privacy prot
 The PII replacement pipeline operates in multiple stages:
 
 1. Detection: Classifies PII entities within free text and entire columns.
-2. Replacement: Transforms PII using configurable rules.
+2. Replacement: Substitutes PII using configurable rules.
 
 ## Detection Methods
 
@@ -126,12 +126,6 @@ GLiNER PII will attempt to identify any custom entity type you provide. However,
 
 Beyond these built-in types, you can define custom entities using:
 
-- GLiNER PII: Fast, accurate zero-shot NER for standard and custom entity types
-- Regex: Deterministic pattern matching, best for consistent formats (SSN, credit cards)
-- LLM: Contextual understanding, handles complex patterns and ambiguous cases
-
-#### Example custom entity
-
 ```yaml title="Custom entity configuration"
 globals:
   classify:
@@ -171,9 +165,4 @@ Consider using PII replacement when:
 - You want to ensure the model cannot memorize sensitive values
 - You need to share synthetic data with external parties
 
-PII replacement is the default preprocessing step before synthesis.
-
-## Related Topics
-
-- [Hands-on PII replacement tutorial](../tutorials/pii-replacement.md)
-- [Tutorials](../tutorials/index.md): More tutorials
+PII replacement is on by default as a pre-processing step before synthesis.

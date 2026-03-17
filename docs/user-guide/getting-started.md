@@ -93,8 +93,7 @@ Create a synthetic version of an input dataset in one step.
       num_records: 1000
     ```
 
-    PII replacement is on by default. Pass `--no_replace_pii` on the CLI to skip
-    it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
+    PII replacement as a pre-processing step is on by default. Pass `--no_replace_pii` on the CLI to skip it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
     to customize entity types.
 
 Then run:
@@ -116,7 +115,7 @@ and produces an evaluation report. The default outputs are placed in
 
 To run the same pipeline from Python, see [Running Safe Synthesizer -- SDK](running.md#running-the-pipeline).
 
-→ Next step: read [Synthetic Data Quality](evaluating-data.md) to understand
+→ Next step: read [Evaluation](../product-overview/evaluation.md) to understand
 your first report and how to interpret SQS and DPS scores.
 
 ---
@@ -125,7 +124,7 @@ your first report and how to interpret SQS and DPS scores.
 
 The pipeline has five stages. Each is independently configurable -- you can
 run the full pipeline in one step, or execute stages individually (train once,
-generate many times).
+generate many times). You can find a brief overview of each stage below, or read [Pipeline](../product-overview/pipeline.md) for in-depth descriptions.
 
 ```mermaid
 flowchart LR
@@ -149,13 +148,10 @@ and prepares it for training:
 
 ### 2. PII Replacement
 
-PII replacement is on by default. The PII replacer detects
+PII replacement is on by default as a pre-processing step. The PII replacer detects
 personally identifiable information (PII) using GLiNER NER and optional LLM-based
 column classification, then replaces detected entities with synthetic but
-realistic values. This ensures the model never learns the most sensitive
-information (e.g. names, addresses, identifiers) from the training data. See
-[PII Replacement](../product-overview/pii_replacement.md) for the full entity
-list.
+realistic values prior to fine-tuning. This ensures the model never has no chance to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. See [Supported Entity Types](../product-overview/pii_replacement.md#supported-entity-types) for the full entity list.
 
 See [Configuration -- Replacing PII](configuration.md#replacing-pii) for
 entity types, LLM classification setup, and SDK customization.
@@ -167,16 +163,15 @@ available:
 
 | Backend | Description |
 |---------|-------------|
-| HuggingFace | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus |
 | Unsloth | Optimized training for faster fine-tuning (auto-selected by default) |
+| HuggingFace | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus |
 
-The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested
-support for SmolLM3, TinyLlama, and Mistral (see
-[Configuration -- Training](configuration.md#training) for details).
+If you enable differential privacy, the pipeline automatically switches to use the HuggingFace backend.
+
+The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the backend or model).
 
 !!! tip "Differential privacy"
-    For formal privacy guarantees, enable DP-SGD via `privacy.dp_enabled: true`.
-    See [Configuration -- Differential Privacy](configuration.md#differential-privacy).
+    For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via `privacy.dp_enabled: true`. See [Configuration -- Differential Privacy](configuration.md#differential-privacy).
 
 ### 4. Generation
 
@@ -192,21 +187,24 @@ See [Configuration -- Generation](configuration.md#generation).
 Measures quality and privacy of the synthetic data and produces an HTML report
 with interactive visualizations. Two composite scores are reported:
 
-- SQS (Synthetic Quality Score) -- column distributions, correlations, deep
-  structure
+- SQS (Synthetic Quality Score) -- composite quality score with five subscores:
+    - Column Correlation Stability -- measures the correlation across every combination of two numeric and categorical columns
+    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis
+    - Column Distribution Stability -- measures the distribution of each numeric and categorical column
+    - Text Structure Similarity -- measures the sentence, word, and character counts for text columns
+    - Text Semantic Similarity -- measures whether the semantic meaning in text columns held after synthesizing
 - DPS (Data Privacy Score) -- composite privacy score with three subscores:
-    - MIA (Membership Inference Attack) -- measures whether a model trained on the data can distinguish training records from held-out records
-    - AIA (Attribute Inference Attack) -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data
-    - PII replay detection -- checks whether PII from training appears in synthetic data
+    - Membership Inference Protection -- measures whether a model trained on the data can distinguish training records from held-out records
+    - Attribute Inference Protection -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data
+    - PII Replay Detection -- checks whether PII from training appears in synthetic data
 
-See [Synthetic Data Quality](evaluating-data.md) for how to interpret scores.
+See [Evaluation](../product-overview/evaluation.md) for how to interpret scores.
 
 ---
 
 ## What to Read Next
 
-After your first run, read [Synthetic Data Quality](evaluating-data.md) to understand
-your SQS and DPS scores and learn how to improve generation quality.
+After your first run, read [Evaluation](../product-overview/evaluation.md) to understand your SQS and DPS scores and [Synthetic Data Quality](evaluating-data.md) to learn how to improve generation quality. If your job failed to run, read [Troubleshooting](troubleshooting.md) to learn how to fix common errors.
 
 ## Guides
 
@@ -250,8 +248,7 @@ your SQS and DPS scores and learn how to improve generation quality.
 
     ---
 
-    Interpreting SQS and DPS scores, improving generation quality,
-    choosing privacy settings.
+    Improving generation quality, the quality-privacy tradeoff, and unavailable metrics.
 
     [→ Synthetic Data Quality](evaluating-data.md)
 

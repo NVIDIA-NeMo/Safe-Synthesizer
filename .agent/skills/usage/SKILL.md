@@ -74,7 +74,10 @@ synthesizer.evaluate()
 
 ## Configuration
 
-Sources (highest precedence first): CLI overrides > dataset registry overrides > YAML config file.
+Configuration precedence (highest to lowest) depends on entry point:
+
+- CLI: CLI flags > dataset registry overrides > YAML config file > defaults
+- SDK: Python SDK builder calls > YAML config file > defaults
 
 Config sections: `data`, `replace_pii`, `training`, `generation`, `privacy`, `evaluation`, `time_series`.
 

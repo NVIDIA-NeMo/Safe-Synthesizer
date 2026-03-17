@@ -26,6 +26,23 @@ NeMo Safe Synthesizer adapts language models to understand and generate tabular 
 - Generates new records that maintain statistical properties with no one-to-one mapping to original records
 - Supports various model sizes and architectures
 
+Two backends are available:
+
+| Backend | Description | When to use |
+|---------|-------------|-------------|
+| Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
+| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via Opacus | Required for differential privacy; also the fallback when Unsloth is unavailable |
+
+Three models have been extensively tested:
+
+| Family | HuggingFace ID |
+|--------|----------------|
+| SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+| Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+
+For information on the trade-offs with model selection, see [Training](running.md#training).
+
 ### Supported Data Types
 
 NeMo Safe Synthesizer supports diverse tabular data:
@@ -33,7 +50,7 @@ NeMo Safe Synthesizer supports diverse tabular data:
 - Numeric: Continuous and discrete numerical values
 - Categorical: Text labels and categories
 - Text: Free-form text fields
-- Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental.)
+- Temporal: Event sequences and time series
 
 ### Differential Privacy
 
@@ -75,7 +92,7 @@ Enabling DP provides strong privacy guarantees but affects synthetic data qualit
 - Lower epsilon: stronger privacy, but more noise and potentially lower utility
 - Training speed: DP training is usually 2-4x slower due to per-sample gradient computation
 - Data requirements: DP works best with larger datasets (10,000+ records recommended, compared to 1,000+ records without DP)
-- Quality impact: Added noise may reduce statistical fidelity of synthetic data
+- Quality impact: The added noise may reduce statistical fidelity of synthetic data
 
 #### Configuration Parameters
 
@@ -110,6 +127,6 @@ For a complete list of all available parameters and their defaults, refer to [Pa
 
 ## Related Topics
 
-- [Parameters Reference](../user-guide/configuration.md): Complete parameter reference
-- [Differential Privacy](../tutorials/differential-privacy.md): Learn about differential privacy in practice
-- [Tutorials](../tutorials/index.md): Run the pipeline
+- [Pipeline](pipeline.md): Pipeline overview and stages
+- [Getting Started](../user-guide/getting-started.md): Install and run your first pipeline
+- [Configuration](../user-guide/configuration.md): Complete parameter reference

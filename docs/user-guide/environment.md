@@ -53,10 +53,8 @@ are cached, and which network endpoints are used.
 
 Synthesis parameters:
 
-1. CLI flags (`--training__learning_rate 0.001`)
-2. Dataset registry overrides
-3. YAML config file
-4. Defaults
+- CLI: CLI flags > dataset registry overrides > YAML config file > defaults
+- SDK: Python SDK builder calls > YAML config file > defaults
 
 Infrastructure settings (artifact path, logging, WandB):
 

@@ -229,12 +229,10 @@ flowchart TB
     dp_p --> dp_check
 ```
 
-Configuration precedence (highest to lowest):
+Configuration precedence (highest to lowest) depends on entry point:
 
-1. CLI flags / SDK `with_*()` overrides
-2. Dataset registry overrides
-3. YAML config file
-4. Pydantic model defaults (including `default_factory`)
+- CLI: CLI flags > dataset registry overrides > YAML config file > defaults
+- SDK: Python SDK builder calls > YAML config file > defaults
 
 Nullable sub-configs (`PiiReplacerConfig | None`, `DifferentialPrivacyHyperparams | None`)
 use `None` as the sole disabled signal. The `@pydantic_options` decorator auto-generates

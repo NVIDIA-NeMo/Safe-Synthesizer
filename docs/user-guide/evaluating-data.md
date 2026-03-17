@@ -12,6 +12,8 @@ For runtime errors, OOM issues, and configuration problems, see
 [Program Runtime](troubleshooting.md). For environment variables and model
 caching, see [Environment Variables](environment.md).
 
+There is always an inherent trade off between privacy and quality. A high level of privacy protection is achieved simply through the process of generating synthetic data, and is often a sufficient balance between privacy and utility. However, parameter tuning can often help you improve one without sacrificing the other.
+
 ---
 
 ## Differential Privacy
@@ -36,7 +38,7 @@ Unable to automatically determine a noise multiplier
 ```
 
 The privacy budget (epsilon) is too low for your dataset size. Either increase
-`privacy.epsilon` or add more training records.
+`privacy.epsilon` or add more training records. Generally, you need a minimum of ~10,000 records to achieve reasonable quality when DP is enabled.
 
 ```text
 Discrete mean differs
@@ -126,8 +128,8 @@ Several evaluation metrics have minimum data requirements:
 |--------|---------|-------------------|
 | Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
 | Text semantic similarity | 200 records | Skipped; score marked UNAVAILABLE |
-| Attribute Inference Attack | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
-| PCA (deep structure) | 2x2 matrix | Skipped with warning; score marked UNAVAILABLE |
+| Attribute Inference Protection | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
+| Deep Structure Stability | 2x2 matrix | Skipped with warning; score marked UNAVAILABLE |
 
 ### UNAVAILABLE Metrics
 

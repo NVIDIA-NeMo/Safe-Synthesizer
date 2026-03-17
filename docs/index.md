@@ -12,7 +12,7 @@ It uses LLM fine-tuning with optional [differential privacy](https://desfontain.
 
 ## Key Features
 
-- Privacy-first synthetic data -- PII detection and replacement, optional differential privacy via [Opacus](https://github.com/meta-pytorch/opacus)
+- Privacy-first synthetic data -- PII detection and replacement, optional differential privacy while fine-tuning via [Opacus](https://github.com/meta-pytorch/opacus)
 - LLM fine-tuning -- LoRA fine-tuning optimized for tabular data, including numeric, categorical, and text columns
 - Fast inference -- [vLLM](https://github.com/vllm-project/vllm)-powered generation with optional structured output enforcement
 - Comprehensive evaluation -- Privacy and quality metrics in an in-depth HTML report
