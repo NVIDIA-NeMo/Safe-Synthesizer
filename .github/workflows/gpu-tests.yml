@@ -56,15 +56,11 @@ jobs:
         uses: ./.github/actions/detect-changes
 
   gpu-e2e-test:
-    name: GPU E2E Tests - (Python ${{ matrix.python-version }})
+    name: GPU E2E Tests
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 60
     runs-on: linux-amd64-gpu-a100-latest-1
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11"]
     steps:
       - name: checkout
         uses: actions/checkout@v6
@@ -75,7 +71,6 @@ jobs:
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
-          python-version: ${{ matrix.python-version }}
           bootstrap-tools: "true"
 
       - name: Run GPU E2E tests
