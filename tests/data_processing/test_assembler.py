@@ -50,7 +50,7 @@ def fixture_llm_metadata(
     fixture_session_cache_dir, fixture_assembler_config: SafeSynthesizerParameters
 ) -> ModelMetadata:
     metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model, save_path=fixture_session_cache_dir
+        model_name_or_path=fixture_assembler_config.training.pretrained_model
     )
     assert metadata is not None
     return metadata
@@ -135,7 +135,7 @@ def test_tabular_data_assembler(
     fixture_session_cache_dir: str,
 ):
     metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model, save_path=fixture_session_cache_dir
+        model_name_or_path=fixture_assembler_config.training.pretrained_model
     )
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
@@ -273,7 +273,6 @@ def test_grouped_data_assembler(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
 
     assembler = TrainingExampleAssembler.from_data(
@@ -381,7 +380,6 @@ def test_grouped_data_assembler_training_examples_high_decimal(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_sample_patient_dataset,
@@ -435,7 +433,6 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_chickweight_dataset,
@@ -499,7 +496,6 @@ def test_grouped_data_assembler_dp(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
         # Set max_sequences_per_example=1 for DP mode (1 group per example)
         max_sequences_per_example=1,
     )
@@ -549,7 +545,6 @@ def test_grouped_data_assembler_context_width_exception(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_dow_jones_index_dataset,
@@ -627,7 +622,6 @@ def test_create_group_example_assembler(
             eos_token="</s>",
             eos_token_id=2,
         ),
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
     assert isinstance(
         TrainingExampleAssembler.from_data(
@@ -661,7 +655,6 @@ def fixture_sequential_metadata(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
 
 
@@ -965,7 +958,6 @@ def test_sequential_assembler_end_to_end(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
 
     assembler = TrainingExampleAssembler.from_data(
@@ -1037,7 +1029,6 @@ def test_sequential_assembler_single_group_with_pseudo_column(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),  # ty: ignore[unknown-argument] -- datasets library kwarg
     )
 
     assembler = SequentialExampleAssembler(
