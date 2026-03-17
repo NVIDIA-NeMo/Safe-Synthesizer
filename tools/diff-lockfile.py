@@ -116,7 +116,7 @@ def get_lockfile_content(repo: git.Repo, ref: str, path: str) -> str:
     return blob.data_stream.read().decode()
 
 
-def _extract_source(raw: dict) -> str:
+def _extract_source(raw: dict) -> str:  # type: ignore[type-arg]
     """Return a human-readable source string from a ``[[package]]`` entry."""
     src = raw.get("source", {})
     if isinstance(src, dict):
