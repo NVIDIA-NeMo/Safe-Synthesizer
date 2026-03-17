@@ -3,7 +3,6 @@
 
 """Unit tests for the TimeseriesBackend class private methods."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd

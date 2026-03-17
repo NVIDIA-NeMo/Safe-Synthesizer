@@ -38,7 +38,7 @@ from ..privacy.dp_transformers.dp_utils import (
 )
 
 if TYPE_CHECKING:
-    from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
+    from unsloth import FastLanguageModel
 
 logger = get_logger()
 

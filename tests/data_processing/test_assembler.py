@@ -49,9 +49,7 @@ def fixture_autoconfig() -> PretrainedConfig:
 def fixture_llm_metadata(
     fixture_session_cache_dir, fixture_assembler_config: SafeSynthesizerParameters
 ) -> ModelMetadata:
-    metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model
-    )
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assert metadata is not None
     return metadata
 
@@ -134,9 +132,7 @@ def test_tabular_data_assembler(
     fixture_assembler_config: SafeSynthesizerParameters,
     fixture_session_cache_dir: str,
 ):
-    metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model
-    )
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
         tokenizer=fixture_tokenizer,
