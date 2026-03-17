@@ -9095,6 +9095,11 @@ See <a href="../configuration/">Configuration Reference</a> for the full list.</
   DP uses Opacus per-sample gradients (<code>GradSampleModule</code>), which require
   standard model layers and disable gradient checkpointing -- Unsloth's
   custom layers and checkpointing are incompatible</li>
+<li><code>training.learning_rate</code> -- model-specific default from <code>ModelMetadata</code>:
+  Mistral uses 0.0001, all other supported model families use 0.0005</li>
+<li><code>data.max_sequences_per_example</code> -- resolves to <code>1</code> when differential
+  privacy is enabled (required to limit per-example gradient contribution),
+  <code>10</code> otherwise for best performance</li>
 <li><code>privacy.delta</code> -- computed from record count</li>
 </ul>
 <div class="admonition warning">

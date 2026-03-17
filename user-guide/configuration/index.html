@@ -8415,8 +8415,8 @@ for the full field list.</p>
 <tr>
 <td><code>training.learning_rate</code></td>
 <td><code>"auto"</code></td>
-<td>Initial learning rate for the AdamW optimizer</td>
-<td>1e-4 to 1e-3 typical; <code>"auto"</code> picks a model-specific default</td>
+<td>Initial learning rate for the <code>AdamW</code> optimizer. <code>"auto"</code> selects a model-specific default (Mistral: 1e-4, others: 5e-4)</td>
+<td>Leave at <code>"auto"</code> for most cases; override with a float in (0, 1) to tune manually</td>
 </tr>
 <tr>
 <td><code>training.batch_size</code></td>
