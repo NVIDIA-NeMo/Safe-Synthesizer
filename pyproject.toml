@@ -222,6 +222,12 @@ constraint-dependencies = ["torch==2.9.1", "regex==2025.07.34", "pandas<3"]
     { index = "pytorch-cpu", extra="cpu" },
     { index = "pytorch-cu128", extra="cu128"},
   ]
+  flashinfer-python = [
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
+  flashinfer-cubin = [
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
   flashinfer-jit-cache = [
     { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
   ]
