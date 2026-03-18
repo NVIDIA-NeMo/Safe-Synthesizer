@@ -3,7 +3,7 @@
 
 # PII Replacement
 
-PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model has no chance of learning the most sensitive information like names, addresses, and other identifiers.
+PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data.
 
 ## How It Works
 

@@ -31,7 +31,7 @@ The asymmetry matters: YAML and environment variables are *configuration only* -
 
 All configuration surfaces share the same underlying [Pydantic](https://docs.pydantic.dev/) parameter models defined in `src/nemo_safe_synthesizer/config/`. The `__` syntax used in CLI flags (e.g. `--privacy__dp_enabled true`) mirrors the nested structure of those models: `privacy` is the config section, `dp_enabled` is the field. Setting a parameter via YAML, CLI flag, or SDK call resolves to the same field in the same model.
 
-When multiple surfaces are used together, later layers override earlier ones. Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
 - CLI: `CLI flags` > `dataset registry` > `YAML config file` > `model defaults`
 - SDK: `Python SDK builder calls` > `YAML config file` > `model defaults`

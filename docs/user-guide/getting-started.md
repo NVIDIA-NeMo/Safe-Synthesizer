@@ -151,7 +151,7 @@ and prepares it for training:
 PII replacement is on by default as a pre-processing step. The PII replacer detects
 personally identifiable information (PII) using GLiNER NER and optional LLM-based
 column classification, then replaces detected entities with synthetic but
-realistic values prior to fine-tuning. This ensures the model never has no chance to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. See [Supported Entity Types](../product-overview/pii_replacement.md#supported-entity-types) for the full entity list.
+realistic values prior to fine-tuning. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. See [Supported Entity Types](../product-overview/pii_replacement.md#supported-entity-types) for the full entity list.
 
 See [Configuration -- Replacing PII](configuration.md#replacing-pii) for
 entity types, LLM classification setup, and SDK customization.
