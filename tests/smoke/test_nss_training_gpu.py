@@ -34,8 +34,7 @@ def test_nss_train_dp_one_batch(local_tinyllama_dir, iris_df, tmp_path):
     count low enough that the DP accountant's composition budget isn't exceeded.
     """
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         pretrained_model=str(local_tinyllama_dir),
         use_unsloth=False,
         num_input_records_to_sample=100,

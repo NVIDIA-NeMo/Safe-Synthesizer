@@ -127,7 +127,6 @@ def test_training_example_assembler(iris_df, stub_tokenizer, fixture_stub_tokeni
     from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
         num_input_records_to_sample=10,
         use_unsloth=False,
     )

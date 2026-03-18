@@ -6,72 +6,26 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from datasets import Dataset
-from transformers import AutoConfig, AutoTokenizer, LlamaConfig, LlamaForCausalLM
+from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION
-from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig, ModelMetadata
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
-
-class SmolLM2(ModelMetadata):
-    """Test-only metadata for HuggingFaceTB/SmolLM2-135M.
-
-    Moved out of production code because SmolLM2-135M is only used in smoke tests.
-    Uses the tokenizer's native BOS token (not the Qwen2 <|im_start|> override
-    that was previously hardcoded -- that token ID is out of range for SmolLM2's
-    49K vocab and causes CUDA device-side asserts).
-    """
-
-    def __init__(
-        self, model_name_or_path: str, tokenizer=None, rope_scaling_factor: float | None = None, **kwargs
-    ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
-
-        super().__init__(
-            autoconfig=config,
-            instruction=DEFAULT_INSTRUCTION,
-            prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} \n assistant\n{prefill}",
-                add_bos_token_to_prompt=False,
-                add_eos_token_to_prompt=False,
-                tokenizer=tokenizer,
-                name=model_name_or_path,
-            ),
-            model_name_or_path=model_name_or_path,
-            rope_scaling=None,
-            rope_parameters_location="autoconfig",
-            **kwargs,
-        )
-
-
-@pytest.fixture
-def _register_smollm2(monkeypatch):
-    """Patch ModelMetadata resolution so the SDK can find SmolLM2 (test-only class)."""
-    original = ModelMetadata.from_str_or_path.__func__
-
-    def patched(cls, model_name_or_path, **kwargs):
-        if "smollm2" in str(model_name_or_path).lower():
-            return SmolLM2(model_name_or_path=str(model_name_or_path), **kwargs)
-        return original(cls, model_name_or_path, **kwargs)
-
-    monkeypatch.setattr(ModelMetadata, "from_str_or_path", classmethod(patched))
+STUB_DATASETS_DIR = Path(__file__).parent.parent / "stub_datasets"
 
 
 @pytest.fixture(scope="session")
 def fixture_stub_tokenizer_path() -> str:
-    """Session-scoped override of the function-scoped fixture in tests/conftest.py."""
+    """Path to the Llama stub tokenizer in tests/stub_tokenizer/."""
     return str(Path(__file__).parent.parent / "stub_tokenizer")
 
 
 @pytest.fixture(scope="session")
-def tiny_llama_config(fixture_stub_tokenizer_path):
+def tiny_llama_config(stub_tokenizer):
     """LlamaConfig with minimal dimensions for fast smoke testing."""
-    tokenizer = AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path)
     return LlamaConfig(
-        vocab_size=tokenizer.vocab_size,  # 32000 -- must match stub tokenizer
+        vocab_size=stub_tokenizer.vocab_size,  # 32000 -- must match stub tokenizer
         hidden_size=64,
         intermediate_size=128,
         num_hidden_layers=2,
@@ -137,9 +91,7 @@ def local_tinyllama_dir(tmp_path_factory, tiny_llama_config, stub_tokenizer):
 @pytest.fixture(scope="session")
 def iris_df():
     """Load iris.csv from stub_datasets."""
-    from tests.conftest import load_test_dataframe
-
-    return load_test_dataframe("iris.csv").copy()
+    return pd.read_csv(STUB_DATASETS_DIR / "iris.csv")
 
 
 @pytest.fixture(scope="session")
@@ -162,7 +114,7 @@ def timeseries_df():
             ],
             "value": [10, 20, 30, 40, 50, 100, 110, 120, 130, 140],
         }
-    ).copy()
+    )
 
 
 @pytest.fixture(scope="session")
@@ -171,15 +123,15 @@ def smoke_save_path(tmp_path_factory):
     return tmp_path_factory.mktemp("smoke-tier-b")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def base_smoke_config(local_tinyllama_dir):
     """Base SafeSynthesizerParameters shared by all GPU smoke tests with local tiny model.
 
-    Individual tests override specific fields via SafeSynthesizerParameters.from_params(**overrides).
+    Session-scoped because the config is immutable (Pydantic frozen model).
+    Tests that need different settings create their own via SafeSynthesizerParameters.from_params().
     """
     return SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         pretrained_model=str(local_tinyllama_dir),
         use_unsloth=False,
         num_input_records_to_sample=10,
@@ -207,10 +159,11 @@ def train_with_sdk(config: SafeSynthesizerParameters, data_df: pd.DataFrame, sav
     return nss
 
 
-@pytest.fixture
-def _patch_attn_eager(monkeypatch):
+@pytest.fixture(scope="session")
+def _patch_attn_eager():
     """Override attn_implementation from 'flashinfer' (not a valid HF option) to 'sdpa'.
 
+    Session-scoped so class-scoped and function-scoped fixtures can depend on it.
     The HuggingFaceBackend defaults to 'flashinfer' which is not supported by
     HuggingFace's from_pretrained. PyTorch SDPA is universally compatible.
     """
@@ -222,4 +175,6 @@ def _patch_attn_eager(monkeypatch):
         model_kwargs.setdefault("attn_implementation", "sdpa")
         return original_build(self, model_kwargs)
 
-    monkeypatch.setattr(HuggingFaceBackend, "_build_base_framework_params", patched_build)
+    HuggingFaceBackend._build_base_framework_params = patched_build
+    yield
+    HuggingFaceBackend._build_base_framework_params = original_build

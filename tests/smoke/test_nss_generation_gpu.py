@@ -13,34 +13,19 @@ from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 pytestmark = [
     pytest.mark.requires_gpu,
+    pytest.mark.vllm,
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
 
 
 @pytest.fixture(scope="class")
-def trained_nss(base_smoke_config, iris_df, tmp_path_factory):
-    """Train once per class; both SDK chain and manual VllmBackend tests consume this.
-
-    Patches attn_implementation inline because _patch_attn_eager is function-scoped
-    (via monkeypatch) and cannot be active when a class-scoped fixture runs.
-    """
-    from nemo_safe_synthesizer.training.huggingface_backend import HuggingFaceBackend
-
-    original_build = HuggingFaceBackend._build_base_framework_params
-
-    def patched_build(self, model_kwargs):
-        model_kwargs.setdefault("attn_implementation", "sdpa")
-        return original_build(self, model_kwargs)
-
-    HuggingFaceBackend._build_base_framework_params = patched_build
-    try:
-        save_path = tmp_path_factory.mktemp("gen-smoke")
-        nss = SafeSynthesizer(config=base_smoke_config, save_path=save_path)
-        nss.with_data_source(iris_df).process_data().train()
-        return nss
-    finally:
-        HuggingFaceBackend._build_base_framework_params = original_build
+def trained_nss(_patch_attn_eager, base_smoke_config, iris_df, tmp_path_factory):
+    """Train once per class; both SDK chain and manual VllmBackend tests consume this."""
+    save_path = tmp_path_factory.mktemp("gen-smoke")
+    nss = SafeSynthesizer(config=base_smoke_config, save_path=save_path)
+    nss.with_data_source(iris_df).process_data().train()
+    return nss
 
 
 class TestNSSGenerationGPU:
@@ -54,8 +39,8 @@ class TestNSSGenerationGPU:
         """
         try:
             trained_nss.generate()
-        except GenerationError:
-            pass  # Expected: random tiny model produces no valid records
+        except GenerationError as exc:
+            assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
 
     def test_manual_vllm_backend_with_local_model(self, trained_nss, local_tinyllama_dir):
         """Manually construct VllmBackend and generate with the saved adapter."""
@@ -70,5 +55,5 @@ class TestNSSGenerationGPU:
         backend.prepare_params(temperature=0.9, top_p=1.0, max_new_tokens=64)
         try:
             backend.generate(keep_llm_state=False)
-        except GenerationError:
-            pass  # Expected: random tiny model produces no valid records
+        except GenerationError as exc:
+            assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"

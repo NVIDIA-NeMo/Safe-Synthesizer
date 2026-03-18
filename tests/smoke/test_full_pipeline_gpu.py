@@ -17,12 +17,14 @@ from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 pytestmark = [
     pytest.mark.requires_gpu,
+    pytest.mark.vllm,
+    pytest.mark.smollm2,
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
 
 
-@pytest.mark.usefixtures("_patch_attn_eager", "_register_smollm2")
+@pytest.mark.usefixtures("_patch_attn_eager")
 def test_full_pipeline_smollm2(iris_df, smoke_save_path):
     """Train SmolLM2-135M then generate with vLLM in a single end-to-end pass.
 
@@ -32,8 +34,7 @@ def test_full_pipeline_smollm2(iris_df, smoke_save_path):
     train-then-generate code path, not output quality.
     """
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         pretrained_model="HuggingFaceTB/SmolLM2-135M",
         use_unsloth=False,
         num_input_records_to_sample=50,
@@ -46,8 +47,8 @@ def test_full_pipeline_smollm2(iris_df, smoke_save_path):
 
     try:
         nss.generate()
-    except GenerationError:
-        print("\n--- SmolLM2-135M: no valid records (expected with minimal training) ---\n")
+    except GenerationError as exc:
+        assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
         return
 
     result = nss.generator.gen_results

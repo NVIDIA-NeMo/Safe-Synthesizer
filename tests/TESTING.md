@@ -73,6 +73,9 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 | `smoke` | Quick smoke tests (training/generation hot paths, tiny models) |
 | `e2e` | End-to-end pipeline tests (requires CUDA) |
 | `requires_gpu` | Test needs CUDA hardware (modifier, stacks on `smoke`/`e2e`) |
+| `vllm` | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
+| `smollm2` | SmolLM2 Hub download tests (Makefile uses for process isolation) |
+| `unsloth` | Unsloth backend tests (process-isolated from DP tests) |
 | `noautouse` | Skip autouse fixtures for specific tests |
 
 ## Auto-marking
@@ -117,7 +120,7 @@ Per-module fixtures:
 - Generation/eval/data_processing: shared tokenizer and JSONL fixtures
 - CLI: `mock_workdir(tmp_path)` for tmp_path-based Workdir
 - Config: `basic_parameter`, `training_hyperparams`, `simple_safe_synthesizer_parameters`
-- Smoke: session-scoped `tiny_llama_config`, `stub_tokenizer`, `local_tinyllama_dir`, `iris_df`; function-scoped `base_smoke_config`, `tiny_model`, `_patch_attn_eager`; helpers `train_with_sdk()`, `assert_adapter_saved()`
+- Smoke: session-scoped `tiny_llama_config`, `stub_tokenizer`, `local_tinyllama_dir`, `iris_df`, `base_smoke_config`, `_patch_attn_eager`; function-scoped `tiny_model`; helpers `train_with_sdk()`, `assert_adapter_saved()`
 
 ## Fixture Scoping
 
@@ -133,10 +136,20 @@ Mock Workdir via `mock_workdir(tmp_path)` in `cli/conftest.py`.
 
 ## GPU Isolation Gotcha
 
-Unsloth patches transformers at import time, which poisons Opacus/DP if they share a process. CUDA device-side asserts also cascade across xdist workers. Both e2e and smoke GPU tests require process isolation:
+Two GPU isolation hazards require per-file process isolation (`-n 0`):
 
-- `make test-smoke-gpu` runs three separate single-process (`-n 0`) pytest invocations over `tests/smoke/`, split by `-k` filters: (1) non-unsloth/non-smollm2, (2) smollm2, (3) unsloth.
-- `make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
+1. vLLM pre-allocates all GPU memory and never releases it within a process. Tests that call `.generate()` must run in separate processes or later tests OOM.
+2. Unsloth patches transformers at import time, poisoning Opacus/DP if they share a process.
+
+GPU smoke tests use markers to express isolation requirements:
+
+- `requires_gpu`: all GPU tests
+- `vllm`: tests using vLLM generation (each file gets its own process)
+- `smollm2`, `unsloth`: marker-isolated groups (auto-discovered)
+
+`make test-smoke-gpu` uses marker algebra for train-only tests (auto-discovering via `requires_gpu and not vllm and not smollm2 and not unsloth`), explicit file paths for vLLM tests (per-file isolation), and marker selection for SmolLM2/Unsloth. When adding a new vLLM test file, add `pytest.mark.vllm` and also add the file to the Makefile's explicit list.
+
+`make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
 
 See [`tests/smoke/README.md`](smoke/README.md) for additional smoke-specific gotchas.
 

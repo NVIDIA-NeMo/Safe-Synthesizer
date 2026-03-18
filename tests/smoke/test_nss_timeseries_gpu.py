@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 pytestmark = [
     pytest.mark.requires_gpu,
+    pytest.mark.vllm,
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
@@ -23,8 +24,7 @@ pytestmark = [
 def test_nss_timeseries_train_and_generate(local_tinyllama_dir, timeseries_df, tmp_path):
     """Train and generate through the TimeseriesBackend with inline stub data."""
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         pretrained_model=str(local_tinyllama_dir),
         use_unsloth=False,
         num_input_records_to_sample=10,
@@ -42,8 +42,8 @@ def test_nss_timeseries_train_and_generate(local_tinyllama_dir, timeseries_df, t
     nss.with_data_source(timeseries_df).process_data().train()
     try:
         nss.generate()
-    except GenerationError:
-        pass  # Expected: random tiny model may produce no valid records
+    except GenerationError as exc:
+        assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
 
     # Verify TimeseriesBackend was used
     from nemo_safe_synthesizer.generation.timeseries_backend import TimeseriesBackend

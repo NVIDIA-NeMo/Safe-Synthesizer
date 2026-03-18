@@ -1,6 +1,6 @@
 # Smoke Tests
 
-Quick tests that verify training and generation code paths don't crash.
+Quick tests that verify training, generation, evaluation, and PII replacement code paths don't crash.
 They use tiny or small models and run in seconds (CPU) or a few minutes (GPU).
 
 ```bash
@@ -10,9 +10,10 @@ make test-smoke-gpu          # GPU tests (requires CUDA)
 
 ## When should I add a smoke test?
 
-If you're adding a new training backend, generation backend, or model family,
-add a smoke test for it. Same if you're changing how the SDK orchestrates
-train/generate -- those paths are easy to break silently.
+If you're adding a new training backend, generation backend, evaluation
+component, or model family, add a smoke test for it. Same if you're changing
+how the SDK orchestrates train/generate/evaluate -- those paths are easy to
+break silently.
 
 Smoke tests don't check output quality. They just make sure the code runs
 end-to-end without throwing. Use the smallest model that exercises the path
@@ -21,31 +22,24 @@ a real tokenizer/model).
 
 ## GPU Test Process Isolation
 
-GPU smoke tests run in three separate single-process (`-n 0`) pytest invocations to avoid CUDA and import-time conflicts:
+GPU smoke tests use three marker-based isolation groups:
 
-1. Local tiny-model tests (everything except SmolLM2 and Unsloth)
-2. SmolLM2 Hub download test (downloads ~270MB from HuggingFace)
-3. Unsloth backend test (process-isolated from DP tests)
+1. Train-only (`requires_gpu` without `vllm`/`smollm2`/`unsloth`): share a single process, auto-discovered via marker algebra.
+2. vLLM generation (`vllm` marker): each file gets its own process because vLLM pre-allocates all GPU memory and never releases it.
+3. SmolLM2 / Unsloth (`smollm2`, `unsloth` markers): each gets its own process, auto-discovered via markers.
 
-Why: Unsloth monkey-patches transformers at import time, poisoning Opacus/DP if they share a process. CUDA device-side asserts also cascade across xdist workers. The Makefile `test-smoke-gpu` target handles the split automatically via `-k` filters.
-
-Tests use pytestmark decorators:
+When adding a new GPU smoke test, add the appropriate markers to `pytestmark`:
 
 ```python
 pytestmark = [
     pytest.mark.requires_gpu,
+    pytest.mark.vllm,  # if the test calls .generate() (uses vLLM)
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
 ```
 
-For SmolLM2 and Unsloth tests, add the marker to a test function:
-
-```python
-@pytest.mark.usefixtures("_register_smollm2")  # for SmolLM2 tests
-def test_full_pipeline_smollm2(...):
-    ...
-```
+If the new file uses vLLM, also add it to the explicit file list in the `test-smoke-gpu` Makefile target (vLLM files need per-file isolation).
 
 ## Things that will bite you
 
@@ -58,14 +52,22 @@ def test_full_pipeline_smollm2(...):
 
 ## What's in `conftest.py`?
 
-The shared fixtures cover both CPU and GPU smoke tests. The most important ones:
+The shared fixtures cover both CPU and GPU smoke tests. Session-scoped fixtures are created once per pytest process; function-scoped fixtures are recreated per test.
 
-- `base_smoke_config` -- default `SafeSynthesizerParameters` pointing at the local tiny model
+Session-scoped (immutable / read-only):
+
+- `base_smoke_config` -- default `SafeSynthesizerParameters` pointing at the local tiny model (Pydantic frozen model)
+- `_patch_attn_eager` -- the attention implementation workaround mentioned above
+- `stub_tokenizer`, `tiny_llama_config`, `local_tinyllama_dir` -- tokenizer and tiny model on disk
+- `iris_df`, `timeseries_df` -- small DataFrames for training input
+
+Function-scoped (fresh per test):
+
+- `tiny_model` -- randomly initialized `LlamaForCausalLM` (mutated by training)
+
+Helpers (plain functions, not fixtures):
+
 - `train_with_sdk(config, data_df, save_path)` -- convenience wrapper around the SDK train flow
 - `assert_adapter_saved(workdir)` -- checks that adapter files landed on disk
-- `_patch_attn_eager` -- the attention implementation workaround mentioned above
-- `tiny_model`, `stub_tokenizer`, `tiny_training_dataset` -- CPU test building blocks
-- `local_tinyllama_dir` -- saves the tiny model to a temp dir so GPU tests don't need internet
-- `iris_df`, `timeseries_df` -- small DataFrames for training input
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md#testing) for the full list of test commands.

@@ -17,6 +17,7 @@ from .conftest import train_with_sdk
 
 pytestmark = [
     pytest.mark.requires_gpu,
+    pytest.mark.vllm,
     pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available"),
     pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS"),
 ]
@@ -34,8 +35,7 @@ def test_nss_resume_generate_after_train(local_tinyllama_dir, iris_df, tmp_path)
     large_df = pd.concat([iris_df, iris_df], ignore_index=True)
 
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         pretrained_model=str(local_tinyllama_dir),
         use_unsloth=False,
         num_input_records_to_sample=10,
@@ -56,8 +56,8 @@ def test_nss_resume_generate_after_train(local_tinyllama_dir, iris_df, tmp_path)
     # Step 3: Generate from the saved state
     try:
         nss2.generate()
-    except GenerationError:
-        pass  # Expected: random tiny model may produce no valid records
+    except GenerationError as exc:
+        assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
 
     # Verify the resume pipeline reached the generation stage
     assert nss2.generator is not None
