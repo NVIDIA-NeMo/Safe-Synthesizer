@@ -37,6 +37,21 @@ does at each stage.
         validate configuration, explore the CLI, or import config classes in
         code. An A100 or larger GPU is required to run the full pipeline.
 
+=== "Docker (Linux with NVIDIA GPU)"
+
+    ```bash
+    make container-build-gpu
+
+    docker run --gpus all --shm-size=1g \
+      -v $(pwd):/workspace \
+      -v ~/.cache/huggingface:/workspace/.hf_cache \
+      -e HF_HOME=/workspace/.hf_cache \
+      nss-gpu:latest run --config /workspace/config.yaml --url /workspace/data.csv
+    ```
+
+    No local Python install needed. See [Docker](docker.md) for full
+    setup, volume mounts, and offline usage.
+
 === "Bare package for config definitions"
 
     ```bash

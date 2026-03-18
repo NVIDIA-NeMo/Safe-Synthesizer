@@ -746,14 +746,22 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 ## Dockerfiles
 
-The repo currently has one CI `Dockerfile` ([containers/Dockerfile.test_ci](containers/Dockerfile.test_ci)). These conventions apply to new `Dockerfile`s; the CI image follows a simpler pattern.
+Two Dockerfiles live in `containers/`:
+
+- [containers/Dockerfile.cuda](containers/Dockerfile.cuda) -- CUDA GPU image (deps/runtime/dev stages). The production reference for these conventions.
+- [containers/Dockerfile.test_ci](containers/Dockerfile.test_ci) -- CPU-only CI image (`make test-ci-container`).
+
+See [containers/README.md](containers/README.md) for build arguments and Makefile targets.
+
+Conventions for new or modified Dockerfiles:
 
 - Multi-stage builds for production images
 - Copy uv from `ghcr.io/astral-sh/uv:<version>`
-- `--mount=type=cache` for pip/uv caches
-- `--no-install-recommends` + `rm -rf /var/lib/apt/lists/*`
-- Non-root user (`appuser`)
-- `HEALTHCHECK` directives
+- `--mount=type=cache` for pip/uv caches and APT (`/var/cache/apt`, `/var/lib/apt/lists`). Prefer cache mounts over `rm -rf /var/lib/apt/lists/*` -- they speed up rebuilds and keep layers clean automatically
+- `ENV UV_LINK_MODE=copy` when using cache mounts (hardlinks into cache layers vanish after unmount)
+- `--no-install-recommends` on all `apt-get install` invocations
+- Non-root user (`appuser`) with `NVIDIA_VISIBLE_DEVICES=all` for GPU access
+- `tini` or `--init` for proper PID 1 signal handling in batch containers
 - Order `COPY` directives for cache efficiency (deps before source)
 - Comments explaining cache invalidation points
 

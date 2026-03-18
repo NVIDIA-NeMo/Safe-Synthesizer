@@ -161,6 +161,7 @@ nav:
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md
+      - Docker: user-guide/docker.md
       - Troubleshooting:
           - Synthetic Data Quality: user-guide/evaluating-data.md
           - Program Runtime: user-guide/troubleshooting.md
@@ -169,6 +170,7 @@ nav:
           - Environment Variables: user-guide/environment.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
+      - Docker: developer-guide/docker.md
       - API Reference: reference/
   - Developer Notes:
       - blog/index.md

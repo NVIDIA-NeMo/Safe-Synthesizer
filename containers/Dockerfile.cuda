@@ -1,0 +1,205 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Multistage CUDA Dockerfile for Safe-Synthesizer.
+#
+# Stages:
+#   deps    -- install Python, uv, and all cu128+engine dependencies
+#   runtime -- minimal CLI wrapper (ENTRYPOINT entrypoint.sh -> safe-synthesizer)
+#   dev     -- extends runtime with dev tools, tests, and interactive shell
+#
+# Build:
+#   docker build -f containers/Dockerfile.cuda --target runtime -t nss-gpu:latest .
+#   docker build -f containers/Dockerfile.cuda --target dev -t nss-gpu-dev:latest .
+#
+# Run with your data:
+#   docker run --gpus all --shm-size=1g \
+#     -v $(pwd)/my_data:/workspace/data \
+#     -v ~/.cache/huggingface:/workspace/.hf_cache \
+#     -e HF_HOME=/workspace/.hf_cache \
+#     nss-gpu:latest \
+#     run --url /workspace/data/input.csv
+#
+# Key flags:
+#   --gpus all          expose NVIDIA GPUs (requires nvidia-container-toolkit)
+#   --shm-size=1g       increase /dev/shm for PyTorch training (default 64 MB is too small)
+#   -v HOST:CONTAINER   bind-mount data and HF cache (use absolute paths)
+#   -e HF_HOME=...      persist model downloads across container runs
+#   -e HF_TOKEN=...     HF token for gated models (Llama, Mistral, etc.)
+#   -e NIM_API_KEY=...  NIM endpoint key for PII classification (optional)
+#
+# Interactive shell:
+#   docker run -it --gpus all --shm-size=1g \
+#     -v $(pwd)/my_data:/workspace/data \
+#     -v ~/.cache/huggingface:/workspace/.hf_cache \
+#     -e HF_HOME=/workspace/.hf_cache \
+#     --entrypoint /bin/bash nss-gpu:latest
+#
+# Cache mounts (DOCKER_BUILDKIT=1, default in Docker 23.0+) avoid
+# re-downloading ~10 GB of PyTorch/CUDA wheels on rebuild.
+#
+# uv Docker best practices: https://docs.astral.sh/uv/guides/integration/docker/
+
+# ---------------------------------------------------------------------------
+# Multi-architecture support
+# ---------------------------------------------------------------------------
+# This Dockerfile supports linux/amd64 and linux/arm64 (Blackwell/Grace).
+# BuildKit sets TARGETARCH automatically when building with:
+#   docker buildx build --platform linux/arm64 ...
+#
+# The nvidia/cuda base images and uv binaries are already multi-platform,
+# so no conditional logic is needed for the core build. CUDA_ARCH_FLAGS is
+# provided as forward-compatibility for when CUDA_IMAGE_TYPE=devel is used
+# and kernels must be compiled for specific GPU architectures.
+ARG TARGETARCH
+
+# ---------------------------------------------------------------------------
+# Build arguments
+# ---------------------------------------------------------------------------
+ARG CUDA_VERSION=12.8.1
+ARG UBUNTU_VERSION=22.04
+# Use "runtime" when all deps ship pre-built wheels (current state).
+# Switch to "devel" if a future dependency requires CUDA compilation.
+ARG CUDA_IMAGE_TYPE=runtime
+ARG PYTHON_VERSION=3.11.13
+# Pinned to the lower bound of pyproject.toml [tool.uv] required-version.
+ARG UV_VERSION=0.9.14
+
+# CUDA compute capabilities to compile for (used with CUDA_IMAGE_TYPE=devel).
+# Recommended values per architecture:
+#   amd64 -> "80;86;90;90a"   (A100, A10/3090, H100)
+#   arm64 -> "90;90a;120;120a" (H100 Grace, Blackwell)
+# Not consumed by the current stages -- present for documentation and
+# forward-compatibility with devel builds that invoke nvcc.
+# Override via: --build-arg CUDA_ARCH_FLAGS="90;90a;120;120a"
+ARG CUDA_ARCH_FLAGS="80;86;90;90a"
+
+# ---------------------------------------------------------------------------
+# Stage 1: deps -- build dependencies in a CUDA environment
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:${CUDA_VERSION}-${CUDA_IMAGE_TYPE}-ubuntu${UBUNTU_VERSION} AS deps
+
+ARG PYTHON_VERSION
+ARG UV_VERSION
+
+COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+
+# Cache apt downloads across rebuilds instead of deleting them each time.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        git curl build-essential ca-certificates
+
+# uv settings for reproducible container builds.
+# See: https://docs.astral.sh/uv/guides/integration/docker/#optimizations
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_PYTHON_CACHE_DIR=/root/.cache/uv/python \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_NO_INSTALLER_METADATA=1 \
+    UV_FROZEN=true
+
+WORKDIR /build
+
+# Install Python to a stable path (/opt/python) for cross-stage portability.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv python install ${PYTHON_VERSION}
+
+# -- Intermediate layer: install dependencies without the project itself.
+# This layer is invalidated only when pyproject.toml or uv.lock changes,
+# not when source code changes.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-install-project --extra cu128 --extra engine --no-group dev
+
+# -- Project layer: install the project (non-editable so the venv is
+# self-contained and source code is not needed in the runtime image).
+COPY README.md ./
+COPY src/ src/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-editable --extra cu128 --extra engine --no-group dev
+
+# ---------------------------------------------------------------------------
+# Stage 2: runtime -- minimal image wrapping the safe-synthesizer CLI
+# ---------------------------------------------------------------------------
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS runtime
+
+ARG CUDA_VERSION
+ARG UBUNTU_VERSION
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 ca-certificates tini \
+        gcc libc6-dev  # torch.compile / Triton JIT needs a C compiler at runtime
+
+# Python toolchain and venv from the deps stage.
+# UV_PYTHON_INSTALL_DIR=/opt/python keeps the path stable across stages.
+COPY --from=deps /opt/python /opt/python
+COPY --from=deps /opt/venv /opt/venv
+
+ENV PATH="/opt/venv/bin:${PATH}" \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# OCI image metadata.
+LABEL org.opencontainers.image.title="Safe Synthesizer" \
+      org.opencontainers.image.description="NVIDIA NeMo Safe Synthesizer -- GPU runtime for synthetic data generation, training, and evaluation." \
+      org.opencontainers.image.vendor="NVIDIA" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/NVIDIA-NeMo/Safe-Synthesizer" \
+      org.opencontainers.image.documentation="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/docker/" \
+      org.opencontainers.image.base.name="nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}" \
+      org.opencontainers.image.usage="docker run --gpus all --shm-size=1g -v /path/to/data:/workspace/data -v ~/.cache/huggingface:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv"
+
+# Non-root user.
+RUN groupadd -r -g 1000 appuser && \
+    useradd -r -u 1000 -g appuser -m appuser
+
+# Wrapper entrypoint detects common misconfigurations (missing mounts,
+# unset HF_HOME, no GPU) and prints hints before delegating to safe-synthesizer.
+COPY --chmod=755 containers/entrypoint.sh /usr/local/bin/entrypoint.sh
+
+USER appuser
+WORKDIR /workspace
+
+ENTRYPOINT ["tini", "--", "entrypoint.sh"]
+CMD ["--help"]
+
+# ---------------------------------------------------------------------------
+# Stage 3: dev -- interactive development and testing
+# ---------------------------------------------------------------------------
+FROM runtime AS dev
+
+USER root
+
+ARG UV_VERSION
+COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        git curl build-essential make
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_FROZEN=true
+
+WORKDIR /build
+
+# Copy the full repo (.dockerignore filters out .git, .venv, caches, etc.).
+# Bind-mount at /workspace overrides this at runtime for live editing.
+COPY . .
+
+# Install dev dependencies into the existing venv.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --extra cu128 --extra engine --group dev
+
+RUN git config --global --add safe.directory /workspace
+
+WORKDIR /workspace
+ENTRYPOINT []
+CMD ["/bin/bash"]
