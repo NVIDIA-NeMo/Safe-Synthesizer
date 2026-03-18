@@ -61,7 +61,22 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
 
-3. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise and direnv trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
+
+  ```bash
+   # ~/.config/direnv/direnv.toml
+   [whitelist]
+   prefix = ["/path/to/Safe-Synthesizer"]
+  ```
+
+  ```bash
+   # In your shell profile (~/.bashrc, ~/.zshrc)
+   export MISE_TRUSTED_CONFIG_PATHS="/path/to/Safe-Synthesizer"
+  ```
+
+  Alternatively, set `MISE_YES=1` and `DIRENV_TRUST_ALLOW_ALL=1` to trust all configs globally (appropriate for dev machines and CI).
+
+4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
 
   ```bash
    echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
