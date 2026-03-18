@@ -234,6 +234,8 @@ class SafeSynthesizer(ConfigBuilder):
             # Resume path or already-processed data in this builder instance; nothing to do.
             return self
 
+        self._resolve_datasource()
+
         holdout = Holdout(self._nss_config)
         original_train_df, self._test_df = holdout.train_test_split(self._data_source)
 
