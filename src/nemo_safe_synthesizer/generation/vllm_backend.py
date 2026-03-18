@@ -118,7 +118,13 @@ class VllmBackend(GeneratorBackend):
             avoid leaking sensitive data).
     """
 
-    def __init__(self, config: SafeSynthesizerParameters, model_metadata: ModelMetadata, workdir: Workdir, **kwargs):
+    def __init__(
+        self,
+        config: SafeSynthesizerParameters,
+        model_metadata: ModelMetadata,
+        workdir: Workdir,
+        **kwargs,
+    ):
         self.model_metadata = model_metadata
         self.config = config
         self.remote = False
@@ -140,38 +146,39 @@ class VllmBackend(GeneratorBackend):
         self.processor = create_processor(self.schema, self.model_metadata, self.config)
         adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
+        self._torn_down = False
 
     def teardown(self) -> None:
-        """Release GPU memory and clean up distributed resources."""
-        self._clear_llm_state()
+        """Release GPU memory and distributed resources. Idempotent -- safe to call multiple times."""
+        if self._torn_down:
+            return
+        self._torn_down = True
 
-    def _clear_llm_state(self) -> None:
-        """Delete LLM state to free up GPU memory."""
-        cleanup_dist_env_and_memory()
-        # destroy_model_parallel()
+        try:
+            cleanup_dist_env_and_memory()
+        except Exception:
+            logger.debug("cleanup_dist_env_and_memory failed during teardown", exc_info=True)
+
         self.llm = None
-        logger.debug("Cleaned up LLM")
-        cleanup_memory()
-        logger.debug("Cleaned up memory")
+
+        try:
+            cleanup_memory()
+        except Exception:
+            logger.debug("cleanup_memory failed during teardown", exc_info=True)
 
     def __del__(self) -> None:
-        """Clean up resources on garbage collection to prevent shutdown warnings."""
+        """Clean up resources on garbage collection."""
         try:
-            self._clear_llm_state()
+            self.teardown()
         except Exception:
-            # Suppress errors during garbage collection to avoid masking other exceptions
             pass
 
     def initialize(self, **kwargs) -> None:
         """Initialize and load the model into memory."""
-        # vLLM 0.11.x uses an environment variable for attention backend selection.
-        # When vLLM is upgraded to 0.12+, migrate to the attention_backend constructor arg.
-        if self.config.generation.attention_backend not in [None, "auto"]:
-            os.environ["VLLM_ATTENTION_BACKEND"] = self.config.generation.attention_backend
-
-        max_vram = get_max_vram()
-        # note this only works for single GPU setups
-        max_vram = max_vram.get(0, 0.8)
+        self._torn_down = False
+        max_vram_map = get_max_vram()
+        max_vram_frac = max_vram_map.get(0)
+        gpu_memory_utilization = float(max_vram_frac) if max_vram_frac is not None else 0.9
 
         # vllm requires this "config" to set the backend ahead of time.
         structured_outputs_config = StructuredOutputsConfig(
@@ -189,7 +196,7 @@ class VllmBackend(GeneratorBackend):
 
         self.llm = vLLM(
             model=self.config.training.pretrained_model,
-            gpu_memory_utilization=max_vram,
+            gpu_memory_utilization=gpu_memory_utilization,
             enable_lora=True,
             max_lora_rank=self.config.training.lora_r,
             structured_outputs_config=structured_outputs_config,
@@ -455,7 +462,6 @@ class VllmBackend(GeneratorBackend):
 
     def generate(
         self,
-        keep_llm_state: bool = True,
         data_actions_fn: utils.DataActionsFn | None = None,
     ) -> GenerateJobResults:
         """Generate synthetic tabular data in batches until the target count is reached.
@@ -465,9 +471,6 @@ class VllmBackend(GeneratorBackend):
         a stopping condition fires.
 
         Args:
-            keep_llm_state: If ``True``, keep the model in GPU memory after
-                generation for potential reuse.  The model is still freed
-                on garbage collection.
             data_actions_fn: Optional post-processing / validation function
                 applied to each batch of generated records.
 
@@ -528,9 +531,6 @@ class VllmBackend(GeneratorBackend):
 
         batches.job_complete()
         batches.log_status()
-
-        if not keep_llm_state:
-            self._clear_llm_state()
 
         max_num_records = (
             self.config.generation.num_records

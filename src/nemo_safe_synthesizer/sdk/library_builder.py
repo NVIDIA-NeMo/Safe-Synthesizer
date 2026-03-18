@@ -384,7 +384,10 @@ class SafeSynthesizer(ConfigBuilder):
             )
 
         self.generator.initialize()
-        self.generator.generate(keep_llm_state=False)
+        try:
+            self.generator.generate()
+        finally:
+            self.generator.teardown()
         self._generated = True
         return self
 
