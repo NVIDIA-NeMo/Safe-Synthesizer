@@ -122,6 +122,4 @@ evaluation:
 
 ## Related Topics
 
-- [Safe Synthesizer 101](../tutorials/safe-synthesizer-101.md): Get started with Safe Synthesizer
-- [Differential Privacy](../tutorials/differential-privacy.md): Enable differential privacy
-- [Tutorials](../tutorials/index.md): More tutorials
+- [Synthetic Data Quality](evaluating-data.md): See recommendations for increasing quality and privacy scores

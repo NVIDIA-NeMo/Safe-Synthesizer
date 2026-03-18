@@ -113,7 +113,7 @@ Delta calculation: Use `"auto"` (recommended), which sets $\delta = \frac{1}{n^{
 
 Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
 
-For hands-on guidance, refer to [Differential Privacy Tutorial](../tutorials/differential-privacy.md). For complete parameter documentation, refer to [Parameters Reference](../user-guide/configuration.md).
+For hands-on guidance, see [Running Safe Synthesizer -- Differential Privacy](../user-guide/running.md#differential-privacy) and [Configuration -- Differential Privacy](../user-guide/configuration.md#differential-privacy). For complete parameter documentation, refer to [Parameters Reference](../user-guide/configuration.md).
 
 ## Configuration
 
