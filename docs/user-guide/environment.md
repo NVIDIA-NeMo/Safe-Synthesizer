@@ -231,6 +231,35 @@ there are at least 1,000 records per worker.
 
 ---
 
+## Container Usage
+
+When running Safe Synthesizer in a Docker container, these variables are
+particularly important:
+
+| Variable | Recommended Value | Why |
+|----------|-------------------|-----|
+| `HF_HOME` | `/workspace/.hf_cache` | Point at a bind-mounted host directory so model downloads persist across container runs |
+| `HF_HUB_OFFLINE` | `1` | Set in air-gapped environments after pre-caching models |
+| `VLLM_CACHE_ROOT` | `/workspace/.vllm_cache` | Persist vLLM's internal cache if needed |
+| `NSS_ARTIFACTS_PATH` | `/workspace/artifacts` | Write artifacts to a mounted volume |
+| `NSS_LOG_FORMAT` | `json` | Structured logs for log aggregators; auto-detected in non-TTY containers |
+| `NVIDIA_VISIBLE_DEVICES` | `0` or `all` | Select GPUs (set by `--gpus` flag, but can be overridden) |
+
+Example:
+
+```bash
+docker run --gpus all --shm-size=1g \
+  -v $(pwd):/workspace \
+  -v ~/.cache/huggingface:/workspace/.hf_cache \
+  -e HF_HOME=/workspace/.hf_cache \
+  -e NSS_ARTIFACTS_PATH=/workspace/artifacts \
+  nss-gpu:latest run --config /workspace/config.yaml --url /workspace/data.csv
+```
+
+See [Docker](docker.md) for full container setup and Makefile shortcuts.
+
+---
+
 - [Running Safe Synthesizer](running.md) -- pipeline execution, CLI commands, and artifacts
 - [Configuration Reference](configuration.md) -- parameter tables
 - [Program Runtime](troubleshooting.md) -- runtime errors and OOM fixes
