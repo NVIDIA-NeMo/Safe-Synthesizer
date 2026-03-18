@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Tool versions managed by mise (https://mise.jdx.dev/).
+# Run `mise install` to install all tools, or `mise use <tool>` to add a new one.
+#
+# Tools NOT managed here:
+#   - uv: installed via `astral-sh/setup-uv` in CI; locally via https://astral.sh/uv/install.sh.
+#     Version constraint lives in pyproject.toml [tool.uv] required-version.
+#   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
+
+[tools]
+jq = "1.8.1"
+ruff = "0.15.0"
+ty = "0.0.1-alpha.21"
+github-cli = "2.87.0"
+yq = "4.44.1"
+"ubi:google/osv-scanner" = "2.2.3"
+direnv = "2.37.1"

@@ -45,19 +45,14 @@ help:
 
 ### BOOTSTRAP AND SETUP ###
 
-.PHONY: bootstrap-tools
-bootstrap-tools: ## Bootstrap tools
-	bash tools/binaries/bootstrap_tools.sh
-	@echo "tools bootstrapped successfully"
+.PHONY: setup
+setup: ## Install dev tools via mise
+	@command -v mise >/dev/null 2>&1 || { echo "mise not found. Install: curl -sSf https://mise.run | sh"; exit 1; }
+	mise install
+	@echo "tools installed successfully via mise"
 
-.PHONY: bootstrap-tools-ci
-bootstrap-tools-ci: ## Bootstrap tools for CI
-	bash tools/binaries/bootstrap_tools.sh --bootstrap-only
-
-.PHONY: install-uv
-install-uv: ## Install uv tool
-	bash tools/binaries/install_uv.sh
-	@echo "uv tool installed successfully"
+.PHONY: bootstrap-tools bootstrap-tools-ci
+bootstrap-tools bootstrap-tools-ci: setup ## (legacy alias) Bootstrap tools via mise
 
 .PHONY: clean-python
 clean-python: ## Remove python virtual environment
@@ -134,18 +129,19 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 .PHONY: format
 format: ## Format the code (ruff format + lint fix + copyright headers)
-	bash tools/codestyle/format.sh
-	uv run --script tools/codestyle/copyright_fixer.py .
+	ruff format .
+	ruff check --fix .
+	uv run --script tools/copyright_fixer.py .
 
 .PHONY: format-check
 format-check: ## Check formatting, lint rules, and copyright headers (read-only)
-	bash tools/codestyle/format.sh --check
-	bash tools/codestyle/ruff_check.sh
-	uv run --script tools/codestyle/copyright_fixer.py --check .
+	ruff format --check .
+	ruff check .
+	uv run --script tools/copyright_fixer.py --check .
 
 .PHONY: typecheck
 typecheck: ## Run ty type checks
-	bash tools/codestyle/typecheck.sh
+	ty check
 
 .PHONY: lock-check
 lock-check: ## Check that uv.lock is up to date

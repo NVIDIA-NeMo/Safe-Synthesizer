@@ -776,7 +776,6 @@ Current state is inconsistent; these are the target conventions for new scripts.
 - Naming: `snake_case` for functions, `_` prefix for internal helpers
 - Variables: always quote (`"$VAR"`, `"${VAR}"`), defaults via `${VAR:-default}`. Use `readonly` for variables that should not change after assignment.
 - Repo root detection: `REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}`
-- Source shared utilities from `tools/binaries/defs.sh` and `tools/binaries/common_functions.sh` where applicable
 - Use `shellcheck` to lint shell scripts. When disabling a check, add `# shellcheck disable=SCXXXX` with a brief reason.
 
 ```bash
@@ -784,7 +783,6 @@ Current state is inconsistent; these are the target conventions for new scripts.
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
-source "${REPO_ROOT}/tools/binaries/defs.sh"
 
 readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 ```

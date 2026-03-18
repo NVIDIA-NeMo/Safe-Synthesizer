@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Python 3.11+ (project supports Python ≥3.11; `.python-version` currently pins 3.11 for bootstrapping at the repo root)
 - Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)).
 
 ### Setup
 
@@ -50,11 +50,9 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    cd Safe-Synthesizer
 
-   # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
-   make bootstrap-tools
-
-   # Ensure ~/.local/bin is on your PATH (add to your shell profile if needed)
-   export PATH="$HOME/.local/bin:$PATH"
+   # Install mise (one-time) and dev tools (ruff, ty, yq, gh, etc.)
+   curl -sSf https://mise.run | sh
+   make setup
 
    # Install Python dependencies (choose one)
    make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
@@ -457,7 +455,7 @@ For detailed style guidelines covering Python, markdown, Dockerfiles, shell scri
 
 ### Formatting, Linting, and Type Checking
 
-Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `make bootstrap-tools` and check all tracked files.
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.toml` (installed via `make setup`) and check all tracked files.
 
 ```bash
 make format   # auto-fix: ruff format + import sorting + copyright headers
@@ -471,16 +469,16 @@ We use `ruff` and `ty` for the majority of this work, wrapped with settings for 
 
 CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
 
-The wrapper scripts in `tools/` also accept explicit file paths for spot-checking individual files:
+You can also run tools directly on specific files:
 
 ```bash
-bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
-bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
+ruff format --check src/nemo_safe_synthesizer/cli/run.py
+ruff check src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
 
-All `make` targets check the entire project. Pre-commit scopes checks to staged files. The wrapper scripts also accept explicit file paths when you want to check specific files.
+All `make` targets check the entire project. Pre-commit scopes checks to staged files.
 
 | Check | CI target | `make format` / `make check` | Pre-commit |
 |---|---|---|---|

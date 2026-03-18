@@ -38,23 +38,30 @@ repos:
   - repo: local
     hooks:
 
-      - id: format
-        name: Run ruff (format + lint fix)
-        entry: bash tools/codestyle/format.sh
+      - id: ruff-format
+        name: Run ruff format
+        entry: ruff format
+        language: system
+        pass_filenames: true
+        types: [python]
+
+      - id: ruff-check
+        name: Run ruff check --fix
+        entry: ruff check --fix
         language: system
         pass_filenames: true
         types: [python]
 
       - id: typecheck
         name: Run ty typechecks
-        entry: bash tools/codestyle/typecheck.sh
+        entry: ty check
         language: system
         pass_filenames: false
         types: [python]
 
       - id: copyright-fix
         name: Fix copyright headers
-        entry: uv run --script tools/codestyle/copyright_fixer.py
+        entry: uv run --script tools/copyright_fixer.py
         language: system
         pass_filenames: true
         files: '\.(py|sh|md|yaml|yml)$'
