@@ -28,7 +28,7 @@ from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
-from ..observability import LogCategory, get_logger, traced
+from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..pii_replacer.nemo_pii import NemoPII
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..training.huggingface_backend import HuggingFaceBackend
@@ -158,6 +158,26 @@ class SafeSynthesizer(ConfigBuilder):
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
 
+    def _ensure_observability(self) -> None:
+        """Initialize structured logging when running via the SDK.
+
+        The CLI path calls ``initialize_observability()`` during
+        ``common_setup``.  When the SDK is used directly, the structlog
+        processor chain (including table rendering) is never installed,
+        so log messages that carry data in ``extra["ctx"]`` render as
+        empty lines.  This method mirrors the CLI setup --
+        ``configure_logging_from_workdir`` followed by
+        ``initialize_observability`` -- and is idempotent: both the
+        env-var configuration and the logging initialization are
+        skipped on subsequent calls.
+        """
+        from ..observability import _INITIALIZED_OBSERVABILITY
+
+        if _INITIALIZED_OBSERVABILITY:
+            return
+        configure_logging_from_workdir(self._workdir)
+        initialize_observability()
+
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
     def load_from_save_path(self) -> SafeSynthesizer:
         """Load the Safe Synthesizer configuration from the save path.
@@ -173,6 +193,7 @@ class SafeSynthesizer(ConfigBuilder):
         Returns:
             Self for method chaining.
         """
+        self._ensure_observability()
         # Use source paths which point to parent workdir when resuming for generation
         config_file = self._workdir.source_config
 
@@ -225,6 +246,8 @@ class SafeSynthesizer(ConfigBuilder):
         self._total_start = time.monotonic()
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "process_data"
+
+        self._ensure_observability()
 
         if TYPE_CHECKING:
             assert self._nss_config is not None
