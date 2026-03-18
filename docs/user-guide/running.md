@@ -440,7 +440,7 @@ works -- not just NVIDIA NIM:
 ```bash
 export NIM_ENDPOINT_URL="https://integrate.api.nvidia.com/v1"  # or your own OpenAI-compatible endpoint
 
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret  (optional -- only needed for direct endpoints, not inference gateways)
+export NVIDIA_API_KEY="your-api-key"  # pragma: allowlist secret  (optional -- only needed for direct endpoints, not inference gateways)
 ```
 
 When `NIM_ENDPOINT_URL` is unset, the classification step is attempted but

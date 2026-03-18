@@ -116,15 +116,15 @@ def _get_classify_endpoint_url() -> str:
 
 
 def get_column_classifier() -> ColumnClassifierLLM:
-    """Return a column classifier backed by the NIM endpoint (``NIM_ENDPOINT_URL``, ``NIM_API_KEY``)."""
+    """Return a column classifier backed by the NIM endpoint (``NIM_ENDPOINT_URL``, ``NVIDIA_API_KEY``)."""
     classifier = ColumnClassifierLLM()
     classifier._num_samples = 5
 
     endpoint = _get_classify_endpoint_url()
 
     # When using Inference Gateway, no API key is needed (gateway handles auth).
-    # For legacy direct endpoint, NIM_API_KEY can be provided.
-    api_key = os.environ.get("NIM_API_KEY", "not-needed")
+    # For legacy direct endpoint, NVIDIA_API_KEY can be provided.
+    api_key = os.environ.get("NVIDIA_API_KEY", "not-needed")
 
     classifier._llm = OpenAI(api_key=api_key, base_url=endpoint)
     return classifier

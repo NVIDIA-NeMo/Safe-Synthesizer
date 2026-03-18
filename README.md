@@ -245,7 +245,7 @@ To point to a locally hosted LLM:
 
 ```bash
 export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+export NVIDIA_API_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
 ### Disable Classification

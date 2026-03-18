@@ -28,7 +28,7 @@ are cached, and which network endpoints are used.
 | `NSS_WANDB_MODE` | `--wandb-mode` | WandB mode (alias for `WANDB_MODE`) |
 | `NSS_WANDB_PROJECT` | `--wandb-project` | WandB project name (alias for `WANDB_PROJECT`) |
 | `NIM_ENDPOINT_URL` | -- | LLM endpoint for PII column classification |
-| `NIM_API_KEY` | -- | API key (optional -- only for direct endpoints) |
+| `NVIDIA_API_KEY` | -- | API key (optional -- only for direct endpoints) |
 | `NIM_MODEL_ID` | -- | Column classification model ID |
 | `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (Unsloth, GLiNER) |
 | `SAFE_SYNTHESIZER_CPU_COUNT` | -- | NER CPU processes |
@@ -177,7 +177,7 @@ Set this to enable LLM-based column classification:
 
 ```bash
 export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+export NVIDIA_API_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
 To disable column classification entirely instead of pointing it at a local
@@ -208,7 +208,7 @@ PII classify config is deeply nested -- use YAML or SDK:
     )
     ```
 
-### `NIM_API_KEY`
+### `NVIDIA_API_KEY`
 
 API key for the NIM endpoint. Required when `NIM_ENDPOINT_URL` points to an
 authenticated endpoint.

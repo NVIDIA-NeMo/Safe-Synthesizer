@@ -123,7 +123,7 @@ docker run --gpus all --shm-size=1g \
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `HF_TOKEN` | For gated models | Hugging Face token for downloading gated models (Llama, Mistral, etc.). Get one at [hf.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| `NIM_API_KEY` | For PII classification | API key for the NIM endpoint used by PII column classification. Only needed when `NIM_ENDPOINT_URL` is set |
+| `NVIDIA_API_KEY` | For PII classification | API key for the NIM endpoint used by PII column classification. Only needed when `NIM_ENDPOINT_URL` is set |
 | `NIM_ENDPOINT_URL` | For PII classification | NIM/OpenAI-compatible endpoint URL for PII column classification |
 | `WANDB_API_KEY` | For experiment tracking | WandB API key. Only needed when `--wandb-mode online` is used |
 

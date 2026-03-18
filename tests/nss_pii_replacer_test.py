@@ -13,7 +13,7 @@ from nemo_safe_synthesizer.pii_replacer.nemo_pii import NemoPII
 
 # Currently use env variables to configure various pieces
 # Inferenc endpoint for classify:
-# export NIM_API_KEY=<...>
+# export NVIDIA_API_KEY=<...>
 # export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
 # export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
 
