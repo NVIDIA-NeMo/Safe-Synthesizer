@@ -97,22 +97,16 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
     return entity_extractor
 
 
+DEFAULT_NIM_ENDPOINT_URL = "https://integrate.api.nvidia.com/v1"
+
+
 def _get_classify_endpoint_url() -> str:
     """Return the inference endpoint URL for column classification.
 
-    Reads ``NIM_ENDPOINT_URL`` from the environment.
-
-    Returns:
-        The endpoint URL string.
-
-    Raises:
-        Exception: If ``NIM_ENDPOINT_URL`` is not set.
+    Reads ``NIM_ENDPOINT_URL`` from the environment; if unset, uses the default
+    NVIDIA integrate API URL.
     """
-    endpoint = os.environ.get("NIM_ENDPOINT_URL")
-    if endpoint:
-        return endpoint
-
-    raise Exception("Inference endpoint not configured for classify. Set NIM_ENDPOINT_URL environment variable.")
+    return os.environ.get("NIM_ENDPOINT_URL", DEFAULT_NIM_ENDPOINT_URL)
 
 
 def get_column_classifier() -> ColumnClassifierLLM:

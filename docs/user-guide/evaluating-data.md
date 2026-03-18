@@ -82,8 +82,8 @@ or
 Could not perform classify, falling back to default entities.
 ```
 
-Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
-is reachable. PII classify config is deeply nested -- use YAML or SDK:
+Fix: set entity types explicitly in your config, or when using the CLI ensure
+`NVIDIA_API_KEY` is set (and `NIM_ENDPOINT_URL` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
 
 === "Config reference"
 

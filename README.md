@@ -235,9 +235,11 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 ## NIM Integration
 
 Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
-in your data. The endpoint is configured via `NIM_ENDPOINT_URL`; if it is unset,
-classification is skipped and the pipeline falls back to default entity detection,
-logging an error and falling back rather than raising it to the user.
+in your data. `NIM_ENDPOINT_URL` defaults to `https://integrate.api.nvidia.com/v1`;
+override it to use a different endpoint.
+
+When using the CLI, set `NVIDIA_API_KEY` (and `NIM_ENDPOINT_URL` only if not
+using the default) so column classification can run.
 
 ### Local Endpoint
 
