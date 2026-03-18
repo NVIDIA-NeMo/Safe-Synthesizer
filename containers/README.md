@@ -84,7 +84,7 @@ Key flags:
 | `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
 | `CUDA_IMAGE_TYPE` | `runtime` | Base image variant (`runtime` or `devel`) |
 | `PYTHON_VERSION` | `3.11.13` | Python version installed via `uv python install` to `/opt/python` |
-| `UV_VERSION` | `0.9.14` | uv version (matches `pyproject.toml` lower bound) |
+| `UV_VERSION` | `0.10.11` | uv version for the deps stage (matches `.mise.toml` pin) |
 | `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`) |
 | `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc` (override for arm64: `90;90a;120;120a`) |
 

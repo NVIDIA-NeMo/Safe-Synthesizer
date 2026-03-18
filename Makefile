@@ -4,6 +4,7 @@
 ### CONFIGURATION ###
 
 SHELL := /bin/bash
+export PATH := $(HOME)/.local/bin:$(PATH)
 UNAME_S := $(shell uname -s)
 ARCH := $(shell uname -m)
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
@@ -30,6 +31,7 @@ PYTEST_CI_OPTS := --cov --cov-report json:coverage.json
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
 PYTEST_NO_XDIST_CMD := $(PYTEST_CMD) -n 0
 
+
 # Display platform info
 $(info local system architecture: $(PLATFORM)/$(ARCH))
 
@@ -45,10 +47,16 @@ help:
 
 ### BOOTSTRAP AND SETUP ###
 
+.PHONY: install-mise
+install-mise: ## Install mise
+	@command -v mise >/dev/null 2>&1 || { \
+		echo "mise not found -- installing..."; \
+		curl -sSf https://mise.run | sh; \
+	}
+
 .PHONY: setup
-setup: ## Install dev tools via mise
-	@command -v mise >/dev/null 2>&1 || { echo "mise not found. Install: curl -sSf https://mise.run | sh"; exit 1; }
-	mise install
+setup: install-mise ## Install dev tools via mise (installs mise itself if missing)
+	MISE_YES=1 mise install
 	@echo "tools installed successfully via mise"
 
 .PHONY: bootstrap-tools bootstrap-tools-ci
@@ -129,19 +137,18 @@ docs-deploy: ## Deploy the documentation site to GitHub Pages
 
 .PHONY: format
 format: ## Format the code (ruff format + lint fix + copyright headers)
-	ruff format .
-	ruff check --fix .
-	uv run --script tools/copyright_fixer.py .
+	bash tools/codestyle/format.sh
+	uv run --script tools/codestyle/copyright_fixer.py .
 
 .PHONY: format-check
 format-check: ## Check formatting, lint rules, and copyright headers (read-only)
-	ruff format --check .
-	ruff check .
-	uv run --script tools/copyright_fixer.py --check .
+	bash tools/codestyle/format.sh --check
+	bash tools/codestyle/ruff_check.sh
+	uv run --script tools/codestyle/copyright_fixer.py --check .
 
 .PHONY: typecheck
 typecheck: ## Run ty type checks
-	ty check
+	bash tools/codestyle/typecheck.sh
 
 .PHONY: lock-check
 lock-check: ## Check that uv.lock is up to date
@@ -250,14 +257,38 @@ CONTAINER_TEST_IMAGE ?= nss-test:latest
 CONTAINER_TEST_FILE := containers/Dockerfile.test_ci
 CONTAINER_TEST_PLATFORM := linux/amd64
 
+CONTAINER_TEST_IMAGE_SETUP ?= nss-test-setup:latest
+
 CONTAINER_BUILD_ARGS ?= --platform $(CONTAINER_TEST_PLATFORM) \
-	--tag $(CONTAINER_TEST_IMAGE) \
 	--progress=plain \
 	-f $(CONTAINER_TEST_FILE)
 
 .PHONY: container-build-test
-container-build-test: ## Build the container image for running CI tests locally
-	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) .
+container-build-test: ## Build the full container image for running CI tests locally
+	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) --tag $(CONTAINER_TEST_IMAGE) .
+
+.PHONY: container-build-test-setup
+container-build-test-setup: ## Build only the setup stage (tools, no Python deps)
+	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) --tag $(CONTAINER_TEST_IMAGE_SETUP) --target setup .
+
+.PHONY: test-tool-install
+test-tool-install: container-build-test-setup ## Verify mise-managed tools install correctly in a container
+	$(CONTAINER_CMD) run \
+		--rm \
+		--platform $(CONTAINER_TEST_PLATFORM) \
+		$(CONTAINER_TEST_IMAGE_SETUP) \
+		bash -c ' \
+			echo "=== Verifying installed tools ===" && \
+			mise --version && \
+			uv --version && \
+			ruff --version && \
+			ty --version && \
+			jq --version && \
+			yq --version && \
+			gh --version && \
+			osv-scanner --version && \
+			direnv --version && \
+			echo "=== All tools OK ==="'
 
 .PHONY: test-ci-container
 test-ci-container: container-build-test ## Run CI unit tests in a Linux container

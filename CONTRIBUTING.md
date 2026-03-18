@@ -30,7 +30,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Python 3.11–3.13 (project supports Python 3.11, 3.12, and 3.13; `.python-version` currently pins 3.11 for bootstrapping at the repo root. Python 3.14+ is not supported — see [Troubleshooting](docs/user-guide/troubleshooting.md#python-314-is-not-supported))
 - Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)).
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
 ### Setup
 
@@ -53,8 +53,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    cd Safe-Synthesizer
 
-   # Install mise (one-time) and dev tools (ruff, ty, yq, gh, etc.)
-   curl -sSf https://mise.run | sh
+   # Install dev tools via mise (installs mise itself if missing)
    make setup
 
    # Install Python dependencies (choose one)
@@ -64,7 +63,27 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
 
-3. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise and direnv trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
+
+  ```bash
+   # Append a direnv whitelist entry for this repo
+   mkdir -p ~/.config/direnv
+   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+   cat >> ~/.config/direnv/direnv.toml <<EOF
+   [whitelist]
+   prefix = ["$REPO"]
+   EOF
+  ```
+
+  ```bash
+   # Add to your shell profile (~/.bashrc, ~/.zshrc)
+   echo "export MISE_TRUSTED_CONFIG_PATHS=\"$(cd "$(git rev-parse --show-toplevel)" && pwd -P)\"" \
+     >> ~/.bashrc   # or ~/.zshrc
+  ```
+
+  Alternatively, set `MISE_YES=1` and `DIRENV_TRUST_ALLOW_ALL=1` to trust all configs globally (appropriate for dev machines and CI).
+
+4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
 
   ```bash
    echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
@@ -462,7 +481,7 @@ For detailed style guidelines covering Python, markdown, Dockerfiles, shell scri
 
 ### Formatting, Linting, and Type Checking
 
-Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.toml` (installed via `make setup`) and check all tracked files.
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
 
 ```bash
 make format   # auto-fix: ruff format + import sorting + copyright headers
