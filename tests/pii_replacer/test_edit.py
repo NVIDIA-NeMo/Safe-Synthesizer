@@ -13,7 +13,7 @@ import pandas as pd
 
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import Editor, ProgressLog
 
-# The entity types that use the bothify transformation in DEFAULT_PII_TRANSFORM_CONFIG
+# Entity types that support the bothify transformation (structure-preserving replacement).
 BOTHIFY_ENTITIES = [
     "unique_identifier",
     "medical_record_number",
@@ -50,7 +50,6 @@ def make_bothify_config(seed: int = 42, entity_type: str = "account_number") -> 
                 "rows": {
                     "update": [
                         {
-                            # Match the exact structure from DEFAULT_PII_TRANSFORM_CONFIG
                             "condition": f'column.entity == "{entity_type}" and not (this | isna)',
                             "value": BOTHIFY_VALUE_EXPRESSION,
                         }

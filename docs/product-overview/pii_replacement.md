@@ -36,6 +36,13 @@ After detection, PII can be handled in multiple ways:
 ## Supported Entity Types
 GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:
 
+!!! note "Default entity set"
+    The default configuration detects and replaces a focused subset of these entities: `first_name`,
+    `last_name`, `name`, `street_address`, `city`, `county`, `state`, `postcode`, `country`, `address`,
+    `phone_number`, `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect
+    additional entity types, add them to `replace_pii.globals.classify.entities` and
+    `replace_pii.globals.ner.ner_entities` in your configuration. Also add replacement steps to `replace_pii.steps`.
+
 ### Personal Information
 - `first_name` - Given names
 - `last_name` - Surnames and family names
