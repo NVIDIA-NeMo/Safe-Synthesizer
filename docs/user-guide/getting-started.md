@@ -88,7 +88,6 @@ Create a synthetic version of an input dataset in one step.
     ```yaml
     training:
       pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-      learning_rate: 0.0005
     generation:
       num_records: 1000
     ```

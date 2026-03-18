@@ -34,7 +34,7 @@ privacy:
 training:
   batch_size: 1
   gradient_accumulation_steps: 8
-  learning_rate: 0.0005
+  learning_rate: auto
   lora_alpha_over_r: 1.0
   lora_r: 32
   lora_target_modules:
@@ -44,7 +44,7 @@ training:
   - o_proj
   lr_scheduler: cosine
   num_input_records_to_sample: auto
-  pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  pretrained_model: HuggingFaceTB/SmolLM3-3B
   rope_scaling_factor: auto
   use_unsloth: auto
   validation_ratio: 0

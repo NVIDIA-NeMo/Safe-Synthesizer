@@ -7,6 +7,7 @@ set -eu
 DIRENV_VERSION="2.37.1"
 REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
 source "${REPO_ROOT}/tools/binaries/defs.sh"
+source "${REPO_ROOT}/tools/binaries/common_functions.sh"
 
 # Parse arguments
 CONFIGURE_SHELL=false
@@ -34,9 +35,20 @@ for arg in "$@"; do
 done
 
 install_direnv() {
+    print_tool_manager_transition_warning
+    needs_install=true
     if command -v direnv >/dev/null; then
-        echo "direnv is already installed at $(command -v direnv)"
-    else
+        current_direnv_version="$(direnv version | awk '{print $NF}')"
+        if version_matches_exact "$current_direnv_version" "$DIRENV_VERSION"; then
+            echo "direnv ${DIRENV_VERSION} is already installed at $(command -v direnv)"
+            needs_install=false
+        else
+            echo "found direnv ${current_direnv_version} at $(command -v direnv), expected ${DIRENV_VERSION}"
+            echo "installing required direnv version ${DIRENV_VERSION}..."
+        fi
+    fi
+
+    if [ "$needs_install" = true ]; then
         echo "Installing direnv..."
         if [ "$OS" == "darwin" ]; then
             if command -v brew >/dev/null; then
@@ -67,6 +79,12 @@ install_direnv() {
             echo "Error: Unsupported OS: $OS"
             exit 1
         fi
+    fi
+
+    installed_direnv_version="$(direnv version | awk '{print $NF}')"
+    if ! version_matches_exact "$installed_direnv_version" "$DIRENV_VERSION"; then
+        echo "Error: direnv version ${installed_direnv_version} does not match required version ${DIRENV_VERSION}"
+        exit 1
     fi
 
     echo ""

@@ -246,6 +246,11 @@ See [Configuration Reference](configuration.md) for the full list.
 - `training.use_unsloth` -- resolves to `true` unless DP is enabled.
   DP uses [Opacus](https://opacus.ai/) per-sample gradients (`GradSampleModule`), which require standard model layers and disable gradient checkpointing -- Unsloth's
   custom layers and checkpointing are incompatible
+- `training.learning_rate` -- model-specific default from `ModelMetadata`:
+  Mistral uses 0.0001, all other supported model families use 0.0005
+- `data.max_sequences_per_example` -- resolves to `1` when differential
+  privacy is enabled (required to limit per-example gradient contribution),
+  `10` otherwise for best performance
 - `privacy.delta` -- computed from record count
 
 !!! warning "Unsloth and Mistral compatibility"

@@ -10,6 +10,10 @@ general purpose tools should be configured here.
 The `bootstrap_tools.sh` file reads tool definitions from `tools.yaml` and installs them.
 From the root of the repo, run `make bootstrap-tools` to install all tools.
 
+Note: we will likely adopt Mise en place as the long-term tool manager and
+gradually replace these bootstrap scripts. Until then, this directory remains the
+source of truth for local tool installation.
+
 ## Quick Start
 
 ```bash
@@ -90,26 +94,32 @@ custom_scripts:
     script: install_my-tool.sh
 ```
 
+Custom scripts should enforce pinned versions explicitly and fail with a clear error
+when no compatible version is available. Shared version helpers are available in
+`common_functions.sh` (`version_at_least`, `version_less_than`, `version_in_range`,
+`version_matches_exact`).
+
 ## Guidelines
 
 - Pin the version explicitly in `tools.yaml`
 - Ensure your tool works on both macOS (arm64) and Linux (amd64)
 - Tools install to `$HOME/.local/bin` by default
 - For Homebrew-only tools on macOS, use the `darwin_brew` field
+- For `custom_scripts`, verify the installed version after install and exit non-zero on mismatch
 
 ## Files
 
-| File | Purpose |
+|File|Purpose|
 |------|---------|
-| `tools.yaml` | Tool definitions (versions, URLs, options) |
-| `bootstrap_tools.sh` | Main installer script |
-| `install_yq.sh` | Bootstrap yq (needed to parse YAML) |
-| `install_direnv.sh` | Custom script for direnv (shell hooks) |
-| `install_uv.sh` | Custom script for uv (version from pyproject.toml) |
-| `install_gnutar.sh` | macOS-only gnu-tar install |
-| `defs.sh` | Common environment variables (OS, ARCH) |
-| `common_functions.sh` | Shared shell functions |
-| `test_tool_install.sh` | Docker-based installation test |
+|`tools.yaml`|Tool definitions (versions, URLs, options)|
+|`bootstrap_tools.sh`|Main installer script|
+|`install_yq.sh`|Bootstrap yq (needed to parse YAML)|
+|`install_direnv.sh`|Custom script for direnv (shell hooks)|
+|`install_uv.sh`|Custom script for uv (version from pyproject.toml)|
+|`install_gnutar.sh`|macOS-only gnu-tar install|
+|`defs.sh`|Common environment variables (OS, ARCH)|
+|`common_functions.sh`|Shared shell functions|
+|`test_tool_install.sh`|Docker-based installation test|
 
 ## Testing
 
@@ -120,3 +130,18 @@ bash test_tool_install.sh
 ```
 
 This runs the bootstrap in a Docker container to verify Linux compatibility.
+
+Recommended local checks before pushing changes:
+
+```bash
+# Syntax checks for shared/bootstrap custom scripts
+bash -n tools/binaries/common_functions.sh \
+  tools/binaries/install_uv.sh \
+  tools/binaries/install_direnv.sh
+
+# Bootstrap-only tools (yq, ruff, ty, uv)
+make bootstrap-tools-ci
+
+# Full tool bootstrap (includes direnv custom script)
+make bootstrap-tools
+```
