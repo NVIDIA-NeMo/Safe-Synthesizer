@@ -50,7 +50,7 @@ The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two b
 
 | Backend | Description |
 |---------|-------------|
-| **HuggingFace** | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus |
+| **HuggingFace** | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via [Opacus](https://opacus.ai/) |
 | **Unsloth** | Optimized training for faster fine-tuning |
 
 Three models have been extensively tested:

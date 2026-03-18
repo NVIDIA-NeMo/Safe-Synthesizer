@@ -316,7 +316,7 @@ Path: `src/nemo_safe_synthesizer/training/`
 
 | Backend | Description |
 |---------|-------------|
-| **HuggingFaceBackend** | Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via Opacus |
+| **HuggingFaceBackend** | Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via [Opacus](https://opacus.ai/) |
 | **UnslothBackend** | Optimized training with Unsloth library |
 
 ### 4. Generation Backend

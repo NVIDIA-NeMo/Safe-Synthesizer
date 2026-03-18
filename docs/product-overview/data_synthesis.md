@@ -31,7 +31,7 @@ Two backends are available:
 | Backend | Description | When to use |
 |---------|-------------|-------------|
 | Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
-| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via Opacus | Required for differential privacy; also the fallback when Unsloth is unavailable |
+| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
 
 Three models have been extensively tested:
 

@@ -244,8 +244,7 @@ See [Configuration Reference](configuration.md) for the full list.
   for details and caveats
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
 - `training.use_unsloth` -- resolves to `true` unless DP is enabled.
-  DP uses Opacus per-sample gradients (`GradSampleModule`), which require
-  standard model layers and disable gradient checkpointing -- Unsloth's
+  DP uses [Opacus](https://opacus.ai/) per-sample gradients (`GradSampleModule`), which require standard model layers and disable gradient checkpointing -- Unsloth's
   custom layers and checkpointing are incompatible
 - `privacy.delta` -- computed from record count
 

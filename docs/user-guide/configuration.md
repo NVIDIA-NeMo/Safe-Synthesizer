@@ -162,7 +162,7 @@ for the full schema.
 
 Differential privacy (DP) provides a formal bound on what an adversary can
 learn about any individual record. Safe Synthesizer implements DP-SGD
-(Differentially Private Stochastic Gradient Descent) via Opacus.
+(Differentially Private Stochastic Gradient Descent) via [Opacus](https://opacus.ai/).
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|

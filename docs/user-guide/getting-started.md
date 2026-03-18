@@ -164,7 +164,7 @@ available:
 | Backend | Description |
 |---------|-------------|
 | Unsloth | Optimized training for faster fine-tuning (auto-selected by default) |
-| HuggingFace | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus |
+| HuggingFace | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via [Opacus](https://opacus.ai/) |
 
 If you enable differential privacy, the pipeline automatically switches to use the HuggingFace backend.
 
