@@ -160,6 +160,8 @@ and prepares it for training:
   model's context window raise a [`GenerationError`][nemo_safe_synthesizer.errors.GenerationError] rather than being silently
   truncated
 
+Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy).
+
 ### 2. PII Replacement
 
 PII replacement is on by default as a pre-processing step. The PII replacer detects

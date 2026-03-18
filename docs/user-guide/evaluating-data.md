@@ -16,10 +16,15 @@ There is always an inherent trade off between privacy and quality. A high level 
 
 ---
 
+## Row count
+
+Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy). If you have fewer, both quality and privacy are likely to suffer considerably.
+
+---
+
 ## Differential Privacy
 
-Differentially private (DP) training has strict requirements. Violating them produces errors that may
-not immediately point to the root cause.
+Differentially private (DP) training has strict requirements. Violating them produces errors that may not immediately point to the root cause.
 
 ### Requirements
 

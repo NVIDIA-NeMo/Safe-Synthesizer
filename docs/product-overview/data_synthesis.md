@@ -52,6 +52,8 @@ NeMo Safe Synthesizer supports diverse tabular data:
 - Text: Free-form text fields
 - Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental)
 
+Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy).
+
 ### Differential Privacy
 
 A high level of privacy protection is achieved simply through the process of generating synthetic data, and is often a sufficient balance between privacy and utility. For use cases that require maximum privacy, you can fine-tune with differential privacy.
