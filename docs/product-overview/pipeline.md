@@ -11,7 +11,7 @@ Safe Synthesizer employs a novel approach to synthetic data generation:
 
 1. Tabular Fine-Tuning: fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties
 2. Generation: uses the fine-tuned model to generate new synthetic records that maintain data utility
-3. Privacy Protection: optionally applies differential privacy during training for mathematical privacy guarantees and PII replacement as a pre-processing step
+3. Privacy Protection: applies differential privacy during training for mathematical privacy guarantees (off by default) and PII replacement as a pre-processing step (on by default)
 
 ## Pipeline Stages
 
@@ -36,7 +36,7 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-On by default, the PII replacer detects personally identifiable information (PII) using NER models and regex patterns, then replaces detected entities with synthetic but realistic values.  This ensures the model never has no chance to learn the most sensitive information like names and addresses. Disable with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
+On by default, the PII replacer detects personally identifiable information (PII) using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model never has a chance to learn the most sensitive information like names and addresses. Disable with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
 
 See [PII Replacement](pii_replacement.md) for detailed PII Replacement documentation.
 
@@ -76,7 +76,7 @@ Safe Synthesizer supports diverse tabular data:
 - Numeric: continuous and discrete numerical values
 - Categorical: text labels and categories
 - Text: free-form text fields
-- Temporal: event sequences and time series
+- Temporal: event sequences and time series (Note: Temporal dataset support is currently experimental)
 
 ## Running the Pipeline
 
@@ -115,7 +115,7 @@ results = synthesizer.results
 
 ### Resource Planning
 
-- NeMo Safe Synthesizer requires an NVIDIA GPU (A100 or better) for training and generation
+- NeMo Safe Synthesizer requires an NVIDIA GPU (A100 or larger) for training and generation
 - Larger datasets and models require more GPU memory (80GB+ VRAM recommended)
 - Training time scales with data size and model complexity
 - Plan for 15-120 minutes for typical jobs
@@ -123,6 +123,6 @@ results = synthesizer.results
 
 ### Troubleshooting
 
-If results are poor, read [Synthetic Data Quality](../user-guide/evaluating-data.md) to learn recommendations for adjusting data and configuration settings.
+If results are poor, read [Synthetic Data Quality](../user-guide/evaluating-data.md) to see recommendations for adjusting data and configuration settings.
 
-If your job fails to run, read [Program Runtime](../user-guide/troubleshooting.md) to learn how to address common errors.
+If your job fails to run, read [Program Runtime](../user-guide/troubleshooting.md) to see how to address common errors.

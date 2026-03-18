@@ -31,7 +31,7 @@ The asymmetry matters: YAML and environment variables are *configuration only* -
 
 All configuration surfaces share the same underlying [Pydantic](https://docs.pydantic.dev/) parameter models defined in `src/nemo_safe_synthesizer/config/`. The `__` syntax used in CLI flags (e.g. `--privacy__dp_enabled true`) mirrors the nested structure of those models: `privacy` is the config section, `dp_enabled` is the field. Setting a parameter via YAML, CLI flag, or SDK call resolves to the same field in the same model.
 
-When multiple surfaces are used together, later layers override earlier ones. Precedence depends on how you run the pipeline:
+When multiple surfaces are used together, later layers override earlier ones. Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
 - CLI: `CLI flags` > `dataset registry` > `YAML config file` > `model defaults`
 - SDK: `Python SDK builder calls` > `YAML config file` > `model defaults`
@@ -480,16 +480,16 @@ Three models have been extensively tested:
 | Family | HuggingFace ID |
 |--------|----------------|
 | SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
-| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 
 We recommend you start with the default, `HuggingFaceTB/SmolLM3-3B`. However, depending on your use case, you may find a different model to be a better fit.
 
 Based on testing, some trade-offs identified compared to SmolLM3 on average:
 - TinyLlama runs ~17% faster, while Mistral takes ~2x as long to run.
-- TinyLlama has ~7% decrease in valid record fraction, while Mistral has ~6% increase.
-- TinyLlama has ~3% higher job completion rate, and Mistral has ~5% higher.
-- TinyLlama has ~0.1 point decrease in Data Privacy Score, while Mistral is comparable to SmolLM3.
+- Mistral has ~6% increase in valid record fraction, while TinyLlama has ~7% decrease.
+- Mistral has ~5% higher job completion rate and TinyLlama has ~3% higher.
+- Mistral is comparable to SmolLM3 in Data Privacy Score, while TinyLlama has ~0.1 point decrease.
 - All 3 have comparable Synthetic Quality Scores.
 
 === "CLI"
@@ -774,7 +774,7 @@ with interactive visualizations. Scores are from 0-10, and higher is better. Two
 
 - SQS (Synthetic Quality Score) -- composite quality score with five subscores:
     - Column Correlation Stability -- measures the correlation across every combination of two numeric and categorical columns
-    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis
+    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis (PCA)
     - Column Distribution Stability -- measures the distribution of each numeric and categorical column
     - Text Structure Similarity -- measures the sentence, word, and character counts for text columns
     - Text Semantic Similarity -- measures whether the semantic meaning in text columns held after synthesizing

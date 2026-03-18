@@ -21,7 +21,7 @@ SQS is a measure of how well the synthetic data matches the training data. It is
 SQS comprises five metrics:
 
 - Column Correlation Stability: analyzes correlations across every pair of columns
-- Deep Structure Stability: uses Principal Component Analysis to reduce dimensionality when comparing the original and synthetic data
+- Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the original and synthetic data
 - Column Distribution Stability: compares the distribution for each column in the original data to its counterpart in the synthetic data
 - Text Structure Similarity: compares sentence, word, and character counts across the two datasets
 - Text Semantic Similarity: determines whether the semantic meaning of the text is preserved after synthesis

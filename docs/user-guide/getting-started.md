@@ -16,7 +16,7 @@ does at each stage.
 
 - Python 3.11+ (dev tooling currently pins 3.11 via `.python-version` in the repo root)
 - CUDA runtime 12.8
-- NVIDIA GPU (A100 or better) for training and generation
+- NVIDIA GPU (A100 or larger) for training and generation
 
 ### Install the Package
 
@@ -35,7 +35,7 @@ does at each stage.
     !!! warning "Development use only"
         The CPU install does not support training or generation. Use it to
         validate configuration, explore the CLI, or import config classes in
-        code. An A100 or better GPU is required to run the full pipeline.
+        code. An A100 or larger GPU is required to run the full pipeline.
 
 === "Bare package for config definitions"
 
@@ -189,7 +189,7 @@ with interactive visualizations. Two composite scores are reported:
 
 - SQS (Synthetic Quality Score) -- composite quality score with five subscores:
     - Column Correlation Stability -- measures the correlation across every combination of two numeric and categorical columns
-    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis
+    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis (PCA)
     - Column Distribution Stability -- measures the distribution of each numeric and categorical column
     - Text Structure Similarity -- measures the sentence, word, and character counts for text columns
     - Text Semantic Similarity -- measures whether the semantic meaning in text columns held after synthesizing

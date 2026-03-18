@@ -129,7 +129,7 @@ Several evaluation metrics have minimum data requirements:
 | Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
 | Text semantic similarity | 200 records | Skipped; score marked UNAVAILABLE |
 | Attribute Inference Protection | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
-| Deep Structure Stability | 2x2 matrix | Skipped with warning; score marked UNAVAILABLE |
+| Deep Structure Stability | 2 columns, 2 rows | Skipped with warning; score marked UNAVAILABLE |
 
 ### UNAVAILABLE Metrics
 

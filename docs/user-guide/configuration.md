@@ -11,7 +11,7 @@ environment variables, see [Environment Variables](environment.md).
 
 ## Configuration Precedence
 
-Precedence depends on how you run the pipeline. Settings are resolved in this order, from highest to lowest priority:
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
 - CLI: `CLI flags` > `dataset registry overrides` > `YAML config file` > `model defaults`
 - SDK: `SDK builder calls` > `YAML config file` > `model defaults`

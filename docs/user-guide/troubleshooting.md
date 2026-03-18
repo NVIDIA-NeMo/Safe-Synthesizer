@@ -133,13 +133,12 @@ because the table has too many columns for the model's context window.
 1. Reduce record size -- shorten text fields, drop unnecessary columns,
    or simplify the schema.
 2. When using `data.group_training_examples_by`, all records in the same group must fit
-   in context together, making the limit tighter. Consider reducing
-   `data.max_sequences_per_example` or reducing the number of records per group.
+   in context together, making the limit tighter. Consider reducing the number of records per group.
 3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to 
    extend the context window.
    When set to `"auto"`, it is estimated from dataset token counts using
    heuristics (4 chars per token for text, 1 token per digit) -- this can
-   underestimate for complex or multilingual data. `training.rope_scaling_factor` is not applicable when using `HuggingFaceTB/SmolLM3-3B` (default) or `mistralai/Mistral-7B-Instruct-v0.3`.
+   underestimate for complex or multilingual data. `training.rope_scaling_factor` is not applicable when using `HuggingFaceTB/SmolLM3-3B` (default model) or `mistralai/Mistral-7B-Instruct-v0.3`.
 
 !!! note "Error type clarification"
     These errors are typed as `GenerationError` in the codebase even though
@@ -187,8 +186,7 @@ Generation stopped prematurely because the average fraction of invalid records w
 ```
 
 : Too many invalid records across `generation.patience` consecutive batches.
-  Consider lowering `generation.invalid_fraction_threshold`, retraining with
-  more records, and/or increasing `training.number_of_input_records_to_sample`.
+  Consider retraining with more records, adjusting `training.number_of_input_records_to_sample`, or setting `use_structured_generation=True`.
 
 For context-length errors during data assembly (`"The number of tokens in an
 example exceeds the available context length"`), see

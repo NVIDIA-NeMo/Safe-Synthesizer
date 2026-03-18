@@ -51,6 +51,8 @@ are cached, and which network endpoints are used.
 
 ## Precedence
 
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last).
+
 Synthesis parameters:
 
 - CLI: CLI flags > dataset registry overrides > YAML config file > defaults

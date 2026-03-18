@@ -229,7 +229,7 @@ flowchart TB
     dp_p --> dp_check
 ```
 
-Configuration precedence (highest to lowest) depends on entry point:
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
 - CLI: CLI flags > dataset registry overrides > YAML config file > defaults
 - SDK: Python SDK builder calls > YAML config file > defaults

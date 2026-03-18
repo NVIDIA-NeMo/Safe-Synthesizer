@@ -50,7 +50,7 @@ NeMo Safe Synthesizer supports diverse tabular data:
 - Numeric: Continuous and discrete numerical values
 - Categorical: Text labels and categories
 - Text: Free-form text fields
-- Temporal: Event sequences and time series
+- Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental)
 
 ### Differential Privacy
 
