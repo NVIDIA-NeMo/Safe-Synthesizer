@@ -32,7 +32,7 @@ make test-ci-container     # CI tests in a Linux container (Docker/Podman)
 Run a single test:
 
 ```bash
-pytest tests/path/test_file.py::test_name -vvs -n0
+uv run --frozen pytest tests/path/test_file.py::test_name -vvs -n0
 ```
 
 Test runner: `uv run --frozen pytest -n auto --dist loadscope -vv`

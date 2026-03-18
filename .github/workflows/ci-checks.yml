@@ -178,9 +178,9 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "changes:   ${{ needs.changes.result }}"
-          echo "format:    ${{ needs.format.result }}"
-          echo "typecheck: ${{ needs.typecheck.result }}"
+          echo "changes:    ${{ needs.changes.result }}"
+          echo "format:     ${{ needs.format.result }}"
+          echo "typecheck:  ${{ needs.typecheck.result }}"
           echo "unit-test:  ${{ needs.unit-test.result }}"
           echo "smoke-test: ${{ needs.smoke-test.result }}"
 

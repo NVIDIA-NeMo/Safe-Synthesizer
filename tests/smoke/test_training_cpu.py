@@ -122,7 +122,7 @@ def test_dp_training_one_step(tiny_model, stub_tokenizer, tiny_training_dataset_
     assert len(trainer.state.log_history) > 0
 
 
-def test_training_example_assembler(iris_df, stub_tokenizer, fixture_stub_tokenizer_path, tmp_path):
+def test_training_example_assembler(iris_df, stub_tokenizer, tmp_path):
     """Exercises: NSS data preparation pipeline (TrainingExampleAssembler)."""
     from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 

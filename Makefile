@@ -185,7 +185,8 @@ test-smoke: ## Run CPU smoke tests (~few min, no GPU required)
 SMOKE_DIR := tests/smoke
 .PHONY: test-smoke-gpu
 test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
-# -n 0 disables xdist. Groups are split for GPU memory isolation.
+# Uses PYTEST_NO_XDIST_CMD (-n 0) because CUDA device-side asserts poison
+# xdist workers. Groups are split for GPU memory isolation.
 #
 # When adding a new GPU smoke test file:
 #   - Train-only (no vLLM): add pytest.mark.requires_gpu -> auto-discovered below
@@ -194,23 +195,21 @@ test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
 #   - Downloads from Hub: also add pytest.mark.smollm2 (or similar) -> auto-discovered below
 #
 # 1) Train-only tests share a process (no vLLM, safe to batch).
-	$(PYTEST_CMD) $(SMOKE_DIR)/ -n 0 -m "requires_gpu and not vllm and not smollm2 and not unsloth"
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and not vllm and not smollm2 and not unsloth"
 # 2) Each vLLM test file gets its own process -- vLLM pre-allocates all GPU
 #    memory and never releases it within a process.
-	$(PYTEST_CMD) $(SMOKE_DIR)/test_nss_generation_gpu.py -n 0
-	$(PYTEST_CMD) $(SMOKE_DIR)/test_nss_resume_gpu.py -n 0
-	$(PYTEST_CMD) $(SMOKE_DIR)/test_nss_structured_gen_gpu.py -n 0
-	$(PYTEST_CMD) $(SMOKE_DIR)/test_nss_timeseries_gpu.py -n 0
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_generation_gpu.py
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_resume_gpu.py
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_structured_gen_gpu.py
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_timeseries_gpu.py
 # 3) SmolLM2 (Hub download + vLLM) and Unsloth (patches transformers) are marker-isolated.
-	$(PYTEST_CMD) $(SMOKE_DIR)/ -n 0 -m "requires_gpu and smollm2"
-	$(PYTEST_CMD) $(SMOKE_DIR)/ -n 0 -m "requires_gpu and unsloth"
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and smollm2"
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and unsloth"
 
 
 E2E_TEST_FILE := $(NSS_ROOT_PATH)/tests/e2e/test_safe_synthesizer.py
 .PHONY: test-gpu-integration
-test-gpu-integration: ## Run GPU integration tests (smoke GPU + e2e)
-# -n 0 disables xdist: CUDA device-side asserts poison the worker, cascading to all subsequent tests.
-# Separate invocations: (1) local tiny-model tests, (2) SmolLM2 Hub test, (3) Unsloth (process-isolated from DP).
+test-gpu-integration: ## Run GPU e2e tests (default + DP configs)
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(E2E_TEST_FILE) -k default && \
 	$(PYTEST_CMD) $(E2E_TEST_FILE) -k dp
