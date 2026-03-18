@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/pii_replacer/ner/report/results/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/developer-guide/docker/">
       
       
-        <link rel="prev" href="../metadata/">
+        <link rel="prev" href="../architecture/">
       
       
-        <link rel="next" href="../../utils/">
+        <link rel="next" href="../../reference/nemo_safe_synthesizer/artifacts/analyzers/field_features/">
       
       
         
       
       
-      <link rel="icon" href="../../../../../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
-        <title>results - NeMo Safe Synthesizer</title>
+        <title>Docker - NeMo Safe Synthesizer</title>
       
     
     
-      <link rel="stylesheet" href="../../../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,13 +53,13 @@
       
     
     
-      <link rel="stylesheet" href="../../../../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../../../../../css/style.css">
+      <link rel="stylesheet" href="../../css/style.css">
     
-      <link rel="stylesheet" href="../../../../../../css/mkdocstrings.css">
+      <link rel="stylesheet" href="../../css/mkdocstrings.css">
     
-    <script>__md_scope=new URL("../../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results" class="md-skip">
+        <a href="#docker-build-and-customize" class="md-skip">
           Skip to content
         </a>
       
@@ -98,7 +98,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../../../.." title="NeMo Safe Synthesizer" class="md-header__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
+    <a href="../.." title="NeMo Safe Synthesizer" class="md-header__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -118,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              results
+              Docker
             
           </span>
         </div>
@@ -231,7 +231,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../../../.." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -252,7 +252,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../../product-overview/pipeline/" class="md-tabs__link">
+        <a href="../../product-overview/pipeline/" class="md-tabs__link">
           
   
   
@@ -274,7 +274,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../../tutorials/" class="md-tabs__link">
+        <a href="../../tutorials/" class="md-tabs__link">
           
   
   
@@ -296,7 +296,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../../user-guide/getting-started/" class="md-tabs__link">
+        <a href="../../user-guide/getting-started/" class="md-tabs__link">
           
   
   
@@ -320,7 +320,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../../../../../developer-guide/architecture/" class="md-tabs__link">
+        <a href="../architecture/" class="md-tabs__link">
           
   
   
@@ -342,7 +342,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../../blog/" class="md-tabs__link">
+        <a href="../../blog/" class="md-tabs__link">
           
   
   
@@ -378,7 +378,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../../../.." title="NeMo Safe Synthesizer" class="md-nav__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
+    <a href="../.." title="NeMo Safe Synthesizer" class="md-nav__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -408,7 +408,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -499,7 +499,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../product-overview/pipeline/" class="md-nav__link">
+      <a href="../../product-overview/pipeline/" class="md-nav__link">
         
   
   
@@ -527,7 +527,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../product-overview/data_synthesis/" class="md-nav__link">
+      <a href="../../product-overview/data_synthesis/" class="md-nav__link">
         
   
   
@@ -555,7 +555,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../product-overview/pii_replacement/" class="md-nav__link">
+      <a href="../../product-overview/pii_replacement/" class="md-nav__link">
         
   
   
@@ -583,7 +583,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../product-overview/evaluation/" class="md-nav__link">
+      <a href="../../product-overview/evaluation/" class="md-nav__link">
         
   
   
@@ -643,7 +643,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../../../tutorials/" class="md-nav__link ">
+            <a href="../../tutorials/" class="md-nav__link ">
               
   
   
@@ -755,7 +755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/getting-started/" class="md-nav__link">
+      <a href="../../user-guide/getting-started/" class="md-nav__link">
         
   
   
@@ -783,7 +783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/running/" class="md-nav__link">
+      <a href="../../user-guide/running/" class="md-nav__link">
         
   
   
@@ -811,7 +811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/docker/" class="md-nav__link">
+      <a href="../../user-guide/docker/" class="md-nav__link">
         
   
   
@@ -899,7 +899,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/evaluating-data/" class="md-nav__link">
+      <a href="../../user-guide/evaluating-data/" class="md-nav__link">
         
   
   
@@ -927,7 +927,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/troubleshooting/" class="md-nav__link">
+      <a href="../../user-guide/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1023,7 +1023,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/configuration/" class="md-nav__link">
+      <a href="../../user-guide/configuration/" class="md-nav__link">
         
   
   
@@ -1051,7 +1051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../user-guide/environment/" class="md-nav__link">
+      <a href="../../user-guide/environment/" class="md-nav__link">
         
   
   
@@ -1159,7 +1159,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../developer-guide/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -1184,10 +1184,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../../../developer-guide/docker/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1203,6 +1230,280 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#dockerfile-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dockerfile Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entrypoint-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entrypoint Script
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#oci-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OCI Labels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build Arguments
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-build-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Build Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Build Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#uv-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        uv Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nvidia-runtime-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NVIDIA Runtime Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#python-toolchain-portability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python Toolchain Portability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intermediate-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intermediate Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apt-cache-mounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        APT Cache Mounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-runtime-not-devel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why runtime, Not devel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#makefile-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Makefile Targets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing the Image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image Size
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relationship-to-dockerfiletest_ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relationship to Dockerfile.test_ci
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-architecture-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Architecture Support
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-Architecture Support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-for-arm64-blackwell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building for arm64 (Blackwell)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-platform-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-platform manifest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-buildx-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        docker buildx requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cuda-compute-capabilities-cuda_arch_flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CUDA compute capabilities (CUDA_ARCH_FLAGS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#makefile-targets_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Makefile targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1212,8 +1513,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1233,11 +1532,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_3" >
         
           
           <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
@@ -1258,7 +1559,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1273,10 +1574,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1327,11 +1626,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3_1" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_3_1" >
         
           
           <label class="md-nav__link" for="__nav_5_3_1" id="__nav_5_3_1_label" tabindex="0">
@@ -1352,7 +1653,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_3_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_3_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_3_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1488,7 +1789,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../artifacts/analyzers/field_features/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/artifacts/analyzers/field_features/" class="md-nav__link">
         
   
   
@@ -1582,7 +1883,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../artifacts/base/fields/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/artifacts/base/fields/" class="md-nav__link">
         
   
   
@@ -1700,7 +2001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/artifact_structure/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/artifact_structure/" class="md-nav__link">
         
   
   
@@ -1728,7 +2029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/artifacts/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/artifacts/" class="md-nav__link">
         
   
   
@@ -1756,7 +2057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/cli/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/cli/" class="md-nav__link">
         
   
   
@@ -1784,7 +2085,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/config/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/config/" class="md-nav__link">
         
   
   
@@ -1812,7 +2113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/datasets/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/datasets/" class="md-nav__link">
         
   
   
@@ -1840,7 +2141,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/run/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/run/" class="md-nav__link">
         
   
   
@@ -1868,7 +2169,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/settings/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/settings/" class="md-nav__link">
         
   
   
@@ -1896,7 +2197,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/utils/" class="md-nav__link">
         
   
   
@@ -1924,7 +2225,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../cli/wandb_setup/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/wandb_setup/" class="md-nav__link">
         
   
   
@@ -2044,7 +2345,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/autoconfig/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/autoconfig/" class="md-nav__link">
         
   
   
@@ -2072,7 +2373,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/base/" class="md-nav__link">
         
   
   
@@ -2100,7 +2401,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/data/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/data/" class="md-nav__link">
         
   
   
@@ -2128,7 +2429,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/differential_privacy/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/differential_privacy/" class="md-nav__link">
         
   
   
@@ -2156,7 +2457,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/evaluate/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/evaluate/" class="md-nav__link">
         
   
   
@@ -2184,7 +2485,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/external_results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/external_results/" class="md-nav__link">
         
   
   
@@ -2212,7 +2513,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/generate/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/generate/" class="md-nav__link">
         
   
   
@@ -2240,7 +2541,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/internal_results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/internal_results/" class="md-nav__link">
         
   
   
@@ -2268,7 +2569,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/job/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/job/" class="md-nav__link">
         
   
   
@@ -2296,7 +2597,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/parameters/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/parameters/" class="md-nav__link">
         
   
   
@@ -2324,7 +2625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/replace_pii/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/replace_pii/" class="md-nav__link">
         
   
   
@@ -2352,7 +2653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/time_series/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/time_series/" class="md-nav__link">
         
   
   
@@ -2380,7 +2681,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/training/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/training/" class="md-nav__link">
         
   
   
@@ -2408,7 +2709,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../config/types/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/types/" class="md-nav__link">
         
   
   
@@ -2508,7 +2809,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../configurator/parameter/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/parameter/" class="md-nav__link">
         
   
   
@@ -2536,7 +2837,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../configurator/parameters/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/parameters/" class="md-nav__link">
         
   
   
@@ -2564,7 +2865,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../configurator/pydantic_click_options/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/pydantic_click_options/" class="md-nav__link">
         
   
   
@@ -2592,7 +2893,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../configurator/validators/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/validators/" class="md-nav__link">
         
   
   
@@ -2760,7 +3061,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/actions/data_actions/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/data_actions/" class="md-nav__link">
         
   
   
@@ -2788,7 +3089,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/actions/dates/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/dates/" class="md-nav__link">
         
   
   
@@ -2816,7 +3117,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/actions/distributions/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/distributions/" class="md-nav__link">
         
   
   
@@ -2844,7 +3145,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/actions/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/utils/" class="md-nav__link">
         
   
   
@@ -2880,7 +3181,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/assembler/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/assembler/" class="md-nav__link">
         
   
   
@@ -2908,7 +3209,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/dataset/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/dataset/" class="md-nav__link">
         
   
   
@@ -2936,7 +3237,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/record_utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/record_utils/" class="md-nav__link">
         
   
   
@@ -3028,7 +3329,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/records/base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/base/" class="md-nav__link">
         
   
   
@@ -3056,7 +3357,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/records/fragment/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/fragment/" class="md-nav__link">
         
   
   
@@ -3084,7 +3385,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/records/json_record/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/json_record/" class="md-nav__link">
         
   
   
@@ -3112,7 +3413,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/records/value_path/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/value_path/" class="md-nav__link">
         
   
   
@@ -3148,7 +3449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../data_processing/stats/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/stats/" class="md-nav__link">
         
   
   
@@ -3184,7 +3485,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../defaults/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/defaults/" class="md-nav__link">
         
   
   
@@ -3212,7 +3513,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../errors/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/errors/" class="md-nav__link">
         
   
   
@@ -3394,7 +3695,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/attribute_inference_protection/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/attribute_inference_protection/" class="md-nav__link">
         
   
   
@@ -3422,7 +3723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/column_distribution/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/column_distribution/" class="md-nav__link">
         
   
   
@@ -3450,7 +3751,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/component/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/component/" class="md-nav__link">
         
   
   
@@ -3478,7 +3779,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/composite_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/composite_score/" class="md-nav__link">
         
   
   
@@ -3506,7 +3807,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/correlation/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/correlation/" class="md-nav__link">
         
   
   
@@ -3534,7 +3835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/data_privacy_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/data_privacy_score/" class="md-nav__link">
         
   
   
@@ -3562,7 +3863,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/dataset_statistics/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/dataset_statistics/" class="md-nav__link">
         
   
   
@@ -3590,7 +3891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/deep_structure/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/deep_structure/" class="md-nav__link">
         
   
   
@@ -3618,7 +3919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/membership_inference_protection/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/membership_inference_protection/" class="md-nav__link">
         
   
   
@@ -3646,7 +3947,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/multi_modal_figures/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/multi_modal_figures/" class="md-nav__link">
         
   
   
@@ -3674,7 +3975,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/pii_replay/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/pii_replay/" class="md-nav__link">
         
   
   
@@ -3702,7 +4003,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/sqs_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/sqs_score/" class="md-nav__link">
         
   
   
@@ -3730,7 +4031,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/text_semantic_similarity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/text_semantic_similarity/" class="md-nav__link">
         
   
   
@@ -3758,7 +4059,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/components/text_structure_similarity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/text_structure_similarity/" class="md-nav__link">
         
   
   
@@ -3794,7 +4095,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/constants/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/constants/" class="md-nav__link">
         
   
   
@@ -3888,7 +4189,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/data_model/entity_metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/entity_metadata/" class="md-nav__link">
         
   
   
@@ -3916,7 +4217,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_dataset/" class="md-nav__link">
         
   
   
@@ -3944,7 +4245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/data_model/evaluation_field/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_field/" class="md-nav__link">
         
   
   
@@ -3972,7 +4273,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/data_model/evaluation_report/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_report/" class="md-nav__link">
         
   
   
@@ -4000,7 +4301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/data_model/evaluation_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_score/" class="md-nav__link">
         
   
   
@@ -4036,7 +4337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/evaluator/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/evaluator/" class="md-nav__link">
         
   
   
@@ -4064,7 +4365,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/render/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/render/" class="md-nav__link">
         
   
   
@@ -4208,7 +4509,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/reports/multimodal/multimodal_report/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/reports/multimodal/multimodal_report/" class="md-nav__link">
         
   
   
@@ -4310,7 +4611,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../evaluation/statistics/stats/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/statistics/stats/" class="md-nav__link">
         
   
   
@@ -4428,7 +4729,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/backend/" class="md-nav__link">
         
   
   
@@ -4456,7 +4757,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/batch/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/batch/" class="md-nav__link">
         
   
   
@@ -4484,7 +4785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/processors/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/processors/" class="md-nav__link">
         
   
   
@@ -4512,7 +4813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/regex_manager/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/regex_manager/" class="md-nav__link">
         
   
   
@@ -4540,7 +4841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/results/" class="md-nav__link">
         
   
   
@@ -4568,7 +4869,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/stopping/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/stopping/" class="md-nav__link">
         
   
   
@@ -4596,7 +4897,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/timeseries_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/timeseries_backend/" class="md-nav__link">
         
   
   
@@ -4624,7 +4925,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/utils/" class="md-nav__link">
         
   
   
@@ -4652,7 +4953,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../generation/vllm_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/vllm_backend/" class="md-nav__link">
         
   
   
@@ -4746,7 +5047,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../holdout/holdout/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/holdout/holdout/" class="md-nav__link">
         
   
   
@@ -4842,7 +5143,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../llm/metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/llm/metadata/" class="md-nav__link">
         
   
   
@@ -4870,7 +5171,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../llm/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/llm/utils/" class="md-nav__link">
         
   
   
@@ -4906,7 +5207,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../observability/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/observability/" class="md-nav__link">
         
   
   
@@ -4934,7 +5235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../package_info/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/package_info/" class="md-nav__link">
         
   
   
@@ -4959,10 +5260,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -4983,11 +5282,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3_1_14" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_3_1_14" >
         
           
           <label class="md-nav__link" for="__nav_5_3_1_14" id="__nav_5_3_1_14_label" tabindex="0">
@@ -5008,7 +5309,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_3_1_14_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_3_1_14_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_3_1_14">
             <span class="md-nav__icon md-icon"></span>
             
@@ -5090,7 +5391,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_editor/detect/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/detect/" class="md-nav__link">
         
   
   
@@ -5118,7 +5419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_editor/edit/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/edit/" class="md-nav__link">
         
   
   
@@ -5146,7 +5447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_editor/environment/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/environment/" class="md-nav__link">
         
   
   
@@ -5174,7 +5475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_editor/filters/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/filters/" class="md-nav__link">
         
   
   
@@ -5210,7 +5511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../nemo_pii/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/nemo_pii/" class="md-nav__link">
         
   
   
@@ -5235,10 +5536,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -5293,11 +5592,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3_1_14_3" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_3_1_14_3" >
         
           
           <label class="md-nav__link" for="__nav_5_3_1_14_3" id="__nav_5_3_1_14_3_label" tabindex="0">
@@ -5318,7 +5619,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_3_1_14_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_3_1_14_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_3_1_14_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -5336,7 +5637,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../const/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/const/" class="md-nav__link">
         
   
   
@@ -5364,7 +5665,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../custom/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/custom/" class="md-nav__link">
         
   
   
@@ -5392,7 +5693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../datetime/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/datetime/" class="md-nav__link">
         
   
   
@@ -5420,7 +5721,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../entity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/entity/" class="md-nav__link">
         
   
   
@@ -5448,7 +5749,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../factory/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/factory/" class="md-nav__link">
         
   
   
@@ -5476,7 +5777,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../fasttext/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/fasttext/" class="md-nav__link">
         
   
   
@@ -5504,7 +5805,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../helpers/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/helpers/" class="md-nav__link">
         
   
   
@@ -5532,7 +5833,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../labels/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/labels/" class="md-nav__link">
         
   
   
@@ -5560,7 +5861,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/metadata/" class="md-nav__link">
         
   
   
@@ -5588,7 +5889,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../model/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/model/" class="md-nav__link">
         
   
   
@@ -5616,7 +5917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../models/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/models/" class="md-nav__link">
         
   
   
@@ -5644,7 +5945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ner/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/ner/" class="md-nav__link">
         
   
   
@@ -5672,7 +5973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ner_mp/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/ner_mp/" class="md-nav__link">
         
   
   
@@ -5700,7 +6001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../nlp/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/nlp/" class="md-nav__link">
         
   
   
@@ -5728,7 +6029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../person_name/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/person_name/" class="md-nav__link">
         
   
   
@@ -5756,7 +6057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pipeline/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/pipeline/" class="md-nav__link">
         
   
   
@@ -5784,7 +6085,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../predictor/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/predictor/" class="md-nav__link">
         
   
   
@@ -5812,7 +6113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regex/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regex/" class="md-nav__link">
         
   
   
@@ -5958,7 +6259,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/aba_routing_number/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/aba_routing_number/" class="md-nav__link">
         
   
   
@@ -5986,7 +6287,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/age/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/age/" class="md-nav__link">
         
   
   
@@ -6014,7 +6315,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/credit_card/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/credit_card/" class="md-nav__link">
         
   
   
@@ -6042,7 +6343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/domain_name/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/domain_name/" class="md-nav__link">
         
   
   
@@ -6070,7 +6371,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/email/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/email/" class="md-nav__link">
         
   
   
@@ -6098,7 +6399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/facebook/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/facebook/" class="md-nav__link">
         
   
   
@@ -6126,7 +6427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/generic_key/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/generic_key/" class="md-nav__link">
         
   
   
@@ -6154,7 +6455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/github/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/github/" class="md-nav__link">
         
   
   
@@ -6182,7 +6483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/google/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/google/" class="md-nav__link">
         
   
   
@@ -6210,7 +6511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/google_olc/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/google_olc/" class="md-nav__link">
         
   
   
@@ -6238,7 +6539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/iban/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/iban/" class="md-nav__link">
         
   
   
@@ -6266,7 +6567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/imei/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/imei/" class="md-nav__link">
         
   
   
@@ -6294,7 +6595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/ip_address/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/ip_address/" class="md-nav__link">
         
   
   
@@ -6322,7 +6623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/jwt/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/jwt/" class="md-nav__link">
         
   
   
@@ -6350,7 +6651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/lat_lon/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/lat_lon/" class="md-nav__link">
         
   
   
@@ -6378,7 +6679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/md5/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/md5/" class="md-nav__link">
         
   
   
@@ -6406,7 +6707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/race_ethnicity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/race_ethnicity/" class="md-nav__link">
         
   
   
@@ -6434,7 +6735,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/sendgrid/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sendgrid/" class="md-nav__link">
         
   
   
@@ -6462,7 +6763,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/sex_gender/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sex_gender/" class="md-nav__link">
         
   
   
@@ -6490,7 +6791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/sha256/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sha256/" class="md-nav__link">
         
   
   
@@ -6518,7 +6819,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/sha512/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sha512/" class="md-nav__link">
         
   
   
@@ -6546,7 +6847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/slack/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/slack/" class="md-nav__link">
         
   
   
@@ -6574,7 +6875,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/square/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/square/" class="md-nav__link">
         
   
   
@@ -6602,7 +6903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/stripe/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/stripe/" class="md-nav__link">
         
   
   
@@ -6630,7 +6931,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/swift/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/swift/" class="md-nav__link">
         
   
   
@@ -6658,7 +6959,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/twilio/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/twilio/" class="md-nav__link">
         
   
   
@@ -6686,7 +6987,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/url/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/url/" class="md-nav__link">
         
   
   
@@ -6714,7 +7015,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/us_phone/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_phone/" class="md-nav__link">
         
   
   
@@ -6742,7 +7043,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/us_ssn/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_ssn/" class="md-nav__link">
         
   
   
@@ -6770,7 +7071,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/us_zipcode/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_zipcode/" class="md-nav__link">
         
   
   
@@ -6798,7 +7099,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../regexes/uuid/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/uuid/" class="md-nav__link">
         
   
   
@@ -6831,10 +7132,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -6853,11 +7152,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3_1_14_3_20" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_3_1_14_3_20" >
         
           
           <label class="md-nav__link" for="__nav_5_3_1_14_3_20" id="__nav_5_3_1_14_3_20_label" tabindex="0">
@@ -6878,7 +7179,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="6" aria-labelledby="__nav_5_3_1_14_3_20_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="6" aria-labelledby="__nav_5_3_1_14_3_20_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_3_1_14_3_20">
             <span class="md-nav__icon md-icon"></span>
             
@@ -6896,7 +7197,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/report/base/" class="md-nav__link">
         
   
   
@@ -6924,7 +7225,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/report/metadata/" class="md-nav__link">
         
   
   
@@ -6949,35 +7250,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    results
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/report/results/" class="md-nav__link">
         
   
   
@@ -6993,130 +7269,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;results
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" results">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResult" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RecordResult
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ExporterConfig
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" ExporterConfig">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_json_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;include_json_path
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_match" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;include_match
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResultExporter" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RecordResultExporter
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DatasetClassifyResults
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" DatasetClassifyResults">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults.jsonl" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;jsonl
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -7137,7 +7289,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/utils/" class="md-nav__link">
         
   
   
@@ -7173,7 +7325,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../transform_result/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/transform_result/" class="md-nav__link">
         
   
   
@@ -7331,7 +7483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../privacy/dp_transformers/dp_utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/dp_utils/" class="md-nav__link">
         
   
   
@@ -7359,7 +7511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../privacy/dp_transformers/linear/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/linear/" class="md-nav__link">
         
   
   
@@ -7387,7 +7539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../privacy/dp_transformers/privacy_args/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/privacy_args/" class="md-nav__link">
         
   
   
@@ -7415,7 +7567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../privacy/dp_transformers/sampler/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/sampler/" class="md-nav__link">
         
   
   
@@ -7459,7 +7611,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/results/" class="md-nav__link">
         
   
   
@@ -7547,7 +7699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../sdk/config_builder/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/sdk/config_builder/" class="md-nav__link">
         
   
   
@@ -7575,7 +7727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../sdk/library_builder/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/sdk/library_builder/" class="md-nav__link">
         
   
   
@@ -7677,7 +7829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../training/backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/backend/" class="md-nav__link">
         
   
   
@@ -7705,7 +7857,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../training/callbacks/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/callbacks/" class="md-nav__link">
         
   
   
@@ -7733,7 +7885,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../training/huggingface_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/huggingface_backend/" class="md-nav__link">
         
   
   
@@ -7761,7 +7913,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../training/timeseries_preprocessing/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/timeseries_preprocessing/" class="md-nav__link">
         
   
   
@@ -7789,7 +7941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../training/unsloth_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
         
   
   
@@ -7825,7 +7977,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/utils/" class="md-nav__link">
         
   
   
@@ -7903,7 +8055,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../../../blog/" class="md-nav__link ">
+            <a href="../../blog/" class="md-nav__link ">
               
   
   
@@ -8007,7 +8159,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../../blog/archive/2026/" class="md-nav__link">
+      <a href="../../blog/archive/2026/" class="md-nav__link">
         
   
   
@@ -8060,6 +8212,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -8068,22 +8222,66 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results" class="md-nav__link">
+  <a href="#dockerfile-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;results
+        Dockerfile Layout
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" results">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entrypoint-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entrypoint Script
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#oci-labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OCI Labels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build Arguments
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-build-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Build Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Build Details">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResult" class="md-nav__link">
+  <a href="#uv-environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RecordResult
+        uv Environment Variables
       
     </span>
   </a>
@@ -8091,22 +8289,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig" class="md-nav__link">
+  <a href="#nvidia-runtime-environment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ExporterConfig
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" ExporterConfig">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_json_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;include_json_path
+        NVIDIA Runtime Environment
       
     </span>
   </a>
@@ -8114,10 +8300,43 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_match" class="md-nav__link">
+  <a href="#python-toolchain-portability" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;include_match
+        Python Toolchain Portability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intermediate-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intermediate Layers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apt-cache-mounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        APT Cache Mounts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-runtime-not-devel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why runtime, Not devel
       
     </span>
   </a>
@@ -8128,43 +8347,126 @@
     </nav>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResultExporter" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#makefile-targets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RecordResultExporter
+        Makefile Targets
       
     </span>
   </a>
   
 </li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults" class="md-nav__link">
+      
+        <li class="md-nav__item">
+  <a href="#testing-the-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;DatasetClassifyResults
+        Testing the Image
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" DatasetClassifyResults">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image Size
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relationship-to-dockerfiletest_ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relationship to Dockerfile.test_ci
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-architecture-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Architecture Support
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-Architecture Support">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults.jsonl" class="md-nav__link">
+  <a href="#how-it-works" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;jsonl
+        How it works
       
     </span>
   </a>
   
 </li>
         
-      </ul>
-    </nav>
+          <li class="md-nav__item">
+  <a href="#building-for-arm64-blackwell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building for arm64 (Blackwell)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-platform-manifest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-platform manifest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-buildx-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        docker buildx requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cuda-compute-capabilities-cuda_arch_flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CUDA compute capabilities (CUDA_ARCH_FLAGS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#makefile-targets_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Makefile targets
+      
+    </span>
+  </a>
   
 </li>
         
@@ -8198,7 +8500,7 @@
   
   
     <li class="md-path__item">
-      <a href="../../../../../.." class="md-path__link">
+      <a href="../.." class="md-path__link">
         
   <span class="md-ellipsis">
     Home
@@ -8216,148 +8518,10 @@
     
     
       <li class="md-path__item">
-        <a href="../../../../../../developer-guide/architecture/" class="md-path__link">
+        <a href="../architecture/" class="md-path__link">
           
   <span class="md-ellipsis">
     Developer Guide
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../../../../artifacts/analyzers/field_features/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    API Reference
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-    
-  
-
-    
-  
-
-    
-  
-
-      
-        
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../../../../artifacts/analyzers/field_features/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    nemo_safe_synthesizer
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-    
-  
-
-    
-  
-
-      
-        
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../../../data_editor/detect/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    pii_replacer
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-    
-  
-
-      
-        
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../../const/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    ner
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../base/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    report
   </span>
 
         </a>
@@ -8379,661 +8543,486 @@
   
 
 
-  <h1>results</h1>
-
-<div class="doc doc-object doc-module">
-
-
-
-<h2 id="nemo_safe_synthesizer.pii_replacer.ner.report.results" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>results</code>
-
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results" class="headerlink" title="Permanent link">&para;</a></h2>
-
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Classes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              RecordResult(index, entities)
-
-  
-      dataclass
-   (nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResult)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResult">RecordResult</a></code></td>
-            <td>
-              <div class="doc-md-description">
-                <p>Represents a NER result for a record in a dataset.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              ExporterConfig(include_json_path=False, include_match=False)
-
-  
-      dataclass
-   (nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig">ExporterConfig</a></code></td>
-            <td>
-              <div class="doc-md-description">
-                
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              RecordResultExporter(config=None) (nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResultExporter)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResultExporter">RecordResultExporter</a></code></td>
-            <td>
-              <div class="doc-md-description">
-                <p>Responsible for creating a representation of RecordResult that is exportable to</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              DatasetClassifyResults(results=None) (nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults">DatasetClassifyResults</a></code></td>
-            <td>
-              <div class="doc-md-description">
-                <p>Represents classification result on the dataset.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResult" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">RecordResult</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">entities</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResult" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-
-
-        <p>Represents a NER result for a record in a dataset.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>index</code>
-            </td>
-            <td>
-                  <code><span title="int">int</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>index of the record in the original dataset</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>entities</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="nemo_safe_synthesizer.pii_replacer.ner.report.results.Prediction">Prediction</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Dict representation of NERPrediction (NERPrediction.as_dict)</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-
-
-                  <details class="mkdocstrings-source">
-                    <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-26">26</a></span>
-<span class="normal"><a href="#__codelineno-0-27">27</a></span>
-<span class="normal"><a href="#__codelineno-0-28">28</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Prediction</span><span class="p">]):</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">index</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">entities</span> <span class="o">=</span> <span class="n">entities</span>
-</span></code></pre></div></td></tr></table></div>
-                  </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">ExporterConfig</span><span class="p">(</span><span class="n">include_json_path</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_match</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            include_json_path = field(default=False)
-
-  
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_json_path)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_json_path">include_json_path</a></code></td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If set to True, the exported predictions will include "json_path" field for</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            include_match = field(default=False)
-
-  
-      class-attribute
-      instance-attribute
-   (nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_match)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_match">include_match</a></code></td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>If set to True, the exported prediction will contain text that got matched.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h4 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_json_path" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">include_json_path</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_json_path" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>If set to True, the exported predictions will include "json_path" field for
-each entity.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h4 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_match" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">include_match</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
-      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
-  </span>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig.include_match" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>If set to True, the exported prediction will contain text that got matched.</p>
-
-    </div>
-
-</div>
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResultExporter" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">RecordResultExporter</span><span class="p">(</span><span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.RecordResultExporter" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-
-
-        <p>Responsible for creating a representation of RecordResult that is exportable to
-the outside.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>config</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="              ExporterConfig(include_json_path=False, include_match=False)
-
-  
-      dataclass
-   (nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig">ExporterConfig</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Configuration for how to export the predictions.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-
-
-                  <details class="mkdocstrings-source">
-                    <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-71">71</a></span>
-<span class="normal"><a href="#__codelineno-0-72">72</a></span>
-<span class="normal"><a href="#__codelineno-0-73">73</a></span>
-<span class="normal"><a href="#__codelineno-0-74">74</a></span>
-<span class="normal"><a href="#__codelineno-0-75">75</a></span>
-<span class="normal"><a href="#__codelineno-0-76">76</a></span>
-<span class="normal"><a href="#__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#__codelineno-0-78">78</a></span>
-<span class="normal"><a href="#__codelineno-0-79">79</a></span>
-<span class="normal"><a href="#__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#__codelineno-0-81">81</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExporterConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">config</span><span class="p">:</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">ExporterConfig</span><span class="p">()</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pass_through_fields</span><span class="p">}</span>
-</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">include_json_path</span><span class="p">:</span>
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span><span class="p">[</span><span class="s2">&quot;json_path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_path&quot;</span>
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>
-</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">include_match</span><span class="p">:</span>
-</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;match&quot;</span>
-</span></code></pre></div></td></tr></table></div>
-                  </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">DatasetClassifyResults</span><span class="p">(</span><span class="n">results</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-
-
-        <p>Represents classification result on the dataset.</p>
-<p>For now this representation is using whatever is returned from the NER.predict()
-for simplicity and so we don't need to create a separate data structure (as there
-may be a lot of results).</p>
-
-
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Methods:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            jsonl(exporter_config=None) (nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults.jsonl)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults.jsonl">jsonl</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Serializes results into a JSONL-formatted string.</p>
-                </div>
-              </td>
-            </tr>
-      </tbody>
-    </table>
-
-
-
-                  <details class="mkdocstrings-source">
-                    <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-113">113</a></span>
-<span class="normal"><a href="#__codelineno-0-114">114</a></span>
-<span class="normal"><a href="#__codelineno-0-115">115</a></span>
-<span class="normal"><a href="#__codelineno-0-116">116</a></span>
-<span class="normal"><a href="#__codelineno-0-117">117</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">results</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DatasetPredictions</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-</span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">results</span><span class="p">:</span>
-</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>
-</span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="n">results</span>
-</span></code></pre></div></td></tr></table></div>
-                  </details>
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h4 id="nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults.jsonl" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">jsonl</span><span class="p">(</span><span class="n">exporter_config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-<a href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.DatasetClassifyResults.jsonl" class="headerlink" title="Permanent link">&para;</a></h4>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Serializes results into a JSONL-formatted string.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>exporter_config</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<a class="autorefs autorefs-internal" title="              ExporterConfig(include_json_path=False, include_match=False)
-
-  
-      dataclass
-   (nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig)" href="#nemo_safe_synthesizer.pii_replacer.ner.report.results.ExporterConfig">ExporterConfig</a>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Config to use for the result exporter.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">JSONL representation of results. Each line contains classification</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>result for corresponding row in the input dataset.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-122">122</a></span>
-<span class="normal"><a href="#__codelineno-0-123">123</a></span>
-<span class="normal"><a href="#__codelineno-0-124">124</a></span>
-<span class="normal"><a href="#__codelineno-0-125">125</a></span>
-<span class="normal"><a href="#__codelineno-0-126">126</a></span>
-<span class="normal"><a href="#__codelineno-0-127">127</a></span>
-<span class="normal"><a href="#__codelineno-0-128">128</a></span>
-<span class="normal"><a href="#__codelineno-0-129">129</a></span>
-<span class="normal"><a href="#__codelineno-0-130">130</a></span>
-<span class="normal"><a href="#__codelineno-0-131">131</a></span>
-<span class="normal"><a href="#__codelineno-0-132">132</a></span>
-<span class="normal"><a href="#__codelineno-0-133">133</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="k">def</span><span class="w"> </span><span class="nf">jsonl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exporter_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExporterConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">    Serializes results into a JSONL-formatted string.</span>
-</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>
-</span><span id="__span-0-126"><a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">        exporter_config: Config to use for the result exporter.</span>
-</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>
-</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">    Returns: JSONL representation of results. Each line contains classification</span>
-</span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">        result for corresponding row in the input dataset.</span>
-</span><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a>    <span class="n">exporter</span> <span class="o">=</span> <span class="n">RecordResultExporter</span><span class="p">(</span><span class="n">exporter_config</span><span class="p">)</span>
-</span><span id="__span-0-133"><a id="__codelineno-0-133" name="__codelineno-0-133"></a>    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">exporter</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">result</span><span class="p">))</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
-</span></code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<h1 id="docker-build-and-customize">Docker: Build and Customize<a class="headerlink" href="#docker-build-and-customize" title="Permanent link">&para;</a></h1>
+<p>How the CUDA Docker image is built, how to customize it, and how it relates
+to the CI test image.</p>
+<p>For running Safe Synthesizer in a container, see
+<a href="../../user-guide/docker/">User Guide -- Docker</a>.</p>
+<hr />
+<h2 id="dockerfile-layout">Dockerfile Layout<a class="headerlink" href="#dockerfile-layout" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/containers/Dockerfile.cuda"><code>containers/Dockerfile.cuda</code></a>
+uses a three-stage multistage build:</p>
+<pre class="mermaid"><code>flowchart TD
+    uvImage["ghcr.io/astral-sh/uv:UV_VERSION"]
+    cudaBuild["nvidia/cuda:CUDA_VERSION-CUDA_IMAGE_TYPE-ubuntu\n(deps stage -- may be runtime or devel)"]
+    cudaRuntime["nvidia/cuda:CUDA_VERSION-runtime-ubuntu\n(runtime stage -- always runtime)"]
+
+    subgraph stages [Build Stages]
+        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu128+engine"]
+        runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
+        dev["dev\nExtends runtime\nAdds git, make, pytest\nRoot user"]
+    end
+
+    uvImage --&gt;|"COPY /uv"| deps
+    cudaBuild --&gt; deps
+    deps --&gt;|"COPY venv + toolchain"| runtime
+    cudaRuntime --&gt; runtime
+    runtime --&gt; dev</code></pre>
+<ul>
+<li>deps: installs uv, Python, and all cu128+engine dependencies. Uses
+  <code>--mount=type=cache</code> to avoid re-downloading ~10 GB of PyTorch/CUDA wheels.</li>
+<li>runtime: copies the venv and uv-managed Python into a fresh CUDA runtime
+  base. Runs as non-root <code>appuser</code> (uid 1000). GPU access is declared via
+  <code>NVIDIA_VISIBLE_DEVICES=all</code> and <code>NVIDIA_DRIVER_CAPABILITIES=compute,utility</code>
+  environment variables baked into the image.
+  Uses a wrapper entrypoint (<code>containers/entrypoint.sh</code>) that detects
+  common misconfigurations before delegating to <code>safe-synthesizer</code>.</li>
+<li>dev: extends runtime with git, make, uv, and the full dev dependency group
+  (pytest, ruff, etc.). Runs as root for flexibility. Used for interactive
+  development and running tests inside the container.</li>
+</ul>
+<hr />
+<h2 id="entrypoint-script">Entrypoint Script<a class="headerlink" href="#entrypoint-script" title="Permanent link">&para;</a></h2>
+<p>The runtime stage uses <code>containers/entrypoint.sh</code> instead of a bare
+<code>ENTRYPOINT ["safe-synthesizer"]</code>. The script checks for common mistakes
+and prints hints to stderr before calling <code>exec safe-synthesizer "$@"</code>:</p>
+<ul>
+<li>Empty <code>/workspace</code> -- user forgot to mount data</li>
+<li><code>HF_HOME</code> not set or pointing to a nonexistent directory -- models will
+  download to a temporary location and be lost on exit</li>
+<li><code>HF_TOKEN</code> missing and no cached token file -- gated models will fail</li>
+<li><code>nvidia-smi</code> not found -- user may have forgotten <code>--gpus all</code></li>
+<li><code>/dev/shm</code> below 256 MB -- training with multi-worker data loading will
+  crash with "Bus error"; hints at <code>--shm-size=1g</code></li>
+</ul>
+<p>These checks run only on stderr and do not interfere with normal CLI
+output. For non-GPU commands (<code>--help</code>, <code>config validate</code>), the GPU check
+is skipped.</p>
+<hr />
+<h2 id="oci-labels">OCI Labels<a class="headerlink" href="#oci-labels" title="Permanent link">&para;</a></h2>
+<p>The runtime image includes <a href="https://github.com/opencontainers/image-spec/blob/main/annotations.md">OCI image metadata</a>
+visible via <code>docker inspect</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>docker<span class="w"> </span>inspect<span class="w"> </span>nss-gpu:latest<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{index .Config.Labels &quot;org.opencontainers.image.usage&quot;}}&#39;</span>
+</span></code></pre></div>
+<p>Labels include <code>title</code>, <code>description</code>, <code>vendor</code>, <code>licenses</code>, <code>source</code>,
+<code>documentation</code>, <code>base.name</code>, and <code>usage</code> (a full example <code>docker run</code>
+command).</p>
+<hr />
+<h2 id="build-arguments">Build Arguments<a class="headerlink" href="#build-arguments" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>ARG</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CUDA_VERSION</code></td>
+<td><code>12.8.1</code></td>
+<td>CUDA toolkit version in the base image tag</td>
+</tr>
+<tr>
+<td><code>UBUNTU_VERSION</code></td>
+<td><code>22.04</code></td>
+<td>Ubuntu version in the base image tag</td>
+</tr>
+<tr>
+<td><code>CUDA_IMAGE_TYPE</code></td>
+<td><code>runtime</code></td>
+<td>Base image variant for the deps stage. Change to <code>devel</code> if a dependency requires CUDA headers for compilation</td>
+</tr>
+<tr>
+<td><code>PYTHON_VERSION</code></td>
+<td><code>3.11.13</code></td>
+<td>Python version installed via <code>uv python install</code></td>
+</tr>
+<tr>
+<td><code>UV_VERSION</code></td>
+<td><code>0.9.14</code></td>
+<td>uv version (pinned to the lower bound of <code>pyproject.toml</code> <code>required-version</code>)</td>
+</tr>
+<tr>
+<td><code>TARGETARCH</code></td>
+<td><em>(set by BuildKit)</em></td>
+<td>Target architecture (<code>amd64</code> or <code>arm64</code>). Automatically populated by <code>docker buildx build --platform</code></td>
+</tr>
+<tr>
+<td><code>CUDA_ARCH_FLAGS</code></td>
+<td><code>80;86;90;90a</code></td>
+<td>CUDA SM capabilities for <code>nvcc</code>. Override for arm64: <code>90;90a;120;120a</code></td>
+</tr>
+</tbody>
+</table>
+<p>Override at build time:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">PYTHON_VERSION</span><span class="o">=</span><span class="m">3</span>.12.10<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CUDA_VERSION</span><span class="o">=</span><span class="m">12</span>.6.3<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:custom<span class="w"> </span>.
+</span></code></pre></div>
+<hr />
+<h2 id="key-build-details">Key Build Details<a class="headerlink" href="#key-build-details" title="Permanent link">&para;</a></h2>
+<h3 id="uv-environment-variables">uv Environment Variables<a class="headerlink" href="#uv-environment-variables" title="Permanent link">&para;</a></h3>
+<p>The deps stage sets several uv environment variables for reproducible builds.
+See the <a href="https://docs.astral.sh/uv/guides/integration/docker/">uv Docker guide</a>
+for full documentation.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>UV_PROJECT_ENVIRONMENT</code></td>
+<td><code>/opt/venv</code></td>
+<td>Installs into a fixed venv path</td>
+</tr>
+<tr>
+<td><code>UV_PYTHON_INSTALL_DIR</code></td>
+<td><code>/opt/python</code></td>
+<td>Stable path for cross-stage COPY</td>
+</tr>
+<tr>
+<td><code>UV_PYTHON_CACHE_DIR</code></td>
+<td><code>/root/.cache/uv/python</code></td>
+<td>Lets Python downloads benefit from the uv cache mount</td>
+</tr>
+<tr>
+<td><code>UV_LINK_MODE</code></td>
+<td><code>copy</code></td>
+<td>Hardlinks into cache mounts vanish after unmount; copy is safe</td>
+</tr>
+<tr>
+<td><code>UV_COMPILE_BYTECODE</code></td>
+<td><code>1</code></td>
+<td>Precompile <code>.pyc</code> for faster container startup</td>
+</tr>
+<tr>
+<td><code>UV_NO_INSTALLER_METADATA</code></td>
+<td><code>1</code></td>
+<td>Deterministic layers (no <code>installer</code>/<code>direct_url.json</code> variance)</td>
+</tr>
+<tr>
+<td><code>UV_FROZEN</code></td>
+<td><code>true</code></td>
+<td>Equivalent to <code>--frozen</code> on every uv command; prevents accidental re-locking</td>
+</tr>
+</tbody>
+</table>
+<h3 id="nvidia-runtime-environment">NVIDIA Runtime Environment<a class="headerlink" href="#nvidia-runtime-environment" title="Permanent link">&para;</a></h3>
+<p>The runtime stage sets two environment variables that declare GPU
+requirements to the NVIDIA Container Toolkit:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NVIDIA_VISIBLE_DEVICES</code></td>
+<td><code>all</code></td>
+<td>Tells the toolkit this image needs GPU access. Equivalent to <code>--gpus all</code> intent; the user still passes <code>--gpus</code> to inject devices</td>
+</tr>
+<tr>
+<td><code>NVIDIA_DRIVER_CAPABILITIES</code></td>
+<td><code>compute,utility</code></td>
+<td>Requests CUDA compute libraries and <code>nvidia-smi</code>. Matches the NMP convention (<code>nmp-gpu-base</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>This follows the same pattern used by NeMo Customizer and <code>nmp-gpu-base</code>.
+No <code>video</code> group membership is needed -- the toolkit handles device
+permissions when these variables are set.</p>
+<h3 id="python-toolchain-portability">Python Toolchain Portability<a class="headerlink" href="#python-toolchain-portability" title="Permanent link">&para;</a></h3>
+<p><code>UV_PYTHON_INSTALL_DIR=/opt/python</code> puts the uv-managed Python at a
+stable, explicit path instead of the default <code>~/.local/share/uv/python/</code>.
+The venv at <code>/opt/venv</code> symlinks into that directory. Both paths are
+copied to the runtime stage:</p>
+<div class="language-dockerfile highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>deps<span class="w"> </span>/opt/python<span class="w"> </span>/opt/python
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>deps<span class="w"> </span>/opt/venv<span class="w"> </span>/opt/venv
+</span></code></pre></div>
+<h3 id="intermediate-layers">Intermediate Layers<a class="headerlink" href="#intermediate-layers" title="Permanent link">&para;</a></h3>
+<p>The deps stage uses two-pass installation following
+<a href="https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers">uv best practices</a>:</p>
+<ol>
+<li><code>uv sync --no-install-project</code> -- installs all dependencies from the
+   lockfile without the project itself. This layer is invalidated only when
+   <code>pyproject.toml</code> or <code>uv.lock</code> changes.</li>
+<li><code>uv sync --no-editable</code> -- installs the project non-editably into the
+   existing venv. Non-editable means the venv is self-contained and does
+   not need source code at runtime.</li>
+</ol>
+<h3 id="apt-cache-mounts">APT Cache Mounts<a class="headerlink" href="#apt-cache-mounts" title="Permanent link">&para;</a></h3>
+<p>APT layers use <code>--mount=type=cache,target=/var/cache/apt,sharing=locked</code>
+instead of the traditional <code>rm -rf /var/lib/apt/lists/*</code> pattern. This
+caches downloaded <code>.deb</code> files across rebuilds, speeding up layer
+re-creation when the apt install list changes.</p>
+<h3 id="why-runtime-not-devel">Why runtime, Not devel<a class="headerlink" href="#why-runtime-not-devel" title="Permanent link">&para;</a></h3>
+<p>All current locked dependencies (<code>torch</code>, <code>vllm</code>, <code>xformers</code>, <code>flashinfer</code>,
+etc.) ship pre-built wheels. The CUDA devel image (~3 GB larger) is not
+needed. If a future dependency requires source compilation with CUDA headers,
+change <code>CUDA_IMAGE_TYPE</code> to <code>devel</code>.</p>
+<hr />
+<h2 id="makefile-targets">Makefile Targets<a class="headerlink" href="#makefile-targets" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>container-build-gpu</code></td>
+<td>Build the <code>runtime</code> stage</td>
+</tr>
+<tr>
+<td><code>container-build-gpu-dev</code></td>
+<td>Build the <code>dev</code> stage</td>
+</tr>
+<tr>
+<td><code>container-build-gpu-multiarch</code></td>
+<td>Build multi-arch manifest (requires <code>CONTAINER_GPU_REGISTRY</code>)</td>
+</tr>
+<tr>
+<td><code>container-run-gpu</code></td>
+<td>Run a command in the runtime container</td>
+</tr>
+<tr>
+<td><code>container-run-gpu-dev</code></td>
+<td>Run a command in the dev container</td>
+</tr>
+</tbody>
+</table>
+<p>For interactive shells, use <code>docker run -it --entrypoint /bin/bash</code> directly --
+this gives full control over mounts and flags. See the
+<a href="../../user-guide/docker/#interactive-shell">user guide</a> for examples.</p>
+<p>Overridable variables:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CONTAINER_GPU_IMAGE</code></td>
+<td><code>nss-gpu:latest</code></td>
+<td>Runtime image tag</td>
+</tr>
+<tr>
+<td><code>CONTAINER_GPU_IMAGE_DEV</code></td>
+<td><code>nss-gpu-dev:latest</code></td>
+<td>Dev image tag</td>
+</tr>
+<tr>
+<td><code>CONTAINER_GPU_PLATFORM</code></td>
+<td><code>linux/amd64</code></td>
+<td>Target platform (override for arm64)</td>
+</tr>
+<tr>
+<td><code>CONTAINER_GPU_REGISTRY</code></td>
+<td><em>(empty)</em></td>
+<td>Registry for multi-arch manifest pushes</td>
+</tr>
+<tr>
+<td><code>CONTAINER_GPU_FLAG</code></td>
+<td><code>--gpus all</code></td>
+<td>GPU access flag</td>
+</tr>
+<tr>
+<td><code>CONTAINER_HF_CACHE</code></td>
+<td><code>$(HOME)/.cache/huggingface</code></td>
+<td>Host HF cache dir</td>
+</tr>
+<tr>
+<td><code>CONTAINER_EXTRA_MOUNTS</code></td>
+<td><em>(empty)</em></td>
+<td>Additional <code>-v</code> flags for data outside the repo tree</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="testing-the-image">Testing the Image<a class="headerlink" href="#testing-the-image" title="Permanent link">&para;</a></h2>
+<p>Smoke test (no GPU required):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>nss-gpu:latest<span class="w"> </span>--help
+</span></code></pre></div>
+<p>Run unit tests inside the dev container:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>container-run-gpu-dev<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;make test&quot;</span>
+</span></code></pre></div>
+<p>Interactive dev shell (use <code>docker run</code> directly for full mount control):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/workspace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--entrypoint<span class="w"> </span>/bin/bash<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>nss-gpu-dev:latest
+</span></code></pre></div>
+<hr />
+<h2 id="image-size">Image Size<a class="headerlink" href="#image-size" title="Permanent link">&para;</a></h2>
+<p>The runtime image is approximately 15--25 GB, dominated by PyTorch, vllm,
+and CUDA libraries. This is expected for a full ML inference stack.</p>
+<p>To reduce size:</p>
+<ul>
+<li>The runtime stage excludes dev dependencies (<code>--no-group dev</code>)</li>
+<li>The base is <code>cuda-runtime</code> (not <code>cuda-devel</code>)</li>
+<li>Build caches (<code>--mount=type=cache</code>) stay out of the final image layers</li>
+</ul>
+<hr />
+<h2 id="relationship-to-dockerfiletest_ci">Relationship to <code>Dockerfile.test_ci</code><a class="headerlink" href="#relationship-to-dockerfiletest_ci" title="Permanent link">&para;</a></h2>
+<p><code>Dockerfile.test_ci</code> provides a CPU-only test image for CI and local testing.</p>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th><code>Dockerfile.cuda</code></th>
+<th><code>Dockerfile.test_ci</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Base</td>
+<td><code>nvidia/cuda:12.8.1-runtime-ubuntu22.04</code></td>
+<td><code>python:3.11-slim</code></td>
+</tr>
+<tr>
+<td>Extras</td>
+<td><code>cu128</code> + <code>engine</code></td>
+<td><code>cpu</code> + <code>engine</code></td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>Required</td>
+<td>Not needed</td>
+</tr>
+<tr>
+<td>Stages</td>
+<td><code>deps</code> / <code>runtime</code> / <code>dev</code></td>
+<td>Single stage</td>
+</tr>
+<tr>
+<td>Use case</td>
+<td>Training, generation, evaluation</td>
+<td>CPU-only unit tests and CI checks</td>
+</tr>
+<tr>
+<td>Build target</td>
+<td><code>make container-build-gpu</code></td>
+<td><code>make container-build-test</code></td>
+</tr>
+</tbody>
+</table>
+<p>Both follow the conventions in <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#dockerfiles">STYLE_GUIDE.md -- Dockerfiles</a>.</p>
+<hr />
+<h2 id="multi-architecture-support">Multi-Architecture Support<a class="headerlink" href="#multi-architecture-support" title="Permanent link">&para;</a></h2>
+<p>The CUDA Dockerfile supports <code>linux/amd64</code> and <code>linux/arm64</code>
+(Grace/Blackwell). The <code>nvidia/cuda</code> base images and <code>uv</code> binaries are
+already multi-platform, so the same Dockerfile works for both architectures
+without conditional logic.</p>
+<h3 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
+<p>Docker BuildKit sets the <code>TARGETARCH</code> build argument automatically when
+you pass <code>--platform</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>build<span class="w"> </span>--platform<span class="w"> </span>linux/arm64<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:arm64<span class="w"> </span>.
+</span></code></pre></div>
+<p>No code paths branch on <code>TARGETARCH</code> today -- it exists as documentation
+and forward-compatibility for when <code>CUDA_IMAGE_TYPE=devel</code> builds need to
+pass architecture-specific flags to <code>nvcc</code>.</p>
+<h3 id="building-for-arm64-blackwell">Building for arm64 (Blackwell)<a class="headerlink" href="#building-for-arm64-blackwell" title="Permanent link">&para;</a></h3>
+<p>Single-platform arm64 build via Make:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>container-build-gpu<span class="w"> </span><span class="nv">CONTAINER_GPU_PLATFORM</span><span class="o">=</span>linux/arm64
+</span></code></pre></div>
+<p>This uses <code>docker build --platform linux/arm64</code>, which works with local
+<code>--load</code> and QEMU emulation (or natively on an arm64 host).</p>
+<h3 id="multi-platform-manifest">Multi-platform manifest<a class="headerlink" href="#multi-platform-manifest" title="Permanent link">&para;</a></h3>
+<p>A multi-platform manifest contains images for both architectures in a
+single tag. Clients pull the correct variant automatically. Because
+<code>--load</code> only supports one platform, multi-arch builds must be pushed
+directly to a registry:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>container-build-gpu-multiarch<span class="w"> </span><span class="nv">CONTAINER_GPU_REGISTRY</span><span class="o">=</span>ghcr.io/nvidia-nemo
+</span></code></pre></div>
+<p>This runs:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>build<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--platform<span class="w"> </span>linux/amd64,linux/arm64<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--tag<span class="w"> </span>ghcr.io/nvidia-nemo/nss-gpu:latest<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>--push<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span>.
+</span></code></pre></div>
+<h3 id="docker-buildx-requirements"><code>docker buildx</code> requirements<a class="headerlink" href="#docker-buildx-requirements" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Docker 19.03+ with BuildKit enabled (<code>DOCKER_BUILDKIT=1</code> or Docker 23.0+
+  where it is the default).</li>
+<li>A buildx builder instance with multi-platform support. Create one with:</li>
+</ul>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>create<span class="w"> </span>--name<span class="w"> </span>multiarch<span class="w"> </span>--use
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>docker<span class="w"> </span>buildx<span class="w"> </span>inspect<span class="w"> </span>--bootstrap
+</span></code></pre></div>
+<ul>
+<li>For cross-architecture builds on amd64 hosts, QEMU user-static must be
+  registered: <code>docker run --rm --privileged multiarch/qemu-user-static --reset -p yes</code>.</li>
+</ul>
+<h3 id="cuda-compute-capabilities-cuda_arch_flags">CUDA compute capabilities (<code>CUDA_ARCH_FLAGS</code>)<a class="headerlink" href="#cuda-compute-capabilities-cuda_arch_flags" title="Permanent link">&para;</a></h3>
+<p>When <code>CUDA_IMAGE_TYPE=devel</code> is used and CUDA kernels must be compiled,
+pass the appropriate SM values via <code>--build-arg CUDA_ARCH_FLAGS</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Architecture</th>
+<th><code>CUDA_ARCH_FLAGS</code></th>
+<th>GPUs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>amd64</td>
+<td><code>80;86;90;90a</code></td>
+<td>A100, A10/3090, H100</td>
+</tr>
+<tr>
+<td>arm64</td>
+<td><code>90;90a;120;120a</code></td>
+<td>H100 Grace, Blackwell</td>
+</tr>
+</tbody>
+</table>
+<p>The Dockerfile defaults to the amd64 set. Override for arm64:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CUDA_IMAGE_TYPE</span><span class="o">=</span>devel<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CUDA_ARCH_FLAGS</span><span class="o">=</span><span class="s2">&quot;90;90a;120;120a&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--platform<span class="w"> </span>linux/arm64<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:arm64-devel<span class="w"> </span>.
+</span></code></pre></div>
+<h3 id="makefile-targets_1">Makefile targets<a class="headerlink" href="#makefile-targets_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>container-build-gpu</code></td>
+<td>Single-platform build (default <code>linux/amd64</code>, override with <code>CONTAINER_GPU_PLATFORM</code>)</td>
+</tr>
+<tr>
+<td><code>container-build-gpu-multiarch</code></td>
+<td>Multi-platform manifest build (requires <code>CONTAINER_GPU_REGISTRY</code>)</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -9071,7 +9060,7 @@ may be a lot of results).</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../metadata/" class="md-footer__link md-footer__link--prev" aria-label="Previous: metadata">
+          <a href="../architecture/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Architecture">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9081,20 +9070,20 @@ may be a lot of results).</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                metadata
+                Architecture
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../utils/" class="md-footer__link md-footer__link--next" aria-label="Next: utils">
+          <a href="../../reference/nemo_safe_synthesizer/artifacts/analyzers/field_features/" class="md-footer__link md-footer__link--next" aria-label="Next: field_features">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                utils
+                field_features
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -9135,16 +9124,16 @@ may be a lot of results).</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../../../..", "features": ["content.code.copy", "content.code.select", "content.code.annotate", "content.tabs.link", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "toc.follow"], "search": "../../../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.select", "content.code.annotate", "content.tabs.link", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../../../../../js/mathjax.js"></script>
+        <script src="../../js/mathjax.js"></script>
       
         <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
-        <script src="../../../../../../js/toc-toggle.js"></script>
+        <script src="../../js/toc-toggle.js"></script>
       
     
   </body>
