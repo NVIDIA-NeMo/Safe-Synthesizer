@@ -8493,26 +8493,9 @@ realistic values prior to fine-tuning. This ensures the model never has the oppo
 entity types, LLM classification setup, and SDK customization.</p>
 <h3 id="3-training">3. Training<a class="headerlink" href="#3-training" title="Permanent link">&para;</a></h3>
 <p>Fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two backends are
-available:</p>
-<table>
-<thead>
-<tr>
-<th>Backend</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Unsloth</td>
-<td>Optimized training for faster fine-tuning (auto-selected by default)</td>
-</tr>
-<tr>
-<td>HuggingFace</td>
-<td>Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via <a href="https://opacus.ai/">Opacus</a></td>
-</tr>
-</tbody>
-</table>
-<p>If you enable differential privacy, the pipeline automatically switches to use the HuggingFace backend.</p>
+available: Unsloth (default, faster) and HuggingFace (required for
+differential privacy). Both perform LoRA fine-tuning; see
+<a href="../running/#training">Running -- Training</a> for a comparison.</p>
 <p>The default model is <code>HuggingFaceTB/SmolLM3-3B</code>. Safe Synthesizer has tested support for <code>HuggingFaceTB/SmolLM3-3B</code>, <code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code>, and <code>mistralai/Mistral-7B-Instruct-v0.3</code> (see <a href="../configuration/#training">Configuration -- Training</a> for details on how to change the backend or model).</p>
 <div class="admonition tip">
 <p class="admonition-title">Differential privacy</p>

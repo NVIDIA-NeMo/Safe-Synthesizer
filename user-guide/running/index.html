@@ -9517,16 +9517,17 @@ generation without re-training.</p>
 <tbody>
 <tr>
 <td>Unsloth</td>
-<td>Optimized kernels for faster fine-tuning</td>
+<td>LoRA fine-tuning with optimized kernels for faster training and lower VRAM usage. Uses Unsloth's <code>FastLanguageModel</code> for model loading and PEFT wrapping</td>
 <td>Default -- use unless you need DP or a custom quantization setup</td>
 </tr>
 <tr>
 <td>HuggingFace</td>
-<td>Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via <a href="https://opacus.ai/">Opacus</a></td>
+<td>LoRA fine-tuning via PEFT with 4-bit/8-bit quantization support and optional differential privacy (DP-SGD) via <a href="https://opacus.ai/">Opacus</a></td>
 <td>Required for differential privacy; also the fallback when Unsloth is unavailable</td>
 </tr>
 </tbody>
 </table>
+<p>If you enable differential privacy, the pipeline automatically switches to the HuggingFace backend.</p>
 <p>Three models have been extensively tested:</p>
 <table>
 <thead>

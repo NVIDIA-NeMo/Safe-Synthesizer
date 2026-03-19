@@ -8342,28 +8342,9 @@
 <li>Generates new records that maintain statistical properties with no one-to-one mapping to original records</li>
 <li>Supports various model sizes and architectures</li>
 </ul>
-<p>Two backends are available:</p>
-<table>
-<thead>
-<tr>
-<th>Backend</th>
-<th>Description</th>
-<th>When to use</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Unsloth</td>
-<td>Optimized kernels for faster fine-tuning</td>
-<td>Default -- use unless you need DP or a custom quantization setup</td>
-</tr>
-<tr>
-<td>HuggingFace</td>
-<td>Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via <a href="https://opacus.ai/">Opacus</a></td>
-<td>Required for differential privacy; also the fallback when Unsloth is unavailable</td>
-</tr>
-</tbody>
-</table>
+<p>Two backends are available: Unsloth (default, faster) and HuggingFace
+(required for differential privacy). Both perform LoRA fine-tuning; see
+<a href="../../user-guide/running/#training">Running -- Training</a> for a comparison.</p>
 <p>Three models have been extensively tested:</p>
 <table>
 <thead>
