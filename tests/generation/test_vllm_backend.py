@@ -572,3 +572,36 @@ class TestGroupedGenerationStopKwargs:
         assert "stop" not in captured
         assert "stop_token_ids" not in captured
         assert captured["ignore_eos"] is False
+
+    def test_large_context_grouped_generation_has_eos_stop(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """Regression: large-context models (e.g. SmolLM3) need explicit EOS stop tokens
+        for grouped generation, otherwise generation runs away to max_tokens.
+
+        With small context windows (e.g. TinyLlama 2048) the max_tokens limit masks
+        the missing stop condition. A large window like 8192+ exposes the bug.
+        """
+        mock_model_metadata.prompt_config.eos_token = "</s>"
+        mock_model_metadata.prompt_config.eos_token_id = 2
+        mock_model_metadata.max_seq_length = 8192
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        assert not isinstance(backend.processor, TabularDataProcessor)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["max_tokens"] == 8192
+        assert "stop" in captured, "EOS stop string must be set to prevent runaway generation"
+        assert "stop_token_ids" in captured, "EOS stop token ID must be set to prevent runaway generation"
+        assert captured["stop"] == ["</s>"]
+        assert captured["stop_token_ids"] == [2]

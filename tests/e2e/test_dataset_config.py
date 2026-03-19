@@ -107,18 +107,8 @@ def test_clinc_oos_dataset(fixture_clinc_oos_dataset, config_file, quality_thres
     [
         ("mistral-dp.yaml", 4.5, 6.0),
         ("mistral-nodp.yaml", 7.5, 8.0),
-        pytest.param(
-            "smollm3-dp.yaml",
-            5.0,
-            6.0,
-            marks=pytest.mark.xfail(reason="SmolLM3 DP sometimes fails with no or low valid records or timeout"),
-        ),
-        pytest.param(
-            "smollm3-unsloth.yaml",
-            6.0,
-            6.0,
-            marks=pytest.mark.xfail(reason="SmolLM3 Unsloth sometimes fails with no or low valid records or timeout"),
-        ),
+        ("smollm3-dp.yaml", 5.0, 6.0),
+        ("smollm3-unsloth.yaml", 6.0, 6.0),
         ("tinyllama-dp.yaml", 5.5, 6.0),
         ("tinyllama-unsloth.yaml", 7.5, 7.0),
     ],
