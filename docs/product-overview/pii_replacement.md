@@ -38,9 +38,9 @@ GLiNER PII will attempt to identify any custom entity type you provide. However,
 
 !!! note "Default entity set"
     The default configuration detects and replaces a focused subset of these entities: `first_name`,
-    `last_name`, `name`, `street_address`, `city`, `county`, `state`, `postcode`, `country`, `address`,
-    `phone_number`, `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect
-    additional entity types, add them to `replace_pii.globals.classify.entities` and
+    `last_name`, `name`, `street_address`, `city`, `state`, `postcode`, `address`, `phone_number`,
+    `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect additional
+    entity types, add them to `replace_pii.globals.classify.entities` and
     `replace_pii.globals.ner.ner_entities` in your configuration. Also add replacement steps to `replace_pii.steps`.
 
 ### Personal Information

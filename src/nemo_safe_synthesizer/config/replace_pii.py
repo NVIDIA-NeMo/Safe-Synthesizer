@@ -264,10 +264,8 @@ globals:
       - name
       - street_address
       - city
-      - county
       - state
       - postcode
-      - country
       - address
       - phone_number
       - fax_number
@@ -284,10 +282,8 @@ globals:
       - name
       - street_address
       - city
-      - county
       - state
       - postcode
-      - country
       - address
       - phone_number
       - fax_number
@@ -308,7 +304,7 @@ steps:
           value: fake.persona(row_index=vars.row_seed + index).last_name
         - condition: column.entity == "name" and not (this | isna)
           value: column.entity | fake
-        - condition: (column.entity == "street_address" or column.entity == "city" or column.entity == "county" or column.entity == "state" or column.entity == "postcode" or column.entity == "address") and not (this | isna)
+        - condition: (column.entity == "street_address" or column.entity == "city" or column.entity == "state" or column.entity == "postcode" or column.entity == "address") and not (this | isna)
           value: column.entity | fake
         - condition: column.entity == "email" and not (this | isna)
           value: fake.persona(row_index=vars.row_seed + index).email
