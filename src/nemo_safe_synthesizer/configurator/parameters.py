@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import typing
 from abc import ABCMeta
-from collections.abc import Generator, Iterable, Iterator, Mapping
+from collections.abc import Generator, Iterator, Mapping
 from pathlib import Path
 from typing import Any, Self, get_args
 
