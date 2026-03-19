@@ -12,11 +12,10 @@ This package makes synthetic data, safely.
 
 ### Quick Start
 
-Install [mise](https://mise.jdx.dev/) and bootstrap development tools (`ruff`, `ty`, `yq`, `gh`, etc.):
+Bootstrap development tools (`ruff`, `ty`, `yq`, `gh`, etc.) via [mise](https://mise.jdx.dev/):
 
 ```bash
-curl -sSf https://mise.run | sh   # one-time mise install
-make setup                         # install pinned tool versions
+make setup   # installs mise (if missing) + pinned tool versions
 ```
 
 Then bootstrap the project package with your desired extras -- likely `cpu|cuda`.
@@ -443,8 +442,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribut
 ### Setup
 
 ```bash
-# 1. Install mise (one-time) and bootstrap dev tools
-curl -sSf https://mise.run | sh
+# 1. Bootstrap dev tools (installs mise automatically if missing)
 make setup
 
 # 2. Install Python dependencies and package

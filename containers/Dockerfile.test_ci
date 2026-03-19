@@ -10,16 +10,15 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /workspace
 
-# Install mise and dev tools (cached until .mise.toml or Makefile change)
+# Install mise and all dev tools including uv (cached until .mise.toml or Makefile change)
 COPY .mise.toml .
 COPY Makefile .
-COPY pyproject.toml .
-RUN curl -sSf https://mise.run | sh \
-    && ~/.local/bin/mise install
+RUN make setup
 
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
 
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
+COPY pyproject.toml .
 COPY ruff.toml .
 COPY pytest.ini .
 COPY README.md .
@@ -27,6 +26,5 @@ COPY uv.lock .
 COPY src/ src/
 COPY tests/ tests/
 RUN make bootstrap-nss cpu
-
 
 RUN git config --global --add safe.directory /workspace

@@ -62,8 +62,8 @@ ARG UBUNTU_VERSION=22.04
 # Switch to "devel" if a future dependency requires CUDA compilation.
 ARG CUDA_IMAGE_TYPE=runtime
 ARG PYTHON_VERSION=3.11.13
-# Pinned to the lower bound of pyproject.toml [tool.uv] required-version.
-ARG UV_VERSION=0.9.14
+# Pinned to match .mise.toml; used by the deps stage which doesn't have mise.
+ARG UV_VERSION=0.10.11
 
 # CUDA compute capabilities to compile for (used with CUDA_IMAGE_TYPE=devel).
 # Recommended values per architecture:
@@ -174,9 +174,6 @@ FROM runtime AS dev
 
 USER root
 
-ARG UV_VERSION
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
-
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -193,6 +190,11 @@ WORKDIR /build
 # Copy the full repo (.dockerignore filters out .git, .venv, caches, etc.).
 # Bind-mount at /workspace overrides this at runtime for live editing.
 COPY . .
+
+# Install mise and all dev tools including uv
+RUN make setup
+
+ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
 
 # Install dev dependencies into the existing venv.
 RUN --mount=type=cache,target=/root/.cache/uv \

@@ -4,6 +4,7 @@
 ### CONFIGURATION ###
 
 SHELL := /bin/bash
+export PATH := $(HOME)/.local/bin:$(PATH)
 UNAME_S := $(shell uname -s)
 ARCH := $(shell uname -m)
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
@@ -46,9 +47,12 @@ help:
 ### BOOTSTRAP AND SETUP ###
 
 .PHONY: setup
-setup: ## Install dev tools via mise
-	@command -v mise >/dev/null 2>&1 || { echo "mise not found. Install: curl -sSf https://mise.run | sh"; exit 1; }
-	mise install
+setup: ## Install dev tools via mise (installs mise itself if missing)
+	@command -v mise >/dev/null 2>&1 || { \
+		echo "mise not found -- installing..."; \
+		curl -sSf https://mise.run | sh; \
+	}
+	MISE_YES=1 mise install
 	@echo "tools installed successfully via mise"
 
 .PHONY: bootstrap-tools bootstrap-tools-ci
@@ -228,6 +232,25 @@ CONTAINER_BUILD_ARGS ?= --platform $(CONTAINER_TEST_PLATFORM) \
 .PHONY: container-build-test
 container-build-test: ## Build the container image for running CI tests locally
 	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) .
+
+.PHONY: test-tool-install
+test-tool-install: container-build-test ## Verify mise-managed tools install correctly in a container
+	$(CONTAINER_CMD) run \
+		--rm \
+		--platform $(CONTAINER_TEST_PLATFORM) \
+		$(CONTAINER_TEST_IMAGE) \
+		bash -c ' \
+			echo "=== Verifying installed tools ===" && \
+			mise --version && \
+			uv --version && \
+			ruff version && \
+			ty --version && \
+			jq --version && \
+			yq --version && \
+			gh --version && \
+			osv-scanner --version && \
+			direnv --version && \
+			echo "=== All tools OK ==="'
 
 .PHONY: test-ci-container
 test-ci-container: container-build-test ## Run CI unit tests in a Linux container

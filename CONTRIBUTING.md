@@ -50,8 +50,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    cd Safe-Synthesizer
 
-   # Install mise (one-time) and dev tools (ruff, ty, yq, gh, etc.)
-   curl -sSf https://mise.run | sh
+   # Install dev tools via mise (installs mise itself if missing)
    make setup
 
    # Install Python dependencies (choose one)
@@ -64,14 +63,19 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise and direnv trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
 
   ```bash
-   # ~/.config/direnv/direnv.toml
+   # Append a direnv whitelist entry for this repo
+   mkdir -p ~/.config/direnv
+   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+   cat >> ~/.config/direnv/direnv.toml <<EOF
    [whitelist]
-   prefix = ["/path/to/Safe-Synthesizer"]
+   prefix = ["$REPO"]
+   EOF
   ```
 
   ```bash
-   # In your shell profile (~/.bashrc, ~/.zshrc)
-   export MISE_TRUSTED_CONFIG_PATHS="/path/to/Safe-Synthesizer"
+   # Add to your shell profile (~/.bashrc, ~/.zshrc)
+   echo "export MISE_TRUSTED_CONFIG_PATHS=\"$(cd "$(git rev-parse --show-toplevel)" && pwd -P)\"" \
+     >> ~/.bashrc   # or ~/.zshrc
   ```
 
   Alternatively, set `MISE_YES=1` and `DIRENV_TRUST_ALLOW_ALL=1` to trust all configs globally (appropriate for dev machines and CI).
