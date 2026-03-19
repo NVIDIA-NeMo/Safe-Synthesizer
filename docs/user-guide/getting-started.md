@@ -119,6 +119,8 @@ safe-synthesizer run --config config.yaml --url data.csv
 Replace `data.csv` with your actual input file. Any `.csv`, `.json`, `.jsonl`,
 `.parquet`, or `.txt` file works -- see [Running Safe Synthesizer -- Data Input](running.md#data-input) for all supported formats.
 
+Your dataset should have at least 1,000 records (10,000 records if using [differential privacy](running.md#differential-privacy)).
+
 The command above fine-tunes a LoRA adapter on your data, generates 1000 synthetic records,
 and produces an evaluation report. The default outputs are placed in
 `./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/`
