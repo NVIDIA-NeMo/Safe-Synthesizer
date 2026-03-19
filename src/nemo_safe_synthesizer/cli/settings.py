@@ -129,7 +129,7 @@ class CLISettings(BaseSettings):
     )
     """Path to log file (env variable: ``NSS_LOG_FILE``)."""
 
-    verbose: int | str = Field(
+    verbose: int = Field(
         default=0,
         description="Verbosity level (0=INFO, 1=DEBUG, 2=DEBUG_DEPENDENCIES)",
     )

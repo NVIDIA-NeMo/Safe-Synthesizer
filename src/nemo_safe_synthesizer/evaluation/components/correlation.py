@@ -76,8 +76,8 @@ class Correlation(Component):
             correlation_difference,
             mean_absolute_error,
         ) = Correlation._get_correlation_calculations(
-            reference=evaluation_dataset.reference.reindex(columns=tabular_columns),
-            output=evaluation_dataset.output.reindex(columns=tabular_columns),
+            reference=evaluation_dataset.reference[tabular_columns],
+            output=evaluation_dataset.output[tabular_columns],
             nominal_columns=nominal_columns,
             fields=evaluation_dataset.evaluation_fields,
         )

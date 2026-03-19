@@ -150,7 +150,7 @@ class GlinerConfig(NSSBaseModel):
 
     gliner_model: str = Field(
         description="GLiNER model name.",
-        default="gretelai/gretel-gliner-bi-large-v1.0",
+        default="nvidia/gliner-PII",
     )
 
 

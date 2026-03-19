@@ -139,9 +139,7 @@ def describe_field(field_name: str, data: Series) -> FieldFeatures:
         features.max_value = floor_power_of_10(int(non_na_data.max()))
         return features
 
-    # See
-    # - https://github.com/Gretellabs/text_research/blob/main/column_detector.py
-    # - https://jeffreymorgan.io/articles/identifying-categorical-data/
+    # See https://jeffreymorgan.io/articles/identifying-categorical-data/
     diff = non_na_count - unique_count
     diff_percent = diff / non_na_count
 

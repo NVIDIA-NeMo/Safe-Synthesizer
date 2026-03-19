@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import click
 import pandas as pd
@@ -326,8 +326,6 @@ def _initialize_logging_for_cli_from_settings(
 
     # Determine log level from verbosity
     verbose = min(settings.verbose, 2)
-    # pydantic handles this for us in a validator. not sure why the typechecker doesn't quite like this.
-    verbose = cast(int, verbose)
     log_level = VERBOSITY_TO_LOG_LEVEL[verbose]
 
     # Use workdir structure for logging
