@@ -131,7 +131,7 @@ class TestOutputFileOverride:
         fixture_session_cache_dir: Path,
         patched_run_dependencies: dict,
     ):
-        """Verify that --output-file triggers an explicit save_results call."""
+        """Verify that --output-file is forwarded to run()."""
         custom_output = tmp_path / "custom_output.csv"
 
         result = cli_runner.invoke(
@@ -149,16 +149,16 @@ class TestOutputFileOverride:
 
         assert result.exit_code == 0
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.save_results.assert_called_once_with(output_file=str(custom_output))
+        mock_ss.run.assert_called_once_with(output_file=str(custom_output))
 
-    def test_run_without_output_file_does_not_call_save_results(
+    def test_run_without_output_file_passes_none(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
         fixture_session_cache_dir: Path,
         patched_run_dependencies: dict,
     ):
-        """Without --output-file the CLI relies on run() to save automatically."""
+        """Without --output-file, run() is called with output_file=None."""
         result = cli_runner.invoke(
             run,
             [
@@ -172,7 +172,8 @@ class TestOutputFileOverride:
 
         assert result.exit_code == 0
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.save_results.assert_not_called()
+        # Default output path is used if no --output-file is provided
+        mock_ss.run.assert_called_once_with(output_file=None)
 
 
 class TestPathOptions:

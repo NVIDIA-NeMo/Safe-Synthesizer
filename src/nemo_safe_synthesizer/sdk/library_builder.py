@@ -439,10 +439,14 @@ class SafeSynthesizer(ConfigBuilder):
         )
         return self
 
-    def run(self) -> None:
+    def run(self, output_file: Path | str | None = None) -> None:
         """Run the full pipeline: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
 
         For step-by-step control, call the individual methods instead.
+
+        Args:
+            output_file: Explicit output path for the synthetic data CSV.
+                Falls back to ``workdir.output_file`` when ``None``.
 
         Raises:
             RuntimeError: If called after ``load_from_save_path()``.
@@ -460,7 +464,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert isinstance(self._data_source, pd.DataFrame)
 
         self.process_data().train().generate().evaluate()
-        self.save_results()
+        self.save_results(output_file=output_file)
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> None:
