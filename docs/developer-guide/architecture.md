@@ -205,8 +205,8 @@ flowchart TB
     pydantic --> collect
     collect --> leaf & flag
 
-    flag -->|"--no_replace_pii"| parse
-    flag -->|"--no_privacy"| parse
+    flag -->|"--no-replace-pii"| parse
+    flag -->|"--no-privacy"| parse
     leaf -->|"--training__lr etc"| parse
 
     parse -->|"overrides dict"| clisettings

@@ -20,7 +20,7 @@ Critical: `parse_overrides(kwargs)` must use the same `field_sep` as `pydantic_o
 
 ## common_run_options()
 
-Shared decorator in `run.py` that adds `--config`, `--url`, `--artifact-path`, `--run-path`, `--output-file`, `--log-format`, `--log-file`, `--log-color`, `--wandb-mode`, `--wandb-project`, `--dataset-registry`, and `-v`. Applied to `run`, `run train`, and `run generate`. Env var handling lives in `CLISettings`, not in Click's `envvar=` — keeps precedence logic in one place.
+Shared decorator in `run.py` that adds `--config`, `--data-source`, `--artifact-path`, `--run-path`, `--output-file`, `--log-format`, `--log-file`, `--log-color`, `--wandb-mode`, `--wandb-project`, `--dataset-registry`, and `-v`. Applied to `run`, `run train`, and `run generate`. Env var handling lives in `CLISettings`, not in Click's `envvar=` — keeps precedence logic in one place.
 
 ## Settings precedence
 
@@ -48,7 +48,7 @@ New run subcommand: In `run.py`, add:
 @run.command("mystage")
 @common_run_options
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
-def run_mystage(config_path, url, ..., **kwargs):
+def run_mystage(config_path, data_source, ..., **kwargs):
     settings = CLISettings.from_cli_kwargs(..., synthesis_overrides=parse_overrides(kwargs))
     run_logger, config, df, workdir = common_setup(settings=settings, phase="mystage")
     # ...

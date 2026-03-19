@@ -29,7 +29,7 @@ if [ -z "$(ls -A /workspace 2>/dev/null)" ]; then
     warn "    docker run --gpus all -v /path/to/data:/workspace/data \\"
     warn "      -v ~/.cache/huggingface:/workspace/.hf_cache \\"
     warn "      -e HF_HOME=/workspace/.hf_cache \\"
-    warn "      nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv"
+    warn "      nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv"
     echo >&2
     warn "  Relative paths don't work with docker -v. Use \$(pwd) to expand them:"
     warn "    -v \$(pwd)/my_data:/workspace/data"

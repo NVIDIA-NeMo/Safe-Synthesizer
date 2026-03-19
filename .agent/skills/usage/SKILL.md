@@ -15,17 +15,17 @@ Entry point: `safe-synthesizer` (installed via `pip install nemo-safe-synthesize
 
 ```bash
 # Full pipeline (train + generate + evaluate)
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 
 # Train only
-safe-synthesizer run train --config config.yaml --url data.csv
+safe-synthesizer run train --config config.yaml --data-source data.csv
 
 # Generate only (needs a trained adapter)
-safe-synthesizer run generate --config config.yaml --url data.csv \
+safe-synthesizer run generate --config config.yaml --data-source data.csv \
     --run-path /path/to/trained/run
 
 # Generate with auto-discovery of adapter
-safe-synthesizer run generate --config config.yaml --url data.csv \
+safe-synthesizer run generate --config config.yaml --data-source data.csv \
     --auto-discover-adapter --artifact-path ./safe-synthesizer-artifacts
 
 # Validate a config file
@@ -38,7 +38,7 @@ safe-synthesizer artifacts clean
 CLI options map to config fields with `__` as the nested separator:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv \
+safe-synthesizer run --config config.yaml --data-source data.csv \
     --data__holdout=0.1 \
     --training__learning_rate=0.0001
 ```

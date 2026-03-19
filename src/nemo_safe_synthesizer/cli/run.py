@@ -46,7 +46,7 @@ def common_run_options(f):
     )
     options.append(
         click.option(
-            "--url",
+            "--data-source",
             type=str,
             default=None,
             required=False,
@@ -149,7 +149,7 @@ def common_run_options(f):
             required=False,
             default=None,
             help="URL or path of a dataset registry YAML file. If provided, "
-            "datasets in the registry may be referenced by name in --url. "
+            "datasets in the registry may be referenced by name in --data-source. "
             "Can also be set via NSS_DATASET_REGISTRY env var. "
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
@@ -167,7 +167,7 @@ def common_run_options(f):
 def run(
     ctx: click.Context,
     config_path: PathT | None,
-    url: str,
+    data_source: str,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -191,7 +191,7 @@ def run(
 
     # Create unified settings from CLI kwargs (CLI values override env vars)
     settings = CLISettings.from_cli_kwargs(
-        url=url,
+        data_source=data_source,
         config_path=config_path,
         artifact_path=artifact_path,
         run_path=run_path,
@@ -231,7 +231,7 @@ def run(
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_train(
     config_path: PathT,
-    url: str,
+    data_source: str,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -251,7 +251,7 @@ def run_train(
     """
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
-        url=url,
+        data_source=data_source,
         config_path=config_path,
         artifact_path=artifact_path,
         run_path=run_path,
@@ -298,7 +298,7 @@ def run_train(
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_generate(
     config_path: PathT,
-    url: str,
+    data_source: str,
     run_path: PathT | None,
     artifact_path: PathT | None,
     output_file: PathT | None,
@@ -324,7 +324,7 @@ def run_generate(
     """
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
-        url=url,
+        data_source=data_source,
         config_path=config_path,
         artifact_path=artifact_path,
         run_path=run_path,
@@ -354,7 +354,7 @@ def run_generate(
     with traced_user("SafeSynthesizer"):
         ss = SafeSynthesizer(config, workdir=workdir)
 
-        # Only set data source if provided via --url
+        # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
         if df is not None:
             ss = ss.with_data_source(df)

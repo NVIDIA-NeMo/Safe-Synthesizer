@@ -137,7 +137,7 @@ class TestOutputFileOverride:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--output-file",
                 str(custom_output),
@@ -166,7 +166,7 @@ class TestOutputFileOverride:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(fixture_session_cache_dir),
@@ -214,7 +214,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(artifacts_dir),
@@ -244,7 +244,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -275,7 +275,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(artifacts_dir),
@@ -306,7 +306,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--dataset-registry",
                 "./registry.yaml",
@@ -329,7 +329,7 @@ class TestRunTrainOptions:
         result = cli_runner.invoke(run, ["train", "--help"])
 
         assert result.exit_code == 0
-        assert "--url" in result.output
+        assert "--data-source" in result.output
         assert "--config" in result.output
         assert "--run-path" in result.output
 
@@ -347,7 +347,7 @@ class TestRunTrainOptions:
             run,
             [
                 "train",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -379,7 +379,7 @@ class TestRunTrainOptions:
             run,
             [
                 "train",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -404,7 +404,7 @@ class TestRunTrainOptions:
             run,
             [
                 "train",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--dataset-registry",
                 "./registry.yaml",
@@ -447,7 +447,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
             ],
         )
@@ -470,7 +470,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -502,7 +502,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(artifacts_dir),
@@ -536,7 +536,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -568,7 +568,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -598,7 +598,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--dataset-registry",
                 "./registry.yaml",

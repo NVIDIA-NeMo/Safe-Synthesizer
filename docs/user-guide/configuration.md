@@ -25,13 +25,13 @@ through to the next layer.
 Start from model defaults, override one field via CLI:
 
 ```bash
-safe-synthesizer run --url data.csv --generation__num_records 2000
+safe-synthesizer run --data-source data.csv --generation__num_records 2000
 ```
 
 Use a YAML base for most settings, tune one field per run without editing the file:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv \
+safe-synthesizer run --config config.yaml --data-source data.csv \
   --training__learning_rate 0.001
 ```
 
@@ -143,7 +143,7 @@ for details.
 
 PII replacement detects and replaces personally identifiable information in
 your dataset before synthesis. It is on by default -- set `replace_pii: null`
-in YAML (or use `--no_replace_pii` on the CLI) to disable it.
+in YAML (or use `--no-replace-pii` on the CLI) to disable it.
 The `replace_pii` block is only needed when customizing entity types or
 classification via the SDK.
 
@@ -287,7 +287,7 @@ safe-synthesizer config create --training__pretrained_model "HuggingFaceTB/SmolL
 Use double underscores to address nested fields:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv \
+safe-synthesizer run --config config.yaml --data-source data.csv \
   --training__learning_rate 0.001 \
   --data__holdout 0.1 \
   --generation__num_records 5000

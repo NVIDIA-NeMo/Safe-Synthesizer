@@ -36,7 +36,7 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-On by default, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses. Disable with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
+On by default, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses. Disable with `--no-replace-pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
 
 See [Privacy](privacy.md) for detailed PII documentation.
 
@@ -76,13 +76,13 @@ Safe Synthesizer supports diverse tabular data:
 
 ```bash
 # Full end-to-end pipeline
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 
 # Training only
-safe-synthesizer run train --config config.yaml --url data.csv
+safe-synthesizer run train --config config.yaml --data-source data.csv
 
 # Generation only (requires a trained adapter)
-safe-synthesizer run generate --config config.yaml --url data.csv --run-path /path/to/trained/run
+safe-synthesizer run generate --config config.yaml --data-source data.csv --run-path /path/to/trained/run
 ```
 
 ### Python SDK

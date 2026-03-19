@@ -44,7 +44,7 @@ The same run, three ways -- 10,000 records with DP-SGD:
 
     ```bash
     safe-synthesizer run \
-      --url data.csv \
+      --data-source data.csv \
       --generation__num_records 10000 \
       --privacy__dp_enabled true \
       --privacy__epsilon 8.0
@@ -76,14 +76,14 @@ The same run, three ways -- 10,000 records with DP-SGD:
     ```
 
     ```bash
-    safe-synthesizer run --config config.yaml --url data.csv
+    safe-synthesizer run --config config.yaml --data-source data.csv
     ```
 
 ---
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
+The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--no-replace-pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
 
 ```mermaid
 flowchart LR
@@ -100,7 +100,7 @@ Run the full end-to-end pipeline in one step:
     ```bash
     safe-synthesizer run \
       --config config.yaml \
-      --url data.csv \
+      --data-source data.csv \
       --artifact-path ./artifacts
     ```
 
@@ -135,12 +135,12 @@ Pass `--config` to load a base config, then override individual fields with
 
 ```bash
 # All defaults, no config file
-safe-synthesizer run --url data.csv
+safe-synthesizer run --data-source data.csv
 
 # Config file as base, override two fields
 safe-synthesizer run \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --training__learning_rate 0.001 \
   --generation__num_records 2000
 ```
@@ -184,18 +184,18 @@ Without a subcommand, `run` executes the full end-to-end pipeline (data processi
 PII replacement, training, generation, evaluation). PII replacement is on by default.
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 ```
 
 #### Common Options
 
-These options apply to `run` and `run generate`. Only `--url` is required;
+These options apply to `run` and `run generate`. Only `--data-source` is required;
 all others have defaults or are optional.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
 | `--config` | `NSS_CONFIG` | (model defaults) | Path to YAML config file; omit to use all model defaults |
-| `--url` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
+| `--data-source` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
 | `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
 | `--output-file` | -- | -- | Path to output CSV file |
@@ -219,7 +219,7 @@ for the full syntax, examples, and precedence rules.
 Train only -- saves the adapter without generating or evaluating.
 
 ```bash
-safe-synthesizer run train --config config.yaml --url data.csv
+safe-synthesizer run train --config config.yaml --data-source data.csv
 ```
 
 Accepts the same common options and synthesis parameter overrides as `run`.
@@ -231,13 +231,13 @@ Generate only -- requires a previously trained adapter.
 ```bash
 safe-synthesizer run generate \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --auto-discover-adapter
 
 # Or specify an explicit run path
 safe-synthesizer run generate \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --run-path ./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00
 ```
 
@@ -275,11 +275,11 @@ registry name.
 
 Data source options:
 
-- CLI / dataset registry: `--url data.csv` -- supports `.csv`, `.json`, `.jsonl`, `.parquet`, `.txt`
-- URL: `--url https://example.com/data.csv`
+- CLI / dataset registry: `--data-source data.csv` -- supports `.csv`, `.json`, `.jsonl`, `.parquet`, `.txt`
+- URL: `--data-source https://example.com/data.csv`
 - DataFrame (SDK): `.with_data_source(df)` -- supports any format you can load into pandas
 - CSV path (SDK): `.with_data_source("data.csv")` -- loaded via `pd.read_csv`; for non-CSV formats, load into a DataFrame first
-- Dataset registry name: `--url my_dataset` (with `--dataset-registry registry.yaml`)
+- Dataset registry name: `--data-source my_dataset` (with `--dataset-registry registry.yaml`)
 
 ### Grouping and Ordering
 
@@ -293,7 +293,7 @@ customer ID) so related rows are trained together. Use
     safe-synthesizer run \
       --data__group_training_examples_by customer_id \
       --data__order_training_examples_by transaction_date \
-      --url transactions.csv
+      --data-source transactions.csv
     ```
 
 === "SDK"
@@ -334,7 +334,7 @@ datasets:
 ```
 
 ```bash
-safe-synthesizer run --dataset-registry registry.yaml --url customer_transactions
+safe-synthesizer run --dataset-registry registry.yaml --data-source customer_transactions
 ```
 
 See [Configuration Reference -- Data](configuration.md#data) for the full parameter table.
@@ -357,14 +357,14 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
     If your dataset does not contain PII, you may disable this stage to reduce pipeline
     runtime:
 
-    - CLI: `--no_replace_pii`
+    - CLI: `--no-replace-pii`
     - SDK: `.with_replace_pii(enable=False)`
 
 === "CLI"
 
     ```bash
     safe-synthesizer run \
-      --url data.csv
+      --data-source data.csv
     ```
 
     Non-list PII settings can be overridden from the CLI, e.g.
@@ -473,7 +473,7 @@ Two backends are available:
     safe-synthesizer run \
       --training__learning_rate 0.001 \
       --training__batch_size 4 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -515,7 +515,7 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
     safe-synthesizer run \
       --training__quantize_model true \
       --training__quantization_bits 4 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -569,7 +569,7 @@ Opacus.
     safe-synthesizer run \
       --privacy__dp_enabled true \
       --privacy__epsilon 8.0 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -636,7 +636,7 @@ flowchart TD
     safe-synthesizer run \
       --generation__num_records 5000 \
       --generation__temperature 0.7 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -671,7 +671,7 @@ records. Use it when the pipeline struggles to produce valid records.
     ```bash
     safe-synthesizer run \
       --generation__use_structured_generation true \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -711,7 +711,7 @@ fraction per batch.
     safe-synthesizer run \
       --generation__patience 5 \
       --generation__invalid_fraction_threshold 0.6 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -768,7 +768,7 @@ interpretation.
     safe-synthesizer run \
       --evaluation__mia_enabled false \
       --evaluation__aia_enabled false \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -801,7 +801,7 @@ To skip evaluation entirely (e.g., for faster iteration during development):
     ```bash
     safe-synthesizer run \
       --evaluation__enabled false \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -846,7 +846,7 @@ to sort within groups.
       --time_series__timestamp_column timestamp \
       --time_series__timestamp_interval_seconds 60 \
       --data__group_training_examples_by sensor_id \
-      --url sensor_data.csv
+      --data-source sensor_data.csv
     ```
 
 === "SDK"
@@ -893,7 +893,7 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
 === "CLI"
 
     ```bash
-    safe-synthesizer run train --config config.yaml --url data.csv
+    safe-synthesizer run train --config config.yaml --data-source data.csv
     ```
 
 === "SDK"
@@ -917,7 +917,7 @@ the CLI Commands section for all options.
     ```bash
     safe-synthesizer run generate \
       --config config.yaml \
-      --url data.csv \
+      --data-source data.csv \
       --auto-discover-adapter
     ```
 
@@ -964,14 +964,14 @@ synthesizer.save_results()
 
 Each run writes to a directory named `<config-stem>---<dataset-stem>/<run_name>`
 under the artifact path. The config and dataset stems are derived from the
-filenames you pass to `--config` and `--url`, making it easy to identify runs
+filenames you pass to `--config` and `--data-source`, making it easy to identify runs
 at a glance. `<run_name>` defaults to an ISO 8601 timestamp (e.g., `2026-01-15T12:00:00`).
 
 To use an explicit output directory (skipping the auto-generated
 `<config>---<dataset>/<run_name>` structure), pass `--run-path`:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv --run-path ./my-run
+safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my-run
 ```
 
 ```text
@@ -1081,7 +1081,7 @@ config file.
     ```bash
     safe-synthesizer run \
       --config config.yaml \
-      --url data.csv \
+      --data-source data.csv \
       --wandb-mode online \
       --wandb-project my-experiments
     ```
