@@ -12,29 +12,29 @@ Full reference for pipeline execution. For a quick first run, see
 
 ## Configuration Interfaces
 
-NeMo Safe Synthesizer has two ways to run the pipeline and three and a half ways to configure it.
+NeMo Safe Synthesizer has two ways to run the pipeline and four-and-a-half ways to configure it.
 
 Two ways to run:
 
 - `safe-synthesizer` CLI -- the command-line application
 - Python SDK -- the [`SafeSynthesizer`][nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer] builder, for use in scripts, notebooks, and services
 
-Three and a half ways to configure:
+Four-and-a-half ways to configure:
 
 - YAML config file -- a portable, versionable snapshot of parameters; passed to the CLI via `--config` or loaded in the SDK with [`SafeSynthesizerParameters.from_yaml()`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters]
 - CLI flags -- `--generation__num_records 10000`, `--privacy__dp_enabled true`; override the YAML file when both are provided
 - Python SDK builder calls -- `.with_generate(num_records=10000)`, `.with_differential_privacy(dp_enabled=True)`; override the YAML file when both are used
+- [Dataset registry](#dataset-registry) -- a YAML file (passed via `--dataset-registry`) that defines named datasets and their parameter overrides so you can refer to them by name in the CLI
 - Environment variables (the half) -- control infrastructure only: artifact paths, logging, model cache locations, WandB mode. They do not set synthesis parameters like learning rate or record count
 
 The asymmetry matters: YAML and environment variables are *configuration only* -- they don't invoke the pipeline. CLI and SDK are *run and configure* -- they set parameters and execute.
 
 All configuration surfaces share the same underlying [Pydantic](https://docs.pydantic.dev/) parameter models defined in `src/nemo_safe_synthesizer/config/`. The `__` syntax used in CLI flags (e.g. `--privacy__dp_enabled true`) mirrors the nested structure of those models: `privacy` is the config section, `dp_enabled` is the field. Setting a parameter via YAML, CLI flag, or SDK call resolves to the same field in the same model.
 
-When multiple surfaces are used together, later layers override earlier ones:
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
-```text
-CLI flags  >  dataset registry  >  YAML config file  >  model defaults
-```
+- CLI: `CLI flags` > `dataset registry` > `YAML config file` > `model defaults`
+- SDK: `Python SDK builder calls` > `YAML config file` > `model defaults`
 
 See [Configuration Precedence](configuration.md#configuration-precedence) for details.
 
@@ -83,7 +83,7 @@ The same run, three ways -- 10,000 records with DP-SGD:
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
+The pipeline runs five stages in sequence. PII replacement is on by default as a pre-processing step; disable it with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
 
 ```mermaid
 flowchart LR
@@ -362,15 +362,23 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
 
 === "CLI"
 
+    Default (PII on, no config needed):
+
     ```bash
-    safe-synthesizer run \
-      --url data.csv
+    safe-synthesizer run --url data.csv
     ```
 
-    Non-list PII settings can be overridden from the CLI, e.g.
-    `--replace_pii__globals__classify__enable_classify true`.
-    List-typed fields (like `entities`) cannot be set via CLI flags;
-    use YAML or the SDK for those at this time.
+    Customize (e.g. enable LLM classification and restrict entity types):
+    put the `replace_pii` block in a YAML file and pass it with `--config`.
+    List-typed fields like `entities` cannot be set via CLI flags; use the
+    config file (see Config reference tab) or SDK.
+
+    ```bash
+    safe-synthesizer run --config pii_config.yaml --url data.csv
+    ```
+
+    To override only non-list PII settings from the CLI, use the `__` syntax,
+    e.g. `--replace_pii__globals__classify__enable_classify true`.
 
 === "SDK"
 
@@ -422,7 +430,7 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
     ```
 
     `steps` is required and has no default. The snippet above shows a minimal
-    single-step config. For the full default ruleset (40+ entity types), use
+    single-step config. For the full default ruleset (50+ entity types), use
     [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
     in the SDK and export it to YAML:
 
@@ -465,7 +473,24 @@ Two backends are available:
 | Backend | Description | When to use |
 |---------|-------------|-------------|
 | Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
-| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via Opacus | Required for differential privacy; also the fallback when Unsloth is unavailable |
+| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
+
+Three models have been extensively tested:
+
+| Family | HuggingFace ID |
+|--------|----------------|
+| SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
+| Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+
+We recommend you start with the default, `HuggingFaceTB/SmolLM3-3B`. However, depending on your use case, you may find a different model to be a better fit.
+
+Based on testing, some trade-offs identified compared to SmolLM3 on average:
+- TinyLlama runs ~17% faster, while Mistral takes ~2x as long to run.
+- Mistral has ~6% increase in valid record fraction, while TinyLlama has ~7% decrease.
+- Mistral has ~5% higher job completion rate and TinyLlama has ~3% higher.
+- Mistral is comparable to SmolLM3 in Data Privacy Score, while TinyLlama has ~0.1 point decrease.
+- All 3 have comparable Synthetic Quality Scores.
 
 === "CLI"
 
@@ -560,8 +585,7 @@ Common values:
 ### Differential Privacy
 
 Differential privacy (DP) provides a formal bound on what an adversary can
-learn about any individual record. Safe Synthesizer implements DP-SGD via
-Opacus.
+learn about any individual record. Safe Synthesizer implements Differentially Private Stochastic Gradient Descent (DP-SGD) via [Opacus](https://opacus.ai/).
 
 === "CLI"
 
@@ -600,7 +624,7 @@ Compatibility constraints when DP is enabled:
 
 !!! note "DP training trade-offs"
     DP training is slower and typically requires more epochs to reach the same
-    loss as non-DP training. Start with `epsilon: 8.0` -- a common practical
+    loss as non-DP training. Start with `epsilon: 8.0` -- a common, practical
     threshold -- and lower it only if your privacy requirements demand it.
     Very low epsilon values (e.g., below 1.0) significantly degrade model
     utility.
@@ -746,18 +770,18 @@ See [Configuration Reference -- Generation](configuration.md#generation) for the
 ## Evaluation
 
 Measures quality and privacy of synthetic data and produces an HTML report
-with interactive visualizations. Two composite scores are reported:
+with interactive visualizations. Scores are from 0-10, and higher is better. Two composite scores are reported:
 
-- Synthetic Quality Score (SQS): measures statistical fidelity -- how well
-  column distributions, correlations, and structure in the synthetic data match
-  the training data. Higher is better (scale of 0--10).
-- Data Privacy Score (DPS): measures resistance to privacy attacks. Higher
-  means the synthetic data leaks less information about individual training
-  records. DPS is a composite of three subscores:
-    - MIA (Membership Inference Attack) -- privacy risk assessment
-    - AIA (Attribute Inference Attack) -- quasi-identifier privacy; requires a
-      larger sample size to work well
-    - PII replay detection -- checks whether PII from training appears in synthetic data
+- SQS (Synthetic Quality Score) -- composite quality score with five subscores:
+    - Column Correlation Stability -- measures the correlation across every combination of two numeric and categorical columns
+    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis (PCA)
+    - Column Distribution Stability -- measures the distribution of each numeric and categorical column
+    - Text Structure Similarity -- measures the sentence, word, and character counts for text columns
+    - Text Semantic Similarity -- measures whether the semantic meaning in text columns held after synthesizing
+- DPS (Data Privacy Score) -- composite privacy score with three subscores:
+    - Membership Inference Protection -- measures whether a model trained on the data can distinguish training records from held-out records
+    - Attribute Inference Protection -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data
+    - PII Replay Detection -- checks whether PII from training appears in synthetic data
 
 See [Evaluation](../product-overview/evaluation.md) for details on score
 interpretation.
