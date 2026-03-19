@@ -8450,6 +8450,7 @@ to customize entity types.</p>
 </span></code></pre></div>
 <p>Replace <code>data.csv</code> with your actual input file. Any <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>,
 <code>.parquet</code>, or <code>.txt</code> file works -- see <a href="../running/#data-input">Running Safe Synthesizer -- Data Input</a> for all supported formats.</p>
+<p>Your dataset should have at least 1,000 records (10,000 records if using <a href="../running/#differential-privacy">differential privacy</a>).</p>
 <p>The command above fine-tunes a LoRA adapter on your data, generates 1000 synthetic records,
 and produces an evaluation report. The default outputs are placed in
 <code>./safe-synthesizer-artifacts/&lt;config&gt;---&lt;dataset&gt;/&lt;run_name&gt;/</code></p>
@@ -8482,6 +8483,7 @@ and prepares it for training:</p>
   model's context window raise a <a class="autorefs autorefs-internal" title="            GenerationError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.GenerationError"><code>GenerationError</code></a> rather than being silently
   truncated</li>
 </ul>
+<p>Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy).</p>
 <h3 id="2-pii-replacement">2. PII Replacement<a class="headerlink" href="#2-pii-replacement" title="Permanent link">&para;</a></h3>
 <p>PII replacement is on by default as a pre-processing step. The PII replacer detects
 personally identifiable information (PII) using GLiNER NER and optional LLM-based

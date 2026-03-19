@@ -8396,6 +8396,7 @@
 <li>Text: Free-form text fields</li>
 <li>Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental)</li>
 </ul>
+<p>Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy).</p>
 <h3 id="differential-privacy">Differential Privacy<a class="headerlink" href="#differential-privacy" title="Permanent link">&para;</a></h3>
 <p>A high level of privacy protection is achieved simply through the process of generating synthetic data, and is often a sufficient balance between privacy and utility. For use cases that require maximum privacy, you can fine-tune with differential privacy.</p>
 <p>Differential privacy (DP) is the gold standard for privacy protection, providing mathematical guarantees that individual records cannot be identified. When you enable DP, NeMo Safe Synthesizer introduces calibrated noise during model training to ensure that the synthetic data generation process is provably private.</p>
