@@ -177,14 +177,10 @@ entity types, LLM classification setup, and SDK customization.
 ### 3. Training
 
 Fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two backends are
-available:
-
-| Backend | Description |
-|---------|-------------|
-| Unsloth | Optimized training for faster fine-tuning (auto-selected by default) |
-| HuggingFace | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via [Opacus](https://opacus.ai/) |
-
-If you enable differential privacy, the pipeline automatically switches to use the HuggingFace backend.
+available -- Unsloth (default, faster) and HuggingFace (required for
+differential privacy). Both perform LoRA fine-tuning; see
+[Pipeline -- Training](../product-overview/pipeline.md#4-training) for a
+comparison.
 
 The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the backend or model).
 
