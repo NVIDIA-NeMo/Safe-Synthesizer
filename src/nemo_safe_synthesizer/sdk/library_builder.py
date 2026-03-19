@@ -460,6 +460,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert isinstance(self._data_source, pd.DataFrame)
 
         self.process_data().train().generate().evaluate()
+        self.save_results()
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> None:

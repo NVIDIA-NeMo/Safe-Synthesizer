@@ -1031,11 +1031,15 @@ Key outputs:
 
 ### SDK Results Access
 
+`run()` automatically saves `synthetic_data.csv` and `evaluation_report.html`
+to the artifacts directory. For stepwise execution, call `save_results()`
+explicitly after `evaluate()`.
+
 ```python
 results = synthesizer.results
 df = results.synthetic_data
 summary = results.summary
-synthesizer.save_results()
+# synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically
 ```
 
 ### Cleaning Up

@@ -219,12 +219,14 @@ def run(
         from ..sdk.library_builder import SafeSynthesizer
 
         ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
-        # ss.run() calls train + generate + evaluate. The generate step has its own try/finally,
+        # ss.run() calls train + generate + evaluate + save_results. The generate step has its own try/finally,
         # but train or evaluate failures leave the generator loaded; this guard ensures teardown
         # on all exit paths of the full pipeline.
         try:
             ss.run()
-            ss.save_results(output_file=settings.output_file or workdir.output_file)
+            if settings.output_file:
+                # Only save results if an output path overrides the default
+                ss.save_results(output_file=settings.output_file)
             ss.results.summary.log_summary(run_logger)
             ss.results.summary.timing.log_timing(run_logger)
             ss.results.summary.log_wandb()

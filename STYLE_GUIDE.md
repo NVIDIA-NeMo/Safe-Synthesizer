@@ -357,8 +357,7 @@ Standard context managers (`with open(...)`, `with lock:`) are fine when they fi
 
 ```python
 try:
-    ss.run()
-    ss.save_results(workdir)
+    ss.run()  # saves results automatically
 finally:
     if hasattr(ss, "generator") and ss.generator is not None:
         ss.generator.teardown()
