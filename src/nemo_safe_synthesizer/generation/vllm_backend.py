@@ -419,7 +419,7 @@ class VllmBackend(GeneratorBackend):
         Returns:
             Batch object that contains the generated records and associated statistics.
         """
-        logger.debug("prompt: ", self.prompt)
+        logger.debug(f"generation prompt: chars: {len(self.prompt)}, prompt:\n{self.prompt}")
         prompt_list = [self.prompt] * num_prompts_per_batch
 
         # `n` is the number of output sequences per prompt.
@@ -427,8 +427,14 @@ class VllmBackend(GeneratorBackend):
         sampling_kwargs.update({"n": 1})
 
         for idx, output in enumerate(self._generate(prompts=prompt_list, **sampling_kwargs)):
-            logger.debug(f"output: {output.outputs[0].text}")
-            batch.process(idx, output.outputs[0].text)
+            out = output.outputs[0]
+            logger.info(
+                f"prompt {idx}: {len(out.token_ids)} tokens, "
+                f"finish_reason={out.finish_reason}, "
+                f"stop_reason={out.stop_reason}, "
+                f"text_tail={out.text[-80:]!r}"
+            )
+            batch.process(idx, out.text)
 
         return batch
 
@@ -509,6 +515,9 @@ class VllmBackend(GeneratorBackend):
                 sampling_kwargs["stop_token_ids"] = [eos_id]
             if eos_str:
                 sampling_kwargs["stop"] = [eos_str]
+            logger.info(
+                f"grouped stop: eos_id={eos_id}, eos_str={eos_str!r}, max_tokens={sampling_kwargs['max_tokens']}"
+            )
 
         self.prepare_params(**sampling_kwargs)
 
@@ -522,9 +531,11 @@ class VllmBackend(GeneratorBackend):
 
         while batches.num_valid_records < self.config.generation.num_records:
             # Generate a batch from prompts and process the responses.
+            num_prompts = batches.get_next_num_prompts()
+            logger.info(f"starting batch {batches.num_batches} with {num_prompts} prompts")
             start_time = time.perf_counter()
             batch: Batch = self._generate_batch(
-                num_prompts_per_batch=batches.get_next_num_prompts(),
+                num_prompts_per_batch=num_prompts,
                 batch=Batch(processor=self.processor),
                 **sampling_kwargs,
             )
