@@ -82,6 +82,8 @@ or
 Could not perform classify, falling back to default entities.
 ```
 
+When `NSS_INFERENCE_KEY` is not set, the same log line is followed by guidance to set it (and a note that `NSS_INFERENCE_ENDPOINT` is optional with the default API). When the key is set, a traceback may be included to show the underlying API error.
+
 Fix: set entity types explicitly in your config, or when using the CLI ensure
 `NSS_INFERENCE_KEY` is set (and `NSS_INFERENCE_ENDPOINT` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
 

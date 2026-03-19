@@ -101,12 +101,49 @@ DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 
 
 def _get_classify_endpoint_url() -> str:
-    """Return the inference endpoint URL for column classification.
+    """Resolve the NIM/OpenAI-compatible base URL for PII column classification.
 
-    Reads ``NSS_INFERENCE_ENDPOINT`` from the environment; if unset, uses the default
-    NVIDIA integrate API URL.
+    If ``NSS_INFERENCE_ENDPOINT`` is present in the environment, that value is used.
+     If the variable is unset, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT``.
+
+    Note:
+        Emits an INFO log indicating whether the default or configured URL applies.
+
+    Returns:
+        inference endpoint for PII column classification.
     """
-    return os.environ.get("NSS_INFERENCE_ENDPOINT", DEFAULT_NSS_INFERENCE_ENDPOINT)
+    configured = os.environ.get("NSS_INFERENCE_ENDPOINT")
+    if configured is None:
+        url = DEFAULT_NSS_INFERENCE_ENDPOINT
+        logging.info(
+            "PII column classification will call the default NVIDIA inference API at %s. "
+            "To use another server, set the NSS_INFERENCE_ENDPOINT environment variable to a NIM/OpenAI-compatible endpoint.",
+            url,
+        )
+    else:
+        url = configured
+        logging.info(
+            "PII column classification will use the inference API you configured (NSS_INFERENCE_ENDPOINT): %s",
+            url,
+        )
+    return url
+
+
+def _inference_key_configured() -> bool:
+    """Return whether ``NSS_INFERENCE_KEY`` is set to a non-empty value."""
+    return bool((os.environ.get("NSS_INFERENCE_KEY") or "").strip())
+
+
+def _column_classify_failure_remediation(exc: BaseException) -> str:
+    """Extra log text after column classifier init or classify failures."""
+    if not _inference_key_configured():
+        return (
+            " Please set NSS_INFERENCE_KEY in the environment. Get an API key at https://build.nvidia.com/settings/api-keys. "
+            "NSS_INFERENCE_ENDPOINT is optional when using the default NVIDIA inference API."
+        )
+    return (
+        f" If this persists, check NSS_INFERENCE_ENDPOINT and that your API key is valid. ({type(exc).__name__}: {exc})"
+    )
 
 
 def get_column_classifier() -> ColumnClassifierLLM:
@@ -255,9 +292,11 @@ class NemoPII(object):
                 # Try to initialize the column classifier
                 try:
                     column_classifier = get_column_classifier()
-                except Exception:
+                except Exception as exc:
                     logging.error(
-                        "Could not initialize column classifier, falling back to default entities.", exc_info=False
+                        "Could not initialize column classifier, falling back to default entities.%s",
+                        _column_classify_failure_remediation(exc),
+                        exc_info=_inference_key_configured(),
                     )
 
                 # Try to perform classification if we successfully got a classifier
@@ -273,8 +312,12 @@ class NemoPII(object):
                             )
                             for (name, entity) in columns.items()
                         }
-                    except Exception:
-                        logging.error("Could not perform classify, falling back to default entities.", exc_info=False)
+                    except Exception as exc:
+                        logging.error(
+                            "Could not perform classify, falling back to default entities.%s",
+                            _column_classify_failure_remediation(exc),
+                            exc_info=_inference_key_configured(),
+                        )
             else:
                 logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")
         finally:
