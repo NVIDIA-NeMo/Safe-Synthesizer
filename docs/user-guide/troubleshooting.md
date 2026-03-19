@@ -134,7 +134,7 @@ because the table has too many columns for the model's context window.
    or simplify the schema.
 2. When using `data.group_training_examples_by`, all records in the same group must fit
    in context together, making the limit tighter. Consider reducing the number of records per group.
-3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to 
+3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to
    extend the context window.
    When set to `"auto"`, it is estimated from dataset token counts using
    heuristics (4 chars per token for text, 1 token per digit) -- this can

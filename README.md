@@ -396,7 +396,7 @@ See [script/slurm/README.md](script/slurm/README.md) for detailed instructions o
 
 ## Testing
 
-We have pytest set up for unit, integration, and end-to-end tests.
+We have pytest set up for unit, smoke, and end-to-end tests.
 
 ### Running Tests
 

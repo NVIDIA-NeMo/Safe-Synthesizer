@@ -767,6 +767,8 @@ class SmolLM2(ModelMetadata):
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=False,
                 tokenizer=tokenizer,
+                bos_token="<|im_start|>",
+                bos_token_id=151644,
                 name=model_name_or_path,
             ),
             model_name_or_path=model_name_or_path,
