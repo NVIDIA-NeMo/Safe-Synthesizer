@@ -238,7 +238,7 @@ Column classification uses a NIM/OpenAI-compatible endpoint to detect entity typ
 in your data. `NSS_INFERENCE_ENDPOINT` defaults to `https://integrate.api.nvidia.com/v1`;
 override it to use a different endpoint.
 
-When using the CLI, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
+When using the CLI or Python SDK, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
 using the default) so column classification can run.
 
 ### Local Endpoint

@@ -179,7 +179,7 @@ export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
 export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
-When using the CLI: for column classification to work, set `NSS_INFERENCE_KEY` (and
+When using the CLI or SDK: for column classification to work, set `NSS_INFERENCE_KEY` (and
 `NSS_INFERENCE_ENDPOINT` only if you are not using the default URL).
 
 To disable column classification entirely instead of pointing it at a local
