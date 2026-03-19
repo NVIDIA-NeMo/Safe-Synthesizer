@@ -54,6 +54,6 @@ class TestNSSGenerationGPU:
         backend.initialize()
         backend.prepare_params(temperature=0.9, top_p=1.0, max_new_tokens=64)
         try:
-            backend.generate(keep_llm_state=False)
+            backend.generate()
         except GenerationError as exc:
             assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
