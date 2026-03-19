@@ -9048,7 +9048,7 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">10000</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--privacy__dp_enabled<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--privacy__epsilon<span class="w"> </span><span class="m">8</span>.0
@@ -9074,14 +9074,14 @@
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">dp_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">epsilon</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8.0</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 </div>
 </div>
 <hr />
 <h2 id="running-the-pipeline">Running the Pipeline<a class="headerlink" href="#running-the-pipeline" title="Permanent link">&para;</a></h2>
-<p>The pipeline runs five stages in sequence. PII replacement is on by default as a pre-processing step; disable it with <code>--no_replace_pii</code> (CLI) or <code>.with_replace_pii(enable=False)</code> (SDK).</p>
+<p>The pipeline runs five stages in sequence. PII replacement is on by default as a pre-processing step; disable it with <code>--no-replace-pii</code> (CLI) or <code>.with_replace_pii(enable=False)</code> (SDK).</p>
 <pre class="mermaid"><code>flowchart LR
     data[Data Input] --&gt; pii["PII Replacement&lt;br/&gt;(on by default)"]
     pii --&gt; train["Training&lt;br/&gt;LoRA fine-tune"]
@@ -9093,7 +9093,7 @@
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--config<span class="w"> </span>config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--artifact-path<span class="w"> </span>./artifacts
 </span></code></pre></div>
 </div>
@@ -9122,12 +9122,12 @@ values from the file.</p>
 <p>Pass <code>--config</code> to load a base config, then override individual fields with
 <code>--key__subkey value</code> syntax:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># All defaults, no config file</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Config file as base, override two fields</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--config<span class="w"> </span>config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">2000</span>
 </span></code></pre></div>
@@ -9162,10 +9162,10 @@ for the full override precedence rules.</p>
 <h3 id="run-execute-the-pipeline"><code>run</code> -- Execute the Pipeline<a class="headerlink" href="#run-execute-the-pipeline" title="Permanent link">&para;</a></h3>
 <p>Without a subcommand, <code>run</code> executes the full end-to-end pipeline (data processing,
 PII replacement, training, generation, evaluation). PII replacement is on by default.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <h4 id="common-options">Common Options<a class="headerlink" href="#common-options" title="Permanent link">&para;</a></h4>
-<p>These options apply to <code>run</code> and <code>run generate</code>. Only <code>--url</code> is required;
+<p>These options apply to <code>run</code> and <code>run generate</code>. Only <code>--data-source</code> is required;
 all others have defaults or are optional.</p>
 <table>
 <thead>
@@ -9184,7 +9184,7 @@ all others have defaults or are optional.</p>
 <td>Path to YAML config file; omit to use all model defaults</td>
 </tr>
 <tr>
-<td><code>--url</code></td>
+<td><code>--data-source</code></td>
 <td>--</td>
 <td>(required)</td>
 <td>Dataset path, URL, or name from <code>--dataset-registry</code></td>
@@ -9258,20 +9258,20 @@ See <a href="../configuration/#cli-override-syntax">Configuration Reference -- C
 for the full syntax, examples, and precedence rules.</p>
 <h3 id="run-train"><code>run train</code><a class="headerlink" href="#run-train" title="Permanent link">&para;</a></h3>
 <p>Train only -- saves the adapter without generating or evaluating.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>Accepts the same common options and synthesis parameter overrides as <code>run</code>.</p>
 <h3 id="run-generate"><code>run generate</code><a class="headerlink" href="#run-generate" title="Permanent link">&para;</a></h3>
 <p>Generate only -- requires a previously trained adapter.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--config<span class="w"> </span>config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--auto-discover-adapter
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Or specify an explicit run path</span>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>--config<span class="w"> </span>config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--run-path<span class="w"> </span>./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00
 </span></code></pre></div>
 <table>
@@ -9335,11 +9335,11 @@ for the full syntax, examples, and precedence rules.</p>
 registry name.</p>
 <p>Data source options:</p>
 <ul>
-<li>CLI / dataset registry: <code>--url data.csv</code> -- supports <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>, <code>.parquet</code>, <code>.txt</code></li>
-<li>URL: <code>--url https://example.com/data.csv</code></li>
+<li>CLI / dataset registry: <code>--data-source data.csv</code> -- supports <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>, <code>.parquet</code>, <code>.txt</code></li>
+<li>URL: <code>--data-source https://example.com/data.csv</code></li>
 <li>DataFrame (SDK): <code>.with_data_source(df)</code> -- supports any format you can load into pandas</li>
 <li>CSV path (SDK): <code>.with_data_source("data.csv")</code> -- loaded via <code>pd.read_csv</code>; for non-CSV formats, load into a DataFrame first</li>
-<li>Dataset registry name: <code>--url my_dataset</code> (with <code>--dataset-registry registry.yaml</code>)</li>
+<li>Dataset registry name: <code>--data-source my_dataset</code> (with <code>--dataset-registry registry.yaml</code>)</li>
 </ul>
 <h3 id="grouping-and-ordering">Grouping and Ordering<a class="headerlink" href="#grouping-and-ordering" title="Permanent link">&para;</a></h3>
 <p>Use <code>data.group_training_examples_by</code> to group records by a column (e.g.,
@@ -9351,7 +9351,7 @@ customer ID) so related rows are trained together. Use
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>--data__group_training_examples_by<span class="w"> </span>customer_id<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--data__order_training_examples_by<span class="w"> </span>transaction_date<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--url<span class="w"> </span>transactions.csv
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--data-source<span class="w"> </span>transactions.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9385,7 +9385,7 @@ customer ID) so related rows are trained together. Use
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span><span class="nt">data</span><span class="p">:</span>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">        </span><span class="nt">group_training_examples_by</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;customer_id&quot;</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--dataset-registry<span class="w"> </span>registry.yaml<span class="w"> </span>--url<span class="w"> </span>customer_transactions
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--dataset-registry<span class="w"> </span>registry.yaml<span class="w"> </span>--data-source<span class="w"> </span>customer_transactions
 </span></code></pre></div>
 <p>See <a href="../configuration/#data">Configuration Reference -- Data</a> for the full parameter table.</p>
 <hr />
@@ -9404,7 +9404,7 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
 <p>If your dataset does not contain PII, you may disable this stage to reduce pipeline
 runtime:</p>
 <ul>
-<li>CLI: <code>--no_replace_pii</code></li>
+<li>CLI: <code>--no-replace-pii</code></li>
 <li>SDK: <code>.with_replace_pii(enable=False)</code></li>
 </ul>
 </div>
@@ -9412,7 +9412,7 @@ runtime:</p>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>Default (PII on, no config needed):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--url<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>Customize (e.g. enable LLM classification and restrict entity types):
 put the <code>replace_pii</code> block in a YAML file and pass it with <code>--config</code>.
@@ -9563,7 +9563,7 @@ generation without re-training.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--training__batch_size<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9629,7 +9629,7 @@ precision. Set <code>training.quantize_model</code> to <code>true</code> and cho
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span>--training__quantize_model<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span>--training__quantization_bits<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9677,7 +9677,7 @@ learn about any individual record. Safe Synthesizer implements Differentially Pr
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span>--privacy__dp_enabled<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span>--privacy__epsilon<span class="w"> </span><span class="m">8</span>.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9736,7 +9736,7 @@ records, the loop stops early.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">5000</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">  </span>--generation__temperature<span class="w"> </span><span class="m">0</span>.7<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9767,7 +9767,7 @@ records. Use it when the pipeline struggles to produce valid records.</p>
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="w">  </span>--generation__use_structured_generation<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9804,7 +9804,7 @@ fraction per batch.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="w">  </span>--generation__patience<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="w">  </span>--generation__invalid_fraction_threshold<span class="w"> </span><span class="m">0</span>.6<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9860,7 +9860,7 @@ interpretation.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span>--evaluation__mia_enabled<span class="w"> </span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span>--evaluation__aia_enabled<span class="w"> </span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9889,7 +9889,7 @@ interpretation.</p>
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="w">  </span>--evaluation__enabled<span class="w"> </span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="w">  </span>--url<span class="w"> </span>data.csv
+</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9929,7 +9929,7 @@ to sort within groups.</p>
 </span><span id="__span-48-3"><a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a><span class="w">  </span>--time_series__timestamp_column<span class="w"> </span>timestamp<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-48-4"><a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="w">  </span>--time_series__timestamp_interval_seconds<span class="w"> </span><span class="m">60</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-48-5"><a id="__codelineno-48-5" name="__codelineno-48-5" href="#__codelineno-48-5"></a><span class="w">  </span>--data__group_training_examples_by<span class="w"> </span>sensor_id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-48-6"><a id="__codelineno-48-6" name="__codelineno-48-6" href="#__codelineno-48-6"></a><span class="w">  </span>--url<span class="w"> </span>sensor_data.csv
+</span><span id="__span-48-6"><a id="__codelineno-48-6" name="__codelineno-48-6" href="#__codelineno-48-6"></a><span class="w">  </span>--data-source<span class="w"> </span>sensor_data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9970,7 +9970,7 @@ See <a href="../troubleshooting/#time-series">Troubleshooting -- Time Series</a>
 <div class="tabbed-set tabbed-alternate" data-tabs="14:2"><input checked="checked" id="__tabbed_14_1" name="__tabbed_14" type="radio" /><input id="__tabbed_14_2" name="__tabbed_14" type="radio" /><div class="tabbed-labels"><label for="__tabbed_14_1">CLI</label><label for="__tabbed_14_2">SDK</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -9992,7 +9992,7 @@ the CLI Commands section for all options.</p>
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="w">  </span>--config<span class="w"> </span>config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-53-3"><a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-53-3"><a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-53-4"><a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a><span class="w">  </span>--auto-discover-adapter
 </span></code></pre></div>
 </div>
@@ -10033,11 +10033,11 @@ the CLI Commands section for all options.</p>
 <h2 id="artifacts-and-output">Artifacts and Output<a class="headerlink" href="#artifacts-and-output" title="Permanent link">&para;</a></h2>
 <p>Each run writes to a directory named <code>&lt;config-stem&gt;---&lt;dataset-stem&gt;/&lt;run_name&gt;</code>
 under the artifact path. The config and dataset stems are derived from the
-filenames you pass to <code>--config</code> and <code>--url</code>, making it easy to identify runs
+filenames you pass to <code>--config</code> and <code>--data-source</code>, making it easy to identify runs
 at a glance. <code>&lt;run_name&gt;</code> defaults to an ISO 8601 timestamp (e.g., <code>2026-01-15T12:00:00</code>).</p>
 <p>To use an explicit output directory (skipping the auto-generated
 <code>&lt;config&gt;---&lt;dataset&gt;/&lt;run_name&gt;</code> structure), pass <code>--run-path</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv<span class="w"> </span>--run-path<span class="w"> </span>./my-run
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span>--run-path<span class="w"> </span>./my-run
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>safe-synthesizer-artifacts/
 </span><span id="__span-57-2"><a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a>└── &lt;config&gt;---&lt;dataset&gt;/
@@ -10140,7 +10140,7 @@ config file.</p>
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-61-2"><a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a><span class="w">  </span>--config<span class="w"> </span>config.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-61-3"><a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a><span class="w">  </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-61-3"><a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-61-4"><a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a><span class="w">  </span>--wandb-mode<span class="w"> </span>online<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-61-5"><a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a><span class="w">  </span>--wandb-project<span class="w"> </span>my-experiments
 </span></code></pre></div>

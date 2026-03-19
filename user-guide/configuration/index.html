@@ -8428,10 +8428,10 @@ environment variables, see <a href="../environment/">Environment Variables</a>.<
 through to the next layer.</p>
 <h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
 <p>Start from model defaults, override one field via CLI:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--url<span class="w"> </span>data.csv<span class="w"> </span>--generation__num_records<span class="w"> </span><span class="m">2000</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span>--generation__num_records<span class="w"> </span><span class="m">2000</span>
 </span></code></pre></div>
 <p>Use a YAML base for most settings, tune one field per run without editing the file:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001
 </span></code></pre></div>
 <p>Load a YAML base from Python, override a section with the builder:</p>
@@ -8705,7 +8705,7 @@ for details.</p>
 <h2 id="replacing-pii">Replacing PII<a class="headerlink" href="#replacing-pii" title="Permanent link">&para;</a></h2>
 <p>PII replacement detects and replaces personally identifiable information (PII) in
 your dataset before synthesis. It is on by default -- set <code>replace_pii: null</code>
-in YAML (or use <code>--no_replace_pii</code> on the CLI) to disable it.
+in YAML (or use <code>--no-replace-pii</code> on the CLI) to disable it.
 The <code>replace_pii</code> block is only needed when customizing entity types or
 classification via the SDK.</p>
 <p>Key config parameters:</p>
@@ -9049,7 +9049,7 @@ after a pipeline run.</p>
 </table>
 <h3 id="cli-override-syntax">CLI Override Syntax<a class="headerlink" href="#cli-override-syntax" title="Permanent link">&para;</a></h3>
 <p>Use double underscores to address nested fields:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--data__holdout<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">5000</span>

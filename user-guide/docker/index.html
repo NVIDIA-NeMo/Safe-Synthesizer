@@ -8351,7 +8351,7 @@ Hugging Face cache, then pass CLI arguments after the image name:</p>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span></code></pre></div>
 <p>The entrypoint prints helpful warnings if it detects common mistakes
 (empty <code>/workspace</code>, missing <code>HF_HOME</code>, no GPU access).</p>
@@ -8361,14 +8361,14 @@ Hugging Face cache, then pass CLI arguments after the image name:</p>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>train<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Generate from a trained adapter</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>generate<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv<span class="w"> </span>--auto-discover-adapter
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>generate<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv<span class="w"> </span>--auto-discover-adapter
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Validate a config file (no GPU needed)</span>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>docker<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
@@ -8382,7 +8382,7 @@ by bind-mounting host directories with <code>-v</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-v<span class="w"> </span>/home/user/project:/workspace/data<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>...
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span></code></pre></div>
 <p>Docker requires absolute paths for bind mounts. Relative paths like
 <code>-v data:/workspace/data</code> are silently interpreted as named volumes --
@@ -8398,7 +8398,7 @@ directory. Use <code>$(pwd)</code> to expand relative paths:</p>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>-v<span class="w"> </span>/data/output:/workspace/output<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">NSS_ARTIFACTS_PATH</span><span class="o">=</span>/workspace/output<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>...
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/configs/my_config.yaml<span class="w"> </span>--url<span class="w"> </span>/workspace/inputs/data.csv
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/configs/my_config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/inputs/data.csv
 </span></code></pre></div>
 <p>Artifacts are written to <code>/workspace/safe-synthesizer-artifacts/</code> by default
 (override with <code>NSS_ARTIFACTS_PATH</code>). Make sure to mount a host directory
@@ -8412,7 +8412,7 @@ image. The most common ones:</p>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_TOKEN</span><span class="o">=</span><span class="s2">&quot;hf_...&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span></code></pre></div>
 <table>
 <thead>
@@ -8529,7 +8529,7 @@ reuse the populated cache in the target environment:</p>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>-v<span class="w"> </span>/path/to/data:/workspace/data<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># Step 2: use in offline environment</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
@@ -8537,7 +8537,7 @@ reuse the populated cache in the target environment:</p>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>-v<span class="w"> </span>/shared/hf_cache:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HUB_OFFLINE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span></code></pre></div>
 <p>See <a href="../environment/#hugging-face-cache">Environment Variables -- Hugging Face Cache</a>
 for details on <code>HF_HOME</code>, <code>HF_HUB_OFFLINE</code>, and <code>VLLM_CACHE_ROOT</code>.</p>
@@ -8567,7 +8567,7 @@ a bash shell. Mount your data the same way as a normal run:</p>
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>nss-gpu:latest
 </span></code></pre></div>
 <p>Inside the container you can run <code>safe-synthesizer</code> commands directly:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>appuser@container:/workspace$<span class="w"> </span>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--url<span class="w"> </span>/workspace/data/input.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>appuser@container:/workspace$<span class="w"> </span>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data/input.csv
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>appuser@container:/workspace$<span class="w"> </span>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml
 </span></code></pre></div>
 <hr />
@@ -8601,12 +8601,12 @@ targets that handle GPU flags, HF cache mounts, and workspace bind mounts:</p>
 </tbody>
 </table>
 <p>Override variables as needed:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>make<span class="w"> </span>container-run-gpu<span class="w"> </span><span class="nv">CONTAINER_HF_CACHE</span><span class="o">=</span>/shared/hf_cache<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --url /workspace/data.csv&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>make<span class="w"> </span>container-run-gpu<span class="w"> </span><span class="nv">CONTAINER_HF_CACHE</span><span class="o">=</span>/shared/hf_cache<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data.csv&quot;</span>
 </span></code></pre></div>
 <p>Mount data from outside the repo tree with <code>CONTAINER_EXTRA_MOUNTS</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>make<span class="w"> </span>container-run-gpu<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nv">CONTAINER_EXTRA_MOUNTS</span><span class="o">=</span><span class="s2">&quot;-v /data/sensitive:/workspace/data&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --url /workspace/data/customers.csv&quot;</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data/customers.csv&quot;</span>
 </span></code></pre></div>
 <hr />
 <h2 id="what-to-read-next">What to Read Next<a class="headerlink" href="#what-to-read-next" title="Permanent link">&para;</a></h2>

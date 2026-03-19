@@ -2003,10 +2003,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.cli.settings.CLISettings.url" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.cli.settings.CLISettings.data_source" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;url
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;data_source
       
     </span>
   </a>
@@ -8361,10 +8361,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.cli.settings.CLISettings.url" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.cli.settings.CLISettings.data_source" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;url
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;data_source
       
     </span>
   </a>
@@ -8794,7 +8794,7 @@
   <h3 id="nemo_safe_synthesizer.cli.settings--from-environment-variables-only">From environment variables only<a class="headerlink" href="#nemo_safe_synthesizer.cli.settings--from-environment-variables-only" title="Permanent link">&para;</a></h3>
 <p>settings = CLISettings()</p>
 <h3 id="nemo_safe_synthesizer.cli.settings--from-click-kwargs-cli-takes-precedence-over-env-vars">From Click kwargs (CLI takes precedence over env vars)<a class="headerlink" href="#nemo_safe_synthesizer.cli.settings--from-click-kwargs-cli-takes-precedence-over-env-vars" title="Permanent link">&para;</a></h3>
-<p>settings = CLISettings.from_cli_kwargs(url="data.csv", artifact_path="/tmp")</p>
+<p>settings = CLISettings.from_cli_kwargs(data_source="data.csv", artifact_path="/tmp")</p>
 <h3 id="nemo_safe_synthesizer.cli.settings--access-composed-settings">Access composed settings<a class="headerlink" href="#nemo_safe_synthesizer.cli.settings--access-composed-settings" title="Permanent link">&para;</a></h3>
 <p>log_format = settings.observability.nss_log_format
 wandb_mode = settings.wandb.wandb_mode</p>
@@ -8971,18 +8971,18 @@ CLI arguments (passed via <code>from_cli_kwargs</code>), and composed sub-settin
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            url = Field(default=None, description='Dataset URL, name, or path to CSV')
+            <td><code><a class="autorefs autorefs-internal" title="            data_source = Field(default=None, description='Dataset name, URL, or path to CSV')
 
   
       class-attribute
       instance-attribute
-   (nemo_safe_synthesizer.cli.settings.CLISettings.url)" href="#nemo_safe_synthesizer.cli.settings.CLISettings.url">url</a></code></td>
+   (nemo_safe_synthesizer.cli.settings.CLISettings.data_source)" href="#nemo_safe_synthesizer.cli.settings.CLISettings.data_source">data_source</a></code></td>
             <td>
                   <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Dataset URL, name, or path to CSV.</p>
+                <p>Dataset name, URL, or path to CSV.</p>
               </div>
             </td>
           </tr>
@@ -9319,20 +9319,20 @@ CLI arguments (passed via <code>from_cli_kwargs</code>), and composed sub-settin
 
 
 
-<h4 id="nemo_safe_synthesizer.cli.settings.CLISettings.url" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">url</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Dataset URL, name, or path to CSV&#39;</span><span class="p">)</span></code>
+<h4 id="nemo_safe_synthesizer.cli.settings.CLISettings.data_source" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">data_source</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Dataset name, URL, or path to CSV&#39;</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
       <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.cli.settings.CLISettings.url" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.cli.settings.CLISettings.data_source" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Dataset URL, name, or path to CSV.</p>
+        <p>Dataset name, URL, or path to CSV.</p>
 
     </div>
 

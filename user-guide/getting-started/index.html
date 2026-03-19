@@ -8388,7 +8388,7 @@ code. An A100 or larger GPU is required to run the full pipeline.</p>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/workspace<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config.yaml<span class="w"> </span>--url<span class="w"> </span>/workspace/data.csv
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data.csv
 </span></code></pre></div>
 <p>No local Python install needed. See <a href="../docker/">Docker</a> for full
 setup, volume mounts, and offline usage.</p>
@@ -8442,11 +8442,11 @@ Service or any Python project that needs to construct or validate
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">generation</span><span class="p">:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">num_records</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
 </span></code></pre></div>
-<p>PII replacement as a pre-processing step is on by default. Pass <code>--no_replace_pii</code> on the CLI to skip it, or see <a href="../configuration/#replacing-pii">Configuration -- Replacing PII</a>
+<p>PII replacement as a pre-processing step is on by default. Pass <code>--no-replace-pii</code> on the CLI to skip it, or see <a href="../configuration/#replacing-pii">Configuration -- Replacing PII</a>
 to customize entity types.</p>
 </div>
 <p>Then run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>Replace <code>data.csv</code> with your actual input file. Any <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>,
 <code>.parquet</code>, or <code>.txt</code> file works -- see <a href="../running/#data-input">Running Safe Synthesizer -- Data Input</a> for all supported formats.</p>
