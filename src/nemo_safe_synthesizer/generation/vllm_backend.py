@@ -179,6 +179,8 @@ class VllmBackend(GeneratorBackend):
         """Initialize and load the model into memory."""
         self._torn_down = False
 
+        # vLLM 0.12+ accepts attention_config as a constructor arg (replaces the
+        # VLLM_ATTENTION_BACKEND env var used in 0.11.x).
         attn_backend = self.config.generation.attention_backend
         attention_config = {"backend": attn_backend} if attn_backend not in (None, "auto") else None
 
