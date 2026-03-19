@@ -442,12 +442,13 @@ When using the CLI, set both for column classification:
 
 ```bash
 export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
-export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the default endpoint)
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
 ```
 
-No environment variables are required for NER-only PII replacement; column
-classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`
-if not using the default).
+PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
+When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
+falls back to NER-only detection (with an error log). No environment
+variables are required for NER-only PII replacement.
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 

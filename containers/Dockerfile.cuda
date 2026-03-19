@@ -26,7 +26,7 @@
 #   -v HOST:CONTAINER   bind-mount data and HF cache (use absolute paths)
 #   -e HF_HOME=...      persist model downloads across container runs
 #   -e HF_TOKEN=...     HF token for gated models (Llama, Mistral, etc.)
-#   -e NSS_INFERENCE_KEY=...  NSS inference endpoint key for PII classification (optional)
+#   -e NSS_INFERENCE_KEY=...  inference API key for PII column classification (optional)
 #
 # Interactive shell:
 #   docker run -it --gpus all --shm-size=1g \

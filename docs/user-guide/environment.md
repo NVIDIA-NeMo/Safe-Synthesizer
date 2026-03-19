@@ -28,7 +28,7 @@ are cached, and which network endpoints are used.
 | `NSS_WANDB_MODE` | `--wandb-mode` | WandB mode (alias for `WANDB_MODE`) |
 | `NSS_WANDB_PROJECT` | `--wandb-project` | WandB project name (alias for `WANDB_PROJECT`) |
 | `NSS_INFERENCE_ENDPOINT` | -- | LLM endpoint for PII column classification (default: `https://integrate.api.nvidia.com/v1`) |
-| `NSS_INFERENCE_KEY` | -- | API key for the NSS inference endpoint is required for column classification in both CLI and SDK. |
+| `NSS_INFERENCE_KEY` | -- | API key for the `NSS_INFERENCE_ENDPOINT` is required for column classification in both CLI and SDK. |
 | `NIM_MODEL_ID` | -- | Column classification model ID |
 | `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (Unsloth, GLiNER) |
 | `SAFE_SYNTHESIZER_CPU_COUNT` | -- | NER CPU processes |
@@ -175,7 +175,7 @@ The NIM/OpenAI-compatible endpoint used for PII column classification. Defaults
 to `https://integrate.api.nvidia.com/v1` when unset. Override for a custom endpoint:
 
 ```bash
-export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
+export NSS_INFERENCE_ENDPOINT="https://your-llm-inference-endpoint"
 export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
@@ -212,7 +212,7 @@ PII classify config is deeply nested -- use YAML or SDK:
 
 ### `NSS_INFERENCE_KEY`
 
-API key for the NSS inference endpoint. Required for column classification when using the
+API key for the NSS inference endpoint. Required for PII column classification when using the
 CLI and SDK (with the default or custom `NSS_INFERENCE_ENDPOINT`).
 
 ### `NIM_MODEL_ID`
