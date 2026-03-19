@@ -468,10 +468,14 @@ model. Only the adapter is updated during training, which keeps VRAM
 requirements low and produces a compact artifact that can be reused for
 generation without re-training.
 
-Two backends are available -- Unsloth (default, faster) and HuggingFace
-(for differential privacy and quantization). Both perform LoRA fine-tuning; see
-[Pipeline -- Training](../product-overview/pipeline.md#4-training) for a
-comparison.
+Two backends are available:
+
+| Backend | Description |
+|---------|-------------|
+| Unsloth | LoRA fine-tuning with optimized kernels for faster training and lower VRAM usage. Uses Unsloth's `FastLanguageModel` for model loading and PEFT wrapping |
+| HuggingFace | LoRA fine-tuning via PEFT with 4-bit/8-bit quantization support and optional differential privacy (DP-SGD) via [Opacus](https://opacus.ai/) |
+
+If you enable differential privacy, the pipeline automatically switches to the HuggingFace backend.
 
 Three models have been extensively tested:
 
