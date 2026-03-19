@@ -1,0 +1,32 @@
+# Dockerfile for NeMo Safe Synthesizer on DGX Spark (aarch64)
+#
+# Base: NVIDIA vLLM container with torch + vLLM + Triton pre-installed
+#
+# Build:
+#   docker build -f containers/Dockerfile.cuda-aarch64 -t nss-spark .
+#
+# Run:
+#   docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+#     -it nss-spark
+#
+FROM nvcr.io/nvidia/vllm:26.02-py3
+
+ENV TRITON_CACHE_DIR=/workspace/.triton_cache
+ENV BNB_CUDA_VERSION=130
+
+WORKDIR /workspace/Safe-Synthesizer
+COPY . .
+
+# 1. Install NSS package (no deps — we manage them explicitly)
+RUN pip install --no-deps -e .
+
+# 2. Torch-dependent packages — --no-deps preserves the container's torch/CUDA
+RUN pip install --no-deps \
+    peft accelerate bitsandbytes datasets==4.3.0 trl==0.26.1 \
+    hf_transfer unsloth unsloth_zoo \
+    opacus sentence-transformers gliner kernels
+
+# 3. Remaining deps (safe to resolve normally)
+RUN pip install -e ".[engine,cuda-aarch64]"
+
+ENTRYPOINT ["/usr/bin/bash"]

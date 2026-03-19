@@ -203,16 +203,27 @@ class VllmBackend(GeneratorBackend):
         # check this when updating unsloth in the future.
         enforce_eager = self.config.training.use_unsloth is True
 
+        vllm_kwargs = dict(
+            model=self.config.training.pretrained_model,
+            gpu_memory_utilization=max_vram,
+            enable_lora=True,
+            max_lora_rank=self.config.training.lora_r,
+            structured_outputs_config=structured_outputs_config,
+            enforce_eager=enforce_eager,
+        )
+        # attention_config was added in vLLM 0.12+ but is not present in NGC
+        # container builds (e.g. nvcr.io/nvidia/vllm:26.02-py3 ships 0.15.1 without it).
+        # Fall back to VLLM_ATTENTION_BACKEND env var if the kwarg is not accepted.
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
-            self.llm = vLLM(
-                model=self.config.training.pretrained_model,
-                gpu_memory_utilization=max_vram,
-                enable_lora=True,
-                max_lora_rank=self.config.training.lora_r,
-                structured_outputs_config=structured_outputs_config,
-                enforce_eager=enforce_eager,
-                attention_config=attention_config,
-            )
+            if attention_config is not None:
+                try:
+                    self.llm = vLLM(**vllm_kwargs, attention_config=attention_config)
+                except TypeError:
+                    if attn_backend not in (None, "auto"):
+                        os.environ["VLLM_ATTENTION_BACKEND"] = attn_backend
+                    self.llm = vLLM(**vllm_kwargs)
+            else:
+                self.llm = vLLM(**vllm_kwargs)
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.

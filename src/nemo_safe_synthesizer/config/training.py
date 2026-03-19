@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import platform
 from typing import (
     Annotated,
     Literal,
@@ -10,6 +11,7 @@ from typing import (
 
 from pydantic import (
     Field,
+    model_validator,
 )
 
 from ..configurator.parameters import (
@@ -269,3 +271,11 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = "kernels-community/vllm-flash-attn3"
+
+    @model_validator(mode="after")
+    def _resolve_platform_defaults(self) -> "TrainingHyperparams":
+        """Override defaults that are incompatible with the current platform."""
+        if platform.machine() == "aarch64":
+            if self.attn_implementation == "kernels-community/vllm-flash-attn3":
+                self.attn_implementation = "sdpa"
+        return self
