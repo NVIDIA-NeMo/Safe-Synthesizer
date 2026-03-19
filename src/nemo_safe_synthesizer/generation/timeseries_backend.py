@@ -568,6 +568,8 @@ class TimeseriesBackend(VllmBackend):
             skip_special_tokens=sampling_params.skip_special_tokens,
             include_stop_str_in_output=sampling_params.include_stop_str_in_output,
             ignore_eos=sampling_params.ignore_eos,
+            stop=sampling_params.stop,
+            stop_token_ids=sampling_params.stop_token_ids,
         )
 
         return modified_params, effective_samples_per_prompt
@@ -880,6 +882,16 @@ class TimeseriesBackend(VllmBackend):
         num_records = self.config.generation.num_records
 
         need_special_token_outputs = not isinstance(self.processor, TimeSeriesDataProcessor)
+        eos_stop = (
+            [self.model_metadata.prompt_config.eos_token]
+            if need_special_token_outputs and self.model_metadata.prompt_config.eos_token
+            else None
+        )
+        eos_stop_ids = (
+            [self.model_metadata.prompt_config.eos_token_id]
+            if need_special_token_outputs and self.model_metadata.prompt_config.eos_token_id is not None
+            else None
+        )
         sampling_params = SamplingParams(
             temperature=self.config.generation.temperature,
             repetition_penalty=self.config.generation.repetition_penalty,
@@ -890,6 +902,8 @@ class TimeseriesBackend(VllmBackend):
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,
             ignore_eos=need_special_token_outputs,
+            stop=eos_stop,
+            stop_token_ids=eos_stop_ids,
         )
 
         batches = GenerationBatches(

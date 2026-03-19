@@ -501,6 +501,15 @@ class VllmBackend(GeneratorBackend):
             include_stop_str_in_output=need_special_token_outputs,
             ignore_eos=need_special_token_outputs,
         )
+
+        if need_special_token_outputs:
+            eos_id = self.model_metadata.prompt_config.eos_token_id
+            eos_str = self.model_metadata.prompt_config.eos_token
+            if eos_id is not None:
+                sampling_kwargs["stop_token_ids"] = [eos_id]
+            if eos_str:
+                sampling_kwargs["stop"] = [eos_str]
+
         self.prepare_params(**sampling_kwargs)
 
         # The batches object collects batches and keeps track of the stopping condition.

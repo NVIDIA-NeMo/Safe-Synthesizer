@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.config import (
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
+from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F401
 
 
@@ -520,3 +521,54 @@ class TestNoopRemoteCacheBackend:
         fake_redis = MagicMock()
         with patch.dict("sys.modules", {"redis": fake_redis}):
             assert _is_redis_available() is True
+
+
+class TestGroupedGenerationStopKwargs:
+    """Tests that stop kwargs are injected when processor is not TabularDataProcessor."""
+
+    def test_stop_kwargs_added_for_grouped_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+        """When processor is not TabularDataProcessor, stop and stop_token_ids must appear."""
+        mock_model_metadata.prompt_config.eos_token = "</s>"
+        mock_model_metadata.prompt_config.eos_token_id = 2
+        mock_model_metadata.max_seq_length = 2048
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        assert not isinstance(backend.processor, TabularDataProcessor)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["stop"] == ["</s>"]
+        assert captured["stop_token_ids"] == [2]
+        assert captured["ignore_eos"] is True
+        assert captured["include_stop_str_in_output"] is True
+
+    def test_no_stop_kwargs_for_tabular_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+        """When processor is TabularDataProcessor, stop kwargs must not appear."""
+        mock_model_metadata.max_seq_length = 2048
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.processor = MagicMock(spec=TabularDataProcessor)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert "stop" not in captured
+        assert "stop_token_ids" not in captured
+        assert captured["ignore_eos"] is False
