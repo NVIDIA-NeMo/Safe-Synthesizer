@@ -93,7 +93,7 @@ uv sync --frozen --extra cu128 --extra engine --group dev
 
 
 # for column classification
-export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
+export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
 source "${LUSTRE_DIR}/.api_tokens.sh"
 

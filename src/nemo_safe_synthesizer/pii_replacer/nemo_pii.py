@@ -97,28 +97,28 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
     return entity_extractor
 
 
-DEFAULT_NIM_ENDPOINT_URL = "https://integrate.api.nvidia.com/v1"
+DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 
 
 def _get_classify_endpoint_url() -> str:
     """Return the inference endpoint URL for column classification.
 
-    Reads ``NIM_ENDPOINT_URL`` from the environment; if unset, uses the default
+    Reads ``NSS_INFERENCE_ENDPOINT`` from the environment; if unset, uses the default
     NVIDIA integrate API URL.
     """
-    return os.environ.get("NIM_ENDPOINT_URL", DEFAULT_NIM_ENDPOINT_URL)
+    return os.environ.get("NSS_INFERENCE_ENDPOINT", DEFAULT_NSS_INFERENCE_ENDPOINT)
 
 
 def get_column_classifier() -> ColumnClassifierLLM:
-    """Return a column classifier backed by the NIM endpoint (``NIM_ENDPOINT_URL``, ``NVIDIA_API_KEY``)."""
+    """Return a column classifier backed by the NSS inference endpoint (``NSS_INFERENCE_ENDPOINT``, ``NSS_INFERENCE_KEY``)."""
     classifier = ColumnClassifierLLM()
     classifier._num_samples = 5
 
     endpoint = _get_classify_endpoint_url()
 
     # When using Inference Gateway, no API key is needed (gateway handles auth).
-    # For legacy direct endpoint, NVIDIA_API_KEY can be provided.
-    api_key = os.environ.get("NVIDIA_API_KEY", "not-needed")
+    # For legacy direct endpoint, NSS_INFERENCE_KEY can be provided.
+    api_key = os.environ.get("NSS_INFERENCE_KEY", "not-needed")
 
     classifier._llm = OpenAI(api_key=api_key, base_url=endpoint)
     return classifier

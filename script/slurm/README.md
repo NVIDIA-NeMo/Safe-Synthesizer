@@ -22,7 +22,7 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 ### Prerequisites
 
 - Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
-- Nvidia API Key: You will need a `NVIDIA_API_KEY` to run column classification. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com) using your `nvidian` organization account.
+- Nvidia API Key: You will need a `NSS_INFERENCE_KEY` to run column classification. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com) using your `nvidian` organization account.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
 ```bash
@@ -85,9 +85,9 @@ export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 export USER_NAME=your_lustre_username
 ```
 
-2) Create your API token file with `NVIDIA_API_KEY` and restrict permissions, recommended to inclue `HF_TOKEN` to avoid throttling by HF Hub and, if you're using W&B, `WANDB_API_KEY`:
+2) Create your API token file with `NSS_INFERENCE_KEY` and restrict permissions, recommended to inclue `HF_TOKEN` to avoid throttling by HF Hub and, if you're using W&B, `WANDB_API_KEY`:
 ```bash
-echo 'export NVIDIA_API_KEY="<your_api_key>"' > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
+echo 'export NSS_INFERENCE_KEY="<your_api_key>"' > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
 chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
 ```
 
@@ -214,7 +214,7 @@ Use W&B by setting `WANDB_MODE=online` in `env_variables.sh` and add your W&B to
 ### Troubleshooting
 
 - "USER_NAME is not set": run `export USER_NAME=...` and retry.
-- Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NVIDIA_API_KEY` and `chmod 600`.
+- Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NSS_INFERENCE_KEY` and `chmod 600`.
 - Missing config files: verify `CONFIGS` in `env_variables.sh` and files in `CONFIG_DIR`.
 - Permission errors: confirm your `/lustre/.../${USER_NAME}` paths and file perms.
 

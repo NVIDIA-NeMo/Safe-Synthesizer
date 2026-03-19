@@ -235,10 +235,10 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 ## NIM Integration
 
 Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
-in your data. `NIM_ENDPOINT_URL` defaults to `https://integrate.api.nvidia.com/v1`;
+in your data. `NSS_INFERENCE_ENDPOINT` defaults to `https://integrate.api.nvidia.com/v1`;
 override it to use a different endpoint.
 
-When using the CLI, set `NVIDIA_API_KEY` (and `NIM_ENDPOINT_URL` only if not
+When using the CLI, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
 using the default) so column classification can run.
 
 ### Local Endpoint
@@ -246,8 +246,8 @@ using the default) so column classification can run.
 To point to a locally hosted LLM:
 
 ```bash
-export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
-export NVIDIA_API_KEY="your-api-key"  # pragma: allowlist secret
+export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
 ### Disable Classification

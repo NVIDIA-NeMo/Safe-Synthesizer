@@ -109,7 +109,7 @@ IDLE_EXEMPT_COMMENT='{"OccupiedIdleGPUsJobReaper":{"exemptIdleTimeMins":"15","re
 # Verify token file exists for NIM usage inside jobs
 if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
   echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
-  echo "Create it and define NVIDIA_API_KEY." >&2
+  echo "Create it and define NSS_INFERENCE_KEY." >&2
   exit 1
 fi
 

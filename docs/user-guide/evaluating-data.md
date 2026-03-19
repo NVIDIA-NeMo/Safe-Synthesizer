@@ -83,7 +83,7 @@ Could not perform classify, falling back to default entities.
 ```
 
 Fix: set entity types explicitly in your config, or when using the CLI ensure
-`NVIDIA_API_KEY` is set (and `NIM_ENDPOINT_URL` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
+`NSS_INFERENCE_KEY` is set (and `NSS_INFERENCE_ENDPOINT` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
 
 === "Config reference"
 
