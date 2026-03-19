@@ -385,7 +385,7 @@ class Workdir:
 
         # Generate run_name if not provided, otherwise parse it
         # RunName.from_string() accepts both timestamp and arbitrary names
-        if self.run_name is None:
+        if not self.run_name:
             self._run_name_obj = RunName()  # Auto-generates timestamp
             self.run_name = self._run_name_obj.to_string()
         else:

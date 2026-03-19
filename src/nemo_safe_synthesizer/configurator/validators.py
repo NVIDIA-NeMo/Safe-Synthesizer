@@ -92,11 +92,12 @@ class DependsOnValidator:
         if vf(value):
             if self.depends_on_func(info.data.get(self.depends_on)):
                 return value
-            else:
-                raise ValueError(
-                    f"{info.field_name} is only allowed when {self.depends_on} pass condition \
-                    `{inspect.getsource(self.depends_on_func)}`"
-                )
+            try:
+                src = inspect.getsource(self.depends_on_func)
+                msg = f"{info.field_name} is only allowed when {self.depends_on} passes condition `{src}`"
+            except OSError:
+                msg = f"{info.field_name} is only allowed when {self.depends_on} passes its dependency condition"
+            raise ValueError(msg)
 
         return value
 

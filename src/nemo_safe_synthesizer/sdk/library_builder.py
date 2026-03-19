@@ -178,6 +178,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         if _INITIALIZED_OBSERVABILITY:
             return
+        assert self._workdir is not None
         configure_logging_from_workdir(self._workdir)
         initialize_observability()
 

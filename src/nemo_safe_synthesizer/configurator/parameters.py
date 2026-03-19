@@ -231,8 +231,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         """
         return cls.model_validate(kwargs)
 
-    def get_auto_params(self) -> Iterable[Any]:
-        """Yield parameters whose current value is the ``"auto"`` sentinel."""
+    def get_auto_params(self) -> Iterator[str]:
+        """Yield field names whose current value is the ``"auto"`` sentinel."""
         for param in self:
-            if param == "auto":
-                yield param
+            for field_name, value in param.items():
+                if value == "auto":
+                    yield field_name

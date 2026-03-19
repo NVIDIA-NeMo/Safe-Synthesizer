@@ -182,6 +182,8 @@ def predictions_to_dict(
     }
     predictions_by_key = defaultdict(list)
     for prediction in predictions:
+        if prediction.field is None:
+            continue
         predictions_by_key[prediction.field].append(
             {
                 "start": prediction.start,
