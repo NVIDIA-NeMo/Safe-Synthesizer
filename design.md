@@ -311,7 +311,7 @@ Path: `src/nemo_safe_synthesizer/evaluation/`
 
 #### Privacy Module (`privacy/dp_transformers/`)
 
-- `OpacusDPTrainer`: Integration with Opacus for DP-SGD
+- `[Opacus](https://opacus.ai/)DPTrainer`: Integration with Opacus for DP-SGD
 - Privacy Arguments: DP hyperparameters
 - Custom Layers: DP-compatible layers
 

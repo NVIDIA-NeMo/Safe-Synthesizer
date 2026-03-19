@@ -219,11 +219,18 @@ def run(
         from ..sdk.library_builder import SafeSynthesizer
 
         ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
-        ss.run()
-        ss.save_results(output_file=settings.output_file or workdir.output_file)
-        ss.results.summary.log_summary(run_logger)
-        ss.results.summary.timing.log_timing(run_logger)
-        ss.results.summary.log_wandb()
+        # ss.run() calls train + generate + evaluate. The generate step has its own try/finally,
+        # but train or evaluate failures leave the generator loaded; this guard ensures teardown
+        # on all exit paths of the full pipeline.
+        try:
+            ss.run()
+            ss.save_results(output_file=settings.output_file or workdir.output_file)
+            ss.results.summary.log_summary(run_logger)
+            ss.results.summary.timing.log_timing(run_logger)
+            ss.results.summary.log_wandb()
+        finally:
+            if hasattr(ss, "generator") and ss.generator is not None:
+                ss.generator.teardown()
 
 
 @run.command("train")
@@ -359,9 +366,18 @@ def run_generate(
         if df is not None:
             ss = ss.with_data_source(df)
 
-        ss = ss.load_from_save_path().process_data().generate().evaluate().save_results(output_file=final_output_file)
-        ss.generator.teardown()
-        ss.results.summary.log_summary(run_logger)
-        ss.results.summary.timing.log_timing(run_logger)
-        run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
-        ss.results.summary.log_wandb()
+        try:
+            ss = (
+                ss.load_from_save_path()
+                .process_data()
+                .generate()
+                .evaluate()
+                .save_results(output_file=final_output_file)
+            )
+            ss.results.summary.log_summary(run_logger)
+            ss.results.summary.timing.log_timing(run_logger)
+            run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
+            ss.results.summary.log_wandb()
+        finally:
+            if hasattr(ss, "generator") and ss.generator is not None:
+                ss.generator.teardown()

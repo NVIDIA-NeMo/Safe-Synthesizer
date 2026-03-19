@@ -130,15 +130,15 @@ because the table has too many columns for the model's context window.
 
 #### How to Fix
 
-1. Increase `training.rope_scaling_factor` to extend the context window.
+1. Reduce record size -- shorten text fields, drop unnecessary columns,
+   or simplify the schema.
+2. When using `data.group_training_examples_by`, all records in the same group must fit
+   in context together, making the limit tighter. Consider reducing the number of records per group.
+3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to 
+   extend the context window.
    When set to `"auto"`, it is estimated from dataset token counts using
    heuristics (4 chars per token for text, 1 token per digit) -- this can
-   underestimate for complex or multilingual data.
-2. Reduce record size -- shorten text fields, drop unnecessary columns,
-   or simplify the schema.
-3. When using `data.group_training_examples_by`, multiple records must fit
-   in context together, making the limit tighter. Consider reducing
-   `data.max_sequences_per_example` or simplifying the grouped records.
+   underestimate for complex or multilingual data. `training.rope_scaling_factor` is not applicable when using `HuggingFaceTB/SmolLM3-3B` (default model) or `mistralai/Mistral-7B-Instruct-v0.3`.
 
 !!! note "Error type clarification"
     These errors are typed as `GenerationError` in the codebase even though
@@ -186,9 +186,7 @@ Generation stopped prematurely because the average fraction of invalid records w
 ```
 
 : Too many invalid records across `generation.patience` consecutive batches.
-  Consider lowering `generation.invalid_fraction_threshold`, retraining with
-  more data, or increasing `training.rope_scaling_factor` if records are being
-  truncated.
+  Consider retraining with more records, adjusting `training.number_of_input_records_to_sample`, or setting `use_structured_generation=True`.
 
 For context-length errors during data assembly (`"The number of tokens in an
 example exceeds the available context length"`), see
@@ -232,7 +230,7 @@ Several defaults may not match your expectations:
 | `training.batch_size` | `1` | Effective batch = `batch_size` x `gradient_accumulation_steps` (8) |
 | `training.validation_ratio` | `0.0` | No validation split by default |
 | `data.holdout` | `0.05` | 5% of records held out for evaluation; capped by `data.max_holdout` (2000) |
-| `data.random_state` | `None` | Auto-generates a random seed -- set explicitly for reproducibility |
+| `data.random_state` | `None` | Auto-generates a random seed -- set this value explicitly if you need reproducibility |
 | `generation.num_records` | `1000` | May be too small for production use |
 
 ### Auto-Resolved Parameters
@@ -246,8 +244,7 @@ See [Configuration Reference](configuration.md) for the full list.
   for details and caveats
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
 - `training.use_unsloth` -- resolves to `true` unless DP is enabled.
-  DP uses Opacus per-sample gradients (`GradSampleModule`), which require
-  standard model layers and disable gradient checkpointing -- Unsloth's
+  DP uses [Opacus](https://opacus.ai/) per-sample gradients (`GradSampleModule`), which require standard model layers and disable gradient checkpointing -- Unsloth's
   custom layers and checkpointing are incompatible
 - `training.learning_rate` -- model-specific default from `ModelMetadata`:
   Mistral uses 0.0001, all other supported model families use 0.0005

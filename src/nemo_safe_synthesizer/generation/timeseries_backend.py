@@ -856,7 +856,6 @@ class TimeseriesBackend(VllmBackend):
 
     def generate(
         self,
-        keep_llm_state: bool = True,
         data_actions_fn: utils.DataActionsFn | None = None,
     ) -> GenerateJobResults:
         """Generate time-series tabular data using Nemo Safe Synthesizer.
@@ -872,7 +871,6 @@ class TimeseriesBackend(VllmBackend):
             seen during training (from model_metadata.initial_prefill).
 
         Args:
-            keep_llm_state: If True, keep the model in memory after generation.
             data_actions_fn: Optional function that takes a DataFrame and returns a modified DataFrame.
 
         Returns:
@@ -923,9 +921,6 @@ class TimeseriesBackend(VllmBackend):
 
         batches.job_complete()
         batches.log_status()
-
-        if not keep_llm_state:
-            self._clear_llm_state()
 
         generation_time_sec = time.monotonic() - generation_start
         self.elapsed_time = generation_time_sec

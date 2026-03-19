@@ -383,8 +383,11 @@ class SafeSynthesizer(ConfigBuilder):
                 config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
             )
 
-        self.generator.initialize()
-        self.generator.generate(keep_llm_state=False)
+        try:
+            self.generator.initialize()
+            self.generator.generate()
+        finally:
+            self.generator.teardown()
         self._generated = True
         return self
 

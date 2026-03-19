@@ -11,11 +11,10 @@ environment variables, see [Environment Variables](environment.md).
 
 ## Configuration Precedence
 
-Settings are resolved in this order, from highest to lowest priority:
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
-```text
-CLI flags  >  dataset registry overrides  >  YAML config file  >  model defaults
-```
+- CLI: `CLI flags` > `dataset registry overrides` > `YAML config file` > `model defaults`
+- SDK: `SDK builder calls` > `YAML config file` > `model defaults`
 
 Each layer only overrides what it explicitly sets -- everything else falls
 through to the next layer.
@@ -102,9 +101,8 @@ We have extensively tested the following models for synthetic data use in NSS, a
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 
-Within each family, any size variant on HuggingFace Hub should work.
-Benchmarking data for additional model families will be added as they are
-validated.
+Benchmarking data for additional models will be added as they are
+validated. To understand the trade-offs with model selection, see [Training](running.md#training).
 
 ---
 
@@ -141,7 +139,7 @@ for details.
 
 ## Replacing PII
 
-PII replacement detects and replaces personally identifiable information in
+PII replacement detects and replaces personally identifiable information (PII) in
 your dataset before synthesis. It is on by default -- set `replace_pii: null`
 in YAML (or use `--no-replace-pii` on the CLI) to disable it.
 The `replace_pii` block is only needed when customizing entity types or
@@ -164,7 +162,7 @@ for the full schema.
 
 Differential privacy (DP) provides a formal bound on what an adversary can
 learn about any individual record. Safe Synthesizer implements DP-SGD
-(Differentially Private Stochastic Gradient Descent) via Opacus.
+(Differentially Private Stochastic Gradient Descent) via [Opacus](https://opacus.ai/).
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|

@@ -51,13 +51,6 @@ are cached, and which network endpoints are used.
 
 ## Precedence
 
-Synthesis parameters:
-
-1. CLI flags (`--training__learning_rate 0.001`)
-2. Dataset registry overrides
-3. YAML config file
-4. Defaults
-
 Infrastructure settings (artifact path, logging, WandB):
 
 1. CLI flags (`--artifact-path`, `--log-format`, etc.)
