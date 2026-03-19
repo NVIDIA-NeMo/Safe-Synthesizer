@@ -8346,6 +8346,7 @@ DPS measure and how to read the HTML report, see
 For runtime errors, OOM issues, and configuration problems, see
 <a href="../troubleshooting/">Program Runtime</a>. For environment variables and model
 caching, see <a href="../environment/">Environment Variables</a>.</p>
+<p>There is always an inherent trade off between privacy and quality. A high level of privacy protection is achieved simply through the process of generating synthetic data, and is often a sufficient balance between privacy and utility. However, parameter tuning can often help you improve one without sacrificing the other.</p>
 <hr />
 <h2 id="differential-privacy">Differential Privacy<a class="headerlink" href="#differential-privacy" title="Permanent link">&para;</a></h2>
 <p>Differentially private (DP) training has strict requirements. Violating them produces errors that may
@@ -8363,7 +8364,7 @@ these are set automatically when running the full pipeline.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Unable to automatically determine a noise multiplier
 </span></code></pre></div>
 <p>The privacy budget (epsilon) is too low for your dataset size. Either increase
-<code>privacy.epsilon</code> or add more training records.</p>
+<code>privacy.epsilon</code> or add more training records. Generally, you need a minimum of ~10,000 records to achieve reasonable quality when DP is enabled.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Discrete mean differs
 </span></code></pre></div>
 <p>The <a href="https://github.com/microsoft/prv_accountant">PRV accountant</a> failed and
@@ -8445,13 +8446,13 @@ is reachable. PII classify config is deeply nested -- use YAML or SDK:</p>
 <td>Skipped; score marked UNAVAILABLE</td>
 </tr>
 <tr>
-<td>Attribute Inference Attack</td>
+<td>Attribute Inference Protection</td>
 <td>FAISS installed + <code>evaluation.quasi_identifier_count</code> columns (default 3; auto-reduced for smaller datasets)</td>
 <td>Skipped if FAISS missing; UNAVAILABLE if too few columns</td>
 </tr>
 <tr>
-<td>PCA (deep structure)</td>
-<td>2x2 matrix</td>
+<td>Deep Structure Stability</td>
+<td>2 columns, 2 rows</td>
 <td>Skipped with warning; score marked UNAVAILABLE</td>
 </tr>
 </tbody>

@@ -729,17 +729,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8326,17 +8315,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8430,7 +8408,7 @@
 <ol>
 <li>Tabular Fine-Tuning: fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties</li>
 <li>Generation: uses the fine-tuned model to generate new synthetic records that maintain data utility</li>
-<li>Privacy Protection: optionally applies differential privacy during training for mathematical privacy guarantees</li>
+<li>Privacy Protection: applies differential privacy during training for mathematical privacy guarantees (off by default) and PII replacement as a pre-processing step (on by default)</li>
 </ol>
 <h2 id="pipeline-stages">Pipeline Stages<a class="headerlink" href="#pipeline-stages" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart LR
@@ -8449,8 +8427,8 @@
 <li>Train/test split for holdout evaluation</li>
 </ul>
 <h3 id="2-pii-replacement">2. PII Replacement<a class="headerlink" href="#2-pii-replacement" title="Permanent link">&para;</a></h3>
-<p>On by default, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses. Disable with <code>--no_replace_pii</code> (CLI) or <code>.with_replace_pii(enable=False)</code> (SDK) if your data contains no PII.</p>
-<p>See <a href="privacy.md">Privacy</a> for detailed PII documentation.</p>
+<p>On by default, the PII replacer detects personally identifiable information (PII) using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. Disable with <code>--no_replace_pii</code> (CLI) or <code>.with_replace_pii(enable=False)</code> (SDK) if your data contains no PII.</p>
+<p>See <a href="../pii_replacement/">PII Replacement</a> for detailed PII Replacement documentation.</p>
 <h3 id="3-example-assembly">3. Example Assembly<a class="headerlink" href="#3-example-assembly" title="Permanent link">&para;</a></h3>
 <p>Records are converted to a JSON format and tokenized for model training. The assembler handles truncation, padding, and proper formatting for the target LLM.</p>
 <h3 id="4-training">4. Training<a class="headerlink" href="#4-training" title="Permanent link">&para;</a></h3>
@@ -8465,11 +8443,34 @@
 <tbody>
 <tr>
 <td><strong>HuggingFace</strong></td>
-<td>Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus</td>
+<td>Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via <a href="https://opacus.ai/">Opacus</a></td>
 </tr>
 <tr>
 <td><strong>Unsloth</strong></td>
 <td>Optimized training for faster fine-tuning</td>
+</tr>
+</tbody>
+</table>
+<p>Three models have been extensively tested:</p>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>HuggingFace ID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SmolLM3 (default)</td>
+<td><code>HuggingFaceTB/SmolLM3-3B</code></td>
+</tr>
+<tr>
+<td>TinyLlama</td>
+<td><code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code></td>
+</tr>
+<tr>
+<td>Mistral</td>
+<td><code>mistralai/Mistral-7B-Instruct-v0.3</code></td>
 </tr>
 </tbody>
 </table>
@@ -8483,7 +8484,7 @@
 <li>Numeric: continuous and discrete numerical values</li>
 <li>Categorical: text labels and categories</li>
 <li>Text: free-form text fields</li>
-<li>Temporal: event sequences and time series</li>
+<li>Temporal: event sequences and time series (Note: Temporal dataset support is currently experimental)</li>
 </ul>
 <h2 id="running-the-pipeline">Running the Pipeline<a class="headerlink" href="#running-the-pipeline" title="Permanent link">&para;</a></h2>
 <h3 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h3>
@@ -8514,39 +8515,15 @@
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <h3 id="resource-planning">Resource Planning<a class="headerlink" href="#resource-planning" title="Permanent link">&para;</a></h3>
 <ul>
+<li>NeMo Safe Synthesizer requires an NVIDIA GPU (A100 or larger) for training and generation</li>
 <li>Larger datasets and models require more GPU memory (80GB+ VRAM recommended)</li>
 <li>Training time scales with data size and model complexity</li>
-<li>Plan for 15-60 minutes for typical jobs</li>
+<li>Plan for 15-120 minutes for typical jobs</li>
 <li>Ensure sufficient disk space for models and datasets (50GB+ recommended)</li>
 </ul>
-<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
-<ul>
-<li>Start with default settings</li>
-<li>Enable PII replacement for sensitive data</li>
-<li>Use differential privacy for maximum privacy guarantees</li>
-<li>Adjust generation parameters based on evaluation results</li>
-</ul>
 <h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
-<p>GPU Memory Issues</p>
-<ul>
-<li>Reduce <code>batch_size</code> in training parameters</li>
-<li>Use a smaller subset of data for initial testing</li>
-<li>Increase <code>gradient_accumulation_steps</code> to maintain effective batch size with lower memory</li>
-<li>Check GPU usage with <code>nvidia-smi</code></li>
-</ul>
-<p>Invalid Data Format Errors</p>
-<ul>
-<li>Ensure CSV is UTF-8 encoded</li>
-<li>Validate column names don't contain special characters</li>
-<li>Check for null values or inconsistent data types</li>
-</ul>
-<p>Generation Quality Issues</p>
-<ul>
-<li>Increase training data or epochs for more training</li>
-<li>Adjust <code>temperature</code> (try 0.7-1.0 range)</li>
-<li>Enable structured generation for better format adherence</li>
-<li>Review evaluation report for specific quality issues</li>
-</ul>
+<p>If results are poor, read <a href="../../user-guide/evaluating-data/">Synthetic Data Quality</a> to see recommendations for adjusting data and configuration settings.</p>
+<p>If your job fails to run, read <a href="../../user-guide/troubleshooting/">Program Runtime</a> to see how to address common errors.</p>
 
 
 

@@ -8694,13 +8694,11 @@ converge on the same Pydantic model and handle nullable sub-configs
 
     pii_p --&gt; pii_check
     dp_p --&gt; dp_check</code></pre>
-<p>Configuration precedence (highest to lowest):</p>
-<ol>
-<li>CLI flags / SDK <code>with_*()</code> overrides</li>
-<li>Dataset registry overrides</li>
-<li>YAML config file</li>
-<li>Pydantic model defaults (including <code>default_factory</code>)</li>
-</ol>
+<p>Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):</p>
+<ul>
+<li>CLI: CLI flags &gt; dataset registry overrides &gt; YAML config file &gt; defaults</li>
+<li>SDK: Python SDK builder calls &gt; YAML config file &gt; defaults</li>
+</ul>
 <p>Nullable sub-configs (<code>PiiReplacerConfig | None</code>, <code>DifferentialPrivacyHyperparams | None</code>)
 use <code>None</code> as the sole disabled signal. The <code>@pydantic_options</code> decorator auto-generates
 <code>--no_&lt;field&gt;</code> is-flags for these fields; <code>parse_overrides</code> translates them into
@@ -8775,7 +8773,7 @@ use <code>None</code> as the sole disabled signal. The <code>@pydantic_options</
 <tbody>
 <tr>
 <td><strong>HuggingFaceBackend</strong></td>
-<td>Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via Opacus</td>
+<td>Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via <a href="https://opacus.ai/">Opacus</a></td>
 </tr>
 <tr>
 <td><strong>UnslothBackend</strong></td>

@@ -9024,15 +9024,15 @@ fit within this window. If it doesn't, data assembly fails with a
 because the table has too many columns for the model's context window.</p>
 <h4 id="how-to-fix">How to Fix<a class="headerlink" href="#how-to-fix" title="Permanent link">&para;</a></h4>
 <ol>
-<li>Increase <code>training.rope_scaling_factor</code> to extend the context window.
-   When set to <code>"auto"</code>, it is estimated from dataset token counts using
-   heuristics (4 chars per token for text, 1 token per digit) -- this can
-   underestimate for complex or multilingual data.</li>
 <li>Reduce record size -- shorten text fields, drop unnecessary columns,
    or simplify the schema.</li>
-<li>When using <code>data.group_training_examples_by</code>, multiple records must fit
-   in context together, making the limit tighter. Consider reducing
-   <code>data.max_sequences_per_example</code> or simplifying the grouped records.</li>
+<li>When using <code>data.group_training_examples_by</code>, all records in the same group must fit
+   in context together, making the limit tighter. Consider reducing the number of records per group.</li>
+<li>If using <code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code>, increase <code>training.rope_scaling_factor</code> to 
+   extend the context window.
+   When set to <code>"auto"</code>, it is estimated from dataset token counts using
+   heuristics (4 chars per token for text, 1 token per digit) -- this can
+   underestimate for complex or multilingual data. <code>training.rope_scaling_factor</code> is not applicable when using <code>HuggingFaceTB/SmolLM3-3B</code> (default model) or <code>mistralai/Mistral-7B-Instruct-v0.3</code>.</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">Error type clarification</p>
@@ -9073,9 +9073,7 @@ an equivalent config field.</p>
 </span></code></pre></div></dt>
 <dd>
 <p>Too many invalid records across <code>generation.patience</code> consecutive batches.
-  Consider lowering <code>generation.invalid_fraction_threshold</code>, retraining with
-  more data, or increasing <code>training.rope_scaling_factor</code> if records are being
-  truncated.</p>
+  Consider retraining with more records, adjusting <code>training.number_of_input_records_to_sample</code>, or setting <code>use_structured_generation=True</code>.</p>
 </dd>
 </dl>
 <p>For context-length errors during data assembly (<code>"The number of tokens in an
@@ -9133,7 +9131,7 @@ diagnostics are covered in <a href="../evaluating-data/#evaluation">Synthetic Da
 <tr>
 <td><code>data.random_state</code></td>
 <td><code>None</code></td>
-<td>Auto-generates a random seed -- set explicitly for reproducibility</td>
+<td>Auto-generates a random seed -- set this value explicitly if you need reproducibility</td>
 </tr>
 <tr>
 <td><code>generation.num_records</code></td>
@@ -9152,8 +9150,7 @@ See <a href="../configuration/">Configuration Reference</a> for the full list.</
   for details and caveats</li>
 <li><code>training.num_input_records_to_sample</code> -- derived from <code>rope_scaling_factor * 25000</code></li>
 <li><code>training.use_unsloth</code> -- resolves to <code>true</code> unless DP is enabled.
-  DP uses Opacus per-sample gradients (<code>GradSampleModule</code>), which require
-  standard model layers and disable gradient checkpointing -- Unsloth's
+  DP uses <a href="https://opacus.ai/">Opacus</a> per-sample gradients (<code>GradSampleModule</code>), which require standard model layers and disable gradient checkpointing -- Unsloth's
   custom layers and checkpointing are incompatible</li>
 <li><code>training.learning_rate</code> -- model-specific default from <code>ModelMetadata</code>:
   Mistral uses 0.0001, all other supported model families use 0.0005</li>

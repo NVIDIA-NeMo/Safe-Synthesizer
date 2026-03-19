@@ -8342,13 +8342,59 @@
 <li>Generates new records that maintain statistical properties with no one-to-one mapping to original records</li>
 <li>Supports various model sizes and architectures</li>
 </ul>
+<p>Two backends are available:</p>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th>Description</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unsloth</td>
+<td>Optimized kernels for faster fine-tuning</td>
+<td>Default -- use unless you need DP or a custom quantization setup</td>
+</tr>
+<tr>
+<td>HuggingFace</td>
+<td>Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via <a href="https://opacus.ai/">Opacus</a></td>
+<td>Required for differential privacy; also the fallback when Unsloth is unavailable</td>
+</tr>
+</tbody>
+</table>
+<p>Three models have been extensively tested:</p>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>HuggingFace ID</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SmolLM3 (default)</td>
+<td><code>HuggingFaceTB/SmolLM3-3B</code></td>
+</tr>
+<tr>
+<td>TinyLlama</td>
+<td><code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code></td>
+</tr>
+<tr>
+<td>Mistral</td>
+<td><code>mistralai/Mistral-7B-Instruct-v0.3</code></td>
+</tr>
+</tbody>
+</table>
+<p>For information on the trade-offs with model selection, see <a href="running.md#training">Training</a>.</p>
 <h3 id="supported-data-types">Supported Data Types<a class="headerlink" href="#supported-data-types" title="Permanent link">&para;</a></h3>
 <p>NeMo Safe Synthesizer supports diverse tabular data:</p>
 <ul>
 <li>Numeric: Continuous and discrete numerical values</li>
 <li>Categorical: Text labels and categories</li>
 <li>Text: Free-form text fields</li>
-<li>Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental.)</li>
+<li>Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental)</li>
 </ul>
 <h3 id="differential-privacy">Differential Privacy<a class="headerlink" href="#differential-privacy" title="Permanent link">&para;</a></h3>
 <p>A high level of privacy protection is achieved simply through the process of generating synthetic data, and is often a sufficient balance between privacy and utility. For use cases that require maximum privacy, you can fine-tune with differential privacy.</p>
@@ -8381,7 +8427,7 @@ P[M(D_1) \in S] \le \exp(\varepsilon) \cdot P[M(D_2) \in S] + \delta
 <li>Lower epsilon: stronger privacy, but more noise and potentially lower utility</li>
 <li>Training speed: DP training is usually 2-4x slower due to per-sample gradient computation</li>
 <li>Data requirements: DP works best with larger datasets (10,000+ records recommended, compared to 1,000+ records without DP)</li>
-<li>Quality impact: Added noise may reduce statistical fidelity of synthetic data</li>
+<li>Quality impact: The added noise may reduce statistical fidelity of synthetic data</li>
 </ul>
 <h4 id="configuration-parameters">Configuration Parameters<a class="headerlink" href="#configuration-parameters" title="Permanent link">&para;</a></h4>
 <p>For the complete list of configuration parameters, see the <a href="../../user-guide/configuration/">Parameters Reference</a>. Some commonly used parameters are listed below:</p>
@@ -8425,7 +8471,7 @@ P[M(D_1) \in S] \le \exp(\varepsilon) \cdot P[M(D_2) \in S] + \delta
 <p>Starting point: Begin with <span class="arithmatex">\(\varepsilon \in [8, 12]\)</span> and reduce as needed based on privacy requirements and acceptable quality trade-offs.</p>
 <p>Delta calculation: Use <code>"auto"</code> (recommended), which sets <span class="arithmatex">\(\delta = \frac{1}{n^{1.2}}\)</span> based on dataset size <span class="arithmatex">\(n\)</span>. Manual values are typically between 1e-6 and 1e-4.</p>
 <p>Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.</p>
-<p>For hands-on guidance, refer to <a href="../tutorials/differential-privacy.md">Differential Privacy Tutorial</a>. For complete parameter documentation, refer to <a href="../../user-guide/configuration/">Parameters Reference</a>.</p>
+<p>For hands-on guidance, see <a href="../../user-guide/running/#differential-privacy">Running Safe Synthesizer -- Differential Privacy</a> and <a href="../../user-guide/configuration/#differential-privacy">Configuration -- Differential Privacy</a>. For complete parameter documentation, refer to <a href="../../user-guide/configuration/">Parameters Reference</a>.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <p>Synthesis behavior is controlled through configuration parameters:</p>
 <ul>
@@ -8436,9 +8482,9 @@ P[M(D_1) \in S] \le \exp(\varepsilon) \cdot P[M(D_2) \in S] + \delta
 <p>For a complete list of all available parameters and their defaults, refer to <a href="../../user-guide/configuration/">Parameters Reference</a>.</p>
 <h2 id="related-topics">Related Topics<a class="headerlink" href="#related-topics" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../../user-guide/configuration/">Parameters Reference</a>: Complete parameter reference</li>
-<li><a href="../tutorials/differential-privacy.md">Differential Privacy</a>: Learn about differential privacy in practice</li>
-<li><a href="../../tutorials/">Tutorials</a>: Run the pipeline</li>
+<li><a href="../pipeline/">Pipeline</a>: Pipeline overview and stages</li>
+<li><a href="../../user-guide/getting-started/">Getting Started</a>: Install and run your first pipeline</li>
+<li><a href="../../user-guide/configuration/">Configuration</a>: Complete parameter reference</li>
 </ul>
 
 

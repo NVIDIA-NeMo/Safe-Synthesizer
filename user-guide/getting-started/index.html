@@ -8362,7 +8362,7 @@ does at each stage.</p>
 <ul>
 <li>Python 3.11+ (dev tooling currently pins 3.11 via <code>.python-version</code> in the repo root)</li>
 <li>CUDA runtime 12.8</li>
-<li>NVIDIA GPU (A100 or better) for training and generation</li>
+<li>NVIDIA GPU (A100 or larger) for training and generation</li>
 </ul>
 <h3 id="install-the-package">Install the Package<a class="headerlink" href="#install-the-package" title="Permanent link">&para;</a></h3>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CUDA 12.8 (Linux with NVIDIA GPU)</label><label for="__tabbed_1_2">CPU (macOS / Linux without GPU)</label><label for="__tabbed_1_3">Docker (Linux with NVIDIA GPU)</label><label for="__tabbed_1_4">Bare package for config definitions</label></div>
@@ -8378,7 +8378,7 @@ does at each stage.</p>
 <p class="admonition-title">Development use only</p>
 <p>The CPU install does not support training or generation. Use it to
 validate configuration, explore the CLI, or import config classes in
-code. An A100 or better GPU is required to run the full pipeline.</p>
+code. An A100 or larger GPU is required to run the full pipeline.</p>
 </div>
 </div>
 <div class="tabbed-block">
@@ -8442,8 +8442,7 @@ Service or any Python project that needs to construct or validate
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">generation</span><span class="p">:</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">num_records</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
 </span></code></pre></div>
-<p>PII replacement is on by default. Pass <code>--no_replace_pii</code> on the CLI to skip
-it, or see <a href="../configuration/#replacing-pii">Configuration -- Replacing PII</a>
+<p>PII replacement as a pre-processing step is on by default. Pass <code>--no_replace_pii</code> on the CLI to skip it, or see <a href="../configuration/#replacing-pii">Configuration -- Replacing PII</a>
 to customize entity types.</p>
 </div>
 <p>Then run:</p>
@@ -8460,13 +8459,13 @@ and produces an evaluation report. The default outputs are placed in
 <li><code>train/adapter/</code> -- trained adapter (reusable for more generation)</li>
 </ul>
 <p>To run the same pipeline from Python, see <a href="../running/#running-the-pipeline">Running Safe Synthesizer -- SDK</a>.</p>
-<p>→ Next step: read <a href="../evaluating-data/">Synthetic Data Quality</a> to understand
+<p>→ Next step: read <a href="../../product-overview/evaluation/">Evaluation</a> to understand
 your first report and how to interpret SQS and DPS scores.</p>
 <hr />
 <h2 id="how-the-pipeline-works">How the Pipeline Works<a class="headerlink" href="#how-the-pipeline-works" title="Permanent link">&para;</a></h2>
 <p>The pipeline has five stages. Each is independently configurable -- you can
 run the full pipeline in one step, or execute stages individually (train once,
-generate many times).</p>
+generate many times). You can find a brief overview of each stage below, or read <a href="../../product-overview/pipeline/">Pipeline</a> for in-depth descriptions.</p>
 <pre class="mermaid"><code>flowchart LR
     Data["Data Input"] --&gt; PII["PII Replacement&lt;br/&gt;(on by default)"]
     PII --&gt; Train["Training"]
@@ -8484,13 +8483,10 @@ and prepares it for training:</p>
   truncated</li>
 </ul>
 <h3 id="2-pii-replacement">2. PII Replacement<a class="headerlink" href="#2-pii-replacement" title="Permanent link">&para;</a></h3>
-<p>PII replacement is on by default. The PII replacer detects
+<p>PII replacement is on by default as a pre-processing step. The PII replacer detects
 personally identifiable information (PII) using GLiNER NER and optional LLM-based
 column classification, then replaces detected entities with synthetic but
-realistic values. This ensures the model never learns the most sensitive
-information (e.g. names, addresses, identifiers) from the training data. See
-<a href="../../product-overview/pii_replacement/">PII Replacement</a> for the full entity
-list.</p>
+realistic values prior to fine-tuning. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. See <a href="../../product-overview/pii_replacement/#supported-entity-types">Supported Entity Types</a> for the full entity list.</p>
 <p>See <a href="../configuration/#replacing-pii">Configuration -- Replacing PII</a> for
 entity types, LLM classification setup, and SDK customization.</p>
 <h3 id="3-training">3. Training<a class="headerlink" href="#3-training" title="Permanent link">&para;</a></h3>
@@ -8505,22 +8501,20 @@ available:</p>
 </thead>
 <tbody>
 <tr>
-<td>HuggingFace</td>
-<td>Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus</td>
-</tr>
-<tr>
 <td>Unsloth</td>
 <td>Optimized training for faster fine-tuning (auto-selected by default)</td>
 </tr>
+<tr>
+<td>HuggingFace</td>
+<td>Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via <a href="https://opacus.ai/">Opacus</a></td>
+</tr>
 </tbody>
 </table>
-<p>The default model is <code>HuggingFaceTB/SmolLM3-3B</code>. Safe Synthesizer has tested
-support for SmolLM3, TinyLlama, and Mistral (see
-<a href="../configuration/#training">Configuration -- Training</a> for details).</p>
+<p>If you enable differential privacy, the pipeline automatically switches to use the HuggingFace backend.</p>
+<p>The default model is <code>HuggingFaceTB/SmolLM3-3B</code>. Safe Synthesizer has tested support for <code>HuggingFaceTB/SmolLM3-3B</code>, <code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code>, and <code>mistralai/Mistral-7B-Instruct-v0.3</code> (see <a href="../configuration/#training">Configuration -- Training</a> for details on how to change the backend or model).</p>
 <div class="admonition tip">
 <p class="admonition-title">Differential privacy</p>
-<p>For formal privacy guarantees, enable DP-SGD via <code>privacy.dp_enabled: true</code>.
-See <a href="../configuration/#differential-privacy">Configuration -- Differential Privacy</a>.</p>
+<p>For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via <code>privacy.dp_enabled: true</code>. See <a href="../configuration/#differential-privacy">Configuration -- Differential Privacy</a>.</p>
 </div>
 <h3 id="4-generation">4. Generation<a class="headerlink" href="#4-generation" title="Permanent link">&para;</a></h3>
 <p>Produces synthetic records using the trained LoRA adapter via vLLM. The
@@ -8532,20 +8526,25 @@ control.</p>
 <p>Measures quality and privacy of the synthetic data and produces an HTML report
 with interactive visualizations. Two composite scores are reported:</p>
 <ul>
-<li>SQS (Synthetic Quality Score) -- column distributions, correlations, deep
-  structure</li>
+<li>SQS (Synthetic Quality Score) -- composite quality score with five subscores:<ul>
+<li>Column Correlation Stability -- measures the correlation across every combination of two numeric and categorical columns</li>
+<li>Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis (PCA)</li>
+<li>Column Distribution Stability -- measures the distribution of each numeric and categorical column</li>
+<li>Text Structure Similarity -- measures the sentence, word, and character counts for text columns</li>
+<li>Text Semantic Similarity -- measures whether the semantic meaning in text columns held after synthesizing</li>
+</ul>
+</li>
 <li>DPS (Data Privacy Score) -- composite privacy score with three subscores:<ul>
-<li>MIA (Membership Inference Attack) -- measures whether a model trained on the data can distinguish training records from held-out records</li>
-<li>AIA (Attribute Inference Attack) -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data</li>
-<li>PII replay detection -- checks whether PII from training appears in synthetic data</li>
+<li>Membership Inference Protection -- measures whether a model trained on the data can distinguish training records from held-out records</li>
+<li>Attribute Inference Protection -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data</li>
+<li>PII Replay Detection -- checks whether PII from training appears in synthetic data</li>
 </ul>
 </li>
 </ul>
-<p>See <a href="../evaluating-data/">Synthetic Data Quality</a> for how to interpret scores.</p>
+<p>See <a href="../../product-overview/evaluation/">Evaluation</a> for how to interpret scores.</p>
 <hr />
 <h2 id="what-to-read-next">What to Read Next<a class="headerlink" href="#what-to-read-next" title="Permanent link">&para;</a></h2>
-<p>After your first run, read <a href="../evaluating-data/">Synthetic Data Quality</a> to understand
-your SQS and DPS scores and learn how to improve generation quality.</p>
+<p>After your first run, read <a href="../../product-overview/evaluation/">Evaluation</a> to understand your SQS and DPS scores and <a href="../evaluating-data/">Synthetic Data Quality</a> to learn how to improve generation quality. If your job failed to run, read <a href="../troubleshooting/">Troubleshooting</a> to learn how to fix common errors.</p>
 <h2 id="guides">Guides<a class="headerlink" href="#guides" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>
@@ -8578,8 +8577,7 @@ and artifacts.</p>
 <li>
 <p>Synthetic Data Quality</p>
 <hr />
-<p>Interpreting SQS and DPS scores, improving generation quality,
-choosing privacy settings.</p>
+<p>Improving generation quality, the quality-privacy tradeoff, and unavailable metrics.</p>
 <p><a href="../evaluating-data/">→ Synthetic Data Quality</a></p>
 </li>
 </ul>

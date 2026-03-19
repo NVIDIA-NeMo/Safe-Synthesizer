@@ -770,23 +770,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Custom Entity Types">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example-custom-entity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example custom entity
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
         
       </ul>
@@ -810,17 +793,6 @@
     <span class="md-ellipsis">
       
         When to Use PII Replacement
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-topics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Topics
       
     </span>
   </a>
@@ -8327,23 +8299,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Custom Entity Types">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example-custom-entity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Example custom entity
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
         
       </ul>
@@ -8367,17 +8322,6 @@
     <span class="md-ellipsis">
       
         When to Use PII Replacement
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-topics" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Topics
       
     </span>
   </a>
@@ -8456,12 +8400,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 <h1 id="pii-replacement">PII Replacement<a class="headerlink" href="#pii-replacement" title="Permanent link">&para;</a></h1>
-<p>PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model has no chance of learning the most sensitive information like names, addresses, and other identifiers.</p>
+<p>PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data.</p>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
 <p>The PII replacement pipeline operates in multiple stages:</p>
 <ol>
 <li>Detection: Classifies PII entities within free text and entire columns.</li>
-<li>Replacement: Transforms PII using configurable rules.</li>
+<li>Replacement: Substitutes PII using configurable rules.</li>
 </ol>
 <h2 id="detection-methods">Detection Methods<a class="headerlink" href="#detection-methods" title="Permanent link">&para;</a></h2>
 <p>NeMo Safe Synthesizer supports multiple PII detection approaches described in the table below:</p>
@@ -8612,12 +8556,6 @@
 </ul>
 <h3 id="custom-entity-types">Custom Entity Types<a class="headerlink" href="#custom-entity-types" title="Permanent link">&para;</a></h3>
 <p>Beyond these built-in types, you can define custom entities using:</p>
-<ul>
-<li>GLiNER PII: Fast, accurate zero-shot NER for standard and custom entity types</li>
-<li>Regex: Deterministic pattern matching, best for consistent formats (SSN, credit cards)</li>
-<li>LLM: Contextual understanding, handles complex patterns and ambiguous cases</li>
-</ul>
-<h4 id="example-custom-entity">Example custom entity<a class="headerlink" href="#example-custom-entity" title="Permanent link">&para;</a></h4>
 <div class="language-yaml highlight"><span class="filename">Custom entity configuration</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">globals</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">classify</span><span class="p">:</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">enable_classify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
@@ -8650,12 +8588,7 @@
 <li>You want to ensure the model cannot memorize sensitive values</li>
 <li>You need to share synthetic data with external parties</li>
 </ul>
-<p>PII replacement is the default preprocessing step before synthesis.</p>
-<h2 id="related-topics">Related Topics<a class="headerlink" href="#related-topics" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../tutorials/pii-replacement.md">Hands-on PII replacement tutorial</a></li>
-<li><a href="../../tutorials/">Tutorials</a>: More tutorials</li>
-</ul>
+<p>PII replacement is on by default as a pre-processing step before synthesis.</p>
 
 
 
