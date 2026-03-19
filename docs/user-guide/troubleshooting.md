@@ -338,7 +338,7 @@ export WANDB_API_KEY="your-api-key"  # pragma: allowlist secret
 Or switch to offline mode to avoid network access entirely:
 
 ```bash
-safe-synthesizer run --wandb-mode disabled --config config.yaml --url data.csv
+safe-synthesizer run --wandb-mode disabled --config config.yaml --data-source data.csv
 ```
 
 See [Running Safe Synthesizer -- WandB Integration](running.md#wandb-integration) for the full WandB setup.

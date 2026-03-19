@@ -46,7 +46,7 @@ does at each stage.
       -v $(pwd):/workspace \
       -v ~/.cache/huggingface:/workspace/.hf_cache \
       -e HF_HOME=/workspace/.hf_cache \
-      nss-gpu:latest run --config /workspace/config.yaml --url /workspace/data.csv
+      nss-gpu:latest run --config /workspace/config.yaml --data-source /workspace/data.csv
     ```
 
     No local Python install needed. See [Docker](docker.md) for full
@@ -107,13 +107,13 @@ Create a synthetic version of an input dataset in one step.
       num_records: 1000
     ```
 
-    PII replacement as a pre-processing step is on by default. Pass `--no_replace_pii` on the CLI to skip it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
+    PII replacement as a pre-processing step is on by default. Pass `--no-replace-pii` on the CLI to skip it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
     to customize entity types.
 
 Then run:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 ```
 
 Replace `data.csv` with your actual input file. Any `.csv`, `.json`, `.jsonl`,

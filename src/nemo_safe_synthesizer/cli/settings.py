@@ -18,7 +18,7 @@ Usage:
     settings = CLISettings()
 
     # From Click kwargs (CLI takes precedence over env vars)
-    settings = CLISettings.from_cli_kwargs(url="data.csv", artifact_path="/tmp")
+    settings = CLISettings.from_cli_kwargs(data_source="data.csv", artifact_path="/tmp")
 
     # Access composed settings
     log_format = settings.observability.nss_log_format
@@ -73,8 +73,8 @@ class CLISettings(BaseSettings):
     Loaded from its own environment variables; not populated by ``CLISettings``.
     """
 
-    url: str | None = Field(default=None, description="Dataset URL, name, or path to CSV")
-    """Dataset URL, name, or path to CSV."""
+    data_source: str | None = Field(default=None, description="Dataset name, URL, or path to CSV")
+    """Dataset name, URL, or path to CSV."""
 
     config_path: str | None = Field(
         default=None,

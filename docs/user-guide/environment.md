@@ -85,7 +85,7 @@ environment:
 
 ```bash
 export HF_HOME=/shared/cache/huggingface
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 ```
 
 What gets downloaded on first use:
@@ -246,7 +246,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   -e NSS_ARTIFACTS_PATH=/workspace/artifacts \
-  nss-gpu:latest run --config /workspace/config.yaml --url /workspace/data.csv
+  nss-gpu:latest run --config /workspace/config.yaml --data-source /workspace/data.csv
 ```
 
 See [Docker](docker.md) for full container setup and Makefile shortcuts.

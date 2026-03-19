@@ -13,7 +13,7 @@ Pydantic v2 is the backbone of config, settings, CLI, and SDK validation. This r
 
 ```
 Pydantic model fields  -->  _collect_params()  -->  LeafParam / FlagParam  -->  Click CLI options
-     (nested)                 (flattens)             (typed params)            (--data__holdout, --no_replace_pii)
+     (nested)                 (flattens)             (typed params)            (--data__holdout, --no-replace-pii)
 ```
 
 1. `pydantic_options(model_class, field_separator="__")` walks the Pydantic model tree via `_collect_params()`

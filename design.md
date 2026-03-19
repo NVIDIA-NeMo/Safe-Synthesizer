@@ -381,7 +381,7 @@ The execution follows a clear pipeline: Data → PII Replacement → Training �
 ```bash
 safe-synthesizer run \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --output-path synthetic.csv
 ```
 
