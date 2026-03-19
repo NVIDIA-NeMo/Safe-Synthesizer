@@ -26,12 +26,9 @@ NeMo Safe Synthesizer adapts language models to understand and generate tabular 
 - Generates new records that maintain statistical properties with no one-to-one mapping to original records
 - Supports various model sizes and architectures
 
-Two backends are available:
-
-| Backend | Description | When to use |
-|---------|-------------|-------------|
-| Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
-| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
+Two backends are available: Unsloth (default, faster) and HuggingFace
+(required for differential privacy). Both perform LoRA fine-tuning; see
+[Running -- Training](../user-guide/running.md#training) for a comparison.
 
 Three models have been extensively tested:
 

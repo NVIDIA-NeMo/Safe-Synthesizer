@@ -472,8 +472,10 @@ Two backends are available:
 
 | Backend | Description | When to use |
 |---------|-------------|-------------|
-| Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
-| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
+| Unsloth | LoRA fine-tuning with optimized kernels for faster training and lower VRAM usage. Uses Unsloth's `FastLanguageModel` for model loading and PEFT wrapping | Default -- use unless you need DP or a custom quantization setup |
+| HuggingFace | LoRA fine-tuning via PEFT with 4-bit/8-bit quantization support and optional differential privacy (DP-SGD) via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
+
+If you enable differential privacy, the pipeline automatically switches to the HuggingFace backend.
 
 Three models have been extensively tested:
 
