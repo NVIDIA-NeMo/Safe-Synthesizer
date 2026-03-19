@@ -27,13 +27,16 @@ call ``initialize_observability()`` first. When used as a library,
 application's logging configuration.
 """
 
+import contextlib
 import contextvars
 import inspect
 import logging
 import os
 import sys
+import threading
 import time
 import warnings
+from collections.abc import Generator
 from datetime import datetime
 from enum import Enum
 from functools import wraps
@@ -935,3 +938,42 @@ def traced_system(name: str | None = None, **kwargs):
 def traced_backend(name: str | None = None, **kwargs):
     """Log a backend operation."""
     return traced(name=name, category=LogCategory.BACKEND, **kwargs)
+
+
+@contextlib.contextmanager
+def heartbeat(
+    message: str,
+    interval: float = 5.0,
+    *,
+    logger_name: str | None = None,
+    **extra_fields,
+) -> Generator[None, None, None]:
+    """Context manager that logs a periodic heartbeat during a long-running operation.
+
+    Args:
+        message: Description of the operation (e.g. "Model loading", "Generation").
+        interval: Seconds between heartbeat log messages.
+        logger_name: Logger name (pass ``__name__`` so heartbeat logs attribute
+            to the calling module).
+        **extra_fields: Additional structured fields passed to the logger
+            (e.g. ``model="SmolLM3"``).
+    """
+    _logger = get_logger(logger_name or __name__)
+    stop = threading.Event()
+    start = time.monotonic()
+
+    def _extra() -> dict:
+        return {"elapsed_seconds": round(time.monotonic() - start, 1), **extra_fields}
+
+    def _run() -> None:
+        while not stop.wait(timeout=interval):
+            _logger.info(f"{message} in progress", extra={"ctx": _extra()})
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=1)
+        _logger.info(f"{message} complete", extra={"ctx": _extra()})

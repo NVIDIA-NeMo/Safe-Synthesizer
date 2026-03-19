@@ -26,6 +26,7 @@ from nemo_safe_synthesizer.observability import (
     _render_rich_table,
     _render_table_data_for_console,
     get_logger,
+    heartbeat,
     initialize_observability,
     traced,
 )
@@ -617,3 +618,55 @@ class TestObservabilityIntegration:
 
         assert "Error in error_test" in caplog.text
         assert "RuntimeError" in caplog.text
+
+
+class TestHeartbeat:
+    """Tests for the heartbeat context manager."""
+
+    def test_heartbeat_logs_completion(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Test op", interval=0.05):
+            time.sleep(0.01)
+
+        assert "Test op complete" in caplog.text
+
+    def test_heartbeat_logs_progress_on_long_operation(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Slow op", interval=0.05):
+            time.sleep(0.5)
+
+        assert "Slow op in progress" in caplog.text
+        assert "Slow op complete" in caplog.text
+
+    def test_heartbeat_includes_extra_fields(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Loading", interval=0.05, model="test-model"):
+            time.sleep(0.2)
+
+        # Extra fields appear on record.ctx (plain logging) or get
+        # merged into the structlog event dict (when structlog is
+        # initialized). Check both paths.
+        has_field = any(
+            getattr(r, "ctx", {}).get("model") == "test-model" or "test-model" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_field, f"model field not found in records: {caplog.text}"
+
+    def test_heartbeat_logs_elapsed_seconds(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Timed op", interval=0.05):
+            time.sleep(0.2)
+
+        has_elapsed = any(
+            "elapsed_seconds" in getattr(r, "ctx", {}) or "elapsed_seconds" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_elapsed, f"elapsed_seconds not found in records: {caplog.text}"
+
+    def test_heartbeat_completes_on_exception(self, caplog):
+        caplog.set_level(logging.INFO)
+        with pytest.raises(RuntimeError):
+            with heartbeat("Failing op", interval=60.0):
+                raise RuntimeError("boom")
+
+        assert "Failing op complete" in caplog.text

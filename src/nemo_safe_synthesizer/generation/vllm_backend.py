@@ -3,6 +3,7 @@
 
 """vLLM-based generation backend for tabular data synthesis."""
 
+import logging
 import os
 import time
 from functools import partial
@@ -28,7 +29,7 @@ from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import cleanup_memory, get_max_vram
-from ..observability import get_logger
+from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
@@ -202,15 +203,16 @@ class VllmBackend(GeneratorBackend):
         # check this when updating unsloth in the future.
         enforce_eager = self.config.training.use_unsloth is True
 
-        self.llm = vLLM(
-            model=self.config.training.pretrained_model,
-            gpu_memory_utilization=max_vram,
-            enable_lora=True,
-            max_lora_rank=self.config.training.lora_r,
-            structured_outputs_config=structured_outputs_config,
-            enforce_eager=enforce_eager,
-            attention_config=attention_config,
-        )
+        with heartbeat("Model loading", logger=__name__, model=self.config.training.pretrained_model):
+            self.llm = vLLM(
+                model=self.config.training.pretrained_model,
+                gpu_memory_utilization=max_vram,
+                enable_lora=True,
+                max_lora_rank=self.config.training.lora_r,
+                structured_outputs_config=structured_outputs_config,
+                enforce_eager=enforce_eager,
+                attention_config=attention_config,
+            )
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -342,6 +344,7 @@ class VllmBackend(GeneratorBackend):
         sampling_params = self._transform_kwargs_to_sampling_params(kwargs, api_mapping)
 
         real_params = SamplingParams(**sampling_params)
+        logger.debug(f"SamplingParams: {real_params!r}")
 
         # Create a partially parametrized version of the underlying vllm.LLM.generate
         # method that is immediately callable downstream.
@@ -351,7 +354,8 @@ class VllmBackend(GeneratorBackend):
             self.llm.generate,
             sampling_params=real_params,
             lora_request=self.lora_req,
-            use_tqdm=False,
+            # we only want to enable the vllm logger if we are in debug mode
+            use_tqdm=logger.isEnabledFor(logging.DEBUG),
         )
 
     def _generate(
@@ -389,12 +393,17 @@ class VllmBackend(GeneratorBackend):
                 result = None
                 match input_ids:
                     case torch.Tensor(data=ids):
+                        logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
                         result = self._gen_method(prompt_token_ids=ids.tolist())
                     # read the below as:
                     # if the ids passed are a list of a list of ints
                     case [*ids] if all_equal_type(ids, int):
+                        logger.debug("vllm generate: prompt_token_ids (list of lists)")
                         result = self._gen_method(prompt_token_ids=ids)
                     case None:
+                        logger.debug(
+                            f"vllm generate: processing {len(prompts) if isinstance(prompts, list) else 1} prompts"
+                        )
                         return self._gen_method(prompts=prompts)
                     case _:
                         raise ValueError("input_ids are not a tensor, list, or None!")
@@ -419,20 +428,21 @@ class VllmBackend(GeneratorBackend):
         Returns:
             Batch object that contains the generated records and associated statistics.
         """
-        logger.debug(f"generation prompt: chars: {len(self.prompt)}, prompt:\n{self.prompt}")
+        logger.debug(f"generation prompt ({len(self.prompt)} chars):\n{self.prompt}")
         prompt_list = [self.prompt] * num_prompts_per_batch
 
         # `n` is the number of output sequences per prompt.
         # Subsequent processing assumes `n=1`, so we hardcode it here.
         sampling_kwargs.update({"n": 1})
 
-        for idx, output in enumerate(self._generate(prompts=prompt_list, **sampling_kwargs)):
+        outputs = self._generate(prompts=prompt_list, **sampling_kwargs)
+
+        for idx, output in enumerate(outputs):
             out = output.outputs[0]
-            logger.info(
+            logger.debug(
                 f"prompt {idx}: {len(out.token_ids)} tokens, "
                 f"finish_reason={out.finish_reason}, "
-                f"stop_reason={out.stop_reason}, "
-                f"text_tail={out.text[-80:]!r}"
+                f"stop_reason={out.stop_reason}"
             )
             batch.process(idx, out.text)
 
@@ -515,7 +525,7 @@ class VllmBackend(GeneratorBackend):
                 sampling_kwargs["stop_token_ids"] = [eos_id]
             if eos_str:
                 sampling_kwargs["stop"] = [eos_str]
-            logger.info(
+            logger.debug(
                 f"grouped stop: eos_id={eos_id}, eos_str={eos_str!r}, max_tokens={sampling_kwargs['max_tokens']}"
             )
 
@@ -529,34 +539,39 @@ class VllmBackend(GeneratorBackend):
             data_actions_fn=data_actions_fn,
         )
 
-        while batches.num_valid_records < self.config.generation.num_records:
-            # Generate a batch from prompts and process the responses.
-            num_prompts = batches.get_next_num_prompts()
-            logger.info(f"starting batch {batches.num_batches} with {num_prompts} prompts")
-            start_time = time.perf_counter()
-            batch: Batch = self._generate_batch(
-                num_prompts_per_batch=num_prompts,
-                batch=Batch(processor=self.processor),
-                **sampling_kwargs,
-            )
-            duration = time.perf_counter() - start_time
-            batches.add_batch(batch)
+        with heartbeat(
+            "Generation",
+            interval=10.0,
+            logger=__name__,
+            target_records=self.config.generation.num_records,
+        ):
+            while batches.num_valid_records < self.config.generation.num_records:
+                # Generate a batch from prompts and process the responses.
+                num_prompts = batches.get_next_num_prompts()
+                start_time = time.perf_counter()
+                batch: Batch = self._generate_batch(
+                    num_prompts_per_batch=num_prompts,
+                    batch=Batch(processor=self.processor),
+                    **sampling_kwargs,
+                )
+                duration = time.perf_counter() - start_time
+                batches.add_batch(batch)
 
-            # Log generation summary and progress.
-            batch.log_summary(detailed_errors=self.use_detailed_logs)
-            self._log_batch_timing_and_progress(
-                batch=batch,
-                duration=duration,
-                num_records=self.config.generation.num_records,
-                num_valid_records=batches.num_valid_records,
-                batches=batches,
-            )
-            # Check if the generation job should stop.
-            if batches.status in [
-                GenerationStatus.STOP_NO_RECORDS,
-                GenerationStatus.STOP_METRIC_REACHED,
-            ]:
-                break
+                # Log generation summary and progress.
+                batch.log_summary(detailed_errors=self.use_detailed_logs)
+                self._log_batch_timing_and_progress(
+                    batch=batch,
+                    duration=duration,
+                    num_records=self.config.generation.num_records,
+                    num_valid_records=batches.num_valid_records,
+                    batches=batches,
+                )
+                # Check if the generation job should stop.
+                if batches.status in [
+                    GenerationStatus.STOP_NO_RECORDS,
+                    GenerationStatus.STOP_METRIC_REACHED,
+                ]:
+                    break
 
         batches.job_complete()
         batches.log_status()
