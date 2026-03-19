@@ -160,6 +160,8 @@ class VllmBackend(GeneratorBackend):
             logger.debug("cleanup_dist_env_and_memory failed during teardown", exc_info=True)
 
         self.llm = None
+        self._gen_method = None
+        self.gen_method = None
 
         try:
             cleanup_memory()

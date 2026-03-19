@@ -219,6 +219,8 @@ def run(
         from ..sdk.library_builder import SafeSynthesizer
 
         ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+        # SafeSynthesizer.generate() also calls teardown() via its own try/finally, but the
+        # full run() pipeline (train + generate + evaluate) does not, so we guard here too.
         try:
             ss.run()
             ss.save_results(output_file=settings.output_file or workdir.output_file)
@@ -367,7 +369,7 @@ def run_generate(
             ss = (
                 ss.load_from_save_path()
                 .process_data()
-                .generate()
+                .generate()  # generate() has its own try/finally; this outer guard covers all other exit paths
                 .evaluate()
                 .save_results(output_file=final_output_file)
             )

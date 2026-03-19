@@ -31,6 +31,12 @@ def backend(_mock_vllm_cleanup, fixture_session_cache_dir):
     mock_metadata.prompt_config.template = "{instruction} {schema}"
 
     mock_config = MagicMock()
+    # Pin branching fields so create_processor() selects TabularDataProcessor deterministically.
+    mock_config.time_series.is_timeseries = False
+    mock_config.data.group_training_examples_by = None
+    # Pin to a valid literal so StructuredOutputsConfig Pydantic validation passes in initialize().
+    mock_config.generation.structured_generation_backend = "xgrammar"
+    mock_config.generation.attention_backend = None
 
     mock_workdir = MagicMock()
     mock_workdir.schema_file = fixture_session_cache_dir / "schema.json"
@@ -69,8 +75,9 @@ class TestTeardownIdempotency:
         backend.teardown()
         assert backend._torn_down is True
 
-        # Simulate initialize resetting the flag without needing real vLLM
-        backend._torn_down = False
+        with patch.object(vllm_backend_mod, "vLLM"):
+            backend.initialize()
+
         assert backend._torn_down is False
 
 
@@ -99,6 +106,8 @@ class TestDunderDel:
     def test_del_calls_teardown(self, backend, _mock_vllm_cleanup):
         mock_dist, _ = _mock_vllm_cleanup
 
+        # Reset to isolate only this explicit __del__ call.
+        mock_dist.reset_mock()
         backend.__del__()
 
         mock_dist.assert_called_once()
