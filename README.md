@@ -12,10 +12,10 @@ This package makes synthetic data, safely.
 
 ### Quick Start
 
-Bootstrap development tools (`ruff`, `ty`, `yq`, `gh`, etc.) via [mise](https://mise.jdx.dev/):
+Bootstrap development tools (`ruff`, `ty`, `yq`, `gh`, etc.) via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), so every developer and CI runner uses identical tool versions:
 
 ```bash
-make setup   # installs mise (if missing) + pinned tool versions
+make setup   # installs mise (if missing) + pinned tool versions from mise.lock
 ```
 
 Then bootstrap the project package with your desired extras -- likely `cpu|cuda`.

@@ -76,10 +76,11 @@ runs:
 
     - name: Install mise and dev tools (uv, ruff, ty, etc.)
       if: inputs.bootstrap-tools == 'true'
-      uses: jdx/mise-action@v2
-      with:
-        install: true
-        cache: true
+      shell: bash
+      run: |
+        make setup
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
 
     - name: Install uv (fallback when mise is skipped)
       if: inputs.bootstrap-tools != 'true'

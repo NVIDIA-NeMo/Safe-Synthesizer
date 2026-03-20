@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Python 3.11+ (project supports Python ≥3.11; `.python-version` currently pins 3.11 for bootstrapping at the repo root)
 - Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)).
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
 ### Setup
 
@@ -474,7 +474,7 @@ For detailed style guidelines covering Python, markdown, Dockerfiles, shell scri
 
 ### Formatting, Linting, and Type Checking
 
-Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.toml` (installed via `make setup`) and check all tracked files.
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
 
 ```bash
 make format   # auto-fix: ruff format + import sorting + copyright headers
