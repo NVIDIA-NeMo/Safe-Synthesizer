@@ -131,7 +131,7 @@ class TestOutputFileOverride:
         fixture_session_cache_dir: Path,
         patched_run_dependencies: dict,
     ):
-        """Verify that --output-file overrides default workdir output."""
+        """Verify that --output-file is forwarded to run()."""
         custom_output = tmp_path / "custom_output.csv"
 
         result = cli_runner.invoke(
@@ -147,22 +147,18 @@ class TestOutputFileOverride:
             catch_exceptions=False,
         )
 
-        # Verify save_results was called with the custom output file
         assert result.exit_code == 0
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.save_results.assert_called_once()
-        actual_output_path = mock_ss.save_results.call_args.kwargs.get("output_file")
-        assert str(actual_output_path) == str(custom_output)
+        mock_ss.run.assert_called_once_with(output_file=str(custom_output))
 
-    def test_run_uses_workdir_output_when_no_override(
+    def test_run_without_output_file_passes_none(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
         fixture_session_cache_dir: Path,
-        mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ):
-        """Verify that workdir.output_file is used when --output-file is not provided."""
+        """Without --output-file, run() is called with output_file=None."""
         result = cli_runner.invoke(
             run,
             [
@@ -174,12 +170,10 @@ class TestOutputFileOverride:
             catch_exceptions=False,
         )
 
-        # Verify save_results was called with the workdir's default output file
         assert result.exit_code == 0
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.save_results.assert_called_once()
-        actual_output_path = mock_ss.save_results.call_args.kwargs.get("output_file")
-        assert str(actual_output_path) == str(mock_workdir.output_file)
+        # Default output path is used if no --output-file is provided
+        mock_ss.run.assert_called_once_with(output_file=None)
 
 
 class TestPathOptions:

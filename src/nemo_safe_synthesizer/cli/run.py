@@ -218,19 +218,18 @@ def run(
     with traced_user("SafeSynthesizer"):
         from ..sdk.library_builder import SafeSynthesizer
 
-        ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
-        # ss.run() calls train + generate + evaluate. The generate step has its own try/finally,
-        # but train or evaluate failures leave the generator loaded; this guard ensures teardown
-        # on all exit paths of the full pipeline.
+        nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+        # nss.run() calls train + generate + evaluate + save_results. The generate step has its
+        # own try/finally, but train or evaluate failures leave the generator loaded; this guard
+        # ensures teardown on all exit paths of the full pipeline.
         try:
-            ss.run()
-            ss.save_results(output_file=settings.output_file or workdir.output_file)
-            ss.results.summary.log_summary(run_logger)
-            ss.results.summary.timing.log_timing(run_logger)
-            ss.results.summary.log_wandb()
+            nss.run(output_file=settings.output_file)
+            nss.results.summary.log_summary(run_logger)
+            nss.results.summary.timing.log_timing(run_logger)
+            nss.results.summary.log_wandb()
         finally:
-            if hasattr(ss, "generator") and ss.generator is not None:
-                ss.generator.teardown()
+            if hasattr(nss, "generator") and nss.generator is not None:
+                nss.generator.teardown()
 
 
 @run.command("train")
@@ -359,25 +358,25 @@ def run_generate(
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        ss = SafeSynthesizer(config, workdir=workdir)
+        nss = SafeSynthesizer(config, workdir=workdir)
 
         # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
         if df is not None:
-            ss = ss.with_data_source(df)
+            nss = nss.with_data_source(df)
 
         try:
-            ss = (
-                ss.load_from_save_path()
+            nss = (
+                nss.load_from_save_path()
                 .process_data()
                 .generate()
                 .evaluate()
                 .save_results(output_file=final_output_file)
             )
-            ss.results.summary.log_summary(run_logger)
-            ss.results.summary.timing.log_timing(run_logger)
+            nss.results.summary.log_summary(run_logger)
+            nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
-            ss.results.summary.log_wandb()
+            nss.results.summary.log_wandb()
         finally:
-            if hasattr(ss, "generator") and ss.generator is not None:
-                ss.generator.teardown()
+            if hasattr(nss, "generator") and nss.generator is not None:
+                nss.generator.teardown()
