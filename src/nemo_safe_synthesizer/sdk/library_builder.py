@@ -143,7 +143,6 @@ class SafeSynthesizer(ConfigBuilder):
                 config_name="default",
                 dataset_name="data",
             )
-        self._resolve_nss_config()
         # Initialize state for pipeline stages
         self._train_df: pd.DataFrame | None = (
             None  # The active training df that might go through transformation, eg. pii replacement
@@ -257,6 +256,7 @@ class SafeSynthesizer(ConfigBuilder):
             # Resume path or already-processed data in this builder instance; nothing to do.
             return self
 
+        self._resolve_nss_config()
         self._resolve_datasource()
 
         holdout = Holdout(self._nss_config)
