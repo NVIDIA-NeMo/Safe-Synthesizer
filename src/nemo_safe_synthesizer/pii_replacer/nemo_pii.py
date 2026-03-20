@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from ..artifacts.analyzers.field_features import describe_field
 from ..artifacts.base.fields import FieldType
 from ..config.replace_pii import PiiReplacerConfig
+from ..defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
 from ..pii_replacer.data_editor.edit import Editor, TransformFnAccounting
 from ..pii_replacer.transform_result import ColumnStatistics, TransformResult
 from .data_editor.detect import (
@@ -97,14 +98,11 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
     return entity_extractor
 
 
-DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
-
-
 def _get_classify_endpoint_url() -> str:
     """Resolve the NIM/OpenAI-compatible base URL for PII column classification.
 
     If ``NSS_INFERENCE_ENDPOINT`` is present in the environment, that value is used.
-     If the variable is unset, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT``.
+    If the variable is unset, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT`` from ``defaults``.
 
     Note:
         Emits an INFO log indicating whether the default or configured URL applies.
@@ -314,7 +312,7 @@ class NemoPII(object):
                         }
                     except Exception as exc:
                         logging.error(
-                        "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
+                            "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
                             _column_classify_failure_remediation(exc),
                             exc_info=_inference_key_configured(),
                         )
