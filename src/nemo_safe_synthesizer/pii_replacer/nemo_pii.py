@@ -294,7 +294,7 @@ class NemoPII(object):
                     column_classifier = get_column_classifier()
                 except Exception as exc:
                     logging.error(
-                        "Could not initialize column classifier, falling back to default entities.%s",
+                        "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
                         _column_classify_failure_remediation(exc),
                         exc_info=_inference_key_configured(),
                     )
@@ -314,7 +314,7 @@ class NemoPII(object):
                         }
                     except Exception as exc:
                         logging.error(
-                            "Could not perform classify, falling back to default entities.%s",
+                        "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
                             _column_classify_failure_remediation(exc),
                             exc_info=_inference_key_configured(),
                         )
