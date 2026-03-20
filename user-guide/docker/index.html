@@ -8429,14 +8429,14 @@ image. The most common ones:</p>
 <td>Hugging Face token for downloading gated models (Llama, Mistral, etc.). Get one at <a href="https://huggingface.co/settings/tokens">hf.co/settings/tokens</a></td>
 </tr>
 <tr>
-<td><code>NIM_API_KEY</code></td>
+<td><code>NSS_INFERENCE_KEY</code></td>
 <td>For PII classification</td>
-<td>API key for the NIM endpoint used by PII column classification. Only needed when <code>NIM_ENDPOINT_URL</code> is set</td>
+<td>API key for <code>NSS_INFERENCE_ENDPOINT</code>. Set when using the CLI/SDK for column classification</td>
 </tr>
 <tr>
-<td><code>NIM_ENDPOINT_URL</code></td>
+<td><code>NSS_INFERENCE_ENDPOINT</code></td>
 <td>For PII classification</td>
-<td>NIM/OpenAI-compatible endpoint URL for PII column classification</td>
+<td>NIM/OpenAI-compatible endpoint URL (default: <code>https://integrate.api.nvidia.com/v1</code>). Override for a custom endpoint</td>
 </tr>
 <tr>
 <td><code>WANDB_API_KEY</code></td>

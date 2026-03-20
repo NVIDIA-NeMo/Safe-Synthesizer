@@ -9486,17 +9486,18 @@ in the SDK and export it to YAML:</p>
 </div>
 </div>
 <h3 id="llm-column-classification">LLM Column Classification<a class="headerlink" href="#llm-column-classification" title="Permanent link">&para;</a></h3>
-<p>To enable LLM-based PII column classification (optional), set the endpoint
-before running the pipeline. Any OpenAI-compatible inference endpoint
-works -- not just NVIDIA NIM:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NIM_ENDPOINT_URL</span><span class="o">=</span><span class="s2">&quot;https://integrate.api.nvidia.com/v1&quot;</span><span class="w">  </span><span class="c1"># or your own OpenAI-compatible endpoint</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NIM_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret  (optional -- only needed for direct endpoints, not inference gateways)</span>
+<p>To enable LLM-based PII column classification (optional), set the API key
+before running the pipeline. The endpoint defaults to
+<code>https://integrate.api.nvidia.com/v1</code>; override <code>NSS_INFERENCE_ENDPOINT</code> for a
+custom OpenAI-compatible endpoint.</p>
+<p>When using the CLI, set both for column classification:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NSS_INFERENCE_ENDPOINT</span><span class="o">=</span><span class="s2">&quot;https://integrate.api.nvidia.com/v1&quot;</span><span class="w">  </span><span class="c1"># optional; this is the default</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NSS_INFERENCE_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret  (required for column classification with the inference endpoint)</span>
 </span></code></pre></div>
-<p>When <code>NIM_ENDPOINT_URL</code> is unset, the classification step is attempted but
+<p>PII column classification requires <code>NSS_INFERENCE_KEY</code> (and optionally <code>NSS_INFERENCE_ENDPOINT</code> if not using the default).
+When <code>NSS_INFERENCE_KEY</code> is unset, the classification step is attempted but
 falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement; column classification
-requires <code>NIM_ENDPOINT_URL</code>.</p>
+variables are required for NER-only PII replacement.</p>
 <p>See <a href="../configuration/#replacing-pii">Configuration Reference -- Replacing PII</a> for the full parameter reference.</p>
 <hr />
 <h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>

@@ -8416,8 +8416,9 @@ or classify, it falls back to default entity types.</p>
 <p>or</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Could not perform classify, falling back to default entities.
 </span></code></pre></div>
-<p>Fix: set entity types explicitly in your config, or check that <code>NIM_ENDPOINT_URL</code>
-is reachable. PII classify config is deeply nested -- use YAML or SDK:</p>
+<p>When <code>NSS_INFERENCE_KEY</code> is not set, the same log line is followed by guidance to set it (and a note that <code>NSS_INFERENCE_ENDPOINT</code> is optional with the default API). When the key is set, a traceback may be included to show the underlying API error.</p>
+<p>Fix: set entity types explicitly in your config, or when using the CLI ensure
+<code>NSS_INFERENCE_KEY</code> is set (and <code>NSS_INFERENCE_ENDPOINT</code> if not using the default). PII classify config is deeply nested -- use YAML or SDK:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Config reference</label><label for="__tabbed_1_2">SDK</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

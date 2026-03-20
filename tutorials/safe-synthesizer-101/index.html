@@ -7942,10 +7942,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#set-the-nim-api-key-and-configure-column-classification" class="md-nav__link">
+  <a href="#set-the-inference-api-key-for-column-classification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔑 Set the NIM API key and configure column classification
+        🔑 Set the inference API key for column classification
       
     </span>
   </a>
@@ -7990,39 +7990,6 @@
     <span class="md-ellipsis">
       
         🛡️ Review evaluation report
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ➡️ Next Steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-tutorials" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Advanced Tutorials
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#try-these-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Try These Next
       
     </span>
   </a>
@@ -8845,8 +8812,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="set-the-nim-api-key-and-configure-column-classification">🔑 Set the NIM API key and configure column classification<a class="anchor-link" href="#set-the-nim-api-key-and-configure-column-classification">¶</a></h3><p>Setting <code>NIM_API_KEY</code> is optional but strongly recommended.</p>
-<p>NeMo Safe Synthesizer uses an LLM‑based column classifier to automatically infer column types and improve PII detection accuracy. To enable this feature, you must set both <code>NIM_ENDPOINT_URL</code> and <code>NIM_API_KEY</code>. You can obtain an API key from <a href="https://build.nvidia.com/settings/api-keys">build.nvidia.com</a></p>
+<h3 id="set-the-inference-api-key-for-column-classification">🔑 Set the inference API key for column classification<a class="anchor-link" href="#set-the-inference-api-key-for-column-classification">¶</a></h3><p>NeMo Safe Synthesizer uses an LLM‑based column classifier to automatically infer column types and improve PII detection accuracy. To enable this feature, set <code>NSS_INFERENCE_KEY</code> (the inference endpoint defaults to the NVIDIA integrate URL. You can obtain an API key from <a href="https://build.nvidia.com/settings/api-keys">build.nvidia.com</a>). Setting this value is optional but strongly recommended.</p>
 </div>
 </div>
 </div>
@@ -8872,36 +8838,28 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">getpass</span>
 
-<span class="c1"># Set the NIM endpoint URL</span>
-<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"NIM_ENDPOINT_URL"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"https://integrate.api.nvidia.com/v1"</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">"NIM_ENDPOINT_URL is set."</span><span class="p">)</span>
-
-<span class="c1"># Setting NIM_API_KEY is optional but strongly recommended for PII replacement.</span>
-<span class="k">if</span> <span class="s2">"NIM_API_KEY"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">:</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"NIM_API_KEY"</span><span class="p">]</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">"Paste NIM API key (or press Enter to skip): "</span><span class="p">)</span>
-<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"NIM_API_KEY"</span><span class="p">):</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">"NIM_API_KEY is set"</span><span class="p">)</span>
+<span class="c1"># Setting NSS_INFERENCE_KEY is optional but strongly recommended for PII replacement.</span>
+<span class="k">if</span> <span class="s2">"NSS_INFERENCE_KEY"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">:</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"NSS_INFERENCE_KEY"</span><span class="p">]</span> <span class="o">=</span> <span class="n">getpass</span><span class="o">.</span><span class="n">getpass</span><span class="p">(</span><span class="s2">"Paste inference API key (or press Enter to skip): "</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"NSS_INFERENCE_KEY"</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"NSS_INFERENCE_KEY is set"</span><span class="p">)</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span>
-        <span class="s2">"NIM_API_KEY is not set. "</span>
+        <span class="s2">"NSS_INFERENCE_KEY is not set. "</span>
         <span class="s2">"We strongly recommend setting a key."</span>
     <span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">import os
 import getpass
 
-# Set the NIM endpoint URL
-os.environ["NIM_ENDPOINT_URL"] = "https://integrate.api.nvidia.com/v1"
-print("NIM_ENDPOINT_URL is set.")
-
-# Setting NIM_API_KEY is optional but strongly recommended for PII replacement.
-if "NIM_API_KEY" not in os.environ:
-    os.environ["NIM_API_KEY"] = getpass.getpass("Paste NIM API key (or press Enter to skip): ")
-if os.environ.get("NIM_API_KEY"):
-    print("NIM_API_KEY is set")
+# Setting NSS_INFERENCE_KEY is optional but strongly recommended for PII replacement.
+if "NSS_INFERENCE_KEY" not in os.environ:
+    os.environ["NSS_INFERENCE_KEY"] = getpass.getpass("Paste inference API key (or press Enter to skip): ")
+if os.environ.get("NSS_INFERENCE_KEY"):
+    print("NSS_INFERENCE_KEY is set")
 else:
     print(
-        "NIM_API_KEY is not set. "
+        "NSS_INFERENCE_KEY is not set. "
         "We strongly recommend setting a key."
     )</div>
 </div>
@@ -8990,14 +8948,18 @@ Run the pipeline with <code>run()</code>, which performs data processing, PII re
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.sdk.library_builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizer</span>
 
-<span class="n">builder</span> <span class="o">=</span> <span class="n">SafeSynthesizer</span><span class="p">()</span><span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">df</span><span class="p">)</span><span class="o">.</span><span class="n">with_replace_pii</span><span class="p">()</span>
+
+<span class="c1"># To disable PII replacement for the run, chain `.with_replace_pii(enable=False)` on the builder before `run()`.</span>
+<span class="n">builder</span> <span class="o">=</span> <span class="n">SafeSynthesizer</span><span class="p">()</span><span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
 
 <span class="n">builder</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 <span class="n">results</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">results</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
-builder = SafeSynthesizer().with_data_source(df).with_replace_pii()
+
+# To disable PII replacement for the run, chain `.with_replace_pii(enable=False)` on the builder before `run()`.
+builder = SafeSynthesizer().with_data_source(df)
 
 builder.run()
 results = builder.results</div>
@@ -9126,29 +9088,6 @@ if results.evaluation_report_html:
     print(f"The HTML evaluation report is saved in {report_path}.")</div>
 </div>
 </div>
-</div>
-</div>
-</div>
-</div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e9a19fcc">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="next-steps">➡️ Next Steps<a class="anchor-link" href="#next-steps">¶</a></h3><p>Now that you've completed your first Safe Synthesizer job, explore more advanced features:</p>
-<h3 id="advanced-tutorials">Advanced Tutorials<a class="anchor-link" href="#advanced-tutorials">¶</a></h3><ul>
-<li><p><a href="https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/tutorials/differential-privacy.html">Differential Privacy Tutorial</a> - Apply mathematical privacy guarantees</p>
-</li>
-<li><p><a href="https://aire.gitlab-master-pages.nvidia.com/microservices/nmp/latest/nemo-microservices/latest/safe-synthesizer/tutorials/pii-replacement.html">PII Replacement Tutorial</a> - Advanced PII detection and replacement</p>
-</li>
-</ul>
-<h3 id="try-these-next">Try These Next<a class="anchor-link" href="#try-these-next">¶</a></h3><ol>
-<li><strong>Customize PII replacement</strong>: Configure specific entity types and replacement strategies</li>
-<li><strong>Enable differential privacy</strong>: Add formal privacy guarantees with epsilon and delta parameters</li>
-<li><strong>Tune generation parameters</strong>: Experiment with temperature and sampling to understand how they impact quality and privacy scores. More on generation parameters <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/user-guide/configuration.md#generation">here</a></li>
-<li><strong>Use your own data</strong>: Replace the sample dataset with your sensitive data</li>
-</ol>
 </div>
 </div>
 </div>
