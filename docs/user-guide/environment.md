@@ -27,8 +27,8 @@ are cached, and which network endpoints are used.
 | `NSS_DATASET_REGISTRY` | `--dataset-registry` | Dataset registry YAML path/URL |
 | `NSS_WANDB_MODE` | `--wandb-mode` | WandB mode (alias for `WANDB_MODE`) |
 | `NSS_WANDB_PROJECT` | `--wandb-project` | WandB project name (alias for `WANDB_PROJECT`) |
-| `NIM_ENDPOINT_URL` | -- | LLM endpoint for PII column classification |
-| `NIM_API_KEY` | -- | API key (optional -- only for direct endpoints) |
+| `NSS_INFERENCE_ENDPOINT` | -- | LLM endpoint for PII column classification (default: `https://integrate.api.nvidia.com/v1`) |
+| `NSS_INFERENCE_KEY` | -- | API key for the `NSS_INFERENCE_ENDPOINT` is required for column classification in both CLI and SDK. |
 | `NIM_MODEL_ID` | -- | Column classification model ID |
 | `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (Unsloth, GLiNER) |
 | `SAFE_SYNTHESIZER_CPU_COUNT` | -- | NER CPU processes |
@@ -162,16 +162,18 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`,
 
 NIM endpoint, API keys, and CPU parallelism for PII detection.
 
-### `NIM_ENDPOINT_URL`
+### `NSS_INFERENCE_ENDPOINT`
 
-The NIM/OpenAI-compatible endpoint used for PII column classification. When
-unset, an error is logged and the pipeline falls back to NER-only detection.
-Set this to enable LLM-based column classification:
+The NIM/OpenAI-compatible endpoint used for PII column classification. Defaults
+to `https://integrate.api.nvidia.com/v1` when unset. Override for a custom endpoint:
 
 ```bash
-export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+export NSS_INFERENCE_ENDPOINT="https://your-llm-inference-endpoint"
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 ```
+
+When using the CLI or SDK: for column classification to work, set `NSS_INFERENCE_KEY` (and
+`NSS_INFERENCE_ENDPOINT` only if you are not using the default URL).
 
 To disable column classification entirely instead of pointing it at a local
 endpoint, use the `replace_pii.globals.classify.enable_classify` config option.
@@ -201,10 +203,10 @@ PII classify config is deeply nested -- use YAML or SDK:
     )
     ```
 
-### `NIM_API_KEY`
+### `NSS_INFERENCE_KEY`
 
-API key for the NIM endpoint. Required when `NIM_ENDPOINT_URL` points to an
-authenticated endpoint.
+API key for the NSS inference endpoint. Required for PII column classification when using the
+CLI and SDK (with the default or custom `NSS_INFERENCE_ENDPOINT`).
 
 ### `NIM_MODEL_ID`
 

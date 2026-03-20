@@ -441,20 +441,22 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
 
 ### LLM Column Classification
 
-To enable LLM-based PII column classification (optional), set the endpoint
-before running the pipeline. Any OpenAI-compatible inference endpoint
-works -- not just NVIDIA NIM:
+To enable LLM-based PII column classification (optional), set the API key
+before running the pipeline. The endpoint defaults to
+`https://integrate.api.nvidia.com/v1`; override `NSS_INFERENCE_ENDPOINT` for a
+custom OpenAI-compatible endpoint.
+
+When using the CLI, set both for column classification:
 
 ```bash
-export NIM_ENDPOINT_URL="https://integrate.api.nvidia.com/v1"  # or your own OpenAI-compatible endpoint
-
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret  (optional -- only needed for direct endpoints, not inference gateways)
+export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
 ```
 
-When `NIM_ENDPOINT_URL` is unset, the classification step is attempted but
+PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
+When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
 falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement; column classification
-requires `NIM_ENDPOINT_URL`.
+variables are required for NER-only PII replacement.
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 
