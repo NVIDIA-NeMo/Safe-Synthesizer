@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
@@ -456,12 +457,15 @@ class TestProcessDataConfigValidation:
     immediately -- before holdout split, PII replacement, or any disk I/O.
     """
 
-    def test_dp_and_explicit_unsloth_raises_at_process_data(self) -> None:
+    def test_dp_and_explicit_unsloth_raises_at_process_data(self, fixture_workdir: Workdir) -> None:
         """DP + explicit ``use_unsloth=True`` raises before any data is processed.
 
-        Pydantic wraps the inner ``ParameterError`` in a ``ValidationError``,
-        so we match on the message rather than the exception type.
+        Pydantic wraps the inner ``ParameterError`` in a ``ValidationError``.
         """
-        ss = SafeSynthesizer().with_train(use_unsloth=True).with_differential_privacy(dp_enabled=True)
-        with pytest.raises(Exception, match="not compatible with DP"):
+        ss = (
+            SafeSynthesizer(workdir=fixture_workdir)
+            .with_train(use_unsloth=True)
+            .with_differential_privacy(dp_enabled=True)
+        )
+        with pytest.raises(ValidationError, match="not compatible with DP"):
             ss.process_data()
