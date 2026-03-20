@@ -10008,10 +10008,11 @@ the CLI Commands section for all options.</p>
 </span><span id="__span-54-8"><a id="__codelineno-54-8" name="__codelineno-54-8" href="#__codelineno-54-8"></a>    <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00&quot;</span><span class="p">)</span>
 </span><span id="__span-54-9"><a id="__codelineno-54-9" name="__codelineno-54-9" href="#__codelineno-54-9"></a><span class="p">)</span>
 </span><span id="__span-54-10"><a id="__codelineno-54-10" name="__codelineno-54-10" href="#__codelineno-54-10"></a><span class="n">synthesizer</span> <span class="o">=</span> <span class="n">SafeSynthesizer</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">workdir</span><span class="o">=</span><span class="n">workdir</span><span class="p">)</span>
-</span><span id="__span-54-11"><a id="__codelineno-54-11" name="__codelineno-54-11" href="#__codelineno-54-11"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">process_data</span><span class="p">()</span>
-</span><span id="__span-54-12"><a id="__codelineno-54-12" name="__codelineno-54-12" href="#__codelineno-54-12"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">load_from_save_path</span><span class="p">()</span>
+</span><span id="__span-54-11"><a id="__codelineno-54-11" name="__codelineno-54-11" href="#__codelineno-54-11"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">load_from_save_path</span><span class="p">()</span>
+</span><span id="__span-54-12"><a id="__codelineno-54-12" name="__codelineno-54-12" href="#__codelineno-54-12"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">process_data</span><span class="p">()</span>
 </span><span id="__span-54-13"><a id="__codelineno-54-13" name="__codelineno-54-13" href="#__codelineno-54-13"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">generate</span><span class="p">()</span>
 </span><span id="__span-54-14"><a id="__codelineno-54-14" name="__codelineno-54-14" href="#__codelineno-54-14"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">evaluate</span><span class="p">()</span>
+</span><span id="__span-54-15"><a id="__codelineno-54-15" name="__codelineno-54-15" href="#__codelineno-54-15"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">save_results</span><span class="p">()</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -10069,10 +10070,13 @@ remove them when no longer needed. Use <code>--caches-only</code> to keep the ad
 but reclaim training cache space.</p>
 </div>
 <h3 id="sdk-results-access">SDK Results Access<a class="headerlink" href="#sdk-results-access" title="Permanent link">&para;</a></h3>
+<p><code>run()</code> automatically saves <code>synthetic_data.csv</code> and <code>evaluation_report.html</code>
+to the artifacts directory unless an <code>output_file</code> override is provided.
+For stepwise execution, call <code>save_results()</code> explicitly after <code>evaluate()</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="n">results</span> <span class="o">=</span> <span class="n">synthesizer</span><span class="o">.</span><span class="n">results</span>
 </span><span id="__span-58-2"><a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">synthetic_data</span>
 </span><span id="__span-58-3"><a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">summary</span>
-</span><span id="__span-58-4"><a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a><span class="n">synthesizer</span><span class="o">.</span><span class="n">save_results</span><span class="p">()</span>
+</span><span id="__span-58-4"><a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a><span class="c1"># synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically</span>
 </span></code></pre></div>
 <h3 id="cleaning-up">Cleaning Up<a class="headerlink" href="#cleaning-up" title="Permanent link">&para;</a></h3>
 <p>See <a href="#artifacts-clean"><code>artifacts clean</code></a> in the CLI Commands section for options.</p>
