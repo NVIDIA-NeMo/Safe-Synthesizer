@@ -8468,6 +8468,14 @@
 </table>
 <h2 id="supported-entity-types">Supported Entity Types<a class="headerlink" href="#supported-entity-types" title="Permanent link">&para;</a></h2>
 <p>GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:</p>
+<div class="admonition note">
+<p class="admonition-title">Default entity set</p>
+<p>The default configuration detects and replaces a focused subset of these entities: <code>first_name</code>,
+<code>last_name</code>, <code>name</code>, <code>street_address</code>, <code>city</code>, <code>state</code>, <code>postcode</code>, <code>address</code>, <code>phone_number</code>,
+<code>fax_number</code>, <code>email</code>, <code>ssn</code>, <code>national_id</code>, <code>tax_id</code>, and <code>credit_debit_card</code>. To detect additional
+entity types, add them to <code>replace_pii.globals.classify.entities</code> and
+<code>replace_pii.globals.ner.ner_entities</code> in your configuration. Also add replacement steps to <code>replace_pii.steps</code>.</p>
+</div>
 <h3 id="personal-information">Personal Information<a class="headerlink" href="#personal-information" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>first_name</code> - Given names</li>

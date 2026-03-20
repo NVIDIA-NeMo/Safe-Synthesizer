@@ -8943,14 +8943,14 @@ else:
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
 
 <span class="n">dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="s2">"clinc/clinc_oos"</span><span class="p">,</span> <span class="s2">"small"</span><span class="p">)</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">"train"</span><span class="p">]</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-<span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">"train"</span><span class="p">]</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>  <span class="c1"># type: ignore[union-attr]</span>
+<span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>  <span class="c1"># type: ignore[union-attr]</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">from datasets import load_dataset
 
 dataset = load_dataset("clinc/clinc_oos", "small")
-df = dataset["train"].to_pandas()
-df.head()</div>
+df = dataset["train"].to_pandas()  # type: ignore[union-attr]
+df.head()  # type: ignore[union-attr]</div>
 </div>
 </div>
 </div>

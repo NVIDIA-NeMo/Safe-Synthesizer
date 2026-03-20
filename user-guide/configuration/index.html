@@ -8728,13 +8728,13 @@ classification via the SDK.</p>
 <tr>
 <td><code>replace_pii.globals.classify.entities</code></td>
 <td>(see default list)</td>
-<td>Entity types used for LLM-based column classification. Defaults to 40+ types -- see <a href="../../product-overview/pii_replacement/">PII Replacement</a> and <a class="autorefs autorefs-internal" title="            PiiReplacerConfig
+<td>Entity types used for LLM-based column classification. Defaults to 15 types covering names, addresses, phone numbers, emails, SSN, national/tax IDs, and credit/debit cards -- see <a href="../../product-overview/pii_replacement/">PII Replacement</a> and <a class="autorefs autorefs-internal" title="            PiiReplacerConfig
 
 
   
       pydantic-model
   " href="../../reference/nemo_safe_synthesizer/config/replace_pii/#nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig"><code>PiiReplacerConfig</code></a></td>
-<td>Override with a smaller list to limit which column types are classified</td>
+<td>Override to add or remove entity types from classification</td>
 </tr>
 <tr>
 <td><code>replace_pii.globals.ner.ner_threshold</code></td>
