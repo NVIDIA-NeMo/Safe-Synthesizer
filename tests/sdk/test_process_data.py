@@ -439,3 +439,29 @@ class TestLoadFromSavePath:
 
         with pytest.raises(RuntimeError, match="run.*cannot be called after load_from_save_path"):
             builder.run()
+
+
+# ---------------------------------------------------------------------------
+# Tests: config validation at process_data entry
+# ---------------------------------------------------------------------------
+
+
+class TestProcessDataConfigValidation:
+    """``process_data`` must validate configuration before doing any I/O.
+
+    Incompatible settings that are supplied via the builder's ``with_*``
+    methods after construction are not visible to the Pydantic validator
+    until ``_resolve_nss_config()`` is called.  ``process_data`` must
+    call it at the top of the method so invalid configs are caught
+    immediately -- before holdout split, PII replacement, or any disk I/O.
+    """
+
+    def test_dp_and_explicit_unsloth_raises_at_process_data(self) -> None:
+        """DP + explicit ``use_unsloth=True`` raises before any data is processed.
+
+        Pydantic wraps the inner ``ParameterError`` in a ``ValidationError``,
+        so we match on the message rather than the exception type.
+        """
+        ss = SafeSynthesizer().with_train(use_unsloth=True).with_differential_privacy(dp_enabled=True)
+        with pytest.raises(Exception, match="not compatible with DP"):
+            ss.process_data()
