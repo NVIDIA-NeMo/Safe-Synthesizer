@@ -960,10 +960,11 @@ the CLI Commands section for all options.
         Path("./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00")
     )
     synthesizer = SafeSynthesizer(config, workdir=workdir)
-    synthesizer.process_data()
     synthesizer.load_from_save_path()
+    synthesizer.process_data()
     synthesizer.generate()
     synthesizer.evaluate()
+    synthesizer.save_results()
     ```
 
 ### Stepwise execution (SDK)
@@ -1032,8 +1033,8 @@ Key outputs:
 ### SDK Results Access
 
 `run()` automatically saves `synthetic_data.csv` and `evaluation_report.html`
-to the artifacts directory. For stepwise execution, call `save_results()`
-explicitly after `evaluate()`.
+to the artifacts directory unless an `output_file` override is provided.
+For stepwise execution, call `save_results()` explicitly after `evaluate()`.
 
 ```python
 results = synthesizer.results

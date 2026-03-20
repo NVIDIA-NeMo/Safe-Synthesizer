@@ -91,6 +91,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         builder = SafeSynthesizer().with_data_source(df)
         builder.process_data().train().generate().evaluate()
+        builder.save_results()
         results = builder.results
 
     Args:
@@ -440,9 +441,11 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     def run(self, output_file: Path | str | None = None) -> None:
-        """Run the full pipeline: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
+        """Run the full pipeline and save results.
 
-        For step-by-step control, call the individual methods instead.
+        Executes ``process_data`` -> ``train`` -> ``generate`` ->
+        ``evaluate`` -> ``save_results``.  For step-by-step control,
+        call the individual methods instead.
 
         Args:
             output_file: Explicit output path for the synthetic data CSV.
@@ -470,6 +473,9 @@ class SafeSynthesizer(ConfigBuilder):
     def save_results(self, output_file: Path | str | None = None) -> None:
         """Save synthetic data CSV and evaluation report HTML to the workdir.
 
+        Called automatically by ``run()``.  Call explicitly after
+        stepwise execution (``process_data().train().generate().evaluate()``).
+
         Args:
             output_file: Explicit output path for the CSV.  Falls back
                 to ``workdir.output_file`` when ``None``.
@@ -478,7 +484,6 @@ class SafeSynthesizer(ConfigBuilder):
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)
 
-        # Determine output file path for synthetic data
         match output_file:
             case Path() as p:
                 output_file = p
@@ -487,12 +492,10 @@ class SafeSynthesizer(ConfigBuilder):
             case _:
                 output_file = self._workdir.output_file
 
-        # Save synthetic data CSV
         output_file.parent.mkdir(parents=True, exist_ok=True)
         self.results.synthetic_data.to_csv(str(output_file), index=False)
         logger.info(f"Saved synthetic data to {output_file}")
 
-        # Save evaluation report HTML if available
         if self.results.evaluation_report_html:
             report_path = self._workdir.evaluation_report
             report_path.parent.mkdir(parents=True, exist_ok=True)
