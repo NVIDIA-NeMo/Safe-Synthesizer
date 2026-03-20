@@ -26,6 +26,20 @@ NeMo Safe Synthesizer adapts language models to understand and generate tabular 
 - Generates new records that maintain statistical properties with no one-to-one mapping to original records
 - Supports various model sizes and architectures
 
+Two backends are available: Unsloth (default, faster) and HuggingFace
+(required for differential privacy). Both perform LoRA fine-tuning; see
+[Running -- Training](../user-guide/running.md#training) for a comparison.
+
+Three models have been extensively tested:
+
+| Family | HuggingFace ID |
+|--------|----------------|
+| SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+| Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+
+For information on the trade-offs with model selection, see [Training](running.md#training).
+
 ### Supported Data Types
 
 NeMo Safe Synthesizer supports diverse tabular data:
@@ -33,7 +47,9 @@ NeMo Safe Synthesizer supports diverse tabular data:
 - Numeric: Continuous and discrete numerical values
 - Categorical: Text labels and categories
 - Text: Free-form text fields
-- Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental.)
+- Temporal: Event sequences and time series (Note: Temporal dataset support is currently experimental)
+
+Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy).
 
 ### Differential Privacy
 
@@ -75,7 +91,7 @@ Enabling DP provides strong privacy guarantees but affects synthetic data qualit
 - Lower epsilon: stronger privacy, but more noise and potentially lower utility
 - Training speed: DP training is usually 2-4x slower due to per-sample gradient computation
 - Data requirements: DP works best with larger datasets (10,000+ records recommended, compared to 1,000+ records without DP)
-- Quality impact: Added noise may reduce statistical fidelity of synthetic data
+- Quality impact: The added noise may reduce statistical fidelity of synthetic data
 
 #### Configuration Parameters
 
@@ -96,7 +112,7 @@ Delta calculation: Use `"auto"` (recommended), which sets $\delta = \frac{1}{n^{
 
 Data size: DP performs best with 10,000+ training records. Smaller datasets may experience significant quality degradation due to the noise required for privacy guarantees.
 
-For hands-on guidance, refer to [Differential Privacy Tutorial](../tutorials/differential-privacy.md). For complete parameter documentation, refer to [Parameters Reference](../user-guide/configuration.md).
+For hands-on guidance, see [Running Safe Synthesizer -- Differential Privacy](../user-guide/running.md#differential-privacy) and [Configuration -- Differential Privacy](../user-guide/configuration.md#differential-privacy). For complete parameter documentation, refer to [Parameters Reference](../user-guide/configuration.md).
 
 ## Configuration
 
@@ -110,6 +126,6 @@ For a complete list of all available parameters and their defaults, refer to [Pa
 
 ## Related Topics
 
-- [Parameters Reference](../user-guide/configuration.md): Complete parameter reference
-- [Differential Privacy](../tutorials/differential-privacy.md): Learn about differential privacy in practice
-- [Tutorials](../tutorials/index.md): Run the pipeline
+- [Pipeline](pipeline.md): Pipeline overview and stages
+- [Getting Started](../user-guide/getting-started.md): Install and run your first pipeline
+- [Configuration](../user-guide/configuration.md): Complete parameter reference

@@ -33,7 +33,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --url /workspace/data/input.csv
+  run --data-source /workspace/data/input.csv
 
 
 # Run with a test dataset
@@ -42,7 +42,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --url /workspace/data/clinc_oos.csv
+  run --data-source /workspace/data/clinc_oos.csv
 
 # Run the full pipeline with a config file
 docker run --gpus all --shm-size=1g \
@@ -50,7 +50,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --config /workspace/data/config.yaml --url /workspace/data/input.csv
+  run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv
 
 # Interactive shell (mount your data, override entrypoint)
 docker run -it --gpus all --shm-size=1g \

@@ -266,7 +266,7 @@ CONTAINER_GPU_FLAG ?= --gpus all
 CONTAINER_HF_CACHE ?= $(HOME)/.cache/huggingface
 
 # Extra mounts for data outside the repo tree.
-#   make container-run-gpu CONTAINER_EXTRA_MOUNTS="-v /data/input:/workspace/data" CMD="run --url /workspace/data/input.csv"
+#   make container-run-gpu CONTAINER_EXTRA_MOUNTS="-v /data/input:/workspace/data" CMD="run --data-source /workspace/data/input.csv"
 CONTAINER_EXTRA_MOUNTS ?=
 
 CONTAINER_GPU_RUN_OPTS := \

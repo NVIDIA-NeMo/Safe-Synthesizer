@@ -167,7 +167,7 @@ if [[ "${NSS_PHASE}" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
     uv run safe-synthesizer run train \
-        --url "$dataset" \
+        --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
         $dataset_registry_arg
@@ -183,7 +183,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
     fi
 
     uv run safe-synthesizer run generate \
-        --url "$dataset" \
+        --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
         $dataset_registry_arg \
@@ -191,7 +191,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
 else
     # Full end-to-end run
     uv run safe-synthesizer run \
-        --url "$dataset" \
+        --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
         $dataset_registry_arg

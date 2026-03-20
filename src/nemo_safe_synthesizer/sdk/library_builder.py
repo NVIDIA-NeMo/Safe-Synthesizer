@@ -91,6 +91,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         builder = SafeSynthesizer().with_data_source(df)
         builder.process_data().train().generate().evaluate()
+        builder.save_results()
         results = builder.results
 
     Args:
@@ -143,7 +144,6 @@ class SafeSynthesizer(ConfigBuilder):
                 config_name="default",
                 dataset_name="data",
             )
-        self._resolve_nss_config()
         # Initialize state for pipeline stages
         self._train_df: pd.DataFrame | None = (
             None  # The active training df that might go through transformation, eg. pii replacement
@@ -249,15 +249,16 @@ class SafeSynthesizer(ConfigBuilder):
 
         self._ensure_observability()
 
-        if TYPE_CHECKING:
-            assert self._nss_config is not None
-            assert isinstance(self._data_source, pd.DataFrame)
-
         if self._loaded_from_save_path or getattr(self, "_data_processed", False):
             # Resume path or already-processed data in this builder instance; nothing to do.
             return self
 
+        self._resolve_nss_config()
         self._resolve_datasource()
+
+        if TYPE_CHECKING:
+            assert self._nss_config is not None
+            assert isinstance(self._data_source, pd.DataFrame)
 
         holdout = Holdout(self._nss_config)
         original_train_df, self._test_df = holdout.train_test_split(self._data_source)
@@ -383,8 +384,11 @@ class SafeSynthesizer(ConfigBuilder):
                 config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
             )
 
-        self.generator.initialize()
-        self.generator.generate(keep_llm_state=False)
+        try:
+            self.generator.initialize()
+            self.generator.generate()
+        finally:
+            self.generator.teardown()
         self._generated = True
         return self
 
@@ -436,10 +440,16 @@ class SafeSynthesizer(ConfigBuilder):
         )
         return self
 
-    def run(self) -> None:
-        """Run the full pipeline: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
+    def run(self, output_file: Path | str | None = None) -> None:
+        """Run the full pipeline and save results.
 
-        For step-by-step control, call the individual methods instead.
+        Executes ``process_data`` -> ``train`` -> ``generate`` ->
+        ``evaluate`` -> ``save_results``.  For step-by-step control,
+        call the individual methods instead.
+
+        Args:
+            output_file: Explicit output path for the synthetic data CSV.
+                Falls back to ``workdir.output_file`` when ``None``.
 
         Raises:
             RuntimeError: If called after ``load_from_save_path()``.
@@ -457,10 +467,14 @@ class SafeSynthesizer(ConfigBuilder):
             assert isinstance(self._data_source, pd.DataFrame)
 
         self.process_data().train().generate().evaluate()
+        self.save_results(output_file=output_file)
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> None:
         """Save synthetic data CSV and evaluation report HTML to the workdir.
+
+        Called automatically by ``run()``.  Call explicitly after
+        stepwise execution (``process_data().train().generate().evaluate()``).
 
         Args:
             output_file: Explicit output path for the CSV.  Falls back
@@ -470,7 +484,6 @@ class SafeSynthesizer(ConfigBuilder):
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)
 
-        # Determine output file path for synthetic data
         match output_file:
             case Path() as p:
                 output_file = p
@@ -479,12 +492,10 @@ class SafeSynthesizer(ConfigBuilder):
             case _:
                 output_file = self._workdir.output_file
 
-        # Save synthetic data CSV
         output_file.parent.mkdir(parents=True, exist_ok=True)
         self.results.synthetic_data.to_csv(str(output_file), index=False)
         logger.info(f"Saved synthetic data to {output_file}")
 
-        # Save evaluation report HTML if available
         if self.results.evaluation_report_html:
             report_path = self._workdir.evaluation_report
             report_path.parent.mkdir(parents=True, exist_ok=True)

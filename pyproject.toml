@@ -187,6 +187,7 @@ dependency-metadata = [
 override-dependencies = [
     "flashinfer-python==0.6.1; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
     "flashinfer-cubin==0.6.1; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
+    "xgrammar>=0.1.32,<1.0.0",                            # CVE-2026-25048: override vllm's pin on 0.1.29
 ]
 
 environments = [
@@ -326,6 +327,7 @@ safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
 # Below is a list of excluded directories from ty typechecks.
 exclude = [
     ".uv_cache", # Cache Dir in CI
+    "./docs/**/*.ipynb",
     "./src/nemo_safe_synthesizer/artifacts/",
     "./src/nemo_safe_synthesizer/pii_replacer/",
     "./tests/",

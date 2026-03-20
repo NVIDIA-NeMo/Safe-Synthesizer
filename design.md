@@ -311,7 +311,7 @@ Path: `src/nemo_safe_synthesizer/evaluation/`
 
 #### Privacy Module (`privacy/dp_transformers/`)
 
-- `OpacusDPTrainer`: Integration with Opacus for DP-SGD
+- `[Opacus](https://opacus.ai/)DPTrainer`: Integration with Opacus for DP-SGD
 - Privacy Arguments: DP hyperparameters
 - Custom Layers: DP-compatible layers
 
@@ -381,7 +381,7 @@ The execution follows a clear pipeline: Data → PII Replacement → Training �
 ```bash
 safe-synthesizer run \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --output-path synthetic.csv
 ```
 

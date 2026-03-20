@@ -71,7 +71,7 @@ Usage: safe-synthesizer run [OPTIONS] COMMAND [ARGS]...
 
 Options:
   --config TEXT                   path to a yaml config file
-  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+  --data-source TEXT                      Dataset name, URL, or path to CSV dataset.
                                   For 'run generate', this is optional if a
                                   cached dataset exists in the workdir.
   --artifact-path DIRECTORY       Base directory for all runs. Runs are
@@ -106,7 +106,7 @@ Options:
                                   dependencies too
   --dataset-registry TEXT         URL or path of a dataset registry YAML file.
                                   If provided, datasets in the registry may be
-                                  referenced by name in --url. Can also be set
+                                  referenced by name in --data-source. Can also be set
                                   via NSS_DATASET_REGISTRY env var. If both
                                   env var and CLI option are provided, the CLI
                                   option takes precedence.
@@ -137,7 +137,7 @@ Usage: safe-synthesizer run generate [OPTIONS]
 
 Options:
   --config TEXT                   path to a yaml config file
-  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+  --data-source TEXT                      Dataset name, URL, or path to CSV dataset.
                                   [required]
   --artifact-path DIRECTORY       Base directory for all runs. Runs are
                                   created as <artifact-path>/<config>-
@@ -207,7 +207,7 @@ training:
 
 ```bash
 # CLI override
-safe-synthesizer run --training__attn_implementation sdpa --url my_data.csv
+safe-synthesizer run --training__attn_implementation sdpa --data-source my_data.csv
 ```
 
 | Value | Description | Requires |
@@ -341,11 +341,11 @@ If both are provided, the CLI option takes precedence.
 
 ### Referencing Datasets
 
-When a dataset registry is provided, you can use dataset names defined in the registry with the `--url` argument.
+When a dataset registry is provided, you can use dataset names defined in the registry with the `--data-source` argument.
 For example:
 
 ```bash
-nemo-safe-synthesizer run --dataset-registry my_registry.yaml --url my_dataset
+nemo-safe-synthesizer run --dataset-registry my_registry.yaml --data-source my_dataset
 ```
 
 This will load the dataset from the url plus apply any overrides for `my_dataset` from the registry YAML.
@@ -377,7 +377,7 @@ datasets:
 `url` may be a URL or a file path, anything that data readers like `pd.read_csv` will accept.
 - `base_url` - Any relative urls or paths will be prepended with the `base_url` before attempting to load the dataset.
 This only applies to the named datasets in the registry which have a relative url.
-Passing a relative `--url` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
+Passing a relative `--data-source` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
 `base_url` is optional, if not provided, it is recommended to use absolute urls or file paths for all entries.
 - `overrides` - Dataset specific config overrides, such as a dataset that should always be run with `group_training_examples_by`.
 Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.

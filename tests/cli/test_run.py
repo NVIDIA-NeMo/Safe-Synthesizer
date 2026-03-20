@@ -131,13 +131,13 @@ class TestOutputFileOverride:
         fixture_session_cache_dir: Path,
         patched_run_dependencies: dict,
     ):
-        """Verify that --output-file overrides default workdir output."""
+        """Verify that --output-file is forwarded to run()."""
         custom_output = tmp_path / "custom_output.csv"
 
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--output-file",
                 str(custom_output),
@@ -147,26 +147,22 @@ class TestOutputFileOverride:
             catch_exceptions=False,
         )
 
-        # Verify save_results was called with the custom output file
         assert result.exit_code == 0
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.save_results.assert_called_once()
-        actual_output_path = mock_ss.save_results.call_args.kwargs.get("output_file")
-        assert str(actual_output_path) == str(custom_output)
+        mock_ss.run.assert_called_once_with(output_file=str(custom_output))
 
-    def test_run_uses_workdir_output_when_no_override(
+    def test_run_without_output_file_passes_none(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
         fixture_session_cache_dir: Path,
-        mock_workdir: MagicMock,
         patched_run_dependencies: dict,
     ):
-        """Verify that workdir.output_file is used when --output-file is not provided."""
+        """Without --output-file, run() is called with output_file=None."""
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(fixture_session_cache_dir),
@@ -174,12 +170,10 @@ class TestOutputFileOverride:
             catch_exceptions=False,
         )
 
-        # Verify save_results was called with the workdir's default output file
         assert result.exit_code == 0
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.save_results.assert_called_once()
-        actual_output_path = mock_ss.save_results.call_args.kwargs.get("output_file")
-        assert str(actual_output_path) == str(mock_workdir.output_file)
+        # Default output path is used if no --output-file is provided
+        mock_ss.run.assert_called_once_with(output_file=None)
 
 
 class TestPathOptions:
@@ -214,7 +208,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(artifacts_dir),
@@ -244,7 +238,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -275,7 +269,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(artifacts_dir),
@@ -306,7 +300,7 @@ class TestPathOptions:
         result = cli_runner.invoke(
             run,
             [
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--dataset-registry",
                 "./registry.yaml",
@@ -329,7 +323,7 @@ class TestRunTrainOptions:
         result = cli_runner.invoke(run, ["train", "--help"])
 
         assert result.exit_code == 0
-        assert "--url" in result.output
+        assert "--data-source" in result.output
         assert "--config" in result.output
         assert "--run-path" in result.output
 
@@ -347,7 +341,7 @@ class TestRunTrainOptions:
             run,
             [
                 "train",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -379,7 +373,7 @@ class TestRunTrainOptions:
             run,
             [
                 "train",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -404,7 +398,7 @@ class TestRunTrainOptions:
             run,
             [
                 "train",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--dataset-registry",
                 "./registry.yaml",
@@ -447,7 +441,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
             ],
         )
@@ -470,7 +464,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -502,7 +496,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--artifact-path",
                 str(artifacts_dir),
@@ -536,7 +530,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -568,7 +562,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--run-path",
                 str(run_dir),
@@ -598,7 +592,7 @@ class TestRunGenerateOptions:
             run,
             [
                 "generate",
-                "--url",
+                "--data-source",
                 str(dummy_csv),
                 "--dataset-registry",
                 "./registry.yaml",

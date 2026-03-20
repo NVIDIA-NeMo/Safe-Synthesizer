@@ -357,11 +357,10 @@ Standard context managers (`with open(...)`, `with lock:`) are fine when they fi
 
 ```python
 try:
-    ss.run()
-    ss.save_results(workdir)
+    nss.run()  # saves results automatically
 finally:
-    if hasattr(ss, "generator") and ss.generator is not None:
-        ss.generator.teardown()
+    if hasattr(nss, "generator") and nss.generator is not None:
+        nss.generator.teardown()
 ```
 
 For backends with expensive resources, use the `_torn_down` guard pattern:

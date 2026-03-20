@@ -11,11 +11,10 @@ environment variables, see [Environment Variables](environment.md).
 
 ## Configuration Precedence
 
-Settings are resolved in this order, from highest to lowest priority:
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
-```text
-CLI flags  >  dataset registry overrides  >  YAML config file  >  model defaults
-```
+- CLI: `CLI flags` > `dataset registry overrides` > `YAML config file` > `model defaults`
+- SDK: `SDK builder calls` > `YAML config file` > `model defaults`
 
 Each layer only overrides what it explicitly sets -- everything else falls
 through to the next layer.
@@ -25,13 +24,13 @@ through to the next layer.
 Start from model defaults, override one field via CLI:
 
 ```bash
-safe-synthesizer run --url data.csv --generation__num_records 2000
+safe-synthesizer run --data-source data.csv --generation__num_records 2000
 ```
 
 Use a YAML base for most settings, tune one field per run without editing the file:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv \
+safe-synthesizer run --config config.yaml --data-source data.csv \
   --training__learning_rate 0.001
 ```
 
@@ -102,9 +101,8 @@ We have extensively tested the following models for synthetic data use in NSS, a
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 
-Within each family, any size variant on HuggingFace Hub should work.
-Benchmarking data for additional model families will be added as they are
-validated.
+Benchmarking data for additional models will be added as they are
+validated. To understand the trade-offs with model selection, see [Training](running.md#training).
 
 ---
 
@@ -141,9 +139,9 @@ for details.
 
 ## Replacing PII
 
-PII replacement detects and replaces personally identifiable information in
+PII replacement detects and replaces personally identifiable information (PII) in
 your dataset before synthesis. It is on by default -- set `replace_pii: null`
-in YAML (or use `--no_replace_pii` on the CLI) to disable it.
+in YAML (or use `--no-replace-pii` on the CLI) to disable it.
 The `replace_pii` block is only needed when customizing entity types or
 classification via the SDK.
 
@@ -152,7 +150,7 @@ Key config parameters:
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
 | `replace_pii.globals.classify.enable_classify` | `true` | Enable LLM-based PII column classification | When using the CLI, set `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT`); set to `false` if no LLM endpoint is available |
-| `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 40+ types -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override with a smaller list to limit which column types are classified |
+| `replace_pii.globals.classify.entities` | (see default list) | Entity types used for LLM-based column classification. Defaults to 15 types covering names, addresses, phone numbers, emails, SSN, national/tax IDs, and credit/debit cards -- see [PII Replacement](../product-overview/pii_replacement.md) and [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig] | Override to add or remove entity types from classification |
 | `replace_pii.globals.ner.ner_threshold` | `0.3` | GLiNER confidence threshold for NER detection | Lower to catch more entities (more false positives); raise to reduce false positives |
 
 See [`PiiReplacerConfig`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
@@ -164,7 +162,7 @@ for the full schema.
 
 Differential privacy (DP) provides a formal bound on what an adversary can
 learn about any individual record. Safe Synthesizer implements DP-SGD
-(Differentially Private Stochastic Gradient Descent) via Opacus.
+(Differentially Private Stochastic Gradient Descent) via [Opacus](https://opacus.ai/).
 
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
@@ -287,7 +285,7 @@ safe-synthesizer config create --training__pretrained_model "HuggingFaceTB/SmolL
 Use double underscores to address nested fields:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv \
+safe-synthesizer run --config config.yaml --data-source data.csv \
   --training__learning_rate 0.001 \
   --data__holdout 0.1 \
   --generation__num_records 5000
