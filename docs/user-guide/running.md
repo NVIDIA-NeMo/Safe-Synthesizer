@@ -324,14 +324,18 @@ customer ID) so related rows are trained together. Use
     With grouping enabled, each training example is tokenized as:
 
     ```text
-    [schema prompt] <|im_start|> group1-record1
-    group1-record2 <|im_end|> <|im_start|> group2-record1
-    group2-record2 <|im_end|>
+    [schema prompt] <BOS> group1-record1
+    group1-record2 <EOS> <BOS> group2-record1
+    group2-record2 <EOS>
     ```
 
-    `max_sequences_per_example` controls how many groups are packed into
-    a single example (default: `"auto"`, which resolves to 10 without DP).
-    Fewer groups per example means more training examples overall.
+    Here `<BOS>` and `<EOS>` represent the model's begin-of-sequence and
+    end-of-sequence tokens; the exact strings are taken from the selected
+    model's metadata and may differ across model families.
+
+    `data.max_sequences_per_example` controls how many groups are packed
+    into a single example (default: `"auto"`, which resolves to 10 without
+    DP). Fewer groups per example means more training examples overall.
     See [Example Generation](../developer-guide/example-generation.md) for a full walkthrough.
 
 ### Dataset Registry

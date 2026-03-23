@@ -316,11 +316,17 @@ sequences within an example. The specific tokens depend on the model:
 | [Qwen 2.5](https://huggingface.co/Qwen/Qwen2.5-1.5B)        | `<\|im_start\|>`  | 151644 | `<\|im_end\|>`    | 151645 |
 | [Llama 3.2](https://huggingface.co/meta-llama/Llama-3.2-1B)  | `<\|im_start\|>`  | 151644 | *(from tokenizer)* | --     |
 
-!!! note "These are not the models' native BOS/EOS tokens"
-    Safe Synthesizer overrides the default tokenizer tokens for group delimiting.
-    For example, Llama 3.2's native BOS is `<|begin_of_text|>` (128000), but
-    this repo uses `<|im_start|>` (151644) instead
-    ([source](https://huggingface.co/meta-llama/Llama-3.2-1B)).
+!!! warning "Token IDs are model- and tokenizer-version dependent"
+    The IDs above are illustrative, not repo-guaranteed constants. BOS tokens
+    are explicitly set in `ModelMetadata` subclasses (`src/nemo_safe_synthesizer/llm/metadata.py`),
+    while EOS tokens are generally read from the loaded tokenizer via
+    `LLMPromptConfig.from_tokenizer(...)`. If a model's tokenizer is updated
+    upstream, the IDs may change.
+
+    These are also not the models' native BOS/EOS tokens -- Safe Synthesizer
+    overrides them for group delimiting. For example, Llama 3.2's native BOS
+    is `<|begin_of_text|>` (128000), but this repo uses `<|im_start|>`
+    (151644) instead ([source](https://huggingface.co/meta-llama/Llama-3.2-1B)).
     The Qwen tokenizer's native `eos_token` is `<|endoftext|>` (151643), not
     `<|im_end|>`
     ([tokenizer config](https://huggingface.co/Qwen/Qwen2.5-1.5B/blob/main/tokenizer_config.json)).
@@ -332,10 +338,11 @@ In tabular and sequential mode, one BOS/EOS pair wraps all the records in an
 example. In grouped mode, each group gets its own pair -- so the model learns
 that BOS marks the start of a new group.
 
-### `max_sequences_per_example`
+### `data.max_sequences_per_example`
 
-This parameter controls how many units are packed into a single example. What
-counts as a "unit" depends on the mode:
+This parameter (CLI: `--data__max_sequences_per_example`) controls how many
+units are packed into a single example. What counts as a "unit" depends on
+the mode:
 
 | Mode       | Unit                                      | Default                                        |
 | ---------- | ----------------------------------------- | ---------------------------------------------- |
@@ -348,7 +355,7 @@ differential privacy is enabled, 10 otherwise. You can also set an explicit
 integer. With DP, each example must contain exactly one unit for correct
 per-example gradient clipping.
 
-??? tip "When to lower `max_sequences_per_example`"
+??? tip "When to lower `data.max_sequences_per_example`"
     Reducing this value produces more training examples with fewer records each.
     More examples means more gradient steps, which often improves model quality.
     For grouped mode, start with 3--5 if you have many small groups; the
