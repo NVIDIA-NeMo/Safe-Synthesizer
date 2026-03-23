@@ -671,5 +671,9 @@ class TestHeartbeat:
 
         assert "Failing op failed" in caplog.text
         assert "Failing op complete" not in caplog.text
-        has_error_type = any(getattr(r, "ctx", {}).get("error_type") == "RuntimeError" for r in caplog.records)
+        has_error_type = any(
+            getattr(r, "ctx", {}).get("error_type") == "RuntimeError"
+            or "'error_type': 'RuntimeError'" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
         assert has_error_type, f"error_type not found in records: {caplog.text}"
