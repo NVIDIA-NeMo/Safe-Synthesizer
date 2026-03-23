@@ -127,6 +127,7 @@ and produces an evaluation report. The default outputs are placed in
 
 - `generate/synthetic_data.csv` -- the synthetic dataset
 - `generate/evaluation_report.html` -- quality and privacy scores
+- `generate/evaluation_metrics.json` -- machine-readable evaluation scores and timing
 - `train/adapter/` -- trained adapter (reusable for more generation)
 
 To run the same pipeline from Python, see [Running Safe Synthesizer -- SDK](running.md#running-the-pipeline).

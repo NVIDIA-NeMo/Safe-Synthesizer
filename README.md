@@ -273,22 +273,26 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
-├── safe-synthesizer-config.json  # Root config for the run
+├── safe-synthesizer-config.json
 ├── train/
 │   ├── safe-synthesizer-config.json
-│   └── adapter/                  # Trained PEFT adapter
+│   └── adapter/                     # Trained PEFT adapter
 │       ├── adapter_config.json
+│       ├── adapter_model.safetensors
 │       ├── metadata_v2.json
 │       └── dataset_schema.json
 ├── generate/
-│   ├── safe-synthesizer-config.json
-│   ├── logs.jsonl               # Generation logs
-│   ├── synthetic_data.csv       # Default output location
-│   └── evaluation_report.html   # HTML evaluation report
-└── dataset/                      # Processed dataset splits
-    ├── training.csv
-    ├── test.csv
-    └── validation.csv
+│   ├── logs.jsonl                   # generate-only workflow
+│   ├── synthetic_data.csv
+│   ├── evaluation_report.html
+│   └── evaluation_metrics.json      # Machine-readable metrics
+├── dataset/
+│   ├── training.csv
+│   ├── test.csv
+│   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
+└── logs/
+    └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 ### Run Names

@@ -471,10 +471,13 @@ class SafeSynthesizer(ConfigBuilder):
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> None:
-        """Save synthetic data CSV and evaluation report HTML to the workdir.
+        """Save synthetic data, evaluation report, and metrics to the workdir.
 
-        Called automatically by ``run()``.  Call explicitly after
-        stepwise execution (``process_data().train().generate().evaluate()``).
+        Writes ``synthetic_data.csv``, ``evaluation_report.html`` (when
+        available), and ``evaluation_metrics.json`` into the generate
+        directory.  Called automatically by ``run()``.  Call explicitly
+        after stepwise execution
+        (``process_data().train().generate().evaluate()``).
 
         Args:
             output_file: Explicit output path for the CSV.  Falls back
@@ -501,5 +504,10 @@ class SafeSynthesizer(ConfigBuilder):
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(self.results.evaluation_report_html)
             logger.info(f"Saved evaluation report to {report_path}")
+
+        metrics_path = self._workdir.evaluation_metrics
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(self.results.summary.model_dump_json(indent=2))
+        logger.info(f"Saved evaluation metrics to {metrics_path}")
 
         return self

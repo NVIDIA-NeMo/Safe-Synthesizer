@@ -95,17 +95,25 @@ Environment variables:
 ## Output Layout
 
 ```
-<artifact-path>/<config>---<dataset>/<timestamp>/
+<artifact-path>/<config>---<dataset>/<run_name>/
 ├── safe-synthesizer-config.json
 ├── train/
-│   ├── adapter/              # Trained PEFT adapter
-│   └── safe-synthesizer-config.json
+│   ├── safe-synthesizer-config.json
+│   └── adapter/                     # Trained PEFT adapter
+│       ├── adapter_config.json
+│       ├── adapter_model.safetensors
+│       ├── metadata_v2.json
+│       └── dataset_schema.json
 ├── generate/
+│   ├── logs.jsonl                   # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
-│   └── logs.jsonl
-└── dataset/
-    ├── training.csv
-    ├── test.csv
-    └── validation.csv
+│   └── evaluation_metrics.json      # Machine-readable metrics
+├── dataset/
+│   ├── training.csv
+│   ├── test.csv
+│   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
+└── logs/
+    └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
