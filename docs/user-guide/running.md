@@ -1008,7 +1008,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my
 ├── safe-synthesizer-config.json
 ├── train/
 │   ├── safe-synthesizer-config.json
-│   └── adapter/                     # Trained PEFT adapter
+│   └── adapter/                     # trained PEFT adapter
 │       ├── adapter_config.json
 │       ├── adapter_model.safetensors
 │       ├── metadata_v2.json
@@ -1017,7 +1017,7 @@ safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my
 │   ├── logs.jsonl                   # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
-│   └── evaluation_metrics.json      # Machine-readable metrics
+│   └── evaluation_metrics.json      # machine-readable metrics
 ├── dataset/
 │   ├── training.csv
 │   ├── test.csv

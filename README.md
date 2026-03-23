@@ -276,7 +276,7 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 ├── safe-synthesizer-config.json
 ├── train/
 │   ├── safe-synthesizer-config.json
-│   └── adapter/                     # Trained PEFT adapter
+│   └── adapter/                     # trained PEFT adapter
 │       ├── adapter_config.json
 │       ├── adapter_model.safetensors
 │       ├── metadata_v2.json
@@ -285,7 +285,7 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 │   ├── logs.jsonl                   # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
-│   └── evaluation_metrics.json      # Machine-readable metrics
+│   └── evaluation_metrics.json      # machine-readable metrics
 ├── dataset/
 │   ├── training.csv
 │   ├── test.csv

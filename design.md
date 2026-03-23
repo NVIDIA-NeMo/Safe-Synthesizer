@@ -446,16 +446,16 @@ safe-synthesizer-artifacts/
         ├── train/
         │   ├── safe-synthesizer-config.json
         │   ├── cache/                          # training checkpoints and tokenized data
-        │   └── adapter/                          # Trained PEFT adapter
+        │   └── adapter/                        # trained PEFT adapter
         │       ├── adapter_config.json
         │       ├── adapter_model.safetensors
         │       ├── metadata_v2.json
         │       └── dataset_schema.json
         ├── generate/
-        │   ├── logs.jsonl                          # generate-only workflow
+        │   ├── logs.jsonl                      # generate-only workflow
         │   ├── synthetic_data.csv
         │   ├── evaluation_report.html
-        │   └── evaluation_metrics.json              # Machine-readable metrics
+        │   └── evaluation_metrics.json         # machine-readable metrics
         ├── dataset/
         │   ├── training.csv
         │   ├── test.csv
