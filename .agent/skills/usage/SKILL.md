@@ -102,6 +102,7 @@ Environment variables:
 │   └── adapter/                     # trained PEFT adapter
 ├── generate/
 │   ├── logs.jsonl                   # generate-only workflow
+│   ├── info.json                    # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
 │   └── evaluation_metrics.json      # machine-readable metrics

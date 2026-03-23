@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import pandas as pd
 from datasets import Dataset
@@ -470,7 +470,7 @@ class SafeSynthesizer(ConfigBuilder):
         self.save_results(output_file=output_file)
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
-    def save_results(self, output_file: Path | str | None = None) -> None:
+    def save_results(self, output_file: Path | str | None = None) -> Self:
         """Save synthetic data, evaluation report, and metrics to the workdir.
 
         Writes ``synthetic_data.csv``, ``evaluation_report.html`` (when

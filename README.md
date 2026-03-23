@@ -283,6 +283,7 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 │       └── dataset_schema.json
 ├── generate/
 │   ├── logs.jsonl                   # generate-only workflow
+│   ├── info.json                    # generate-only workflow
 │   ├── synthetic_data.csv
 │   ├── evaluation_report.html
 │   └── evaluation_metrics.json      # machine-readable metrics
