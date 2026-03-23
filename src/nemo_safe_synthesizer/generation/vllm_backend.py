@@ -396,7 +396,8 @@ class VllmBackend(GeneratorBackend):
                     case torch.Tensor():
                         logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
                         result = self._gen_method(prompt_token_ids=input_ids.tolist())
-                    case [[*first], *_] if all_equal_type(input_ids, int):
+                    case [[*_inner], *_] if all_equal_type(input_ids, int):
+                        assert isinstance(input_ids, list)
                         logger.debug(f"vllm generate: prompt_token_ids ({len(input_ids)} prompts)")
                         result = self._gen_method(prompt_token_ids=input_ids)
                     case [*ids] if all_equal_type(ids, int, flatten_iter=False):
