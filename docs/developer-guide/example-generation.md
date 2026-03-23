@@ -604,9 +604,9 @@ context window.
 
 ## Next steps
 
-- [Running Safe Synthesizer](running.md) -- CLI and SDK syntax for grouping,
+- [Running Safe Synthesizer](../user-guide/running.md) -- CLI and SDK syntax for grouping,
   ordering, and time-series configuration
-- [Configuration Reference](configuration.md) -- full parameter tables
+- [Configuration Reference](../user-guide/configuration.md) -- full parameter tables
   including `generation.validation.*` knobs
-- [Troubleshooting](troubleshooting.md) -- common errors like
+- [Troubleshooting](../user-guide/troubleshooting.md) -- common errors like
   `GenerationError` and how to resolve them

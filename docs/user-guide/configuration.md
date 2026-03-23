@@ -137,7 +137,7 @@ Advanced group-by validation knobs live under `generation.validation`:
 | `group_by_fix_non_unique_value` | `false` | Normalize the group-by column to the first record's value when records disagree |
 | `group_by_fix_unordered_records` | `false` | Re-sort records instead of rejecting out-of-order groups |
 
-See [Example Generation -- Validation](example-generation.md#grouped-generation-validation-knobs)
+See [Example Generation -- Validation](../developer-guide/example-generation.md#grouped-generation-validation-knobs)
 for guidance on when to enable each knob, and
 [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters]
 for the full API reference.

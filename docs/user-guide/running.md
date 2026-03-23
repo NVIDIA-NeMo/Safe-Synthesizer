@@ -332,7 +332,7 @@ customer ID) so related rows are trained together. Use
     `max_sequences_per_example` controls how many groups are packed into
     a single example (default: `"auto"`, which resolves to 10 without DP).
     Fewer groups per example means more training examples overall.
-    See [Example Generation](example-generation.md) for a full walkthrough.
+    See [Example Generation](../developer-guide/example-generation.md) for a full walkthrough.
 
 ### Dataset Registry
 
@@ -931,7 +931,7 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
     Each training example contains records from a single group in
     chronological order. The model learns to continue a sequence --
     not to produce independent records. See
-    [Example Generation](example-generation.md) for assembly details.
+    [Example Generation](../developer-guide/example-generation.md) for assembly details.
 
 ---
 

@@ -176,7 +176,7 @@ because the table has too many columns for the model's context window.
         Example: 5 records × 200 chars ≈ 250 tokens/group; with a 400-token
         prompt and 3 groups per example: `400 + 250 × 3 = 1150` tokens.
 
-        See [Example Generation -- Sizing](example-generation.md#sizing-and-context-budget)
+        See [Example Generation -- Sizing](../developer-guide/example-generation.md#sizing-and-context-budget)
         for per-mode formulas.
 
 3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to

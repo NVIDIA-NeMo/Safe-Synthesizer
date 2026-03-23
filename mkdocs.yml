@@ -165,12 +165,12 @@ nav:
       - Troubleshooting:
           - Synthetic Data Quality: user-guide/evaluating-data.md
           - Program Runtime: user-guide/troubleshooting.md
-          - Example Generation: user-guide/example-generation.md
       - Reference:
           - Configuration: user-guide/configuration.md
           - Environment Variables: user-guide/environment.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
+      - Example Generation: developer-guide/example-generation.md
       - Docker: developer-guide/docker.md
       - API Reference: reference/
   - Developer Notes:
