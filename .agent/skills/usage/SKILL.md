@@ -96,7 +96,6 @@ Environment variables:
 
 ```
 <artifact-path>/<config>---<dataset>/<run_name>/
-├── safe-synthesizer-config.json
 ├── train/
 │   ├── safe-synthesizer-config.json
 │   └── adapter/                     # trained PEFT adapter

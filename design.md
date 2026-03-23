@@ -442,7 +442,6 @@ results = synthesizer.results
 safe-synthesizer-artifacts/
 └── <config>---<dataset>/
     └── <run_name>/
-        ├── safe-synthesizer-config.json
         ├── train/
         │   ├── safe-synthesizer-config.json
         │   ├── cache/                          # training checkpoints and tokenized data

@@ -12,7 +12,6 @@ hard-coding strings throughout the CLI.
 Typical directory tree:
 
     <base_path>/<config>---<dataset>/<run_name>/
-    - safe-synthesizer-config.json
     - train/  ...
     - generate/  ...
     - dataset/  ...
@@ -282,7 +281,6 @@ class Workdir:
     Full directory structure:
 
         <base_path>/<config>---<dataset>/<run_name>/
-        - safe-synthesizer-config.json
         - train/
           - safe-synthesizer-config.json
           - cache/

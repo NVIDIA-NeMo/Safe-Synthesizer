@@ -1005,7 +1005,6 @@ safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
-├── safe-synthesizer-config.json
 ├── train/
 │   ├── safe-synthesizer-config.json
 │   └── adapter/                     # trained PEFT adapter
@@ -1030,7 +1029,7 @@ Key outputs:
 - `generate/evaluation_report.html`: quality and privacy report
 - `generate/evaluation_metrics.json`: machine-readable evaluation scores and timing
 - `train/adapter/`: LoRA weights for resuming generation
-- `safe-synthesizer-config.json`: resolved config snapshot
+- `train/safe-synthesizer-config.json`: resolved config snapshot
 
 !!! tip "Clean up artifacts"
     Adapter weights and training caches can consume significant disk space
