@@ -414,10 +414,10 @@ class TestGetTimestampFromPrefill:
 
 
 class TestBuildModifiedSamplingParamsStopPropagation:
-    """Tests that _build_modified_sampling_params propagates stop and stop_token_ids."""
+    """Tests that _build_modified_sampling_params propagates ignore_eos and other stop fields."""
 
-    def test_propagates_stop_and_stop_token_ids(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """Stop and stop_token_ids from the original params must survive the rebuild."""
+    def test_propagates_ignore_eos_false(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
+        """ignore_eos=False from the upstream VllmBackend must survive the rebuild."""
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
 
         original = SamplingParams(
@@ -429,15 +429,14 @@ class TestBuildModifiedSamplingParamsStopPropagation:
             repetition_penalty=1.0,
             skip_special_tokens=False,
             include_stop_str_in_output=True,
-            ignore_eos=True,
-            stop=["</s>"],
-            stop_token_ids=[2],
+            ignore_eos=False,
         )
 
         modified, _ = backend._build_modified_sampling_params(original, num_active=2)
 
-        assert modified.stop == ["</s>"]
-        assert modified.stop_token_ids == [2]
+        assert modified.ignore_eos is False
+        assert modified.stop == []
+        assert modified.stop_token_ids == []
 
     def test_propagates_none_stop_values(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
         """When original has no stop values, the rebuilt params should also have none."""
@@ -457,5 +456,6 @@ class TestBuildModifiedSamplingParamsStopPropagation:
 
         modified, _ = backend._build_modified_sampling_params(original, num_active=2)
 
+        assert modified.ignore_eos is False
         assert modified.stop == []
         assert modified.stop_token_ids == []

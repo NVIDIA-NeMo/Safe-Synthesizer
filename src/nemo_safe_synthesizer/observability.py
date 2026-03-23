@@ -944,7 +944,7 @@ def traced_backend(name: str | None = None, **kwargs):
 @contextlib.contextmanager
 def heartbeat(
     message: str,
-    interval: float = 5.0,
+    interval: float = 60.0,
     *,
     logger_name: str | None = None,
     **extra_fields,

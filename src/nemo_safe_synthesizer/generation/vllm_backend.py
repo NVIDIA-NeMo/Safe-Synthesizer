@@ -531,7 +531,6 @@ class VllmBackend(GeneratorBackend):
 
         with heartbeat(
             "Generation",
-            interval=60.0,
             logger_name=__name__,
             target_records=self.config.generation.num_records,
         ):
