@@ -526,11 +526,15 @@ class TestNoopRemoteCacheBackend:
 
 class TestGroupedGenerationStopKwargs:
     """Tests that grouped generation relies on native EOS stopping (ignore_eos=False)
-    rather than explicit stop/stop_token_ids kwargs."""
+    rather than explicit stop/stop_token_ids kwargs.
+    """
 
-    def test_native_eos_stopping_for_grouped_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+    def test_native_eos_stopping_for_grouped_processor(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
         """When processor is not TabularDataProcessor, ignore_eos must be False and
-        no explicit stop/stop_token_ids kwargs are passed."""
+        no explicit stop/stop_token_ids kwargs are passed.
+        """
         mock_model_metadata.prompt_config.eos_token = "</s>"
         mock_model_metadata.prompt_config.eos_token_id = 2
         mock_model_metadata.max_seq_length = 2048
@@ -556,7 +560,8 @@ class TestGroupedGenerationStopKwargs:
 
     def test_no_stop_kwargs_for_tabular_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
         """When processor is TabularDataProcessor, no explicit stop/stop_token_ids
-        kwargs are passed, ignore_eos is False, and special-token outputs are off."""
+        kwargs are passed, ignore_eos is False, and special-token outputs are off.
+        """
         mock_model_metadata.max_seq_length = 2048
 
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
