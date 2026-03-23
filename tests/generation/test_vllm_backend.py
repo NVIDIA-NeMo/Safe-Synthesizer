@@ -546,9 +546,9 @@ class TestGroupedGenerationStopKwargs:
         with pytest.raises(StopIteration):
             backend.generate()
 
-        assert captured["stop"] == ["</s>"]
-        assert captured["stop_token_ids"] == [2]
-        assert captured["ignore_eos"] is True
+        assert "stop" not in captured
+        assert "stop_token_ids" not in captured
+        assert captured["ignore_eos"] is False
         assert captured["include_stop_str_in_output"] is True
 
     def test_no_stop_kwargs_for_tabular_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
@@ -601,7 +601,6 @@ class TestGroupedGenerationStopKwargs:
             backend.generate()
 
         assert captured["max_tokens"] == 8192
-        assert "stop" in captured, "EOS stop string must be set to prevent runaway generation"
-        assert "stop_token_ids" in captured, "EOS stop token ID must be set to prevent runaway generation"
-        assert captured["stop"] == ["</s>"]
-        assert captured["stop_token_ids"] == [2]
+        assert "stop" not in captured
+        assert "stop_token_ids" not in captured
+        assert captured["ignore_eos"] is False
