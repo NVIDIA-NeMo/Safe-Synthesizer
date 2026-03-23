@@ -66,7 +66,7 @@ does at each stage.
 
 ### Verify
 
-After installing, confirm the CLI is available:
+After installing, activate your Python virtual environment and confirm the CLI is available:
 
 ```bash
 safe-synthesizer --help
@@ -116,10 +116,18 @@ Then run:
 safe-synthesizer run --config config.yaml --data-source data.csv
 ```
 
-Replace `data.csv` with your actual input file. Any `.csv`, `.json`, `.jsonl`,
+You can use [Clinc OOS](https://huggingface.co/datasets/clinc/clinc_oos) as an example dataset: export the split you want (for example the training split) to a CSV file, then point `--data-source` at that file:
+
+```bash
+safe-synthesizer run --config config.yaml --data-source clinc_oos.csv
+```
+
+Replace `data.csv` (or `clinc_oos.csv`) with your actual input file. Any `.csv`, `.json`, `.jsonl`,
 `.parquet`, or `.txt` file works -- see [Running Safe Synthesizer -- Data Input](running.md#data-input) for all supported formats.
 
 Your dataset should have at least 1,000 records (10,000 records if using [differential privacy](running.md#differential-privacy)).
+
+Use `--log-format plain` or set `NSS_LOG_FORMAT=plain` for more readable log output when using a non-interactive terminal (for example CI or captured logs). See [Log format](running.md#log-format) for details.
 
 The command above fine-tunes a LoRA adapter on your data, generates 1000 synthetic records,
 and produces an evaluation report. The default outputs are placed in
