@@ -168,22 +168,52 @@ test-slow: ## Run all tests including slow tests (excludes e2e)
 	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
 
 .PHONY: test-ci
-test-ci: ## Run CI unit tests excluding slow and GPU tests
+test-ci: ## Run CI unit tests excluding slow, GPU, and smoke tests
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not gpu_integration and not slow"
+	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "not e2e and not requires_gpu and not slow and not smoke"
 
 .PHONY: test-ci-slow
 test-ci-slow: ## Run slow tests in CI with coverage
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests -m "slow"
 
-E2E_TEST_FILE := $(NSS_ROOT_PATH)/tests/e2e/test_safe_synthesizer.py
 
+.PHONY: test-smoke
+test-smoke: ## Run CPU smoke tests (~few min, no GPU required)
+	$(PYTEST_CMD) -m "smoke and not requires_gpu"
+
+SMOKE_DIR := tests/smoke
+.PHONY: test-smoke-gpu
+test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
+# Uses PYTEST_NO_XDIST_CMD (-n 0) because CUDA device-side asserts poison
+# xdist workers. Groups are split for GPU memory isolation.
+#
+# When adding a new GPU smoke test file:
+#   - Train-only (no vLLM): add pytest.mark.requires_gpu -> auto-discovered below
+#   - Uses vLLM: also add pytest.mark.vllm -> add the file to the vLLM list below
+#   - Uses Unsloth: also add pytest.mark.unsloth -> auto-discovered below
+#   - Downloads from Hub: also add pytest.mark.smollm2 (or similar) -> auto-discovered below
+#
+# 1) Train-only tests share a process (no vLLM, safe to batch).
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and not vllm and not smollm2 and not unsloth"
+# 2) Each vLLM test file gets its own process -- vLLM pre-allocates all GPU
+#    memory and never releases it within a process.
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_generation_gpu.py
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_resume_gpu.py
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_structured_gen_gpu.py
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_timeseries_gpu.py
+# 3) SmolLM2 (Hub download + vLLM) and Unsloth (patches transformers) are marker-isolated.
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and smollm2"
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and unsloth"
+
+
+E2E_TEST_FILE := $(NSS_ROOT_PATH)/tests/e2e/test_safe_synthesizer.py
 .PHONY: test-gpu-integration
-test-gpu-integration: ## Run GPU integration tests
+test-gpu-integration: ## Run GPU e2e tests (default + DP configs)
 	pushd $(NSS_ROOT_PATH) && \
 	$(PYTEST_CMD) $(E2E_TEST_FILE) -k default && \
 	$(PYTEST_CMD) $(E2E_TEST_FILE) -k dp
+
 
 # Please modify these based on updating the e2e tests for NMP CI
 .PHONY: test-e2e

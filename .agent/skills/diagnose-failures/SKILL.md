@@ -40,7 +40,7 @@ Conditional-assert pitfall: do not `assert field is not None` for fields that ar
 
 ### Pytest Markers
 
-Markers are defined in `pytest.ini`. Run `make test` (unit), `make test-slow` (all), or `uv run pytest -m <marker>` for specific markers.
+Markers are defined in `pytest.ini`. Run `make test` (unit), `make test-smoke`, `make test-slow` (all), or `uv run pytest -m <marker>` for specific markers.
 
 ## 2. CI Pipeline Failures
 

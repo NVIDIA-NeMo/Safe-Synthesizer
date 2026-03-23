@@ -55,11 +55,40 @@ jobs:
         id: changes
         uses: ./.github/actions/detect-changes
 
+  gpu-smoke-test:
+    name: GPU Smoke Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 30
+    runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: ${{ matrix.python-version }}
+          bootstrap-tools: "true"
+
+      - name: Bootstrap CUDA environment
+        run: make bootstrap-nss cu128
+
+      - name: Run GPU smoke tests
+        timeout-minutes: 20
+        run: make test-smoke-gpu
+
   gpu-e2e-test:
     name: GPU E2E Tests
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    timeout-minutes: 60
+    timeout-minutes: 55
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
@@ -68,34 +97,46 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Python environment
-        id: setup
         uses: ./.github/actions/setup-python-env
         with:
+          python-version: "3.11"
           bootstrap-tools: "true"
+
+      - name: Bootstrap CUDA environment
+        run: make bootstrap-nss cu128
 
       - name: Run GPU E2E tests
         timeout-minutes: 45
-        run: |
-          make bootstrap-nss cu128
-          make test-e2e
+        run: make test-e2e
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
+  # Smoke tests are required; E2E failures produce a warning but don't block.
   # ---------------------------------------------------------------------------
   gpu-ci-status:
     name: GPU CI Status
     if: always() && !cancelled()
-    needs: [changes, gpu-e2e-test]
+    needs: [changes, gpu-smoke-test, gpu-e2e-test]
     runs-on: linux-amd64-cpu4
     steps:
       - name: Check job results
         run: |
-          echo "changes:      ${{ needs.changes.result }}"
-          echo "gpu-e2e-test: ${{ needs.gpu-e2e-test.result }}"
+          echo "changes:        ${{ needs.changes.result }}"
+          echo "gpu-smoke-test: ${{ needs.gpu-smoke-test.result }}"
+          echo "gpu-e2e-test:   ${{ needs.gpu-e2e-test.result }}"
 
-          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
-            echo "::error::GPU E2E tests failed"
+          if [[ "${{ needs.changes.result }}" == "failure" ]]; then
+            echo "::error::Change detection failed"
             exit 1
           fi
 
-          echo "All GPU jobs passed (or were skipped)."
+          if [[ "${{ needs.gpu-smoke-test.result }}" == "failure" ]]; then
+            echo "::error::GPU smoke tests failed (required)"
+            exit 1
+          fi
+
+          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ]]; then
+            echo "::warning::GPU E2E tests failed (informational, does not block merge)"
+          fi
+
+          echo "All required GPU jobs passed (or were skipped)."

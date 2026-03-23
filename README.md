@@ -398,7 +398,7 @@ See [script/slurm/README.md](script/slurm/README.md) for detailed instructions o
 
 ## Testing
 
-We have pytest set up for unit, integration, and end-to-end tests.
+We have pytest set up for unit, smoke, and end-to-end tests.
 
 ### Running Tests
 
@@ -411,8 +411,11 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
+# Run CPU smoke tests (~few min, no GPU required)
+make test-smoke
+
+# Run GPU smoke tests (requires CUDA)
+make test-smoke-gpu
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
