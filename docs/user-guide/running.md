@@ -287,6 +287,13 @@ Use `data.group_training_examples_by` to group records by a column (e.g.,
 customer ID) so related rows are trained together. Use
 `data.order_training_examples_by` to sort within groups (requires group_by).
 
+!!! info "When to use grouped mode"
+    Grouping is recommended when there is a natural ordering within each
+    group -- i.e., `data.order_training_examples_by` points to a valid
+    ordering field such as a date or sequence number. If your data has no
+    meaningful intra-group order, tabular mode with shuffled records is
+    usually sufficient.
+
 === "CLI"
 
     ```bash

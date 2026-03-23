@@ -122,6 +122,13 @@ Grouped mode is for data where multiple records share a key -- for example,
 all transactions belonging to the same customer. Enable it by setting
 `data.group_training_examples_by` to the column name (e.g. `customer_id`).
 
+!!! info "When to use grouped mode"
+    Grouped mode is recommended when there is a natural ordering within each
+    group -- i.e., `data.order_training_examples_by` points to a valid
+    ordering field (e.g. a date or sequence number). If your data has no
+    meaningful intra-group order, tabular mode with shuffled records is
+    usually sufficient.
+
 ### Token structure
 
 Each group becomes its own BOS/EOS-delimited sequence, and multiple groups are
