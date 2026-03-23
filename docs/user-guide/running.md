@@ -319,6 +319,21 @@ customer ID) so related rows are trained together. Use
       order_training_examples_by: "transaction_date"
     ```
 
+!!! info "What the model sees"
+
+    With grouping enabled, each training example is tokenized as:
+
+    ```text
+    [schema prompt] <|im_start|> group1-record1
+    group1-record2 <|im_end|> <|im_start|> group2-record1
+    group2-record2 <|im_end|>
+    ```
+
+    `max_sequences_per_example` controls how many groups are packed into
+    a single example (default: `"auto"`, which resolves to 10 without DP).
+    Fewer groups per example means more training examples overall.
+    See [Example Generation](example-generation.md) for a full walkthrough.
+
 ### Dataset Registry
 
 Define named datasets in a YAML file to reference them by name:
@@ -911,6 +926,12 @@ to sort within groups.
 
 See [Configuration Reference -- Time Series](configuration.md#time-series) for the full parameter table.
 See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common issues.
+
+!!! note "How time-series examples are assembled"
+    Each training example contains records from a single group in
+    chronological order. The model learns to continue a sequence --
+    not to produce independent records. See
+    [Example Generation](example-generation.md) for assembly details.
 
 ---
 

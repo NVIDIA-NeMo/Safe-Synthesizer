@@ -129,11 +129,18 @@ for the full API reference.
 | `generation.attention_backend` | `"auto"` | vLLM attention backend | Leave at `"auto"` |
 
 Advanced group-by validation knobs live under `generation.validation`:
-`group_by_accept_no_delineator`, `group_by_ignore_invalid_records`,
-`group_by_fix_non_unique_value`, `group_by_fix_unordered_records`. All
-default to `false`. See
+
+| Knob | Default | Effect |
+|------|---------|--------|
+| `group_by_accept_no_delineator` | `false` | Treat raw JSONL without BOS/EOS markers as a single group instead of rejecting |
+| `group_by_ignore_invalid_records` | `false` | Drop invalid records from a group and keep the rest, rather than discarding the whole group |
+| `group_by_fix_non_unique_value` | `false` | Normalize the group-by column to the first record's value when records disagree |
+| `group_by_fix_unordered_records` | `false` | Re-sort records instead of rejecting out-of-order groups |
+
+See [Example Generation -- Validation](example-generation.md#grouped-generation-validation-knobs)
+for guidance on when to enable each knob, and
 [`GenerateParameters`][nemo_safe_synthesizer.config.generate.GenerateParameters]
-for details.
+for the full API reference.
 
 ---
 

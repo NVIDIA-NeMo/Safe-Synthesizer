@@ -165,6 +165,7 @@ nav:
       - Troubleshooting:
           - Synthetic Data Quality: user-guide/evaluating-data.md
           - Program Runtime: user-guide/troubleshooting.md
+          - Example Generation: user-guide/example-generation.md
       - Reference:
           - Configuration: user-guide/configuration.md
           - Environment Variables: user-guide/environment.md
