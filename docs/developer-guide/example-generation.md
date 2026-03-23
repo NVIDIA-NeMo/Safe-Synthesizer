@@ -4,12 +4,17 @@
 # Training Example Assembly
 
 Safe Synthesizer converts tabular records into tokenized training examples that
-fit inside a language model's context window -- this page explains how that
-process works for each of the three data modes.
+fit inside a language model's context window. Understanding this process helps
+when tuning `data.max_sequences_per_example`, diagnosing context-length errors,
+or choosing a group column.
+
+Safe Synthesizer supports three data modes -- tabular, grouped, and sequential
+(time-series) -- each assembling training examples differently. The mode is
+selected automatically based on your configuration.
 
 ---
 
-## How mode is selected
+## How Mode Is Selected
 
 The pipeline inspects two configuration fields and dispatches to a matching
 assembler and data processor:
@@ -29,8 +34,8 @@ pipeline does the rest:
 | Config                                | Assembler                     | Processor                 |
 | ------------------------------------- | ----------------------------- | ------------------------- |
 | *(defaults)*                          | `TabularDataExampleAssembler` | `TabularDataProcessor`    |
-| `data.group_training_examples_by` set | `GroupedDataExampleAssembler` | `GroupedDataProcessor`    |
 | `time_series.is_timeseries: true`     | `SequentialExampleAssembler`  | `TimeSeriesDataProcessor` |
+| `data.group_training_examples_by` set | `GroupedDataExampleAssembler` | `GroupedDataProcessor`    |
 
 !!! note
     Time-series mode takes priority. If both `is_timeseries` and
@@ -52,9 +57,11 @@ Each training example is a single sequence:
 [schema prompt] [BOS record₁ record₂ … recordₙ EOS]
 ```
 
-One BOS/EOS pair wraps all the records in the example. The schema prompt
-describes the column names so the model knows the expected output format; its
-tokens are masked (`label = -100`) so they don't contribute to loss.
+One BOS (beginning-of-sequence) / EOS (end-of-sequence) pair wraps all the
+records in the example. The schema prompt lists the column names as JSON keys
+so the model knows the expected output format; its tokens are masked
+(`label = -100`) so they don't contribute to loss. Shorter column names
+reduce prompt token count, leaving more room for records.
 
 ### Packing logic
 
@@ -139,7 +146,7 @@ at inference time.
    `max_sequences_per_example` groups have been packed.
 
 !!! info "Split before tokenize"
-    The grouped assembler splits the dataset into train and validation sets
+    The grouped assembler splits the dataset into train and test sets
     *before* tokenization, using group boundaries. This ensures the expensive
     grouping and tokenization steps run independently on each split and that no
     group is divided across splits.
@@ -178,7 +185,7 @@ If `max_sequences_per_example` were 1, each customer would get its own example.
 
 ---
 
-## Sequential / time-series mode
+## Sequential / Time-Series Mode
 
 Sequential mode is designed for temporally ordered data -- sensor readings,
 transaction logs, event streams -- where the order of records carries meaning.
@@ -200,7 +207,7 @@ mode, records are never shuffled and groups are never mixed.
 Records within each group maintain their original order (typically sorted by
 a timestamp column specified via `data.order_training_examples_by`). The
 train/test split is performed along group boundaries -- entire groups go to
-train or validation, never split across both -- and the dataset is re-sorted
+train or test, never split across both -- and the dataset is re-sorted
 after splitting so chronological order is restored.
 
 ### Continuation across examples
@@ -213,22 +220,27 @@ sequence continues across example boundaries. The model sees:
 - Example 3: records 0--74 from group B
 
 This teaches the model that a sequence can pick up mid-stream, which is
-critical for generating long event sequences at inference time.
+critical for generating long event sequences at inference time. Each example
+contains records from exactly one group -- records from different groups are
+never mixed within an example.
 
 ### Randomized token budgets
 
 To prevent the model from learning a fixed example length, each training
-example's fill target is sampled uniformly between 70% and 100% of
-`max_seq_length`. Validation examples always use the full budget.
+example's fill target is sampled uniformly between 70% and 100% of the
+remaining record token budget (`max_seq_length` minus the schema prompt and
+BOS/EOS overhead). Test-split examples always use the full budget (no
+randomization).
 
 ### Flush conditions
 
 The assembler flushes the current example and starts a new one when any of
-these conditions is met:
+these conditions are met:
 
 - Group change -- the next record belongs to a different group
-- Dataset restart -- the row index wraps back (happens when `data_fraction > 1`
-  causes the dataset to be duplicated end-to-end)
+- Dataset restart -- the row index wraps back (happens when
+  `training.num_input_records_to_sample` exceeds the number of training
+  records, causing the dataset to be duplicated and reshuffled)
 - Token budget exceeded -- the accumulated tokens reach the randomized budget
 - `max_sequences_per_example` reached
 
@@ -257,7 +269,7 @@ Given eight records for two devices:
 With `time_series.is_timeseries: true`,
 `data.group_training_examples_by: device_id`,
 `data.order_training_examples_by: timestamp`, and a token budget that fits
-roughly 3 records per example:
+roughly 4 records per example:
 
 === "Example 1 (sensor-A, part 1)"
 
@@ -267,6 +279,7 @@ roughly 3 records per example:
     {"device_id":"sensor-A","timestamp":"2024-01-15T00:00","temp":21.3,"status":"ok"}
     {"device_id":"sensor-A","timestamp":"2024-01-15T01:00","temp":21.5,"status":"ok"}
     {"device_id":"sensor-A","timestamp":"2024-01-15T02:00","temp":22.1,"status":"ok"}
+    {"device_id":"sensor-A","timestamp":"2024-01-15T03:00","temp":28.7,"status":"warn"}
     <EOS>
     ```
 
@@ -275,7 +288,6 @@ roughly 3 records per example:
     ```text
     device_id, timestamp, temp, status           ← schema prompt (masked)
     <BOS>
-    {"device_id":"sensor-A","timestamp":"2024-01-15T03:00","temp":28.7,"status":"warn"}
     {"device_id":"sensor-A","timestamp":"2024-01-15T04:00","temp":30.2,"status":"alert"}
     <EOS>
     ```
@@ -310,28 +322,28 @@ model's output.
 BOS (beginning-of-sequence) and EOS (end-of-sequence) tokens delimit record
 sequences within an example. The specific tokens depend on the model:
 
-| Model family | BOS token          | BOS ID | EOS token          | EOS ID |
-| ------------ | ------------------ | ------ | ------------------ | ------ |
-| [SmolLM3](https://huggingface.co/HuggingFaceTB/SmolLM3-3B)   | `<\|im_start\|>`  | 128011 | `<\|im_end\|>`    | 128012 |
-| [Qwen 2.5](https://huggingface.co/Qwen/Qwen2.5-1.5B)        | `<\|im_start\|>`  | 151644 | `<\|im_end\|>`    | 151645 |
-| [Llama 3.2](https://huggingface.co/meta-llama/Llama-3.2-1B)  | `<\|im_start\|>`  | 151644 | *(from tokenizer)* | --     |
+For the default model ([SmolLM3](https://huggingface.co/HuggingFaceTB/SmolLM3-3B)):
+
+| Token | String             | ID     |
+| ----- | ------------------ | ------ |
+| BOS   | `<&#124;im_start&#124;>` | 128011 |
+| EOS   | `<&#124;im_end&#124;>`   | 128012 |
+
+Other supported model families (Mistral, TinyLlama, Qwen, Llama, etc.) use
+the same BOS/EOS override pattern with model-specific token IDs resolved at
+runtime from `ModelMetadata` subclasses in `llm/metadata.py`.
 
 !!! warning "Token IDs are model- and tokenizer-version dependent"
     The IDs above are illustrative, not repo-guaranteed constants. BOS tokens
-    are explicitly set in `ModelMetadata` subclasses (`src/nemo_safe_synthesizer/llm/metadata.py`),
-    while EOS tokens are generally read from the loaded tokenizer via
+    are explicitly set in `ModelMetadata` subclasses, while EOS tokens are
+    generally read from the loaded tokenizer via
     `LLMPromptConfig.from_tokenizer(...)`. If a model's tokenizer is updated
     upstream, the IDs may change.
 
-    These are also not the models' native BOS/EOS tokens -- Safe Synthesizer
-    overrides them for group delimiting. For example, Llama 3.2's native BOS
-    is `<|begin_of_text|>` (128000), but this repo uses `<|im_start|>`
-    (151644) instead ([source](https://huggingface.co/meta-llama/Llama-3.2-1B)).
-    The Qwen tokenizer's native `eos_token` is `<|endoftext|>` (151643), not
-    `<|im_end|>`
-    ([tokenizer config](https://huggingface.co/Qwen/Qwen2.5-1.5B/blob/main/tokenizer_config.json)).
-    SmolLM3's token 128009 is `<|eot_id|>`, not `<|im_end|>` -- the actual
-    `<|im_end|>` EOS is at ID 128012
+    These are not the models' native BOS/EOS tokens -- Safe Synthesizer
+    overrides them for group delimiting. For example, SmolLM3's native token
+    128009 is `<|eot_id|>`, not `<|im_end|>` -- the actual `<|im_end|>` EOS
+    is at ID 128012
     ([tokenizer config](https://huggingface.co/HuggingFaceTB/SmolLM3-3B/blob/main/tokenizer_config.json)).
 
 In tabular and sequential mode, one BOS/EOS pair wraps all the records in an
@@ -348,22 +360,26 @@ the mode:
 | ---------- | ----------------------------------------- | ---------------------------------------------- |
 | Tabular    | individual records                        | `"auto"` -> 10 (1 for DP)                     |
 | Grouped    | groups (each containing multiple records) | `"auto"` -> 10 (1 for DP)                     |
-| Sequential | records from one group                    | effectively 1 (flush-on-group-change)          |
+| Sequential | records from a single group (one group per example) | `"auto"` -> 10 (1 for DP; single-group enforced by group-boundary flush) |
 
 The field default is `"auto"`. The auto-config resolver sets it to 1 when
 differential privacy is enabled, 10 otherwise. You can also set an explicit
 integer. With DP, each example must contain exactly one unit for correct
-per-example gradient clipping.
+per-example gradient clipping. See
+[Differential Privacy](../user-guide/running.md#differential-privacy) for
+details.
 
 ??? tip "When to lower `data.max_sequences_per_example`"
     Reducing this value produces more training examples with fewer records each.
     More examples means more gradient steps, which often improves model quality.
     For grouped mode, start with 3--5 if you have many small groups; the
-    default of 10 can compress a small dataset into very few examples.
+    default of 10 can compress a small dataset into very few examples. The
+    tradeoff is proportionally longer training time -- more examples means more
+    gradient steps per epoch.
 
 ---
 
-## Generation: how output is parsed
+## Generation: How Output Is Parsed
 
 After training, Safe Synthesizer generates synthetic records by prompting the
 fine-tuned model and parsing its text output back into structured data. The
@@ -433,7 +449,7 @@ group (though multiple groups are processed in parallel batches).
 
 ---
 
-## Grouped generation: validation knobs
+## Grouped Generation: Validation Knobs
 
 When parsing grouped output, four boolean parameters control how strictly the
 processor enforces record validity. All default to `false` (strict mode).
@@ -524,8 +540,9 @@ bound on how many tokens you'll need.
     total = prompt_tokens + tokens_for_one_groups_records
     ```
 
-    Each example holds one group. The token budget is bounded by a randomized
-    fill ratio (70--100% of `max_seq_length`).
+    Each example holds one group. The token budget for records is bounded by a
+    randomized fill ratio (70--100% of `max_new_tokens`, where `max_new_tokens`
+    is `max_seq_length` minus the schema prompt and BOS/EOS overhead).
 
 ### Worked example
 
