@@ -527,7 +527,7 @@ class TestGroupedGenerationStopKwargs:
     """Tests that stop kwargs are injected when processor is not TabularDataProcessor."""
 
     def test_stop_kwargs_added_for_grouped_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
-        """When processor is not TabularDataProcessor, stop and stop_token_ids must appear."""
+        """When processor is not TabularDataProcessor, ignore_eos must be False (native EOS stopping)."""
         mock_model_metadata.prompt_config.eos_token = "</s>"
         mock_model_metadata.prompt_config.eos_token_id = 2
         mock_model_metadata.max_seq_length = 2048

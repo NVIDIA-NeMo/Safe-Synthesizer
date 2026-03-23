@@ -266,8 +266,8 @@ more or examine the training parameters.
 
 To diagnose, run with `-v` (debug logging). The logs will show:
 
-- `grouped stop: eos_id=..., eos_str=..., max_tokens=...` -- the stop
-  condition targeting the model's EOS token
+- Sampling parameters, including EOS token configuration, `max_tokens`,
+  and stop conditions
 - Per-prompt output: token count, `finish_reason`, and `stop_reason`
 
 If every prompt shows `finish_reason=stop`, the stop condition is working
