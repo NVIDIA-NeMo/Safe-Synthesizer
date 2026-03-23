@@ -18,7 +18,7 @@ Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
 make bootstrap-tools
 ```
 
-Then bootstrap the project package with your desired extras - likely `cpu|cuda` .
+Then bootstrap the project package with your desired extras -- likely `cpu|cuda`.
 
 ```bash
 # CPU-only (for development on Linux without GPU, or macOS)
@@ -36,7 +36,7 @@ make bootstrap-nss dev
 
 ## Running
 
-Run the CLI using `safe-synthesizer`:
+Activate Python virtual environment and run the CLI using `safe-synthesizer`:
 
 ```bash
 > safe-synthesizer --help
