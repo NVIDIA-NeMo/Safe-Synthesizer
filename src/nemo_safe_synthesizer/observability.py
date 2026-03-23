@@ -959,6 +959,8 @@ def heartbeat(
         **extra_fields: Additional structured fields passed to the logger
             (e.g. ``model="SmolLM3"``).
     """
+    if interval <= 0:
+        raise ValueError(f"heartbeat interval must be positive, got {interval}")
     _logger = get_logger(logger_name or __name__)
     stop = threading.Event()
     start = time.monotonic()

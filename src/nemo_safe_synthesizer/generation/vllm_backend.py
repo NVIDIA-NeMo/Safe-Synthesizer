@@ -361,7 +361,7 @@ class VllmBackend(GeneratorBackend):
     def _generate(
         self,
         prompts: str | list[str] | None = None,
-        input_ids: torch.TensorType | list[list[int]] | None = None,
+        input_ids: torch.TensorType | list[int] | list[list[int]] | None = None,
         **kwargs,
     ) -> list[RequestOutput]:
         """Dispatch a generation call to the underlying vLLM engine.
@@ -370,7 +370,8 @@ class VllmBackend(GeneratorBackend):
 
         Args:
             prompts: Text prompts to generate from.
-            input_ids: Pre-tokenized prompt IDs (tensor or nested list).
+            input_ids: Pre-tokenized prompt IDs (tensor, flat list for a
+                single prompt, or nested list for multiple prompts).
 
         Returns:
             List of vLLM ``RequestOutput`` objects.
@@ -392,14 +393,15 @@ class VllmBackend(GeneratorBackend):
             case {"sampling_params": _, **rest_}:  # noqa: F841
                 result = None
                 match input_ids:
-                    case torch.Tensor(data=ids):
+                    case torch.Tensor():
                         logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
-                        result = self._gen_method(prompt_token_ids=ids.tolist())
-                    # read the below as:
-                    # if the ids passed are a list of a list of ints
-                    case [*ids] if all_equal_type(ids, int):
-                        logger.debug("vllm generate: prompt_token_ids (list of lists)")
-                        result = self._gen_method(prompt_token_ids=ids)
+                        result = self._gen_method(prompt_token_ids=input_ids.tolist())
+                    case [[*first], *_] if all_equal_type(input_ids, int):
+                        logger.debug(f"vllm generate: prompt_token_ids ({len(input_ids)} prompts)")
+                        result = self._gen_method(prompt_token_ids=input_ids)
+                    case [*ids] if all_equal_type(ids, int, flatten_iter=False):
+                        logger.debug("vllm generate: prompt_token_ids (single flat list)")
+                        result = self._gen_method(prompt_token_ids=[ids])
                     case None:
                         logger.debug(
                             f"vllm generate: processing {len(prompts) if isinstance(prompts, list) else 1} prompts"
