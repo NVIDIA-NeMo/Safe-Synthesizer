@@ -663,10 +663,13 @@ class TestHeartbeat:
         )
         assert has_elapsed, f"elapsed_seconds not found in records: {caplog.text}"
 
-    def test_heartbeat_completes_on_exception(self, caplog):
+    def test_heartbeat_logs_failure_on_exception(self, caplog):
         caplog.set_level(logging.INFO)
         with pytest.raises(RuntimeError):
             with heartbeat("Failing op", interval=60.0):
                 raise RuntimeError("boom")
 
-        assert "Failing op complete" in caplog.text
+        assert "Failing op failed" in caplog.text
+        assert "Failing op complete" not in caplog.text
+        has_error_type = any(getattr(r, "ctx", {}).get("error_type") == "RuntimeError" for r in caplog.records)
+        assert has_error_type, f"error_type not found in records: {caplog.text}"

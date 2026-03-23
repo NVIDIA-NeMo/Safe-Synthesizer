@@ -974,9 +974,17 @@ def heartbeat(
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
+    exc: BaseException | None = None
     try:
         yield
+    except BaseException as e:
+        exc = e
+        raise
     finally:
         stop.set()
         thread.join(timeout=1)
-        _logger.info(f"{message} complete", extra={"ctx": _extra()})
+        if exc is not None:
+            ctx = {**_extra(), "error_type": type(exc).__name__}
+            _logger.error(f"{message} failed", extra={"ctx": ctx})
+        else:
+            _logger.info(f"{message} complete", extra={"ctx": _extra()})
