@@ -315,9 +315,10 @@ class VllmBackend(GeneratorBackend):
 
         for param, val in kwargs.items():
             if action := api_mapping.get(param):
-                logger.info(f"updating {param} from {val}")
-                param, val = action(val)
-                logger.info(f"updated {param} to {val}")
+                new_param, new_val = action(val)
+                if new_param != param or new_val != val:
+                    logger.info(f"remapped {param}={val} -> {new_param}={new_val}")
+                param, val = new_param, new_val
 
             # Skip parameters that were mapped to None (signals exclusion)
             if param is not None:
