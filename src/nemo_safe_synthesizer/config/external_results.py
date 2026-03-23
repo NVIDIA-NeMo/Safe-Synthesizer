@@ -31,12 +31,9 @@ class SafeSynthesizerTiming(NSSBaseModel):
 
     def log_timing(self, logger: logging.Logger) -> None:
         """Emit all timing fields as a structured table via *logger*."""
-        data = self.model_dump()
-        if self.total_time_sec is not None:
-            data["total_time_minutes"] = round(self.total_time_sec / 60, 2)
         logger.info(
             "Safe Synthesizer timing",
-            extra={"ctx": {"render_table": True, "tabular_data": data, "title": "Pipeline Timing"}},
+            extra={"ctx": {"render_table": True, "tabular_data": self.model_dump(), "title": "Pipeline Timing"}},
         )
 
     def log_wandb(self, run: Optional["wandb.Run"] = None) -> None:
@@ -121,13 +118,9 @@ class SafeSynthesizerSummary(NSSBaseModel):
 
     def log_summary(self, logger: logging.Logger) -> None:
         """Emit all summary metrics as a structured table via ``logger``."""
-        data = self.model_dump()
-        gen_sec = self.timing.generation_time_sec
-        if self.num_valid_records is not None and gen_sec is not None and gen_sec > 0:
-            data["valid_records_per_minute"] = round(self.num_valid_records / (gen_sec / 60), 2)
         logger.info(
             "Safe Synthesizer Summary",
-            extra={"ctx": {"render_table": True, "tabular_data": data, "title": "Quality Metrics"}},
+            extra={"ctx": {"render_table": True, "tabular_data": self.model_dump(), "title": "Quality Metrics"}},
         )
 
     def log_wandb(self) -> None:
