@@ -2,6 +2,7 @@
 *.local.md
 .cursor/rules/personal/
 .claude/settings.local.json
+.cursor/sandbox.json
 ai/tmp/
 venv*/
 env*/

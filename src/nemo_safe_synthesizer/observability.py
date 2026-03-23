@@ -75,6 +75,7 @@ __all__ = [
     "traced_runtime",
     "traced_system",
     "traced_backend",
+    "heartbeat",
 ]
 
 

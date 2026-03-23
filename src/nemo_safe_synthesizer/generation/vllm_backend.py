@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from functools import partial
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 from transformers import TypicalLogitsWarper
@@ -203,7 +203,7 @@ class VllmBackend(GeneratorBackend):
         # check this when updating unsloth in the future.
         enforce_eager = self.config.training.use_unsloth is True
 
-        with heartbeat("Model loading", logger=__name__, model=self.config.training.pretrained_model):
+        with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
                 model=self.config.training.pretrained_model,
                 gpu_memory_utilization=max_vram,
@@ -354,7 +354,7 @@ class VllmBackend(GeneratorBackend):
             self.llm.generate,
             sampling_params=real_params,
             lora_request=self.lora_req,
-            # we only want to enable the vllm logger if we are in debug mode
+            # Show vLLM's tqdm progress bar only when debug logging is enabled.
             use_tqdm=logger.isEnabledFor(logging.DEBUG),
         )
 
@@ -408,7 +408,7 @@ class VllmBackend(GeneratorBackend):
                     case _:
                         raise ValueError("input_ids are not a tensor, list, or None!")
 
-                return cast(list[RequestOutput], [r.outputs[0].text for r in result])
+                return result
             case _:
                 raise ValueError("input ids are not a tensor or list!")
 
@@ -439,11 +439,12 @@ class VllmBackend(GeneratorBackend):
 
         for idx, output in enumerate(outputs):
             out = output.outputs[0]
-            logger.debug(
-                f"prompt {idx}: {len(out.token_ids)} tokens, "
-                f"finish_reason={out.finish_reason}, "
-                f"stop_reason={out.stop_reason}"
-            )
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"prompt {idx}: {len(out.token_ids)} tokens, "
+                    f"finish_reason={out.finish_reason}, "
+                    f"stop_reason={out.stop_reason}"
+                )
             batch.process(idx, out.text)
 
         return batch
@@ -541,8 +542,8 @@ class VllmBackend(GeneratorBackend):
 
         with heartbeat(
             "Generation",
-            interval=10.0,
-            logger=__name__,
+            interval=60.0,
+            logger_name=__name__,
             target_records=self.config.generation.num_records,
         ):
             while batches.num_valid_records < self.config.generation.num_records:

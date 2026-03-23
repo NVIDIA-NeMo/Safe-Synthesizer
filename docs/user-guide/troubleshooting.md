@@ -164,6 +164,21 @@ because the table has too many columns for the model's context window.
    or simplify the schema.
 2. When using `data.group_training_examples_by`, all records in the same group must fit
    in context together, making the limit tighter. Consider reducing the number of records per group.
+
+    ??? tip "Sizing formula (approximate)"
+        Estimate token budget before adjusting parameters. The /4 divisor is
+        a rough heuristic for BPE tokenizers on JSON content (actual ratios
+        vary by tokenizer and content):
+
+        - `tokens_per_group ≈ (records_per_group × chars_per_record) / 4`
+        - `total ≈ prompt_tokens + tokens_per_group × max_sequences_per_example`
+
+        Example: 5 records × 200 chars ≈ 250 tokens/group; with a 400-token
+        prompt and 3 groups per example: `400 + 250 × 3 = 1150` tokens.
+
+        See [Example Generation -- Sizing](example-generation.md#sizing-and-context-budget)
+        for per-mode formulas.
+
 3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to 
    extend the context window.
    When set to `"auto"`, it is estimated from dataset token counts using
@@ -201,13 +216,20 @@ not epochs. The internal `data_fraction` is computed as
 duplicate and reshuffle the training examples. To get meaningful training
 with grouped data:
 
-- Check the "Number of training examples" log line -- if it's small
-  (< 10), you need a much larger `num_input_records_to_sample`
-- Multiply: `num_input_records_to_sample = N * dataset_size` for
-  approximately N passes over the data. With 200 records and 2 base
-  examples, you need at least 50x (10000) to get ~13 gradient steps
+- Decrease `max_sequences_per_example` -- this is the preferred first
+  step. Fewer groups per example means the assembler produces more
+  training examples, which means more gradient steps per epoch -- without
+  increasing training time per step. Start with
+  `max_sequences_per_example: 1` and increase only if quality suffers.
+  (Sequential/time-series mode already enforces one group per example,
+  so this knob only applies to grouped mode.)
+- If reducing groups per example is not enough, increase
+  `num_input_records_to_sample`. Set it to `N * dataset_size` for
+  approximately N passes over the data.
 - Watch for `Total steps = 1` in the Unsloth/Trainer output -- this means
   the model barely trained
+- See [Example Generation](example-generation.md) for how records are
+  packed into training examples
 
 ---
 
@@ -237,7 +259,7 @@ to cause long generation times:
 up to `max_seq_length` output tokens (`12,288` for SmolLM3). If the model
 produces long outputs before the stop condition fires, each prompt in the
 batch takes proportionally longer. A heartbeat log (`"Generation in
-progress"`) is emitted every 10 seconds to confirm the pipeline is alive.
+progress"`) is emitted every 60 seconds to confirm the pipeline is alive.
 
 Long-tail batch latency: vLLM processes all prompts in a batch
 simultaneously, but `llm.generate()` blocks until every prompt completes.

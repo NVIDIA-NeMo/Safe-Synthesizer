@@ -567,6 +567,8 @@ class TimeseriesBackend(VllmBackend):
             skip_special_tokens=sampling_params.skip_special_tokens,
             include_stop_str_in_output=sampling_params.include_stop_str_in_output,
             ignore_eos=sampling_params.ignore_eos,
+            stop=sampling_params.stop,
+            stop_token_ids=sampling_params.stop_token_ids,
         )
 
         return modified_params, effective_samples_per_prompt
