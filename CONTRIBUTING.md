@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - Python 3.11+ (project supports Python ≥3.11; `.python-version` currently pins 3.11 for bootstrapping at the repo root)
 - Git 2.34+ (minimum required for SSH commit signing)
 
-> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
 ### Setup
 
@@ -50,11 +50,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   ```bash
    cd Safe-Synthesizer
 
-   # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
-   make bootstrap-tools
-
-   # Ensure ~/.local/bin is on your PATH (add to your shell profile if needed)
-   export PATH="$HOME/.local/bin:$PATH"
+   # Install dev tools via mise (installs mise itself if missing)
+   make setup
 
    # Install Python dependencies (choose one)
    make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
@@ -63,7 +60,27 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
 
-3. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise and direnv trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
+
+  ```bash
+   # Append a direnv whitelist entry for this repo
+   mkdir -p ~/.config/direnv
+   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+   cat >> ~/.config/direnv/direnv.toml <<EOF
+   [whitelist]
+   prefix = ["$REPO"]
+   EOF
+  ```
+
+  ```bash
+   # Add to your shell profile (~/.bashrc, ~/.zshrc)
+   echo "export MISE_TRUSTED_CONFIG_PATHS=\"$(cd "$(git rev-parse --show-toplevel)" && pwd -P)\"" \
+     >> ~/.bashrc   # or ~/.zshrc
+  ```
+
+  Alternatively, set `MISE_YES=1` and `DIRENV_TRUST_ALLOW_ALL=1` to trust all configs globally (appropriate for dev machines and CI).
+
+4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
 
   ```bash
    echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
@@ -457,7 +474,7 @@ For detailed style guidelines covering Python, markdown, Dockerfiles, shell scri
 
 ### Formatting, Linting, and Type Checking
 
-Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `make bootstrap-tools` and check all tracked files.
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
 
 ```bash
 make format   # auto-fix: ruff format + import sorting + copyright headers
@@ -471,16 +488,16 @@ We use `ruff` and `ty` for the majority of this work, wrapped with settings for 
 
 CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
 
-The wrapper scripts in `tools/` also accept explicit file paths for spot-checking individual files:
+You can also run tools directly on specific files:
 
 ```bash
-bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
-bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
+ruff format --check src/nemo_safe_synthesizer/cli/run.py
+ruff check src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
 
-All `make` targets check the entire project. Pre-commit scopes checks to staged files. The wrapper scripts also accept explicit file paths when you want to check specific files.
+All `make` targets check the entire project. Pre-commit scopes checks to staged files.
 
 | Check | CI target | `make format` / `make check` | Pre-commit |
 |---|---|---|---|

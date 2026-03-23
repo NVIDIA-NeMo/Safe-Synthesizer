@@ -12,10 +12,10 @@ This package makes synthetic data, safely.
 
 ### Quick Start
 
-Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
+Bootstrap development tools (`ruff`, `ty`, `yq`, `gh`, etc.) via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), so every developer and CI runner uses identical tool versions:
 
 ```bash
-make bootstrap-tools
+make setup   # installs mise (if missing) + pinned tool versions from mise.lock
 ```
 
 Then bootstrap the project package with your desired extras -- likely `cpu|cuda`.
@@ -444,8 +444,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribut
 ### Setup
 
 ```bash
-# 1. Bootstrap development tools
-make bootstrap-tools
+# 1. Bootstrap dev tools (installs mise automatically if missing)
+make setup
 
 # 2. Install Python dependencies and package
 make bootstrap-nss cpu    # or: cuda, engine, dev

@@ -29,7 +29,7 @@ inputs:
     required: false
     default: "1"
   bootstrap-tools:
-    description: "Whether to run make bootstrap-tools"
+    description: "Whether to install dev tools via mise"
     required: false
     default: "true"
 
@@ -62,12 +62,6 @@ runs:
         echo "Merge Base SHA: $MERGE_BASE_SHA"
         echo "merge_base=$MERGE_BASE_SHA" >> $GITHUB_OUTPUT
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v6
-      with:
-        # version is parsed from pyproject.toml
-        enable-cache: true
-
     - name: Set up Python ${{ inputs.python-version }}
       if: inputs.python-version != ''
       uses: actions/setup-python@v5
@@ -80,7 +74,16 @@ runs:
       with:
         python-version-file: ".python-version"
 
-    - name: Install tools
+    - name: Install mise and dev tools (uv, ruff, ty, etc.)
       if: inputs.bootstrap-tools == 'true'
       shell: bash
-      run: make bootstrap-tools-ci
+      run: |
+        make setup
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+
+    - name: Install uv (fallback when mise is skipped)
+      if: inputs.bootstrap-tools != 'true'
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true

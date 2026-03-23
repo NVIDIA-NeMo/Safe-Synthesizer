@@ -103,7 +103,7 @@ Build backend: `hatchling` with wheel target `packages = ["src/nemo_safe_synthes
 
 | Section | Purpose |
 |---------|---------|
-| `[tool.uv]` | Required version, cache-keys, conflicts, overrides, environments |
+| `[tool.uv]` | Cache-keys, conflicts, overrides, environments |
 | `[tool.uv.sources]` | Map packages to specific indexes by extra/marker |
 | `[[tool.uv.index]]` | Define named package indexes |
 | `[build-system]` | hatchling + uv-dynamic-versioning |
@@ -123,6 +123,6 @@ Build backend: `hatchling` with wheel target `packages = ["src/nemo_safe_synthes
 1. Never use `pip` -- always `uv`
 2. Use `--frozen` in CI and Make targets to prevent lock updates
 3. Use `uv run` to run tools (pytest, mkdocs, etc.)
-4. Pin uv version in `[tool.uv] required-version` (currently `>=0.9.14,<0.10.0`)
+4. uv version is pinned in `.mise.toml` (currently `0.9.14`)
 5. Edit extras manually in `pyproject.toml`, then `uv lock`
 6. Use `uv add` for base/group deps

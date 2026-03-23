@@ -3,12 +3,21 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-# audit.sh - Hook script that writes all JSON input to /tmp/agent-audit.log
-# This script is designed to be called by Cursor's hooks system for auditing purposes
+# read_env.sh - preToolUse hook that sets up PATH and loads local env vars
 
-# Read the environment variables from the .env file
-direnv allow
-source .local.envrc
+# Ensure mise-managed tools are on PATH and config is trusted
+export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
+if command -v mise >/dev/null 2>&1; then
+    mise trust --quiet 2>/dev/null
+fi
+
+# Read the environment variables from the local env file (if it exists)
+if [ -f .local.envrc ]; then
+    if command -v direnv >/dev/null 2>&1; then
+        direnv allow
+    fi
+    source .local.envrc
+fi
 
 # Exit successfully
 exit 0

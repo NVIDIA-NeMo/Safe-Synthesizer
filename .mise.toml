@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Tool versions managed by mise (https://mise.jdx.dev/).
+# Run `mise install` to install all tools, or `mise use <tool>` to add a new one.
+#
+# Tools NOT managed here:
+#   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
+
+[tools]
+# Tools for working with JSON, Git, and other system utilities.
+jq = "1.8.1"
+yq = "4.44.1"
+github-cli = "latest"
+"ubi:google/osv-scanner" = "latest"
+ripgrep = "latest"
+
+# Tools for managing Python environments and packages.
+direnv = "latest"
+dprint = "latest"
+uv = "0.10.11"
+ruff = "0.15.0"
+ty = "0.0.1-alpha.21"
+
+# Prek is a tool for managing Python environments and packages.
+"aqua:j178/prek" = "latest"
+
+
+[settings]
+lockfile = true

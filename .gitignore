@@ -1,6 +1,7 @@
 # ignores agents.local.md, cursor.local.md, claude.local.md, etc.
 *.local.md
 .cursor/rules/personal/
+.cursor/sandbox.json
 .claude/settings.local.json
 ai/tmp/
 venv*/
