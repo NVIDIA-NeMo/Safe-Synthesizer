@@ -20,7 +20,6 @@ from ..config import SafeSynthesizerParameters
 from ..data_processing.record_utils import _parse_timestamp_to_seconds, extract_records_from_jsonl_string
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..generation.batch import Batch
-from ..generation.processors import TimeSeriesDataProcessor
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_backend import VllmBackend
 from ..llm.metadata import ModelMetadata
@@ -568,6 +567,8 @@ class TimeseriesBackend(VllmBackend):
             skip_special_tokens=sampling_params.skip_special_tokens,
             include_stop_str_in_output=sampling_params.include_stop_str_in_output,
             ignore_eos=sampling_params.ignore_eos,
+            stop=sampling_params.stop,
+            stop_token_ids=sampling_params.stop_token_ids,
         )
 
         return modified_params, effective_samples_per_prompt
@@ -879,7 +880,6 @@ class TimeseriesBackend(VllmBackend):
         generation_start = time.monotonic()
         num_records = self.config.generation.num_records
 
-        need_special_token_outputs = not isinstance(self.processor, TimeSeriesDataProcessor)
         sampling_params = SamplingParams(
             temperature=self.config.generation.temperature,
             repetition_penalty=self.config.generation.repetition_penalty,
@@ -887,9 +887,9 @@ class TimeseriesBackend(VllmBackend):
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
             max_tokens=self.model_metadata.max_seq_length,
-            skip_special_tokens=not need_special_token_outputs,
-            include_stop_str_in_output=need_special_token_outputs,
-            ignore_eos=need_special_token_outputs,
+            skip_special_tokens=True,
+            include_stop_str_in_output=False,
+            ignore_eos=False,
         )
 
         batches = GenerationBatches(
