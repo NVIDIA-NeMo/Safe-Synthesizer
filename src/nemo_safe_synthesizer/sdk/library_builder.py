@@ -505,9 +505,10 @@ class SafeSynthesizer(ConfigBuilder):
             report_path.write_text(self.results.evaluation_report_html)
             logger.info(f"Saved evaluation report to {report_path}")
 
-        metrics_path = self._workdir.evaluation_metrics
-        metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        metrics_path.write_text(self.results.summary.model_dump_json(indent=2))
-        logger.info(f"Saved evaluation metrics to {metrics_path}")
+            # we only get non-empty results summary when evaluation is run
+            metrics_path = self._workdir.evaluation_metrics
+            metrics_path.parent.mkdir(parents=True, exist_ok=True)
+            metrics_path.write_text(self.results.summary.model_dump_json(indent=2))
+            logger.info(f"Saved evaluation metrics and runtimes to {metrics_path}")
 
         return self

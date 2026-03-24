@@ -412,4 +412,4 @@ class TestSaveResults:
 
         assert nss._workdir.output_file.exists()
         assert not nss._workdir.evaluation_report.exists()
-        assert nss._workdir.evaluation_metrics.exists()
+        assert not nss._workdir.evaluation_metrics.exists()

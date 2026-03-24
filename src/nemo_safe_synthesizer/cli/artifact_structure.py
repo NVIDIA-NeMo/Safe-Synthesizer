@@ -362,7 +362,6 @@ class Workdir:
     # Generate directory structure
     generate = DirNode(
         "generate",
-        config=FileNode("safe-synthesizer-config.json"),
         logs=FileNode("logs.jsonl"),
         output=FileNode("synthetic_data.csv"),
         report=FileNode("evaluation_report.html"),
