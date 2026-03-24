@@ -287,6 +287,13 @@ Use `data.group_training_examples_by` to group records by a column (e.g.,
 customer ID) so related rows are trained together. Use
 `data.order_training_examples_by` to sort within groups (requires group_by).
 
+!!! info "When to use grouped mode"
+    Grouping is recommended when there is a natural ordering within each
+    group -- i.e., `data.order_training_examples_by` points to a valid
+    ordering field such as a date or sequence number. If your data has no
+    meaningful intra-group order, tabular mode with shuffled records is
+    usually sufficient.
+
 === "CLI"
 
     ```bash
@@ -318,6 +325,25 @@ customer ID) so related rows are trained together. Use
       group_training_examples_by: "customer_id"
       order_training_examples_by: "transaction_date"
     ```
+
+!!! info "What the model sees"
+
+    With grouping enabled, each training example is tokenized as:
+
+    ```text
+    [schema prompt] <BOS> group1-record1
+    group1-record2 <EOS> <BOS> group2-record1
+    group2-record2 <EOS>
+    ```
+
+    Here `<BOS>` and `<EOS>` represent the model's begin-of-sequence and
+    end-of-sequence tokens; the exact strings are taken from the selected
+    model's metadata and may differ across model families.
+
+    `data.max_sequences_per_example` controls how many groups are packed
+    into a single example (default: `"auto"`, which resolves to 10 without
+    DP). Fewer groups per example means more training examples overall.
+    See [Example Generation](../developer-guide/example-generation.md) for a full walkthrough.
 
 ### Dataset Registry
 
@@ -911,6 +937,12 @@ to sort within groups.
 
 See [Configuration Reference -- Time Series](configuration.md#time-series) for the full parameter table.
 See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common issues.
+
+!!! note "How time-series examples are assembled"
+    Each training example contains records from a single group in
+    chronological order. The model learns to continue a sequence --
+    not to produce independent records. See
+    [Example Generation](../developer-guide/example-generation.md) for assembly details.
 
 ---
 

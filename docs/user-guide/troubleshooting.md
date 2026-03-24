@@ -164,6 +164,21 @@ because the table has too many columns for the model's context window.
    or simplify the schema.
 2. When using `data.group_training_examples_by`, all records in the same group must fit
    in context together, making the limit tighter. Consider reducing the number of records per group.
+
+    ??? tip "Sizing formula (approximate)"
+        Estimate token budget before adjusting parameters. The /4 divisor is
+        a rough heuristic for BPE tokenizers on JSON content (actual ratios
+        vary by tokenizer and content):
+
+        - `tokens_per_group ≈ (records_per_group × chars_per_record) / 4`
+        - `total ≈ prompt_tokens + tokens_per_group × max_sequences_per_example`
+
+        Example: 5 records × 200 chars ≈ 250 tokens/group; with a 400-token
+        prompt and 3 groups per example: `400 + 250 × 3 = 1150` tokens.
+
+        See [Example Generation -- Sizing](../developer-guide/example-generation.md#sizing-and-context-budget)
+        for per-mode formulas.
+
 3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to
    extend the context window.
    When set to `"auto"`, it is estimated from dataset token counts using

@@ -164,7 +164,7 @@ The pipeline loads your input data (CSV, JSON, JSONL, Parquet, or DataFrame)
 and prepares it for training:
 
 - Column type inference and validation
-- Grouping and ordering (if configured via `data.group_training_examples_by` and `data.order_training_examples_by`)
+- [Grouping and ordering](../developer-guide/example-generation.md) (if configured via `data.group_training_examples_by` and `data.order_training_examples_by`)
 - Train/test split -- a holdout set (default 5%) is reserved for evaluation
 - Records are serialized to JSONL and tokenized; records that exceed the
   model's context window raise a [`GenerationError`][nemo_safe_synthesizer.errors.GenerationError] rather than being silently
