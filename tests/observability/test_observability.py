@@ -261,7 +261,7 @@ class TestRenderRichTable:
         assert "Count" in result
         assert "100" in result
         assert "Rate" in result
-        assert "95.00%" in result  # Formatted as percentage
+        assert "95.000%" in result  # Formatted as percentage
 
     def test_renders_nested_dict(self):
         """Test rendering a nested statistics dictionary."""
