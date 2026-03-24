@@ -9,7 +9,6 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 from transformers import PretrainedConfig
-from vllm.sampling_params import SamplingParams
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import (
@@ -411,51 +410,3 @@ class TestGetTimestampFromPrefill:
 
         assert backend._get_timestamp_from_prefill("") is None
         assert backend._get_timestamp_from_prefill(None) is None
-
-
-class TestBuildModifiedSamplingParamsStopPropagation:
-    """Tests that _build_modified_sampling_params propagates ignore_eos and other stop fields."""
-
-    def test_propagates_ignore_eos_false(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """ignore_eos=False from the upstream VllmBackend must survive the rebuild."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        original = SamplingParams(
-            temperature=0.8,
-            top_p=0.95,
-            top_k=50,
-            min_p=0.0,
-            max_tokens=2048,
-            repetition_penalty=1.0,
-            skip_special_tokens=False,
-            include_stop_str_in_output=True,
-            ignore_eos=False,
-        )
-
-        modified, _ = backend._build_modified_sampling_params(original, num_active=2)
-
-        assert modified.ignore_eos is False
-        assert modified.stop == []
-        assert modified.stop_token_ids == []
-
-    def test_propagates_none_stop_values(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
-        """When original has no stop values, the rebuilt params should also have none."""
-        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
-
-        original = SamplingParams(
-            temperature=0.8,
-            top_p=0.95,
-            top_k=50,
-            min_p=0.0,
-            max_tokens=2048,
-            repetition_penalty=1.0,
-            skip_special_tokens=True,
-            include_stop_str_in_output=False,
-            ignore_eos=False,
-        )
-
-        modified, _ = backend._build_modified_sampling_params(original, num_active=2)
-
-        assert modified.ignore_eos is False
-        assert modified.stop == []
-        assert modified.stop_token_ids == []

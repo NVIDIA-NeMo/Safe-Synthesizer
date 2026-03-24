@@ -4,7 +4,6 @@
 .agents/skills/personal/
 .agents/skills
 .claude/settings.local.json
-.cursor/sandbox.json
 ai/tmp/
 venv*/
 env*/
