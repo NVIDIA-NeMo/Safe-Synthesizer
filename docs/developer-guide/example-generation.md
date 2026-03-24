@@ -239,6 +239,14 @@ remaining record token budget (`max_seq_length` minus the schema prompt and
 BOS/EOS overhead). Test-split examples always use the full budget (no
 randomization).
 
+If the first record in a new example is larger than the randomized budget,
+the budget is expanded to fit that record -- no record is ever rejected
+because of the random draw. For example, if `max_new_tokens` is 1000, the
+random draw selects 70% (700 tokens), but the first record is 900 tokens,
+the budget silently expands to 900. The example is then flushed after that
+single record since the next record would not fit. A record only fails if it
+exceeds `max_new_tokens` entirely.
+
 ### Flush conditions
 
 The assembler flushes the current example and starts a new one when any of
@@ -336,9 +344,9 @@ For the default model ([SmolLM3](https://huggingface.co/HuggingFaceTB/SmolLM3-3B
 | BOS   | `<&#124;im_start&#124;>` | 128011 |
 | EOS   | `<&#124;im_end&#124;>`   | 128012 |
 
-Other supported model families (Mistral, TinyLlama, Qwen, Llama, etc.) use
-the same BOS/EOS override pattern with model-specific token IDs resolved at
-runtime from `ModelMetadata` subclasses in `llm/metadata.py`.
+Other tested model families (Mistral, TinyLlama) use the same BOS/EOS
+override pattern with model-specific token IDs resolved at runtime from
+`ModelMetadata` subclasses in `llm/metadata.py`.
 
 !!! warning "Token IDs are model- and tokenizer-version dependent"
     The IDs above are illustrative, not repo-guaranteed constants. BOS tokens
