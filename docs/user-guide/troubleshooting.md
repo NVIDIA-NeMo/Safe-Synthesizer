@@ -24,8 +24,6 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | "Unsloth not compatible with DP" | Mutual exclusion | [Configuration Reference -- Differential Privacy](configuration.md#differential-privacy) |
 | "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](evaluating-data.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
-| Generation appears to hang | Normal for large-context models | [See Slow Generation](#slow-generation-with-large-context-models) |
-| Grouped data trains for only 1 step | Too few training examples | [See Grouped Training](#grouped-data-produces-very-few-training-examples) |
 | "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
 | Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
@@ -33,34 +31,6 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
-
----
-
-## Enabling Debug Logging
-
-Most troubleshooting steps below recommend running with debug logging.
-Use the `-v` flag for debug output, or `-vv` to also include dependency
-logs (vLLM, HuggingFace, etc.):
-
-```bash
-safe-synthesizer run -v --config config.yaml --url data.csv
-```
-
-Debug logging adds:
-
-- Generation diagnostics: EOS token configuration, per-prompt finish
-  reasons and token counts, vLLM progress bars
-- Training details: data assembly statistics, example counts
-- SamplingParams: the full vLLM parameter object used for generation
-
-You can also set the log level via environment variable:
-
-```bash
-export NSS_LOG_LEVEL=DEBUG
-```
-
-See [Running -- Logging](running.md#logging) for the full logging
-configuration reference.
 
 ---
 
@@ -195,40 +165,6 @@ attempts to process sequences near the limit). See
 [Out of Memory During Training](#out-of-memory-during-training) for
 memory-specific fixes like quantization and batch size reduction.
 
-### Grouped Data Produces Very Few Training Examples
-
-When using `data.group_training_examples_by`, the assembler packs multiple
-groups into each training example to fill the context window. With
-large-context models (e.g. SmolLM3 at 12288 tokens) and small records,
-a 200-record dataset with 12 groups can compress into as few as 2 training
-examples. Combined with `gradient_accumulation_steps=8` (default), this
-yields only 1 gradient step -- effectively no training.
-
-The training log confirms this pattern:
-
-```text
-Num examples = 2 | Num Epochs = 1 | Total steps = 1
-```
-
-Training duration is controlled by `training.num_input_records_to_sample`,
-not epochs. The internal `data_fraction` is computed as
-`num_input_records_to_sample / total_training_records`. Values above 1.0
-duplicate and reshuffle the training examples. To get meaningful training
-with grouped data:
-
-- Decrease `max_sequences_per_example` -- this is the preferred first
-  step. Fewer groups per example means the assembler produces more
-  training examples, which means more gradient steps per epoch -- without
-  increasing training time per step. Start with
-  `max_sequences_per_example: 1` and increase only if quality suffers.
-  (Sequential/time-series mode already enforces one group per example,
-  so this knob only applies to grouped mode.)
-- If reducing groups per example is not enough, increase
-  `num_input_records_to_sample`. Set it to `N * dataset_size` for
-  approximately N passes over the data.
-- Watch for `Total steps = 1` in the Unsloth/Trainer output -- this means
-  the model barely trained
-
 ---
 
 ## Generation
@@ -246,50 +182,6 @@ an equivalent config field.
    it, but verify with `nvidia-smi`
 2. If the GPU has less memory than expected, check that the training teardown
    completed before generation started
-
-### Slow Generation with Large-Context Models
-
-Generation may appear to hang with large-context models (SmolLM3, Llama 3,
-etc.) when using `data.group_training_examples_by`. Two factors combine
-to cause long generation times:
-
-`max_tokens` scales with context window: each generation prompt is allowed
-up to `max_seq_length` output tokens (`12,288` for SmolLM3). If the model
-produces long outputs before the stop condition fires, each prompt in the
-batch takes proportionally longer. A heartbeat log (`"Generation in
-progress"`) is emitted every 60 seconds to confirm the pipeline is alive.
-
-Long-tail batch latency: vLLM processes all prompts in a batch
-simultaneously, but `llm.generate()` blocks until every prompt completes.
-With `temperature=0.9` (default), each prompt samples a different
-generation path. Most paths produce compact output and hit the EOS token
-quickly, but a few diverge into longer text before the model emits EOS.
-This variance is worse with undertrained models -- instead of reliably
-producing `<|im_start|> records... <|im_end|>`, the model sometimes
-wanders into chat-style explanations of unpredictable length.
-
-E.g., in one
-observed run with SmolLM3-3B, 96 of 100 prompts finished in 67 seconds,
-while the last 4 took an additional 93 seconds -- with a single prompt
-consuming 61 seconds and 1618 tokens on its own. The batch cannot return
-until the slowest prompt finishes. Run with `-v` to see vLLM's tqdm
-progress bar, which shows per-prompt completion rates and makes the tail
-effect visible. 
-
-If this stage takes more than 10 minutes, you might need to train the model
-more or examine the training parameters.
-
-To diagnose, run with `-v` (debug logging). The logs will show:
-
-- Sampling parameters, including EOS token configuration, `max_tokens`,
-  and stop conditions
-- Per-prompt output: token count, `finish_reason`, and `stop_reason`
-
-If every prompt shows `finish_reason=stop`, the stop condition is working
-and the generation time is real inference time. If any prompt shows
-`finish_reason=length`, it ran to `max_tokens` without producing an EOS
-token -- this typically indicates insufficient training (see
-[Grouped Data Produces Very Few Training Examples](#grouped-data-produces-very-few-training-examples)).
 
 ### GenerationError
 
