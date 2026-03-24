@@ -104,12 +104,14 @@ The project has 7 GitHub Actions workflows:
 | Workflow | File | Trigger | Purpose |
 |----------|------|---------|---------|
 | CI Checks | `ci-checks.yml` | push to main, PRs, manual | format, lint, typecheck, unit-test |
-| GPU jobs | `gpu-tests.yml` | push to main, PRs, manual | e2e job |
+| GPU jobs | `gpu-tests.yml` | push to main, push to `pull-request/<N>`, manual | e2e on A100 (copy-pr-bot; see below) |
 | Conventional Commit | `conventional-commit.yml` | PR title changes | Validates PR title format |
 | Copyright Check | `copyright-check.yml` | push to main, release branches | NVIDIA copyright headers |
 | DCO Assistant | `dco-assistant.yml` | PR events, comments | Developer Certificate of Origin |
 | Release | `release.yml` | manual dispatch only | Build and publish to PyPI |
 | Secrets Detector | `secrets-detector.yml` | PRs to main | Scans for leaked secrets |
+
+GPU tests use the copy-pr-bot pattern: they do NOT fire on `pull_request` events. Instead, copy-pr-bot pushes PR content to a `pull-request/<N>` branch, which triggers the workflow via a push event. To manually trigger GPU tests on a PR, comment `/sync` on the PR. See the [copy-pr-bot docs](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/).
 
 ```bash
 # Check CI status + recent runs in one call

@@ -34,7 +34,7 @@ Each skill is a self-contained directory with a `SKILL.md` that an agent reads o
 | `python-observability` | Structured logging with `CategoryLogger` and `TracedContext` |
 | `sync-agent-config` | Syncing agent config changes between repos |
 | `sync-with-nmp` | Syncing with the NMP upstream repository |
-| `usage` | Usage tracking and reporting patterns |
+| `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
 | `uv-build` | Building and publishing Python packages with `uv` |
 
 ## Discoverability

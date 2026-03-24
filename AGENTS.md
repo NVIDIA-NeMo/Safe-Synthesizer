@@ -16,6 +16,24 @@ When you read a skill file (from `.agents/skills/`) or a context rule (from `.cu
 
 If only always-apply rules were loaded and no additional skills or rules were consulted, say so briefly (e.g., "No additional skills or rules loaded beyond always-apply defaults.").
 
+## Skills
+
+Repo-specific skills live in `.agents/skills/`. General-purpose skills (ast-nav, deslop, bulk-edit, etc.) are installed globally via `~/.cursor/skills/` and do not need repo copies.
+
+| Skill | Purpose |
+|-------|---------|
+| `configurator` | Pydantic-to-Click parameter mapping, `NSSBaseModel` vs `BaseSettings`, validators |
+| `diagnose-failures` | Triage test, CI, runtime, GPU, import, and type errors using the error hierarchy |
+| `git-worktrees` | NSS-specific worktree overrides: venv setup, DCO/GPG signing, Cursor automation |
+| `github-cli` | `gh` CLI for PRs, issues, CI workflows, code review, releases |
+| `python-observability` | `CategoryLogger`, `@traced` decorators, log categories and env vars |
+| `sync-agent-config` | What to update when Makefile targets, modules, markers, or skills change |
+| `sync-with-nmp` | Bidirectional sync between GitHub and NMP GitLab |
+| `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
+| `uv-build` | `uv` package management, extras, PyTorch indexes, hatch build, versioning |
+
+Several source modules also have their own `AGENTS.md` with internal patterns and gotchas: `cli/`, `sdk/`, `llm/`, `generation/`, `training/`, and `tests/`. When working in a subtree, check for a local `AGENTS.md` before diving in.
+
 ## Repo Conventions
 
 See [STYLE_GUIDE.md](STYLE_GUIDE.md) for detailed code style conventions (Python, markdown, Dockerfiles, shell scripts, testing, config files, docstrings).
@@ -38,6 +56,8 @@ All commits require DCO sign-off and GPG signing. Always use `git commit --signo
 
 Shell scripting: never use `~` inside double-quoted strings -- it does not expand. Use `$HOME` or an absolute path instead.
 
+Testing gotchas: `asyncio_mode = auto` in `pytest.ini` -- async tests work without `@pytest.mark.asyncio`. The `unit_test` marker is deprecated; use `unit`. `datasets==4.3.0` is hard-pinned in `pyproject.toml` due to an unsloth incompatibility -- do not unpin it.
+
 For testing, building, syncing, bootstrapping, and other workflows, see the matching skill or `.claude/commands/` file.
 
 ## Agent Behavior
@@ -58,7 +78,7 @@ Hook scripts live in `.cursor/hooks/` and are loaded by both Cursor (`.cursor/ho
 
 Cursor parallel-agent worktrees are configured via `.cursor/worktrees.json`, which runs `.cursor/setup-worktree.sh` at worktree creation. The setup script runs `uv sync --frozen` and copies `.local.envrc` from the main worktree if present.
 
-For manual worktrees (agent-created via `git worktree add`), run `uv sync --frozen` after creation. See the `git-worktrees` skill for the full workflow.
+For manual worktrees (agent-created via `git worktree add`), run the full sync command after creation (not bare `uv sync --frozen` -- that omits extras). See the `git-worktrees` skill for the full workflow.
 
 ## Fast-model subagent suitability
 
@@ -91,8 +111,10 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `training/` | TrainingBackend, HuggingFace, Unsloth backends |
 | `artifacts/` | Data quality checks, field analysis, metadata |
 | `observability.py` | CategoryLogger, TracedContext, structured logging |
-| `errors.py` | Custom error hierarchy -- see `diagnose-failures` skill |
+| `errors.py` | Error hierarchy: `SafeSynthesizerError` → `UserError` (`DataError`/`ParameterError` are also `ValueError`; `GenerationError` is also `RuntimeError`) and `InternalError` (also `RuntimeError`). See `diagnose-failures` skill |
 | `defaults.py` | Default settings, constants (`DEFAULT_ARTIFACTS_PATH`, `PSEUDO_GROUP_COLUMN`) |
 | `package_info.py` | Package version (uv-dynamic-versioning) |
 | `results.py` | Result compilation (`make_nss_results`, `make_nss_summary`) |
 | `utils.py` | Schema prompt creation, pattern matching helpers |
+
+For component-level architecture diagrams and data flow, see [design.md](design.md).

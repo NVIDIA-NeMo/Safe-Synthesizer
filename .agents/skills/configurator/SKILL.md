@@ -2,12 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 ---
 name: configurator
-<<<<<<< HEAD:.agent/skills/configurator/SKILL.md
 description: "Pydantic models and the Pydantic-to-Click configurator for config, CLI, and SDK validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, LeafParam, FlagParam, _collect_params, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam, Pydantic, BaseModel, NSSBaseModel, BaseSettings, field_validator, model_validator, ConfigDict, TypeAdapter, pydantic-settings, validation."
-=======
-description: "Pydantic models and the Pydantic-to-Click configurator for config, CLI, and SDK validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam, Pydantic, BaseModel, NSSBaseModel, BaseSettings, field_validator, model_validator, ConfigDict, TypeAdapter, pydantic-settings, validation."
-license: Apache-2.0
->>>>>>> 84b0640 (chore: update repo agent setup):.agents/skills/configurator/SKILL.md
 ---
 
 # Configurator and Pydantic Patterns
