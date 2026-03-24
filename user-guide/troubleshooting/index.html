@@ -1004,17 +1004,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#enabling-debug-logging" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Enabling Debug Logging
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#training" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1087,17 +1076,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#grouped-data-produces-very-few-training-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Grouped Data Produces Very Few Training Examples
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -1120,17 +1098,6 @@
     <span class="md-ellipsis">
       
         Out of Memory During Generation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#slow-generation-with-large-context-models" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Slow Generation with Large-Context Models
       
     </span>
   </a>
@@ -8435,17 +8402,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#enabling-debug-logging" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Enabling Debug Logging
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#training" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -8518,17 +8474,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#grouped-data-produces-very-few-training-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Grouped Data Produces Very Few Training Examples
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -8551,17 +8496,6 @@
     <span class="md-ellipsis">
       
         Out of Memory During Generation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#slow-generation-with-large-context-models" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Slow Generation with Large-Context Models
       
     </span>
   </a>
@@ -9002,16 +8936,6 @@ configuration, and NER parallelism, see <a href="../environment/">Environment Va
 <td><a href="#generationerror">See GenerationError</a></td>
 </tr>
 <tr>
-<td>Generation appears to hang</td>
-<td>Normal for large-context models</td>
-<td><a href="#slow-generation-with-large-context-models">See Slow Generation</a></td>
-</tr>
-<tr>
-<td>Grouped data trains for only 1 step</td>
-<td>Too few training examples</td>
-<td><a href="#grouped-data-produces-very-few-training-examples">See Grouped Training</a></td>
-</tr>
-<tr>
 <td>"exceeds context length"</td>
 <td>Records too long</td>
 <td><a href="#context-length-and-record-fitting">Reduce record size</a></td>
@@ -9048,25 +8972,6 @@ configuration, and NER parallelism, see <a href="../environment/">Environment Va
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="enabling-debug-logging">Enabling Debug Logging<a class="headerlink" href="#enabling-debug-logging" title="Permanent link">&para;</a></h2>
-<p>Most troubleshooting steps below recommend running with debug logging.
-Use the <code>-v</code> flag for debug output, or <code>-vv</code> to also include dependency
-logs (vLLM, HuggingFace, etc.):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--url<span class="w"> </span>data.csv
-</span></code></pre></div>
-<p>Debug logging adds:</p>
-<ul>
-<li>Generation diagnostics: EOS token configuration, per-prompt finish
-  reasons and token counts, vLLM progress bars</li>
-<li>Training details: data assembly statistics, example counts</li>
-<li>SamplingParams: the full vLLM parameter object used for generation</li>
-</ul>
-<p>You can also set the log level via environment variable:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NSS_LOG_LEVEL</span><span class="o">=</span>DEBUG
-</span></code></pre></div>
-<p>See <a href="../running/#logging">Running -- Logging</a> for the full logging
-configuration reference.</p>
 <hr />
 <h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>
 <p>GPU memory, context length, and backend issues during fine-tuning.</p>
@@ -9111,7 +9016,7 @@ stack traces. If you see <code>torch.cuda.OutOfMemoryError</code>:</p>
 in the HuggingFace documentation.</p>
 <h3 id="no-gpu-detected">No GPU Detected<a class="headerlink" href="#no-gpu-detected" title="Permanent link">&para;</a></h3>
 <p>If Safe Synthesizer fails to find a GPU, the Unsloth backend raises immediately:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>RuntimeError: Cannot use unsloth without GPU.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>RuntimeError: Cannot use unsloth without GPU.
 </span></code></pre></div>
 <p>The HuggingFace backend will not error but will attempt to use CPU (extremely slow).</p>
 <p>To diagnose:</p>
@@ -9120,7 +9025,7 @@ in the HuggingFace documentation.</p>
 <li>Verify PyTorch CUDA build: <code>python -c "import torch; print(torch.cuda.is_available())"</code></li>
 <li>
 <p>Ensure you installed the CUDA extras, not the CPU-only package:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu128,engine]&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu128,engine]&quot;</span>
 </span></code></pre></div>
 </li>
 </ol>
@@ -9139,11 +9044,11 @@ fit within this window. If it doesn't, data assembly fails with a
 <code>GenerationError</code> before training even starts.</p>
 <h4 id="when-records-dont-fit">When Records Don't Fit<a class="headerlink" href="#when-records-dont-fit" title="Permanent link">&para;</a></h4>
 <p>Two error messages indicate context-length problems during data assembly:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>The number of tokens in an example exceeds the available context length
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>The number of tokens in an example exceeds the available context length
 </span></code></pre></div>
 <p>A single training example (schema prompt + records) exceeds
 <code>max_seq_length</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The dataset schema requires more tokens than the max length of the model
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>The dataset schema requires more tokens than the max length of the model
 </span></code></pre></div>
 <p>The schema prompt alone is wider than <code>max_seq_length</code> -- typically
 because the table has too many columns for the model's context window.</p>
@@ -9187,35 +9092,6 @@ in the pipeline before any training or generation occurs.</p>
 attempts to process sequences near the limit). See
 <a href="#out-of-memory-during-training">Out of Memory During Training</a> for
 memory-specific fixes like quantization and batch size reduction.</p>
-<h3 id="grouped-data-produces-very-few-training-examples">Grouped Data Produces Very Few Training Examples<a class="headerlink" href="#grouped-data-produces-very-few-training-examples" title="Permanent link">&para;</a></h3>
-<p>When using <code>data.group_training_examples_by</code>, the assembler packs multiple
-groups into each training example to fill the context window. With
-large-context models (e.g. SmolLM3 at 12288 tokens) and small records,
-a 200-record dataset with 12 groups can compress into as few as 2 training
-examples. Combined with <code>gradient_accumulation_steps=8</code> (default), this
-yields only 1 gradient step -- effectively no training.</p>
-<p>The training log confirms this pattern:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Num examples = 2 | Num Epochs = 1 | Total steps = 1
-</span></code></pre></div>
-<p>Training duration is controlled by <code>training.num_input_records_to_sample</code>,
-not epochs. The internal <code>data_fraction</code> is computed as
-<code>num_input_records_to_sample / total_training_records</code>. Values above 1.0
-duplicate and reshuffle the training examples. To get meaningful training
-with grouped data:</p>
-<ul>
-<li>Decrease <code>max_sequences_per_example</code> -- this is the preferred first
-  step. Fewer groups per example means the assembler produces more
-  training examples, which means more gradient steps per epoch -- without
-  increasing training time per step. Start with
-  <code>max_sequences_per_example: 1</code> and increase only if quality suffers.
-  (Sequential/time-series mode already enforces one group per example,
-  so this knob only applies to grouped mode.)</li>
-<li>If reducing groups per example is not enough, increase
-  <code>num_input_records_to_sample</code>. Set it to <code>N * dataset_size</code> for
-  approximately N passes over the data.</li>
-<li>Watch for <code>Total steps = 1</code> in the Unsloth/Trainer output -- this means
-  the model barely trained</li>
-</ul>
 <hr />
 <h2 id="generation">Generation<a class="headerlink" href="#generation" title="Permanent link">&para;</a></h2>
 <p>VRAM, invalid records, and early stopping during synthetic data production.</p>
@@ -9230,47 +9106,10 @@ an equivalent config field.</p>
 <li>If the GPU has less memory than expected, check that the training teardown
    completed before generation started</li>
 </ol>
-<h3 id="slow-generation-with-large-context-models">Slow Generation with Large-Context Models<a class="headerlink" href="#slow-generation-with-large-context-models" title="Permanent link">&para;</a></h3>
-<p>Generation may appear to hang with large-context models (SmolLM3, Llama 3,
-etc.) when using <code>data.group_training_examples_by</code>. Two factors combine
-to cause long generation times:</p>
-<p><code>max_tokens</code> scales with context window: each generation prompt is allowed
-up to <code>max_seq_length</code> output tokens (<code>12,288</code> for SmolLM3). If the model
-produces long outputs before the stop condition fires, each prompt in the
-batch takes proportionally longer. A heartbeat log (<code>"Generation in
-progress"</code>) is emitted every 60 seconds to confirm the pipeline is alive.</p>
-<p>Long-tail batch latency: vLLM processes all prompts in a batch
-simultaneously, but <code>llm.generate()</code> blocks until every prompt completes.
-With <code>temperature=0.9</code> (default), each prompt samples a different
-generation path. Most paths produce compact output and hit the EOS token
-quickly, but a few diverge into longer text before the model emits EOS.
-This variance is worse with undertrained models -- instead of reliably
-producing <code>&lt;|im_start|&gt; records... &lt;|im_end|&gt;</code>, the model sometimes
-wanders into chat-style explanations of unpredictable length.</p>
-<p>E.g., in one
-observed run with SmolLM3-3B, 96 of 100 prompts finished in 67 seconds,
-while the last 4 took an additional 93 seconds -- with a single prompt
-consuming 61 seconds and 1618 tokens on its own. The batch cannot return
-until the slowest prompt finishes. Run with <code>-v</code> to see vLLM's tqdm
-progress bar, which shows per-prompt completion rates and makes the tail
-effect visible. </p>
-<p>If this stage takes more than 10 minutes, you might need to train the model
-more or examine the training parameters.</p>
-<p>To diagnose, run with <code>-v</code> (debug logging). The logs will show:</p>
-<ul>
-<li>Sampling parameters, including EOS token configuration, <code>max_tokens</code>,
-  and stop conditions</li>
-<li>Per-prompt output: token count, <code>finish_reason</code>, and <code>stop_reason</code></li>
-</ul>
-<p>If every prompt shows <code>finish_reason=stop</code>, the stop condition is working
-and the generation time is real inference time. If any prompt shows
-<code>finish_reason=length</code>, it ran to <code>max_tokens</code> without producing an EOS
-token -- this typically indicates insufficient training (see
-<a href="#grouped-data-produces-very-few-training-examples">Grouped Data Produces Very Few Training Examples</a>).</p>
 <h3 id="generationerror">GenerationError<a class="headerlink" href="#generationerror" title="Permanent link">&para;</a></h3>
 <p>Generation failures during synthetic data production. The two most common:</p>
 <dl>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Generation stopped prematurely due to no valid records
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Generation stopped prematurely due to no valid records
 </span></code></pre></div></dt>
 <dd>
 <p>The first batch produced zero valid records. The model may be underfitting
@@ -9278,7 +9117,7 @@ token -- this typically indicates insufficient training (see
   <code>training.num_input_records_to_sample</code> to give the model more context,
   and check training logs for quality issues.</p>
 </dd>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
 </span></code></pre></div></dt>
 <dd>
 <p>Too many invalid records across <code>generation.patience</code> consecutive batches.
@@ -9379,7 +9218,7 @@ your configuration. Note that some <code>"auto"</code> fields (such as
 <code>training.rope_scaling_factor</code> and <code>training.num_input_records_to_sample</code>)
 require a dataset to resolve -- they will remain <code>"auto"</code> in the validate
 output and only resolve during an actual run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
 </span></code></pre></div>
 <h3 id="common-validation-errors">Common Validation Errors<a class="headerlink" href="#common-validation-errors" title="Permanent link">&para;</a></h3>
 <dl>
@@ -9427,13 +9266,13 @@ optionally reduce CPU parallelism so each worker has more resources.</p>
 <h3 id="authentication-failures">Authentication Failures<a class="headerlink" href="#authentication-failures" title="Permanent link">&para;</a></h3>
 <p>WandB requires an API key when running in <code>online</code> mode. If the key is missing
 or invalid, training will fail when the WandB run is initialized.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>wandb: ERROR api_key not configured (no-auth)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>wandb: ERROR api_key not configured (no-auth)
 </span></code></pre></div>
 <p>Set the API key before running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
 </span></code></pre></div>
 <p>Or switch to offline mode to avoid network access entirely:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>See <a href="../running/#wandb-integration">Running Safe Synthesizer -- WandB Integration</a> for the full WandB setup.</p>
 <h3 id="resume-errors">Resume Errors<a class="headerlink" href="#resume-errors" title="Permanent link">&para;</a></h3>
@@ -9455,8 +9294,8 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 <dd>
 <p>Any <code>NaN</code> or <code>null</code> values in the timestamp column raise a <code>DataError</code>.
   Clean your data before running the pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
 </span></code></pre></div>
 </dd>
 <dt>Interval mismatch:</dt>
@@ -9490,12 +9329,12 @@ groups.</p>
 <p>Safe Synthesizer uses a structured error hierarchy. Understanding which error
 class you received helps narrow down the cause and write targeted <code>except</code> clauses.</p>
 <p>Inheritance:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>SafeSynthesizerError
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>├── InternalError (also RuntimeError)
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>└── UserError
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    ├── DataError (also ValueError)
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    ├── ParameterError (also ValueError)
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    └── GenerationError (also RuntimeError)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>SafeSynthesizerError
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>├── InternalError (also RuntimeError)
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>└── UserError
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    ├── DataError (also ValueError)
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    ├── ParameterError (also ValueError)
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    └── GenerationError (also RuntimeError)
 </span></code></pre></div>
 <p>SDK callers can catch <a class="autorefs autorefs-internal" title="            UserError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.UserError"><code>UserError</code></a> to handle all user-facing errors, or
 <a class="autorefs autorefs-internal" title="            SafeSynthesizerError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.SafeSynthesizerError"><code>SafeSynthesizerError</code></a> to also catch internal errors. Catching the built-in
