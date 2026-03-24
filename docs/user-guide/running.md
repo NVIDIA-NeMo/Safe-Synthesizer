@@ -1036,27 +1036,32 @@ safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my
 ```
 
 ```text
-safe-synthesizer-artifacts/
-└── <config>---<dataset>/
-    └── <run_name>/
-        ├── safe-synthesizer-config.json
-        ├── train/
-        │   └── adapter/
-        ├── generate/
-        │   ├── synthetic_data.csv
-        │   └── evaluation_report.html
-        └── dataset/
-            ├── training.csv
-            ├── test.csv
-            └── validation.csv  (only when training.validation_ratio > 0.0)
+<artifact-path>/<config>---<dataset>/<run_name>/
+├── train/
+│   ├── safe-synthesizer-config.json
+│   └── adapter/                     # trained PEFT adapter
+├── generate/
+│   ├── logs.jsonl                   # generate-only workflow
+│   ├── info.json                    # generate-only workflow
+│   ├── synthetic_data.csv
+│   ├── evaluation_report.html
+│   └── evaluation_metrics.json      # machine-readable metrics
+├── dataset/
+│   ├── training.csv
+│   ├── test.csv
+│   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
+└── logs/
+    └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 Key outputs:
 
 - `generate/synthetic_data.csv`: the synthetic dataset
 - `generate/evaluation_report.html`: quality and privacy report
+- `generate/evaluation_metrics.json`: machine-readable evaluation scores and timing
 - `train/adapter/`: LoRA weights for resuming generation
-- `safe-synthesizer-config.json`: resolved config snapshot
+- `train/safe-synthesizer-config.json`: resolved config snapshot
 
 !!! tip "Clean up artifacts"
     Adapter weights and training caches can consume significant disk space
@@ -1066,9 +1071,10 @@ Key outputs:
 
 ### SDK Results Access
 
-`run()` automatically saves `synthetic_data.csv` and `evaluation_report.html`
-to the artifacts directory unless an `output_file` override is provided.
-For stepwise execution, call `save_results()` explicitly after `evaluate()`.
+`run()` automatically saves `synthetic_data.csv`, `evaluation_report.html`,
+and `evaluation_metrics.json` to the artifacts directory unless an
+`output_file` override is provided. For stepwise execution, call
+`save_results()` explicitly after `evaluate()`.
 
 ```python
 results = synthesizer.results

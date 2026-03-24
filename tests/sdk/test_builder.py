@@ -361,17 +361,21 @@ def test_with_replace_pii_reenable_after_disable():
     assert config.replace_pii is not None
 
 
+_METRICS_JSON = '{"timing": {}}'
+
+
 def _builder_with_mock_results(tmp_path: Path) -> SafeSynthesizer:
     """Create a SafeSynthesizer with mocked results for save_results testing."""
     nss = SafeSynthesizer(save_path=tmp_path / "artifacts")
     nss.results = MagicMock()
     nss.results.synthetic_data = _SMALL_DF
     nss.results.evaluation_report_html = _REPORT_HTML
+    nss.results.summary.model_dump_json.return_value = _METRICS_JSON
     return nss
 
 
 class TestSaveResults:
-    """Verify save_results persists CSV and HTML to the expected paths."""
+    """Verify save_results persists CSV, HTML, and evaluation metrics."""
 
     def test_saves_to_default_workdir(self, tmp_path: Path):
         nss = _builder_with_mock_results(tmp_path)
@@ -380,10 +384,13 @@ class TestSaveResults:
 
         csv_path = nss._workdir.output_file
         report_path = nss._workdir.evaluation_report
+        metrics_path = nss._workdir.evaluation_metrics
         assert csv_path.exists()
         assert report_path.exists()
+        assert metrics_path.exists()
         assert pd.read_csv(csv_path).equals(_SMALL_DF)
         assert report_path.read_text() == _REPORT_HTML
+        assert metrics_path.read_text() == _METRICS_JSON
 
     def test_output_file_override_writes_csv_to_custom_path(self, tmp_path: Path):
         nss = _builder_with_mock_results(tmp_path)
@@ -405,3 +412,4 @@ class TestSaveResults:
 
         assert nss._workdir.output_file.exists()
         assert not nss._workdir.evaluation_report.exists()
+        assert not nss._workdir.evaluation_metrics.exists()
