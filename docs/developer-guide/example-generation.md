@@ -429,12 +429,13 @@ which uses `re.findall` with a regex of the form:
 BOS + whitespace? + (one or more {…} records) + whitespace? + EOS
 ```
 
-This finds all complete BOS/EOS-delimited blocks in the output. In principle,
-a single prompt could produce multiple groups.
-
-!!! note "Current limitation"
-    In practice, vLLM stops generation at the first EOS token, so each prompt
-    currently yields at most one group. This is under active improvement.
+This finds all complete BOS/EOS-delimited blocks in the output. The parser
+can handle multiple groups if they appear, but in practice each prompt yields
+exactly one group because the backend sets `ignore_eos=False`
+(`vllm_backend.py:520`). vLLM's native EOS handling stops generation as soon
+as the model emits the EOS token -- which marks the end of the first group.
+The `include_stop_str_in_output=True` setting ensures the EOS token text is
+included so the parser can match the BOS/EOS pair.
 
 When no BOS/EOS delimiters are found, behavior depends on
 `group_by_accept_no_delineator`: `false` (default) rejects the output;
