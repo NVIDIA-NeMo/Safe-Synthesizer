@@ -10,16 +10,6 @@
                 ]
             }
         ],
-        "SessionEnd": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/audit.sh"
-                    }
-                ]
-            }
-        ],
         "PreToolUse": [
             {
                 "matcher": "Bash",
@@ -27,48 +17,6 @@
                     {
                         "type": "command",
                         "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/enforce-signoff.sh"
-                    },
-                    {
-                        "type": "command",
-                        "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/audit.sh"
-                    }
-                ]
-            },
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/audit.sh"
-                    }
-                ]
-            }
-        ],
-        "PostToolUse": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/audit.sh"
-                    }
-                ]
-            }
-        ],
-        "PreCompact": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/audit.sh"
-                    }
-                ]
-            }
-        ],
-        "Stop": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "\"$CLAUDE_PROJECT_DIR\"/.cursor/hooks/audit.sh"
                     }
                 ]
             }

@@ -14,8 +14,7 @@ Cursor-specific agent configuration: hooks, rules, skills, and worktree setup.
 ├── setup-worktree.sh   # Runs inside each new parallel-agent worktree at creation time
 ├── hooks/              # Hook scripts (shared by both Cursor and Claude Code)
 │   ├── session_context.sh   # sessionStart -- reports venv state, runs uv sync if .venv absent
-│   ├── enforce-signoff.sh   # beforeShellExecution/PreToolUse(Bash) -- blocks git commit without --signoff/-s and --gpg-sign/-S
-│   └── audit.sh             # most events -- appends timestamped JSON to ~/.cursor/audit.log
+│   └── enforce-signoff.sh   # beforeShellExecution/PreToolUse(Bash) -- blocks git commit without --signoff/-s and --gpg-sign/-S
 ├── rules/              # Always-apply and requestable context rules (.mdc files)
 │   ├── agent-markdown-style.mdc   # alwaysApply -- markdown and docstring style conventions
 │   ├── claude-commands.mdc        # alwaysApply -- maps task keywords to .claude/commands/ files
@@ -33,9 +32,7 @@ Registers hook scripts against Cursor lifecycle events.
 | Event | Script | Purpose |
 |-------|--------|---------|
 | `sessionStart` | `session_context.sh` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
-| `sessionEnd` | `audit.sh` | Appends audit entry |
 | `beforeShellExecution` (git commit) | `enforce-signoff.sh` | Blocks commits missing `--signoff` or `--gpg-sign` |
-| `beforeShellExecution`, `beforeMCPExecution`, `afterShellExecution`, `afterMCPExecution`, `afterFileEdit`, `beforeSubmitPrompt`, `preCompact`, `stop` | `audit.sh` | Audit log |
 
 The same hook scripts are registered in `.claude/settings.json` for Claude Code using its `PreToolUse`/`PostToolUse` event model.
 

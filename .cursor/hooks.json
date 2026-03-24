@@ -6,53 +6,10 @@
         "command": ".cursor/hooks/session_context.sh"
       }
     ],
-    "sessionEnd": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
     "beforeShellExecution": [
       {
         "command": ".cursor/hooks/enforce-signoff.sh",
         "matcher": "git commit"
-      },
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "beforeMCPExecution": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "afterShellExecution": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "afterMCPExecution": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "afterFileEdit": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "beforeSubmitPrompt": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "preCompact": [
-      {
-        "command": ".cursor/hooks/audit.sh"
-      }
-    ],
-    "stop": [
-      {
-        "command": ".cursor/hooks/audit.sh"
       }
     ]
   }

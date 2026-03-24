@@ -28,7 +28,6 @@ Repo-specific skills live in `.agents/skills/`. General-purpose skills (ast-nav,
 | `github-cli` | `gh` CLI for PRs, issues, CI workflows, code review, releases |
 | `python-observability` | `CategoryLogger`, `@traced` decorators, log categories and env vars |
 | `sync-agent-config` | What to update when Makefile targets, modules, markers, or skills change |
-| `sync-with-nmp` | Bidirectional sync between GitHub and NMP GitLab |
 | `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
 | `uv-build` | `uv` package management, extras, PyTorch indexes, hatch build, versioning |
 
@@ -74,7 +73,6 @@ Hook scripts live in `.cursor/hooks/` and are loaded by both Cursor (`.cursor/ho
 |--------|-------|---------|
 | `session_context.sh` | `sessionStart` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
 | `enforce-signoff.sh` | `beforeShellExecution` / `PreToolUse(Bash)` | Blocks `git commit` without `--signoff` / `-s`; blocks missing `--gpg-sign` / `-S` |
-| `audit.sh` | most events | Appends timestamped JSON to `~/.cursor/audit.log` |
 
 Cursor parallel-agent worktrees are configured via `.cursor/worktrees.json`, which runs `.cursor/setup-worktree.sh` at worktree creation. The setup script runs `uv sync --frozen` and copies `.local.envrc` from the main worktree if present.
 

@@ -17,9 +17,7 @@ Claude Code-specific agent configuration: hook registrations and slash commands.
     ├── format.md
     ├── gpu-test.md
     ├── lint.md
-    ├── pre-commit.md
     ├── start-docs-server.md
-    ├── sync-nmp.md
     ├── test-ci-container.md
     ├── test-slow.md
     └── unit-test.md
@@ -32,9 +30,7 @@ Registers hook scripts against Claude Code lifecycle events. The hook scripts th
 | Event | Script | Purpose |
 |-------|--------|---------|
 | `SessionStart` | `session_context.sh` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
-| `SessionEnd` | `audit.sh` | Appends audit entry |
 | `PreToolUse` (Bash) | `enforce-signoff.sh` | Blocks commits missing `--signoff` or `--gpg-sign` |
-| `PreToolUse`, `PostToolUse`, `PreCompact`, `Stop` | `audit.sh` | Audit log |
 
 ## commands/
 
@@ -48,9 +44,7 @@ Each file is a slash command available in Claude Code as `/command-name` (filena
 | `format` | Format code (ruff + copyright) |
 | `gpu-test` | GPU integration and e2e tests |
 | `lint` | Lint and typecheck |
-| `pre-commit` | Run all pre-commit hooks |
 | `start-docs-server` | Local docs dev server |
-| `sync-nmp` | Sync with NMP repository |
 | `test-ci-container` | CI tests in a container |
 | `test-slow` | All tests including slow |
 | `unit-test` | Run unit tests |

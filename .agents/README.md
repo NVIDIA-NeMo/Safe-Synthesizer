@@ -16,7 +16,6 @@ Agent-neutral skill definitions. Skills here are available to any agent (Cursor,
     ├── github-cli/
     ├── python-observability/
     ├── sync-agent-config/
-    ├── sync-with-nmp/
     ├── usage/
     └── uv-build/
 ```
@@ -33,7 +32,6 @@ Each skill is a self-contained directory with a `SKILL.md` that an agent reads o
 | `github-cli` | `gh` CLI usage for PRs, issues, and CI |
 | `python-observability` | Structured logging with `CategoryLogger` and `TracedContext` |
 | `sync-agent-config` | Syncing agent config changes between repos |
-| `sync-with-nmp` | Syncing with the NMP upstream repository |
 | `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
 | `uv-build` | Building and publishing Python packages with `uv` |
 

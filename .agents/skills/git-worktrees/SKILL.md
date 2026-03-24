@@ -51,22 +51,4 @@ git commit -s -S -m "message"
 
 Never hand-write the `Signed-off-by` trailer -- it must come from `--signoff` so it matches `git config user.name` / `user.email` exactly.
 
-GPG signing requires a key configured in git:
-
-```bash
-# Check current signing key
-git config --global user.signingkey
-
-# Set a key (replace with your key ID or SSH key path)
-git config --global user.signingkey <KEY_ID>
-git config --global commit.gpgSign true
-
-# For SSH signing (simpler than GPG for new setups)
-git config --global gpg.format ssh
-git config --global user.signingkey ~/.ssh/id_ed25519.pub
-git config --global commit.gpgSign true
-```
-
 GitHub marks commits as "Verified" when the signing key matches a key registered in your GitHub account (Settings → SSH and GPG keys). Commits squash-merged by GitHub are signed by GitHub's own key -- only locally-created commits need your personal key.
-
-Note for agents: you can diagnose a missing or misconfigured signing key and show the commands above, but you cannot generate a key or register it in GitHub on the user's behalf. Key generation and registration (GitHub Settings → SSH and GPG keys) require user action.
