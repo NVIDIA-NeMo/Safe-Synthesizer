@@ -205,8 +205,8 @@ flowchart TB
     pydantic --> collect
     collect --> leaf & flag
 
-    flag -->|"--no_replace_pii"| parse
-    flag -->|"--no_privacy"| parse
+    flag -->|"--no-replace-pii"| parse
+    flag -->|"--no-privacy"| parse
     leaf -->|"--training__lr etc"| parse
 
     parse -->|"overrides dict"| clisettings
@@ -229,12 +229,10 @@ flowchart TB
     dp_p --> dp_check
 ```
 
-Configuration precedence (highest to lowest):
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
-1. CLI flags / SDK `with_*()` overrides
-2. Dataset registry overrides
-3. YAML config file
-4. Pydantic model defaults (including `default_factory`)
+- CLI: CLI flags > dataset registry overrides > YAML config file > defaults
+- SDK: Python SDK builder calls > YAML config file > defaults
 
 Nullable sub-configs (`PiiReplacerConfig | None`, `DifferentialPrivacyHyperparams | None`)
 use `None` as the sole disabled signal. The `@pydantic_options` decorator auto-generates
@@ -318,7 +316,7 @@ Path: `src/nemo_safe_synthesizer/training/`
 
 | Backend | Description |
 |---------|-------------|
-| **HuggingFaceBackend** | Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via Opacus |
+| **HuggingFaceBackend** | Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via [Opacus](https://opacus.ai/) |
 | **UnslothBackend** | Optimized training with Unsloth library |
 
 ### 4. Generation Backend

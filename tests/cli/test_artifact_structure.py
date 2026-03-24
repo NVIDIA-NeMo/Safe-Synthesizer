@@ -335,10 +335,10 @@ class TestWorkdir:
     def test_generate_files(self, workdir: Workdir):
         """Generate directory contains expected files."""
         gen = workdir.generate
-        assert gen.config == gen.path / "safe-synthesizer-config.json"
         assert gen.logs == gen.path / "logs.jsonl"
         assert gen.output == gen.path / "synthetic_data.csv"
         assert gen.report == gen.path / "evaluation_report.html"
+        assert gen.evaluation_metrics == gen.path / "evaluation_metrics.json"
 
     # =========================================================================
     # Dataset directory structure
@@ -378,6 +378,10 @@ class TestWorkdir:
     def test_evaluation_report_alias(self, workdir: Workdir):
         """evaluation_report shortcut matches full path."""
         assert workdir.evaluation_report == workdir.generate.report
+
+    def test_evaluation_metrics_alias(self, workdir: Workdir):
+        """evaluation_metrics shortcut matches full path."""
+        assert workdir.evaluation_metrics == workdir.generate.evaluation_metrics
 
     # =========================================================================
     # Directory creation

@@ -3,14 +3,14 @@
 
 # PII Replacement
 
-PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model has no chance of learning the most sensitive information like names, addresses, and other identifiers.
+PII (Personally Identifiable Information) replacement is a critical privacy protection step that detects and replaces sensitive information in your datasets before synthesis. This ensures that the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data.
 
 ## How It Works
 
 The PII replacement pipeline operates in multiple stages:
 
 1. Detection: Classifies PII entities within free text and entire columns.
-2. Replacement: Transforms PII using configurable rules.
+2. Replacement: Substitutes PII using configurable rules.
 
 ## Detection Methods
 
@@ -35,6 +35,13 @@ After detection, PII can be handled in multiple ways:
 
 ## Supported Entity Types
 GLiNER PII will attempt to identify any custom entity type you provide. However, it has specifically been fine-tuned to detect the following entities, organized by category:
+
+!!! note "Default entity set"
+    The default configuration detects and replaces a focused subset of these entities: `first_name`,
+    `last_name`, `name`, `street_address`, `city`, `state`, `postcode`, `address`, `phone_number`,
+    `fax_number`, `email`, `ssn`, `national_id`, `tax_id`, and `credit_debit_card`. To detect additional
+    entity types, add them to `replace_pii.globals.classify.entities` and
+    `replace_pii.globals.ner.ner_entities` in your configuration. Also add replacement steps to `replace_pii.steps`.
 
 ### Personal Information
 - `first_name` - Given names
@@ -126,12 +133,6 @@ GLiNER PII will attempt to identify any custom entity type you provide. However,
 
 Beyond these built-in types, you can define custom entities using:
 
-- GLiNER PII: Fast, accurate zero-shot NER for standard and custom entity types
-- Regex: Deterministic pattern matching, best for consistent formats (SSN, credit cards)
-- LLM: Contextual understanding, handles complex patterns and ambiguous cases
-
-#### Example custom entity
-
 ```yaml title="Custom entity configuration"
 globals:
   classify:
@@ -171,9 +172,4 @@ Consider using PII replacement when:
 - You want to ensure the model cannot memorize sensitive values
 - You need to share synthetic data with external parties
 
-PII replacement is the default preprocessing step before synthesis.
-
-## Related Topics
-
-- [Hands-on PII replacement tutorial](../tutorials/pii-replacement.md)
-- [Tutorials](../tutorials/index.md): More tutorials
+PII replacement is on by default as a pre-processing step before synthesis.

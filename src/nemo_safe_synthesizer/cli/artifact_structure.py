@@ -12,7 +12,6 @@ hard-coding strings throughout the CLI.
 Typical directory tree:
 
     <base_path>/<config>---<dataset>/<run_name>/
-    - safe-synthesizer-config.json
     - train/  ...
     - generate/  ...
     - dataset/  ...
@@ -282,23 +281,27 @@ class Workdir:
     Full directory structure:
 
         <base_path>/<config>---<dataset>/<run_name>/
-        - safe-synthesizer-config.json
         - train/
           - safe-synthesizer-config.json
-          - adapter/
+          - cache/
+          - adapter/                     (trained PEFT adapter)
             - adapter_config.json
+            - adapter_model.safetensors
             - metadata_v2.json
             - dataset_schema.json
         - generate/
-          - safe-synthesizer-config.json
-          - logs.jsonl
+          - logs.jsonl                   (generate-only workflow)
+          - info.json                    (generate-only workflow)
           - synthetic_data.csv
           - evaluation_report.html
+          - evaluation_metrics.json      (machine-readable metrics)
         - dataset/
           - training.csv
           - test.csv
-          - validation.csv
-          - transformed_training.csv  (inspection artifact, only written if input is transformed and different from training.csv)
+          - validation.csv               (when training.validation_ratio > 0)
+          - transformed_training.csv     (when PII replacement transforms the data)
+        - logs/
+          - <phase>.jsonl                (e.g. end_to_end.jsonl or train.jsonl)
 
     """
 
@@ -359,10 +362,10 @@ class Workdir:
     # Generate directory structure
     generate = DirNode(
         "generate",
-        config=FileNode("safe-synthesizer-config.json"),
         logs=FileNode("logs.jsonl"),
         output=FileNode("synthetic_data.csv"),
         report=FileNode("evaluation_report.html"),
+        evaluation_metrics=FileNode("evaluation_metrics.json"),
         info=FileNode("info.json"),
     )
     """Location and contents of generate directory structure."""
@@ -481,6 +484,11 @@ class Workdir:
     def evaluation_report(self) -> Path:
         """Shortcut to generate.report."""
         return self.generate.report  # type: ignore[return-value]
+
+    @property
+    def evaluation_metrics(self) -> Path:
+        """Shortcut to generate.evaluation_metrics."""
+        return self.generate.evaluation_metrics  # type: ignore[return-value]
 
     # =========================================================================
     # Source paths (for generation runs that have a parent training run)

@@ -311,7 +311,7 @@ Path: `src/nemo_safe_synthesizer/evaluation/`
 
 #### Privacy Module (`privacy/dp_transformers/`)
 
-- `OpacusDPTrainer`: Integration with Opacus for DP-SGD
+- `[Opacus](https://opacus.ai/)DPTrainer`: Integration with Opacus for DP-SGD
 - Privacy Arguments: DP hyperparameters
 - Custom Layers: DP-compatible layers
 
@@ -381,7 +381,7 @@ The execution follows a clear pipeline: Data → PII Replacement → Training �
 ```bash
 safe-synthesizer run \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --output-path synthetic.csv
 ```
 
@@ -438,17 +438,31 @@ results = synthesizer.results
 
 ## Output Artifacts
 
-```bash
+```text
 safe-synthesizer-artifacts/
-├── safe-synthesizer-model/
-│   ├── adapter_config.json
-│   ├── adapter_model.safetensors
-│   ├── metadata_v2.json
-│   └── training_args.bin
-├── safe-synthesizer-config.json
-├── dataset_schema.json
-├── synthetic_data.csv
-└── evaluation_report.html
+└── <config>---<dataset>/
+    └── <run_name>/
+        ├── train/
+        │   ├── safe-synthesizer-config.json
+        │   ├── cache/                          # training checkpoints and tokenized data
+        │   └── adapter/                        # trained PEFT adapter
+        │       ├── adapter_config.json
+        │       ├── adapter_model.safetensors
+        │       ├── metadata_v2.json
+        │       └── dataset_schema.json
+        ├── generate/
+        │   ├── logs.jsonl                      # generate-only workflow
+        │   ├── info.json                       # generate-only workflow
+        │   ├── synthetic_data.csv
+        │   ├── evaluation_report.html
+        │   └── evaluation_metrics.json         # machine-readable metrics
+        ├── dataset/
+        │   ├── training.csv
+        │   ├── test.csv
+        │   ├── validation.csv                  # when training.validation_ratio > 0
+        │   └── transformed_training.csv        # when PII replacement transforms the data
+        └── logs/
+            └── <phase>.jsonl                   # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 ---

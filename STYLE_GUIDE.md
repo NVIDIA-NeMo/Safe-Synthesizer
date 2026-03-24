@@ -357,11 +357,10 @@ Standard context managers (`with open(...)`, `with lock:`) are fine when they fi
 
 ```python
 try:
-    ss.run()
-    ss.save_results(workdir)
+    nss.run()  # saves results automatically
 finally:
-    if hasattr(ss, "generator") and ss.generator is not None:
-        ss.generator.teardown()
+    if hasattr(nss, "generator") and nss.generator is not None:
+        nss.generator.teardown()
 ```
 
 For backends with expensive resources, use the `_torn_down` guard pattern:
@@ -724,10 +723,10 @@ Testing conventions are substantial enough to warrant their own section. For the
 - Fixture scope: function-scoped by default. Session scope only when empirically justified by test runtime -- not based on assumptions about cost.
 - Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
 - Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
-- Markers: auto-assigned by path via `pytest_collection_modifyitems` (`/e2e/` -> `e2e`, `/gpu_integration/` -> `gpu_integration`, default -> `unit`). Explicit markers: `@pytest.mark.slow`, `@pytest.mark.timeout()`.
+- Markers: auto-assigned by path via `pytest_collection_modifyitems` (`/e2e/` -> `e2e`, `/smoke/` -> `smoke`, default -> `unit`). Explicit markers: `@pytest.mark.slow`, `@pytest.mark.requires_gpu`, `@pytest.mark.timeout()`.
 - `conftest.py`: shared fixtures per directory; root conftest has `load_test_dataset()` and `load_test_dataframe()` helpers
 - Use `tmp_path` fixture for file operations, never write to the repo tree
-- Mark CUDA-dependent tests with `@pytest.mark.e2e` or `@pytest.mark.gpu_integration`
+- Mark CUDA-dependent tests with `@pytest.mark.e2e`, `@pytest.mark.smoke`, or `@pytest.mark.requires_gpu`
 - Mock only external boundaries, not internal implementation details
 - Test isolation: no shared mutable state or execution-order dependencies between tests. If something must be run first before executing a test, include it in the test or a fixture.
 - Use `@pytest.mark.parametrize` for testing multiple input combinations rather than copy-pasting similar tests
@@ -746,14 +745,22 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 ## Dockerfiles
 
-The repo currently has one CI `Dockerfile` ([containers/Dockerfile.test_ci](containers/Dockerfile.test_ci)). These conventions apply to new `Dockerfile`s; the CI image follows a simpler pattern.
+Two Dockerfiles live in `containers/`:
+
+- [containers/Dockerfile.cuda](containers/Dockerfile.cuda) -- CUDA GPU image (deps/runtime/dev stages). The production reference for these conventions.
+- [containers/Dockerfile.test_ci](containers/Dockerfile.test_ci) -- CPU-only CI image (`make test-ci-container`).
+
+See [containers/README.md](containers/README.md) for build arguments and Makefile targets.
+
+Conventions for new or modified Dockerfiles:
 
 - Multi-stage builds for production images
 - Copy uv from `ghcr.io/astral-sh/uv:<version>`
-- `--mount=type=cache` for pip/uv caches
-- `--no-install-recommends` + `rm -rf /var/lib/apt/lists/*`
-- Non-root user (`appuser`)
-- `HEALTHCHECK` directives
+- `--mount=type=cache` for pip/uv caches and APT (`/var/cache/apt`, `/var/lib/apt/lists`). Prefer cache mounts over `rm -rf /var/lib/apt/lists/*` -- they speed up rebuilds and keep layers clean automatically
+- `ENV UV_LINK_MODE=copy` when using cache mounts (hardlinks into cache layers vanish after unmount)
+- `--no-install-recommends` on all `apt-get install` invocations
+- Non-root user (`appuser`) with `NVIDIA_VISIBLE_DEVICES=all` for GPU access
+- `tini` or `--init` for proper PID 1 signal handling in batch containers
 - Order `COPY` directives for cache efficiency (deps before source)
 - Comments explaining cache invalidation points
 

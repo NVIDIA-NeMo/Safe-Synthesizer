@@ -45,7 +45,7 @@ Precedence: `kwargs` override `values`; `values` override model defaults. Each `
 - generate(): Chooses `TimeseriesBackend` or `VllmBackend`, initializes, generates.
 - evaluate(): Builds `Evaluator`, compiles `results` via `make_nss_results`.
 
-`run()` calls `process_data().train().generate().evaluate()`.
+`run()` calls `process_data().train().generate().evaluate()` then `save_results()`. Stepwise callers must invoke `save_results()` themselves.
 
 ## Gotchas
 

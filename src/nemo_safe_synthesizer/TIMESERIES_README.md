@@ -413,7 +413,7 @@ Use the `safe-synthesizer run` command with a config file and data URL:
 
 ```bash
 EXPORT SHARED_DIR=/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer/configs
-uv run safe-synthesizer run --config $SHARED_DIR/smollm_grouped-utility.yaml --url $SHARED_DIR/synthetic_kpi_qoe_policy_dataset.csv
+uv run safe-synthesizer run --config $SHARED_DIR/smollm_grouped-utility.yaml --data-source $SHARED_DIR/synthetic_kpi_qoe_policy_dataset.csv
 ```
 
 ### Example Configuration (Grouped Time Series)
@@ -442,7 +442,6 @@ generation:
 training:
   batch_size: 1
   gradient_accumulation_steps: 8
-  learning_rate: 0.0005
   pretrained_model: HuggingFaceTB/SmolLM3-3B
 ```
 

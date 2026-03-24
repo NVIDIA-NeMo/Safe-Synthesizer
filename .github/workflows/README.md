@@ -11,8 +11,8 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 
 | Workflow                                           | Trigger                                  | Description                                           |
 | -------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, and unit tests (CPU)               |
-| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual  | GPU E2E tests (A100)                                  |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, unit tests, and CPU smoke tests    |
+| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual  | GPU smoke tests (required) and E2E tests (A100)       |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`          | Validates NVIDIA copyright headers on Python files    |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
@@ -59,16 +59,19 @@ flowchart LR
         format[Format]
         typecheck[Typecheck]
         unit[Unit Tests]
+        smoke_cpu[Smoke Tests]
         ci_status[CI Status]
-        changes_ci --> format & typecheck & unit
-        format & typecheck & unit --> ci_status
+        changes_ci --> format & typecheck & unit & smoke_cpu
+        format & typecheck & unit & smoke_cpu --> ci_status
     end
 
     subgraph gpu [GPU Tests - on-prem runners]
         changes_gpu[Detect Changes]
+        gpu_smoke[GPU Smoke Tests]
         e2e[GPU E2E Tests]
         gpu_status[GPU CI Status]
-        changes_gpu --> e2e --> gpu_status
+        changes_gpu --> gpu_smoke & e2e
+        gpu_smoke & e2e --> gpu_status
     end
 
     subgraph compliance [Compliance Workflows]
@@ -113,9 +116,12 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 | Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
 | Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
 | Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
-| Unit Tests | `test-ci` | pytest with coverage |
+| Unit Tests | `test-ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
+| Smoke Tests | `test-smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
 The `changes` detection job (using `dorny/paths-filter`) skips downstream jobs entirely when only non-source files are modified. Within each job, all tracked files are checked -- `ruff` and `ty` are fast enough for this to take seconds. The CI Status aggregation job is the single required check for branch protection.
+
+If a PR only touches workflow YAML, docs, or other non-source paths, format/typecheck/unit-test jobs are skipped. To verify new CI logic or satisfy reviewers: run `make check` and `make test` locally and note in the PR, or add a trivial Python change (e.g. docstring) to trigger the pipeline.
 
 To replicate CI locally:
 
@@ -123,6 +129,7 @@ To replicate CI locally:
 make check       # format-check + typecheck
 make lock-check  # verify uv.lock
 make test        # unit tests
+make test-smoke  # CPU smoke tests
 ```
 
 All jobs run on `ubuntu-latest` (GitHub-hosted).
@@ -131,10 +138,11 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
 
-- GPU E2E Tests: Runs end-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 60-minute job timeout and 45-minute step timeout
-- GPU CI Status: Aggregation job -- single required check for branch protection
+- GPU Smoke Tests: Quick smoke tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 30-minute job timeout and 20-minute step timeout. Required for merge.
+- GPU E2E Tests: End-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 55-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU CI Status: Aggregation job -- single required check for branch protection. Fails if smoke tests fail; warns if E2E tests fail.
 
-The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so the E2E job always runs on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
+The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so downstream jobs always run on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
 
 To trigger manually from the CLI (produces a run but not a PR status check):
 
@@ -149,6 +157,7 @@ To trigger from the PR UI and get a status check result, use `/sync` -- see [On-
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
+| GPU Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
 | GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
@@ -156,7 +165,7 @@ To trigger from the PR UI and get a status check result, use `/sync` -- see [On-
 
 ### Coverage
 
-Coverage reports are uploaded as artifacts from both workflows.
+Coverage reports are uploaded as artifacts from the unit test job.
 
 ## Compliance Workflows
 

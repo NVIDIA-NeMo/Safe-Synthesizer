@@ -68,6 +68,9 @@ NUM_EVAL_BATCHES_GROUPED = 1
 # It is excluded from JSONL conversion so the model never sees it.
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
 
+# default LLM inference endpoint for PII column classification.
+DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+
 # training +  parameters
 DEFAULT_BASE_SEQ_LENGTH = 2048
 MAX_ROPE_SCALING_FACTOR = 6

@@ -415,8 +415,11 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
+# Run CPU smoke tests (~10 seconds, no GPU required)
+make test-smoke
+
+# Run GPU smoke tests (requires CUDA)
+make test-smoke-gpu
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
@@ -431,9 +434,12 @@ make test-ci-container
 uv run pytest tests/cli/test_run.py
 ```
 
-### GPU E2E Tests (CI)
+### GPU Tests (CI)
 
-GPU E2E tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment.
+GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
+
+- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2, Unsloth). Required for merge.
+- GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
 
 When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
 
@@ -568,8 +574,8 @@ This project supports AI coding assistants. Configuration is layered so that con
 | `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
 | `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
 | `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
-| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
-| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `.agents/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agents/skills/` for Cursor discoverability |
 | `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.

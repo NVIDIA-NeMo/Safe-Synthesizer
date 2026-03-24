@@ -55,7 +55,7 @@ In `GenerationBatches.add_batch()`:
 ## Gotchas
 
 - `_resolve_temperature()` — forces `temperature=0.0` when `do_sample=False`; raises if `do_sample=False` and `temperature > 0`.
-- `need_special_token_outputs` — `True` when processor is not `TabularDataProcessor` (VllmBackend) or not `TimeSeriesDataProcessor` (TimeseriesBackend). When True: `skip_special_tokens=False`, `include_stop_str_in_output=True`, `ignore_eos=True`. Needed for GroupedDataProcessor BOS/EOS.
+- `need_special_token_outputs` — `True` when processor is not `TabularDataProcessor` (VllmBackend) or not `TimeSeriesDataProcessor` (TimeseriesBackend). When True: `skip_special_tokens=False`, `include_stop_str_in_output=True`. `ignore_eos` is always `False` (native EOS stopping). Needed for GroupedDataProcessor BOS/EOS.
 - Timeseries single valid response — `_retain_single_valid_response()` keeps only the response with the most valid records per batch; others trimmed for sliding-window continuity.
 - `typical_p` — wrapped as `TypicalLogitsWarperWrapper` (logits processor) because vLLM lacks native typical sampling.
 - `num_beams` — mapped to `beam_width` only when `x > 1`; otherwise `(None, None)` (excluded from SamplingParams).

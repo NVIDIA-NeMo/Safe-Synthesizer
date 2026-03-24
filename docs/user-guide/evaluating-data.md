@@ -12,12 +12,19 @@ For runtime errors, OOM issues, and configuration problems, see
 [Program Runtime](troubleshooting.md). For environment variables and model
 caching, see [Environment Variables](environment.md).
 
+There is always an inherent trade off between privacy and quality. A high level of privacy protection is achieved simply through the process of generating synthetic data, and is often a sufficient balance between privacy and utility. However, parameter tuning can often help you improve one without sacrificing the other.
+
+---
+
+## Row count
+
+Your dataset should have at least 1,000 records (10,000 records if enabling differential privacy). If you have fewer, both quality and privacy are likely to suffer considerably.
+
 ---
 
 ## Differential Privacy
 
-Differentially private (DP) training has strict requirements. Violating them produces errors that may
-not immediately point to the root cause.
+Differentially private (DP) training has strict requirements. Violating them produces errors that may not immediately point to the root cause.
 
 ### Requirements
 
@@ -36,7 +43,7 @@ Unable to automatically determine a noise multiplier
 ```
 
 The privacy budget (epsilon) is too low for your dataset size. Either increase
-`privacy.epsilon` or add more training records.
+`privacy.epsilon` or add more training records. Generally, you need a minimum of ~10,000 records to achieve reasonable quality when DP is enabled.
 
 ```text
 Discrete mean differs
@@ -82,8 +89,10 @@ or
 Could not perform classify, falling back to default entities.
 ```
 
-Fix: set entity types explicitly in your config, or check that `NIM_ENDPOINT_URL`
-is reachable. PII classify config is deeply nested -- use YAML or SDK:
+When `NSS_INFERENCE_KEY` is not set, the same log line is followed by guidance to set it (and a note that `NSS_INFERENCE_ENDPOINT` is optional with the default API). When the key is set, a traceback may be included to show the underlying API error.
+
+Fix: set entity types explicitly in your config, or when using the CLI ensure
+`NSS_INFERENCE_KEY` is set (and `NSS_INFERENCE_ENDPOINT` if not using the default). PII classify config is deeply nested -- use YAML or SDK:
 
 === "Config reference"
 
@@ -126,8 +135,8 @@ Several evaluation metrics have minimum data requirements:
 |--------|---------|-------------------|
 | Holdout split | 200 records | Raises `ValueError` (pipeline stops) |
 | Text semantic similarity | 200 records | Skipped; score marked UNAVAILABLE |
-| Attribute Inference Attack | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
-| PCA (deep structure) | 2x2 matrix | Skipped with warning; score marked UNAVAILABLE |
+| Attribute Inference Protection | FAISS installed + `evaluation.quasi_identifier_count` columns (default 3; auto-reduced for smaller datasets) | Skipped if FAISS missing; UNAVAILABLE if too few columns |
+| Deep Structure Stability | 2 columns, 2 rows | Skipped with warning; score marked UNAVAILABLE |
 
 ### UNAVAILABLE Metrics
 

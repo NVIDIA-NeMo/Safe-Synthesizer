@@ -102,7 +102,6 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def generate(
         self,
-        keep_llm_state: bool = True,
         data_actions_fn: utils.DataActionsFn | None = None,
     ) -> GenerateJobResults:
         """Run the batch generation loop and return aggregated results.
@@ -116,9 +115,6 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
         batch.
 
         Args:
-            keep_llm_state: If ``True``, keep the model in GPU memory
-                after generation for potential reuse.  If ``False``,
-                GPU resources are freed immediately on completion.
             data_actions_fn: Optional post-processing / validation
                 function applied to each batch of generated records.
                 Typically reverses training-time preprocessing and

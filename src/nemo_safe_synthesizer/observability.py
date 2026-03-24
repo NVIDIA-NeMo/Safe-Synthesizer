@@ -119,12 +119,21 @@ class NSSObservabilitySettings(BaseSettings):
     @field_validator("nss_log_format", mode="before")
     @classmethod
     def set_log_format_default(cls, value: Any) -> Literal["json", "plain"]:
-        """Set nss_log_format default based on whether stdout is a tty at instantiation time."""
+        """Set nss_log_format default based on whether stdout is a tty or notebook."""
         match value:
             case str():
                 return value.lower()
+            case _ if sys.stdout.isatty():
+                return "plain"
             case _:
-                return "plain" if sys.stdout.isatty() else "json"
+                try:
+                    from IPython import get_ipython
+
+                    if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
+                        return "plain"
+                except (ImportError, AttributeError):
+                    pass
+                return "json"
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
@@ -211,9 +220,9 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
             # need special formatting (e.g., the "loss", "eval_loss" exclusion list).
             if isinstance(value, float):
                 if key not in ("loss", "eval_loss") and value < 1 and value > 0:
-                    display_value = f"{value:.3%}"
+                    display_value = f"{value:.2%}"
                 else:
-                    display_value = f"{value:.3f}"
+                    display_value = f"{value:.2f}"
             else:
                 display_value = str(value)
             table.add_row(display_key, display_value)

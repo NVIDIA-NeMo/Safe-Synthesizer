@@ -18,7 +18,7 @@ Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
 make bootstrap-tools
 ```
 
-Then bootstrap the project package with your desired extras - likely `cpu|cuda` .
+Then bootstrap the project package with your desired extras -- likely `cpu|cuda`.
 
 ```bash
 # CPU-only (for development on Linux without GPU, or macOS)
@@ -36,7 +36,7 @@ make bootstrap-nss dev
 
 ## Running
 
-Run the CLI using `safe-synthesizer`:
+Activate Python virtual environment and run the CLI using `safe-synthesizer`:
 
 ```bash
 > safe-synthesizer --help
@@ -71,7 +71,7 @@ Usage: safe-synthesizer run [OPTIONS] COMMAND [ARGS]...
 
 Options:
   --config TEXT                   path to a yaml config file
-  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+  --data-source TEXT                      Dataset name, URL, or path to CSV dataset.
                                   For 'run generate', this is optional if a
                                   cached dataset exists in the workdir.
   --artifact-path DIRECTORY       Base directory for all runs. Runs are
@@ -106,7 +106,7 @@ Options:
                                   dependencies too
   --dataset-registry TEXT         URL or path of a dataset registry YAML file.
                                   If provided, datasets in the registry may be
-                                  referenced by name in --url. Can also be set
+                                  referenced by name in --data-source. Can also be set
                                   via NSS_DATASET_REGISTRY env var. If both
                                   env var and CLI option are provided, the CLI
                                   option takes precedence.
@@ -137,7 +137,7 @@ Usage: safe-synthesizer run generate [OPTIONS]
 
 Options:
   --config TEXT                   path to a yaml config file
-  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+  --data-source TEXT                      Dataset name, URL, or path to CSV dataset.
                                   [required]
   --artifact-path DIRECTORY       Base directory for all runs. Runs are
                                   created as <artifact-path>/<config>-
@@ -207,7 +207,7 @@ training:
 
 ```bash
 # CLI override
-safe-synthesizer run --training__attn_implementation sdpa --url my_data.csv
+safe-synthesizer run --training__attn_implementation sdpa --data-source my_data.csv
 ```
 
 | Value | Description | Requires |
@@ -235,17 +235,19 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_AT
 ## NIM Integration
 
 Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
-in your data. The endpoint is configured via `NIM_ENDPOINT_URL`; if it is unset,
-classification is skipped and the pipeline falls back to default entity detection,
-logging an error and falling back rather than raising it to the user.
+in your data. `NSS_INFERENCE_ENDPOINT` defaults to `https://integrate.api.nvidia.com/v1`;
+override it to use a different endpoint.
+
+When using the CLI or Python SDK, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
+using the default) so column classification can run.
 
 ### Local Endpoint
 
 To point to a locally hosted LLM:
 
 ```bash
-export NIM_ENDPOINT_URL="https://your-local-nim-endpoint"
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret
+export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
 ### Disable Classification
@@ -271,22 +273,26 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
-├── safe-synthesizer-config.json  # Root config for the run
 ├── train/
 │   ├── safe-synthesizer-config.json
-│   └── adapter/                  # Trained PEFT adapter
+│   └── adapter/                     # trained PEFT adapter
 │       ├── adapter_config.json
+│       ├── adapter_model.safetensors
 │       ├── metadata_v2.json
 │       └── dataset_schema.json
 ├── generate/
-│   ├── safe-synthesizer-config.json
-│   ├── logs.jsonl               # Generation logs
-│   ├── synthetic_data.csv       # Default output location
-│   └── evaluation_report.html   # HTML evaluation report
-└── dataset/                      # Processed dataset splits
-    ├── training.csv
-    ├── test.csv
-    └── validation.csv
+│   ├── logs.jsonl                   # generate-only workflow
+│   ├── info.json                    # generate-only workflow
+│   ├── synthetic_data.csv
+│   ├── evaluation_report.html
+│   └── evaluation_metrics.json      # machine-readable metrics
+├── dataset/
+│   ├── training.csv
+│   ├── test.csv
+│   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
+└── logs/
+    └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 ### Run Names
@@ -339,11 +345,11 @@ If both are provided, the CLI option takes precedence.
 
 ### Referencing Datasets
 
-When a dataset registry is provided, you can use dataset names defined in the registry with the `--url` argument.
+When a dataset registry is provided, you can use dataset names defined in the registry with the `--data-source` argument.
 For example:
 
 ```bash
-nemo-safe-synthesizer run --dataset-registry my_registry.yaml --url my_dataset
+nemo-safe-synthesizer run --dataset-registry my_registry.yaml --data-source my_dataset
 ```
 
 This will load the dataset from the url plus apply any overrides for `my_dataset` from the registry YAML.
@@ -375,7 +381,7 @@ datasets:
 `url` may be a URL or a file path, anything that data readers like `pd.read_csv` will accept.
 - `base_url` - Any relative urls or paths will be prepended with the `base_url` before attempting to load the dataset.
 This only applies to the named datasets in the registry which have a relative url.
-Passing a relative `--url` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
+Passing a relative `--data-source` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
 `base_url` is optional, if not provided, it is recommended to use absolute urls or file paths for all entries.
 - `overrides` - Dataset specific config overrides, such as a dataset that should always be run with `group_training_examples_by`.
 Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.
@@ -396,7 +402,7 @@ See [script/slurm/README.md](script/slurm/README.md) for detailed instructions o
 
 ## Testing
 
-We have pytest set up for unit, integration, and end-to-end tests.
+We have pytest set up for unit, smoke, and end-to-end tests.
 
 ### Running Tests
 
@@ -409,8 +415,11 @@ make test
 # Run all tests including slow tests (excludes e2e)
 make test-slow
 
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
+# Run CPU smoke tests (~few min, no GPU required)
+make test-smoke
+
+# Run GPU smoke tests (requires CUDA)
+make test-smoke-gpu
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
