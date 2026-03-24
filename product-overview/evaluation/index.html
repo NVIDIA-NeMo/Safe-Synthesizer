@@ -8524,7 +8524,7 @@
 <p>PII Replay counts the total and unique instances of personally identifiable information (PII) from your training data that show up in your synthetic data. Lower counts indicate higher privacy.</p>
 <p>You should expect some PII replay, and it is often not a cause for concern. We typically see rarer entities (for example, full address, full name) replayed less frequently than common ones (for example, first name, U.S. state). To reduce replay, we recommend enabling <a href="../pii_replacement/">Replace PII</a> before synthesis.</p>
 <h2 id="evaluation-reports">Evaluation Reports<a class="headerlink" href="#evaluation-reports" title="Permanent link">&para;</a></h2>
-<p>Every Safe Synthesizer job automatically generates an HTML evaluation report saved to <code>generate/evaluation_report.html</code> inside the run directory (by default <code>./safe-synthesizer-artifacts/&lt;config&gt;---&lt;dataset&gt;/&lt;run_name&gt;/</code>). The report contains:</p>
+<p>Every Safe Synthesizer job automatically generates an HTML evaluation report saved to <code>generate/evaluation_report.html</code> inside the run directory (by default <code>./safe-synthesizer-artifacts/&lt;config&gt;---&lt;dataset&gt;/&lt;run_name&gt;/</code>). A machine-readable companion file, <code>generate/evaluation_metrics.json</code>, contains the same scores and timing data as structured JSON. The report contains:</p>
 <ul>
 <li>Overall SQS and DPS scores</li>
 <li>Statistics describing the training and synthetic data</li>
