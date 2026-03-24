@@ -207,7 +207,7 @@ class TrainingHyperparams(Parameters):
         str,
         Field(
             title="pretrained_model",
-            description="Pretrained model to use for fine-tuning. Defaults to SmolLM3.",
+            description="Pretrained model to use for fine-tuning. Defaults to SmolLM3. Models are downloaded from HF Hub, see security note in docs before using untrusted sources.",
         ),
     ] = "HuggingFaceTB/SmolLM3-3B"
 
