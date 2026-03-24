@@ -176,7 +176,7 @@ def comments(
         top_level=top_level,
     )
     # Single JSON object, written once (no sys.stdout / multiple writes).
-    print(out.model_dump_json(indent=2))  # noqa: T201
+    print(out.model_dump_json(indent=2))
 
 
 @app.command()
@@ -248,7 +248,7 @@ def reply(
     pr.create_review_comment_reply(int(comment_id), reply_text)
 
     result = ReplyOutput(comment_id=int(comment_id), body=reply_text)
-    print(result.model_dump_json(indent=2))  # noqa: T201
+    print(result.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":
