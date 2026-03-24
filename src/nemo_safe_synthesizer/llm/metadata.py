@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 
 from pydantic import (
     BaseModel,
@@ -681,7 +681,7 @@ class Granite(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -708,8 +708,8 @@ class Granite(ModelMetadata):
 class Llama32(ModelMetadata):
     """Metadata for Meta Llama 3.2 model family.
 
-    Uses ``<|im_start|>`` (id 151644) as the BOS token and disables
-    automatic BOS/EOS injection in prompts.
+    Uses ``<|im_start|>`` as the BOS token and disables automatic
+    BOS/EOS injection in prompts.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -721,12 +721,13 @@ class Llama32(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
         config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
+        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
         super().__init__(
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
@@ -735,7 +736,7 @@ class Llama32(ModelMetadata):
                 tokenizer=tokenizer,
                 template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 bos_token="<|im_start|>",
-                bos_token_id=151644,
+                bos_token_id=im_start_id,
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=False,
             ),
@@ -807,7 +808,7 @@ class Nemotron(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -844,7 +845,7 @@ class Qwen(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -885,7 +886,7 @@ class SmolLM2(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -919,9 +920,9 @@ class SmolLM2(ModelMetadata):
 class SmolLM3(ModelMetadata):
     """Metadata for HuggingFace SmolLM3 model family.
 
-    Uses ``<|im_start|>`` (id 128011) as the BOS token.  RoPE scaling
-    is not supported. Any supplied ``rope_scaling_factor`` will be
-    ignored with a warning.
+    Uses ``<|im_start|>`` as the BOS token.  RoPE scaling is not
+    supported. Any supplied ``rope_scaling_factor`` will be ignored
+    with a warning.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -933,7 +934,7 @@ class SmolLM3(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -942,7 +943,7 @@ class SmolLM3(ModelMetadata):
         # we use the bos token here explicitly for support during group-by SFT.
         # the groupby assumes there is a bos token at the start of the prompt.
         bos_token = "<|im_start|>"
-        bos_token_id = 128011
+        bos_token_id = tokenizer.convert_tokens_to_ids(bos_token)
 
         # SmolLM3 uses high theta values (1.5M-5M) so it's important to read from config
         if rope_scaling_factor:
@@ -983,7 +984,7 @@ class TinyLlama(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:

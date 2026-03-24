@@ -127,7 +127,7 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=False,
         expected_add_eos=False,
         expected_bos_token="<|im_start|>",
-        expected_bos_token_id=151644,
+        expected_bos_token_id=1,
     ),
     ModelInitScenario(
         id="smollm2",
@@ -148,7 +148,7 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=True,
         expected_add_eos=False,
         expected_bos_token="<|im_start|>",
-        expected_bos_token_id=128011,
+        expected_bos_token_id=1,
         use_global_max_seq=True,
     ),
     ModelInitScenario(
