@@ -759,6 +759,7 @@ class SmolLM2(ModelMetadata):
                 f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
             )
 
+        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
         super().__init__(
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
@@ -768,7 +769,7 @@ class SmolLM2(ModelMetadata):
                 add_eos_token_to_prompt=False,
                 tokenizer=tokenizer,
                 bos_token="<|im_start|>",
-                bos_token_id=151644,
+                bos_token_id=im_start_id,
                 name=model_name_or_path,
             ),
             model_name_or_path=model_name_or_path,
