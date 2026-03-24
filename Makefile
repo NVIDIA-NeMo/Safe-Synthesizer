@@ -408,6 +408,43 @@ endif
 		dist/*.whl
 	@echo "published: $$(ls dist/*.whl)"
 
+TEST_PYPI_URL := https://test.pypi.org/legacy/
+
+.PHONY: publish-test-pypi
+publish-test-pypi: build-wheel ## Build and publish wheel to Test PyPI. Uses TWINE_USERNAME and TWINE_PASSWORD env vars.
+ifndef TWINE_USERNAME
+	$(error TWINE_USERNAME is not set. For token auth, set TWINE_USERNAME=__token__.)
+endif
+ifndef TWINE_PASSWORD
+	$(error TWINE_PASSWORD is not set. For token auth, set TWINE_PASSWORD=<your-test-pypi-token>.)
+endif
+	@echo "~~~~~~"
+	@echo "uploading to Test PyPI: $(TEST_PYPI_URL)"
+	uvx twine upload \
+		--repository-url $(TEST_PYPI_URL) \
+		--non-interactive \
+		--verbose \
+		dist/*.whl
+	@echo "published to Test PyPI: $$(ls dist/*.whl)"
+	@echo "install with: pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ nemo-safe-synthesizer"
+
+.PHONY: publish-pypi-manual
+publish-pypi-manual: build-wheel ## Build and publish wheel to PyPI with personal credentials. Uses PYPI_USERNAME and PYPI_PASSWORD env vars.
+ifndef PYPI_USERNAME
+	$(error PYPI_USERNAME is not set. For token auth, set PYPI_USERNAME=__token__.)
+endif
+ifndef PYPI_PASSWORD
+	$(error PYPI_PASSWORD is not set. For token auth, set PYPI_PASSWORD=<your-pypi-token>.)
+endif
+	@echo "~~~~~~"
+	@echo "uploading to PyPI (manual)"
+	TWINE_USERNAME=$(PYPI_USERNAME) TWINE_PASSWORD=$(PYPI_PASSWORD) \
+	uvx twine upload \
+		--non-interactive \
+		--verbose \
+		dist/*.whl
+	@echo "published: $$(ls dist/*.whl)"
+
 
 ### NMP SYNCHRONIZATION ###
 

@@ -16,6 +16,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`          | Validates NVIDIA copyright headers on Python files    |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
+| [dev-wheel.yml](dev-wheel.yml)                     | Push to `main`, manual                   | Builds and publishes dev wheel to Test PyPI           |
 | [internal-release.yml](internal-release.yml)       | Tag push (`v[0-9]*`), manual dispatch    | Builds and publishes wheel to Artifactory or PyPI     |
 | [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to PyPI (production)     |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                                      | Scans for accidentally committed secrets              |
@@ -87,15 +88,22 @@ flowchart LR
         slackNotify[Slack Notification]
     end
 
+    subgraph devWheel [Dev Wheel]
+        buildWheelDev[Build Wheel]
+        publishTestPyPI[Publish to Test PyPI]
+        publishArtifactoryDev["Publish to Artifactory (best-effort)"]
+        buildWheelDev --> publishTestPyPI & publishArtifactoryDev
+    end
+
     subgraph internalRelease [Internal Release]
         buildWheelInt[Build Wheel]
         publishArtifactory[Publish to Artifactory/PyPI]
     end
 
-    push --> ci & gpu
+    push --> ci & gpu & devWheel
     cpb --> gpu & copyright
     pr --> ci & conventional & secrets
-    manual --> release
+    manual --> release & devWheel
     tag[Tag push v[0-9]*] --> internalRelease
 
     buildWheel --> publishPyPI --> ghRelease --> slackNotify
@@ -202,6 +210,60 @@ Scans PRs for accidentally committed secrets. False positives can be added to `.
 
 Validates that Python files have proper NVIDIA copyright headers.
 
+## Dev Wheel Workflow
+
+The `dev-wheel.yml` workflow builds a dev wheel on every push to `main` and publishes it to [Test PyPI](https://test.pypi.org/). Artifactory is a best-effort secondary target. It can also be triggered manually via `workflow_dispatch`.
+
+### Version Format
+
+Dev versions are produced by `uv-dynamic-versioning` from git tags. With `metadata = false` and `bump = true` in `pyproject.toml`, the format is:
+
+- On a tagged commit (e.g. `v0.1.0`): `0.1.0`
+- N commits past a tag: `0.1.1.devN` (patch bumped, no local segment)
+
+The `metadata = false` setting strips the `+commit` local segment that PyPI and Test PyPI reject. The `bump = true` setting increments the patch for dev versions, producing cleaner version strings.
+
+### Prerequisites
+
+Before the first publish, create a proper version tag on `main`:
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+Without a version tag, dev versions will be based on the fallback `0.0.0`.
+
+### Installing Dev Wheels
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ \
+    --extra-index-url https://pypi.org/simple/ \
+    nemo-safe-synthesizer
+```
+
+The `--extra-index-url` is needed because Test PyPI doesn't host the project's dependencies -- they're fetched from production PyPI.
+
+### Publishing Locally
+
+To Test PyPI:
+
+```bash
+export TWINE_USERNAME=__token__
+export TWINE_PASSWORD=<your-test-pypi-token>
+make publish-test-pypi
+```
+
+To production PyPI (manual, uses separate credentials from CI):
+
+```bash
+export PYPI_USERNAME=__token__
+export PYPI_PASSWORD=<your-pypi-token>
+make publish-pypi-manual
+```
+
+This target uses `PYPI_USERNAME` / `PYPI_PASSWORD` instead of `TWINE_USERNAME` / `TWINE_PASSWORD` so local credentials don't collide with the CI secrets used by `release.yml`.
+
 ## Internal Release Workflow
 
 The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory or PyPI.
@@ -302,19 +364,21 @@ The release workflow automatically bumps the PATCH version (or PRE_RELEASE for r
 
 The following secrets must be configured in GitHub repository settings:
 
-| Secret                      | Purpose                      |
-| --------------------------- | ---------------------------- |
-| `TWINE_USERNAME`            | PyPI username                |
-| `TWINE_PASSWORD`            | PyPI API token               |
-| `SLACK_WEBHOOK_ADMIN`       | Slack admin notifications    |
-| `SLACK_RELEASE_ENDPOINT`    | Slack release notifications  |
-| `PAT`                       | GitHub Personal Access Token |
-| `SSH_KEY`                   | GPG signing key              |
-| `SSH_PWD`                   | GPG key passphrase           |
-| `BOT_KEY`                   | GitHub App private key       |
-| `ARTIFACTORY_USERNAME`      | NVIDIA Artifactory username  |
-| `ARTIFACTORY_TOKEN`         | NVIDIA Artifactory API key   |
-| `ARTIFACTORY_INTERNAL_URL`  | NVIDIA Artifactory repo URL  |
+| Secret                      | Purpose                          |
+| --------------------------- | -------------------------------- |
+| `TWINE_USERNAME`            | PyPI username                    |
+| `TWINE_PASSWORD`            | PyPI API token                   |
+| `TEST_PYPI_USERNAME`        | Test PyPI username (`__token__`) |
+| `TEST_PYPI_PASSWORD`        | Test PyPI API token              |
+| `SLACK_WEBHOOK_ADMIN`       | Slack admin notifications        |
+| `SLACK_RELEASE_ENDPOINT`    | Slack release notifications      |
+| `PAT`                       | GitHub Personal Access Token     |
+| `SSH_KEY`                   | GPG signing key                  |
+| `SSH_PWD`                   | GPG key passphrase               |
+| `BOT_KEY`                   | GitHub App private key           |
+| `ARTIFACTORY_USERNAME`      | NVIDIA Artifactory username      |
+| `ARTIFACTORY_TOKEN`         | NVIDIA Artifactory API key       |
+| `ARTIFACTORY_INTERNAL_URL`  | NVIDIA Artifactory repo URL      |
 
 | Variable | Purpose       |
 | -------- | ------------- |

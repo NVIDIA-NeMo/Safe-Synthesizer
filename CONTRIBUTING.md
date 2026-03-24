@@ -19,6 +19,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Testing](#testing)
 - [Code Style](#code-style)
 - [Documentation](#documentation)
+- [Releases and Publishing](#releases-and-publishing)
 
 ## Getting Started
 
@@ -563,6 +564,93 @@ API reference pages are auto-generated from Python docstrings. The `mkdocstrings
 ### Deployment
 
 Documentation is deployed to GitHub Pages automatically when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main`. The workflow is defined in `.github/workflows/docs.yml`.
+
+## Releases and Publishing
+
+This project publishes wheels to three destinations depending on the release stage. All versioning is derived from git tags via `uv-dynamic-versioning` -- there is no manual version file to edit.
+
+### Version Format
+
+Versions follow PEP 440 and are computed automatically at build time:
+
+- Tagged commit (e.g. `v0.1.0`): `0.1.0`
+- N commits past a tag: `0.1.1.devN` (patch bumped, no local segment)
+
+The `[tool.uv-dynamic-versioning]` section in `pyproject.toml` controls this. The `metadata = false` setting strips the `+commit` local segment that PyPI rejects, and `bump = true` increments the patch for dev versions.
+
+### Dev Wheels (Test PyPI)
+
+Dev wheels are published to [Test PyPI](https://test.pypi.org/) automatically on every push to `main` that changes source files. The workflow is [`dev-wheel.yml`](.github/workflows/dev-wheel.yml).
+
+Install a dev wheel:
+
+```bash
+pip install --index-url https://test.pypi.org/simple/ \
+    --extra-index-url https://pypi.org/simple/ \
+    nemo-safe-synthesizer
+```
+
+The `--extra-index-url` is needed because Test PyPI doesn't host the project's dependencies.
+
+To publish manually:
+
+```bash
+export TWINE_USERNAME=__token__
+export TWINE_PASSWORD=<your-test-pypi-token>
+make publish-test-pypi
+```
+
+### Internal Releases (Artifactory)
+
+Pushing a version tag to `main` triggers [`internal-release.yml`](.github/workflows/internal-release.yml), which builds a wheel and publishes it to NVIDIA Artifactory:
+
+```bash
+git tag v0.2.0
+git push --tags
+```
+
+The same workflow can be triggered manually via Actions > Internal Release with a choice of `artifactory` or `pypi` as the publish target.
+
+To publish to Artifactory locally:
+
+```bash
+export TWINE_REPOSITORY_URL=<artifactory-repo-url>
+export TWINE_USERNAME=<your-username>
+export TWINE_PASSWORD=<your-api-key>
+make publish-internal
+```
+
+### Production Releases (PyPI)
+
+Full production releases use [`release.yml`](.github/workflows/release.yml), which delegates to the [FW-CI-templates `_release_library.yml`](https://github.com/NVIDIA-NeMo/FW-CI-templates) reusable workflow. This is a manual-dispatch-only workflow that:
+
+1. Validates the wheel can be built (dry-run)
+2. Creates a version-bump PR
+3. Builds and publishes the wheel to PyPI (or Test PyPI for dry runs)
+4. Creates a GitHub release with changelog
+5. Sends a Slack notification
+
+To trigger: Actions > Release NeMo Safe Synthesizer, then fill in the commit SHA or tag, set `dry-run` to `false` for a real release, and specify the version-bump branch.
+
+To publish to production PyPI locally with personal credentials (separate from CI):
+
+```bash
+export PYPI_USERNAME=__token__
+export PYPI_PASSWORD=<your-pypi-token>
+make publish-pypi-manual
+```
+
+### Publishing Summary
+
+| Destination | Trigger | Workflow | Makefile target |
+| --- | --- | --- | --- |
+| Test PyPI | Push to `main`, manual | `dev-wheel.yml` | `make publish-test-pypi` |
+| Artifactory | Tag push `v[0-9]*`, manual | `internal-release.yml` | `make publish-internal` |
+| PyPI (production) | Manual dispatch | `release.yml` | `make publish-pypi` (CI) / `make publish-pypi-manual` (local) |
+
+### Required Secrets
+
+See [`.github/workflows/README.md`](.github/workflows/README.md#required-secrets) for the full list of secrets that must be configured in GitHub repository settings.
 
 ## AI Agents
 

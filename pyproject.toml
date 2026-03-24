@@ -310,6 +310,10 @@ source = "uv-dynamic-versioning"
 fallback-version = "0.0.0"
 vcs = "git"
 style = "pep440"
+# metadata=false strips the +commit local segment that PyPI/Test PyPI reject.
+# bump=true increments the patch for dev versions (e.g. 0.1.1.dev3 instead of 0.1.0.post3.dev0).
+metadata = false
+bump = true
 
 
 [tool.hatch.build.targets.wheel]

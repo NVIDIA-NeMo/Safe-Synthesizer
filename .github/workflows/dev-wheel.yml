@@ -13,19 +13,22 @@
 # limitations under the License.
 
 # ---------------------------------------------------------------------------
-# Dev wheel: build and publish to NVIDIA Artifactory on every merge to main.
-# Version is determined from git tags via uv-dynamic-versioning (PEP 440 dev
-# releases, e.g. 0.2.1.dev3+gabcdef for 3 commits past v0.2.0).
+# Dev wheel: build and publish to Test PyPI on every merge to main.
+# Also publishes to NVIDIA Artifactory when credentials are available.
+# Version is determined from git tags via uv-dynamic-versioning (PEP 440 dev releases).
 # Skips docs/config-only merges using the detect-changes action.
+#
+# Install dev wheels with:
+#   pip install --index-url https://test.pypi.org/simple/ \
+#       --extra-index-url https://pypi.org/simple/ nemo-safe-synthesizer
 # ---------------------------------------------------------------------------
 
 name: "Dev Wheel"
 
 on:
-  # Disabled due to connectivity issues
-  # push:
-  #   branches:
-  #    - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 defaults:
@@ -69,12 +72,8 @@ jobs:
           fetch-depth: 0
           bootstrap-tools: "false"
 
-      - name: Build and publish
-        run: make publish-internal
-        env:
-          TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
-          TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_TOKEN }}
+      - name: Build wheel
+        run: make build-wheel
 
       - name: Show built version
         id: version
@@ -83,6 +82,31 @@ jobs:
           VERSION=$(echo "$WHEEL" | sed -n 's/.*-\([0-9][^-]*\)-.*/\1/p')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Built: $WHEEL (version $VERSION)"
+
+      - name: Publish to Test PyPI
+        run: |
+          uvx twine upload \
+            --repository-url https://test.pypi.org/legacy/ \
+            --non-interactive \
+            --verbose \
+            dist/*.whl
+        env:
+          TWINE_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_PASSWORD }}
+
+      - name: Publish to Artifactory
+        if: ${{ secrets.ARTIFACTORY_INTERNAL_URL != '' }}
+        continue-on-error: true
+        run: |
+          uvx twine upload \
+            --repository-url "$TWINE_REPOSITORY_URL" \
+            --non-interactive \
+            --verbose \
+            dist/*.whl
+        env:
+          TWINE_REPOSITORY_URL: ${{ secrets.ARTIFACTORY_INTERNAL_URL }}
+          TWINE_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.ARTIFACTORY_TOKEN }}
 
       - name: Upload wheel as artifact
         uses: actions/upload-artifact@v7
