@@ -52,7 +52,7 @@ export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 # With the above env vars, the usual make command should work.
 # Note this may be quite slow the first time due to very slow network
 # connectivity on slurm to download from pypi, but subsequent executions
-# (such as startup for your jobs) should be much faster since uv will 
+# (such as startup for your jobs) should be much faster since uv will
 # pull cached wheels from UV_CACHE_DIR.
 # (Be sure to run from the root of the Safe-Synthesizer repo)
 make bootstrap-nss cu128
@@ -206,6 +206,37 @@ tail -f ${BASE_LOG_DIR}/${EXP_NAME}/slurm_*.out
 squeue -u ${USER_NAME}
 scancel <jobid>
 ```
+
+#### nss_top — interactive TUI monitor
+
+`nss_top.py` is a `k9s`-style terminal dashboard for watching your SLURM jobs and tailing their logs in real time. Run it from the login node:
+
+```bash
+# Simplest — username and log dir are inferred from $USER_NAME / $BASE_LOG_DIR / $LUSTRE_DIR
+uv run script/slurm/nss_top.py
+
+# Explicit log dir (searches recursively, so the top-level nss_results dir is fine)
+uv run script/slurm/nss_top.py --log-dir ${BASE_LOG_DIR}
+
+# Override username or refresh interval
+uv run script/slurm/nss_top.py --user mkornfield --refresh 15
+```
+
+Key bindings:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Select job |
+| `l` | Show stdout log |
+| `e` | Show stderr log |
+| `r` | Manual refresh |
+| `q` | Quit |
+
+Log directory resolution order (first match wins):
+1. `--log-dir` flag
+2. `$BASE_LOG_DIR` environment variable
+3. `$LUSTRE_DIR/nss_results` (constructed from `$LUSTRE_DIR`)
+4. `/lustre/fsw/portfolios/llmservice/users/<user>/nss_results` (default)
 
 ### Collect results
 
