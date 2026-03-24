@@ -12,8 +12,8 @@ description: Repo layout - architecture docs, skills, tests, fixtures, config fi
 
 ## Skills
 
-Canonical location: `.agent/skills/` (each has SKILL.md + optional references/).
-Cursor symlinks: `.cursor/skills/` points to `.agent/skills/` for discoverability.
+Canonical location: `.agents/skills/` (each has SKILL.md + optional references/).
+Cursor discovers skills directly from `.agents/skills/` -- no symlinks needed.
 
 ## Tests
 

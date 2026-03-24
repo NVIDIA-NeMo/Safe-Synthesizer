@@ -13,7 +13,7 @@ design.md
 tests/stub_datasets/LICENSES.md
 
 # AI / IDE / CI configuration directories
-.agent/
+.agents/
 .claude/
 .cursor/
 .github/

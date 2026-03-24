@@ -574,8 +574,8 @@ This project supports AI coding assistants. Configuration is layered so that con
 | `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
 | `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
 | `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
-| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
-| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `.agents/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agents/skills/` for Cursor discoverability |
 | `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
