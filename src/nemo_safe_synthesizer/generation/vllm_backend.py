@@ -137,8 +137,6 @@ class VllmBackend(GeneratorBackend):
             instruction=self.model_metadata.instruction,
             prompt_template=self.model_metadata.prompt_config.template,
         )
-        if self.model_metadata.prompt_config.add_eos_token_to_prompt:
-            self.prompt += self.model_metadata.prompt_config.eos_token
         self.llm: vLLM | None = None
         self.logits_processors = []
 
