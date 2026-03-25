@@ -104,7 +104,7 @@ We have extensively tested the following models for synthetic data use in NSS, a
 Benchmarking data for additional models will be added as they are
 validated. To understand the trade-offs with model selection, see [Training](running.md#training).
 
-Models configured via `training.pretrained_model` are downloaded from Hugging Face Hub. See [Pre-Caching Models](environment.md#pre-caching-models) for details.
+When `training.pretrained_model` is set to a Hugging Face Hub model ID, the model is downloaded from the Hub; if a local path or an offline cache is provided, no download is performed. See [Pre-Caching Models](environment.md#pre-caching-models) for details.
 
 !!! warning "Security Note: Pretrained models from Hugging Face Hub"
     Downloading pretrained models from Hugging Face Hub (or any public source) can expose your environment to significant risks, including arbitrary code execution (ACE) or remote code execution (RCE) vulnerabilities. Only use models you have reviewed yourself or from organizations and authors you explicitly trust. Malicious or modified models may contain embedded code, backdoors, or privacy-leaking mechanisms.
