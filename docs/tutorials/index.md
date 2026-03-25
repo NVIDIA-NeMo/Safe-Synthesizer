@@ -8,7 +8,6 @@ Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 ## Available Tutorials
 
 - [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
-- [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
 
 ## Adding a Tutorial
 
