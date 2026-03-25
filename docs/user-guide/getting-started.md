@@ -192,6 +192,8 @@ differential privacy). Both perform LoRA fine-tuning; see
 
 The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the backend or model).
 
+Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.
+
 !!! tip "Differential privacy"
     For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via `privacy.dp_enabled: true`. See [Configuration -- Differential Privacy](configuration.md#differential-privacy).
 
