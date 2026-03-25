@@ -3,6 +3,8 @@
 
 """GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading."""
 
+from __future__ import annotations
+
 import gc
 from contextlib import contextmanager
 from pathlib import Path
@@ -22,8 +24,11 @@ from transformers import (
 )
 
 if TYPE_CHECKING:
+    from ..llm.metadata import ModelMetadata
+
     from unsloth import FastLanguageModel  # noqa: F401  # ty: ignore[unresolved-import]
 
+from ..defaults import BOG_TOKEN, EOG_TOKEN
 from ..observability import get_logger
 
 logger = get_logger(__name__)
@@ -119,6 +124,43 @@ def add_bos_eos_tokens_to_tokenizer(tokenizer: PreTrainedTokenizer) -> PreTraine
     if not tokenizer.pad_token_id:
         tokenizer.pad_token_id = tokenizer.eos_token_id
     return tokenizer
+
+
+def register_group_tokens(
+    tokenizer: PreTrainedTokenizer,
+    metadata: ModelMetadata,
+) -> int:
+    """Register BOG/EOG group-delimiter tokens with the tokenizer.
+
+    Adds ``<|grp_start|>`` and ``<|grp_end|>`` as additional special
+    tokens (idempotent -- already-present tokens are skipped) and
+    resolves their integer IDs on ``metadata.prompt_config``.
+
+    Args:
+        tokenizer: Tokenizer to extend with the new special tokens.
+        metadata: Model metadata whose ``prompt_config`` will be
+            updated with the resolved ``bog_token_id`` and
+            ``eog_token_id``.
+
+    Returns:
+        Number of genuinely new tokens added (0 if both already existed).
+        The caller should call ``model.resize_token_embeddings(len(tokenizer))``
+        when this value is > 0.
+    """
+    tokens_to_add = []
+    existing = set(tokenizer.additional_special_tokens or [])
+    for tok in (BOG_TOKEN, EOG_TOKEN):
+        if tok not in existing:
+            tokens_to_add.append(tok)
+
+    num_added = 0
+    if tokens_to_add:
+        num_added = tokenizer.add_special_tokens({"additional_special_tokens": list(existing | set(tokens_to_add))})
+        logger.info(f"Registered {num_added} new group-delimiter token(s) with the tokenizer")
+
+    metadata.prompt_config.bog_token_id = tokenizer.convert_tokens_to_ids(BOG_TOKEN)
+    metadata.prompt_config.eog_token_id = tokenizer.convert_tokens_to_ids(EOG_TOKEN)
+    return num_added
 
 
 def get_param_from_config(

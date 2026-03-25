@@ -186,18 +186,30 @@ class Example:
         """Total number of tokens in this example (prompt + all sequences)."""
         return len(self.input_ids)
 
-    def add_sequence(self, seq: dict[str, list[int]], add_special_tokens: bool = True) -> None:
+    def add_sequence(
+        self,
+        seq: dict[str, list[int]],
+        add_special_tokens: bool = True,
+        start_token_id: int | None = None,
+        end_token_id: int | None = None,
+    ) -> None:
         """Add a sequence of records to the example.
 
         Args:
             seq: Dictionary containing 'input_ids' and 'attention_mask' for the sequence.
             add_special_tokens: Whether to add special tokens to the sequence.
+            start_token_id: Token ID to prepend. Defaults to the model's BOS token.
+            end_token_id: Token ID to append. Defaults to the model's EOS token.
 
         Raises:
             GenerationError: If the number of tokens in the example exceeds the context length.
         """
+        if start_token_id is None:
+            start_token_id = self.metadata.prompt_config.bos_token_id
+        if end_token_id is None:
+            end_token_id = self.metadata.prompt_config.eos_token_id
         input_ids = (
-            [self.metadata.prompt_config.bos_token_id] + seq["input_ids"] + [self.metadata.prompt_config.eos_token_id]
+            [start_token_id] + seq["input_ids"] + [end_token_id]
             if add_special_tokens
             else seq["input_ids"]
         )
@@ -1422,7 +1434,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         """Pack groups into examples that fill the available context window.
 
         Each example consists of a prompt followed by multiple group sequences,
-        each enclosed by BOS and EOS special tokens. A new example is flushed
+        each enclosed by BOG and EOG special tokens. A new example is flushed
         when adding the next group would exceed the token budget or
         ``max_sequences_per_example`` is reached.
 
@@ -1436,6 +1448,9 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         """
         num_examples = 0
         num_sequences = 0
+
+        bog_token_id = self.metadata.prompt_config.bog_token_id
+        eog_token_id = self.metadata.prompt_config.eog_token_id
 
         num_groups = len(dataset)
         max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
@@ -1454,7 +1469,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             if i % update_interval == 0:
                 logger.info(f"Assembling examples: {i}/{num_groups} groups")
             num_sequences += 1
-            example.add_sequence(dataset[i])
+            example.add_sequence(dataset[i], start_token_id=bog_token_id, end_token_id=eog_token_id)
             num_records += dataset[i]["num_records"]
             # If 1) this is the last group or 2) we have already added
             # max_sequences_per_example groups to the example or 3) adding

@@ -9,12 +9,10 @@ import pytest
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
+from nemo_safe_synthesizer.defaults import BOG_TOKEN, EOG_TOKEN
 from nemo_safe_synthesizer.generation.regex_manager import (
     build_json_based_regex,
 )
-
-BOS_TOKEN = "<s>"
-EOS_TOKEN = "</s>"
 
 
 @pytest.fixture
@@ -33,7 +31,7 @@ def test_build_json_based_regex(fixture_valid_iris_dataset_jsonl_and_schema, fix
     _, schema = fixture_valid_iris_dataset_jsonl_and_schema
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Regex from older implementation (gretel-2025-02-25 tag)
@@ -84,7 +82,7 @@ def test_build_json_based_regex_key_escaping(fixture_safe_synthesizer_config):
         "required": ["full.name"],
     }
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Regex from older implementation (gretel-2025-02-25 tag), updated for outlines STRING_INNER changes:
@@ -112,7 +110,7 @@ def test_build_json_based_regex_value_escaping(fixture_safe_synthesizer_config):
         "required": ["foo"],
     }
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Regex from older implementation (gretel-2025-02-25 tag)
@@ -135,7 +133,7 @@ def test_build_json_based_regex_enum_with_empty(fixture_safe_synthesizer_config)
         "required": ["foo"],
     }
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Regex from older implementation (gretel-2025-02-25 tag)
@@ -163,7 +161,7 @@ def test_build_json_based_regex_enum_with_none(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     assert regex == '(\\{"foo":("a"|null|"hello")\\}\\n)+'
@@ -189,7 +187,7 @@ def test_build_json_based_regex_with_missing(fixture_safe_synthesizer_config):
 
     schema = make_json_schema(df)
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Regex from older implementation (gretel-2025-02-25 tag), updated formatting:
@@ -212,9 +210,9 @@ def test_build_json_based_regex_with_missing(fixture_safe_synthesizer_config):
     assert re.fullmatch(regex, '{"name":"John","age":"43"}\n') is None  # wrong type
 
 
-# Purpose: Validates grouped generation mode wraps groups in BOS/EOS and repeats group blocks, with behavior checks.
-# Data: Simple enum schema; group_by=True; BOS/EOS tokens provided.
-# Asserts: Exact grouped regex string including BOS/EOS and repetition structure; re.fullmatch accepts valid grouped content and rejects malformed/mismatched inner content.
+# Purpose: Validates grouped generation mode wraps groups in BOG/EOG and repeats group blocks, with behavior checks.
+# Data: Simple enum schema; group_by=True; BOG/EOG tokens provided.
+# Asserts: Exact grouped regex string including BOG/EOG and repetition structure; re.fullmatch accepts valid grouped content and rejects malformed/mismatched inner content.
 def test_build_json_based_regex_with_groupby(fixture_safe_synthesizer_config):
     fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
 
@@ -227,20 +225,20 @@ def test_build_json_based_regex_with_groupby(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
-    assert regex == '(<s>(\\{"foo":("a"|"b"|"c")\\}\\n)+</s>\\n)+'
+    assert regex == '(<\\|grp_start\\|>(\\{"foo":("a"|"b"|"c")\\}\\n)+<\\|grp_end\\|>\\n)+'
 
     # Behavior checks for grouped content
-    grouped_ok = '<s>{"foo":"a"}\n{"foo":"b"}\n</s>\n'
+    grouped_ok = f'{BOG_TOKEN}{{"foo":"a"}}\n{{"foo":"b"}}\n{EOG_TOKEN}\n'
     assert re.fullmatch(regex, grouped_ok) is not None
 
-    grouped_bad_inner = '<s>{"foo":"x"}\n</s>\n'
+    grouped_bad_inner = f'{BOG_TOKEN}{{"foo":"x"}}\n{EOG_TOKEN}\n'
     assert re.fullmatch(regex, grouped_bad_inner) is None
 
-    grouped_missing_eos = '<s>{"foo":"a"}\n'
-    assert re.fullmatch(regex, grouped_missing_eos) is None
+    grouped_missing_eog = f'{BOG_TOKEN}{{"foo":"a"}}\n'
+    assert re.fullmatch(regex, grouped_missing_eog) is None
 
 
 # Purpose: Validates integer range inference and sign handling across mixed and all-negative datasets.
@@ -251,7 +249,7 @@ def test_build_json_regex_with_int(fixture_safe_synthesizer_config):
     df = pd.DataFrame({"number": [-5, 12, 3, -45, 9, -4, 17, 21, -12]})
     schema = make_json_schema(df)
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
     assert regex == '(\\{"number":(-)?(\\d|[1-3]\\d|4[0-5])\\}\\n)+'
 
@@ -265,7 +263,7 @@ def test_build_json_regex_with_int(fixture_safe_synthesizer_config):
     df = pd.DataFrame({"number": [-5, -7, -9, -21, -34, -17]})
     schema = make_json_schema(df)
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
     assert regex == '(\\{"number":(-)([5-9]|[1-2]\\d|3[0-4])\\}\\n)+'
 
@@ -293,7 +291,7 @@ def test_build_json_schema_str_bad_len(fixture_safe_synthesizer_config):
     }
 
     with pytest.raises(ValueError):
-        build_json_based_regex(schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN)
+        build_json_based_regex(schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN)
 
 
 # Purpose: Ensures mixed-type enum serialization: numbers unquoted, strings quoted and escaped, None → null.
@@ -311,7 +309,7 @@ def test_enum_regex(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Enum should quote strings, escape dots, keep numbers unquoted, and map None -> null
@@ -339,7 +337,7 @@ def test_str_regex(fixture_safe_synthesizer_config):
         "required": ["s"],
     }
     regex_len = build_json_based_regex(
-        schema_len, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema_len, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     assert re.fullmatch(regex_len, '{"s":"ab"}\n') is not None
@@ -354,7 +352,7 @@ def test_str_regex(fixture_safe_synthesizer_config):
         "required": ["s"],
     }
     regex_pat = build_json_based_regex(
-        schema_pat, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema_pat, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     assert re.fullmatch(regex_pat, '{"s":"foo12"}\n') is not None
@@ -377,7 +375,7 @@ def test_obj_regex(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Valid: 1..3 properties, integer values within range
@@ -410,7 +408,7 @@ def test_property_regex(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     # Valid: optional 'a' before required 'b', optional 'c' after required 'b'
@@ -428,7 +426,7 @@ def test_property_regex(fixture_safe_synthesizer_config):
 
 # Purpose: Round-trip regression: DataFrame -> schema -> regex must match the original JSONL rows.
 # Data: First 5 rows of Iris dataset serialized to JSONL; same schema used to build regex.
-# Asserts: Non-grouped JSONL matches; grouped (BOS/EOS-wrapped) matches when group_by=True.
+# Asserts: Non-grouped JSONL matches; grouped (BOG/EOG-wrapped) matches when group_by=True.
 @pytest.mark.parametrize("group_by", [False, True])
 def test_round_trip_dataframe_schema_regex_matches_iris(
     group_by,
@@ -445,10 +443,10 @@ def test_round_trip_dataframe_schema_regex_matches_iris(
 
     schema = make_json_schema(sample_df)
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
-    text = f"{BOS_TOKEN}{jsonl_str}{EOS_TOKEN}\n" if group_by else jsonl_str
+    text = f"{BOG_TOKEN}{jsonl_str}{EOG_TOKEN}\n" if group_by else jsonl_str
     assert re.fullmatch(regex, text) is not None
 
 
@@ -465,10 +463,10 @@ def test_round_trip_adobe_sample_schema_regex_matches(fixture_adobe_sampled_data
 
     schema = make_json_schema(sample_df)
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
-    # Expect exact JSONL (without BOS/EOS) to match
+    # Expect exact JSONL (without BOG/EOG) to match
     assert re.fullmatch(regex, jsonl_str) is not None
 
 
@@ -486,7 +484,7 @@ def test_single_sequence_no_grouping(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     assert regex == '\\{"foo":("a"|"b"|"c")\\}'
@@ -497,9 +495,9 @@ def test_single_sequence_no_grouping(fixture_safe_synthesizer_config):
     assert re.fullmatch(regex, '{"foo":"a"}\n{"foo":"b"}\n') is None
 
 
-# Purpose: Validates single-sequence mode with grouping produces a single BOS/EOS group (no trailing \n, no group repetition).
+# Purpose: Validates single-sequence mode with grouping produces a single BOG/EOG group (no trailing \n, no group repetition).
 # Data: Simple enum schema; structured_generation_use_single_sequence=True, max_sequences_per_example=1, group_by="id".
-# Asserts: Regex matches exactly one group; rejects trailing newline after EOS and multiple groups.
+# Asserts: Regex matches exactly one group; rejects trailing newline after EOG and multiple groups.
 def test_single_sequence_with_groupby(fixture_safe_synthesizer_config):
     fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
     fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
@@ -512,16 +510,16 @@ def test_single_sequence_with_groupby(fixture_safe_synthesizer_config):
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
-    assert regex == '<s>(\\{"foo":("a"|"b"|"c")\\}\\n)+</s>'
+    assert regex == '<\\|grp_start\\|>(\\{"foo":("a"|"b"|"c")\\}\\n)+<\\|grp_end\\|>'
 
-    assert re.fullmatch(regex, '<s>{"foo":"a"}\n</s>') is not None
-    assert re.fullmatch(regex, '<s>{"foo":"a"}\n{"foo":"b"}\n</s>') is not None
+    assert re.fullmatch(regex, f'{BOG_TOKEN}{{"foo":"a"}}\n{EOG_TOKEN}') is not None
+    assert re.fullmatch(regex, f'{BOG_TOKEN}{{"foo":"a"}}\n{{"foo":"b"}}\n{EOG_TOKEN}') is not None
 
-    assert re.fullmatch(regex, '<s>{"foo":"a"}\n</s>\n') is None
-    assert re.fullmatch(regex, '<s>{"foo":"a"}\n</s>\n<s>{"foo":"b"}\n</s>\n') is None
+    assert re.fullmatch(regex, f'{BOG_TOKEN}{{"foo":"a"}}\n{EOG_TOKEN}\n') is None
+    assert re.fullmatch(regex, f'{BOG_TOKEN}{{"foo":"a"}}\n{EOG_TOKEN}\n{BOG_TOKEN}{{"foo":"b"}}\n{EOG_TOKEN}\n') is None
 
 
 # Purpose: Validates that structured_generation_use_single_sequence is ignored when max_sequences_per_example != 1.
@@ -539,7 +537,7 @@ def test_single_sequence_flag_ignored_when_max_sequences_not_one(max_seq, fixtur
     }
 
     regex = build_json_based_regex(
-        schema, config=fixture_safe_synthesizer_config, bos_token=BOS_TOKEN, eos_token=EOS_TOKEN
+        schema, config=fixture_safe_synthesizer_config, bog_token=BOG_TOKEN, eog_token=EOG_TOKEN
     )
 
     assert regex == '(\\{"foo":("a"|"b")\\}\\n)+'
@@ -547,10 +545,10 @@ def test_single_sequence_flag_ignored_when_max_sequences_not_one(max_seq, fixtur
     assert re.fullmatch(regex, '{"foo":"a"}\n{"foo":"b"}\n') is not None
 
 
-# Purpose: Validates that BOS/EOS tokens containing regex metacharacters are properly escaped via re.escape().
-# Data: Simple enum schema with grouping; BOS="[BOS]", EOS="[EOS]" (square brackets are regex metacharacters).
+# Purpose: Validates that BOG/EOG tokens containing regex metacharacters are properly escaped via re.escape().
+# Data: Simple enum schema with grouping; BOG="[BOG]", EOG="[EOG]" (square brackets are regex metacharacters).
 # Asserts: Escaped literals appear in regex; matches literal bracket tokens; rejects inputs where brackets are interpreted as character classes.
-def test_bos_eos_tokens_with_special_chars_escaped(fixture_safe_synthesizer_config):
+def test_bog_eog_tokens_with_special_chars_escaped(fixture_safe_synthesizer_config):
     fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
 
     schema = {
@@ -562,13 +560,13 @@ def test_bos_eos_tokens_with_special_chars_escaped(fixture_safe_synthesizer_conf
     regex = build_json_based_regex(
         schema,
         config=fixture_safe_synthesizer_config,
-        bos_token="[BOS]",
-        eos_token="[EOS]",
+        bog_token="[BOG]",
+        eog_token="[EOG]",
     )
 
-    assert r"\[BOS\]" in regex
-    assert r"\[EOS\]" in regex
+    assert r"\[BOG\]" in regex
+    assert r"\[EOG\]" in regex
 
-    assert re.fullmatch(regex, '[BOS]{"foo":"x"}\n[EOS]\n') is not None
+    assert re.fullmatch(regex, '[BOG]{"foo":"x"}\n[EOG]\n') is not None
 
     assert re.fullmatch(regex, 'B{"foo":"x"}\nO\n') is None

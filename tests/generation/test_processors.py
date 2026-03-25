@@ -19,13 +19,16 @@ from nemo_safe_synthesizer.generation.processors import (
     TimeSeriesDataProcessor,
     create_processor,
 )
+from nemo_safe_synthesizer.llm.utils import register_group_tokens
 from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.training.backend import ModelMetadata
 
 logger = get_logger(__name__)
 
-BOS = "<s>"
-EOS = "</s>"
+from nemo_safe_synthesizer.defaults import BOG_TOKEN, EOG_TOKEN
+
+BOG = BOG_TOKEN
+EOG = EOG_TOKEN
 
 TOKENIZERS_DIR = Path(__file__).parent.parent / "test_data" / "tokenizers"
 
@@ -96,8 +99,8 @@ def test_tabular_data_processor(
     assert response.prompt_number == 1
 
 
-# Purpose: GroupedDataProcessor should reject input not wrapped in BOS/EOS group blocks.
-# Data: Raw JSONL without BOS/EOS.
+# Purpose: GroupedDataProcessor should reject input not wrapped in BOG/EOG group blocks.
+# Data: Raw JSONL without BOG/EOG.
 # Asserts: 0 valid; entire input counted as 1 invalid; one error emitted.
 def test_grouped_data_processor_with_no_groups(
     fixture_valid_iris_dataset_jsonl_and_schema,
@@ -105,7 +108,7 @@ def test_grouped_data_processor_with_no_groups(
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
     response = GroupedDataProcessor(
-        schema=jsonl_schema, config=fixture_validation_config, group_by="variety", bos_token=BOS, eos_token=EOS
+        schema=jsonl_schema, config=fixture_validation_config, group_by="variety", bog_token=BOG, eog_token=EOG
     )(1, jsonl_str)
     assert len(response.valid_records) == 0
     assert len(response.invalid_records) == 1
@@ -114,18 +117,18 @@ def test_grouped_data_processor_with_no_groups(
 
 
 # Purpose: Mixed validity across groups: accept the valid group and reject the invalid one.
-# Data: Two groups: one valid (BOS + 5 records + EOS), one with extra invalid JSON appended.
+# Data: Two groups: one valid (BOG + 5 records + EOG), one with extra invalid JSON appended.
 # Asserts: 5 valid; 6 invalid/errors; final error details invalid JSON in other group.
 def test_grouped_data_processor_with_invalid_json(
     fixture_valid_iris_dataset_jsonl_and_schema,
     fixture_validation_config: ValidationParameters,
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    valid_group = BOS + jsonl_str + EOS
-    invalid_group = BOS + jsonl_str + '{"a":1, "b":2}\n' + EOS
+    valid_group = BOG + jsonl_str + EOG
+    invalid_group = BOG + jsonl_str + '{"a":1, "b":2}\n' + EOG
     groups_jsonl_str = invalid_group + " " + valid_group
     response = GroupedDataProcessor(
-        schema=jsonl_schema, config=fixture_validation_config, group_by="variety", bos_token=BOS, eos_token="</s>"
+        schema=jsonl_schema, config=fixture_validation_config, group_by="variety", bog_token=BOG, eog_token=EOG
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 5
     assert len(response.invalid_records) == 6
@@ -145,13 +148,13 @@ def test_grouped_data_processor_with_non_unique_group_by(
     # Add a new record in the group with a different variety
     jsonl_schema["properties"]["variety"]["enum"].append("NewSetosa")
     groups_jsonl_str = (
-        BOS
+        BOG
         + jsonl_str
         + '{"sepal.length":5.1,"sepal.width":3.5,"petal.length":1.4,"petal.width":0.2,"variety":"NewSetosa"}\n'
-        + EOS
+        + EOG
     )
     response = GroupedDataProcessor(
-        schema=jsonl_schema, config=fixture_validation_config, group_by="variety", bos_token=BOS, eos_token=EOS
+        schema=jsonl_schema, config=fixture_validation_config, group_by="variety", bog_token=BOG, eog_token=EOG
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 0
     assert len(response.invalid_records) == 6
@@ -167,14 +170,14 @@ def test_grouped_data_processor_out_of_order_records(
     fixture_validation_config: ValidationParameters,
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    groups_jsonl_str = BOS + jsonl_str + EOS
+    groups_jsonl_str = BOG + jsonl_str + EOG
     response = GroupedDataProcessor(
         schema=jsonl_schema,
         config=fixture_validation_config,
         group_by="variety",
         order_by="sepal.length",
-        bos_token=BOS,
-        eos_token=EOS,
+        bog_token=BOG,
+        eog_token=EOG,
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 0
     assert len(response.invalid_records) == 5
@@ -190,13 +193,13 @@ def test_grouped_data_processor_multiple_group_by(
     fixture_validation_config: ValidationParameters,
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    groups_jsonl_str = BOS + jsonl_str + EOS
+    groups_jsonl_str = BOG + jsonl_str + EOG
     response = GroupedDataProcessor(
         schema=jsonl_schema,
         config=fixture_validation_config,
         group_by=["petal.width", "variety"],
-        bos_token=BOS,
-        eos_token=EOS,
+        bog_token=BOG,
+        eog_token=EOG,
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 5
     assert len(response.invalid_records) == 0
@@ -211,13 +214,13 @@ def test_grouped_data_processor_multiple_group_by_error(
     fixture_validation_config: ValidationParameters,
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    groups_jsonl_str = BOS + jsonl_str + EOS
+    groups_jsonl_str = BOG + jsonl_str + EOG
     response = GroupedDataProcessor(
         schema=jsonl_schema,
         config=fixture_validation_config,
         group_by=["sepal.length", "variety"],
-        bos_token=BOS,
-        eos_token=EOS,
+        bog_token=BOG,
+        eog_token=EOG,
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 0
     assert len(response.invalid_records) == 5
@@ -225,8 +228,8 @@ def test_grouped_data_processor_multiple_group_by_error(
     assert response.errors[-1] == ("Groupby value is not unique", "groupby")
 
 
-# Purpose: group_by_accept_no_delineator=True treats raw JSONL (no BOS/EOS) as a single group.
-# Data: Raw JSONL without BOS/EOS (same as test_grouped_data_processor_with_no_groups).
+# Purpose: group_by_accept_no_delineator=True treats raw JSONL (no BOG/EOG) as a single group.
+# Data: Raw JSONL without BOG/EOG (same as test_grouped_data_processor_with_no_groups).
 # Asserts: 5 valid; 0 invalid; 0 errors.
 def test_grouped_data_processor_accept_no_delineator(
     fixture_valid_iris_dataset_jsonl_and_schema,
@@ -239,7 +242,7 @@ def test_grouped_data_processor_accept_no_delineator(
         group_by_fix_unordered_records=False,
     )
     response = GroupedDataProcessor(
-        schema=jsonl_schema, config=config, group_by="variety", bos_token=BOS, eos_token=EOS
+        schema=jsonl_schema, config=config, group_by="variety", bog_token=BOG, eog_token=EOG
     )(1, jsonl_str)
     assert len(response.valid_records) == 5
     assert len(response.invalid_records) == 0
@@ -253,7 +256,7 @@ def test_grouped_data_processor_ignore_invalid_records(
     fixture_valid_iris_dataset_jsonl_and_schema,
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    group_str = BOS + '{"a":1,"b":2}\n' + jsonl_str + EOS
+    group_str = BOG + '{"a":1,"b":2}\n' + jsonl_str + EOG
     config = ValidationParameters(
         group_by_accept_no_delineator=False,
         group_by_ignore_invalid_records=True,
@@ -261,7 +264,7 @@ def test_grouped_data_processor_ignore_invalid_records(
         group_by_fix_unordered_records=False,
     )
     response = GroupedDataProcessor(
-        schema=jsonl_schema, config=config, group_by="variety", bos_token=BOS, eos_token=EOS
+        schema=jsonl_schema, config=config, group_by="variety", bog_token=BOG, eog_token=EOG
     )(1, group_str)
     assert len(response.valid_records) == 5
     # Invalid records in the group are ignored and not included in either valid_records or invalid_records.
@@ -279,14 +282,14 @@ def test_grouped_data_processor_fix_non_unique_value(
     schema = copy.deepcopy(jsonl_schema)
     schema["properties"]["variety"]["enum"].append("NewSetosa")
     extra = '{"sepal.length":5.1,"sepal.width":3.5,"petal.length":1.4,"petal.width":0.2,"variety":"NewSetosa"}\n'
-    groups_jsonl_str = BOS + jsonl_str.strip() + "\n" + extra + EOS
+    groups_jsonl_str = BOG + jsonl_str.strip() + "\n" + extra + EOG
     config = ValidationParameters(
         group_by_accept_no_delineator=False,
         group_by_ignore_invalid_records=False,
         group_by_fix_non_unique_value=True,
         group_by_fix_unordered_records=False,
     )
-    response = GroupedDataProcessor(schema=schema, config=config, group_by="variety", bos_token=BOS, eos_token=EOS)(
+    response = GroupedDataProcessor(schema=schema, config=config, group_by="variety", bog_token=BOG, eog_token=EOG)(
         1, groups_jsonl_str
     )
     assert len(response.valid_records) == 6
@@ -302,7 +305,7 @@ def test_grouped_data_processor_fix_unordered_records(
     fixture_valid_iris_dataset_jsonl_and_schema,
 ):
     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    groups_jsonl_str = BOS + jsonl_str + EOS
+    groups_jsonl_str = BOG + jsonl_str + EOG
     config = ValidationParameters(
         group_by_accept_no_delineator=False,
         group_by_ignore_invalid_records=False,
@@ -314,8 +317,8 @@ def test_grouped_data_processor_fix_unordered_records(
         config=config,
         group_by="variety",
         order_by="sepal.length",
-        bos_token=BOS,
-        eos_token=EOS,
+        bog_token=BOG,
+        eog_token=EOG,
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 5
     assert response.valid_records == sorted(response.valid_records, key=lambda r: r["sepal.length"])
@@ -324,7 +327,7 @@ def test_grouped_data_processor_fix_unordered_records(
 
 
 # Purpose: All validation relaxations True; no delimiters + invalid line → accept and ignore.
-# Data: Raw JSONL (no BOS/EOS) with 5 valid lines and one invalid line.
+# Data: Raw JSONL (no BOG/EOG) with 5 valid lines and one invalid line.
 # Asserts: 5 valid; 0 invalid; 0 errors.
 def test_grouped_data_processor_all_relaxations_no_delineator_and_ignore_invalid(
     fixture_valid_iris_dataset_jsonl_and_schema,
@@ -338,7 +341,7 @@ def test_grouped_data_processor_all_relaxations_no_delineator_and_ignore_invalid
         group_by_fix_unordered_records=True,
     )
     response = GroupedDataProcessor(
-        schema=jsonl_schema, config=config, group_by="variety", bos_token=BOS, eos_token=EOS
+        schema=jsonl_schema, config=config, group_by="variety", bog_token=BOG, eog_token=EOG
     )(1, text)
     assert len(response.valid_records) == 5
     assert len(response.invalid_records) == 0
@@ -346,7 +349,7 @@ def test_grouped_data_processor_all_relaxations_no_delineator_and_ignore_invalid
 
 
 # Purpose: All validation relaxations True; one group with invalid line, non-unique group_by, and wrong order.
-# Data: BOS/EOS group with 5 Setosa + 1 NewSetosa (out of order by sepal.length) and one invalid line.
+# Data: BOG/EOG group with 5 Setosa + 1 NewSetosa (out of order by sepal.length) and one invalid line.
 # Asserts: 6 valid; sorted by sepal.length; all same variety; 0 invalid; 0 errors.
 def test_grouped_data_processor_all_relaxations_with_fixes(
     fixture_valid_iris_dataset_jsonl_and_schema,
@@ -356,7 +359,7 @@ def test_grouped_data_processor_all_relaxations_with_fixes(
     schema["properties"]["variety"]["enum"].append("NewSetosa")
     extra = '{"sepal.length":5.1,"sepal.width":3.5,"petal.length":1.4,"petal.width":0.2,"variety":"NewSetosa"}\n'
     invalid_line = '{"a":1,"b":2}\n'
-    groups_jsonl_str = BOS + jsonl_str.strip() + "\n" + extra + invalid_line + EOS
+    groups_jsonl_str = BOG + jsonl_str.strip() + "\n" + extra + invalid_line + EOG
     config = ValidationParameters(
         group_by_accept_no_delineator=True,
         group_by_ignore_invalid_records=True,
@@ -368,8 +371,8 @@ def test_grouped_data_processor_all_relaxations_with_fixes(
         config=config,
         group_by="variety",
         order_by="sepal.length",
-        bos_token=BOS,
-        eos_token=EOS,
+        bog_token=BOG,
+        eog_token=EOG,
     )(1, groups_jsonl_str)
     assert len(response.valid_records) == 6
     assert response.valid_records == sorted(response.valid_records, key=lambda r: r["sepal.length"])
@@ -498,6 +501,7 @@ def _check_assembler_to_processor(
     hf_dataset = Dataset.from_pandas(df)
 
     metadata = ModelMetadata.from_config(config)
+    register_group_tokens(tokenizer, metadata)
     assembler = TrainingExampleAssembler.from_data(
         dataset=hf_dataset,
         tokenizer=tokenizer,

@@ -324,8 +324,8 @@ def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
 def build_json_based_regex(
     schema: dict,
     config: SafeSynthesizerParameters,
-    bos_token: str,
-    eos_token: str,
+    bog_token: str,
+    eog_token: str,
     whitespace_pattern: str | None = None,
 ):
     """Build a regex that constrains LLM output to valid JSONL records.
@@ -334,8 +334,8 @@ def build_json_based_regex(
         schema: JSON schema dictionary describing the record format.
         config: Pipeline configuration (used for grouping and
             structured-generation settings).
-        bos_token: Beginning-of-sequence token (used when grouping).
-        eos_token: End-of-sequence token (used when grouping).
+        bog_token: Beginning-of-group token (used when grouping).
+        eog_token: End-of-group token (used when grouping).
         whitespace_pattern: Optional regex fragment for matching
             whitespace between JSON tokens.
 
@@ -348,7 +348,7 @@ def build_json_based_regex(
     record_regex = _build_regex(schema, whitespace_pattern)
 
     if config.data.group_training_examples_by is not None:
-        sequence_regex = rf"{re.escape(bos_token)}({record_regex}\n)+{re.escape(eos_token)}"
+        sequence_regex = rf"{re.escape(bog_token)}({record_regex}\n)+{re.escape(eog_token)}"
     else:
         # Without grouping, the "sequence" is a single record.
         sequence_regex = record_regex

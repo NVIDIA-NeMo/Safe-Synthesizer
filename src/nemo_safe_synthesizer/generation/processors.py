@@ -185,8 +185,8 @@ class GroupedDataProcessor(Processor):
         schema: JSON schema as a dictionary.
         config: Validation parameters controlling tolerance for
             invalid records, non-unique group values, etc.
-        bos_token: Token delimiting the beginning of a group sequence.
-        eos_token: Token delimiting the end of a group sequence.
+        bog_token: Token delimiting the beginning of a group sequence.
+        eog_token: Token delimiting the end of a group sequence.
         group_by: Column name that defines groups.
         order_by: Column name to enforce ordering within a group, or
             ``None`` if ordering is not required.
@@ -196,8 +196,8 @@ class GroupedDataProcessor(Processor):
         self,
         schema: dict,
         config: ValidationParameters,
-        bos_token: str,
-        eos_token: str,
+        bog_token: str,
+        eog_token: str,
         group_by: str | list[str],
         order_by: str | None = None,
     ):
@@ -206,14 +206,14 @@ class GroupedDataProcessor(Processor):
             group_by = [group_by]
         self.group_by = group_by
         self.order_by = order_by
-        self.bos_token = bos_token
-        self.eos_token = eos_token
+        self.bog_token = bog_token
+        self.eog_token = eog_token
 
     def _process_text_generation(self, text: str) -> ParsedResponse:
         """Process the output from the fine-tuned model.
 
         For records to be valid, they should:
-            - Be in a group that is bound by BOS and EOS tokens.
+            - Be in a group that is bound by BOG and EOG tokens.
             - Respect the known JSONL schema.
             - Have a unique value for the `group_by` field(s).
             - Be ordered by the `order_by` field if specified.
@@ -227,7 +227,7 @@ class GroupedDataProcessor(Processor):
         Returns:
             Parsed response object that contains the extracted records.
         """
-        groups = extract_groups_from_jsonl_string(text, self.bos_token, self.eos_token)
+        groups = extract_groups_from_jsonl_string(text, self.bog_token, self.eog_token)
         groupby_validator = "groupby"
 
         if len(groups) == 0 and self.config.group_by_accept_no_delineator:
@@ -237,7 +237,7 @@ class GroupedDataProcessor(Processor):
             return ParsedResponse(
                 valid_records=[],
                 invalid_records=[text],
-                errors=[("Group BOS and/or EOS tokens missing", groupby_validator)],
+                errors=[("Group BOG and/or EOG tokens missing", groupby_validator)],
             )
 
         valid_groups, invalid_groups, errors_groups = [], [], []
@@ -333,8 +333,8 @@ def create_processor(schema: dict, metadata: ModelMetadata, config: SafeSynthesi
             config=config.generation.validation,
             group_by=config.data.group_training_examples_by,
             order_by=config.data.order_training_examples_by,
-            bos_token=metadata.prompt_config.bos_token,
-            eos_token=metadata.prompt_config.eos_token,
+            bog_token=metadata.prompt_config.bog_token,
+            eog_token=metadata.prompt_config.eog_token,
         )
     else:
         processor = TabularDataProcessor(schema, config=config.generation.validation)

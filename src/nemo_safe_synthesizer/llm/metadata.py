@@ -43,7 +43,9 @@ from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
 from ..defaults import (
+    BOG_TOKEN,
     DEFAULT_INSTRUCTION,
+    EOG_TOKEN,
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
@@ -93,6 +95,18 @@ class LLMPromptConfig(BaseModel):
     eos_token_id: int
     """Integer id for the EOS token."""
 
+    bog_token: str = BOG_TOKEN
+    """Beginning-of-group token string used to delimit groups in grouped training."""
+
+    bog_token_id: int | None = None
+    """Integer id for the BOG token. Resolved after tokenizer registration via ``register_group_tokens``."""
+
+    eog_token: str = EOG_TOKEN
+    """End-of-group token string used to delimit groups in grouped training."""
+
+    eog_token_id: int | None = None
+    """Integer id for the EOG token. Resolved after tokenizer registration via ``register_group_tokens``."""
+
     @classmethod
     def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
         """Create a prompt config by reading from settings of a tokenizer.
@@ -119,6 +133,8 @@ class LLMPromptConfig(BaseModel):
         template = kwargs.get("template", PROMPT_TEMPLATE)
         add_bos_token_to_prompt = kwargs.get("add_bos_token_to_prompt", True)
         add_eos_token_to_prompt = kwargs.get("add_eos_token_to_prompt", True)
+        bog_token = kwargs.get("bog_token", BOG_TOKEN)
+        eog_token = kwargs.get("eog_token", EOG_TOKEN)
 
         pc = {
             "template": template,
@@ -128,6 +144,8 @@ class LLMPromptConfig(BaseModel):
             "bos_token_id": bos_token_id,
             "eos_token": eos_token,
             "eos_token_id": eos_token_id,
+            "bog_token": bog_token,
+            "eog_token": eog_token,
         }
 
         return cls(**pc)

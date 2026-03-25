@@ -20,7 +20,7 @@ from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 from .. import utils
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
-from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
+from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS, NUM_SPECIAL_TOKENS
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import TabularDataProcessor, create_processor
@@ -207,6 +207,7 @@ class VllmBackend(GeneratorBackend):
             gpu_memory_utilization=max_vram,
             enable_lora=True,
             max_lora_rank=self.config.training.lora_r,
+            lora_extra_vocab_size=NUM_SPECIAL_TOKENS,
             structured_outputs_config=structured_outputs_config,
             enforce_eager=enforce_eager,
             attention_config=attention_config,
@@ -228,8 +229,8 @@ class VllmBackend(GeneratorBackend):
             regex = build_json_based_regex(
                 self.schema,
                 self.config,
-                self.model_metadata.prompt_config.bos_token,
-                self.model_metadata.prompt_config.eos_token,
+                self.model_metadata.prompt_config.bog_token,
+                self.model_metadata.prompt_config.eog_token,
             )
             params["regex"] = regex
         elif self.config.generation.structured_generation_schema_method == "json_schema":

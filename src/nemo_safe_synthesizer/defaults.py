@@ -95,6 +95,10 @@ FIXED_RUNTIME_GENERATE_ARGS = {"top_k": -1, "min_p": 0}
 RUNTIME_MODEL_ARCHIVE_NAME = "model"
 RUNTIME_MODEL_CONFIG_NAME = "safe-synthesizer-config"
 
+# group delimiter tokens (used by GroupedDataExampleAssembler instead of BOS/EOS)
+BOG_TOKEN = "<|grp_start|>"
+EOG_TOKEN = "<|grp_end|>"
+
 # miscellaneous
 EPS = 1e-15
 NUM_SPECIAL_TOKENS = 2

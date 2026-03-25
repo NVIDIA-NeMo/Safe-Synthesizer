@@ -52,6 +52,7 @@ from ..llm.utils import (
     get_device_map,
     get_max_vram,
     get_quantization_config,
+    register_group_tokens,
 )
 from ..observability import get_logger, traced_runtime, traced_user
 from ..privacy.dp_transformers.dp_utils import (
@@ -118,6 +119,9 @@ class HuggingFaceBackend(TrainingBackend):
                 self.params.training.pretrained_model, model_max_length=model_args.get("max_seq_length", None)
             )
         )
+        num_new = register_group_tokens(self.tokenizer, self.model_metadata)
+        if num_new > 0:
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
     # Constants for filtering trainer-specific kwargs
     # These keys are handled specially and should not be passed directly to model loading.

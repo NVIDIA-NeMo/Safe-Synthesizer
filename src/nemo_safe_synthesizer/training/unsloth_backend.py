@@ -7,7 +7,7 @@ import os
 
 import torch
 
-from ..llm.utils import add_bos_eos_tokens_to_tokenizer
+from ..llm.utils import add_bos_eos_tokens_to_tokenizer, register_group_tokens
 from ..observability import get_logger
 from ..training.huggingface_backend import HuggingFaceBackend
 
@@ -113,10 +113,11 @@ class UnslothTrainer(HuggingFaceBackend):
         """Load model and tokenizer via Unsloth and add BOS/EOS tokens."""
         model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)
 
-        self.tokenizer = add_bos_eos_tokens_to_tokenizer(
-            tokenizer,
-        )
+        self.tokenizer = add_bos_eos_tokens_to_tokenizer(tokenizer)
         self.model = model
+        num_new = register_group_tokens(self.tokenizer, self.model_metadata)
+        if num_new > 0:
+            self.model.resize_token_embeddings(len(self.tokenizer))
 
     def load_model(self, **model_args):
         """Load a pretrained model using Unsloth's ``FastLanguageModel``.
