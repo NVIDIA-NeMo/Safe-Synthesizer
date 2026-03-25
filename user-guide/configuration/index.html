@@ -8655,6 +8655,11 @@ list will raise a <code>ValueError</code> at startup.</p>
 </table>
 <p>Benchmarking data for additional models will be added as they are
 validated. To understand the trade-offs with model selection, see <a href="../running/#training">Training</a>.</p>
+<p>When <code>training.pretrained_model</code> is set to a Hugging Face Hub model ID, the model is downloaded from the Hub; if a local path or an offline cache is provided, no download is performed. See <a href="../environment/#pre-caching-models">Pre-Caching Models</a> for details.</p>
+<div class="admonition warning">
+<p class="admonition-title">Security Note: Pretrained models from Hugging Face Hub</p>
+<p>Loading and using pretrained models from Hugging Face Hub (or any public source) can expose your environment to significant risks, including arbitrary code execution (ACE) or remote code execution (RCE) vulnerabilities. Only use models you have reviewed yourself or from organizations and authors you explicitly trust. Malicious or modified models may contain embedded code, backdoors, or privacy-leaking mechanisms.</p>
+</div>
 <hr />
 <h2 id="generation">Generation<a class="headerlink" href="#generation" title="Permanent link">&para;</a></h2>
 <p>The generation stage controls how the fine-tuned model produces synthetic
