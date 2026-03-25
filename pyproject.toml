@@ -156,11 +156,11 @@ cu128 = [
   "torchvision==0.24.1+cu128; sys_platform == 'linux'",
   "torchao==0.14.1; sys_platform == 'linux'",
   "transformers==4.57.3",
-  "triton>=2.0.0",
+  "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4",
-  "unsloth_zoo==2025.12.4",
-  "vllm==0.15.0",
+  "unsloth[cu128-torch291]==2025.12.4; sys_platform == 'linux'",
+  "unsloth_zoo==2025.12.4; sys_platform == 'linux'",
+  "vllm==0.15.0; sys_platform == 'linux'",
   "xformers==v0.0.33.post2; sys_platform == 'linux'",
 ]
 
