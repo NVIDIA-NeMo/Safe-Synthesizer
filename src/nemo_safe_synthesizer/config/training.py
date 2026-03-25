@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import platform
 from typing import (
+    Self,
     Annotated,
     Literal,
 )
@@ -273,7 +274,7 @@ class TrainingHyperparams(Parameters):
     ] = "kernels-community/vllm-flash-attn3"
 
     @model_validator(mode="after")
-    def _resolve_platform_defaults(self) -> "TrainingHyperparams":
+    def _resolve_platform_defaults(self) -> Self:
         """Override defaults that are incompatible with the current platform."""
         if platform.machine() == "aarch64":
             if self.attn_implementation == "kernels-community/vllm-flash-attn3":

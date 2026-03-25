@@ -77,7 +77,7 @@ Set a NIM API key for LLM-based column classification (more accurate than NER-on
 
 ```bash
 export NIM_ENDPOINT_URL="https://integrate.api.nvidia.com/v1"
-export NIM_API_KEY="your-key"  # get one at build.nvidia.com/settings/api-keys
+export NIM_API_KEY="<your-api-key>"  # pragma: allowlist secret  # get one at build.nvidia.com/settings/api-keys
 ```
 
 ## Optional: Differential Privacy
