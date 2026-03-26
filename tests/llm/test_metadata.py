@@ -124,7 +124,7 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=False,
         expected_add_eos=False,
         expected_bos_token="<|im_start|>",
-        expected_bos_token_id=1,
+        expected_bos_token_id=1,  #  this is the token_id that the mock_tockenizer injects, not what a real model would use
     ),
     ModelInitScenario(
         id="smollm2",
