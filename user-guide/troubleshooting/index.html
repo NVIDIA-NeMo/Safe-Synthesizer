@@ -9053,11 +9053,9 @@ in the HuggingFace documentation.</p>
 <ol>
 <li>Verify NVIDIA drivers: <code>nvidia-smi</code></li>
 <li>Verify PyTorch CUDA build: <code>python -c "import torch; print(torch.cuda.is_available())"</code></li>
-<li>
-<p>Ensure you installed the CUDA extras, not the CPU-only package:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;nemo-safe-synthesizer[cu128,engine]&quot;</span>
-</span></code></pre></div>
-</li>
+<li>Ensure you installed the CUDA extras, not the CPU-only package.
+   See <a href="../getting-started/#install-the-package">Installation</a> for the
+   full command with required index URLs.</li>
 </ol>
 <p>Switch to the HuggingFace backend for CPU-only environments (useful for
 development, not recommended for production training).</p>
@@ -9074,11 +9072,11 @@ fit within this window. If it doesn't, data assembly fails with a
 <code>GenerationError</code> before training even starts.</p>
 <h4 id="when-records-dont-fit">When Records Don't Fit<a class="headerlink" href="#when-records-dont-fit" title="Permanent link">&para;</a></h4>
 <p>Two error messages indicate context-length problems during data assembly:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>The number of tokens in an example exceeds the available context length
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>The number of tokens in an example exceeds the available context length
 </span></code></pre></div>
 <p>A single training example (schema prompt + records) exceeds
 <code>max_seq_length</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>The dataset schema requires more tokens than the max length of the model
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>The dataset schema requires more tokens than the max length of the model
 </span></code></pre></div>
 <p>The schema prompt alone is wider than <code>max_seq_length</code> -- typically
 because the table has too many columns for the model's context window.</p>
@@ -9139,7 +9137,7 @@ an equivalent config field.</p>
 <h3 id="generationerror">GenerationError<a class="headerlink" href="#generationerror" title="Permanent link">&para;</a></h3>
 <p>Generation failures during synthetic data production. The two most common:</p>
 <dl>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Generation stopped prematurely due to no valid records
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Generation stopped prematurely due to no valid records
 </span></code></pre></div></dt>
 <dd>
 <p>The first batch produced zero valid records. The model may be underfitting
@@ -9147,7 +9145,7 @@ an equivalent config field.</p>
   <code>training.num_input_records_to_sample</code> to give the model more context,
   and check training logs for quality issues.</p>
 </dd>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
 </span></code></pre></div></dt>
 <dd>
 <p>Too many invalid records across <code>generation.patience</code> consecutive batches.
@@ -9248,7 +9246,7 @@ your configuration. Note that some <code>"auto"</code> fields (such as
 <code>training.rope_scaling_factor</code> and <code>training.num_input_records_to_sample</code>)
 require a dataset to resolve -- they will remain <code>"auto"</code> in the validate
 output and only resolve during an actual run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
 </span></code></pre></div>
 <h3 id="common-validation-errors">Common Validation Errors<a class="headerlink" href="#common-validation-errors" title="Permanent link">&para;</a></h3>
 <dl>
@@ -9296,13 +9294,13 @@ optionally reduce CPU parallelism so each worker has more resources.</p>
 <h3 id="authentication-failures">Authentication Failures<a class="headerlink" href="#authentication-failures" title="Permanent link">&para;</a></h3>
 <p>WandB requires an API key when running in <code>online</code> mode. If the key is missing
 or invalid, training will fail when the WandB run is initialized.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>wandb: ERROR api_key not configured (no-auth)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>wandb: ERROR api_key not configured (no-auth)
 </span></code></pre></div>
 <p>Set the API key before running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
 </span></code></pre></div>
 <p>Or switch to offline mode to avoid network access entirely:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>See <a href="../running/#wandb-integration">Running Safe Synthesizer -- WandB Integration</a> for the full WandB setup.</p>
 <h3 id="resume-errors">Resume Errors<a class="headerlink" href="#resume-errors" title="Permanent link">&para;</a></h3>
@@ -9324,8 +9322,8 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 <dd>
 <p>Any <code>NaN</code> or <code>null</code> values in the timestamp column raise a <code>DataError</code>.
   Clean your data before running the pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
 </span></code></pre></div>
 </dd>
 <dt>Interval mismatch:</dt>
@@ -9359,12 +9357,12 @@ groups.</p>
 <p>Safe Synthesizer uses a structured error hierarchy. Understanding which error
 class you received helps narrow down the cause and write targeted <code>except</code> clauses.</p>
 <p>Inheritance:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>SafeSynthesizerError
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>├── InternalError (also RuntimeError)
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>└── UserError
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    ├── DataError (also ValueError)
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    ├── ParameterError (also ValueError)
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    └── GenerationError (also RuntimeError)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>SafeSynthesizerError
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>├── InternalError (also RuntimeError)
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>└── UserError
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    ├── DataError (also ValueError)
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    ├── ParameterError (also ValueError)
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>    └── GenerationError (also RuntimeError)
 </span></code></pre></div>
 <p>SDK callers can catch <a class="autorefs autorefs-internal" title="            UserError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.UserError"><code>UserError</code></a> to handle all user-facing errors, or
 <a class="autorefs autorefs-internal" title="            SafeSynthesizerError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.SafeSynthesizerError"><code>SafeSynthesizerError</code></a> to also catch internal errors. Catching the built-in

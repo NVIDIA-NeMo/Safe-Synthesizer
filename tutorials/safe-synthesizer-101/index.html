@@ -8852,16 +8852,14 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="c1"># SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.</span>
 <span class="c1"># SPDX-License-Identifier: Apache-2.0</span>
 
-<span class="c1">#TODO: Replace the internal NVIDIA Artifactory endpoint with the public PyPI release when available.</span>
-<span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">nemo</span><span class="o">-</span><span class="n">safe</span><span class="o">-</span><span class="n">synthesizer</span><span class="p">[</span><span class="n">engine</span><span class="p">,</span><span class="n">cu128</span><span class="p">]</span> <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="s2">"https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"</span>
+<span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu128]"</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span>
 <span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">%%capture
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-#TODO: Replace the internal NVIDIA Artifactory endpoint with the public PyPI release when available.
-!uv pip install nemo-safe-synthesizer[engine,cu128] --extra-index-url "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
+!uv pip install "nemo-safe-synthesizer[engine,cu128]" --index https://flashinfer.ai/whl/cu128 --index https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
 !uv pip install datasets
 </div>
 </div>
