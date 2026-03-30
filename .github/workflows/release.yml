@@ -35,6 +35,8 @@ on:
         description: Branch to push the version bump
         required: true
         type: string
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -44,12 +46,12 @@ jobs:
   release:
     uses: NVIDIA-NeMo/FW-CI-templates/.github/workflows/_release_library.yml@v0.81.1
     with:
-      release-ref: ${{ inputs.release-ref }}
+      release-ref: ${{ inputs.release-ref || github.sha }}
       python-package: nemo_safe_synthesizer
       library-name: NeMo Safe Synthesizer
-      dry-run: ${{ inputs.dry-run }}
-      version-bump-branch: ${{ inputs.version-bump-branch }}
-      create-gh-release: ${{ inputs.create-gh-release }}
+      dry-run: ${{ inputs.dry-run || false }}
+      version-bump-branch: ${{ inputs.version-bump-branch || 'main' }}
+      create-gh-release: ${{ inputs.create-gh-release || true }}
       packaging: uv
       has-src-dir: true
       app-id: ${{ vars.BOT_ID }}
