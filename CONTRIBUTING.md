@@ -20,6 +20,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Code Style](#code-style)
 - [Documentation](#documentation)
 - [AI Agents](#ai-agents)
+- [Releasing](#releasing)
 - [NMP Integration](#nmp-integration)
 
 ## Getting Started
@@ -581,6 +582,51 @@ This project supports AI coding assistants. Configuration is layered so that con
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
 Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
+
+## Releasing
+
+Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, and optionally publishes to the real PyPI and creates a GitHub release.
+
+### 1. Create and push a tag
+
+Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For release candidates, use the `-rc.N` pre-release suffix:
+
+```bash
+# Stable release
+git tag 0.1.0 <commit-sha>
+
+# Release candidate
+git tag 0.1.0rc1 <commit-sha>
+
+git push origin <tag>
+```
+
+### 2. Run the workflow
+
+Trigger the workflow from the GitHub UI or via `gh`:
+
+**GitHub UI:** Go to **Actions → Release NeMo Safe Synthesizer → Run workflow** and fill in the inputs.
+
+**CLI:**
+
+```bash
+gh workflow run release.yml \
+  --field release-ref=<tag> \
+  --field dry-run=true \
+  --field create-gh-release=false
+```
+
+### 3. Inputs
+
+| Input | Description | Default |
+|---|---|---|
+| `release-ref` | Full SHA or tag to build from | required |
+| `dry-run` | Publish to Test PyPI only; skip real PyPI | `true` |
+| `create-gh-release` | Create a GitHub release and attach the wheel | `true` |
+
+**Dry-run mode** (default): builds the wheel and publishes it to [Test PyPI](https://test.pypi.org/) only. Use this to verify the package before a real release. The workflow always publishes to Test PyPI regardless of `dry-run`.
+
+**Real release**: uncheck `dry-run` (or pass `--field dry-run=false`) to also publish to the real [PyPI](https://pypi.org/). Pre-release tags (`rc`, `alpha`, `beta`, `.dev`) are automatically marked as pre-releases on both PyPI and GitHub.
 
 ## NMP Integration
 

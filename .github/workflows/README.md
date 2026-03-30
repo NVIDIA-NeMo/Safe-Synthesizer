@@ -16,8 +16,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
 | [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`          | Validates NVIDIA copyright headers on Python files    |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
-| [internal-release.yml](internal-release.yml)       | Tag push (`v[0-9]*`), manual dispatch    | Builds and publishes wheel to Artifactory or PyPI     |
-| [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to PyPI (production)     |
+| [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to Test PyPI or PyPI (production)     |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                                      | Scans for accidentally committed secrets              |
 
 ## Pull Request Testing (copy-pr-bot)
