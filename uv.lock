@@ -6081,20 +6081,6 @@ wheels = [
 
 [[package]]
 name = "torchao"
-version = "0.14.1"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin'",
-    "python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
-    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/91/56/19abb32bbdc55d9fdebf8d6315a8f7d8ae10e387a91c631abd92afe0056b/torchao-0.14.1-cp310-abi3-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:50f68db5e41952e88daa383fc2f358541e617654f388f508d5c7580c3bee9447", size = 7197175, upload-time = "2025-10-24T01:02:59.223Z" },
-    { url = "https://files.pythonhosted.org/packages/41/a7/b888635fbb6ae951cffd41e1318966cbed96ec762b4999815ab68269e23f/torchao-0.14.1-py3-none-any.whl", hash = "sha256:c9896e14531817bc2ca6847b3fe71c42592ab80a43628b36668b2d6d6713fb5b", size = 1067611, upload-time = "2025-10-24T01:03:01.357Z" },
-]
-
-[[package]]
-name = "torchao"
 version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
@@ -6308,14 +6294,14 @@ resolution-markers = [
     "python_full_version < '3.12' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:61315bdd92e355416c557b844f9529784fd89f297b52109adb96575b190a0855" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:dabcfd04708e7608eaba4c78b5eec7729273d96c1ec8adf41db7fa3b12d05d04" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c5224dca158c1e0eb235e3c708bd19cefa968bad43d2fbb94b1d5fa397ebf5c5" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8ce9bcedbd12b393d1309fb899e06818624c7e7765c5231ea5749850015c74d8" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:34e02e5406194a7071a703c9fddde133a590369a670ad81a9b4a0e98320617a9" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e5cfa13cb273cee1043fbf9cb61c4438deb16d57b37b2c277b945ef185890c66" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp313-cp313t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:52b7b7e426a8b2cbc0352137cfdfd8f5e735bc6ba82cd1ad8f6c4773759b0e54" },
-    { url = "https://download.pytorch.org/whl/triton-3.5.1-cp313-cp313t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:373d9450f9937c30c2cd55b571a6358e6711cec4a09aa9016108ce9445d2f543" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:61315bdd92e355416c557b844f9529784fd89f297b52109adb96575b190a0855" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:dabcfd04708e7608eaba4c78b5eec7729273d96c1ec8adf41db7fa3b12d05d04" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c5224dca158c1e0eb235e3c708bd19cefa968bad43d2fbb94b1d5fa397ebf5c5" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8ce9bcedbd12b393d1309fb899e06818624c7e7765c5231ea5749850015c74d8" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:34e02e5406194a7071a703c9fddde133a590369a670ad81a9b4a0e98320617a9" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e5cfa13cb273cee1043fbf9cb61c4438deb16d57b37b2c277b945ef185890c66" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp313-cp313t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:52b7b7e426a8b2cbc0352137cfdfd8f5e735bc6ba82cd1ad8f6c4773759b0e54" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.5.1-cp313-cp313t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:373d9450f9937c30c2cd55b571a6358e6711cec4a09aa9016108ce9445d2f543" },
 ]
 
 [[package]]
@@ -6538,8 +6524,8 @@ dependencies = [
     { name = "sentencepiece", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "torch", version = "2.9.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "torch", version = "2.9.1+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "torchao", version = "0.14.1", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
-    { name = "torchao", version = "0.14.1+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "torchao", version = "0.15.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
+    { name = "torchao", version = "0.15.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
     { name = "tqdm", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "transformers", marker = "(platform_machine == 'aarch64' and sys_platform == 'linux') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "triton", version = "3.5.1", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and sys_platform == 'linux' and 'linux' in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'aarch64' and 'linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (platform_machine == 'x86_64' and 'linux' not in sys_platform and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128') or (sys_platform != 'linux' and extra == 'extra-21-nemo-safe-synthesizer-cpu' and extra == 'extra-21-nemo-safe-synthesizer-cu128')" },
