@@ -45,9 +45,12 @@ def update_group_by_config(
 # Config-based tests using two datasets:
 #   - clinc_oos: free text dataset
 #   - enth: numeric/categorical and group-by dataset
-# Using pytest.mark.parametrize to DRY out repetitive tests
-# Some tests are expected to fail, so we mark them with xfail.
-# As we fix those issues, we can remove the xfail marker and the test will be run.
+# Using pytest.mark.parametrize to DRY out repetitive tests.
+#
+# NOTE: SmolLM3 parametrizations (smollm3-dp, smollm3-unsloth) are not covered
+# by any GitHub Actions workflow -- they require manual GPU validation.
+# `make test-e2e` runs only test_safe_synthesizer.py, and the dedicated
+# `make test-nss-smollm3_dp-dow_jones_index-ci` target is not in any workflow.
 
 
 @pytest.mark.timeout(7200)
