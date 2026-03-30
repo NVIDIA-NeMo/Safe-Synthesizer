@@ -133,9 +133,9 @@ cpu = [
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4",
-  "unsloth_zoo==2025.12.4",
-  "vllm==0.15.0",
+  "unsloth[cu128-torch291]==2025.12.4; sys_platform=='linux'",
+  "unsloth_zoo==2025.12.4; sys_platform=='linux'",
+  "vllm==0.15.0; sys_platform=='linux'",
 ]
 
 cu128 = [
