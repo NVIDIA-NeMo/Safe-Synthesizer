@@ -818,9 +818,9 @@ class SmolLM3(ModelMetadata):
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
-                template="user\n {instruction} {schema} <|im_end|> \n <|im_start|>assistant\n{prefill}",
+                template="user\n {instruction} {schema} <|im_end|> \n assistant\n{prefill}",
                 add_bos_token_to_prompt=True,
-                add_eos_token_to_prompt=True,
+                add_eos_token_to_prompt=False,
                 tokenizer=tokenizer,
                 name=model_name_or_path,
                 bos_token=bos_token,
