@@ -8562,6 +8562,7 @@ available: Unsloth (default, faster) and HuggingFace (required for
 differential privacy). Both perform LoRA fine-tuning; see
 <a href="../running/#training">Running -- Training</a> for a comparison.</p>
 <p>The default model is <code>HuggingFaceTB/SmolLM3-3B</code>. Safe Synthesizer has tested support for <code>HuggingFaceTB/SmolLM3-3B</code>, <code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code>, and <code>mistralai/Mistral-7B-Instruct-v0.3</code> (see <a href="../configuration/#training">Configuration -- Training</a> for details on how to change the backend or model).</p>
+<p>Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.</p>
 <div class="admonition tip">
 <p class="admonition-title">Differential privacy</p>
 <p>For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via <code>privacy.dp_enabled: true</code>. See <a href="../configuration/#differential-privacy">Configuration -- Differential Privacy</a>.</p>
