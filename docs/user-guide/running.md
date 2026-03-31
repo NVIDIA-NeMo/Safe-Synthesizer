@@ -516,6 +516,7 @@ Three models have been extensively tested:
 We recommend you start with the default, `HuggingFaceTB/SmolLM3-3B`. However, depending on your use case, you may find a different model to be a better fit.
 
 Based on testing, some trade-offs identified compared to SmolLM3 on average:
+
 - TinyLlama runs ~17% faster, while Mistral takes ~2x as long to run.
 - Mistral has ~6% increase in valid record fraction, while TinyLlama has ~7% decrease.
 - Mistral has ~5% higher job completion rate and TinyLlama has ~3% higher.

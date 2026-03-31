@@ -123,11 +123,9 @@ To diagnose:
 
 1. Verify NVIDIA drivers: `nvidia-smi`
 2. Verify PyTorch CUDA build: `python -c "import torch; print(torch.cuda.is_available())"`
-3. Ensure you installed the CUDA extras, not the CPU-only package:
-
-    ```bash
-    pip install "nemo-safe-synthesizer[cu128,engine]"
-    ```
+3. Ensure you installed the CUDA extras, not the CPU-only package.
+   See [Installation](getting-started.md#install-the-package) for the
+   full command with required index URLs.
 
 Switch to the HuggingFace backend for CPU-only environments (useful for
 development, not recommended for production training).

@@ -20,17 +20,68 @@ does at each stage.
 
 ### Install the Package
 
+The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
+indexes outside PyPI. You must pass the extra index URLs shown below.
+
 === "CUDA 12.8 (Linux with NVIDIA GPU)"
 
-    ```bash
-    pip install "nemo-safe-synthesizer[cu128,engine]"
-    ```
+    === "pip"
+
+        ```bash
+        pip install "nemo-safe-synthesizer[cu128,engine]" \
+          --extra-index-url https://download.pytorch.org/whl/cu128 \
+          --extra-index-url https://flashinfer.ai/whl/cu128
+        ```
+
+    === "uv"
+
+        ```bash
+        uv pip install "nemo-safe-synthesizer[cu128,engine]" \
+          --index https://flashinfer.ai/whl/cu128 \
+          --index https://download.pytorch.org/whl/cu128 \
+          --index-strategy unsafe-best-match
+        ```
+
+        !!! info "Why `--index-strategy unsafe-best-match`"
+            FlashInfer publishes wheels to flashinfer.ai, but `flashinfer-python`
+            also appears on the PyTorch index at older versions. uv's default
+            `first-match` strategy stops at the first index that contains a
+            package name, so it picks up the wrong version from the PyTorch
+            index and fails to resolve. `--index-strategy unsafe-best-match`
+            tells uv to consider all indexes and pick the best matching version.
 
 === "CPU (macOS / Linux without GPU)"
 
-    ```bash
-    pip install "nemo-safe-synthesizer[cpu,engine]"
-    ```
+    On **macOS**, PyTorch ships standard wheels on PyPI, so no extra indexes are needed.
+
+    On **Linux**, the CPU-only PyTorch wheels (`+cpu` local version) are hosted
+    on a separate PyTorch index.
+
+    === "pip (macOS)"
+
+        ```bash
+        pip install "nemo-safe-synthesizer[cpu,engine]"
+        ```
+
+    === "pip (Linux)"
+
+        ```bash
+        pip install "nemo-safe-synthesizer[cpu,engine]" \
+          --extra-index-url https://download.pytorch.org/whl/cpu
+        ```
+
+    === "uv (macOS)"
+
+        ```bash
+        uv pip install "nemo-safe-synthesizer[cpu,engine]"
+        ```
+
+    === "uv (Linux)"
+
+        ```bash
+        uv pip install "nemo-safe-synthesizer[cpu,engine]" \
+          --index https://download.pytorch.org/whl/cpu
+        ```
 
     !!! warning "Development use only"
         The CPU install does not support training or generation. Use it to
@@ -54,9 +105,19 @@ does at each stage.
 
 === "Bare package for config definitions"
 
-    ```bash
-    pip install "nemo-safe-synthesizer"
-    ```
+    The bare package has no PyTorch or FlashInfer dependencies.
+
+    === "pip"
+
+        ```bash
+        pip install "nemo-safe-synthesizer"
+        ```
+
+    === "uv"
+
+        ```bash
+        uv pip install "nemo-safe-synthesizer"
+        ```
 
     !!! note "Limited use"
         The bare package includes only the Pydantic configuration models -- no
@@ -191,6 +252,8 @@ differential privacy). Both perform LoRA fine-tuning; see
 [Running -- Training](running.md#training) for a comparison.
 
 The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the backend or model).
+
+Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.
 
 !!! tip "Differential privacy"
     For formal privacy guarantees, enable Differentially Private Stochastic Gradient Descent (DP-SGD) when fine-tuning via `privacy.dp_enabled: true`. See [Configuration -- Differential Privacy](configuration.md#differential-privacy).
