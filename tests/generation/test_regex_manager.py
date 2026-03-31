@@ -452,12 +452,11 @@ def test_round_trip_dataframe_schema_regex_matches_iris(
     assert re.fullmatch(regex, text) is not None
 
 
-# Purpose: Round-trip regression for Adobe dataset (single text column): CSV -> DataFrame -> schema -> regex must match JSONL rows.
-# Data: stub_datasets/adobe-sampled.csv; each CSV record is quoted text in a single column (long-form string).
+# Purpose: Round-trip regression for doc summaries dataset (single text column): CSV -> DataFrame -> schema -> regex must match JSONL rows.
+# Data: stub_datasets/doc_summaries.csv; each CSV record is quoted text in a single column (long-form string).
 # Asserts: Non-grouped JSONL (one object per line) fully matches the produced regex.
-def test_round_trip_adobe_sample_schema_regex_matches(fixture_adobe_sampled_dataset, fixture_safe_synthesizer_config):
-    # Use a modest subset to keep test fast but meaningful
-    sample_df = fixture_adobe_sampled_dataset.iloc[:20].copy()
+def test_round_trip_doc_summaries_schema_regex_matches(fixture_doc_summaries_dataset, fixture_safe_synthesizer_config):
+    sample_df = fixture_doc_summaries_dataset.copy()
 
     buf = StringIO()
     sample_df.to_json(buf, orient="records", lines=True)
