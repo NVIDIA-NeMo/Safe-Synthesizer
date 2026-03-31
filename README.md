@@ -1,6 +1,6 @@
-# Nemo Safe Synthesizer
+# 🛡️ NeMo Safe Synthesizer
 
-This package makes synthetic data, safely.
+NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datasets -- entirely synthetic data with no one-to-one mapping to your original records. Purpose-built for privacy compliance and sensitive information protection while preserving data utility for downstream AI tasks.
 
 ## Installation
 
