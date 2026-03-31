@@ -158,6 +158,7 @@ nav:
       - Evaluation: product-overview/evaluation.md
   - Tutorials:
       - tutorials/index.md
+      - Safe Synthesizer 101: tutorials/safe-synthesizer-101.ipynb 
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md

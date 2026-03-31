@@ -7,7 +7,7 @@ Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 
 ## Available Tutorials
 
-_No tutorials have been added yet._
+- [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
 
 ## Adding a Tutorial
 
