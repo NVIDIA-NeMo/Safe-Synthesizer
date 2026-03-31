@@ -380,7 +380,7 @@ class AttributeInferenceProtection(Component):
             numeric_columns = [column for column in df_train.columns if column not in nominal_columns]
 
             # Now separate out the text columns from the nominal
-            text_columns = find_text_fields(df_train[nominal_columns])
+            text_columns = find_text_fields(cast(pd.DataFrame, df_train[nominal_columns]))
             nominal_columns = [x for x in nominal_columns if x not in text_columns]
 
             # If there are text columns, create an embedder
