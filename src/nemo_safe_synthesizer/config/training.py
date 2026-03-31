@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import platform
 from typing import (
-    Self,
     Annotated,
     Literal,
+    Self,
 )
 
 from pydantic import (

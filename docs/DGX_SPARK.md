@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # NeMo Safe Synthesizer on DGX Spark
 
 Generate synthetic tabular data with quality and privacy guarantees — train, generate, and evaluate in one command.
