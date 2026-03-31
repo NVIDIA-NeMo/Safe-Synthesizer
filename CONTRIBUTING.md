@@ -19,6 +19,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Testing](#testing)
 - [Code Style](#code-style)
 - [Documentation](#documentation)
+- [AI Agents](#ai-agents)
+- [NMP Integration](#nmp-integration)
 
 ## Getting Started
 
@@ -191,10 +193,6 @@ git rebase --force-rebase --gpg-sign --signoff upstream/main
 
 git push --force-with-lease
 ```
-
-### NMP Integration
-
-NeMo Safe Synthesizer is a standalone package. Changes flow into NMP via Artifactory publishing and vendor packaging. See the [NMP Integration](README.md#nmp-integration) section of the README for details on publishing, SDK vendoring, and local development workflows.
 
 ## Repository Settings
 
@@ -406,6 +404,8 @@ See the full [DCO](DCO) file for details.
 
 ## Testing
 
+See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and usage.
+
 ### Running Tests
 
 ```bash
@@ -581,6 +581,36 @@ This project supports AI coding assistants. Configuration is layered so that con
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
 Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
+
+## NMP Integration
+
+NeMo Safe Synthesizer is developed as a standalone package and published to PyPI and optionally published to the internal NVIDIA Artifactory. The NeMo Platform (NMP) consumes it as an external dependency.
+
+### Publishing to Artifactory
+
+The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
+
+```bash
+make publish-internal
+```
+
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+
+### Local Development with NMP
+
+The NMP service (`services/safe-synthesizer/pyproject.toml` in the NVIDIA internal `nmp` repo) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
+
+When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
+
+```bash
+# In the NMP repo, from services/safe-synthesizer/
+make use-nss-local          # Build local wheel and patch pyproject.toml
+make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
+```
+
+See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
+
+Run `make help` to see all available Makefile targets.
 
 ---
 
