@@ -9,7 +9,7 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 ### Prerequisites
 
 - Python 3.11+ (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any supported 3.11+ interpreter is fine)
-- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.10.0)
+- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.11.0)
 - NVIDIA GPU (A100 or larger) for training and generation
 
 ### Installation
