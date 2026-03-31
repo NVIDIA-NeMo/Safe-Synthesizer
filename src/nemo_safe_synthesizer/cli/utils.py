@@ -135,16 +135,16 @@ def _create_workdir(
                 raise click.ClickException(
                     f"No trained adapter found in {search_path}.\n\n"
                     "Run training first:\n"
-                    f"  nss run train --data-source data.csv --artifacts-path {search_path}"
+                    f"  safe-synthesizer run train --data-source data.csv --artifacts-path {search_path}"
                 ) from e
         else:
             # No run_path and no auto-discover - error with helpful message
             raise click.ClickException(
                 "--run-path is required for 'generate' command.\n\n"
                 "Specify the path to a trained run:\n"
-                "  nss run generate --data-source data.csv --run-path ./artifacts/<project>/<run>\n\n"
+                "  safe-synthesizer run generate --data-source data.csv --run-path ./artifacts/<project>/<run>\n\n"
                 "Or use --auto-discover-adapter to find the latest trained run:\n"
-                "  nss run generate --data-source data.csv --auto-discover-adapter"
+                "  safe-synthesizer run generate --data-source data.csv --auto-discover-adapter"
             )
 
         # Verify adapter exists using the workdir's adapter_path property
