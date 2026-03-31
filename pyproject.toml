@@ -95,7 +95,7 @@ engine = [
     "prv-accountant",
     "smart-open==7.0.5",
     "python-stdnum",
-    "pandas>=2.1.3, <3",
+    "pandas>=2.1.3, <4",
     "plotly",
     "ratelimit",
     "scikit-learn",
