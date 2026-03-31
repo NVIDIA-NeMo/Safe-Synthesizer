@@ -194,10 +194,6 @@ git rebase --force-rebase --gpg-sign --signoff upstream/main
 git push --force-with-lease
 ```
 
-### NMP Integration
-
-NeMo Safe Synthesizer is a standalone package. Changes flow into NMP via Artifactory publishing and vendor packaging. See the [NMP Integration](README.md#nmp-integration) section of the README for details on publishing, SDK vendoring, and local development workflows.
-
 ## Repository Settings
 
 This repository uses GitHub Rulesets to enforce consistent contribution standards. These rules are automatically enforced—you don't need to configure anything, but you should understand them to contribute successfully.
