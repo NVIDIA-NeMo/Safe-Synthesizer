@@ -153,7 +153,7 @@ cu128 = [
   "sentence-transformers",
   "torch==2.9.1+cu128; sys_platform == 'linux'",
   "torch-c-dlpack-ext",
-  "torchvision==0.24.1+cu128; sys_platform == 'linux'",
+  "torchvision==0.26.0; sys_platform == 'linux'",
   "torchao==0.15.0; sys_platform == 'linux'",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform == 'linux'",
