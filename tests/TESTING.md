@@ -92,7 +92,7 @@ Markers are only added if not already present on the test item.
 
 | Location | Contents |
 |----------|----------|
-| `tests/stub_datasets/` | 8 data files: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `adobe-sampled.csv` (+ `LICENSES.md`) |
+| `tests/stub_datasets/` | Sample datasets including: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `doc_summaries.csv` (+ `licenses.md`) |
 | `tests/stub_tokenizer/` | Minimal tokenizer config |
 | `tests/test_data/tokenizers/` | Full tokenizers: `tinyllama/`, `mistral7b/`, `smollm3b/` |
 | `tests/pii_replacer/fake_people_dataset.csv` | PII test data for NER/replacement |

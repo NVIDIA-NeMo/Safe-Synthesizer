@@ -246,8 +246,8 @@ def fixture_lmsys_chat_non_english_dataset() -> pd.DataFrame:
 
 
 @pytest.fixture
-def fixture_adobe_sampled_dataset() -> pd.DataFrame:
-    return load_test_dataframe("adobe-sampled.csv")
+def fixture_doc_summaries_dataset() -> pd.DataFrame:
+    return load_test_dataframe("doc_summaries.csv")
 
 
 # Purpose: Clinc OOS dataset fixture for free text tests.
