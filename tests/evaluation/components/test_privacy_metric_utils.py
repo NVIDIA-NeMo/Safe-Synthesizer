@@ -1,15 +1,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.evaluation.components.privacy_metric_utils import (
     divide_tabular_text,
     embed_text,
-    find_text_fields,
 )
 
 
@@ -41,7 +41,8 @@ def test_divide_tabular_text(train_df):
 def test_embed_text(mock_embedder):
     """Regression test: with 3+ columns the old pairwise-averaging code
     over-weighted later columns.  The corrected np.stack/np.mean must give
-    each column equal weight."""
+    each column equal weight.
+    """
     df = pd.DataFrame(
         {
             "a": ["x"],  # len 1 → embedding [1, 2, 3]
