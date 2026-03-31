@@ -7,6 +7,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+pytest.importorskip(
+    "sentence_transformers",
+    reason="sentence_transformers is required for these tests (install with: uv sync --extra cpu)",
+)
+
 from nemo_safe_synthesizer.evaluation.components.privacy_metric_utils import (
     divide_tabular_text,
     embed_text,
