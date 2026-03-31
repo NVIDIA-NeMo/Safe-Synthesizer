@@ -135,7 +135,7 @@ def _create_workdir(
                 raise click.ClickException(
                     f"No trained adapter found in {search_path}.\n\n"
                     "Run training first:\n"
-                    f"  safe-synthesizer run train --data-source data.csv --artifacts-path {search_path}"
+                    f"  safe-synthesizer run train --data-source data.csv --artifact-path {search_path}"
                 ) from e
         else:
             # No run_path and no auto-discover - error with helpful message
