@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/differential-privacy/">
       
       
-        <link rel="prev" href="../">
+        <link rel="prev" href="../safe-synthesizer-101/">
       
       
-        <link rel="next" href="../differential-privacy/">
+        <link rel="next" href="../../user-guide/getting-started/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Safe Synthesizer 101 - NeMo Safe Synthesizer</title>
+        <title>Differential Privacy - NeMo Safe Synthesizer</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo-safe-synthesizer-tutorial-the-basics" class="md-skip">
+        <a href="#nemo-safe-synthesizer-tutorial-differential-privacy" class="md-skip">
           Skip to content
         </a>
       
@@ -118,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Safe Synthesizer 101
+              Differential Privacy
             
           </span>
         </div>
@@ -691,6 +691,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../safe-synthesizer-101/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Safe Synthesizer 101
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -710,7 +738,7 @@
   <span class="md-ellipsis">
     
   
-    Safe Synthesizer 101
+    Differential Privacy
   
 
     
@@ -728,7 +756,7 @@
   <span class="md-ellipsis">
     
   
-    Safe Synthesizer 101
+    Differential Privacy
   
 
     
@@ -752,17 +780,6 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-youll-learn" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What you'll learn
-      
-    </span>
-  </a>
-  
-</li>
       
         <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
@@ -845,34 +862,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../differential-privacy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Differential Privacy
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -8178,17 +8167,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-youll-learn" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What you'll learn
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9061,8 +9039,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="nemo-safe-synthesizer-tutorial-the-basics">🔐 NeMo Safe Synthesizer Tutorial: The Basics<a class="anchor-link" href="#nemo-safe-synthesizer-tutorial-the-basics">¶</a></h1><h4 id="what-youll-learn">What you'll learn<a class="anchor-link" href="#what-youll-learn">¶</a></h4><p>In this notebook, we'll explore the fundamentals of NeMo Safe Synthesizer: PII replacement, training on a sample dataset, generating synthetic data, and evaluating quality and privacy.</p>
-<p>This library supports numeric, categorical, and text fields within the training data and generates realistic synthetic data that mirrors the structure of your data. A full run takes about 15 minutes on an A100.</p>
+<h1 id="nemo-safe-synthesizer-tutorial-differential-privacy">🔐 NeMo Safe Synthesizer Tutorial: Differential Privacy<a class="anchor-link" href="#nemo-safe-synthesizer-tutorial-differential-privacy">¶</a></h1><p>Learn how to apply differential privacy to achieve strong privacy with mathematical guarantees. This tutorial demonstrates how to configure differential privacy parameters for optimal results. The runtime of this notebook is about 1 hour on an A100.</p>
+<p>If you have not yet completed the <a href="safe-synthesizer-101.ipynb">Safe Synthesizer 101</a> tutorial, consider starting there first.</p>
 <h3 id="prerequisites">🖥️ Prerequisites<a class="anchor-link" href="#prerequisites">¶</a></h3><p>This notebook requires a GPU. We recommend an H100; minimum A100.</p>
 </div>
 </div>
@@ -9074,7 +9052,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="install-safe-synthesizer">⚡ Install Safe Synthesizer<a class="anchor-link" href="#install-safe-synthesizer">¶</a></h3><p>Run the cell below to install NeMo Safe Synthesizer (engine and CUDA 12.8) and the <code>datasets</code> library for the sample dataset.</p>
+<h3 id="install-safe-synthesizer">⚡ Install Safe Synthesizer<a class="anchor-link" href="#install-safe-synthesizer">¶</a></h3><p>Run the cell below to install NeMo Safe Synthesizer (engine and CUDA 12.8) and kagglehub for the example dataset.</p>
 </div>
 </div>
 </div>
@@ -9102,14 +9080,14 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="c1"># SPDX-License-Identifier: Apache-2.0</span>
 
 <span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu128]"</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span>
-<span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span>
+<span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">kagglehub</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">%%capture
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 !uv pip install "nemo-safe-synthesizer[engine,cu128]" --index https://flashinfer.ai/whl/cu128 --index https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
-!uv pip install datasets
+!uv pip install kagglehub
 </div>
 </div>
 </div>
@@ -9123,7 +9101,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="set-the-inference-api-key-for-pii-column-classification">🔑 Set the inference API key for PII column classification<a class="anchor-link" href="#set-the-inference-api-key-for-pii-column-classification">¶</a></h3><p>NeMo Safe Synthesizer uses an LLM‑based column classifier to automatically infer PII columns. To enable this feature, set <code>NSS_INFERENCE_KEY</code> (the inference endpoint defaults to the NVIDIA integrate URL. You can obtain an API key from <a href="https://build.nvidia.com/settings/api-keys">build.nvidia.com</a>). Setting this value is optional but strongly recommended.</p>
+<h3 id="set-the-inference-api-key-for-pii-column-classification">🔑 Set the inference API key for PII column classification<a class="anchor-link" href="#set-the-inference-api-key-for-pii-column-classification">¶</a></h3><p>NeMo Safe Synthesizer uses an LLM‑based column classifier to automatically infer PII columns. To enable this feature, set <code>NSS_INFERENCE_KEY</code>. By default, the inference endpoint is <code>https://integrate.api.nvidia.com/v1</code> (the NVIDIA integrate URL). You can obtain an API key from <a href="https://build.nvidia.com/settings/api-keys">build.nvidia.com</a>). Setting this value is optional but strongly recommended.</p>
 </div>
 </div>
 </div>
@@ -9185,14 +9163,22 @@ else:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="load-and-preview-sample-dataset">📥 Load and preview sample dataset<a class="anchor-link" href="#load-and-preview-sample-dataset">¶</a></h3><p>Load a tabular dataset—in this example, the <a href="https://huggingface.co/datasets/clinc/clinc_oos">clinc_oos</a> dataset from Hugging Face—and preview the first few rows. NeMo Safe Synthesizer will use this DataFrame as its training data.</p>
-<p>This dataset includes a text column and a categorical intent label supported by Nemo Safe Synthesizer.</p>
-<p>Each user is responsible for checking the content of datasets and the applicable licenses and determining if suitable for the intended use.</p>
+<h3 id="load-and-preview-sample-dataset">📥 Load and preview sample dataset<a class="anchor-link" href="#load-and-preview-sample-dataset">¶</a></h3><p>Load a tabular dataset—in this example, the <a href="https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents">US Accidents dataset</a> from Kaggle—and preview the first few rows. NeMo Safe Synthesizer will use a subset to keep runtime manageable.</p>
+<p>This dataset includes text, categorical, and numeric fields, all of which are supported by Safe Synthesizer.</p>
+<p>The code below also computes a recommended <code>delta</code> for differential privacy. Delta should reflect the full dataset size, not the subset, because it bounds the probability of a privacy breach across the entire population. See <a href="../user-guide/configuration.md#differential-privacy">Differential Privacy</a> for parameter guidance.</p>
+<blockquote>
+<p>Dataset citations:</p>
+<ul>
+<li>Moosavi, Sobhan, Mohammad Hossein Samavatian, Srinivasan Parthasarathy, and Rajiv Ramnath. "A Countrywide Traffic Accident Dataset.", 2019.</li>
+<li>Moosavi, Sobhan, Mohammad Hossein Samavatian, Srinivasan Parthasarathy, Radu Teodorescu, and Rajiv Ramnath. "Accident Risk Prediction based on Heterogeneous Sparse Data: New Dataset and Insights." In proceedings of the 27th ACM SIGSPATIAL International Conference on Advances in Geographic Information Systems, ACM, 2019.</li>
+</ul>
+<p>Each user is responsible for checking the content of the dataset and the applicable licenses and determining if it is suitable for the intended use.</p>
+</blockquote>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=fb1a562a">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=3d456d9b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -9210,36 +9196,36 @@ else:
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">kagglehub</span>
 
-<span class="n">dataset</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="s2">"clinc/clinc_oos"</span><span class="p">,</span> <span class="s2">"small"</span><span class="p">)</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">dataset</span><span class="p">[</span><span class="s2">"train"</span><span class="p">]</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-<span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
+<span class="n">path</span> <span class="o">=</span> <span class="n">kagglehub</span><span class="o">.</span><span class="n">dataset_download</span><span class="p">(</span><span class="s2">"sobhanmoosavi/us-accidents"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"Path to dataset files:"</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">/US_Accidents_March23.csv"</span><span class="p">,</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">full_data_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="n">recommended_delta</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="n">full_data_size</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># delta should reflect the full dataset, even when a subset is used as Safe Synthesizer input</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Full dataset size: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span><span class="si">}</span><span class="s2"> records"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Recommended delta: </span><span class="si">{</span><span class="n">recommended_delta</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3">from datasets import load_dataset
+<div class="clipboard-copy-txt" id="cell-3">import pandas as pd
+import kagglehub
 
-dataset = load_dataset("clinc/clinc_oos", "small")
-df = dataset["train"].to_pandas()
-df.head()</div>
+path = kagglehub.dataset_download("sobhanmoosavi/us-accidents")
+print("Path to dataset files:", path)
+df = pd.read_csv(f"{path}/US_Accidents_March23.csv", index_col=0)
+full_data_size = len(df)
+recommended_delta = 1 / (full_data_size ** 2)  # delta should reflect the full dataset, even when a subset is used as Safe Synthesizer input
+
+print(f"Full dataset size: {len(df)} records")
+print(f"Recommended delta: {recommended_delta:.2e}")</div>
 </div>
 </div>
-</div>
-</div>
-</div>
-</div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1c394bab">
-<div class="jp-Cell-inputWrapper" tabindex="0">
-<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
-</div>
-<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
-</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="create-and-run-safe-synthesizer-job">⚙️ Create and run Safe Synthesizer job<a class="anchor-link" href="#create-and-run-safe-synthesizer-job">¶</a></h3><p>Create the Safe Synthesizer builder and attach your DataFrame. Run the pipeline with <code>run()</code>, which performs data processing, PII replacement, training, generation, and evaluation in a single call. Results are available on <code>builder.results</code>.</p>
-<p>Refer to the <a href="../user-guide/configuration.md">configuration docs</a> for the full list of options.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=9694992a">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=63f5ce95">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -9257,18 +9243,74 @@ df.head()</div>
 </div>
 </clipboard-copy>
 </div>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># use a subset as Safe Synthesizer input for faster runtime</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">26250</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">318</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input dataset size: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="p">)</span><span class="si">}</span><span class="s2"> records"</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
+</pre></div>
+<div class="clipboard-copy-txt" id="cell-4"># use a subset as Safe Synthesizer input for faster runtime
+df = df.sample(n=26250, random_state=318)
+print(f"Input dataset size: {len(df)} records")
+df.head()</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1c394bab">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h3 id="create-and-run-safe-synthesizer-job">⚙️ Create and run Safe Synthesizer job<a class="anchor-link" href="#create-and-run-safe-synthesizer-job">¶</a></h3><p>Create the Safe Synthesizer builder and attach your DataFrame. Enable differential privacy and configure the training and generation stages for optimal performance with DP.</p>
+<p>Run the pipeline with <code>run()</code>, which performs data processing, PII replacement, training, generation, evaluation and saving of results in a single call. Results are available on <code>builder.results</code>.</p>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=3bbde286">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="CodeMirror cm-s-jupyter">
+<div class="zeroclipboard-container">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-5">
+<div>
+<span class="notice" hidden="">Copied!</span>
+<svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
+<path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+<path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+</clipboard-copy>
+</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.sdk.library_builder</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizer</span>
 
-<span class="n">builder</span> <span class="o">=</span> <span class="n">SafeSynthesizer</span><span class="p">()</span><span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>  <span class="c1"># .with_replace_pii(enable=False) to disable PII replacement</span>
+<span class="n">builder</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">SafeSynthesizer</span><span class="p">()</span>
+    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>  <span class="c1"># .with_replace_pii(enable=False) to disable PII replacement</span>
+    <span class="o">.</span><span class="n">with_differential_privacy</span><span class="p">(</span><span class="n">dp_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="n">recommended_delta</span><span class="p">)</span>
+    <span class="o">.</span><span class="n">with_train</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>  <span class="c1"># Override the default batch size of 1, which is designed for non-DP training</span>
+    <span class="o">.</span><span class="n">with_generate</span><span class="p">(</span><span class="n">use_structured_generation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Improves the percentage of valid records when DP is enabled</span>
+<span class="p">)</span>
 <span class="n">builder</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 <span class="n">results</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">results</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+<div class="clipboard-copy-txt" id="cell-5">from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
-builder = SafeSynthesizer().with_data_source(df)  # .with_replace_pii(enable=False) to disable PII replacement
+builder = (
+    SafeSynthesizer()
+    .with_data_source(df)  # .with_replace_pii(enable=False) to disable PII replacement
+    .with_differential_privacy(dp_enabled=True, delta=recommended_delta)
+    .with_train(batch_size=16)  # Override the default batch size of 1, which is designed for non-DP training
+    .with_generate(use_structured_generation=True)  # Improves the percentage of valid records when DP is enabled
+)
 builder.run()
-results = builder.results
-</div>
+results = builder.results</div>
 </div>
 </div>
 </div>
@@ -9294,7 +9336,7 @@ results = builder.results
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-5">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -9308,7 +9350,7 @@ results = builder.results
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Number of synthetic rows: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">synth</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <span class="n">synth</span><span class="o">.</span><span class="n">head</span><span class="p">()</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-5">synth = results.synthetic_data
+<div class="clipboard-copy-txt" id="cell-6">synth = results.synthetic_data
 print(f"Number of synthetic rows: {len(synth)}")
 synth.head()</div>
 </div>
@@ -9317,7 +9359,7 @@ synth.head()</div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=8e8f90d5">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=d2b842ad">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -9325,7 +9367,7 @@ synth.head()</div>
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-6">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-7">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -9338,7 +9380,7 @@ synth.head()</div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># Synthetic data and evaluation report are automatically saved to the artifacts directory</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Artifacts automatically saved to: </span><span class="si">{</span><span class="n">builder</span><span class="o">.</span><span class="n">_workdir</span><span class="o">.</span><span class="n">generate</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-6"># Synthetic data and evaluation report are automatically saved to the artifacts directory
+<div class="clipboard-copy-txt" id="cell-7"># Synthetic data and evaluation report are automatically saved to the artifacts directory
 print(f"Artifacts automatically saved to: {builder._workdir.generate.path}")</div>
 </div>
 </div>
@@ -9365,7 +9407,7 @@ print(f"Artifacts automatically saved to: {builder._workdir.generate.path}")</di
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-7">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -9380,7 +9422,7 @@ print(f"Artifacts automatically saved to: {builder._workdir.generate.path}")</di
 <span class="nb">print</span><span class="p">(</span><span class="s2">"Summary (timing and scores):"</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">summary</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-7">import json
+<div class="clipboard-copy-txt" id="cell-8">import json
 
 print("Summary (timing and scores):")
 print(json.dumps(results.summary.model_dump(), indent=2))</div>
@@ -9398,7 +9440,7 @@ print(json.dumps(results.summary.model_dump(), indent=2))</div>
 <div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div><div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
 <div class="CodeMirror cm-s-jupyter">
 <div class="zeroclipboard-container">
-<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-8">
+<clipboard-copy ,="" aria-label="Copy to Clipboard" for="cell-9">
 <div>
 <span class="notice" hidden="">Copied!</span>
 <svg aria-hidden="true" class="clipboard-copy-icon" data-view-component="true" height="20" version="1.1" viewbox="0 0 16 16" width="20">
@@ -9417,7 +9459,7 @@ print(json.dumps(results.summary.model_dump(), indent=2))</div>
     <span class="n">data_url</span> <span class="o">=</span> <span class="s2">"data:text/html;base64,"</span> <span class="o">+</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">report_html</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
     <span class="n">display</span><span class="p">(</span><span class="n">IFrame</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="n">data_url</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s2">"100%"</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">800</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8"># View the evaluation report in a sandboxed iframe
+<div class="clipboard-copy-txt" id="cell-9"># View the evaluation report in a sandboxed iframe
 import base64
 from IPython.display import IFrame, display
 
@@ -9475,7 +9517,7 @@ if report_html:
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../" class="md-footer__link md-footer__link--prev" aria-label="Previous: Index">
+          <a href="../safe-synthesizer-101/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Safe Synthesizer 101">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9485,20 +9527,20 @@ if report_html:
                 Previous
               </span>
               <div class="md-ellipsis">
-                Index
+                Safe Synthesizer 101
               </div>
             </div>
           </a>
         
         
           
-          <a href="../differential-privacy/" class="md-footer__link md-footer__link--next" aria-label="Next: Differential Privacy">
+          <a href="../../user-guide/getting-started/" class="md-footer__link md-footer__link--next" aria-label="Next: Getting Started">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Differential Privacy
+                Getting Started
               </div>
             </div>
             <div class="md-footer__button md-icon">
