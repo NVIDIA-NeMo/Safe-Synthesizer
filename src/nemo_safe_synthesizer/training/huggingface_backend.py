@@ -717,7 +717,6 @@ class HuggingFaceBackend(TrainingBackend):
         """
         training_start = time.monotonic()
         self.prepare_training_data()
-        breakpoint() # do self.tokenizer.decode(self.training_examples.train['input_ids'][0]
         self.prepare_params(**training_args)
         self.trainer.train()
         training_time_sec = time.monotonic() - training_start
