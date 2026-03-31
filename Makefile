@@ -163,9 +163,9 @@ test: ## Run unit tests excluding slow tests
 	$(PYTEST_CMD) -m "unit and not slow"
 
 .PHONY: test-slow
-test-slow: ## Run all tests including slow tests (excludes e2e)
+test-slow: ## Run unit tests including slow tests (excludes e2e and smoke)
 	pushd $(NSS_ROOT_PATH) && \
-	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "not e2e" --run-slow
+	$(PYTEST_CMD) $(NSS_ROOT_PATH)/tests -m "unit"
 
 .PHONY: test-ci
 test-ci: ## Run CI unit tests excluding slow, GPU, and smoke tests
