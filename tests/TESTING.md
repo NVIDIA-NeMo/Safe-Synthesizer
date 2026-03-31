@@ -164,5 +164,5 @@ See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotch
 - Nullable dtype before NaN: convert to `pd.Int64Dtype()`/`pd.BooleanDtype()` before assigning `np.nan`; see `evaluation/conftest.py` `make_df`.
 - Faker: seed with `fake.seed_instance(seed)` and `random.seed(seed)` for reproducibility.
 - Tests mirror source structure: `tests/training/`, `tests/generation/`, etc.
-- Naming: fixture names use `fixture`_ prefix consistently (e.g., `fixture_iris_dataset`).
+- Naming: fixture names use `fixture_` prefix consistently (e.g., `fixture_iris_dataset`).
 - `print()` is allowed in tests (ruff `T201` is suppressed for `tests/`). Use it freely for debug output in test functions.
