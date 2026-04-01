@@ -409,11 +409,11 @@ See the full [DCO](DCO) file for details.
 ### Running Tests
 
 ```bash
-# Run unit tests (excludes slow and e2e)
+# Run unit tests (excludes slow unit tests, smoke and e2e)
 make test
 
-# Run all tests including slow tests (excludes e2e)
-make test-slow
+# Run all unit tests including slow tests (excludes smoke and e2e)
+make test-unit-slow
 
 # Run CPU smoke tests (~10 seconds, no GPU required)
 make test-smoke
