@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 ### CLINC OOS (`clinc_oos.csv`)
 
 [Licensed](https://github.com/clinc/oos-eval/blob/master/LICENSE) under CC-BY-3.0 (Creative Commons Attribution 3.0 Unported).

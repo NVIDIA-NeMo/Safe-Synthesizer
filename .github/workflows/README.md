@@ -14,7 +14,6 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, unit tests, and CPU smoke tests    |
 | [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual  | GPU smoke tests (required) and E2E tests (A100)       |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
-| [copyright-check.yml](copyright-check.yml)         | Push to `main`/`pull-request/*`          | Validates NVIDIA copyright headers on Python files    |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
 | [internal-release.yml](internal-release.yml)       | Tag push (`v[0-9]*`), manual dispatch    | Builds and publishes wheel to Artifactory or PyPI     |
 | [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to PyPI (production)     |
@@ -93,7 +92,7 @@ flowchart LR
     end
 
     push --> ci & gpu
-    cpb --> gpu & copyright
+    cpb --> gpu
     pr --> ci & conventional & secrets
     manual --> release
     tag[Tag push v[0-9]*] --> internalRelease
@@ -103,7 +102,6 @@ flowchart LR
 
     conventional -.->|reuses| FW-CI-templates
     secrets -.->|reuses| FW-CI-templates
-    copyright -.->|reuses| FW-CI-templates
     release -.->|reuses| FW-CI-templates
 ```
 
@@ -199,10 +197,6 @@ Or comment on the PR: `I have read the DCO Document and I hereby sign the DCO`
 ### Secrets Detector
 
 Scans PRs for accidentally committed secrets. False positives can be added to `.github/workflows/config/.secrets.baseline`.
-
-### Copyright Check
-
-Validates that Python files have proper NVIDIA copyright headers.
 
 ## Internal Release Workflow
 
