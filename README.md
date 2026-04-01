@@ -2,39 +2,35 @@
 
 NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datasets -- entirely synthetic data with no one-to-one mapping to your original records. Purpose-built for privacy compliance and sensitive information protection while preserving data utility for downstream AI tasks.
 
-## Installation
+## Quick Start
+
+Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
 ### Prerequisites
 
 - Python 3.11+ (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any supported 3.11+ interpreter is fine)
-- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.10.0)
-- Git
+- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.11.0)
+- NVIDIA GPU (A100 or larger) for training and generation
 
-### Quick Start
-
-Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
+### Installation
 
 ```bash
+uv pip install "nemo-safe-synthesizer[cu128,engine]" \
+  --index https://flashinfer.ai/whl/cu128 \
+  --index https://download.pytorch.org/whl/cu128 \
+  --index-strategy unsafe-best-match
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
+cd Safe-Synthesizer
 make bootstrap-tools
-```
-
-Then bootstrap the project package with your desired extras -- likely `cpu|cuda`.
-
-```bash
-# CPU-only (for development on Linux without GPU, or macOS)
-make bootstrap-nss cpu
-
-# CUDA 12.8 (for Linux with NVIDIA GPU)
 make bootstrap-nss cuda
-
-# Engine only (synthesis engine dependencies, no torch/training)
-make bootstrap-nss engine
-
-# Dev only (minimal dev dependencies, no engine or torch)
-make bootstrap-nss dev
 ```
 
-## Running
+### Running
 
 Activate Python virtual environment and run the CLI using `safe-synthesizer`:
 
@@ -388,109 +384,13 @@ Config values passed as CLI arguments always take precendence, then any override
 - `load_args` - Extra arguments needed by the data reader for a specific dataset.
 For example, changing the separator used by `pd.read_csv` for a `.csv` file with a different delimiter.
 
-## Slurm Jobs
+## License
 
-For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts in `script/slurm/`.
+NeMo Safe Synthesizer is licensed under the [Apache License 2.0](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/LICENSE).
 
-These scripts support:
+## Contact
 
-- Matrix runs: Launching jobs across multiple configurations and datasets.
-- Two-stage pipelines: Running training and generation as separate jobs with dependencies.
-- Containerized execution: Running jobs inside enroot containers.
-
-See [script/slurm/README.md](script/slurm/README.md) for detailed instructions on cluster setup and job submission.
-
-## Testing
-
-We have pytest set up for unit, smoke, and end-to-end tests.
-
-### Running Tests
-
-You can run tests using `make` targets or `pytest` directly.
-
-```bash
-# Run unit tests (excludes slow and e2e tests)
-make test
-
-# Run all tests including slow tests (excludes e2e)
-make test-slow
-
-# Run CPU smoke tests (~few min, no GPU required)
-make test-smoke
-
-# Run GPU smoke tests (requires CUDA)
-make test-smoke-gpu
-
-# Run end-to-end tests (requires CUDA)
-make test-e2e
-
-# Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
-make test-nss-tinyllama_unsloth-clinc_oos-ci
-
-# Run specific test files directly
-uv run pytest tests/cli/test_run.py
-```
-
-See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and usage.
-
-### Container-Based Testing
-
-You can run the CI test suite locally in a Linux container using Docker or Podman:
-
-```bash
-# Build the test container and run CI tests
-make test-ci-container
-```
-
-This builds a container image from `containers/Dockerfile.test_ci` and runs `make test-ci` inside it. This is useful for verifying tests pass in a Linux environment when developing on macOS.
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribution guidelines.
-
-### Setup
-
-```bash
-# 1. Bootstrap development tools
-make bootstrap-tools
-
-# 2. Install Python dependencies and package
-make bootstrap-nss cpu    # or: cuda, engine, dev
-
-# 3. Run tests
-make test
-
-# 4. Format and check
-make format
-make check
-```
-
-### NMP Integration
-
-NeMo Safe Synthesizer is developed as a standalone package and published to NVIDIA Artifactory. The NeMo Platform (NMP) consumes it as an external dependency.
-
-#### Publishing to Artifactory
-
-The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
-
-```bash
-make publish-internal
-```
-
-This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
-
-#### Local Development with NMP
-
-The NMP service (`services/safe-synthesizer/pyproject.toml` in the NVIDIA internal `nmp` repo) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
-
-When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
-
-```bash
-# In the NMP repo, from services/safe-synthesizer/
-make use-nss-local          # Build local wheel and patch pyproject.toml
-make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
-```
-
-See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
-
-Run `make help` to see all available Makefile targets.
+- [Need help? Ask us a question](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions)
+- [Report a bug](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=bug-report.yml)
+- [Make a feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=feature-request.yml)
+- [Report a security vulnerability](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/security/policy)

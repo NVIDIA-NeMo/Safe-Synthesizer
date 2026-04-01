@@ -18,7 +18,7 @@ All `make` targets, grouped by scope:
 
 ```bash
 make test                  # Unit (excludes slow, e2e, and smoke)
-make test-slow             # Unit tests including slow (excludes e2e and smoke)
+make test-unit-slow        # Unit tests including slow (excludes e2e and smoke)
 make test-smoke            # CPU smoke tests (~few min, no GPU required)
 make test-smoke-gpu        # GPU smoke tests (requires CUDA)
 make test-e2e              # All e2e (requires CUDA) -- runs default + dp
