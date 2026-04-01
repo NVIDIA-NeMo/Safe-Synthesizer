@@ -7,9 +7,11 @@ import time
 from unittest import mock
 from unittest.mock import MagicMock
 
-import nemo_safe_synthesizer.observability as obs
 import pytest
 import structlog
+from rich.table import Table
+
+import nemo_safe_synthesizer.observability as obs
 from nemo_safe_synthesizer.observability import (
     CategoryFilter,
     CategoryLogger,
@@ -24,10 +26,10 @@ from nemo_safe_synthesizer.observability import (
     _render_rich_table,
     _render_table_data_for_console,
     get_logger,
+    heartbeat,
     initialize_observability,
     traced,
 )
-from rich.table import Table
 
 # =============================================================================
 # NSSObservabilitySettings Tests
@@ -259,7 +261,7 @@ class TestRenderRichTable:
         assert "Count" in result
         assert "100" in result
         assert "Rate" in result
-        assert "95.000%" in result  # Formatted as percentage
+        assert "95.00%" in result  # Formatted as percentage
 
     def test_renders_nested_dict(self):
         """Test rendering a nested statistics dictionary."""
@@ -616,3 +618,62 @@ class TestObservabilityIntegration:
 
         assert "Error in error_test" in caplog.text
         assert "RuntimeError" in caplog.text
+
+
+class TestHeartbeat:
+    """Tests for the heartbeat context manager."""
+
+    def test_heartbeat_logs_completion(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Test op", interval=0.05):
+            time.sleep(0.01)
+
+        assert "Test op complete" in caplog.text
+
+    def test_heartbeat_logs_progress_on_long_operation(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Slow op", interval=0.05):
+            time.sleep(0.5)
+
+        assert "Slow op in progress" in caplog.text
+        assert "Slow op complete" in caplog.text
+
+    def test_heartbeat_includes_extra_fields(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Loading", interval=0.05, model="test-model"):
+            time.sleep(0.2)
+
+        # Extra fields appear on record.ctx (plain logging) or get
+        # merged into the structlog event dict (when structlog is
+        # initialized). Check both paths.
+        has_field = any(
+            getattr(r, "ctx", {}).get("model") == "test-model" or "test-model" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_field, f"model field not found in records: {caplog.text}"
+
+    def test_heartbeat_logs_elapsed_seconds(self, caplog):
+        caplog.set_level(logging.INFO)
+        with heartbeat("Timed op", interval=0.05):
+            time.sleep(0.2)
+
+        has_elapsed = any(
+            "elapsed_seconds" in getattr(r, "ctx", {}) or "elapsed_seconds" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_elapsed, f"elapsed_seconds not found in records: {caplog.text}"
+
+    def test_heartbeat_logs_failure_on_exception(self, caplog):
+        caplog.set_level(logging.INFO)
+        with pytest.raises(RuntimeError):
+            with heartbeat("Failing op", interval=60.0):
+                raise RuntimeError("boom")
+
+        assert "Failing op failed" in caplog.text
+        assert "Failing op complete" not in caplog.text
+        has_error_type = any(
+            getattr(r, "ctx", {}).get("error_type") == "RuntimeError"
+            or "'error_type': 'RuntimeError'" in getattr(r, "message", r.getMessage())
+            for r in caplog.records
+        )
+        assert has_error_type, f"error_type not found in records: {caplog.text}"

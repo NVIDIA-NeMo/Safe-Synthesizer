@@ -7,6 +7,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+  - [Commit Signing](#commit-signing)
 - [Repository Settings](#repository-settings)
   - [Branch Naming Convention](#branch-naming-convention)
   - [Conventional Commits](#conventional-commits)
@@ -17,29 +18,46 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Developer Certificate of Origin](#developer-certificate-of-origin)
 - [Testing](#testing)
 - [Code Style](#code-style)
+- [Documentation](#documentation)
+- [AI Agents](#ai-agents)
+- [Releasing](#releasing)
+- [NMP Integration](#nmp-integration)
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.11+
-- Git
-- [gh](https://cli.github.com/) - GitHub CLI (optional, for PR workflows)
+- Python 3.11+ (project supports Python ≥3.11; `.python-version` currently pins 3.11 for bootstrapping at the repo root)
+- Git 2.34+ (minimum required for SSH commit signing)
 
-> **Note:** Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), and [ty](https://github.com/astral-sh/ty) are installed automatically by `make bootstrap-tools`.
+> Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make bootstrap-tools`.
 
 ### Setup
 
-1. Fork the repository on GitHub
-2. Clone your fork:
+1. Get the code:
+
+> NVIDIA employees have write access and can clone the repo directly. External contributors should fork first, then clone the fork and add an upstream remote.
+
   ```bash
-   git clone https://github.com/<your-username>/safe-synthesizer.git
-   cd safe-synthesizer
+   # NVIDIA internal -- clone directly
+   git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
+
+   # External -- fork on GitHub, then:
+   git clone https://github.com/<your-username>/Safe-Synthesizer.git
+   cd Safe-Synthesizer
+   git remote add upstream https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
   ```
-3. Set up the development environment:
+
+2. Set up the development environment:
+
   ```bash
-   # Install development tools (uv, ruff, ty, yq, etc.)
+   cd Safe-Synthesizer
+
+   # Install development tools (uv, ruff, ty, yq, etc.) to ~/.local/bin
    make bootstrap-tools
+
+   # Ensure ~/.local/bin is on your PATH (add to your shell profile if needed)
+   export PATH="$HOME/.local/bin:$PATH"
 
    # Install Python dependencies (choose one)
    make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
@@ -47,34 +65,135 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss engine # Engine dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
-   Or, if you have a local clone of the NMP repo, bootstrap everything in one step:
+
+3. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+
   ```bash
-   NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
-  ```
-   This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs Python dependencies with CPU extras.
-4. Add the upstream remote:
-  ```bash
-   git remote add upstream https://github.com/NVIDIA-NeMo/safe-synthesizer.git
+   echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
   ```
 
-### NMP Synchronization
+   Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
 
-If you work with the NMP monorepo, set `NMP_REPO_PATH` to your local checkout to enable sync targets:
+### Commit Signing
+
+This repository requires [verified commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification). The `main` branch Ruleset enforces `required_signatures`, so unsigned commits will block PR merges. This is separate from [DCO sign-off](#developer-certificate-of-origin) -- both are required.
+
+Choose one of the two options below.
+
+#### Option A: SSH signing (recommended)
+
+Most contributors already have an SSH key for GitHub authentication. The same key can also sign commits. If you don't have an SSH key yet, see [Generating a new SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+1. Set scopes on your `gh` cli. We'll remove them later.
+
+   ```bash
+   gh auth refresh -s admin:ssh_signing_key
+   ```
+
+2. Check whether your key is already registered for signing:
+
+   ```bash
+   gh ssh-key list
+   ```
+
+   If your key already appears with type `signing`, skip to step 4.
+
+3. Register the key as a signing key on GitHub (authentication and signing keys are tracked separately -- having one does not count as the other). This registers the key and then removes the permission scope so it doesn't persist in your token (change this if you want to keep the scope).
+
+   ```bash
+     gh ssh-key add ~/.ssh/id_ed25519.pub --type signing \
+     && gh auth refresh -r admin:ssh_signing_key
+   ```
+
+   Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-new-ssh-key-to-your-github-account) > SSH and GPG keys > New SSH key > Key type: "Signing Key".
+
+4. Configure git to sign commits (see [Telling Git about your signing key](https://docs.github.com/en/authentication/managing-commit-signature-verification/telling-git-about-your-signing-key) for details):
+
+!!! info "git global"
+    You can make this a global default if you'd like by adding the `--global` flag. The following commands are repo scoped.
+
+   ```bash
+   git config gpg.format ssh
+   git config user.signingkey ~/.ssh/id_ed25519.pub
+   ```
+
+5. (Optional) Configure local verification:
+
+   To see "Good signature" locally when running `git log --show-signature`, git needs to know which SSH keys to trust.
+
+   ```bash
+   # Create allowed_signers file
+   echo "$(git config --get user.email) $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
+
+   # Tell git to use it
+   git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+   ```
+
+#### Option B: GPG signing
+
+If you already have a GPG key or prefer GPG. To generate one, see [Generating a new GPG key](https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key).
+
+1. Register the key on GitHub. The `admin:gpg_key` scope grants write access to your account's GPG keys; the one-liner below adds it, uploads the key, then removes the scope:
+
+   ```bash
+   gh auth refresh -s admin:gpg_key \
+     && gh gpg-key add <public-key-file> \
+     && gh auth refresh -r admin:gpg_key
+   ```
+
+   Or [manually via GitHub Settings](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account) > SSH and GPG keys > New GPG key.
+
+2. Configure git to use your key to sign commits:
+
+   ```bash
+   git config user.signingkey <GPG-KEY-ID>
+   ```
+
+#### Verify signing works
 
 ```bash
-export NMP_REPO_PATH=/path/to/nmp
+git commit --allow-empty -s -S -m "test: verify commit signing"
+git log --show-signature -1
 
-# Sync files from NMP to this repo
-make synchronize-from-nmp
-
-# Sync files from this repo to NMP
-make synchronize-to-nmp
-
-# Sync from a specific NMP merge request
-make synchronize-from-nmp-mr MR=5603
+# Clean up the test commit
+git reset --soft HEAD~1
 ```
 
-> **Note:** `NMP_REPO_PATH` is only required for NMP sync operations. It is not needed for standard development, testing, or CI. we also will remove this after we extricate nss fro mnmp.
+You should see a valid signature in the output. On GitHub, the commit will display a "Verified" badge. If something isn't working, see [Troubleshooting commit signature verification](https://docs.github.com/en/authentication/troubleshooting-commit-signature-verification).
+
+
+To avoid forgetting `--signoff` and `--gpg-sign` on future commits, configure this repo to GPG-sign automatically and create a short alias that adds DCO sign-off:
+
+
+!!! info "Git aliases"
+    You can obviously choose your own aliases or set them elsewhere - this is just a suggestion so you do not have to think about it.
+
+
+```bash
+# Automatic GPG signing on every commit (native git config)
+git config commit.gpgsign true
+
+# Alias -- git aliases can't override built-in commands, so use "commit-sign" instead of "commit"
+git config alias.commit-sign "commit --signoff"
+```
+
+Then use `git commit-sign` instead of `git commit`. Since `commit.gpgsign` is active, every commit is both signed and DCO-certified.
+
+NVIDIA internal contributors who work primarily on repos that require DCO and signing can set these globally instead: `git config --global commit.gpgsign true` and `git config --global alias.commit-sign "commit --signoff"`.
+
+#### Re-signing existing commits
+
+If you have unsigned commits on a feature branch that were pushed before signing was configured, rebase to re-create them with signatures. Use the remote that points to the NVIDIA repo (`origin` for internal contributors, `upstream` for external forks):
+
+```bash
+# NVIDIA internal
+git rebase --force-rebase --gpg-sign --signoff origin/main
+
+# External (forked)
+git rebase --force-rebase --gpg-sign --signoff upstream/main
+
+git push --force-with-lease
+```
 
 ## Repository Settings
 
@@ -196,16 +315,18 @@ Examples:
 The `main` branch has the following protections:
 
 
-| Rule                            | Setting     |
-| ------------------------------- | ----------- |
-| Required approvals              | 1           |
-| Code owner review               | Required    |
-| Dismiss stale reviews           | No          |
-| Require conversation resolution | Yes         |
-| Linear history                  | Required    |
-| Force pushes                    | Blocked     |
-| Deletions                       | Blocked     |
-| Merge strategy                  | Squash only |
+| Rule                            | Setting      |
+| ------------------------------- | ------------ |
+| Required approvals              | 1            |
+| Code owner review               | Required     |
+| Dismiss stale reviews           | Yes          |
+| Require conversation resolution | Yes          |
+| Signed commits                  | Required     |
+| Required status checks          | CI Status    |
+| Linear history                  | Required     |
+| Force pushes                    | Blocked      |
+| Deletions                       | Blocked      |
+| Merge strategy                  | Squash only  |
 
 
 ## Pull Request Process
@@ -226,7 +347,14 @@ The `main` branch has the following protections:
   ```
 6. Open a Pull Request using the [PR template](.github/PULL_REQUEST_TEMPLATE.md)
 7. Address review feedback — reviewers from [CODEOWNERS](.github/CODEOWNERS) will be automatically assigned
-8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted
+   - Respond to comments in the github console, be sure to submit as pending comments are only visible to you
+   - Resolve comments where the requested change has been made or otherwise addressed.
+   - Leave comments unresolved if seeking further review or input from the reviewer
+   - Reviewers may re-open resolved comments with further comments or questions, that's okay and part of the process
+   - After responding to all comments and pushing changes to the branch, re-request review with the circular arrow button to the right of the reviewer name
+   - Use the Assignees list to indicate who's expected to take the next action on the PR, such as PR author after reviewer leaves comments, or the reviewer after updates have been made
+   - Reviewers: If there is an error in the PR or something that requires large changes, review and mark it as "requires changes" for explicit feedback. This can give signal for triaging which PRs are mostly ready or those that require more work.
+8. Merge — once approved, your PR will be squash-merged and the branch auto-deleted. Please review the git message, which will automatically be set to the first comment in the PR.
 
 ### CODEOWNERS
 
@@ -273,31 +401,53 @@ By signing off, you certify the [Developer Certificate of Origin](DCO):
 
 See the full [DCO](DCO) file for details.
 
+> Note: DCO sign-off (`git commit -s`) adds a text trailer asserting your right to contribute. It is not a cryptographic signature. This repository also requires [commit signing](#commit-signing) -- both are independent requirements.
+
 ## Testing
+
+See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and usage.
 
 ### Running Tests
 
 ```bash
-# Run unit tests (excludes slow and e2e)
+# Run unit tests (excludes slow unit tests, smoke and e2e)
 make test
 
-# Run all tests including slow tests (excludes e2e)
-make test-slow
+# Run all unit tests including slow tests (excludes smoke and e2e)
+make test-unit-slow
 
-# Run SDK-related tests (config, sdk, cli, api)
-make test-sdk-related
+# Run CPU smoke tests (~10 seconds, no GPU required)
+make test-smoke
 
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
+# Run GPU smoke tests (requires CUDA)
+make test-smoke-gpu
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
+
+# Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
+make test-nss-tinyllama_unsloth-clinc_oos-ci
 
 # Run CI tests locally in a Linux container (Docker/Podman)
 make test-ci-container
 
 # Run specific test files directly
 uv run pytest tests/cli/test_run.py
+```
+
+### GPU Tests (CI)
+
+GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
+
+- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2, Unsloth). Required for merge.
+- GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
+
+When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
+
+To trigger from the CLI instead (no PR status check):
+
+```bash
+gh workflow run gpu-tests.yml --ref <your-branch>
 ```
 
 ### Test Requirements
@@ -310,33 +460,203 @@ Before submitting a PR:
 
 ## Code Style
 
-### Formatting
+For detailed style guidelines covering Python, markdown, Dockerfiles, shell scripts, testing, and docstrings, see [STYLE_GUIDE.md](STYLE_GUIDE.md).
 
-We use [Ruff](https://docs.astral.sh/ruff/) for code formatting and import sorting. The formatter runs on changed files against the `main` branch.
+### Formatting, Linting, and Type Checking
 
-```bash
-# Format code and sort imports
-make format
-```
-
-### Linting and Type Checking
-
-We use [Ruff](https://docs.astral.sh/ruff/) for linting and [ty](https://github.com/astral-sh/ty) for type checking. Both run on changed files against `main`.
+Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `make bootstrap-tools` and check all tracked files.
 
 ```bash
-# Run ruff linter (with auto-fix) and ty type checker
-make lint
+make format   # auto-fix: ruff format + import sorting + copyright headers
+make check    # read-only: all CI checks (format + lint + typecheck + copyright)
+make test     # unit tests
+# or just
+make format check test
 ```
 
-### Pre-commit Hooks
+We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-We recommend setting up pre-commit hooks to catch formatting, linting, and type issues before committing:
+CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
+
+The wrapper scripts in `tools/` also accept explicit file paths for spot-checking individual files:
 
 ```bash
-prek install
+bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
 ```
 
-This installs hooks that run Ruff (format + lint), ty type checking, and uv lock verification on each commit.
+All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
+
+All `make` targets check the entire project. Pre-commit scopes checks to staged files. The wrapper scripts also accept explicit file paths when you want to check specific files.
+
+| Check | CI target | `make format` / `make check` | Pre-commit |
+|---|---|---|---|
+| ruff format + lint | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| ty typecheck | `make typecheck` | read-only | all files |
+| copyright headers | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| uv lock drift | `make lock-check` | not checked | on `pyproject.toml` changes |
+| DCO signoff | branch protection | not checked | commit-msg hook |
+
+## Documentation
+
+This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) for its documentation site, hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
+
+### Local Preview
+
+Documentation dependencies are included in the `dev` bootstrap profile. If you already ran `make bootstrap-nss dev` (or `cpu`/`cuda`), you're set. Otherwise install them directly:
+
+```bash
+uv sync --group docs
+```
+
+Start a local server with live reload:
+
+```bash
+make docs-serve
+# Browse to http://127.0.0.1:8000
+```
+
+In Cursor or VS Code Remote, the port is auto-forwarded. Check the Ports
+panel (`Ctrl+Shift+P` > "Ports: Focus on Ports View") -- port 8000 will
+appear with a local address you can open in the Simple Browser or your
+system browser.
+
+Build the static site (output in `site/`):
+
+```bash
+make docs-build
+```
+
+### Directory Layout
+
+All documentation lives under `docs/`. The structure follows the [Diataxis](https://diataxis.fr/) framework:
+
+| Directory | Content type | Examples |
+| --- | --- | --- |
+| `getting-started/` | Tutorials | Installation, quick start |
+| `user-guide/` | How-tos & reference | CLI, configuration, SDK |
+| `architecture/` | Explanations | Design decisions |
+| `reference/` | API reference | Auto-generated (see below) |
+| `blog/` | Dev notes | Release notes, design posts |
+
+### Adding or Editing a Page
+
+1. Create or edit the `.md` file under the appropriate `docs/` subdirectory.
+2. Add the page to the `nav:` section of `mkdocs.yml` so it appears in the sidebar.
+3. Run `make docs-serve` and verify the page renders correctly.
+
+### MkDocs Material Features
+
+The site configuration (`mkdocs.yml`) enables several useful Markdown extensions:
+
+- Admonitions -- callout boxes (`!!! note`, `!!! warning`, `??? tip` for collapsible)
+- Content tabs -- tabbed content blocks (`=== "Python SDK"` / `=== "CLI"`)
+- Code blocks -- syntax highlighting, line numbers, copy button, and annotations
+- Mermaid diagrams -- fenced code blocks with ` ```mermaid `
+- Task lists, footnotes, definition lists, and emoji
+
+See the [MkDocs Material reference](https://squidfunk.github.io/mkdocs-material/reference/) for full syntax.
+
+### API Reference
+
+API reference pages are auto-generated from Python docstrings. The `mkdocstrings` and `gen-files` plugins run `docs/gen_ref_pages.py` at build time to produce pages under `reference/`. You do not need to edit these files manually -- just write Google-style docstrings in `src/nemo_safe_synthesizer/` and they will appear on the next build.
+
+### Deployment
+
+Documentation is deployed to GitHub Pages automatically when changes to `docs/`, `mkdocs.yml`, or `src/` are pushed to `main`. The workflow is defined in `.github/workflows/docs.yml`.
+
+## AI Agents
+
+This project supports AI coding assistants. Configuration is layered so that conventions are shared across tools while tool-specific features use their native config format.
+
+| Config file | Read by | Purpose |
+|-------------|---------|---------|
+| `AGENTS.md` | All agents (Cursor, Windsurf, Claude Code, etc.) | Repo conventions, module map, skills index |
+| `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
+| `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
+| `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
+| `.agents/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agents/skills/` for Cursor discoverability |
+| `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
+
+Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
+
+Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
+
+## Releasing
+
+Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, and optionally publishes to the real PyPI and creates a GitHub release.
+
+### 1. Create and push a tag
+
+Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For release candidates, use the `rcN` pre-release suffix:
+
+```bash
+# Stable release
+git tag 0.1.0 <commit-sha>
+
+# Release candidate
+git tag 0.1.0rc1 <commit-sha>
+
+git push origin <tag>
+```
+
+### 2. Run the workflow
+
+Trigger the workflow from the GitHub UI or via `gh`:
+
+**GitHub UI:** Go to **Actions → Release NeMo Safe Synthesizer → Run workflow** and fill in the inputs.
+
+**CLI:**
+
+```bash
+gh workflow run release.yml \
+  --field release-ref=<tag> \
+  --field dry-run=true \
+  --field create-gh-release=false
+```
+
+### 3. Inputs
+
+| Input | Description | Default |
+|---|---|---|
+| `release-ref` | Full SHA or tag to build from | required |
+| `dry-run` | Publish to Test PyPI only; skip real PyPI | `true` |
+| `create-gh-release` | Create a GitHub release and attach the wheel | `true` |
+
+**Dry-run mode** (default): builds the wheel and publishes it to [Test PyPI](https://test.pypi.org/) only. Use this to verify the package before a real release. The workflow always publishes to Test PyPI regardless of `dry-run`.
+
+**Real release**: uncheck `dry-run` (or pass `--field dry-run=false`) to also publish to the real [PyPI](https://pypi.org/). Pre-release tags (`rc`, `alpha`, `beta`, `.dev`) are automatically marked as pre-releases on both PyPI and GitHub.
+
+## NMP Integration
+
+NeMo Safe Synthesizer is developed as a standalone package and published to PyPI and optionally published to the internal NVIDIA Artifactory. The NeMo Platform (NMP) consumes it as an external dependency.
+
+### Publishing to Artifactory
+
+The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
+
+```bash
+make publish-internal
+```
+
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+
+### Local Development with NMP
+
+The NMP service (`services/safe-synthesizer/pyproject.toml` in the NVIDIA internal `nmp` repo) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
+
+When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
+
+```bash
+# In the NMP repo, from services/safe-synthesizer/
+make use-nss-local          # Build local wheel and patch pyproject.toml
+make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
+```
+
+See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
+
+Run `make help` to see all available Makefile targets.
 
 ---
 

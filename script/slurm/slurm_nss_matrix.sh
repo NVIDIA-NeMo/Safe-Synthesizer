@@ -1,18 +1,82 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 
 set -euo pipefail
 
-# Source shared environment; prefer existing USER_NAME, then $USER, fallback
-USER_NAME="${USER_NAME:-${USER:-seayang}}"
+# The following environment variables are expected to be set. Some have
+# plausible default values, and others we check and throw an immediate
+# error here at the top of the script. This list of environment variables
+# and checks also serves as documentation for the script.
 
-# Source env_variables.sh - use NSS_SLURM_DIR if available, otherwise construct from USER_NAME
-if [ -n "${NSS_SLURM_DIR:-}" ]; then
-    source "${NSS_SLURM_DIR}/env_variables.sh"
-else
-    source /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer/script/slurm/env_variables.sh
+# This script is intended to be executed through slurm, so these environment
+# variables would be set automatically as part of the slurm job submission.
+# But being able to run this script standalone for debugging purposes is
+# useful.
+
+# If running standalone, manually source env_variables.sh to pick up many
+# needed environment variables.
+
+if [ -z "${PACKED_DATASETS:-}" ]; then
+    echo "PACKED_DATASETS must be set" >&2
+    echo "Run script through submit_slurm_jobs.sh, or if running manually, export PACKED_DATASETS with a single dataset name or url/path" >&2
+    exit 1
 fi
 
-# Allow callers to override ADAPTER_PATH after env_variables.sh sets it
+if [ -z "${PACKED_CONFIGS:-}" ]; then
+    echo "PACKED_CONFIGS must be set" >&2
+    echo "Run script through submit_slurm_jobs.sh, or if running manually, export PACKED_CONFIGS with a single config name (without .yaml extension) to be found in the CONFIG_DIR" >&2
+    exit 1
+fi
+
+if [ -z "${NSS_DIR:-}" ]; then
+    echo "NSS_DIR must be set" >&2
+    echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
+    exit 1
+fi
+
+if [ -z "${LUSTRE_DIR:-}" ]; then
+    echo "LUSTRE_DIR must be set" >&2
+    echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
+    exit 1
+fi
+
+if [ -z "${NSS_SHARED_DIR:-}" ]; then
+    echo "NSS_SHARED_DIR must be set" >&2
+    echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
+    exit 1
+fi
+SLURM_ARRAY_TASK_ID="${SLURM_ARRAY_TASK_ID:-}"
+SLURM_JOB_ID="${SLURM_JOB_ID:-0}"
+NSS_PHASE="${NSS_PHASE:-end_to_end}"
+# EXP_NAME controls the experiment namespace under nss_results
+EXP_NAME="${EXP_NAME:-multi_jobs}"
+BASE_LOG_DIR="${BASE_LOG_DIR:-./}"
+
+
+cd "${NSS_DIR}"
+
+# Get dataset and config name from packed strings
+declare -a all_datasets
+declare -a all_configs
+IFS=',' read -r -a all_datasets <<< "${PACKED_DATASETS}"
+IFS=',' read -r -a all_configs <<< "${PACKED_CONFIGS}"
+
+if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+    dataset=${all_datasets[$SLURM_ARRAY_TASK_ID]}
+    config=${all_configs[$SLURM_ARRAY_TASK_ID]}
+else
+    echo "SLURM_ARRAY_TASK_ID is not set, assuming single dataset and config"
+    if [ ${#all_datasets[@]} -ne 1 ] || [ ${#all_configs[@]} -ne 1 ]; then
+        echo "Exactly one dataset and one config must be provided when SLURM_ARRAY_TASK_ID is not set" >&2
+        exit 1
+    fi
+    dataset=${all_datasets[0]}
+    config=${all_configs[0]}
+fi
+
+# Allow callers to override ADAPTER_PATH
 if [[ -n "${ADAPTER_PATH_OVERRIDE:-}" ]]; then
     export ADAPTER_PATH="${ADAPTER_PATH_OVERRIDE}"
     export NSS_ARTIFACTS_PATH="${ADAPTER_PATH}"
@@ -28,91 +92,16 @@ apt-get update && apt-get install -y --no-install-recommends \
         libcurl4 \
         libcurl3-gnutls
 
-# Temporary: reuse the pre-built venv from the old nmp repo
-# (bypasses uv project resolution that fails on missing .nmp_repo)
-export VIRTUAL_ENV="${NMP_DIR}/.venv"
-export PATH="${VIRTUAL_ENV}/bin:${PATH}"
-cd "${NSS_DIR}"
+# Ensure Python environment is available inside the container
+source "${LUSTRE_DIR}/.uv/bin/env"
+source "${NSS_DIR}/.venv/bin/activate"
+uv sync --frozen --extra cu128 --extra engine --group dev
 
 # for column classification
-export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
+export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
 source "${LUSTRE_DIR}/.api_tokens.sh"
 
-
-
-# Select dataset group
-DATASET_GROUP=${DATASET_GROUP:-short}
-
-declare -a datasets
-
-if [ -n "${DATASET_URLS:-}" ]; then
-    IFS=',' read -r -a datasets <<< "$DATASET_URLS"
-else
-    if [ "$DATASET_GROUP" = "long" ]; then
-        # 4 longer datasets (require more time)
-        datasets=(
-            ai_generated_essays
-            call_transcripts
-            cover_type
-            online_news_popularity
-            car_accident
-            diabetes
-        )
-    elif [ "$DATASET_GROUP" = "short" ]; then
-        # 17 short datasets (21 total minus 4 long)
-        datasets=(
-            adult
-            amazon_reviews_25k
-            aids_clinical_trials
-            beijing
-            bike_sales
-            clinc_oos
-            default
-            dialogs
-            EHR
-            ecommerce_reviews
-            magic
-            ontonotes5_reduced
-            patient_events
-            project_management_sequences
-            shoppers
-            stack_exchange_data_dump
-        )
-    fi
-fi
-
-
-RUNS=${RUNS:-5}
-
-# Map index inputs
-if [ -n "${DATASET_INDEX:-}" ]; then
-    idx=${DATASET_INDEX}
-else
-    idx=${SLURM_ARRAY_TASK_ID:-0}
-fi
-
-num_datasets=${#datasets[@]}
-num_runs=$RUNS
-
-if [ "$num_datasets" -eq 0 ]; then
-    echo "No datasets defined. Set DATASET_URLS or check DATASET_GROUP." >&2
-    exit 1
-fi
-
-if [ -n "${RUN_INDEX:-}" ]; then
-    # Fixed run index; dataset index comes directly from idx
-    run_idx=${RUN_INDEX}
-    dataset_idx=$(( idx % num_datasets ))
-else
-    # Legacy mapping across (dataset, config, run)
-    per_dataset=$(( num_configs * num_runs ))
-    dataset_idx=$(( (idx / per_dataset) % num_datasets ))
-    remainder=$(( idx % per_dataset ))
-    run_idx=$(( remainder % num_runs ))
-fi
-
-dataset=${datasets[$dataset_idx]}
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"
@@ -120,11 +109,15 @@ dataset=${datasets[$dataset_idx]}
 dataset_basename=$(basename "$dataset")
 dataset_name="${dataset_basename%.*}"
 
-config=${CONFIG_DIR}/${CONFIG_NAMES}
+full_config_path="${CONFIG_DIR}/${config}.yaml"
+if [[ ! -f "$full_config_path" ]]; then
+    echo "Config file not found: ${full_config_path}" >&2
+    exit 1
+fi
 
 # Construct run path for WorkdirStructure
 # - two_stage mode (train/generate): Share same base path without SLURM ID
-#   Note: Don't submit multiple batches of same config/dataset/run_idx concurrently in two_stage mode
+#   Note: Don't submit multiple batches of same config/dataset/job_idx concurrently in two_stage mode
 #   The train phase creates the workdir, generate phase resumes from it (with unique output files)
 # - end_to_end mode: Include SLURM ID for uniqueness across concurrent runs
 slurm_id="${SLURM_ARRAY_JOB_ID:-${SLURM_JOB_ID}}"
@@ -132,30 +125,38 @@ if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
     slurm_id="${slurm_id}_${SLURM_ARRAY_TASK_ID}"
 fi
 
-if [[ "${PHASE}" == "end_to_end" ]]; then
+if [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+    job_idx=${SLURM_ARRAY_TASK_ID}
+else
+    job_idx=0
+fi
+
+
+if [[ "${NSS_PHASE}" == "end_to_end" ]]; then
     # end_to_end: include SLURM ID for unique paths across concurrent runs
-    run_path=${ADAPTER_PATH}/${CONFIG_NAMES}_${dataset_name}_${run_idx}_${slurm_id}
+    run_path=${ADAPTER_PATH}/${config}_${dataset_name}_${job_idx}_${slurm_id}
 else
     # two_stage (train/generate): shared base path without SLURM ID
     # Train creates workdir; generate resumes and creates unique output files per run
-    run_path=${ADAPTER_PATH}/${CONFIG_NAMES}_${dataset_name}_${run_idx}
+    run_path=${ADAPTER_PATH}/${config}_${dataset_name}_${job_idx}
 fi
 
 # Results directory (optional; experiments may also write their own outputs)
-# EXP_NAME controls the experiment namespace under nss_results
-EXP_NAME=${EXP_NAME:-multi_jobs}
-OUTPUT_DIR="${BASE_LOG_DIR}/${EXP_NAME}/$DATASET_GROUP/${dataset_name}/$(basename "$config" .yaml)/run_${run_idx}"
+
+OUTPUT_DIR="${BASE_LOG_DIR}/${EXP_NAME}/${dataset_name}/${config}/run_${job_idx}"
 # mkdir -p "$OUTPUT_DIR"
 
 # Derive a stable seed unless overridden
-SEED=${SEED_OVERRIDE:-$(( 42 + dataset_idx*100 +  run_idx ))}
+SEED=${SEED_OVERRIDE:-$(( 42 +  job_idx ))}
 export SEED
-export RUN_INDEX=$run_idx
-echo "CUDA_VISIBLE_DEVICES is set to: $CUDA_VISIBLE_DEVICES"
-echo "[Matrix] idx=$idx group=$DATASET_GROUP dataset_idx=$dataset_idx run_idx=$run_idx"
-echo "[Matrix] dataset=$dataset (name=$dataset_name) config=$config runs=$RUNS seed=$SEED"
-echo "[Matrix] run_path=$run_path"
-echo "[Matrix] output_dir=$OUTPUT_DIR"
+
+
+echo "[NSS SLURM] config=${config}, dataset=${dataset_name}, job_idx=${job_idx}, slurm_id=${slurm_id}"
+echo "[NSS SLURM] full_config_path=${full_config_path}"
+echo "[NSS SLURM] full dataset path/name=${dataset}"
+echo "[NSS SLURM] run_path=$run_path"
+echo "[NSS SLURM] output_dir=$OUTPUT_DIR"
+echo "CUDA_VISIBLE_DEVICES is set to: ${CUDA_VISIBLE_DEVICES:-not set}"
 
 dataset_registry_arg=""
 dataset_registry_file="${NSS_SHARED_DIR}/dataset_registry.yaml"
@@ -178,9 +179,8 @@ fi
 # Only applies when the dataset is a local CSV file (full path).
 # Since `run train` doesn't support pydantic override flags, we create a
 # temporary copy of the config YAML with the value patched in.
-effective_config="${config}.yaml"
+effective_config="$full_config_path"
 if [[ "$dataset" == *.csv ]] && [[ -f "$dataset" ]]; then
-    # wc -l counts lines; subtract 1 for the header row
     line_count=$(wc -l < "$dataset")
     num_rows=$(( line_count > 0 ? line_count - 1 : 0 ))
     if [[ $num_rows -gt 0 ]]; then
@@ -196,25 +196,21 @@ if [[ "$dataset" == *.csv ]] && [[ -f "$dataset" ]]; then
         scaled_records=$(( num_rows * multiplier ))
         echo "[Matrix] Auto-scaled num_input_records_to_sample: ${num_rows} rows x ${multiplier} = ${scaled_records}"
 
-        # Create a temp config with the overridden value
         tmp_config=$(mktemp /tmp/nss_config_XXXXXX.yaml)
-        sed "s/^\(\s*num_input_records_to_sample:\s*\).*/\1${scaled_records}/" "${config}.yaml" > "$tmp_config"
+        sed "s/^\(\s*num_input_records_to_sample:\s*\).*/\1${scaled_records}/" "$full_config_path" > "$tmp_config"
         effective_config="$tmp_config"
         echo "[Matrix] Using temp config: $effective_config"
     fi
 fi
 
-PHASE=${PHASE:-end_to_end}
-if [[ "$PHASE" == "train" ]]; then
-    # Stage 1: PII replacement + training
-    # Creates new workdir at run_path with adapter
-    safe-synthesizer run train \
-        --url "$dataset" \
+if [[ "${NSS_PHASE}" == "train" ]]; then
+    uv run safe-synthesizer run train \
+        --data-source "$dataset" \
         --config "$effective_config" \
         --run-path "$run_path" \
         $dataset_registry_arg \
         $test_url_arg
-elif [[ "$PHASE" == "generate" ]]; then
+elif [[ "${NSS_PHASE}" == "generate" ]]; then
     # Stage 2: generation (+ optional evaluation)
     # Resumes from existing workdir at run_path
     # Each generation run creates unique output files (synthetic_data_TIMESTAMP.csv)
@@ -225,18 +221,20 @@ elif [[ "$PHASE" == "generate" ]]; then
         wandb_resume_arg="--wandb-resume-job-id $wandb_id_file"
     fi
 
-    safe-synthesizer run generate \
-        --url "$dataset" \
+    uv run safe-synthesizer run generate \
+        --data-source "$dataset" \
         --config "$effective_config" \
         --run-path "$run_path" \
         $dataset_registry_arg \
         $wandb_resume_arg
 else
     # Full end-to-end run
-    safe-synthesizer run \
-        --url "$dataset" \
+    uv run safe-synthesizer run \
+        --data-source "$dataset" \
         --config "$effective_config" \
         --run-path "$run_path" \
         $dataset_registry_arg \
         $test_url_arg
 fi
+
+echo "[NSS SLURM] Done"

@@ -9,41 +9,22 @@ from datasets import Dataset, load_dataset
 
 
 def pytest_collection_modifyitems(config, items):
-    """
-    Modify test items during collection.
-
-    Auto-marks tests based on their location:
-    - Tests in gpu_integration/ get the 'gpu_integration' marker
-    - Tests in e2e/ directories get the 'e2e' marker
-    - Tests in integration/ directories get the 'integration' marker
-    - Tests without category markers get the 'unit' marker
-    """
-    category_markers = {
-        "unit",
-        "e2e",
-        "integration",
-        "gpu_integration",
-    }
+    """Auto-mark tests by directory: `/e2e/` -> e2e, `/smoke/` -> smoke, else unit."""
+    category_markers = {"unit", "e2e", "smoke"}
 
     for item in items:
         marker_names = {marker.name for marker in item.iter_markers()}
         path_str = str(item.fspath)
-
-        # Auto-mark tests in gpu_integration/ directory
-        if "/gpu_integration/" in path_str:
-            if "gpu_integration" not in marker_names:
-                item.add_marker(pytest.mark.gpu_integration)
-                marker_names.add("gpu_integration")
 
         if "/e2e/" in path_str:
             if "e2e" not in marker_names:
                 item.add_marker(pytest.mark.e2e)
                 marker_names.add("e2e")
 
-        elif "/integration/" in path_str:
-            if "integration" not in marker_names:
-                item.add_marker(pytest.mark.integration)
-                marker_names.add("integration")
+        if "/smoke/" in path_str:
+            if "smoke" not in marker_names:
+                item.add_marker(pytest.mark.smoke)
+                marker_names.add("smoke")
 
         if not marker_names.intersection(category_markers):
             item.add_marker(pytest.mark.unit)
@@ -59,8 +40,6 @@ data:
   max_sequences_per_example: 2
   order_training_examples_by: null
   random_state: 872602
-enable_replace_pii: true
-enable_synthesis: true
 evaluation:
   aia_enabled: true
   enabled: true
@@ -99,7 +78,7 @@ training:
   - o_proj
   lr_scheduler: cosine
   num_input_records_to_sample: auto
-  pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  pretrained_model: HuggingFaceTB/SmolLM3-3B
   rope_scaling_factor: auto
   use_unsloth: auto
   validation_ratio: 0.0
@@ -150,8 +129,8 @@ def load_test_dataframe(filename: str) -> pd.DataFrame:
 
 
 @pytest.fixture
-def fixture_stub_tokenizer_path() -> str:
-    return str(Path(__file__).parent / "stub_tokenizer")
+def fixture_smollm3_tokenizer() -> str:
+    return str(Path(__file__).parent / "test_data" / "tokenizers" / "smollm3b")
 
 
 # Purpose: Iris dataset fixture (train split) for quick test sampling.
@@ -168,11 +147,13 @@ def fixture_chickweight_dataset() -> Dataset:
     return load_test_dataset("chickweight.csv")
 
 
-# Purpose: Dow Jones Index dataset fixture (train split) for sampling.
-# Used by: (no direct test references currently)
+# Purpose: Dow Jones Index dataset fixture for group-by-order-by tests.
+# Used by:
+#   - data_processing/test_assembler.py::test_assembler_dow_jones_index_dataset
+#   - e2e/test_safe_synthesizer.py::test_dow_jones_index_dataset
 @pytest.fixture
 def fixture_dow_jones_index_dataset() -> Dataset:
-    return load_test_dataset("dow_jones_index.csv")
+    return load_test_dataset("dow_jones_index_group_size_8.csv")
 
 
 # Purpose: Sample patient events dataset with multiple groups for grouped tests.
@@ -180,6 +161,20 @@ def fixture_dow_jones_index_dataset() -> Dataset:
 @pytest.fixture
 def fixture_sample_patient_dataset() -> Dataset:
     return load_test_dataset("sample-patient-events-12groups-200-records.csv")
+
+
+@pytest.fixture
+def fixture_sample_patient_dataframe() -> pd.DataFrame:
+    return load_test_dataframe("sample-patient-events-12groups-200-records.csv")
+
+
+@pytest.fixture
+def fixture_sample_patient_redacted_dataframe(
+    fixture_sample_patient_dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    redacted = fixture_sample_patient_dataframe.copy()
+    redacted["patient_name"] = "REDACTED"
+    return redacted
 
 
 # Purpose: PEMS-SF sample dataset fixture for time-series like tests.
@@ -192,7 +187,7 @@ def fixture_pems_sf_sample_dataset() -> Dataset:
 # Purpose: DataFrame with embedded carriage returns to exercise serialization/regex edge cases.
 # Used by: (no direct test references currently)
 @pytest.fixture
-def fixture_embeddd_carriage_return_dataframe() -> pd.DataFrame:
+def fixture_embedded_carriage_return_dataframe() -> pd.DataFrame:
     return load_test_dataframe("embedded_carriage_return.parquet")
 
 
@@ -251,5 +246,12 @@ def fixture_lmsys_chat_non_english_dataset() -> pd.DataFrame:
 
 
 @pytest.fixture
-def fixture_adobe_sampled_dataset() -> pd.DataFrame:
-    return load_test_dataframe("adobe-sampled.csv")
+def fixture_doc_summaries_dataset() -> pd.DataFrame:
+    return load_test_dataframe("doc_summaries.csv")
+
+
+# Purpose: Clinc OOS dataset fixture for free text tests.
+# Used by: e2e/test_safe_synthesizer.py::test_clinc_oos_dataset
+@pytest.fixture
+def fixture_clinc_oos_dataset() -> pd.DataFrame:
+    return load_test_dataframe("clinc_oos.csv")

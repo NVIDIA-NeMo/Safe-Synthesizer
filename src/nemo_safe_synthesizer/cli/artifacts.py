@@ -1,6 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""CLI entry points for artifact management.
+
+Provides CLI commands for inspecting and cleaning up artifact directories
+produced by Safe Synthesizer runs.
+"""
+
 from __future__ import annotations
 
 import shutil
@@ -14,7 +20,7 @@ from .artifact_structure import BoundDir, PathT, Workdir
 @click.group(invoke_without_command=True)
 @click.pass_context
 def artifacts(ctx: click.Context):
-    """Artifacts management commands."""
+    """Artifact management commands."""
     pass
 
 
@@ -41,7 +47,8 @@ def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches
     # Determine what to clean
     if caches_only:
         cache_dir = workdir.train.cache
-        assert isinstance(cache_dir, BoundDir)
+        if not isinstance(cache_dir, BoundDir):
+            raise TypeError(f"Expected BoundDir, got {type(cache_dir)}")
         target = cache_dir.path
         item_name = "cache"
     else:

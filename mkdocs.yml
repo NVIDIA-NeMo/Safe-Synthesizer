@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
 
 site_name: NeMo Safe Synthesizer
@@ -51,6 +54,8 @@ extra_css:
   - css/mkdocstrings.css
 
 extra_javascript:
+  - js/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - js/toc-toggle.js
 
 watch:
@@ -88,6 +93,9 @@ plugins:
             show_if_no_docstring: false
             summary: true
             filters: ["!^_"]
+            extensions:
+              - griffe_pydantic:
+                  schema: false
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py
@@ -143,22 +151,29 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started:
-      - Installation: getting-started/installation.md
-      - Quick Start: getting-started/quickstart.md
-  - User Guide:
-      - Pipeline Overview: user-guide/pipeline.md
-      - CLI Reference: user-guide/cli.md
-      - Configuration: user-guide/configuration.md
-      - Python SDK: user-guide/sdk.md
-      - Evaluation: user-guide/evaluation.md
-      - Privacy: user-guide/privacy.md
-  - Architecture:
-      - Design: architecture/design.md
+  - Product Overview:
+      - Pipeline: product-overview/pipeline.md
+      - Data Synthesis: product-overview/data_synthesis.md
+      - PII Replacement: product-overview/pii_replacement.md
+      - Evaluation: product-overview/evaluation.md
   - Tutorials:
       - tutorials/index.md
-  - API Reference: reference/
-  - Contributing:
-      - contributing/index.md
-  - Dev Notes:
+      - Safe Synthesizer 101: tutorials/safe-synthesizer-101.ipynb
+      - Differential Privacy: tutorials/differential-privacy.ipynb
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Running Safe Synthesizer: user-guide/running.md
+      - Docker: user-guide/docker.md
+      - Troubleshooting:
+          - Synthetic Data Quality: user-guide/evaluating-data.md
+          - Program Runtime: user-guide/troubleshooting.md
+      - Reference:
+          - Configuration: user-guide/configuration.md
+          - Environment Variables: user-guide/environment.md
+  - Developer Guide:
+      - Architecture: developer-guide/architecture.md
+      - Example Generation: developer-guide/example-generation.md
+      - Docker: developer-guide/docker.md
+      - API Reference: reference/
+  - Developer Notes:
       - blog/index.md

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Installs yq - needed to parse tools.yaml
 # This script is called by bootstrap_tools.sh before parsing YAML
 set -eu
@@ -10,7 +13,7 @@ YQ_VERSION="v4.44.1"
 
 install_yq() {
     if command -v yq >/dev/null 2>&1; then
-        echo "yq is already installed at $(which yq)"
+        echo "yq is already installed at $(command -v yq)"
         yq --version
         return 0
     fi

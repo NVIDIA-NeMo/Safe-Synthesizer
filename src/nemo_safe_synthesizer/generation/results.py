@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Generation result containers and multi-batch accumulator."""
+
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Optional, Self
+from typing import Self
 
 import pandas as pd
 
@@ -33,46 +35,54 @@ logger = get_logger(__name__)
 
 @dataclass
 class GenerateJobResults:
-    """
-    Represents the results of a job that generates data from batches.
+    """Results of a complete generation job.
 
-    This class encapsulates detailed information about the generated data,
-    including statistics for valid and invalid records, total prompts processed,
-    and computation time.
-
-    Attributes:
-        df: A DataFrame containing the generated records based on the
-            input batches.
-        status: Represents the overall generation status derived
-            from the processed batches.
-        num_valid_records: The total number of records deemed valid during
-            generation.
-        num_invalid_records: The total number of records deemed invalid during
-            generation.
-        num_prompts: The total number of prompts that were processed during
-            generation.
-        valid_record_fraction: The fraction of valid records among all records.
-        batch_valid_record_fractions: A list of valid record fractions
-            for individual batches.
-        elapsed_time: The total time elapsed during the generation
-            process in seconds. Defaults to None.
+    Encapsulates the generated DataFrame along with validity statistics,
+    prompt counts, and timing information.  Built from a
+    [`GenerationBatches`][nemo_safe_synthesizer.generation.results.GenerationBatches]
+    accumulator via ``from_batches``.
     """
 
     df: pd.DataFrame
+    """DataFrame containing the generated records."""
+
     status: GenerationStatus
+    """Overall generation status derived from the processed batches."""
 
     num_valid_records: int
+    """Total number of records that passed validation."""
+
     num_invalid_records: int
+    """Total number of records that failed validation."""
+
     num_prompts: int
+    """Total number of prompts processed during generation."""
+
     valid_record_fraction: float
+    """Fraction of valid records among all generated records."""
+
     batch_valid_record_fractions: list[float]
+    """Per-batch valid record fractions, in batch order."""
+
     elapsed_time: float | None = None
+    """Wall-clock generation duration in seconds, or ``None`` if not yet set."""
 
     @classmethod
     def from_batches(
         cls, batches: GenerationBatches, max_num_records: int | None, columns: list[str], elapsed_time: float
     ) -> Self:
-        """Create a GenerateJobResults object primarily from a GenerationBatches object."""
+        """Build results from a completed :class:`GenerationBatches` accumulator.
+
+        Args:
+            batches: Accumulated generation batches.
+            max_num_records: If set, truncate the output DataFrame to
+                this many rows.
+            columns: Column names to select from the generated records.
+            elapsed_time: Wall-clock generation duration in seconds.
+
+        Returns:
+            Populated results instance.
+        """
         df = batches.to_dataframe(columns, max_num_records)
         status = batches.status
         num_valid_records = batches.num_valid_records
@@ -96,22 +106,30 @@ class GenerateJobResults:
         )
 
 
-class GenerationBatches(object):
-    """Object that tracks the various batches during the generation phase of a job. Mostly internal for the Generator backend
+class GenerationBatches:
+    """Accumulator that tracks batches during the generation phase.
 
+    Manages the stopping condition, running statistics, and optional
+    post-processing via ``data_actions_fn``.
 
     Args:
-        target_num_records: The target number of records to generate.
-        batches: A list of BatchResults objects.
-        max_num_prompts_per_batch: The maximum number of prompts to process in a batch.
-        invalid_fraction_threshold: The fraction of invalid records that will stop generation after the `patience` limit is reached.
-        patience: Number of consecutive generations where the `invalid_fraction_threshold` is reached before stopping generation.
-        data_actions_fn: A filtering function that'll postprocess and validate records from a batch.
+        target_num_records: Target number of valid records to generate.
+        batches: Pre-existing batches to seed the accumulator with.
+        max_num_prompts_per_batch: Maximum prompts per LLM generation
+            call.
+        invalid_fraction_threshold: Fraction of invalid records that
+            triggers stopping after ``patience`` consecutive batches.
+        patience: Consecutive batch count before the threshold triggers
+            a stop.
+        data_actions_fn: Optional function that post-processes and
+            validates records from each batch.
 
     Attributes:
-        status: The current status of the generation job.
-        running_stopping_metric: A RunningStatistics object to track the stopping metric.
-        stop_condition: The stopping condition object for the generation job.
+        status: Current generation status.
+        running_stopping_metric: Exponential running average of the
+            invalid-record fraction.
+        stop_condition: The patience-based stopping condition, or
+            ``None`` if thresholds were not provided.
     """
 
     def __init__(
@@ -140,28 +158,22 @@ class GenerationBatches(object):
             )
 
         self.data_actions_fn = data_actions_fn
-        self._batches_df: Optional[pd.DataFrame] = None
+        self._batches_df: pd.DataFrame | None = None
 
     def _apply_data_actions_fn(self, batch: Batch) -> None:
-        """
-        This function will take the passed in `batch` and run it
-        through the `data_actions_fn`. `data_actions_fn` will
-        take a dataframe and do some transformations and filtering on the
-        data.
+        """Post-process and validate a batch via ``data_actions_fn``.
 
-        Usually, this `data_action_fn` first involves running some `postprocessing`,
-        where we "undo" some of the `preprocessing` that was done to
-        the data earlier in the navft lifecycle.
-        Once the data has been `postprocessed`, we run the dataframe
-        through a validation function that filters out results that don't
-        pass user-specified rules.
+        Converts the batch's record lists into a DataFrame, runs the
+        configured post-processing (reversing training-time preprocessing)
+        and user-specified validation rules, then maps the results back
+        onto the batch's ``valid_records`` and ``invalid_records``.
 
-        The `data_actions_fn` expects a `df`, though we only have lists of records
-        at the time that this function is called per-batch. To filter the records, we must:
-            1. tag each record with unique temporary id
-            2. convert all the records to a batch_df
-            3. run the batch_df through our `data_actions_fn`
-            4. take the records the passed validation and return them in the batch
+        Each record is tagged with a temporary ID so that validated rows
+        can be mapped back to their originating response.
+
+        Args:
+            batch: The batch whose records will be post-processed and
+                filtered in place.
         """
         if self.data_actions_fn is None:
             return
@@ -214,33 +226,39 @@ class GenerationBatches(object):
 
     @property
     def num_batches(self) -> int:
-        """Return the number of batches in the generation job."""
+        """The number of batches in the generation job."""
         return len(self._batches)
 
     @property
     def num_prompts(self) -> int:
-        """Return the total number of prompts processed in the generation job."""
+        """The total number of prompts processed in the generation job."""
         return sum([batch.num_prompts for batch in self._batches])
 
     @property
     def num_invalid_records(self) -> int:
-        """Return the total number of invalid records generated in the generation job."""
+        """The total number of invalid records generated in the generation job."""
         return sum([batch.num_invalid_records for batch in self._batches])
 
     @property
     def num_valid_records(self) -> int:
-        """Return the total number of valid records generated in the generation job."""
+        """The total number of valid records generated in the generation job."""
         return sum([batch.num_valid_records for batch in self._batches])
 
     def add_batch(self, batch: Batch) -> None:
-        """Add a Batch object to the generation job.
-        Status of the stopped jobs depends on the following conditions:
-        - Jobs with the first batch of all invalid records are stopped, regardless of the
-         stop_condition status.
-        - Jobs with a stop_condition will continue processing even if subsequent batches
-          (batch number > 1) contain all invalid records, until the stop_condition is met.
-        - Jobs with stop_condition of None will stop generation upon encountering any
-          batch with all invalid records irrespective of the batch number.
+        """Add a batch and update the generation status.
+
+        Stopping rules:
+
+        * The very first batch producing zero valid records always
+          triggers ``STOP_NO_RECORDS``.
+        * When a ``stop_condition`` is configured, subsequent batches
+          with zero valid records are tolerated until the patience-based
+          threshold is reached.
+        * Without a ``stop_condition``, any batch with zero valid
+          records triggers ``STOP_NO_RECORDS``.
+
+        Args:
+            batch: The completed batch to add.
         """
         # TODO: Move application of the data_actions_fn deeper in the generation process
         self._apply_data_actions_fn(batch)
@@ -315,8 +333,17 @@ class GenerationBatches(object):
                 " Please consider increasing the 'num_input_records_to_sample' parameter.",
             )
 
-    def to_dataframe(self, columns: list[str], max_num_records: Optional[int] = None) -> pd.DataFrame:
-        """Return a DataFrame of the valid records generated in the generation job."""
+    def to_dataframe(self, columns: list[str], max_num_records: int | None = None) -> pd.DataFrame:
+        """Combine valid records from all batches into a single DataFrame.
+
+        Args:
+            columns: Column names to include in the output.
+            max_num_records: If set, truncate to this many rows.
+
+        Returns:
+            DataFrame of valid records, or an empty DataFrame if none
+            were generated.
+        """
         # return an empty DataFrame when any generated batch has 0 valid records.
         if self.num_valid_records == 0:
             return pd.DataFrame()
@@ -327,8 +354,10 @@ class GenerationBatches(object):
 
 
 def rejected_record_to_error(record: dict) -> tuple[str, str]:
-    error_msg = f"Failed data_config validation due to [{record[MetadataColumns.REJECT_REASON.value]}]"
+    """Convert a rejected record into a ``(detailed, summary)`` error tuple.
 
-    # The ret[0]/ret[1] are the same because we don't want the log output
-    # to differ when detailed logging is enabled/disabled.
+    Both elements are identical so that log output is consistent
+    regardless of the ``detailed_errors`` setting.
+    """
+    error_msg = f"Failed data_config validation due to [{record[MetadataColumns.REJECT_REASON.value]}]"
     return (error_msg, error_msg)

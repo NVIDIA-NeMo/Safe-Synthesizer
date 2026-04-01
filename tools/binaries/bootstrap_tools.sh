@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 set -eu
 
 REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}
@@ -87,11 +90,24 @@ install_binary_tool() {
     check_command=$(yq -r ".tools.${name}.check_command" "$TOOLS_YAML")
     version=$(yq -r ".tools.${name}.version" "$TOOLS_YAML")
 
-    # Check if already installed
+    # Check if already installed at the desired version
     if eval "$check_command" >/dev/null 2>&1; then
-        echo "$name is already installed"
-        eval "$check_command" || true
-        return 0
+        local installed_output version_bare version_token matched_version
+        installed_output=$(eval "$check_command" 2>&1 || true)
+        version_bare="${version#v}"
+        matched_version=false
+        while IFS= read -r version_token; do
+            if [[ "$version_token" == "$version" || "$version_token" == "$version_bare" || "$version_token" == "v$version_bare" ]]; then
+                matched_version=true
+                break
+            fi
+        done < <(echo "$installed_output" | grep -Eo 'v?[0-9]+(\.[0-9]+){0,3}(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?' || true)
+
+        if [[ "$matched_version" == "true" ]]; then
+            echo "$name ${version} is already installed"
+            return 0
+        fi
+        echo "$name is installed but not at version ${version}, upgrading..."
     fi
 
     # Check for darwin_brew option (use brew on macOS)
@@ -130,6 +146,7 @@ install_binary_tool() {
         arch_val=$(yq -r ".tools.${name}.arch_map.${ARCH} // \"${ARCH}\"" "$TOOLS_YAML")
 
         # Substitute placeholders in extract path
+        extract="${extract//\{version\}/$version}"
         extract="${extract//\{os\}/$os_val}"
         extract="${extract//\{arch\}/$arch_val}"
 
@@ -183,6 +200,7 @@ install_custom_script() {
 
 bootstrap_tools() {
     validate_platform
+    print_tool_manager_transition_warning
     mkdir -p "$HOME/.local/bin"
     add_to_path "$HOME/.local/bin"
 

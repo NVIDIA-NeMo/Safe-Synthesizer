@@ -3,14 +3,15 @@
 
 """Age detection - generally looking for ages of individuals in years or
 months, so we support 4 digits in a row without any digits before/afterwards
-and also descriptive words that can describe the age of an individual."""
+and also descriptive words that can describe the age of an individual.
+"""
 
 import re
 
 from ..entity import Entity
 from ..regex import Pattern, RegexPredictor
 
-# https://github.com/Gretellabs/monogretel/issues/190
+# Relevant issue: detection should support descriptive age terms
 HEADERS = ["age", "ages"]
 
 

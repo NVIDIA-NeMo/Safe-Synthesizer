@@ -1,42 +1,38 @@
-# Nemo Safe Synthesizer
+# 🛡️ NeMo Safe Synthesizer
 
-This package makes synthetic data, safely.
+NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datasets -- entirely synthetic data with no one-to-one mapping to your original records. Purpose-built for privacy compliance and sensitive information protection while preserving data utility for downstream AI tasks.
 
-## Installation
+## Quick Start
+
+Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
 ### Prerequisites
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.10.0)
-- Git
+- Python 3.11+ (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any supported 3.11+ interpreter is fine)
+- [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.11.0)
+- NVIDIA GPU (A100 or larger) for training and generation
 
-### Quick Start
-
-Bootstrap development tools (installs `uv`, `ruff`, `ty`, `yq`, and more):
+### Installation
 
 ```bash
+uv pip install "nemo-safe-synthesizer[cu128,engine]" \
+  --index https://flashinfer.ai/whl/cu128 \
+  --index https://download.pytorch.org/whl/cu128 \
+  --index-strategy unsafe-best-match
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
+cd Safe-Synthesizer
 make bootstrap-tools
-```
-
-Then bootstrap the project package with your desired extras - likely `cpu|cuda` .
-
-```bash
-# CPU-only (for development on Linux without GPU, or macOS)
-make bootstrap-nss cpu
-
-# CUDA 12.8 (for Linux with NVIDIA GPU)
 make bootstrap-nss cuda
-
-# Engine only (synthesis engine dependencies, no torch/training)
-make bootstrap-nss engine
-
-# Dev only (minimal dev dependencies, no engine or torch)
-make bootstrap-nss dev
 ```
 
-## Running
+### Running
 
-Run the CLI using `safe-synthesizer`:
+Activate Python virtual environment and run the CLI using `safe-synthesizer`:
 
 ```bash
 > safe-synthesizer --help
@@ -71,7 +67,7 @@ Usage: safe-synthesizer run [OPTIONS] COMMAND [ARGS]...
 
 Options:
   --config TEXT                   path to a yaml config file
-  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+  --data-source TEXT                      Dataset name, URL, or path to CSV dataset.
                                   For 'run generate', this is optional if a
                                   cached dataset exists in the workdir.
   --artifact-path DIRECTORY       Base directory for all runs. Runs are
@@ -106,7 +102,7 @@ Options:
                                   dependencies too
   --dataset-registry TEXT         URL or path of a dataset registry YAML file.
                                   If provided, datasets in the registry may be
-                                  referenced by name in --url. Can also be set
+                                  referenced by name in --data-source. Can also be set
                                   via NSS_DATASET_REGISTRY env var. If both
                                   env var and CLI option are provided, the CLI
                                   option takes precedence.
@@ -137,7 +133,7 @@ Usage: safe-synthesizer run generate [OPTIONS]
 
 Options:
   --config TEXT                   path to a yaml config file
-  --url TEXT                      Dataset name, URL, or path to CSV dataset.
+  --data-source TEXT                      Dataset name, URL, or path to CSV dataset.
                                   [required]
   --artifact-path DIRECTORY       Base directory for all runs. Runs are
                                   created as <artifact-path>/<config>-
@@ -191,6 +187,78 @@ Commands:
   validate  Validate a Safe Synthesizer configuration.
 ```
 
+## Attention Configuration
+
+Safe Synthesizer exposes attention implementation settings for both training and generation.
+
+### Training (`attn_implementation`)
+
+Controls the HuggingFace attention backend used during model loading for training. Set via config YAML, CLI, or SDK:
+
+```yaml
+# config.yaml
+training:
+  attn_implementation: "kernels-community/vllm-flash-attn3"
+```
+
+```bash
+# CLI override
+safe-synthesizer run --training__attn_implementation sdpa --data-source my_data.csv
+```
+
+| Value | Description | Requires |
+|-------|-------------|----------|
+| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub (default) | `kernels` pip package |
+| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
+| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
+| `sdpa` | PyTorch scaled dot product attention | None (built-in) |
+| `eager` | Standard PyTorch attention | None (built-in) |
+
+If the default `kernels-community/vllm-flash-attn3` is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
+
+### Generation (`attention_backend`)
+
+Controls the vLLM attention backend used during synthetic data generation. Defaults to `"auto"`, which lets vLLM auto-select the best available backend.
+
+```yaml
+# config.yaml
+generation:
+  attention_backend: "FLASH_ATTN"
+```
+
+Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`, `FLEX_ATTENTION`.
+
+## NIM Integration
+
+Column classification uses a NIM/OpenAI-compatible endpoint to detect entity types
+in your data. `NSS_INFERENCE_ENDPOINT` defaults to `https://integrate.api.nvidia.com/v1`;
+override it to use a different endpoint.
+
+When using the CLI or Python SDK, set `NSS_INFERENCE_KEY` (and `NSS_INFERENCE_ENDPOINT` only if not
+using the default) so column classification can run.
+
+### Local Endpoint
+
+To point to a locally hosted LLM:
+
+```bash
+export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
+```
+
+### Disable Classification
+
+To disable classification entirely:
+
+```yaml
+replace_pii:
+  globals:
+    classify:
+      enable_classify: false
+```
+
+When classification is disabled, NSS falls back to default entity types.
+
 ## Artifacts and Workdirs
 
 Safe Synthesizer uses a structured directory format to manage artifacts (trained models, synthetic data, logs).
@@ -201,22 +269,26 @@ By default, runs are nested under `--artifact-path` using the project name (`<co
 
 ```text
 <artifact-path>/<config>---<dataset>/<run_name>/
-├── safe-synthesizer-config.json  # Root config for the run
 ├── train/
 │   ├── safe-synthesizer-config.json
-│   └── adapter/                  # Trained PEFT adapter
+│   └── adapter/                     # trained PEFT adapter
 │       ├── adapter_config.json
+│       ├── adapter_model.safetensors
 │       ├── metadata_v2.json
 │       └── dataset_schema.json
 ├── generate/
-│   ├── safe-synthesizer-config.json
-│   ├── logs.jsonl               # Generation logs
-│   ├── synthetic_data.csv       # Default output location
-│   └── evaluation_report.html   # HTML evaluation report
-└── dataset/                      # Processed dataset splits
-    ├── training.csv
-    ├── test.csv
-    └── validation.csv
+│   ├── logs.jsonl                   # generate-only workflow
+│   ├── info.json                    # generate-only workflow
+│   ├── synthetic_data.csv
+│   ├── evaluation_report.html
+│   └── evaluation_metrics.json      # machine-readable metrics
+├── dataset/
+│   ├── training.csv
+│   ├── test.csv
+│   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
+└── logs/
+    └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 ### Run Names
@@ -260,20 +332,20 @@ Additionally, the registry supports custom config overrides or args that are spe
 
 You can supply a dataset registry (YAML file) via either the CLI or an environment variable:
 
-- **CLI Option**:
+- CLI Option:
 `--dataset-registry <path_or_url>`
-- **Environment Variable**:
+- Environment Variable:
 Set `NSS_DATASET_REGISTRY` to point to your YAML file (path or URL).
 
 If both are provided, the CLI option takes precedence.
 
 ### Referencing Datasets
 
-When a dataset registry is provided, you can use dataset names defined in the registry with the `--url` argument.
+When a dataset registry is provided, you can use dataset names defined in the registry with the `--data-source` argument.
 For example:
 
 ```bash
-nemo-safe-synthesizer run --dataset-registry my_registry.yaml --url my_dataset
+nemo-safe-synthesizer run --dataset-registry my_registry.yaml --data-source my_dataset
 ```
 
 This will load the dataset from the url plus apply any overrides for `my_dataset` from the registry YAML.
@@ -305,107 +377,20 @@ datasets:
 `url` may be a URL or a file path, anything that data readers like `pd.read_csv` will accept.
 - `base_url` - Any relative urls or paths will be prepended with the `base_url` before attempting to load the dataset.
 This only applies to the named datasets in the registry which have a relative url.
-Passing a relative `--url` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
+Passing a relative `--data-source` on the CLI will attempt to load the file relative to your current working directory, regardless of whether a registry is provided or whether `base_url` is set.
 `base_url` is optional, if not provided, it is recommended to use absolute urls or file paths for all entries.
 - `overrides` - Dataset specific config overrides, such as a dataset that should always be run with `group_training_examples_by`.
 Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.
 - `load_args` - Extra arguments needed by the data reader for a specific dataset.
 For example, changing the separator used by `pd.read_csv` for a `.csv` file with a different delimiter.
 
-## Slurm Jobs
+## License
 
-For running on Slurm clusters, Safe Synthesizer provides a set of helper scripts in `script/slurm/`.
+NeMo Safe Synthesizer is licensed under the [Apache License 2.0](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/LICENSE).
 
-These scripts support:
+## Contact
 
-- **Matrix runs**: Launching jobs across multiple configurations and datasets.
-- **Two-stage pipelines**: Running training and generation as separate jobs with dependencies.
-- **Containerized execution**: Running jobs inside enroot containers.
-
-See [script/slurm/README.md](script/slurm/README.md) for detailed instructions on cluster setup and job submission.
-
-## Testing
-
-We have pytest set up for unit, integration, and end-to-end tests.
-
-### Running Tests
-
-You can run tests using `make` targets or `pytest` directly.
-
-```bash
-# Run unit tests (excludes slow and e2e tests)
-make test
-
-# Run all tests including slow tests (excludes e2e)
-make test-slow
-
-# Run SDK-related tests (config, sdk, cli, api)
-make test-sdk-related
-
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
-
-# Run end-to-end tests (requires CUDA)
-make test-e2e
-
-# Run specific test files directly
-uv run pytest tests/cli/test_run.py
-```
-
-### Container-Based Testing
-
-You can run the CI test suite locally in a Linux container using Docker or Podman:
-
-```bash
-# Build the test container and run CI tests
-make test-ci-container
-```
-
-This builds a container image from `containers/Dockerfile.test_ci` and runs `make test-ci` inside it. This is useful for verifying tests pass in a Linux environment when developing on macOS.
-
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full setup instructions and contribution guidelines.
-
-### One-Command Setup
-
-If you have a local clone of the NMP repo, you can bootstrap everything in one step:
-
-```bash
-NMP_REPO_PATH=/path/to/nmp make bootstrap-dev-env
-```
-
-This installs dev tools, creates a `.nmp_repo` symlink for NMP synchronization, and installs all Python dependencies.
-
-### Step-by-Step Setup
-
-```bash
-# 1. Bootstrap development tools
-make bootstrap-tools
-
-# 2. Install Python dependencies and package
-make bootstrap-nss cpu    # or: cuda, engine, dev
-
-# 3. Run tests
-make test
-
-# 4. Format and lint
-make format
-make lint
-```
-
-### NMP Synchronization
-
-To sync code to/from the NMP monorepo, set `NMP_REPO_PATH` to your local NMP checkout:
-
-```bash
-export NMP_REPO_PATH=/path/to/nmp
-
-# Sync files from NMP to this repo
-make synchronize-from-nmp
-
-# Sync files from this repo to NMP
-make synchronize-to-nmp
-```
-
-Run `make help` to see all available Makefile targets.
+- [Need help? Ask us a question](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/discussions)
+- [Report a bug](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=bug-report.yml)
+- [Make a feature request](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/issues/new?template=feature-request.yml)
+- [Report a security vulnerability](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/security/policy)

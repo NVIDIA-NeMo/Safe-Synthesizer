@@ -1,9 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Builder-pattern configuration layer for Safe Synthesizer.
+
+Provides ``ConfigBuilder``, the base builder that accumulates
+per-section configuration objects (training, generation, data, etc.)
+via fluent ``with_*`` methods before resolving them into a single
+``SafeSynthesizerParameters``.
+"""
+
 from __future__ import annotations
 
-from typing import Mapping, Self, TypeAlias, TypeVar, Union
+from typing import Mapping, Self, TypeAlias, TypeVar
 
 import pandas as pd
 from pydantic import BaseModel
@@ -26,41 +34,58 @@ logger = get_logger(__name__)
 KT = TypeVar("KT")
 VT = TypeVar("VT")
 
-NSSParameters = Union[
-    DataParameters,
-    EvaluationParameters,
-    GenerateParameters,
-    DifferentialPrivacyHyperparams,
-    TimeSeriesParameters,
-    TrainingHyperparams,
-    SafeSynthesizerParameters,
-    PiiReplacerConfig,
-]
+NSSParameters = (
+    DataParameters
+    | EvaluationParameters
+    | GenerateParameters
+    | DifferentialPrivacyHyperparams
+    | TimeSeriesParameters
+    | TrainingHyperparams
+    | SafeSynthesizerParameters
+    | PiiReplacerConfig
+)
 
-NSSParametersT = Union[
-    type[DataParameters],
-    type[EvaluationParameters],
-    type[GenerateParameters],
-    type[DifferentialPrivacyHyperparams],
-    type[TimeSeriesParameters],
-    type[TrainingHyperparams],
-    type[SafeSynthesizerParameters],
-    type[PiiReplacerConfig],
-]
+NSSParametersT = (
+    type[DataParameters]
+    | type[EvaluationParameters]
+    | type[GenerateParameters]
+    | type[DifferentialPrivacyHyperparams]
+    | type[TimeSeriesParameters]
+    | type[TrainingHyperparams]
+    | type[SafeSynthesizerParameters]
+    | type[PiiReplacerConfig]
+)
 
 
 ParamT = TypeVar("ParamT", bound=NSSParameters)
 DataSource = pd.DataFrame | str
-ParamDict: TypeAlias = dict[str, Union[str, int, float, bool, None, Mapping[KT, VT]]]
+ParamDict: TypeAlias = dict[str, str | int | float | bool | None | Mapping[KT, VT]]
 
 
 class ConfigBuilder(object):
+    """Fluent builder for assembling Safe Synthesizer configuration.
+
+    Accumulates per-section configuration objects (data, training,
+    generation, evaluation, privacy, PII replacement, and time-series)
+    via ``with_*`` methods.  Call ``resolve()`` (or let
+    ``SafeSynthesizer`` do it) to collapse them into a single
+    ``SafeSynthesizerParameters``.
+
+    Each ``with_*`` method accepts an optional typed config object or
+    a plain dict, plus ``**kwargs`` overrides.  ``kwargs`` always take
+    precedence over fields in the config/dict.  All ``with_*`` methods
+    return ``self`` for chaining.
+
+    Args:
+        config: Optional pre-built parameters.  When supplied, the
+            individual ``_*_config`` attributes are seeded from its
+            sections.
+    """
+
     def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
         self._nss_config: SafeSynthesizerParameters | None = config
         if self._nss_config is not None:
             self._evaluation_config = self._nss_config.evaluation
-            self._enable_synthesis = self._nss_config.enable_synthesis
-            self._enable_replace_pii = self._nss_config.enable_replace_pii
             self._replace_pii_config = self._nss_config.replace_pii
             self._privacy_config: DifferentialPrivacyHyperparams | None = self._nss_config.privacy
             self._training_config = self._nss_config.training
@@ -68,12 +93,10 @@ class ConfigBuilder(object):
             self._data_config = self._nss_config.data
             self._time_series_config = self._nss_config.time_series
         else:
-            self._enable_synthesis = None
-            self._enable_replace_pii = None
             self._data_config: DataParameters = DataParameters()
             self._evaluation_config: EvaluationParameters = EvaluationParameters()
             self._generation_config: GenerateParameters = GenerateParameters()
-            self._replace_pii_config: PiiReplacerConfig | None = None
+            self._replace_pii_config: PiiReplacerConfig | None = PiiReplacerConfig.get_default_config()
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
             self._time_series_config: TimeSeriesParameters = TimeSeriesParameters()
@@ -93,12 +116,18 @@ class ConfigBuilder(object):
 
     def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
         """Resolve configuration from various input types.
+
+        Precedence: ``kwargs`` override ``values``; ``values`` override
+        model defaults.
+
         Args:
-            values: Configuration values as a dictionary or a BaseModel instance.
-            cls: The BaseModel class to validate against.
-            **overrides: Additional configuration parameters to override.
+            values: Existing config, a raw dict, or ``None`` for
+                defaults-only.
+            cls: The Pydantic model class to validate against.
+            **kwargs: Field-level overrides applied on top.
+
         Returns:
-            An instance of the specified BaseModel class with the resolved configuration.
+            A validated config instance of type ``cls``.
         """
         overrides = kwargs
         match values:
@@ -116,42 +145,64 @@ class ConfigBuilder(object):
             df_source: Training dataset as a pandas DataFrame or a fetchable URL.
 
         Returns:
-            The current Safe Synthesizer builder instance.
+            This builder instance with the data source configured.
         """
         self._data_source = df_source
         return self
 
-    def synthesize(self) -> Self:
-        """Enables synthesis for the job run.
-
-        Use if not setting training or generation parameters directly
-        """
-        self._enable_synthesis = True
-        return self
-
     def with_data(self, config: DataParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure  settings."""
+        """Configure data processing settings.
+
+        Args:
+            config: Data configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``holdout_size``).
+
+        Returns:
+            This builder instance with data processing settings applied.
+        """
         self._data_config: DataParameters | None = self._resolve_config(values=config, cls=DataParameters, **kwargs)
         return self
 
     def with_train(self, config: TrainingHyperparams | ParamDict | None = None, **kwargs) -> Self:
-        """Configure training settings."""
+        """Configure training hyperparameters.
+
+        Args:
+            config: Training configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``learning_rate``).
+
+        Returns:
+            This builder instance with training hyperparameters applied.
+        """
         self._training_config: TrainingHyperparams | None = self._resolve_config(
             values=config, cls=TrainingHyperparams, **kwargs
         )
-        self._enable_synthesis = True
         return self
 
     def with_generate(self, config: GenerateParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure generation settings."""
+        """Configure generation settings.
+
+        Args:
+            config: Generation configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``num_records``).
+
+        Returns:
+            This builder instance with generation settings applied.
+        """
         self._generation_config: GenerateParameters | None = self._resolve_config(
             values=config, cls=GenerateParameters, **kwargs
         )
-        self._enable_synthesis = True
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
-        """Configure time-series settings."""
+        """Configure time-series synthesis settings.
+
+        Args:
+            config: Time-series configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``time_column``).
+
+        Returns:
+            This builder instance with time-series synthesis settings applied.
+        """
         self._time_series_config: TimeSeriesParameters | None = self._resolve_config(
             values=config, cls=TimeSeriesParameters, **kwargs
         )
@@ -160,41 +211,61 @@ class ConfigBuilder(object):
     def with_differential_privacy(
         self, config: DifferentialPrivacyHyperparams | ParamDict | None = None, **kwargs
     ) -> Self:
-        """Configure privacy settings."""
+        """Configure differential privacy settings.
+
+        Args:
+            config: DP configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``epsilon``).
+
+        Returns:
+            This builder instance with differential privacy settings applied.
+        """
         self._privacy_config: DifferentialPrivacyHyperparams | None = self._resolve_config(
             values=config, cls=DifferentialPrivacyHyperparams, **kwargs
         )
         return self
 
-    def with_replace_pii(self, config: PiiReplacerConfig | ParamDict | None = None, **kwargs) -> Self:
-        """Configure PII replacement settings. Will use default PII replacement settings if none are provided, which can be found in
-        nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig.
+    def with_replace_pii(
+        self, config: PiiReplacerConfig | ParamDict | None = None, *, enable: bool = True, **kwargs
+    ) -> Self:
+        """Configure PII replacement settings.
 
-        If you pass a keyword argument with a config object, overlapping keyword arguments will take precedence.
+        Falls back to ``PiiReplacerConfig.get_default_config()`` when
+        ``config`` is ``None``.  Pass ``enable=False`` to explicitly
+        disable PII replacement for this run -- this sets
+        ``replace_pii=None``, which is the sole disabled signal.
+
+        Note: PII replacement uses ``replace_pii=None`` as the disabled
+        signal rather than a ``PiiReplacerConfig.enabled`` boolean field.
+        This differs from ``EvaluationConfig.enabled`` but is intentional:
+        ``PiiReplacerConfig`` has a non-trivial ``default_factory`` that
+        must fire when the field is absent from a YAML config.  Adding an
+        ``enabled`` boolean inside the sub-config would require a
+        ``model_validator`` to reconcile the two signals and would not
+        interact cleanly with Pydantic's ``exclude_unset`` semantics used
+        in ``from_params``.
 
         Args:
-            config: PII replacement configuration or dictionary containing PII replacement parameters.
-            **kwargs: Configuration parameters for PII replacement.
+            config: PII replacement configuration object or dict.
+            enable: When ``False``, disables PII replacement entirely
+                and clears any previously set config.
+            **kwargs: Field-level overrides (e.g. ``classify``).
 
         Returns:
-            The current Safe Synthesizer builder instance.
-
+            This builder instance with PII replacement configured.
 
         Raises:
-            ValueError: If the provided config is not a PiiReplacerConfig, dictionary, or None/unset.
+            ValueError: If ``config`` is not a ``PiiReplacerConfig``,
+                dict, or ``None``.
 
-        Examples:
-            ```python
-            >>> from nemo_microservices import NeMoMicroservices
-            >>> from nemo_microservices.beta.safe_synthesizer.sdk.library_builder import SafeSynthesizer
-            >>> from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
-            >>> # Using default PII replacement settings
-            >>> builder = (
-            >>>     SafeSynthesizer()
-            >>>     .with_data_source(your_dataframe)
-            >>>     .with_replace_pii(config=custom_pii_config, **{"classify": {"enable_classify": False}}))
-            ```
+        Example::
+
+            builder = SafeSynthesizer().with_data_source(your_dataframe).with_replace_pii(config=custom_pii_config)
         """
+        if not enable:
+            self._replace_pii_config = None
+            return self
+
         cfg = None
         match config:
             case PiiReplacerConfig() as m:
@@ -204,21 +275,20 @@ class ConfigBuilder(object):
             case None:
                 cfg = PiiReplacerConfig.get_default_config().model_copy(update=kwargs, deep=True)
             case _:
-                raise ValueError("Config must be a PiiReplacerConfig, dictionary, or None")
+                raise ValueError(f"Config must be a PiiReplacerConfig, dict, or None, got {config!r}")
 
         self._replace_pii_config = cfg
-        self._enable_replace_pii = True
         return self
 
     def with_evaluate(self, config: EvaluationParameters | ParamDict | None = None, **kwargs) -> Self:
         """Configure evaluation settings.
 
         Args:
-            config: Evaluation configuration or dictionary containing evaluation parameters.
-            **kwargs: Configuration parameters for evaluation.
+            config: Evaluation configuration object or dict.
+            **kwargs: Field-level overrides (e.g. ``enabled``).
 
         Returns:
-            The current Safe Synthesizer builder instance.
+            This builder instance with evaluation settings applied.
         """
         self._evaluation_config: EvaluationParameters | None = self._resolve_config(
             values=config, cls=EvaluationParameters, **kwargs
@@ -226,11 +296,27 @@ class ConfigBuilder(object):
         return self
 
     def resolve(self) -> Self:
+        """Finalize configuration and data source.
+
+        Assembles the individual ``_*_config`` sections into a single
+        ``SafeSynthesizerParameters`` and converts the data source
+        (URL string or DataFrame) into a ``DataFrame``.
+
+        Returns:
+            This builder instance with all configuration sections finalized.
+        """
         self._resolve_nss_config()
         self._resolve_datasource()
         return self
 
     def _resolve_nss_config(self) -> None:
+        """Assemble per-section configs into a ``SafeSynthesizerParameters``.
+
+        Iterates over ``_nss_inputs``, maps each ``_*_config`` attribute
+        to its ``SafeSynthesizerParameters`` field name, and constructs
+        the unified config.  Also injects ``_classify_model_provider``
+        into the PII replacer config when set.
+        """
         params_map: dict = {k: k.split("_")[1] for k in self._nss_inputs}
         params_map["_replace_pii_config"] = "replace_pii"
         params_map["_time_series_config"] = "time_series"
@@ -247,10 +333,6 @@ class ConfigBuilder(object):
                     logger.debug(f"Using default values for {pg}")
                 case _:
                     raise ValueError(f"Input must be a BaseModel, dictionary, or None: {type(param)}")
-        params_to_use["enable_replace_pii"] = (
-            self._enable_replace_pii if self._enable_replace_pii is not None else False
-        )
-        params_to_use["enable_synthesis"] = self._enable_synthesis if self._enable_synthesis is not None else False
         self._nss_config = SafeSynthesizerParameters(**params_to_use)
 
         # Inject classify_model_provider into PII replacer config if set
@@ -259,6 +341,18 @@ class ConfigBuilder(object):
             logger.debug(f"Injected classify model provider into PII config: {self._classify_model_provider}")
 
     def _resolve_datasource(self, **kwargs) -> None:
+        """Convert the data source into a ``pandas.DataFrame``.
+
+        If ``_data_source`` is already a DataFrame it is kept as-is.
+        A string is treated as a CSV URL and fetched via
+        ``pd.read_csv``.
+
+        Args:
+            **kwargs: Forwarded to ``pd.read_csv`` when loading from URL.
+
+        Raises:
+            ValueError: If ``_data_source`` is not a DataFrame or string.
+        """
         match self._data_source:
             case pd.DataFrame():
                 pass

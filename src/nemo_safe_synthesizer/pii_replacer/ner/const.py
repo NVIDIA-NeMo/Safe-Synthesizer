@@ -1,9 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Shared strings for core modules
-"""
+"""Shared strings for core modules"""
 
 
 class ConstDict(dict):
@@ -16,9 +14,9 @@ class ConstDict(dict):
 
 const = ConstDict(
     {
-        "GRETEL_ID": "_gretel_id",
-        "GRETEL_TS": "_gretel_ts",
-        "GRETEL_SUB": "_gretel_subscriber",
+        "NSS_ID": "_nss_id",
+        "NSS_TS": "_nss_ts",
+        "NSS_SUB": "_nss_subscriber",
         "TYPE": "type",
         "STR_VALUE": "string_value",
         "INT_VALUE": "int_value",
@@ -50,7 +48,7 @@ const = ConstDict(
         "TRUE": "true",
         "FALSE": "false",
         "NULL": "null",
-        "ARRAY_POS": "_gretelarray_",
+        "ARRAY_POS": "_nssarray_",
         "BOOL": "boolean",
         "DELIM": ".",
         "ENTITY": "entity",

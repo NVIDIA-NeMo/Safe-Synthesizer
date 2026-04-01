@@ -13,13 +13,14 @@ PreTrainedTokenizer = transformers.PreTrainedTokenizer
 from io import StringIO  # noqa: E402
 
 import pandas as pd  # noqa: E402
+
 from nemo_safe_synthesizer.data_processing.dataset import make_json_schema  # noqa: E402
 from nemo_safe_synthesizer.data_processing.record_utils import records_to_jsonl  # noqa: E402
 
 
 @pytest.fixture
-def fixture_tokenizer(fixture_stub_tokenizer_path) -> PreTrainedTokenizer:
-    return AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path)
+def fixture_tokenizer(fixture_smollm3_tokenizer) -> PreTrainedTokenizer:
+    return AutoTokenizer.from_pretrained(fixture_smollm3_tokenizer)
 
 
 @pytest.fixture

@@ -1,11 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Sequence, Type
+from typing import Sequence
 
 from ..regex import RegexPredictor
-
-# TODO: are relative imports acceptable in nmp repo?
 from .aba_routing_number import AbaRoutingNumber
 from .age import Age
 from .credit_card import CreditCardNumber
@@ -38,7 +36,7 @@ from .us_ssn import US_SSN
 from .us_zipcode import USZipcode
 from .uuid import UUID
 
-rules: Sequence[Type[RegexPredictor]] = (
+rules: Sequence[type[RegexPredictor]] = (
     AbaRoutingNumber,
     CreditCardNumber,
     DomainName,

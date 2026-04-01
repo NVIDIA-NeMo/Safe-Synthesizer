@@ -27,27 +27,34 @@ from ...observability import get_logger
 from ..components.component import Component
 from ..data_model.evaluation_dataset import EvaluationDataset
 from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
+from ..nearest_neighbors import NearestNeighborSearch
 from . import multi_modal_figures as figures
-
-faiss_available = False
-try:
-    import faiss
-
-    faiss_available = True
-except (ImportError, ModuleNotFoundError):
-    pass
 
 logger = get_logger(__name__)
 
 
 class AttributeInferenceProtection(Component):
+    """Attribute Inference Protection privacy metric.
+
+    Simulates an attribute inference attack: given quasi-identifier columns,
+    can an adversary use synthetic nearest-neighbors to predict the remaining
+    attributes of a training record?  A higher score indicates better
+    protection (lower prediction accuracy).
+
+    See Also:
+        https://arxiv.org/abs/2501.03941 -- Synthetic Data Privacy Metrics.
+    """
+
     name: str = Field(default="Attribute Inference Protection")
-    col_accuracy_df: pd.DataFrame | None = Field(default=None)
+    col_accuracy_df: pd.DataFrame | None = Field(
+        default=None, description="Per-column prediction risk scores and grades."
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
     def jinja_context(self) -> dict[str, str]:
+        """Template context with the attribute-inference bar chart figure."""
         d = super().jinja_context
         d["anchor_link"] = "#aia"
         if self.col_accuracy_df is not None and not self.col_accuracy_df.empty:
@@ -62,10 +69,7 @@ class AttributeInferenceProtection(Component):
     def from_evaluation_dataset(
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> AttributeInferenceProtection:
-        if not faiss_available:
-            logger.info("FAISS is not available, skipping Attribute Inference Attack.")
-            return AttributeInferenceProtection(score=EvaluationScore())
-
+        """Run the attribute inference attack and return the protection score."""
         quasi_identifier_count = config.evaluation.quasi_identifier_count if config else QUASI_IDENTIFIER_COUNT
 
         score, col_accuracy_df = AttributeInferenceProtection._aia(
@@ -180,7 +184,7 @@ class AttributeInferenceProtection(Component):
 
     @staticmethod
     def _divide_tabular_text(df: pd.DataFrame, text_fields: list) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Takes a dataframe and divides it into two dataframes, one with the text fields and one with the tabular fields"""
+        """Split a dataframe into tabular-only and text-only subsets."""
         tabular_fields = []
         for col in df.columns:
             if col not in text_fields:
@@ -192,9 +196,7 @@ class AttributeInferenceProtection(Component):
 
     @staticmethod
     def _embed_text(df: pd.DataFrame, embedder) -> pd.DataFrame:
-        """Takes a dataframe of text fields, finds the embeddings for each
-        and then averages the embeddings into one embedding and returns a dataframe with just that
-        """
+        """Embed each text column and average into a single embedding per row."""
         embeddings = {}
         for col in df.columns:
             data = df[col].to_list()
@@ -263,23 +265,17 @@ class AttributeInferenceProtection(Component):
                     df_train_use, df_synth_use
                 )
 
-        # If all tabular, just use FAISS to get NN
+        # If all tabular, use nearest neighbor search (torch CUDA or sklearn CPU fallback)
         if len(text_columns) == 0:
-            # Create the faiss index on the synthetic data
-            dim = df_synth_norm.shape[1]
-            index = faiss.IndexFlatL2(dim)  # ty: ignore[unresolved-attribute, possibly-unbound-attribute]
-
-            # This usage matches documentation. Specifying n= and x= parameters as
-            # the type annotation for IndexFlatL2.add suggests seems unnecessary, possibly related
-            # to swig handling that ty is not aware of. Similar for other faiss calls below
-            # which are using swig-generated code.
-            index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))  # ty: ignore[missing-argument]
+            # Create the nearest neighbors index on the synthetic data
+            nn = NearestNeighborSearch(n_neighbors=k)
+            nn.fit(np.ascontiguousarray(np.array(df_synth_norm)).astype(np.float32))
 
             # Get nearest neighbors to this attack record
-            _, indexes = index.search(np.float32(np.ascontiguousarray(np.array(df_train_norm))), k)  # ty: ignore[missing-argument]
+            _, indexes = nn.kneighbors(np.ascontiguousarray(np.array(df_train_norm)).astype(np.float32))
             synth_rows = pd.DataFrame()
-            for index in indexes:
-                synth_rows = pd.concat([synth_rows, df_synth.iloc[index].copy()])
+            for idx_row in indexes:
+                synth_rows = pd.concat([synth_rows, df_synth.iloc[idx_row].copy()])
             return synth_rows
 
         # If all text, just use Sentence Transformer to get NN
@@ -288,15 +284,15 @@ class AttributeInferenceProtection(Component):
             df_train_embeddings = AttributeInferenceProtection._embed_text(df_train_text, embedder)
             df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
             hits = util.semantic_search(
-                np.array(list(df_train_embeddings["embedding"])),
-                np.array(list(df_synth_embeddings["embedding"])),
+                np.array(list(df_train_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
+                np.array(list(df_synth_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
                 top_k=k,
             )
             synth_rows = pd.DataFrame()
             for i in range(k):
                 corpus_id = hits[0][i]["corpus_id"]
                 synth_rows = pd.concat(
-                    [synth_rows, pd.DataFrame([df_synth.iloc[corpus_id]])],
+                    [synth_rows, pd.DataFrame([df_synth.iloc[int(corpus_id)]])],
                     ignore_index=True,
                 )
 
@@ -310,8 +306,8 @@ class AttributeInferenceProtection(Component):
         df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
         search_synth_k = min(1000, len(df_synth_embeddings))
         hits = util.semantic_search(
-            np.array(list(df_train_embeddings["embedding"])),
-            np.array(list(df_synth_embeddings["embedding"])),
+            np.array(list(df_train_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
+            np.array(list(df_synth_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
             top_k=search_synth_k,
         )
         synth_NN = pd.DataFrame()
@@ -324,16 +320,13 @@ class AttributeInferenceProtection(Component):
             dist = 1 - sim
             text_dist[i] = dist
             corpus_ids.append(corpus_id)
-            synth_NN = pd.concat([synth_NN, pd.DataFrame([df_synth_norm.iloc[corpus_id]])], ignore_index=True)
+            synth_NN = pd.concat([synth_NN, pd.DataFrame([df_synth_norm.iloc[int(corpus_id)]])], ignore_index=True)
 
-        # Now get the tabular similarity for these 1000 NN
-
-        dim = synth_NN.shape[1]
-        index = faiss.IndexFlatL2(dim)  # ty: ignore[unresolved-attribute, possibly-unbound-attribute]
-        index.add(np.float32(np.ascontiguousarray(np.array(synth_NN))))  # ty: ignore[missing-argument]
-        dists, indexes = index.search(np.float32(np.ascontiguousarray(np.array(df_train_norm))), search_synth_k)  # ty: ignore[missing-argument]
+        # Now get the tabular similarity for these 1000 NN using nearest neighbor search
+        nn = NearestNeighborSearch(n_neighbors=search_synth_k)
+        nn.fit(np.ascontiguousarray(np.array(synth_NN)).astype(np.float32))
+        dists, indexes = nn.kneighbors(np.ascontiguousarray(np.array(df_train_norm)).astype(np.float32))
         # Scale the Euclidean distance to [0,1]
-        dists = np.sqrt(dists)
         max_dist = np.amax(dists)
         if max_dist > 0:
             dist_scaled = dists / max_dist
@@ -341,8 +334,8 @@ class AttributeInferenceProtection(Component):
             dist_scaled = dists
         tab_dist = {}
         for i in range(search_synth_k):
-            index = indexes[0][i]
-            tab_dist[index] = dist_scaled[0][i]
+            idx = indexes[0][i]
+            tab_dist[idx] = dist_scaled[0][i]
 
         # Now get the hybrid distance
 
@@ -372,6 +365,20 @@ class AttributeInferenceProtection(Component):
         df_synth: pd.DataFrame,
         quasi_identifier_count: int,
     ) -> tuple[EvaluationScore, pd.DataFrame | None]:
+        """Core attribute inference attack implementation.
+
+        Iterates over random quasi-identifier subsets, finds nearest
+        synthetic neighbors, and measures attribute prediction accuracy
+        weighted by column entropy.
+
+        Args:
+            df_train: Training dataframe.
+            df_synth: Synthetic dataframe.
+            quasi_identifier_count: Number of columns to use as quasi-identifiers.
+
+        Returns:
+            Tuple of (overall protection score, per-column accuracy dataframe).
+        """
         ias = EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         col_accuracy_df = None
         if quasi_identifier_count is None:
@@ -408,7 +415,7 @@ class AttributeInferenceProtection(Component):
             nominal_columns = list(df_train.select_dtypes(include=["object", "category", "bool"]).columns)
             numeric_columns = [column for column in df_train.columns if column not in nominal_columns]
 
-            # Now seperate out the text columns from the nominal
+            # Now separate out the text columns from the nominal
 
             text_columns = []
             for col in nominal_columns:
@@ -531,7 +538,7 @@ class AttributeInferenceProtection(Component):
                 # Lat/lon values inspired this. Text must be dist .35 or less
                 for column in predict_columns:
                     synth_val = synth_values[column]
-                    train_val = train_row_all.iloc[0][column]
+                    train_val = train_row_all.iloc[0][column]  # ty: ignore[invalid-argument-type]
 
                     if pd.isna(train_val):
                         continue

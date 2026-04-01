@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from ..artifacts.analyzers.field_features import describe_field
 from ..artifacts.base.fields import FieldType
 from ..config.replace_pii import PiiReplacerConfig
+from ..defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
 from ..pii_replacer.data_editor.edit import Editor, TransformFnAccounting
 from ..pii_replacer.transform_result import ColumnStatistics, TransformResult
 from .data_editor.detect import (
@@ -29,29 +30,39 @@ from .data_editor.detect import (
 
 
 class ColumnClassification(BaseModel):
-    """classification info and detected entities in a column prior to transform. entity_count is None and entity_values an empty list if entity is None for non-text fields."""
+    """Classification and detected-entity info for a column prior to transform.
 
-    field_name: str
-    """The name of the field/column."""
+    When ``entity`` is ``None`` (e.g. unclassified), ``entity_count``
+    is ``None`` and ``entity_values`` is an empty list.
+    """
 
-    column_type: str | None
-    """The detected column type (e.g., 'text', 'numeric', etc.)."""
-
-    entity: str | None
-    """The detected entity type (e.g., 'email', 'phone', etc.), or None if no entity detected."""
-
-    entity_count: int | None = None
-    """Number of non-empty values in this field. None if no entity detected."""
-
-    entity_values: list[Any] = Field(default_factory=list)
-    """List of all unique values for this field. Empty list if no entity detected."""
+    field_name: str = Field(description="Name of the field/column.")
+    column_type: str | None = Field(
+        description="Detected column type (e.g. ``text``, ``numeric``).",
+    )
+    entity: str | None = Field(
+        description="Detected entity type (e.g. ``email``, ``phone``), or ``None`` if none.",
+    )
+    entity_count: int | None = Field(
+        default=None,
+        description="Number of non-empty values in this field. ``None`` if no entity detected.",
+    )
+    entity_values: list[Any] = Field(
+        default_factory=list,
+        description="Unique values for this field. Empty if no entity detected.",
+    )
 
 
 def classify_config_from_params(
     config: PiiReplacerConfig,
 ) -> ClassifyConfig:
-    """
-    Parse out classification / NER parameters from config
+    """Build classification and NER config from PII replacer config.
+
+    Args:
+        config: PII replacer config containing globals for classify and NER.
+
+    Returns:
+        ``ClassifyConfig`` with valid entities, NER settings, and GLiNER options.
     """
     valid_entities = DEFAULT_ENTITIES
 
@@ -78,6 +89,7 @@ def classify_config_from_params(
 
 
 def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
+    """Build a composite entity extractor from classification config."""
     entity_extractor = EntityExtractorMulti.get_entity_extractor(clsfy_cfg)
     if clsfy_cfg.gliner_enabled:
         entity_extractor.add_entity_extractor(EntityExtractorGliner.get_entity_extractor(clsfy_cfg))
@@ -87,32 +99,61 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
 
 
 def _get_classify_endpoint_url() -> str:
-    """Get the inference endpoint URL for column classification.
+    """Resolve the NIM/OpenAI-compatible base URL for PII column classification.
 
-    The endpoint is expected to be set in the NIM_ENDPOINT_URL environment variable.
+    If ``NSS_INFERENCE_ENDPOINT`` is present in the environment, that value is used.
+    If the variable is unset, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT`` from ``defaults``.
+
+    Note:
+        Emits an INFO log indicating whether the default or configured URL applies.
 
     Returns:
-        The inference endpoint URL.
-
-    Raises:
-        Exception: If no valid configuration is found.
+        inference endpoint for PII column classification.
     """
-    endpoint = os.environ.get("NIM_ENDPOINT_URL")
-    if endpoint:
-        return endpoint
+    configured = os.environ.get("NSS_INFERENCE_ENDPOINT")
+    if configured is None:
+        url = DEFAULT_NSS_INFERENCE_ENDPOINT
+        logging.info(
+            "PII column classification will call the default NVIDIA inference API at %s. "
+            "To use another server, set the NSS_INFERENCE_ENDPOINT environment variable to a NIM/OpenAI-compatible endpoint.",
+            url,
+        )
+    else:
+        url = configured
+        logging.info(
+            "PII column classification will use the inference API you configured (NSS_INFERENCE_ENDPOINT): %s",
+            url,
+        )
+    return url
 
-    raise Exception("Inference endpoint not configured for classify. Set NIM_ENDPOINT_URL environment variable.")
+
+def _inference_key_configured() -> bool:
+    """Return whether ``NSS_INFERENCE_KEY`` is set to a non-empty value."""
+    return bool((os.environ.get("NSS_INFERENCE_KEY") or "").strip())
+
+
+def _column_classify_failure_remediation(exc: BaseException) -> str:
+    """Extra log text after column classifier init or classify failures."""
+    if not _inference_key_configured():
+        return (
+            " Please set NSS_INFERENCE_KEY in the environment. Get an API key at https://build.nvidia.com/settings/api-keys. "
+            "NSS_INFERENCE_ENDPOINT is optional when using the default NVIDIA inference API."
+        )
+    return (
+        f" If this persists, check NSS_INFERENCE_ENDPOINT and that your API key is valid. ({type(exc).__name__}: {exc})"
+    )
 
 
 def get_column_classifier() -> ColumnClassifierLLM:
+    """Return a column classifier backed by the NSS inference endpoint (``NSS_INFERENCE_ENDPOINT``, ``NSS_INFERENCE_KEY``)."""
     classifier = ColumnClassifierLLM()
     classifier._num_samples = 5
 
     endpoint = _get_classify_endpoint_url()
 
     # When using Inference Gateway, no API key is needed (gateway handles auth).
-    # For legacy direct endpoint, NIM_API_KEY can be provided.
-    api_key = os.environ.get("NIM_API_KEY", "not-needed")
+    # For legacy direct endpoint, NSS_INFERENCE_KEY can be provided.
+    api_key = os.environ.get("NSS_INFERENCE_KEY", "not-needed")
 
     classifier._llm = OpenAI(api_key=api_key, base_url=endpoint)
     return classifier
@@ -137,7 +178,7 @@ ACCOUNTING_FUNCTIONS = [
     "fake_entities",
     "drop",
 ]
-"""Transform functions tracked for report accounting of which functions were used for which columns"""
+"""Transform function names tracked for report accounting (which functions were used per column)."""
 
 
 def _build_column_statistics(
@@ -145,8 +186,16 @@ def _build_column_statistics(
     transform_fn_accounting: TransformFnAccounting,
     column_report: NerReport,
 ) -> dict[str, ColumnStatistics]:
-    """Build statistics for each column from various objects used by Editor."""
+    """Build per-column statistics from classification, accounting, and NER report.
 
+    Args:
+        classifications: Per-column classification (type, entity, counts, values).
+        transform_fn_accounting: Which transform functions were applied per column.
+        column_report: NER report with detected entities for text columns.
+
+    Returns:
+        Map of column name to ``ColumnStatistics``.
+    """
     result = {}
     for field in classifications:
         column_name = field.field_name
@@ -182,27 +231,28 @@ def _build_column_statistics(
 
 
 class NemoPII(object):
-    """Class for performing PII replacement.
+    """PII replacement over DataFrames via classification, NER, and configurable transforms.
 
-    Sample usage:
+    Call ``classify_df`` to get column classifications, then ``transform_df`` to replace
+    PII. The result and per-column statistics are on ``result`` after ``transform_df``.
 
-    ```python
-    nemo_pii = NemoPII()
-    nemo_pii.transform_df(df)
-    result = nemo_pii.result
-    print(result.transformed_df)
-    print(result.column_statistics)
-    ```
+    Args:
+        config: PII replacer config. If ``None``, default config is used.
+
+    Attributes:
+        result: Result of the last ``transform_df`` (``TransformResult`` with ``transformed_df`` and ``column_statistics``).
+
+    Example:
+        >>> nemo_pii = NemoPII()
+        >>> nemo_pii.transform_df(df)
+        >>> result = nemo_pii.result
+        >>> print(result.transformed_df)
+        >>> print(result.column_statistics)
     """
 
     result: TransformResult
 
     def __init__(self, config: PiiReplacerConfig | None = None):
-        """Initialize the NemoPII class.
-
-        Args:
-            config: Optional configuration for the PII replacer. If not provided, a default configuration will be used.
-        """
         if config:
             self.pii_replacer_config = config
         else:
@@ -219,17 +269,14 @@ class NemoPII(object):
         self.elapsed_time = 0.0
 
     def classify_df(self, df: pd.DataFrame) -> list[ColumnClassification]:
-        """Classify the columns of a dataframe.
-
-        Identifies both a column type and entity name for each column.
+        """Classify each column (type and entity) using config and optional LLM classifier.
 
         Args:
-            df: The dataframe to classify.
+            df: DataFrame to classify.
 
         Returns:
-            A list of ColumnClassification objects containing classification info for each field,
-            including field name, column type, entity, entity counts, and a list of unique entity values.
-
+            List of ``ColumnClassification``, one per column, with field name, column type,
+            entity, entity count, and unique entity values.
         """
         # Pre-initialize with defaults
         entities = {}
@@ -243,9 +290,11 @@ class NemoPII(object):
                 # Try to initialize the column classifier
                 try:
                     column_classifier = get_column_classifier()
-                except Exception:
+                except Exception as exc:
                     logging.error(
-                        "Could not initialize column classifier, falling back to default entities.", exc_info=False
+                        "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
+                        _column_classify_failure_remediation(exc),
+                        exc_info=_inference_key_configured(),
                     )
 
                 # Try to perform classification if we successfully got a classifier
@@ -261,8 +310,12 @@ class NemoPII(object):
                             )
                             for (name, entity) in columns.items()
                         }
-                    except Exception:
-                        logging.error("Could not perform classify, falling back to default entities.", exc_info=False)
+                    except Exception as exc:
+                        logging.error(
+                            "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
+                            _column_classify_failure_remediation(exc),
+                            exc_info=_inference_key_configured(),
+                        )
             else:
                 logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")
         finally:
@@ -298,15 +351,12 @@ class NemoPII(object):
         return field_results
 
     def transform_df(self, df: pd.DataFrame, classifications: list[ColumnClassification] | None = None) -> None:
-        """Transform the dataframe by replacing PII.
+        """Replace PII in the DataFrame and set ``self.result``.
 
         Args:
-            df: The dataframe to transform.
-            classifications: Optional classifications for the columns. If not
-                provided, column classification will be performed.
-
-        Returns:
-            None
+            df: DataFrame to transform.
+            classifications: Optional precomputed classifications. If ``None``,
+                ``classify_df`` is run first.
         """
         pii_replacer_start = time.monotonic()
         try:

@@ -1,23 +1,24 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Configuration update logic for auto-params for NSS models.
+"""Resolve ``"auto"`` sentinel values in config parameters to concrete values.
+
+Inspects dataset characteristics (token counts, record counts) to replace
+``"auto"`` placeholders in ``SafeSynthesizerParameters`` with computed values
+for rope scaling factor, number of input records to sample, delta, and other
+training/privacy parameters.
 """
 
 from __future__ import annotations
 
-import inspect
 import math
 import re
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from pydantic import GetCoreSchemaHandler
-from pydantic_core import core_schema
 
 from ..defaults import DEFAULT_MAX_SEQ_LENGTH, MAX_ROPE_SCALING_FACTOR
+from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
 from ..utils import merge_dicts
 from .parameters import SafeSynthesizerParameters
@@ -32,17 +33,36 @@ logger = get_logger(__name__)
 
 
 def choose_num_input_records_to_sample(rope_scaling_factor: int) -> int:
-    # With no rope scaling (rope=1), the default is 25_000. For now our best guess
-    # is to increase training steps linearly as rope scaling increases. So rope=2 uses a
-    # sample of 50_000, etc.
+    """Scale training records linearly with the rope scaling factor.
+
+     ``num_records = rope_scaling_factor * 25000``
+
+    Args:
+        rope_scaling_factor: The RoPE scaling multiplier (1 means no scaling).
+
+    Returns:
+        Number of records to sample for training.
+    """
     return rope_scaling_factor * 25_000
 
 
 def get_max_token_count(data: pd.DataFrame, group_by: list[str] | str | None) -> int:
-    """
-    Estimate the maximum token count needed for the data.
-    """
+    """Estimate the maximum tokens per training example.
 
+    Accounts for prompt overhead (~40 tokens), column names (repeated in JSON
+    formatting), and content character counts. Digits are counted as one token
+    each; other characters use a 4-chars-per-token heuristic (Llama-2 tokenizer).
+    Samples up to 5,000 records from ``data`` for analysis.
+
+    Args:
+        data: Training dataframe to analyze.
+        group_by: Column(s) used to group records into single training examples.
+            When set, grouped records are concatenated before token estimation.
+
+    Returns:
+        Estimated maximum token count across all sampled training examples,
+        or 1 if the dataframe is empty.
+    """
     if data.size == 0:
         return 1
 
@@ -105,9 +125,17 @@ def get_max_token_count(data: pd.DataFrame, group_by: list[str] | str | None) ->
 
 
 def choose_rope_scaling_factor(max_token_count: int, context_length: int = DEFAULT_MAX_SEQ_LENGTH) -> int:
-    """
-    Estimate the rope scaling factor based on the max token count and context length.
-    We assume a context length of 2048 tokens but this can be overridden.
+    """Compute the RoPE scaling factor from the estimated max token count.
+
+    Divides ``max_token_count`` by ``context_length``, rounds up, and
+    caps the result at ``MAX_ROPE_SCALING_FACTOR``.
+
+    Args:
+        max_token_count: Estimated maximum tokens per training example.
+        context_length: Base context window size (default ``DEFAULT_MAX_SEQ_LENGTH``).
+
+    Returns:
+        Integer scaling factor in the range [1, ``MAX_ROPE_SCALING_FACTOR``].
     """
     rope_scaling_factor = math.ceil(max_token_count / context_length)
     rope_scaling_factor = min(rope_scaling_factor, MAX_ROPE_SCALING_FACTOR)
@@ -116,20 +144,20 @@ def choose_rope_scaling_factor(max_token_count: int, context_length: int = DEFAU
 
 
 class AutoConfigResolver:
-    """
-    Handles auto-determination of config parameters based on the provided dataset.
+    """Resolve all ``"auto"`` sentinel values in ``SafeSynthesizerParameters``.
 
-    This class decomposes the config update logic into testable private methods.
+    Inspects the training dataset to compute concrete values for parameters
+    left as ``"auto"`` (rope scaling, number of input records, unsloth,
+    delta, max sequences per example). Resolution order matters:
+    ``rope_scaling_factor`` is resolved first because
+    ``num_input_records_to_sample`` depends on it.
+
+    Args:
+        data: Training dataframe used to derive auto parameters.
+        config: Configuration containing ``"auto"`` sentinel values to resolve.
     """
 
     def __init__(self, data: pd.DataFrame, config: SafeSynthesizerParameters):
-        """
-        Initialize the ConfigUpdater.
-
-        Args:
-            data: The data to use for auto-determination.
-            config: The config to update.
-        """
         self._data = data
         self._config = config
         self._record_count = data.shape[0]
@@ -138,17 +166,11 @@ class AutoConfigResolver:
         self._rope_scaling_factor: int | None = None
 
     def __call__(self) -> SafeSynthesizerParameters:
-        """
-        Resolve the auto-determined config parameters.
-
-        Returns:
-            The updated config with auto parameters resolved.
-        """
+        """Delegate to [`resolve`][nemo_safe_synthesizer.config.autoconfig.AutoConfigResolver.resolve]."""
         return self.resolve()
 
     def _determine_rope_scaling_factor(self) -> dict[str, int]:
-        """
-        Determine the rope scaling factor if set to auto.
+        """Determine the rope scaling factor if set to auto.
 
         Returns:
             Dict with rope_scaling_factor if auto-determined, empty dict otherwise.
@@ -169,8 +191,7 @@ class AutoConfigResolver:
         return {"rope_scaling_factor": self._rope_scaling_factor}
 
     def _determine_num_input_records_to_sample(self) -> dict[str, int]:
-        """
-        Determine the number of input records to sample if set to auto.
+        """Determine the number of input records to sample if set to auto.
 
         Returns:
             Dict with num_input_records_to_sample if auto-determined, empty dict otherwise.
@@ -182,8 +203,7 @@ class AutoConfigResolver:
         return {"num_input_records_to_sample": num_records}
 
     def _determine_use_unsloth(self) -> dict[str, bool]:
-        """
-        Determine whether to use unsloth if set to auto.
+        """Determine whether to use unsloth if set to auto.
 
         Returns:
             Dict with use_unsloth if auto-determined, empty dict otherwise.
@@ -199,16 +219,32 @@ class AutoConfigResolver:
             logger.info("unsloth was set to 'auto', enabling")
             return {"use_unsloth": True}
 
-    def _determine_delta(self) -> dict[str, float]:
+    def _determine_learning_rate(self) -> dict[str, float]:
         """
-        Determine the delta parameter for differential privacy if set to auto.
+        Determine the learning rate if set to auto.
+        Uses model-specific default from llm.metadata.
 
-        We must set delta <<1/n, where n is the training record count.
+        Returns:
+            Dict with learning_rate if auto-determined, empty dict otherwise.
+        """
+        if self._config.training.learning_rate != AUTO_STR:
+            logger.info(f"`learning_rate` was set to {self._config.training.learning_rate}, using that value")
+            return {}
+        lr = ModelMetadata._resolve_model_class(self._config.training.pretrained_model).default_learning_rate
+        logger.info(
+            f"`learning_rate` was automatically set to {lr} with pretrained_model='{self._config.training.pretrained_model}'."
+        )
+        return {"learning_rate": lr}
+
+    def _determine_delta(self) -> dict[str, float]:
+        r"""Determine the delta parameter for differential privacy if set to auto.
+
+        We must set $\delta \ll 1/n$, where $n$ is the training record count.
         With approximate DP, the probability that at least one person has
-        their data exposed is `1-(1-delta)^n`. For small delta, the Taylor
-        expansion is roughly `delta * n`, which we want to bound by e.g.
-        10%. To achieve this, we set `delta = 1/n^POW` when the record
-        count is >= 100, and 0.1/n otherwise.
+        their data exposed is $1 - (1 - \delta)^n$. For small $\delta$, the
+        Taylor expansion is roughly $\delta \cdot n$, which we want to bound
+        by e.g. 10%. To achieve this, we set $\delta = 1 / n^{1.2}$ when
+        $n \ge 100$, and $0.1 / n$ otherwise.
 
         Returns:
             Dict with delta if auto-determined, empty dict otherwise.
@@ -228,24 +264,38 @@ class AutoConfigResolver:
         )
         return {"delta": d}
 
-    def _determine_max_sequences_per_example(self) -> dict[str, Literal["auto"] | int | None]:
-        """
-        Determine max_sequences_per_example if set to auto.
+    def _determine_max_sequences_per_example(self) -> dict[str, int | None]:
+        """Determine max_sequences_per_example if set to auto.
 
         Returns:
-            Dict with max_sequences_per_example if auto-determined, empty dict otherwise.
+            Dict with max_sequences_per_example resolved to a concrete value:
+            1 if DP is enabled, 10 if auto with DP disabled, or the
+            explicit value (int) if manually specified, or None if not specified.
         """
         if self._dp_enabled is True:
-            logger.info(
-                "Parameter `max_sequences_per_example` was automatically set "
-                "to 1 based on the use of differential privacy."
-            )
+            if self._config.data.max_sequences_per_example in [None, AUTO_STR, 1]:
+                logger.info(
+                    "Parameter `max_sequences_per_example` was automatically set "
+                    "to 1 based on the use of differential privacy."
+                )
+            else:
+                logger.info(
+                    "Parameter `max_sequences_per_example` does not allow the value of "
+                    "{self._config.data.max_sequences_per_example} when DP is enabled. Setting to 1 instead."
+                )
             return {"max_sequences_per_example": 1}
         elif self._config.data.max_sequences_per_example != AUTO_STR:
+            if self._config.data.max_sequences_per_example is None:
+                logger.info(
+                    "Parameter `max_sequences_per_example` is not specified, so each example will fill up the context window."
+                )
             return {"max_sequences_per_example": self._config.data.max_sequences_per_example}
 
         else:
-            return {"max_sequences_per_example": None}
+            logger.info(
+                "Parameter `max_sequences_per_example` was automatically set to 10 for best performance/efficiency."
+            )
+            return {"max_sequences_per_example": 10}
 
     def _build_updated_params(
         self,
@@ -253,8 +303,7 @@ class AutoConfigResolver:
         data_params: dict[str, Any],
         privacy_params: dict[str, Any],
     ) -> SafeSynthesizerParameters:
-        """
-        Build and validate the updated configuration parameters.
+        """Build and validate the updated configuration parameters.
 
         Args:
             training_params: Auto-determined training parameters.
@@ -276,17 +325,20 @@ class AutoConfigResolver:
         return my_config
 
     def resolve(self) -> SafeSynthesizerParameters:
-        """
-        Update the config's `auto` parameters with concrete values.
+        """Replace all ``"auto"`` parameters with concrete values.
+
+        Resolution order matters: ``rope_scaling_factor`` is resolved before
+        ``num_input_records_to_sample`` because the latter depends on it.
 
         Returns:
-            The updated config with auto parameters resolved.
+            A new ``SafeSynthesizerParameters`` with all ``"auto"`` values resolved.
         """
         # Determine training params (order matters: rope_scaling_factor first)
         training_params: dict[str, Any] = {}
         training_params.update(self._determine_rope_scaling_factor())
         training_params.update(self._determine_num_input_records_to_sample())
         training_params.update(self._determine_use_unsloth())
+        training_params.update(self._determine_learning_rate())
 
         # Determine data params
         data_params: dict[str, Any] = {}
@@ -297,21 +349,3 @@ class AutoConfigResolver:
         privacy_params.update(self._determine_delta())
 
         return self._build_updated_params(training_params, data_params, privacy_params)
-
-
-@dataclass(frozen=True)
-class AutoParamsValidator:
-    value_func: Callable[[Any], bool]
-
-    def validate(self, value):
-        if isinstance(value, str) and value == "auto":
-            return value
-        elif self.value_func(value):
-            return value
-        else:
-            raise ValueError(f"AutoParam validation failed: {inspect.getsource(self.value_func)}, got {value}")
-
-    def __get_pydantic_core_schema__(self, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
-        return core_schema.with_info_after_validator_function(
-            self.validate, handler(source_type), field_name=handler.field_name
-        )

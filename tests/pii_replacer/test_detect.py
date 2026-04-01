@@ -10,6 +10,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+from pandas.testing import assert_index_equal
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DEFAULT_ENTITIES,
     ClassifyConfig,
@@ -21,8 +24,6 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
 )
 from nemo_safe_synthesizer.pii_replacer.data_editor.environment import redact_entities_fn
 from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
-from pandas.testing import assert_index_equal
-from pydantic import ValidationError
 
 
 def test_gliner_batch_predict_config():
@@ -36,7 +37,7 @@ def test_gliner_batch_predict_config():
         gliner_batch_mode_enabled=False,
         gliner_batch_mode_chunk_length=10,
         gliner_batch_mode_batch_size=20,
-        gliner_model="gretelai/gretel-gliner-bi-large-v1.0",
+        gliner_model="nvidia/gliner-PII",
     )
 
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER", MagicMock()):
@@ -53,13 +54,50 @@ def test_gliner_batch_predict_config():
         gliner_batch_mode_enabled=True,
         gliner_batch_mode_chunk_length=10,
         gliner_batch_mode_batch_size=20,
-        gliner_model="gretelai/gretel-gliner-bi-large-v1.0",
+        gliner_model="nvidia/gliner-PII",
     )
 
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER", MagicMock()):
         entity_extractor = EntityExtractorGliner.get_entity_extractor(cfg)
         entity_extractor.batch_update_cache(["abc"], None)
         entity_extractor._model.batch_predict_entities.assert_called()
+
+
+def test_gliner_pii_detection_recall():
+    # Tests GLiNER’s PII detection on a short text, ensuring it finds a reasonable number of entities without over- or under-detecting.
+
+    GLINER_PII_TEST_MIN_ENTITIES = 4
+    GLINER_PII_TEST_MAX_ENTITIES = 10
+    entity_labels = {"first_name", "last_name", "ssn", "age", "date_time", "phone_number", "address", "city"}
+
+    cfg = ClassifyConfig(
+        valid_entities=entity_labels,
+        ner_threshold=0.3,
+        ner_regexps_enabled=False,
+        ner_entities=None,
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=False,
+        gliner_batch_mode_chunk_length=512,
+        gliner_batch_mode_batch_size=8,
+        gliner_model="nvidia/gliner-PII",
+    )
+    extractor = EntityExtractorGliner.get_entity_extractor(cfg)
+
+    # Short text with clear PII.
+    text_with_pii = "Daniel Martinez, born September 3, 1988, age 38, visited the clinic for a follow-up regarding hypertension. His patient ID is PT30984. He lives at 912 Cedar Avenue, Vernon, CA 90058, and can be reached at 323-555-6724 for appointment reminders. During the visit, the physician reviewed his recent blood pressure readings and confirmed he has been taking his prescribed Lisinopril daily. A follow-up appointment was scheduled in two months to monitor his response to the treatment plan."
+
+    all_predictions = []
+    preds = extractor.extract_ner_predictions(text_with_pii, entity_labels)
+    all_predictions.extend(preds)
+
+    total = len(all_predictions)
+    assert total >= GLINER_PII_TEST_MIN_ENTITIES, (
+        f"Expected at least {GLINER_PII_TEST_MIN_ENTITIES} entities, got {total}. GLiNER may have missed expected PII."
+    )
+    assert total <= GLINER_PII_TEST_MAX_ENTITIES, (
+        f"Expected at most {GLINER_PII_TEST_MAX_ENTITIES} entities, got {total}. "
+        "GLiNER may be over-labeling text as PII."
+    )
 
 
 def test_column_sample_sizes():

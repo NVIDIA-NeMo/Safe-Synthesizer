@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Result compilation for Safe Synthesizer pipeline runs.
+
+Assembles generation output, evaluation scores, and timing into the
+``SafeSynthesizerResults`` and ``SafeSynthesizerSummary`` containers
+consumed by the SDK and CLI.
+"""
+
 import pandas as pd
 
 from .config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
@@ -14,6 +21,20 @@ def make_nss_summary(
     results: GenerateJobResults | pd.DataFrame | None = None,
     report: MultimodalReport | None = None,
 ) -> SafeSynthesizerSummary:
+    """Build a pipeline summary from timing, generation results, and evaluation.
+
+    Extracts evaluation scores from ``report`` when available. If ``report``
+    is ``None`` (e.g. PII-only mode), all scores default to ``None``.
+
+    Args:
+        timing: Wall-clock timing breakdown for the pipeline.
+        results: Generation output -- a ``GenerateJobResults`` with record
+            counts, or a raw ``DataFrame``, or ``None``.
+        report: Evaluation report containing component scores.
+
+    Returns:
+        A populated ``SafeSynthesizerSummary``.
+    """
     # Extract scores from report if available, otherwise use None for all scores
     # (e.g., when running PII-only mode without evaluation)
     if report is not None:
@@ -100,6 +121,28 @@ def make_nss_results(
     evaluation_time: float | None = None,
     report: MultimodalReport | None = None,
 ) -> SafeSynthesizerResults:
+    """Build the final pipeline results container.
+
+    Combines generation output, timing, and an optional evaluation report
+    into a single ``SafeSynthesizerResults`` object.
+
+    Args:
+        generate_results: Generation output -- a ``GenerateJobResults`` or
+            a raw ``DataFrame`` of synthetic records.
+        total_time: Total wall-clock time in seconds.
+        training_time: Training phase time in seconds.
+        generation_time: Generation phase time in seconds.
+        evaluation_time: Evaluation phase time in seconds.
+        report: Evaluation report to render as HTML.
+
+    Returns:
+        A ``SafeSynthesizerResults`` with synthetic data, summary, and
+        optional HTML evaluation report.
+
+    Raises:
+        ValueError: If ``generate_results`` is ``None`` or an empty
+            ``DataFrame``.
+    """
     timing = SafeSynthesizerTiming(
         total_time_sec=total_time,
         evaluation_time_sec=evaluation_time,

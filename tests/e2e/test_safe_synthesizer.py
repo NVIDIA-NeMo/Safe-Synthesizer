@@ -21,39 +21,48 @@ WARNING: Tests are not currently hermetic and require internet access for:
 
 # ruff: noqa: E402
 import sys
-import tempfile
 from pathlib import Path
 
-import pandas as pd
 import pytest
+
+# Skip all tests in this module if sentence_transformers is not available
+pytest.importorskip(
+    "sentence_transformers",
+    reason="sentence_transformers and a GPU are required for these tests (install with: uv sync --extra cu128)",
+)
+
+# Skip all tests in this module if vllm is not properly available.
+vllm = pytest.importorskip(
+    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
+)
+
+try:
+    from vllm import LLM  # noqa: F401
+except ImportError:
+    pytest.skip(
+        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
+        allow_module_level=True,
+    )
+
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 logger = get_logger(__name__)
 
-
-@pytest.fixture
-def fixture_save_path():
-    return Path(tempfile.mkdtemp(prefix="nemo_safe_synthesizer_tmp"))
-
-
-@pytest.fixture
-def fixture_financial_transactions_dataset():
-    return pd.read_csv(
-        "https://raw.githubusercontent.com/gretelai/gretel-blueprints/refs/heads/main/sample_data/financial_transactions.csv"
-    )
+# Path to config files
+CONFIG_DIR = Path(__file__).parent / "required_configs"
 
 
 @pytest.mark.e2e
-@pytest.mark.gpu_integration
+@pytest.mark.requires_gpu
 @pytest.mark.timeout(1000)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         num_input_records_to_sample=1500,
         dp_enabled=True,
         epsilon=100.0,
@@ -75,14 +84,13 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 
 
 @pytest.mark.e2e
-@pytest.mark.gpu_integration
+@pytest.mark.requires_gpu
 @pytest.mark.timeout(500)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
-        enable_synthesis=True,
-        enable_replace_pii=False,
+        replace_pii=None,
         num_input_records_to_sample=5000,
     )
     logger.info(f"Running test_train_and_generate_defaults with config: {config}")

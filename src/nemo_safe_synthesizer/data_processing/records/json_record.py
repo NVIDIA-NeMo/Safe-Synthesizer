@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-"""Represent a single JSON object as a single Python class.
-JSON records (that are already dicts)
-can be passed to the ``Record`` class and have a bunch
-of automatic processing and field-level tracking done
+"""JSON record flattening and field-level tracking.
+
+Provides ``JSONRecord`` for unpacking arbitrarily nested JSON objects
+(or plain strings) into flat ``KVPair`` lists, and the ``flatten``
+utility that recursively collapses nested dicts/lists into a single-level
+dict using the ``NESTING_DELIM`` / ``ARRAY_POS`` markers.
 """
 
 from itertools import chain, starmap
-from typing import Optional, Tuple
+from typing import Optional
 
 from . import base
 from .value_path import (
@@ -19,6 +21,19 @@ from .value_path import (
 
 
 def flatten(raw, array_marker=base.ARRAY_POS):
+    """Recursively flatten a nested dict/list into a single-level dict.
+
+    Keys are joined with ``NESTING_DELIM``; array indices are encoded as
+    ``{array_marker}{index}``. Top-level lists are wrapped in a dict with
+    a None key before flattening.
+
+    Args:
+        raw: Nested dict or list to flatten.
+        array_marker: Prefix used to mark array indices in keys.
+
+    Returns:
+        A flat dict mapping composite keys to scalar values.
+    """
     if isinstance(raw, list):
         # if the whole JSON document is an array, we wrap it in dict
         raw = {None: raw}
@@ -51,7 +66,12 @@ def flatten(raw, array_marker=base.ARRAY_POS):
     return raw
 
 
-def remove_gretel_array_markers(data: str) -> Tuple[str, int, base.ValuePath]:
+def remove_array_markers(data: str) -> tuple[str, int, base.ValuePath]:
+    """Strip array-position markers from a composite key and build a ``ValuePath``.
+
+    Returns:
+        A tuple of (dot-joined field name, array nesting depth, structural value path).
+    """
     array_count = 0
     parts = data.split(base.NESTING_DELIM)
     path_items = []
@@ -66,17 +86,24 @@ def remove_gretel_array_markers(data: str) -> Tuple[str, int, base.ValuePath]:
     return value_path_to_field_name(path), array_count, path
 
 
-def convert_flat_dict_to_kv_pairs(data: dict):
+def convert_flat_dict_to_kv_pairs(data: dict) -> list[base.KVPair]:
+    """Convert a flattened dict (from ``flatten``) into a list of ``KVPair`` objects."""
     out = []
     for k, v in data.items():
         k = str(k)
-        new_key, array_count, value_path = remove_gretel_array_markers(k)
+        new_key, array_count, value_path = remove_array_markers(k)
         flat = base.KVPair(new_key, v, base.get_type_as_string(v), array_count, value_path)
         out.append(flat)
     return out
 
 
 class JSONRecord(base.BaseRecord):
+    """Record backed by a JSON object (dict) or bare string.
+
+    On construction, the original value is flattened into ``KVPair`` entries.
+    Provides lookup by JSONPath or ``ValuePath``.
+    """
+
     def unpack(self):
         flattened_dict = flatten({"": self.original} if isinstance(self.original, str) else self.original)
 
@@ -86,14 +113,17 @@ class JSONRecord(base.BaseRecord):
             self.kv_pairs.append(pair)
 
     def value_for_json_path(self, json_path: str) -> Optional[str]:
+        """Return the string value at ``json_path``, or None if not found."""
         for pair in self.kv_pairs:
             if pair.json_path == json_path:
                 return str(pair.value)
 
     def value_for_value_path(self, path: base.ValuePath) -> Optional[str]:
+        """Return the string value at ``path``, or None if not found."""
         for pair in self.kv_pairs:
             if pair.value_path == path:
                 return str(pair.value)
 
-    def flattened(self):
+    def flattened(self) -> dict[base.ValuePath, object]:
+        """Return a dict mapping each ``ValuePath`` to its scalar value."""
         return {x.value_path: x.value for x in self.kv_pairs}

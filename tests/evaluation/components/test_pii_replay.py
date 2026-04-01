@@ -4,6 +4,7 @@
 import logging
 
 import pytest
+
 from nemo_safe_synthesizer.evaluation.components.pii_replay import PIIReplay
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import EvaluationDataset
 

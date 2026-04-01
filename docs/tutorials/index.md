@@ -1,21 +1,25 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorials
 
 Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 
 ## Available Tutorials
 
-_No tutorials have been added yet._
+- [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
+- [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
 
 ## Adding a Tutorial
 
 To add a new tutorial:
 
 1. Create a Jupyter notebook (`.ipynb`) in the `docs/tutorials/` directory
-2. Add it to the `nav` section in `mkdocs.yml` under **Tutorials**
+2. Add it to the `nav` section in `mkdocs.yml` under Tutorials
 3. The notebook will be automatically rendered as a documentation page
 
 !!! tip
-    Notebooks are rendered with `mkdocs-jupyter`. Cell outputs are included as-is (notebooks are **not** re-executed during the docs build). Make sure to run your notebook and save it with outputs before committing.
+    Notebooks are rendered with `mkdocs-jupyter`. Cell outputs are included as-is (notebooks are _not_ re-executed during the docs build). Make sure to run your notebook and save it with outputs before committing.
 
 ## Guidelines
 

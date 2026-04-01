@@ -8,6 +8,7 @@ from io import BytesIO
 
 import numpy as np
 import pandas as pd
+
 from nemo_safe_synthesizer.data_processing.record_utils import (
     _extract_timestamp_seconds,
     _validate_time_interval,
@@ -188,7 +189,6 @@ def _run_csv_writer(df: pd.DataFrame):
 
     Any normalized DataFrame should successfully write without errors.
     """
-
     output = BytesIO()
     df.to_csv(output, index=False)
 
@@ -272,7 +272,7 @@ def test_normalize_dataframe_carriage_return():
 
 
 def test_normalize_dataframe_carriage_return_repro(
-    fixture_embeddd_carriage_return_dataframe,
+    fixture_embedded_carriage_return_dataframe,
 ):
     # In RDS-1082, we observed prod and dev failures related to embedded
     # carriage returns, but resulting in a different error (possible malformed
@@ -281,7 +281,7 @@ def test_normalize_dataframe_carriage_return_repro(
     # test a minimal DataFrame from one such failure. The difference is probably
     # around dtypes and how the DataFrames used in NavFT are created via json,
     # instead of from csv or manually.
-    normalized_df = normalize_dataframe(fixture_embeddd_carriage_return_dataframe)
+    normalized_df = normalize_dataframe(fixture_embedded_carriage_return_dataframe)
 
     # The normalization changes some of the dtypes in this example, so we don't
     # check for equality before and after. We just want to make sure the
@@ -323,7 +323,6 @@ def test_extract_timestamp_seconds():
 
 def test_validate_time_interval_cases():
     """Test _validate_time_interval in multiple cases: first record, valid, invalid, day rollover."""
-
     # First record (no previous timestamp)
     result_seconds, result_offset, error = _validate_time_interval(
         timestamp_seconds=0,

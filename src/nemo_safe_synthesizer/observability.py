@@ -1,39 +1,42 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Observability for Safe Synthesizer.
+"""Observability for Safe Synthesizer.
 
 Provides structured logging with category support for batch/CLI operations.
 
-Log Categories:
-    - RUNTIME: Internal operational details (memory, timings, debug info)
-    - USER: User-relevant progress and results
-    - SYSTEM: System-level events (startup, shutdown, config)
-    - BACKEND: Logs from dependencies
+Log categories:
+
+  - RUNTIME: internal operational details (memory, timings, debug info)
+  - USER: user-relevant progress and results
+  - SYSTEM: system-level events (startup, shutdown, config)
+  - BACKEND: logs from dependencies
 
 Configure via environment variables:
-    - NSS_LOG_FORMAT: 'json' or 'plain' (default: json)
-    - NSS_LOG_LEVEL: One of 'DEBUG_NO_DEPS', 'INFO', 'WARNING', 'ERROR', 'CRITICAL',
-        'DEBUG_DEPENDENCIES', 'DEBUG' (default: INFO)
-    - NSS_LOG_FILE: Path to file for JSON logs (optional, logs to file in addition to console)
-    - OTEL_SERVICE_NAME: Name of the service for OpenTelemetry (default: nemo-safe-synthesizer)
 
-Usage:
-    Logging is NOT auto-initialized when importing this module. Entry points (CLI, scripts)
-    must explicitly call initialize_logging() or initialize_observability() before logging.
+  - ``NSS_LOG_FORMAT``: ``"json"`` or ``"plain"`` (default: auto-detect from tty)
+  - ``NSS_LOG_LEVEL``: ``"INFO"``, ``"WARNING"``, ``"ERROR"``, ``"CRITICAL"``,
+    ``"DEBUG_DEPENDENCIES"``, or ``"DEBUG"`` (default: ``"INFO"``)
+  - ``NSS_LOG_FILE``: path to file for JSON logs (optional)
+  - ``OTEL_SERVICE_NAME``: OpenTelemetry service name
+    (default: ``"nemo-safe-synthesizer"``)
 
-    When used as a library (imported by other applications), get_logger() returns basic
-    stdlib loggers that integrate with the parent application's logging configuration.
+Logging is NOT auto-initialized on import. Entry points (CLI, scripts) must
+call ``initialize_observability()`` first. When used as a library,
+``get_logger()`` returns basic stdlib loggers that integrate with the parent
+application's logging configuration.
 """
 
+import contextlib
 import contextvars
 import inspect
 import logging
 import os
 import sys
+import threading
 import time
 import warnings
+from collections.abc import Generator
 from datetime import datetime
 from enum import Enum
 from functools import wraps
@@ -72,6 +75,7 @@ __all__ = [
     "traced_runtime",
     "traced_system",
     "traced_backend",
+    "heartbeat",
 ]
 
 
@@ -89,7 +93,6 @@ PACKAGES_TO_SET_TO_WARN = [
     "arrow",
     "bitsandbytes",
     "datasets",
-    "faiss",
     "httpx",
     "matplotlib",
     "nvidia",
@@ -106,11 +109,7 @@ PACKAGES_TO_SET_TO_WARN = [
 
 
 class NSSObservabilitySettings(BaseSettings):
-    """
-    Logging configuration for Safe Synthesizer.
-
-    All settings can be configured via environment variables or passed via the CLI.
-    """
+    """Logging configuration read from environment variables or CLI flags."""
 
     # NSS-specific settings
     nss_log_format: Literal["json", "plain"] | None = None
@@ -123,12 +122,21 @@ class NSSObservabilitySettings(BaseSettings):
     @field_validator("nss_log_format", mode="before")
     @classmethod
     def set_log_format_default(cls, value: Any) -> Literal["json", "plain"]:
-        """Set nss_log_format default based on whether stdout is a tty at instantiation time."""
+        """Set nss_log_format default based on whether stdout is a tty or notebook."""
         match value:
             case str():
                 return value.lower()
+            case _ if sys.stdout.isatty():
+                return "plain"
             case _:
-                return "plain" if sys.stdout.isatty() else "json"
+                try:
+                    from IPython import get_ipython
+
+                    if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
+                        return "plain"
+                except (ImportError, AttributeError):
+                    pass
+                return "json"
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
@@ -215,9 +223,9 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
             # need special formatting (e.g., the "loss", "eval_loss" exclusion list).
             if isinstance(value, float):
                 if key not in ("loss", "eval_loss") and value < 1 and value > 0:
-                    display_value = f"{value:.3%}"
+                    display_value = f"{value:.2%}"
                 else:
-                    display_value = f"{value:.3f}"
+                    display_value = f"{value:.2f}"
             else:
                 display_value = str(value)
             table.add_row(display_key, display_value)
@@ -321,9 +329,7 @@ def _prepare_json_logging() -> tuple[
 
 
 def _prepare_file_logging() -> logging.Handler | None:
-    """
-    Prepare file logging for JSON logs.
-    """
+    """Prepare file logging for JSON logs."""
     if SETTINGS and SETTINGS.nss_log_file:
         json_renderer, json_timestamp_processor, json_env_processors = _prepare_json_logging()
         json_foreign_pre_chain = [
@@ -593,10 +599,10 @@ class _CategoryLogAdapter(logging.LoggerAdapter):
 
 
 class CategoryLogger(logging.Logger):
-    """
-    A logger wrapper that adds category support.
+    """Logger wrapper that adds category support.
 
-    Usage:
+    Usage::
+
         logger = get_logger(__name__)
 
         # Runtime logs (internal details)
@@ -653,10 +659,7 @@ class CategoryLogger(logging.Logger):
 
 
 def _initialize_logging():
-    """
-    Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability().
-    """
-
+    """Initialize logging for Safe Synthesizer. Note that this is to be called only by initialize_observability()."""
     SETTINGS.__init__()
     program_level, dependencies_level = verbosity_mapping[SETTINGS.nss_log_level.upper()]
     _clear_loggers()
@@ -696,14 +699,11 @@ _INITIALIZED_OBSERVABILITY = False
 
 
 def initialize_observability():
-    """
-    Initialize observability for Safe Synthesizer.
+    """Initialize observability for Safe Synthesizer.
 
-    This is to be used eventually as a central entrypoint for observability - right now
-    it only initializes logging.
-
-    Must be called explicitly by entry points (CLI, scripts). Not called automatically
-    when the package is imported.
+    Central entry point for all observability setup -- currently initializes
+    logging only. Must be called explicitly by entry points (CLI, scripts);
+    not called automatically on import. Idempotent.
     """
     global _INITIALIZED_OBSERVABILITY
     if _INITIALIZED_OBSERVABILITY:
@@ -763,14 +763,13 @@ def configure_logging_from_workdir(
 
 
 def get_logger(name: str | None = None) -> CategoryLogger:
-    """
-    Get a logger with the given name and common configuration.
+    """Return a category logger for structured logging.
 
-    If logging has been initialized via initialize_observability(),
-    returns a structlog-based logger with full formatting.
-
-    If observability has NOT been initialized (e.g., when imported as a library), returns a basic
-    stdlib logger that integrates with the parent application's logging configuration.
+    Always pass ``__name__`` as the argument. After
+    ``initialize_observability()`` is called, returns a structlog-based
+    logger with full formatting. Before initialization (e.g. when imported
+    as a library), returns a basic stdlib logger that integrates with the
+    parent application's logging configuration.
     """
     if _INITIALIZED_OBSERVABILITY:
         return CategoryLogger(structlog.get_logger(name))
@@ -782,15 +781,15 @@ def get_logger(name: str | None = None) -> CategoryLogger:
 
 
 class TracedContext:
-    """
-    A traced context that can be used as both a decorator and a context manager.
+    """Traced context usable as both a decorator and a context manager.
 
-    As a decorator:
+    As a decorator::
+
         @traced("operation_name", category=LogCategory.USER)
-        def my_function():
-            ...
+        def my_function(): ...
 
-    As a context manager:
+    As a context manager::
+
         with traced("operation_name", category=LogCategory.USER):
             ...
     """
@@ -894,26 +893,28 @@ def traced(
     record_duration: bool = True,
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "DEBUG",
 ) -> TracedContext:
-    """
-    Decorator/context manager to log function entry/exit with category-aware logging.
+    """Create a traced context for logging operation entry/exit.
 
     Args:
-        name: Operation name (defaults to function qualname when used as decorator)
-        category: Log category for automatic entry/exit logs
-        log_entry: Whether to log function entry
-        log_exit: Whether to log function exit
-        record_duration: Whether to record duration in the exit log
+        name: Operation name (defaults to function qualname when used as
+            a decorator).
+        category: Log category for entry/exit messages.
+        log_entry: Whether to log function entry.
+        log_exit: Whether to log function exit.
+        record_duration: Whether to record duration in the exit log.
+        level: Log level for entry/exit messages.
 
-    Usage as decorator:
+    Example::
+        # Usage as a decorator
         @traced("training.epoch", category=LogCategory.USER)
-        def train_epoch(self, epoch_num: int):
-            ...
+        def train_epoch(self, epoch_num: int): ...
+
 
         @traced(category=LogCategory.RUNTIME)  # Internal operation
-        def _compute_gradients(self):
-            ...
+        def _compute_gradients(self): ...
 
-    Usage as context manager:
+
+        # Usage as a context manager
         with traced("data_loading", category=LogCategory.USER):
             data = load_data()
             process(data)
@@ -946,3 +947,52 @@ def traced_system(name: str | None = None, **kwargs):
 def traced_backend(name: str | None = None, **kwargs):
     """Log a backend operation."""
     return traced(name=name, category=LogCategory.BACKEND, **kwargs)
+
+
+@contextlib.contextmanager
+def heartbeat(
+    message: str,
+    interval: float = 60.0,
+    *,
+    logger_name: str | None = None,
+    **extra_fields,
+) -> Generator[None, None, None]:
+    """Context manager that logs a periodic heartbeat during a long-running operation.
+
+    Args:
+        message: Description of the operation (e.g. "Model loading", "Generation").
+        interval: Seconds between heartbeat log messages.
+        logger_name: Logger name (pass ``__name__`` so heartbeat logs attribute
+            to the calling module).
+        **extra_fields: Additional structured fields passed to the logger
+            (e.g. ``model="SmolLM3"``).
+    """
+    if interval <= 0:
+        raise ValueError(f"heartbeat interval must be positive, got {interval}")
+    _logger = get_logger(logger_name or __name__)
+    stop = threading.Event()
+    start = time.monotonic()
+
+    def _extra() -> dict:
+        return {"elapsed_seconds": round(time.monotonic() - start, 1), **extra_fields}
+
+    def _run() -> None:
+        while not stop.wait(timeout=interval):
+            _logger.info(f"{message} in progress", extra={"ctx": _extra()})
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    exc: BaseException | None = None
+    try:
+        yield
+    except BaseException as e:
+        exc = e
+        raise
+    finally:
+        stop.set()
+        thread.join(timeout=1)
+        if exc is not None:
+            ctx = {**_extra(), "error_type": type(exc).__name__}
+            _logger.error(f"{message} failed", extra={"ctx": ctx})
+        else:
+            _logger.info(f"{message} complete", extra={"ctx": _extra()})

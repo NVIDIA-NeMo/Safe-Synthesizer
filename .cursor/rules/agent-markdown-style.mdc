@@ -1,0 +1,32 @@
+---
+alwaysApply: true
+description: Style rules for markdown and docstrings. Avoid decorative bold; use structural cues instead.
+---
+
+# Markdown and Docstring Style
+
+Source of truth: [STYLE_GUIDE.md](../../STYLE_GUIDE.md). This file provides quick-reference rules for agents.
+
+## No decorative bold
+
+Do not use `**bold**` in list items, body text, or docstrings. Structural cues (headers, list markers, colons, backticks) provide all the emphasis needed. Bold wastes tokens and adds visual noise.
+
+Good:
+```
+- Postprocess reversal: runs actions in reverse order
+- `cleanup_memory()`: gc.collect() + torch.cuda.empty_cache()
+```
+
+Bad:
+```
+- **Postprocess reversal**: runs actions in reverse order
+- **`cleanup_memory()`**: gc.collect() + torch.cuda.empty_cache()
+```
+
+Bold is acceptable only in tables where it's the conventional way to mark header-like cells in the body.
+
+## General markdown guidelines
+
+- Use `##` headers to segment sections, not bold text
+- Use backticks for code identifiers, paths, and CLI commands
+- Use `--` (em-dash) instead of `-` (hyphen) for asides, matching repo convention

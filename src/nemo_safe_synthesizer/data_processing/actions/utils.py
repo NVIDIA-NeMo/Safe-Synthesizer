@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Shared utilities for the data actions framework.
+
+Provides ``ActionCtx`` (execution context with state and dependency injection),
+``TransformsUtil`` (wrapper around the transforms_v2 engine), helper types
+(``MetadataColumns``, ``TransformsUpdate``), and subclass-discovery functions.
+"""
+
 from __future__ import annotations
 
 import inspect
@@ -15,7 +22,6 @@ from typing import (
     Hashable,
     Literal,
     Optional,
-    Type,
     TypeVar,
     Union,
 )
@@ -36,10 +42,7 @@ T = TypeVar("T")
 
 
 def type_alias_fn(field_name: str) -> str:
-    """
-    This alias fn allows `type_` to be parsed as `type` from config yaml. We use `type_`
-    in the actual python objects so it doesn't conflict with the python builtin `type()`.
-    """
+    """Pydantic alias generator that maps ``type_`` to ``type`` for YAML compatibility."""
     if field_name == "type_":
         return "type"
 
@@ -47,13 +50,17 @@ def type_alias_fn(field_name: str) -> str:
 
 
 class MetadataColumns(StrEnum):
-    INDEX = "__gretel__idx"  # used in validation to maintain a mapping to pre-transformed records
-    REJECT_REASON = (
-        "__gretel_reject_reason"  # used in validation to attach model_metadata about why the row was rejected
-    )
+    """Internal column names injected during validation phases."""
+
+    INDEX = "__nss__idx"
+    """Temporary index for mapping back to pre-transformed records."""
+
+    REJECT_REASON = "__nss_reject_reason"
+    """Reason a row was rejected during batch validation."""
 
 
 def remove_metadata_columns_from_df(df: pd.DataFrame):
+    """Drop all ``MetadataColumns`` from the DataFrame in-place."""
     metadata_cols = [col.value for col in MetadataColumns]
 
     columns_to_drop = [col for col in metadata_cols if col in df.columns]
@@ -64,6 +71,7 @@ def remove_metadata_columns_from_df(df: pd.DataFrame):
 
 
 def remove_metadata_columns_from_records(records: list[dict]) -> list[dict]:
+    """Return a copy of each record dict with ``MetadataColumns`` keys removed."""
     metadata_cols = [col.value for col in MetadataColumns]
 
     new_records: list[dict] = []
@@ -74,20 +82,18 @@ def remove_metadata_columns_from_records(records: list[dict]) -> list[dict]:
 
 
 class TransformsUpdate(BaseModel):
-    """
-    `transforms_v2` takes in untyped `dicts`, but this model adds a little
-    bit of structure for better validation.
-    """
+    """Typed wrapper for a single transforms_v2 update step."""
 
-    name: str
-    value: str
-    position: Optional[int] = None
+    name: str = Field(description="Target column name for the update.")
+    value: str = Field(description="Jinja expression evaluated by the transforms_v2 engine.")
+    position: Optional[int] = Field(default=None, description="Column insertion index when adding a new column.")
 
 
 class TransformsUtil:
-    """
-    Simple helper class to manage an instance of a TV2 `Environment` and some methods
-    to run `Step`s on input data.
+    """Wrapper around a transforms_v2 ``Environment`` for executing column updates and drop conditions.
+
+    Args:
+        seed: Random seed passed to the underlying ``Environment``.
     """
 
     def __init__(self, seed: Optional[int] = None) -> None:
@@ -149,15 +155,24 @@ class TransformsUtil:
 
 
 class DataSource(BaseModel, ABC):
+    """Abstract base for pluggable data sources used by ``GenDataSource`` actions.
+
+    Subclasses implement ``generate_data`` to populate a column in an existing
+    DataFrame. ``generate_records`` is a convenience wrapper that creates an
+    empty DataFrame first.
+    """
+
     model_config = ConfigDict(alias_generator=type_alias_fn)
 
     _ctx: ActionCtx = PrivateAttr()
 
     def with_ctx(self, ctx: ActionCtx) -> Self:
+        """Attach an ``ActionCtx`` and return self for chaining."""
         self._ctx = ctx
         return self
 
     def generate_records(self, num_records: int, col: str = "newcol") -> list[dict[Hashable, Any]]:
+        """Generate records as a list of dicts without an existing DataFrame."""
         df = pd.DataFrame(index=range(num_records))
         return self.generate_data(df, col).to_dict("records")
 
@@ -188,23 +203,17 @@ class ExpressionSource(DataSource):
 
 
 DataSourceT = Annotated[DataSource, Field(discriminator="type_")]
-DataSourceT.__origin__ = Union[tuple(DataSource.__subclasses__())]  # type: ignore
+DataSourceT.__origin__ = Union[tuple(DataSource.__subclasses__())]  # type: ignore  # noqa: UP007 -- runtime Union needed for dynamic tuple()
 
 
 def is_abstract(c: Any) -> bool:
-    """
-    This checks the two common ways that classes indicate themselves
-    as abstract; they either have `@abstractmethod`s, or they explicitly
-    inherit from `ABC` (or the metaclass). This checks both of these.
-    """
+    """Return True if the class has abstract methods or directly inherits ``ABC``."""
     return inspect.isabstract(c) or ABC in c.__bases__
 
 
-def all_subclasses(klass: Type[T]) -> set[Type[T]]:
-    """
-    Grab all of the recursive subclasses of `klass`.
-    """
-    subclasses: set[Type[T]] = set()
+def all_subclasses(klass: type[T]) -> set[type[T]]:
+    """Recursively collect all subclasses of ``klass``."""
+    subclasses: set[type[T]] = set()
     subclass_queue = [klass]
     while subclass_queue:
         parent = subclass_queue.pop()
@@ -215,24 +224,18 @@ def all_subclasses(klass: Type[T]) -> set[Type[T]]:
     return subclasses
 
 
-def concrete_subclasses(klass: Type[T]) -> set[Type[T]]:
-    """
-    Find all the subclasses of `klass`, then filter out the abstract
-    subclasses.
+def concrete_subclasses(klass: type[T]) -> set[type[T]]:
+    """Return all non-abstract recursive subclasses of ``klass``.
 
-    This is useful for passing in a very abstract parent class
-    like `BaseAction`, and finding all of the potential children
-    of that `klass`. Some of these children themselves might be abstract,
-    so we should filter those out.
-
-    This function is likely used to feed information to `pydantic` about
-    which potential concrete classes exist for purposes of validation and
-    schema generation.
+    Used by pydantic discriminated unions (e.g., ``ActionT``) to
+    auto-discover instantiable action types for validation and schema
+    generation.
     """
     return set(c for c in all_subclasses(klass) if not is_abstract(c))
 
 
 def guess_datetime_format(datetime_str: str) -> Optional[str]:
+    """Infer a ``strftime``-compatible format string from a date string, or None."""
     # TODO: use `pandas.tseries.api.guess_datetime_format` in the future?
     format = parse_date(datetime_str)
     if format is None:
@@ -241,25 +244,17 @@ def guess_datetime_format(datetime_str: str) -> Optional[str]:
 
 
 class ActionCtx(BaseModel):
-    """
-    Context available during all action execution. This object
-    can be used for some state specific to the execution,
-    as well as dependency injection for external services in the future.
+    """Execution context shared across all action invocations.
+
+    Provides a random seed, a state dictionary for cross-phase communication,
+    and a lazily-initialized ``TransformsUtil`` for expression evaluation.
     """
 
-    seed: Optional[int] = None
-    """
-    Seed used for all random generation tasks
-    """
+    seed: Optional[int] = Field(default=None, description="Seed used for all random generation tasks.")
 
-    state: dict[str, str] = {}
-    """
-    Used for tracking state across multiple action invocations.
-    This is important for actions which might have multiple functions
-    which need to remember information in latter invocations. For example,
-    a `postprocessing` function might benefit from information persisted
-    inside a `preprocessing` function.
-    """
+    state: dict[str, str] = Field(
+        default={}, description="Per-action state persisted across phases (keyed by BaseAction.hash())."
+    )
 
     def __init__(self, /, **data: Any) -> None:
         super().__init__(**data)

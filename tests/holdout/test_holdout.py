@@ -4,11 +4,13 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.holdout.holdout import (
     HOLDOUT_TOO_SMALL_ERROR,
     INPUT_DATA_TOO_SMALL_ERROR,
     Holdout,
+    naive_train_test_split,
 )
 
 
@@ -83,6 +85,12 @@ def test_zero_holdout(df):
 def test_zero_max_holdout(df):
     holdout = Holdout(SafeSynthesizerParameters.from_params(holdout=0.05, max_holdout=0))
     train, test = holdout.train_test_split(df)
+    assert len(train) == 200
+    assert test is None
+
+
+def test_naive_train_test_split_zero_int_test_size(df):
+    train, test = naive_train_test_split(df, test_size=0)
     assert len(train) == 200
     assert test is None
 

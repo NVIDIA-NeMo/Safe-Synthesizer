@@ -35,16 +35,24 @@ MAX_32_BIT_INT = 2**31 - 1
 
 
 class Column(NSSBaseModel):
+    """Rule matcher for selecting columns by name, position, condition, entity, or type."""
+
     name: str | None = Field(description="Column name.", default=None)
+
     position: OptionalListOrInt = Field(description="Column position.", default=None)
+
     condition: str | None = Field(description="Column condition.", default=None)
+
     value: str | None = Field(description="Rename to value.", default=None)
+
     entity: OptionalListOrStr = Field(description="Column entity match.", default=None)
+
     type: OptionalListOrStr = Field(description="Column type match.", default=None)
 
     @model_validator(mode="before")
     @classmethod
     def identifier_required(cls, values):
+        """Ensure at least one column identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
             return values
@@ -60,25 +68,39 @@ class Column(NSSBaseModel):
 
 
 class ColumnActions(NSSBaseModel):
+    """Container for column add, drop, and rename operations."""
+
     add: list[Column] | None = Field(description="Columns to add.", default=None)
+
     drop: list[Column] | None = Field(description="Columns to drop.", default=None)
-    rename: list[Column] | None = Field(description="Columns to rename", default=None)
+
+    rename: list[Column] | None = Field(description="Columns to rename.", default=None)
 
 
 class Row(NSSBaseModel):
+    """Rule matcher for selecting rows by name, condition, entity, or type."""
+
     # eg PrimaryKey or [AddressLine1, AddressLine2]
     name: OptionalListOrStr = Field(description="Row name.", default=None)
+
     condition: str | None = Field(description="Row condition match.", default=None)
+
     foreach: str | None = Field(description="Foreach expression.", default=None)
+
     value: str | None = Field(description="Row value definition.", default=None)
+
     entity: OptionalListOrStr = Field(description="Row entity match.", default=None)
+
     type: OptionalListOrStr = Field(description="Row type match.", default=None)
+
     fallback_value: str | None = Field(description="Row fallback value.", default=None)
+
     description: str | None = Field(description="Rule description for human consumption.", default=None)
 
     @model_validator(mode="before")
     @classmethod
     def identifier_required(cls, values):
+        """Ensure at least one row identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
             return values
@@ -99,11 +121,16 @@ class Row(NSSBaseModel):
 
 
 class RowActions(NSSBaseModel):
+    """Container for row drop and update operations."""
+
     drop: list[Row] | None = Field(description="Rows to drop.", default=None)
+
     update: list[Row] | None = Field(description="Rows to update.", default=None)
 
 
 class StepDefinition(NSSBaseModel):
+    """Single transformation step with optional variables, column actions, and row actions."""
+
     vars: dict[str, str | dict | list] | None = Field(description="Variable names and templates.", default=None)
 
     columns: ColumnActions | None = Field(description="Columns transform configuration.", default=None)
@@ -112,7 +139,9 @@ class StepDefinition(NSSBaseModel):
 
 
 class GlinerConfig(NSSBaseModel):
-    enable_gliner: bool = Field(description="Enable GLiNER NER module", default=True)
+    """Configuration for the GLiNER named-entity recognition model."""
+
+    enable_gliner: bool = Field(description="Enable GLiNER NER module.", default=True)
 
     enable_batch_mode: bool = Field(description="Enable GLiNER batch mode.", default=True)
 
@@ -122,15 +151,17 @@ class GlinerConfig(NSSBaseModel):
 
     gliner_model: str = Field(
         description="GLiNER model name.",
-        default="gretelai/gretel-gliner-bi-large-v1.0",
+        default="nvidia/gliner-PII",
     )
 
 
 class NERConfig(NSSBaseModel):
+    """Configuration for Named Entity Recognition."""
+
     ner_threshold: float = Field(description="NER model threshold.", default=0.3)
 
     enable_regexps: bool = Field(
-        description="Enable NER regular expressions (experimental)",
+        description="Enable NER regular expressions (experimental).",
         default=False,
     )
 
@@ -146,6 +177,8 @@ class NERConfig(NSSBaseModel):
 
 
 class ClassifyConfig(NSSBaseModel):
+    """Configuration for column classification using an LLM."""
+
     enable_classify: bool | None = Field(default=None, description="Enable column classification.")
 
     entities: OptionalStrList = Field(default=None, description="List of entity types to classify.")
@@ -160,7 +193,9 @@ class ClassifyConfig(NSSBaseModel):
 
 
 class Globals(NSSBaseModel):
-    locales: list[str] | None = Field(description="list of locales.", examples=["en_US"], default=None)
+    """Global settings for the PII replacer including locales, seed, NER, and classification."""
+
+    locales: list[str] | None = Field(description="List of locales.", examples=["en_US"], default=None)
 
     seed: int | None = Field(
         lt=MAX_32_BIT_INT,
@@ -169,9 +204,9 @@ class Globals(NSSBaseModel):
         default=None,
     )
 
-    classify: Annotated[ClassifyConfig, Field(description="Column classification configuration")] = ClassifyConfig()
+    classify: Annotated[ClassifyConfig, Field(description="Column classification configuration.")] = ClassifyConfig()
 
-    ner: Annotated[NERConfig, Field(description="Named Entity Recognition configuration")] = NERConfig()
+    ner: Annotated[NERConfig, Field(description="Named Entity Recognition configuration.")] = NERConfig()
 
     lock_columns: OptionalStrList = Field(
         description="List of columns to preserve as immutable across all transformations.",
@@ -181,6 +216,7 @@ class Globals(NSSBaseModel):
     @field_validator("locales")
     @classmethod
     def _validate_locale(cls, locales: list[str] | None) -> list[str] | None:
+        """Validate locale strings against Faker's supported locales."""
         if locales is None:
             return locales
 
@@ -199,28 +235,22 @@ class Globals(NSSBaseModel):
 
 
 class PiiReplacerConfig(Parameters):
-    """
-    Configuration for PII replacer.
-    Used to define how PII data should be detected and replaced in a dataset.
+    """Configuration for PII replacer.
 
-    Attributes:
-        globals Global configuration options.
-        steps: List of transformation steps to perform on input data.
-
-    Methods:
-        get_default_config: Returns a default configuration instance.
+    Defines how PII data should be detected and replaced in a dataset.
     """
 
-    globals: Globals = Field(description="Global config options.", default_factory=Globals)
+    globals: Globals = Field(description="Global configuration options.", default_factory=Globals)
 
     steps: list[StepDefinition] = Field(
         min_length=1,
         max_length=10,
-        description="list of transform steps to perform on input.",
+        description="List of transformation steps to perform on input data.",
     )
 
     @classmethod
     def get_default_config(cls) -> Self:
+        """Return a default configuration loaded from the embedded YAML template."""
         return cls.from_yaml_str(DEFAULT_PII_TRANSFORM_CONFIG)
 
 
@@ -229,7 +259,6 @@ globals:
   classify:
     enable_classify: true
     entities:
-      # True identifiers
       - first_name
       - last_name
       - name
@@ -237,63 +266,17 @@ globals:
       - city
       - state
       - postcode
-      - country
       - address
-      - latitude
-      - longitude
-      - coordinate
-      - age
       - phone_number
       - fax_number
       - email
       - ssn
-      - unique_identifier
-      - medical_record_number
-      - health_plan_beneficiary_number
-      - account_number
-      - certificate_license_number
-      - vehicle_identifier
-      - license_plate
-      - device_identifier
-      - biometric_identifier
-      - url
-      - ipv4
-      - ipv6
       - national_id
       - tax_id
-      - bank_routing_number
-      - swift_bic
       - credit_debit_card
-      - cvv
-      - pin
-      - employee_id
-      - api_key
-      - coordinate
-      - customer_id
-      - user_name
-      - password
-      - mac_address
-      - http_cookie
-
-      # Quasi identifiers
-      - date
-      - date_time
-      - blood_type
-      - gender
-      - sexuality
-      - political_view
-      - race
-      - ethnicity
-      - religious_belief
-      - language
-      - education
-      - job_title
-      - employment_status
-      - company_name
   ner:
     ner_threshold: 0.3
     ner_entities:
-      # True identifiers
       - first_name
       - last_name
       - name
@@ -301,42 +284,14 @@ globals:
       - city
       - state
       - postcode
-      - country
       - address
-      - latitude
-      - longitude
-      - coordinate
-      - age
       - phone_number
       - fax_number
       - email
       - ssn
-      - unique_identifier
-      - medical_record_number
-      - health_plan_beneficiary_number
-      - account_number
-      - certificate_license_number
-      - vehicle_identifier
-      - license_plate
-      - device_identifier
-      - biometric_identifier
-      - url
-      - ipv4
-      - ipv6
       - national_id
       - tax_id
-      - bank_routing_number
-      - swift_bic
       - credit_debit_card
-      - pin
-      - employee_id
-      - api_key
-      - coordinate
-      - customer_id
-      - user_name
-      - password
-      - mac_address
-      - http_cookie
   locales: [en_US]
 steps:
   - vars:
@@ -351,12 +306,6 @@ steps:
           value: column.entity | fake
         - condition: (column.entity == "street_address" or column.entity == "city" or column.entity == "state" or column.entity == "postcode" or column.entity == "address") and not (this | isna)
           value: column.entity | fake
-        - condition: column.entity == "latitude" and not (this | isna)
-          value: fake.location_on_land()[0]
-        - condition: column.entity == "longitude" and not (this | isna)
-          value: fake.location_on_land()[1]
-        - condition: column.entity == "coordinate" and not (this | isna)
-          value: fake.location_on_land()
         - condition: column.entity == "email" and not (this | isna)
           value: fake.persona(row_index=vars.row_seed + index).email
         - condition: column.entity == "ssn" and not (this | isna)
@@ -366,27 +315,10 @@ steps:
         - condition: column.entity == "fax_number" and not (this | isna)
           value: (fake.random_number(digits=3) | string) + "-" + (fake.random_number(digits=3) |
             string) + "-" + (fake.random_number(digits=4) | string)
-        - condition: column.entity == "vehicle_identifier" and not (this | isna)
-          value: fake.vin()
-        - condition: column.entity == "license_plate" and not (this | isna)
-          value: column.entity | fake
-        - condition: (column.entity == "unique_identifier" or column.entity == "medical_record_number" or column.entity == "health_plan_beneficiary_number" or column.entity == "account_number" or column.entity == "certificate_license_number" or column.entity == "device_identifier" or column.entity == "biometric_identifier" or column.entity == "bank_routing_number" or column.entity == "swift_bic" or column.entity == "employee_id" or column.entity == "api_key" or column.entity == "customer_id" or column.entity == "user_name" or column.entity == "password" or column.entity == "http_cookie") and not (this | isna)
-          value: fake.bothify(re.sub("\\\\d", "#", re.sub("[A-Z]", "?", (this | string))))
-        - condition: (column.entity == "url" or column.entity == "ipv4" or column.entity == "ipv6") and not (this | isna)
-          value: column.entity | fake
         - condition: (column.entity == "national_id" or column.entity == "tax_id") and not (this | isna)
           value: fake.itin()
         - condition: column.entity == "credit_debit_card" and not (this | isna)
           value: fake.credit_card_number()
-        - condition: column.entity == "cvv" and not (this | isna)
-          value: fake.credit_card_security_code()
-        - condition: column.entity == "pin" and not (this | isna)
-          value: fake.random_number(digits=4) | string
-        - condition: column.entity == "coordinate" and not (this | isna)
-          value: column.entity | fake
-        - condition: column.entity == "mac_address" and not (this | isna)
-          value: column.entity | fake
-
         - condition: column.entity is none and column.type == "text"
           value: this | fake_entities
 """

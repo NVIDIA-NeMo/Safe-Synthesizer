@@ -4,6 +4,8 @@
 from typing import Annotated, Literal
 
 import pytest
+from pydantic import Field, ValidationError
+
 from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
@@ -11,10 +13,8 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TimeSeriesParameters,
 )
-from nemo_safe_synthesizer.configurator.parameter import AutoParam, Parameter, UnsetParam
 from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.configurator.validators import ValueValidator
-from pydantic import Field, ValidationError
 
 
 class SubGroup(Parameters):
@@ -68,34 +68,6 @@ def subgroup_fixture() -> SubGroup:
         basic_str_param=None,
         basic_union_basic_input=None,
     )
-
-
-class TestParameterClasses:
-    def test_parameter_equality(self, basic_parameter):
-        assert basic_parameter == 10
-        assert Parameter(value=10) == 10
-        assert AutoParam(value=10) == 10
-
-    def test_parameter_pattern_matching(self):
-        param = Parameter(name=None, value=1)
-
-        match param:
-            case UnsetParam():
-                result = "UnsetParam"
-            case Parameter():
-                result = "Parameter"
-            case _:
-                result = "Other"
-
-        assert result == "Parameter"
-
-    def test_auto_param_is_parameter_instance(self):
-        assert isinstance(AutoParam(), Parameter)
-
-    def test_parameter_naming(self):
-        param = Parameter(name="test_name", value=42)
-        assert param.name == "test_name"
-        assert param == 42
 
 
 class TestValueValidation:
@@ -181,13 +153,12 @@ class TestSafeSynthesizerParameters:
         assert params.get("group_training_examples_by") == "my_col"
 
     @pytest.mark.parametrize(
-        "enabled_pii, expected_enabled_pii, expected_pii_config",
-        [(True, True, True), (False, False, None)],
+        "replace_pii_kwarg, expected_pii_config",
+        [({}, True), ({"replace_pii": None}, None)],
         ids=["enabled", "disabled"],
     )
-    def test_enabled_pii(self, enabled_pii, expected_enabled_pii, expected_pii_config):
-        params = SafeSynthesizerParameters.from_params(enable_replace_pii=enabled_pii)
-        assert params.enable_replace_pii == expected_enabled_pii
+    def test_enabled_pii(self, replace_pii_kwarg, expected_pii_config):
+        params = SafeSynthesizerParameters.from_params(**replace_pii_kwarg)
         val = True if params.replace_pii is not None else None
         assert val == expected_pii_config
 

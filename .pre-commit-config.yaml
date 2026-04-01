@@ -1,4 +1,23 @@
-default_install_hook_types: [pre-commit, pre-push]
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+exclude: |
+          (?x)(
+              CITATION.md|
+              CONTRIBUTING.md|
+              CODE_OF_CONDUCT.md|
+              design.md|
+              CLAUDE.md|
+              AGENTS.md|
+              CHANGELOG.md|
+              DCO|
+              LICENSE|
+              README.md|
+              SECURITY.md|
+              THIRD_PARTY.md
+          )$
+
 
 repos:
 
@@ -9,48 +28,36 @@ repos:
         args:
           - --assume-in-merge
 
-      # todo: re-enable after we're cleanly off of NMP since 
-      # this is more invasive there
-      # - id: end-of-file-fixer
-      #   files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
+      - id: end-of-file-fixer
+        files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
 
-      # - id: trailing-whitespace
-      #   files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
+      - id: trailing-whitespace
+        files: ".*\\.(py|sh|toml|yaml|yml|md|rst|txt)$"
 
-      - id: check-merge-conflict
-        args:
-          - --assume-in-merge
-
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version.
-    rev: v0.15.0
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-        exclude: ".*\\.ipynb$"
-      - id: ruff-check
-        args: [--select, 'I', --fix]
-        exclude: ".*\\.ipynb$"
-      # Run the formatter.
-      - id: ruff-format
-        exclude: ".*\\.ipynb$"
 
   - repo: local
     hooks:
-      - id: copyright-check
-        name: Check copyright headers
-        entry: python tools/lint/copyright_fixer.py --check .
+
+      - id: format
+        name: Run ruff (format + lint fix)
+        entry: bash tools/codestyle/format.sh
+        language: system
+        pass_filenames: true
+        types: [python]
+
+      - id: typecheck
+        name: Run ty typechecks
+        entry: bash tools/codestyle/typecheck.sh
         language: system
         pass_filenames: false
         types: [python]
 
-      - id: ty
-        name: Run ty typechecks
-        entry: bash tools/lint/run-ty-check.sh
+      - id: copyright-fix
+        name: Fix copyright headers
+        entry: uv run --script tools/codestyle/copyright_fixer.py
         language: system
-        pass_filenames: false
-        types: [python]
+        pass_filenames: true
+        files: '\.(py|sh|md|yaml|yml)$'
 
       - id: uv-lock
         name: Run uv lock and check for uv.lock drift
@@ -59,3 +66,10 @@ repos:
         files: 'pyproject\.toml$'
         pass_filenames: false
         verbose: true
+
+      - id: check-signoff
+        name: Check commit is signed off (DCO)
+        entry: "grep -qE '^Signed-off-by: .+ <.+>'"
+        language: system
+        stages: [commit-msg]
+        always_run: true

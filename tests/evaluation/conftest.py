@@ -7,6 +7,7 @@ import faker
 import numpy as np
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.config.parameters import (
     DifferentialPrivacyHyperparams,
     EvaluationParameters,
@@ -26,7 +27,7 @@ def make_df(seed: int, n: int = 100):
         {
             "num": [random.random() for _ in range(n)],
             "num_Int64": [random.randint(1, 100) for _ in range(n)],
-            # Categorical columns according to gretel core arfifact classifier
+            # Categorical columns according to core artifact classifier
             "num_cat": [random.randint(1, 4) for _ in range(n)],
             "num_cat_Int64": [random.randint(1, 4) for _ in range(n)],
             "small_cat": [random.choice(["foo", "bar", "baz", "biff", "barf"]) for _ in range(n)],
@@ -102,20 +103,6 @@ def skip_privacy_metrics_config():
 
 
 @pytest.fixture
-def skip_privacy_metrics_and_synth_config():
-    return SafeSynthesizerParameters(
-        enable_synthesis=False, evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=False)
-    )
-
-
-@pytest.fixture
-def skip_synth_config():
-    return SafeSynthesizerParameters(
-        enable_synthesis=False, evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=True)
-    )
-
-
-@pytest.fixture
 def dp_enabled_config():
     return SafeSynthesizerParameters(
         privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta=0.1, epsilon=0.2),
@@ -177,6 +164,125 @@ def mia_aia_df():
             "Attack Percentage": [random.randint(1, 100) for _ in range(15)],
         }
     )
+
+
+def make_mixed_text_tabular_df(seed: int, n: int = 100):
+    """Create a DataFrame with both text columns (>2 spaces avg) and tabular columns.
+
+    This triggers the hybrid text+tabular nearest neighbor path in AIA/MIA evaluation,
+    which uses both sentence-transformers for text similarity and sklearn NearestNeighbors
+    for tabular similarity.
+    """
+    fake = faker.Faker("en_US")
+    fake.seed_instance(seed)
+    random.seed(seed)
+
+    # Text templates with >2 spaces on average (triggers text classification)
+    text_templates = [
+        "The customer {} purchased {} items at the {} store on {}",
+        "Order {} was shipped to {} via {} delivery service today",
+        "Patient {} reported {} symptoms during the {} consultation",
+        "Employee {} completed {} tasks in the {} department this quarter",
+        "Student {} achieved {} points on the {} examination today",
+    ]
+
+    df = pd.DataFrame(
+        {
+            # Numeric columns (tabular)
+            "amount": [round(random.uniform(10.0, 1000.0), 2) for _ in range(n)],
+            "quantity": [random.randint(1, 50) for _ in range(n)],
+            "score": [round(random.uniform(0.0, 100.0), 1) for _ in range(n)],
+            # Categorical columns (tabular)
+            "category": [random.choice(["A", "B", "C", "D"]) for _ in range(n)],
+            "status": [random.choice(["active", "pending", "completed"]) for _ in range(n)],
+            # Text columns (>2 spaces on average - triggers text embedding path)
+            "description": [
+                random.choice(text_templates).format(fake.name(), random.randint(1, 100), fake.company(), fake.date())
+                for _ in range(n)
+            ],
+            "notes": [
+                f"This is a detailed note about {fake.name()} who works at {fake.company()} in {fake.city()}"
+                for _ in range(n)
+            ],
+        }
+    )
+
+    # Add some missing values
+    df.loc[random.sample(list(df.index), k=min(5, n // 20)), "amount"] = np.nan
+    df.loc[random.sample(list(df.index), k=min(3, n // 30)), "category"] = None
+    df.loc[random.sample(list(df.index), k=min(2, n // 50)), "description"] = ""
+
+    return df
+
+
+def make_text_only_df(seed: int, n: int = 100):
+    """Create a DataFrame with only text columns (>2 spaces avg).
+
+    This triggers the text-only nearest neighbor path in AIA/MIA evaluation,
+    which uses only sentence-transformers for similarity (no sklearn).
+    """
+    fake = faker.Faker("en_US")
+    fake.seed_instance(seed)
+    random.seed(seed)
+
+    # All columns have >2 spaces on average to be classified as "text"
+    df = pd.DataFrame(
+        {
+            "description": [
+                f"The customer {fake.name()} purchased {random.randint(1, 100)} items at {fake.company()}"
+                for _ in range(n)
+            ],
+            "notes": [
+                f"This is a detailed note about {fake.name()} who works at {fake.company()} in {fake.city()}"
+                for _ in range(n)
+            ],
+            "summary": [
+                f"Summary for {fake.name()}: completed {random.randint(1, 50)} tasks in {fake.city()} office"
+                for _ in range(n)
+            ],
+        }
+    )
+
+    # Add some empty values (but not too many to break the test)
+    df.loc[random.sample(list(df.index), k=min(2, n // 50)), "description"] = ""
+
+    return df
+
+
+@pytest.fixture
+def train_df_text_only():
+    """Training DataFrame with only text columns (500 rows)."""
+    return make_text_only_df(seed=444, n=500)
+
+
+@pytest.fixture
+def synth_df_text_only():
+    """Synthetic DataFrame with only text columns (500 rows)."""
+    return make_text_only_df(seed=555, n=500)
+
+
+@pytest.fixture
+def test_df_text_only():
+    """Test DataFrame with only text columns (100 rows)."""
+    return make_text_only_df(seed=666, n=100)
+
+
+@pytest.fixture
+def train_df_mixed_5k():
+    """Training DataFrame with mixed text+tabular columns (5000 rows)."""
+    return make_mixed_text_tabular_df(seed=111, n=5000)
+
+
+@pytest.fixture
+def synth_df_mixed_5k():
+    """Synthetic DataFrame with mixed text+tabular columns (5000 rows)."""
+    return make_mixed_text_tabular_df(seed=222, n=5000)
+
+
+@pytest.fixture
+def test_df_mixed():
+    """Test DataFrame with mixed text+tabular columns (100 rows)."""
+    return make_mixed_text_tabular_df(seed=333, n=100)
 
 
 @pytest.fixture

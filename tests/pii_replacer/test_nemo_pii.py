@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import TransformFnAccounting
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import ColumnClassification, NemoPII, _build_column_statistics
 
@@ -40,7 +41,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
             "email": "email",
             "full address": "address",
             "height": None,
-            "date of birth": "date",
+            "date of birth": None,
             "notes": None,
         }
         assert {field.field_name: field.entity_count for field in classification} == {
@@ -49,7 +50,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
             "email": 20,
             "full address": 20,
             "height": None,
-            "date of birth": 20,
+            "date of birth": None,
             "notes": None,
         }
 
@@ -168,7 +169,6 @@ def test_nemo_pii_default_config_national_id(_build_entity_extractor):
 
 def test_build_column_statistics():
     """Test _build_column_statistics with mocked classification and transformer."""
-
     # Create mock classifications for a small dataset/easier to test.
     mock_classifications = [
         ColumnClassification(

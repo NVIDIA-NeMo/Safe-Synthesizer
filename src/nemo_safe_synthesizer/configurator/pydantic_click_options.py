@@ -1,125 +1,249 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Generate Click CLI options from a Pydantic model.
 
+Used by ``cli/run.py`` and ``cli/config.py`` to expose every
+``SafeSynthesizerParameters`` field as a ``--field_name`` CLI option.
+Nested ``BaseModel`` fields are flattened with a separator
+(e.g. ``--data__holdout``).  Fields typed as ``SomeModel | None`` also
+get a ``--no-<field>`` is-flag that sets the field to ``None``.
+
+The companion ``parse_overrides()`` reverses the flattening at runtime,
+converting Click's flat ``{key: value}`` dict back into the nested structure
+Pydantic expects.  The ``field_sep`` argument to ``parse_overrides`` must
+match the ``field_separator`` passed to ``pydantic_options``; otherwise
+nested keys like ``data__holdout`` will not be reconstructed correctly.
 """
-Generate Click options from a Pydantic model.
-This will recursively add options for nested models to the top level command
-"""
+
+from __future__ import annotations
 
 import inspect
 import types
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 import click
 from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 
 __all__ = ["pydantic_options", "parse_overrides"]
 
 
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
-    """Parse Click command line overrides into a nested dictionary.
-    Args:
-        values: Dictionary of command line arguments from Click.
-        field_sep: Separator used in command line arguments to denote nesting.
-    Returns:
-        A nested dictionary of overrides.
-    """
-    if values is None:
-        return {}
-    overrides = {}
-    for k, v in values.items():
-        if v is not None:
-            match k.split(field_sep):
-                # e.g., --enable_synthesis - top level value with no nesting
-                case [k]:
-                    overrides[k] = v
-                # e.g., --enable_replace_pii or --data__group_training_examples_by
-                # would have
-                case [key, suffix]:
-                    # we don't want to overwrite existing nested dicts
-                    if key in overrides:
-                        overrides[key][suffix] = v
-                    else:
-                        overrides[key] = {suffix: v}
-                case _:
-                    raise ValueError(f"Invalid override: {k}")
+    """Parse Click kwargs into a nested override dict.
 
+    ``no_<field>=True`` injects ``{field: None}`` to disable a nullable-model
+    field.  ``no_<field>=False`` (unset is-flag) is silently dropped.
+    ``None`` values (unset regular options) are also dropped.
+
+    Args:
+        values: Flat dictionary of command line arguments from Click. (``None``-valued keys are dropped).
+        field_sep: Separator used to reconstruct nesting.  For example, ``{"data__holdout": 0.1}`` becomes ``{"data": {"holdout": 0.1}}``.
+
+    Returns:
+        A nested dict suitable for ``model_validate()`` or for merging
+        with a loaded config via ``merge_dicts()``.
+
+    Raises:
+        ValueError: If a key contains empty segments (e.g. consecutive
+            separators like ``a____b``).
+    """
+    if not values:
+        return {}
+    overrides: dict[str, Any] = {}
+    for k, v in values.items():
+        if k.startswith("no_") and isinstance(v, bool):
+            if v:
+                overrides[k[3:]] = None
+            continue
+        if v is None:
+            continue
+        match k.split(field_sep):
+            case [key]:
+                overrides[key] = v
+            case [first, *rest, last] if all(rest) and last:
+                target = overrides
+                if not isinstance(target.get(first), dict):
+                    target[first] = {}
+                target = target[first]
+                for part in rest:
+                    if not isinstance(target.get(part), dict):
+                        target[part] = {}
+                    target = target[part]
+                target[last] = v
+            case _:
+                raise ValueError(f"Invalid override key: {k!r}")
     return overrides
 
 
+# ---------------------------------------------------------------------------
+# Param variants
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LeafParam:
+    """A scalar CLI option backed by a Pydantic FieldInfo."""
+
+    name: str
+    field: FieldInfo
+
+
+@dataclass
+class FlagParam:
+    """A ``--no-<field>`` is-flag that sets the named field to ``None``."""
+
+    name: str  # internal key for sort ordering, e.g. "no_replace_pii" (CLI: --no-replace-pii)
+    field_name: str  # field being disabled, e.g. "replace_pii"
+
+
+ClickParam = LeafParam | FlagParam
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_basemodel(t: Any) -> bool:
+    return inspect.isclass(t) and issubclass(t, BaseModel)
+
+
+def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
+    """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
+    return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
+
+
+# Click types ordered from widest to narrowest acceptance. When a union
+# contains multiple scalar types (e.g. ``str | int``), the widest type
+# that won't reject valid input is chosen. Click validates *before*
+# Pydantic, so a narrow Click type (INT) would reject values that
+# Pydantic could accept (a date string for ``str | int``).
+_CLICK_TYPE_PRIORITY: list[tuple[type, click.ParamType]] = [
+    (str, click.STRING),
+    (float, click.FLOAT),
+    (int, click.INT),
+    (bool, click.BOOL),
+]
+
+
+def _has_string_literal(args: set) -> bool:
+    """Check if any member is a ``Literal`` containing a string value."""
+    return any(get_origin(a) is Literal and any(isinstance(v, str) for v in get_args(a)) for a in args)
+
+
+def _click_type(annotation: Any) -> click.ParamType:
+    """Map a Pydantic field annotation to a Click type.
+
+    Unwraps ``Annotated[T, ...]`` and ``T | None`` unions, then returns the
+    widest Click type that covers any member of the union.  String-valued
+    ``Literal`` members (e.g. ``Literal["auto"]``) force ``click.STRING``
+    so Click won't reject the sentinel before Pydantic validates it.
+    Falls back to ``click.STRING`` for unrecognized types.
+    """
+    t = annotation
+    if get_origin(t) is Annotated:
+        t = get_args(t)[0]
+    args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
+    args.discard(type(None))
+    if _has_string_literal(args):
+        return click.STRING
+    for py_type, click_type in _CLICK_TYPE_PRIORITY:
+        if py_type in args:
+            return click_type
+    return click.STRING
+
+
+def _option_names(name: str, field_separator: str) -> tuple[str, ...]:
+    """Build the Click ``*names`` tuple for a given logical field name."""
+    cli = f"--{name.replace('.', field_separator)}"
+    if field_separator == ".":
+        return cli, name.replace(".", "_")
+    return (cli,)
+
+
+def _collect_params(cls: type[BaseModel], prefix: str = "") -> list[ClickParam]:
+    """Recursively collect CLI params from a Pydantic model.
+
+    Returns an unsorted list -- callers are responsible for sorting.
+    """
+    params: list[ClickParam] = []
+    for name, field in cls.model_fields.items():
+        full = f"{prefix}{name}"
+        ft = field.annotation
+
+        # Unwrap Annotated[T, ...] to its inner type.
+        inner = get_args(ft)[0] if get_origin(ft) is Annotated else ft
+
+        match inner:
+            case t if _is_basemodel(t):
+                params.extend(_collect_params(t, f"{full}."))
+            case t if get_origin(t) is types.UnionType:
+                model_arg = _nullable_model_arg(get_args(t))
+                if model_arg is not None:
+                    params.extend(_collect_params(model_arg, f"{full}."))
+                    params.append(FlagParam(f"no_{full}", full))
+                else:
+                    params.append(LeafParam(full, field))
+            case _:
+                params.append(LeafParam(full, field))
+
+    return params
+
+
+# ---------------------------------------------------------------------------
+# Public decorator
+# ---------------------------------------------------------------------------
+
+
 def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
-    """Generate Click options from a Pydantic model."""
+    """Decorate a Click command with options derived from a Pydantic model.
 
-    def get_fields(cls: type[BaseModel], prefix=""):
-        fields = []
-        for name, field in cls.model_fields.items():
-            field_type = field.annotation
-            full_name = f"{prefix}{name}" if prefix else name
+    Recurses into nested sub-models, flattening their fields into top-level
+    CLI options separated by ``field_separator``.  Fields typed as
+    ``SomeModel | None`` also get a ``--no-<field>`` is-flag that sets the
+    field to ``None`` when passed.  Field types are mapped to Click types
+    via ``_CLICK_TYPE_PRIORITY``; help text is pulled from
+    ``Field(description=...)``.
 
-            # Handle nested BaseModel
-            if inspect.isclass(field_type) and issubclass(field_type, BaseModel):
-                fields.extend(get_fields(field_type, f"{full_name}."))
+    Args:
+        model_class: The Pydantic model to generate options from
+            (typically ``SafeSynthesizerParameters``).
+        field_separator: String used to join parent and child field names
+            in the CLI option (default ``"__"``).
 
-            elif get_origin(field_type) is Annotated:
-                base_type = get_args(field_type)[0]
-
-                if inspect.isclass(base_type) and issubclass(base_type, BaseModel):
-                    fields.extend(get_fields(base_type, f"{full_name}."))
-
-                else:
-                    fields.append((full_name, field))
-
-            # union types are strange
-            elif get_origin(field_type) is types.UnionType:
-                union_args = get_args(field_type)
-
-                for arg in union_args:
-                    # Skip None type in the union (for Optional fields)
-                    if arg is type(None):
-                        continue
-
-                    if inspect.isclass(arg) and issubclass(arg, BaseModel):
-                        fields.extend(get_fields(arg, f"{full_name}."))
-
-                else:
-                    # If no BaseModel was found in the union, treat it as a regular field
-                    fields.append((full_name, field))
-
-            else:
-                fields.append((full_name, field))
-        return sorted(fields, key=lambda x: x[0])
+    Returns:
+        A Click decorator that attaches the generated options to a command.
+    """
 
     def decorator(f):
-        for name, field in get_fields(model_class):
-            param_type = field.annotation
-            if get_origin(param_type) is Annotated:
-                param_type = get_args(param_type)[0]
-            elif get_origin(param_type) is Union:
-                param_type = get_args(param_type)[0]
-            else:
-                param_type = param_type
-
-            if param_type in (int, Literal["auto"] | int):
-                click_type = click.INT
-            elif param_type in (float, Literal["auto"] | float):
-                click_type = click.FLOAT
-            elif param_type is bool or param_type == Literal["auto"] | bool:
-                click_type = click.BOOL
-            else:
-                click_type = str
-
-            option_name = f"--{name.replace('.', field_separator)}"
-            # click tries to assign the passed value to a variable with the same name, so we need to rename
-            # it if it has dots in the name.
-            # the name and option name are passed as *args to click, so we pack either into a tuple to unpack correctly.
-            if field_separator == ".":
-                option_name = option_name, name.replace(".", "_")
-            else:
-                option_name = tuple([option_name])
-            help_text = field.description if hasattr(field, "description") else ""
-            f = click.option(*option_name, type=click_type, help=help_text)(f)
-
+        for param in sorted(_collect_params(model_class), key=lambda p: p.name):
+            match param:
+                case FlagParam(field_name=field_name):
+                    # Flags use standard CLI dashes (--no-replace-pii) while
+                    # LeafParam options preserve underscores (--training__learning_rate)
+                    # because the separator/field structure is autogenerated from Pydantic.
+                    nested_name = field_name.replace(".", field_separator)
+                    if field_separator != ".":
+                        parts = nested_name.split(field_separator)
+                        nested_name = field_separator.join(p.replace("_", "-") for p in parts)
+                    else:
+                        nested_name = nested_name.replace("_", "-")
+                    flag_cli = f"--no-{nested_name}"
+                    f = click.option(
+                        flag_cli,
+                        is_flag=True,
+                        default=False,
+                        help=f"Disable {field_name.replace('_', '-')} entirely.",
+                    )(f)
+                case LeafParam(field=field):
+                    names = _option_names(param.name, field_separator)
+                    f = click.option(
+                        *names,
+                        type=_click_type(field.annotation),
+                        help=field.description or "",
+                    )(f)
         return f
 
     return decorator

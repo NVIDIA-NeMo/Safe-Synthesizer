@@ -27,25 +27,24 @@ HIGHLY_UNIQUE_TYPES = [FieldType.OTHER, FieldType.TEXT, FieldType.EMPTY]
 
 
 class EvaluationField(BaseModel):
-    """
-    A Report field.  Stores column level stat values.
+    """Per-column evaluation metadata and distribution scores."""
 
-    Attributes:
-        name: the column name from the original df
-        reference_field_features: FieldFeatures. All the stats etc.
-        output_field_features: FieldFeatures. All the stats etc.
-        distribution_distance: the Jensen Shannon distance between the two distributions.
-        column_statistics: list of entities and their count, whether col was transformed, functions used.
-    """
-
-    name: str = Field()
-    reference_field_features: FieldFeatures = Field()
-    output_field_features: FieldFeatures = Field()
-    reference_distribution: dict | None = Field()
-    output_distribution: dict | None = Field()
-    distribution_distance: float | None = Field()
-    distribution_stability: EvaluationScore | None = Field()
-    column_statistics: ColumnStatistics | None = Field()
+    name: str = Field(description="Column name from the original dataframe.")
+    reference_field_features: FieldFeatures = Field(
+        description="Field type and descriptive statistics for the reference column."
+    )
+    output_field_features: FieldFeatures = Field(
+        description="Field type and descriptive statistics for the output column."
+    )
+    reference_distribution: dict | None = Field(description="Binned distribution dict for the reference column.")
+    output_distribution: dict | None = Field(description="Binned distribution dict for the output column.")
+    distribution_distance: float | None = Field(description="Jensen-Shannon distance between the two distributions.")
+    distribution_stability: EvaluationScore | None = Field(
+        description="Graded score derived from the distribution distance."
+    )
+    column_statistics: ColumnStatistics | None = Field(
+        description="PII entity counts and transform metadata, if available."
+    )
 
     @staticmethod
     def from_series(
@@ -54,18 +53,20 @@ class EvaluationField(BaseModel):
         output: pd.Series,
         column_statistics: ColumnStatistics | None = None,
     ) -> EvaluationField:
-        """
-        Make a Field instance from two pd.Series and some hints.  You should not need to call this directly if you
-        are using report.from_dataframes.
+        """Build an ``EvaluationField`` from paired reference/output column.
+
+        Normally called internally by ``EvaluationDataset``; direct use is
+        rarely needed.
 
         Args:
-            name: column name to pass on to this field.
-            reference: reference pd.Series.
-            output: output pd.Series.
-            column_statistics: ColumnStatistics with info about transformed entities. If present, enrich columns with this info.
+            name: Column name.
+            reference: Reference column data.
+            output: Output (synthetic) column data.
+            column_statistics: PII entity metadata to attach, if available.
 
         Returns:
-            a populated EvaluationField instance.
+            A fully populated ``EvaluationField`` with computed distributions
+            and stability score.
         """
         reference_field_features = describe_field(name, reference)
         output_field_features = describe_field(name, output)
@@ -121,6 +122,7 @@ class EvaluationField(BaseModel):
 
     @staticmethod
     def get_average_divergence(fields: list[EvaluationField]) -> float:
+        """Compute the mean Jensen-Shannon divergence across a list of fields."""
         if len(fields) > 0:
             average_divergence = reduce(
                 lambda x, y: x + y,
@@ -132,14 +134,13 @@ class EvaluationField(BaseModel):
 
     @staticmethod
     def text_js_scaling_func(average_divergence: float) -> float:
-        """
-        Scales the average JS divergence for text data using a linear equation.
+        """Scale average JS divergence for text data using a linear equation.
 
         Args:
-            average_divergence: float, as produced by _get_average_divergence in report.py.
+            average_divergence: Mean JS divergence across text fields.
 
         Returns:
-            A score between 1.5-10.
+            A score in the range ``[1.5, 10]``.
         """
         # Scaling with linear equation penalizes the lower range scores drastically, setting the lower values to 15 instead of 0.
         # More explained in this doc.
@@ -153,14 +154,13 @@ class EvaluationField(BaseModel):
 
     @staticmethod
     def tabular_js_scaling_func(average_divergence: float) -> float:
-        """
-        Scales the average JS divergence for tabular data using a quadratic equation.
+        """Scale average JS divergence for tabular data using a quadratic equation.
 
         Args:
-            average_divergence: float, as produced by _get_average_divergence in report.py.
+            average_divergence: Mean JS divergence across tabular fields.
 
         Returns:
-            A score between 0-10.
+            A score in the range ``[0, 10]``.
         """
         if average_divergence > 0.99:
             score = 0.0
@@ -175,6 +175,16 @@ class EvaluationField(BaseModel):
         average_divergence: float,
         js_scaling_func: Callable[[float], float] | None = None,
     ) -> EvaluationScore:
+        """Convert an average JS divergence into a graded ``EvaluationScore``.
+
+        Args:
+            average_divergence: Mean JS divergence across fields.
+            js_scaling_func: Scaling function mapping divergence to a 0--10
+                score. Defaults to ``tabular_js_scaling_func``.
+
+        Returns:
+            A finalized ``EvaluationScore`` with grade and scaled score.
+        """
         js_scaling_func = js_scaling_func or EvaluationField.tabular_js_scaling_func
         try:
             if np.isnan(average_divergence):

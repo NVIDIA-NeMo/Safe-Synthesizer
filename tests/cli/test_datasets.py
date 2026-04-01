@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry
 
 

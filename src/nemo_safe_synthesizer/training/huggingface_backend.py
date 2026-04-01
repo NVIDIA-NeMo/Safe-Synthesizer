@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""HuggingFace Trainer backend for LoRA fine-tuning."""
+
 import io
 import logging
 import time
 from contextlib import redirect_stdout
 from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,7 +18,6 @@ import wandb
 from datasets import Dataset
 from peft import LoftQConfig, LoraConfig, TaskType, prepare_model_for_kbit_training
 from peft import get_peft_model as get_peft_model_hf
-from rich import print
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
@@ -23,6 +25,8 @@ from transformers import (
     DataCollatorForTokenClassification,
     EvalPrediction,
     IntervalStrategy,
+    PreTrainedModel,
+    PreTrainedTokenizer,
     PrinterCallback,
     Trainer,
     TrainingArguments,
@@ -30,6 +34,7 @@ from transformers import (
 from transformers.trainer_pt_utils import get_model_param_count
 
 from .. import utils
+from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
@@ -84,22 +89,31 @@ FIXED_RUNTIME_TRAINING_ARGS = {
 
 
 class HuggingFaceBackend(TrainingBackend):
+    """Training backend built on the HuggingFace ``Trainer``.
+
+    Handles model loading (``AutoModelForCausalLM``), LoRA/QLoRA wrapping,
+    RoPE scaling, optional differential-privacy training via
+    [`OpacusDPTrainer`][nemo_safe_synthesizer.privacy.dp_transformers.dp_utils.OpacusDPTrainer],
+    and artifact persistence (adapter, schema, metadata).
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type = Trainer
+        self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
         self.model_loader_type = AutoModelForCausalLM
-        self.training_output_dir = self.workdir.train.cache.path
+        self.training_output_dir = Path(self.workdir.train.cache)
         self.autoconfig = AutoConfig.from_pretrained(
             self.params.training.pretrained_model, trust_remote_code=self._trust_remote_code_for_model()
         )
 
     def _load_pretrained_model(self, **model_args):
+        """Load the pretrained model and tokenizer via ``AutoModelForCausalLM``."""
         self.autoconfig.max_position_embeddings = (
             model_args.pop("max_seq_length", None) or self.model_metadata.max_seq_length
         )
         self.model = self.model_loader_type.from_pretrained(**self.framework_load_params, config=self.autoconfig)
 
-        self.tokenizer = add_bos_eos_tokens_to_tokenizer(
+        self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
             AutoTokenizer.from_pretrained(
                 self.params.training.pretrained_model, model_max_length=model_args.get("max_seq_length", None)
             )
@@ -140,19 +154,45 @@ class HuggingFaceBackend(TrainingBackend):
         """
         return {k: v for k, v in kwargs.items() if k not in self._TRAINER_SPECIFIC_KEYS}
 
+    def _resolve_attn_implementation(self, configured: str) -> str:
+        """Resolve attention implementation, falling back to sdpa if kernels is unavailable.
+
+        Args:
+            configured: The configured attention implementation string.
+
+        Returns:
+            The resolved attention implementation string.
+        """
+        if configured.startswith("kernels-community/"):
+            try:
+                import kernels  # noqa: F401
+
+                return configured
+            except ImportError:
+                logger.warning(
+                    f"kernels package not installed, cannot use '{configured}'. "
+                    "Falling back to 'sdpa'. Install with: pip install kernels"
+                )
+                return "sdpa"
+        return configured
+
     def _build_base_framework_params(self, model_kwargs: dict) -> dict:
         """Build the base framework parameters for model loading.
 
         Args:
             model_kwargs: Filtered model keyword arguments.
-            max_seq_length: The maximum sequence length.
+
+        Returns:
+            Dictionary of parameters for ``from_pretrained``.
         """
         return dict(
             pretrained_model_name_or_path=self.params.training.pretrained_model,
             device_map=model_kwargs.pop(
                 "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
             ),
-            attn_implementation=model_kwargs.pop("attn_implementation", "flash_attention_2"),
+            attn_implementation=model_kwargs.pop(
+                "attn_implementation", self._resolve_attn_implementation(self.params.training.attn_implementation)
+            ),
             dtype=model_kwargs.pop("dtype", torch.bfloat16),
             **model_kwargs,
         )
@@ -206,12 +246,11 @@ class HuggingFaceBackend(TrainingBackend):
 
     @traced_runtime("prepare_config")
     def prepare_config(self, add_max_memory: bool = True, **kwargs):
-        """
-        Set common model arguments for initializing a model.
+        """Set common model arguments for initializing a model.
 
         Args:
             add_max_memory: Whether to add max_memory to the model arguments.
-            kwargs: Additional keyword arguments, overriding default arguments when set.
+            **kwargs: Additional keyword arguments, overriding default arguments when set.
         """
         if self.framework_load_params:
             logger.info("already prepared loading parameters")
@@ -222,7 +261,7 @@ class HuggingFaceBackend(TrainingBackend):
         model_kwargs = self._filter_model_kwargs(kwargs)
 
         if add_max_memory:
-            model_kwargs["max_memory"] = get_max_vram(memory_fraction=model_kwargs.pop("max_vram_fraction", None))
+            model_kwargs["max_memory"] = get_max_vram(max_vram_fraction=model_kwargs.pop("max_vram_fraction", None))
 
         framework_params = self._build_base_framework_params(model_kwargs)
         quant_config = self._get_quantization_config_if_enabled()
@@ -233,6 +272,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.framework_load_params = framework_params
 
     def _prepare_quantize_base(self, **quantize_params: dict):
+        """Populate ``quant_params`` with LoRA and optional quantization settings."""
         self.quant_params = dict(
             task_type=TaskType.CAUSAL_LM,
             init_lora_weights=True,
@@ -256,6 +296,7 @@ class HuggingFaceBackend(TrainingBackend):
                 self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=self.params.training.quantization_bits)
 
     def maybe_quantize(self, **quant_params: dict):
+        """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
         self._prepare_quantize_base(**quant_params)
         lora_config = LoraConfig(**self.quant_params)
         if not self.params.training.quantize_model:
@@ -266,19 +307,21 @@ class HuggingFaceBackend(TrainingBackend):
         else:
             self.model = prepare_model_for_kbit_training(self.model, use_gradient_checkpointing=True)
 
-        self.model = get_peft_model_hf(self.model, peft_config=lora_config)
+        if not isinstance(self.model, PreTrainedModel):
+            raise TypeError(f"Expected PreTrainedModel, got {type(self.model)}")
+        peft_model = get_peft_model_hf(self.model, peft_config=lora_config)
+        self.model = peft_model  # ty: ignore[invalid-assignment]  -- PeftMixedModel not in union, but LoraConfig always yields PeftModel
         parameter_count = get_model_param_count(self.model, trainable_only=True) / 1e6
         logger.info(
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",
         )
 
     def load_model(self, **model_args):
-        """
-        Load an AutoModelForCausalLM instance with specified arguments.
+        """Load an ``AutoModelForCausalLM`` instance with specified arguments.
 
         Args:
             **model_args: Additional keyword arguments for model configuration,
-                          passed directly to AutoModelForCausalLM.from_pretrained().
+                passed directly to ``AutoModelForCausalLM.from_pretrained()``.
         """
         logger.info(f"loading pretrained model: {self.params.training.pretrained_model}")
         self.prepare_config(**model_args)
@@ -295,7 +338,7 @@ class HuggingFaceBackend(TrainingBackend):
             IntervalStrategy.STEPS if self.params.training.validation_ratio > 0 else IntervalStrategy.NO
         )
         return dict(
-            output_dir=self.workdir.train.cache.path,
+            output_dir=Path(self.workdir.train.cache),
             per_device_train_batch_size=self.params.training.batch_size,
             gradient_accumulation_steps=self.params.training.gradient_accumulation_steps,
             lr_scheduler_type=self.params.training.lr_scheduler,
@@ -334,7 +377,11 @@ class HuggingFaceBackend(TrainingBackend):
         Raises:
             ParameterError: If required DP parameters are missing.
         """
-        eps = self.params.privacy.epsilon
+        privacy = self.params.privacy
+        if privacy is None:
+            raise ParameterError("Privacy configuration is required for DP training")
+
+        eps = privacy.epsilon
         logger.user.info(
             f"Differentially-private training is enabled, ε is set to {eps}",
         )
@@ -351,11 +398,11 @@ class HuggingFaceBackend(TrainingBackend):
 
         privacy_args = PrivacyArguments(
             target_epsilon=eps,
-            target_delta=self.params.privacy.delta,
-            per_sample_max_grad_norm=self.params.privacy.per_sample_max_grad_norm,
+            target_delta=privacy.delta,
+            per_sample_max_grad_norm=privacy.per_sample_max_grad_norm,
         )
 
-        self.trainer_type: partial[OpacusDPTrainer] = partial(
+        self.trainer_type = partial(
             OpacusDPTrainer,
             privacy_args=privacy_args,
             true_dataset_size=self.true_dataset_size,
@@ -437,6 +484,9 @@ class HuggingFaceBackend(TrainingBackend):
             trainer: The Trainer instance to configure.
             training_args: The training arguments dictionary containing inference_eval_kwargs.
         """
+        if self.dataset_schema is None:
+            raise ParameterError("dataset_schema must be set before configuring inference eval callback")
+
         logger.info(
             "👀 Heads up -> Generation eval is enabled ✅",
         )
@@ -467,7 +517,7 @@ class HuggingFaceBackend(TrainingBackend):
         training_args = self._build_base_training_args()
         self._apply_eval_dataset_overrides(training_args)
 
-        if self.params.privacy.dp_enabled:
+        if self.params.privacy is not None and self.params.privacy.dp_enabled:
             data_collator = self._configure_dp_training(training_args)
         else:
             data_collator = self._configure_standard_training(training_args)
@@ -600,10 +650,25 @@ class HuggingFaceBackend(TrainingBackend):
             logger.user.info("", extra=extra)
 
     def prepare_training_data(self):
-        """Prepare training data for training."""
+        """Validate, preprocess, and tokenize the training dataset.
+
+        Runs auto-config resolution, time-series processing, groupby /
+        orderby validation, and assembles tokenized training examples.
+        Populates ``training_examples``, ``dataset_schema``,
+        ``df_train``, and ``data_fraction``.
+
+        Raises:
+            DataError: If the training dataset is missing or malformed.
+        """
         logger.info("Preparing training data.")
 
+        if self.training_dataset is None:
+            raise DataError("training_dataset must be set before preparing training data")
+
         df_all = self.training_dataset.to_pandas()
+        if not isinstance(df_all, pd.DataFrame):
+            raise DataError("Expected DataFrame from to_pandas(), got an iterator")
+
         self.params = AutoConfigResolver(df_all, self.params).resolve()
 
         # Validate groupby/orderby parameters as a preprocessing step.
@@ -647,6 +712,11 @@ class HuggingFaceBackend(TrainingBackend):
 
     @utils.time_function
     def train(self, **training_args):
+        """Run the full training pipeline and populate ``results``.
+
+        Sequentially calls ``prepare_training_data``,
+        ``prepare_params``, trains the model, and saves artifacts.
+        """
         training_start = time.monotonic()
         self.prepare_training_data()
         self.prepare_params(**training_args)
@@ -675,15 +745,21 @@ class HuggingFaceBackend(TrainingBackend):
         Args:
             delete_trainable_model: If True, delete the model from memory after saving.
         """
+        if self.dataset_schema is None:
+            raise ParameterError("dataset_schema must be set before saving model")
+
+        adapter_dir = self.workdir.train.adapter
+        if not isinstance(adapter_dir, BoundDir):
+            raise TypeError(f"Expected BoundDir, got {type(adapter_dir)}")
         self.workdir.ensure_directories()
-        logger.user.info(f"Saving LoRA adapter to {self.workdir.train.adapter}")
+        logger.user.info(f"Saving LoRA adapter to {adapter_dir}")
         with redirect_stdout(io.StringIO()) as stdout:
-            self.model.save_pretrained(self.workdir.train.adapter)
+            self.model.save_pretrained(str(adapter_dir))
         logger.runtime.debug(stdout.getvalue())
-        logger.user.info(f"Saving model metadata to {self.workdir.train.adapter.metadata}")
+        logger.user.info(f"Saving model metadata to {adapter_dir.metadata}")
         self.model_metadata.save_metadata()
-        logger.user.info(f"Saving dataset schema to {self.workdir.train.adapter.schema}")
-        write_json(self.dataset_schema, self.workdir.train.adapter.schema, indent=4)
+        logger.user.info(f"Saving dataset schema to {adapter_dir.schema}")
+        write_json(self.dataset_schema, adapter_dir.schema, indent=4)
         logger.user.info(f"Saving model parameters to {self.workdir.train.config}")
         write_json(
             self.params.model_dump(mode="json"),
@@ -700,7 +776,8 @@ class HuggingFaceBackend(TrainingBackend):
         # Delete the trainer first, as it holds references to the model
         if hasattr(self, "trainer"):
             del self.trainer
-        del self.model
+        if hasattr(self, "model"):
+            del self.model
         cleanup_memory()
         # Clean up distributed process group if it was initialized by the Trainer
 
@@ -715,6 +792,7 @@ class HuggingFaceBackend(TrainingBackend):
         return f
 
     def info(self):
+        """Print a summary of key trainer attributes to stdout."""
         fields = [
             "params",
             "training_output_dir",
@@ -727,43 +805,52 @@ class HuggingFaceBackend(TrainingBackend):
         msg += "\n" + "\n".join([f"{field}: {value}" for field, value in info.items()])
         msg += "\n" + "-" * len(msg)
 
-        print(msg)
+        logger.info(msg)
 
 
 def preprocess_logits_for_metrics(
     logits: tuple[torch.Tensor, ...], labels: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """
+    """Reduce logits to argmax predictions to avoid OOM during evaluation.
 
-    Running into OOM errors for ecommerce dataset during evaluation loop.
-    Found this workaround online: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
-    Original Trainer may have a memory leak.
-    This is a workaround to avoid storing too many tensors that are not needed.
+    The default Trainer stores full logit tensors across evaluation batches,
+    which can exhaust GPU memory on large datasets. This callback replaces
+    them with predicted token IDs immediately after the forward pass.
+
+    See: https://discuss.huggingface.co/t/cuda-out-of-memory-when-using-trainer-with-compute-metrics/2941/13
 
     Args:
-        logits: Tuple of logits tensors from the model output
-        labels: Ground truth labels tensor
+        logits: Tuple of logits tensors from the model output.
+        labels: Ground truth labels tensor.
 
     Returns:
-        Tuple containing:
-            - Predicted token IDs
-            - Ground truth labels
+        Tuple of ``(predicted_token_ids, labels)``.
     """
     pred_ids = torch.argmax(logits[0], dim=-1)
     return pred_ids, labels
 
 
 def compute_metrics(eval_preds: EvalPrediction) -> dict[str, float]:
-    """Compute metrics for evaluation.
+    """Compute evaluation metrics from forward-pass losses.
+
+    Metrics returned:
+
+    - mean cross-entropy loss (``eval_loss``) -- average of per-batch
+      losses collected during the evaluation loop.
+
+    The per-batch losses are pre-computed during the forward pass
+    (via ``include_for_metrics``).
 
     Args:
-        eval_preds: Evaluation predictions object containing losses and predictions
+        eval_preds: Evaluation predictions object whose ``losses`` field
+            contains per-batch losses collected during the eval loop.
 
     Returns:
-        Dictionary containing evaluation metrics
+        Dictionary mapping metric names to values.
     """
     # include_for_metrics has "loss", so the loss is already computed in the forward pass
-    metrics = {"eval_loss": np.mean(eval_preds.losses)}
+    losses = eval_preds.losses if eval_preds.losses is not None else []
+    metrics = {"eval_loss": np.mean(losses)}
 
     # Log the evaluation loss using the same style as callbacks.py
     if metrics["eval_loss"] is not None:

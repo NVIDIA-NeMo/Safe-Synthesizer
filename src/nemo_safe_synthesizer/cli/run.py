@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI entry points for Safe Synthesizer.
+"""CLI run commands for Safe Synthesizer.
 
-This module provides the main CLI commands for running the Safe Synthesizer pipeline:
-- `run` (default): Full end-to-end pipeline
-- `run train`: Training stage only
-- `run generate`: Generation stage only (requires trained model)
+This module provides the run command group for the Safe Synthesizer pipeline:
+
+- ``run`` (default): Full end-to-end pipeline
+- ``run train``: Training stage only
+- ``run generate``: Generation stage only (requires trained model)
 """
 
 from __future__ import annotations
@@ -46,7 +47,7 @@ def common_run_options(f):
     )
     options.append(
         click.option(
-            "--url",
+            "--data-source",
             type=str,
             default=None,
             required=False,
@@ -149,7 +150,7 @@ def common_run_options(f):
             required=False,
             default=None,
             help="URL or path of a dataset registry YAML file. If provided, "
-            "datasets in the registry may be referenced by name in --url. "
+            "datasets in the registry may be referenced by name in --data-source. "
             "Can also be set via NSS_DATASET_REGISTRY env var. "
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
@@ -161,7 +162,7 @@ def common_run_options(f):
             default=None,
             required=False,
             help="Path or URL to a separate test dataset CSV. "
-            "When provided, the full --url dataset is used for training "
+            "When provided, the full --data-source dataset is used for training "
             "and this dataset is used for evaluation (no train/test split).",
         )
     )
@@ -179,7 +180,7 @@ def common_run_options(f):
 def run(
     ctx: click.Context,
     config_path: PathT | None,
-    url: str,
+    data_source: str,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -204,7 +205,7 @@ def run(
 
     # Create unified settings from CLI kwargs (CLI values override env vars)
     settings = CLISettings.from_cli_kwargs(
-        url=url,
+        data_source=data_source,
         config_path=config_path,
         artifact_path=artifact_path,
         run_path=run_path,
@@ -231,21 +232,25 @@ def run(
     with traced_user("SafeSynthesizer"):
         from ..sdk.library_builder import SafeSynthesizer
 
-        ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+        nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
         if test_url:
-            ss = ss.with_test_data(pd.read_csv(test_url))
-        ss.run()
-        ss.save_results(output_file=settings.output_file or workdir.output_file)
-        ss.results.summary.log_summary(run_logger)
-        ss.results.summary.timing.log_timing(run_logger)
-        ss.results.summary.log_wandb()
+            nss = nss.with_test_data(pd.read_csv(test_url))
+        try:
+            nss.run(output_file=settings.output_file)
+            nss.results.summary.log_summary(run_logger)
+            nss.results.summary.timing.log_timing(run_logger)
+            nss.results.summary.log_wandb()
+        finally:
+            if hasattr(nss, "generator") and nss.generator is not None:
+                nss.generator.teardown()
 
 
 @run.command("train")
 @common_run_options
+@pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_train(
     config_path: PathT,
-    url: str,
+    data_source: str,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -266,7 +271,7 @@ def run_train(
     """
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
-        url=url,
+        data_source=data_source,
         config_path=config_path,
         artifact_path=artifact_path,
         run_path=run_path,
@@ -289,10 +294,10 @@ def run_train(
     from ..sdk.library_builder import SafeSynthesizer
 
     with traced_user("SafeSynthesizer"):
-        ss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
+        nss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
         if test_url:
-            ss = ss.with_test_data(pd.read_csv(test_url))
-        ss.process_data().train()
+            nss = nss.with_test_data(pd.read_csv(test_url))
+        nss.process_data().train()
         run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
 
 
@@ -316,7 +321,7 @@ def run_train(
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_generate(
     config_path: PathT,
-    url: str,
+    data_source: str,
     run_path: PathT | None,
     artifact_path: PathT | None,
     output_file: PathT | None,
@@ -343,7 +348,7 @@ def run_generate(
     """
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
-        url=url,
+        data_source=data_source,
         config_path=config_path,
         artifact_path=artifact_path,
         run_path=run_path,
@@ -371,19 +376,27 @@ def run_generate(
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        ss = SafeSynthesizer(config, workdir=workdir)
+        nss = SafeSynthesizer(config, workdir=workdir)
 
-        # Only set data source if provided via --url
+        # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
         if df is not None:
-            ss = ss.with_data_source(df)
+            nss = nss.with_data_source(df)
 
-        ss = ss.load_from_save_path()
-        if test_url:
-            ss = ss.with_test_data(pd.read_csv(test_url))
-        ss = ss.process_data().generate().evaluate().save_results(output_file=final_output_file)
-        ss.generator.teardown()
-        ss.results.summary.log_summary(run_logger)
-        ss.results.summary.timing.log_timing(run_logger)
-        run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
-        ss.results.summary.log_wandb()
+        try:
+            nss = nss.load_from_save_path()
+            if test_url:
+                nss = nss.with_test_data(pd.read_csv(test_url))
+            nss = (
+                nss.process_data()
+                .generate()
+                .evaluate()
+                .save_results(output_file=final_output_file)
+            )
+            nss.results.summary.log_summary(run_logger)
+            nss.results.summary.timing.log_timing(run_logger)
+            run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
+            nss.results.summary.log_wandb()
+        finally:
+            if hasattr(nss, "generator") and nss.generator is not None:
+                nss.generator.teardown()

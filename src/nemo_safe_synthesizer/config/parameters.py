@@ -3,15 +3,12 @@
 
 from __future__ import annotations
 
-from pydantic import (
-    Field,
-    field_validator,
-)
+from typing import Any
+
+from pydantic import Field, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
-from ..configurator.parameters import (
-    Parameters,
-)
+from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
 from .data import DataParameters
@@ -21,9 +18,7 @@ from .generate import GenerateParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
-from .types import (
-    AUTO_STR,
-)
+from .types import AUTO_STR
 
 __all__ = ["SafeSynthesizerParameters"]
 
@@ -37,46 +32,60 @@ class SafeSynthesizerParameters(Parameters):
     This is the top-level configuration class that orchestrates all aspects of
     synthetic data generation including training, generation, privacy, evaluation,
     and data handling. It provides validation to ensure parameter compatibility.
-
-    Attributes:
-        data: Data parameters.
-        replace_pii: PII replacement parameters.
-        training: Training parameters.
-        generation: Generation parameters.
-        privacy: Privacy parameters.
-        evaluation: Evaluation parameters.
-        enable_synthesis: Enable synthesizing new data by training a model.
-        enable_replace_pii: Enable replacing PII in the data.
     """
 
-    data: DataParameters = Field(description="Data parameters.", default_factory=DataParameters)
+    data: DataParameters = Field(
+        description="Configuration controlling how input data is grouped and split for training and evaluation.",
+        default_factory=DataParameters,
+    )
 
-    evaluation: EvaluationParameters = Field(default_factory=EvaluationParameters, description="Evaluation parameters.")
+    evaluation: EvaluationParameters = Field(
+        description="Parameters for evaluating the quality of generated synthetic data.",
+        default_factory=EvaluationParameters,
+    )
 
-    enable_synthesis: bool = Field(description="Enable synthesizing new data by training a model.", default=True)
+    training: TrainingHyperparams = Field(
+        description="Hyperparameters for model training such as learning rate, batch size, and LoRA adapter settings.",
+        default_factory=TrainingHyperparams,
+    )
 
-    enable_replace_pii: bool = Field(description="Enable replacing PII in the data.", default=True)
-
-    training: TrainingHyperparams = Field(description="Training parameters.", default_factory=TrainingHyperparams)
-
-    generation: GenerateParameters = Field(description="Generation parameters.", default_factory=GenerateParameters)
+    generation: GenerateParameters = Field(
+        description="Parameters governing synthetic data generation including temperature, top-p, and number of records to produce.",
+        default_factory=GenerateParameters,
+    )
 
     privacy: DifferentialPrivacyHyperparams | None = Field(
-        description="Privacy parameters. Optional.", default_factory=DifferentialPrivacyHyperparams
+        description="Differential-privacy hyperparameters. When ``None``, differential privacy is disabled entirely.",
+        default_factory=DifferentialPrivacyHyperparams,
     )
 
     time_series: TimeSeriesParameters = Field(
-        description="Time series parameters.", default_factory=TimeSeriesParameters
+        description="Configuration for time-series mode. Time-series pipeline is currently experimental.",
+        default_factory=TimeSeriesParameters,
     )
 
-    replace_pii: PiiReplacerConfig | None = Field(description="PII replacement parameters. Optional.", default=None)
+    replace_pii: PiiReplacerConfig | None = Field(
+        description="PII replacement configuration. When ``None``, PII replacement is skipped.",
+        default_factory=PiiReplacerConfig.get_default_config,
+    )
 
     @field_validator("privacy", mode="after", check_fields=False)
     def check_dp_compatibility(
         cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
     ) -> DifferentialPrivacyHyperparams | None:
-        """
-        Ensure that if DP is enabled, max_sequences_per_example is 1 or auto, as well as that use_unsloth is False.
+        """Validate that DP-enabled configs have compatible data and training settings.
+
+        When DP is enabled, enforces that ``max_sequences_per_example``
+        is ``1`` (or ``"auto"``, which is resolved to ``1``) to bound
+        per-example contribution, and that Unsloth is disabled since it
+        is not yet compatible with DP-SGD. When DP is disabled but
+        ``max_sequences_per_example`` is ``"auto"``, defaults it to
+        ``10``.
+
+        Raises:
+            ParameterError: If ``data`` or ``training`` parameters are
+                missing, ``max_sequences_per_example`` is not ``1``, or
+                Unsloth is enabled alongside DP.
         """
         if dp_params is None:
             return dp_params
@@ -88,8 +97,8 @@ class SafeSynthesizerParameters(Parameters):
 
         if not dp_params.dp_enabled:
             if data.max_sequences_per_example is not None and data.max_sequences_per_example == AUTO_STR:
-                logger.debug("setting max_sequences_per_example to None because DP is disabled")
-                data.max_sequences_per_example = None
+                logger.debug("setting max_sequences_per_example to the default of 10 because DP is disabled")
+                data.max_sequences_per_example = 10
             return dp_params
 
         match data.max_sequences_per_example:
@@ -120,10 +129,25 @@ class SafeSynthesizerParameters(Parameters):
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
-        This method takes a flat dictionary of parameters, where keys correspond to
-        attributes of the nested parameter classes, and constructs a SafeSynthesizerParameters
-        instance with the appropriate nested structure, using default values for each subgroup that
-        are not explicitly provided.
+
+          Takes a flat dictionary of parameters, where keys correspond to
+          attributes of the nested parameter classes, and constructs a
+          ``SafeSynthesizerParameters`` instance with the appropriate nested
+          structure, using default values for each subgroup that are not
+          explicitly provided.
+
+          Args:
+              **kwargs: Flat key-value pairs that map to attributes of the
+                  nested parameter classes (e.g., ``TrainingHyperparams``,
+                  ``GenerateParameters``).
+
+          Returns:
+              A fully initialized ``SafeSynthesizerParameters`` instance with
+              nested sub-configurations populated from the provided values.
+
+        Example:
+            >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+            >>> SafeSynthesizerParameters.from_params(use_structured_generation=True)
         """
         thp = TrainingHyperparams().model_copy(update=kwargs)
         gp = GenerateParameters().model_copy(update=kwargs)
@@ -132,31 +156,14 @@ class SafeSynthesizerParameters(Parameters):
         dp = DataParameters().model_copy(update=kwargs)
         tsp = TimeSeriesParameters().model_copy(update=kwargs)
 
-        enable_replace_pii = kwargs.pop("enable_replace_pii", False)
-        replace_pii_config = kwargs.get("replace_pii", None)
-
-        match enable_replace_pii, replace_pii_config:
-            case True, None:
-                logger.debug("enable_replace_pii is True but no config provided - using defaults")
-                replace_pii_config = PiiReplacerConfig.get_default_config()
-            case True, dict():
-                logger.debug("enable_replace_pii is True and config provided - using provided config")
-                replace_pii_config = PiiReplacerConfig.get_default_config().model_copy(update=replace_pii_config)
-            case True, PiiReplacerConfig():
-                logger.debug("enable_replace_pii is True and config provided - using provided config")
-            case False, dict() | False, None:
-                replace_pii_config = None
-                logger.debug("enable_replace_pii is False but config provided - ignoring provided config")
-
-        enable_synthesis = kwargs.get("enable_synthesis", True)
-        return cls(
-            training=thp,
-            generation=gp,
-            evaluation=ep,
-            privacy=pp,
-            data=dp,
-            time_series=tsp,
-            replace_pii=replace_pii_config,
-            enable_synthesis=enable_synthesis,
-            enable_replace_pii=enable_replace_pii,
-        )
+        extra: dict[str, Any] = {
+            "training": thp,
+            "generation": gp,
+            "evaluation": ep,
+            "privacy": pp,
+            "data": dp,
+            "time_series": tsp,
+        }
+        if "replace_pii" in kwargs:
+            extra["replace_pii"] = kwargs["replace_pii"]
+        return cls(**extra)

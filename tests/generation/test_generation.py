@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import List, Tuple
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.data_processing.actions.data_actions import (
     ActionExecutor,
     CategoricalCol,
@@ -27,7 +27,7 @@ from nemo_safe_synthesizer.generation.results import GenerationBatches, Generati
 @pytest.fixture()
 def fixture_stub_batches(
     fixture_mock_processor, fixture_mock_processor_without_valid_records
-) -> Tuple[List[Batch], List[Batch]]:
+) -> tuple[list[Batch], list[Batch]]:
     batch_1 = Batch(fixture_mock_processor)
     batch_1.process(1, "stub")
     batch_1.process(2, "stub")

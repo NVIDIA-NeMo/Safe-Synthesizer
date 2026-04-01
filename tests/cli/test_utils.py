@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import common_setup
 
@@ -26,7 +27,7 @@ datasets:
       training:
         batch_size: 16
         learning_rate: 0.01
-      enable_replace_pii: false
+      replace_pii: null
 """)
     return registry_path
 
@@ -90,7 +91,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 3: An empty DatasetRegistry is created when not specified."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
             dataset_registry=None,
         )
 
@@ -99,7 +100,7 @@ class TestCommonSetupDatasetRegistry:
         # Verify the common_setup completed successfully
         assert df is not None
         assert isinstance(df, pd.DataFrame)
-        # Dataset should be loaded directly from the url
+        # Dataset should be loaded directly from the data_source
         assert list(df.columns) == ["col1", "col2"]
         assert len(df) == 2
 
@@ -111,7 +112,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 3: DatasetRegistry is created from YAML file when specified."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
             dataset_registry=str(registry_with_base_url),
         )
 
@@ -130,7 +131,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 4: Dataset is loaded by name when it exists in registry."""
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",  # Name in registry, not a file path
+            data_source="my-dataset",  # Name in registry, not a file path
             dataset_registry=str(registry_with_dataset),
         )
 
@@ -149,7 +150,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 4: Dataset URL is resolved relative to base_url."""
         settings = CLISettings.from_cli_kwargs(
-            url="test-data",  # Name in registry
+            data_source="test-data",  # Name in registry
             dataset_registry=str(registry_with_base_url),
         )
 
@@ -168,7 +169,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 5: Dataset overrides from registry are applied to config."""
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",
+            data_source="my-dataset",
             dataset_registry=str(registry_with_dataset),
         )
 
@@ -185,7 +186,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 5: CLI overrides take precedence over dataset overrides."""
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",
+            data_source="my-dataset",
             dataset_registry=str(registry_with_dataset),
             synthesis_overrides={
                 "training": {
@@ -208,7 +209,7 @@ class TestCommonSetupDatasetRegistry:
     ):
         """Test step 5: Dataset and CLI overrides are merged correctly."""
         settings = CLISettings.from_cli_kwargs(
-            url="test-data",
+            data_source="test-data",
             dataset_registry=str(registry_with_base_url),
             synthesis_overrides={
                 "training": {
@@ -252,11 +253,11 @@ generation:
         # training:
         #   batch_size: 16
         #   learning_rate: 0.01
-        # enable_replace_pii: false
+        # replace_pii: null
 
         # CLI overrides in synthesis_overrides
         settings = CLISettings.from_cli_kwargs(
-            url="my-dataset",
+            data_source="my-dataset",
             dataset_registry=str(registry_with_dataset),
             synthesis_overrides={
                 "training": {
@@ -275,7 +276,7 @@ generation:
         assert config.training.num_input_records_to_sample == 150
         assert config.generation.use_structured_generation
         # Only given in registry
-        assert not config.enable_replace_pii
+        assert config.replace_pii is None
         # Only given in CLI
         assert config.generation.num_records == 496
         # Present in config file and registry, registry takes precedence
@@ -294,7 +295,7 @@ class TestCommonSetupWithoutRegistry:
     ):
         """Test that CSV is loaded directly when no registry is specified."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
         )
 
         _, _, df, _ = common_setup(settings)
@@ -310,7 +311,7 @@ class TestCommonSetupWithoutRegistry:
     ):
         """Test that CLI overrides are applied when no registry is used."""
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
             synthesis_overrides={
                 "generation": {
                     "num_records": 100,
@@ -337,7 +338,7 @@ class TestCommonSetupReturnValues:
         from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
         settings = CLISettings.from_cli_kwargs(
-            url=str(dummy_csv),
+            data_source=str(dummy_csv),
         )
 
         result = common_setup(settings)

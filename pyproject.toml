@@ -21,7 +21,7 @@ classifiers = [
 
 
 dependencies = [
-  # "unsloth[cu128-torch290]==2025.12.4 requires datasets==4.3.0"
+  # "unsloth[cu128-torch291]==2025.12.4 requires datasets==4.3.0"
   # it only has a runtime error of course
   # so we need to pin it here
   "datasets==4.3.0",
@@ -38,6 +38,7 @@ dependencies = [
   "tqdm>=4.67.1",
   "aeon>=1.0.0",
   "wandb>=0.23.1",
+  "setuptools>=80.0.0",
 ]
 
 [dependency-groups]
@@ -58,6 +59,7 @@ dev = [
 docs = [
   "mkdocs-material",
   "mkdocstrings[python]",
+  "griffe-pydantic",
   "mkdocs-gen-files",
   "mkdocs-literate-nav",
   "mkdocs-jupyter",
@@ -76,10 +78,6 @@ test = [
 
 [project.optional-dependencies]
 
-microservices = [
-  "nemo-microservices>=1.5.0",
-]
-
 engine = [
     "anyascii",
     "pycountry",
@@ -94,8 +92,6 @@ engine = [
     "langchain-core",
     "json-repair",
     "matplotlib",
-    "numpy<2",
-    "outlines_core==0.2.13",
     "outlines>=1.0.0",
     "prv-accountant",
     "smart-open==7.0.5",
@@ -103,9 +99,9 @@ engine = [
     "pandas>=2.1.3, <3",
     "plotly",
     "ratelimit",
-    "sqlfluff==3.2.0",
+    "scikit-learn",
     "range_regex>=0.1.0",
-    "tenacity==9.1.2",
+    "tenacity==9.1.4",
     "tiktoken>=0.7.0,<1.0",
     "tldextract",
     "tqdm>=4.67.1",
@@ -124,57 +120,56 @@ engine = [
 cpu = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "flashinfer-python==0.5.3; sys_platform=='linux'",
-  "flashinfer-cubin==0.5.3; sys_platform=='linux'",
-  "faiss-cpu==1.9.0",
+  "flashinfer-python==0.6.1; sys_platform=='linux'",
+  "flashinfer-cubin==0.6.1; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1",
   "peft",
   "opacus",
   "sentence-transformers",
-  "torch==2.9.0; sys_platform == 'darwin'",
-  "torch==2.9.0+cpu; sys_platform == 'linux'",
-  "torchvision==0.24.0; sys_platform == 'darwin'",
-  "torchvision==0.24.0+cpu; sys_platform == 'linux'",
-  "torchao==0.14.1",
+  "torch==2.9.1; sys_platform == 'darwin'",
+  "torch==2.9.1+cpu; sys_platform == 'linux'",
+  "torchvision==0.24.1; sys_platform == 'darwin'",
+  "torchvision==0.24.1+cpu; sys_platform == 'linux'",
+  "torchao==0.15.0",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch290]==2025.12.4",
-  "unsloth_zoo==2025.12.4",
-  "vllm==0.11.1",
-  "xformers==0.0.33.post1; sys_platform == 'linux'",
+  "unsloth[cu128-torch291]==2025.12.4; sys_platform=='linux'",
+  "unsloth_zoo==2025.12.4; sys_platform=='linux'",
+  "vllm==0.15.0; sys_platform=='linux'",
 ]
 
 cu128 = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "faiss-gpu-cu12==1.9.0",
-  "flashinfer-python==0.5.3",
-  "flashinfer-cubin==0.5.3",
-  "flashinfer-jit-cache==0.5.3+cu128; sys_platform == 'linux'",
+  "flashinfer-python==0.6.1; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.1; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.1+cu128; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1",
-  "nvidia-ml-py",
+  "nvidia-cublas-cu12; sys_platform == 'linux'",
+  "nvidia-ml-py; sys_platform == 'linux'",
   "opacus",
   "peft",
   "sentence-transformers",
-  "torch==2.9.0+cu128; sys_platform == 'linux'",
-  "torchvision==0.24.0+cu128; sys_platform == 'linux'",
-  "torchao==0.14.1; sys_platform == 'linux'",
+  "torch==2.9.1+cu128; sys_platform == 'linux'",
+  "torch-c-dlpack-ext",
+  "torchvision==0.24.1+cu128; sys_platform == 'linux'",
+  "torchao==0.15.0; sys_platform == 'linux'",
   "transformers==4.57.3",
-  "triton>=2.0.0",
+  "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch290]==2025.12.4",
-  "unsloth_zoo==2025.12.4",
-  "vllm==0.11.1",
-  "xformers==0.0.33.post1; sys_platform == 'linux'",
+  "unsloth[cu128-torch291]==2025.12.4; sys_platform == 'linux'",
+  "unsloth_zoo==2025.12.4; sys_platform == 'linux'",
+  "vllm==0.15.0; sys_platform == 'linux'",
+  "xformers==v0.0.33.post2; sys_platform == 'linux'",
 ]
 
 # at some point, do per-subpackage dependencies
 
 [tool.uv]
-required-version = ">=0.9.14,<0.10.0"
+required-version = ">=0.9.14, <0.11.0" # Allow current 0.10.x line while staying below the next minor
 cache-keys = [
   { file = "pyproject.toml" }, { git = { commit = true, tags = true } },
   { file = "uv.lock" }
@@ -194,9 +189,9 @@ dependency-metadata = [
 
 
 override-dependencies = [
-    "outlines_core==0.2.13",                        # there's a conflict with vllm's (nss) pin on outlines_core==0.2.10 but this version works.
-    "flashinfer-python==0.5.3; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
-    "flashinfer-cubin==0.5.3; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
+    "flashinfer-python==0.6.1; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
+    "flashinfer-cubin==0.6.1; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
+    "xgrammar>=0.1.32,<1.0.0",                            # CVE-2026-25048: override vllm's pin on 0.1.29
 ]
 
 environments = [
@@ -209,7 +204,7 @@ environments = [
     "sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 
-constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
+constraint-dependencies = ["torch==2.9.1", "regex==2025.07.34", "pandas<3"]
 
 
 
@@ -229,20 +224,58 @@ constraint-dependencies = ["torch==2.9.0", "regex==2025.07.34", "pandas<3"]
     { index = "pytorch-cpu", extra="cpu" },
     { index = "pytorch-cu128", extra="cu128"},
   ]
+  flashinfer-python = [
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
+  flashinfer-cubin = [
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+  ]
   flashinfer-jit-cache = [
     { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
   ]
-
-# this is a local path to the nemo-microservices package
-# used for development purposes
-# it's not used in production.
-# it assumes the nmp repo path is ../aire/microservices/nmp
-  nemo-microservices = [
-    # { path = "../aire/microservices/nmp/sdk/python/nemo-microservices"},
-    { path = ".nmp_repo/sdk/python/nemo-microservices"},
-    # { index = "nvidia-pypi-public", extra = "microservices"}
+  nvidia-cublas-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-cuda-cupti-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-cuda-nvrtc-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-cuda-nvprof-cu12 = [
+    { index = "pytorch-cu128" },
   ]
 
+  nvidia-cuda-runtime-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+
+  nvidia-cuda-nvml-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+
+
+  nvidia-cudnn-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-cusparse-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-cusparselt-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-nccl-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-nvjitlink-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-nvshmem-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
+  nvidia-nvtx-cu12 = [
+    { index = "pytorch-cu128" },
+  ]
 
 
 [[tool.uv.index]]
@@ -270,6 +303,7 @@ explicit = true
 name = "nvidia-pypi-public"
 url = "https://pypi.nvidia.com"
 explicit = true
+
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
@@ -303,42 +337,10 @@ safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
 # Below is a list of excluded directories from ty typechecks.
 exclude = [
     ".uv_cache", # Cache Dir in CI
+    "./docs/**/*.ipynb",
     "./src/nemo_safe_synthesizer/artifacts/",
     "./src/nemo_safe_synthesizer/pii_replacer/",
     "./tests/",
     "./tools/",
-]
-
-[tool.vendor-package]
-package = "nemo_safe_synthesizer"
-target_sdk_module = "beta.safe_synthesizer"
-sdk_optional_dependencies_name = "safe-synthesizer"
-included_paths = [
-  "config/",
-  "configurator/",
-  "data_processing/record_utils.py",
-  "data_processing/dataset.py",
-  "data_processing/stats.py",
-  "holdout/",
-  "sdk/__init__.py",
-  "sdk/config_builder.py",
-  "sdk/job_builder.py",
-  "sdk/job.py",
-  "sdk/library_builder.py",
-  "sdk/datastore.py",
-  "__init__.py",
-  "errors.py",
-  "observability.py",
-  "defaults.py",
-  "utils.py",
-  "cli/settings.py",
-  "cli/artifact_structure.py",
-]
-vendor_tests = true
-tests_path = "tests"
-tests_included_paths = [
-    "config/",
-    "configurator/",
-    "__init__.py",
-    "conftest.py",
+    "./script/slurm/nss_top.py",
 ]

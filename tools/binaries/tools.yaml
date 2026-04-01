@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Tool definitions for bootstrap_tools.sh
 # Supported platforms: darwin (arm64, amd64), linux (arm64, amd64)
 #
@@ -60,6 +63,14 @@ tools:
       arm64: "aarch64"
       amd64: "x86_64"
     bootstrap: true
+
+  gh:
+    version: "2.87.0"
+    check_command: "gh --version"
+    url: "https://github.com/cli/cli/releases/download/v{version}/gh_{version}_{os}_{arch}.tar.gz"
+    extract: "gh_{version}_{os}_{arch}/bin/gh"
+    os_map:
+      darwin: "macOS"
 
 # Tools with custom install scripts (complex logic)
 custom_scripts:

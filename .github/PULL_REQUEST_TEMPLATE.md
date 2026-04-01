@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 <!-- Thank you for contributing to Safe Synthesizer! -->
 
 # Summary
@@ -10,10 +13,11 @@
 
 Ensure that the following pass:
 
-- [ ] `make format && make lint` or via prek validation.
+- [ ] `make format && make check` or via prek validation.
 - [ ] `make test` passes locally
-- [ ] `make e2e` passes locally
+- [ ] `make test-e2e` passes locally
 - [ ] `make test-ci-container` passes locally (recommended)
+- [ ] GPU CI status check passes -- comment `/sync` on this PR to trigger a run (auto-triggers on ready-for-review)
 
 ## Pre-Merge Checklist
 

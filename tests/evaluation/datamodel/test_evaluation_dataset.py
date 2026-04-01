@@ -3,6 +3,7 @@
 
 import pandas as pd
 import pytest
+
 from nemo_safe_synthesizer.artifacts.analyzers.field_features import (
     FieldType,
 )

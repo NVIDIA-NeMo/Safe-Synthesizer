@@ -48,7 +48,6 @@ jobs:
         with:
           fetch-depth: 0
           bootstrap-tools: "true"
-          python-version: "3.11"
 
       - name: Install docs dependencies
         run: make bootstrap-nss dev

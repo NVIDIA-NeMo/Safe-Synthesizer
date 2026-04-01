@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Metadata fragment assembly for NER-annotated records.
+
+Provides ``Metadata`` and ``MetadataFragment`` for aggregating per-field NER
+predictions, along with helpers to merge fragments, build entity maps, and
+produce API-compatible response dicts.
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,14 +16,13 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Tuple, Union
 
 from ...pii_replacer.ner.entity import Score
 from ...pii_replacer.ner.predictor import NERPrediction
 
 
 class MetadataError(Exception):
-    pass
+    """Raised when metadata fragments cannot be merged (e.g., mismatched IDs)."""
 
 
 SCORE_HIGH = "score_high"
@@ -27,45 +33,66 @@ E2F = "fields_by_entity"
 
 @dataclass
 class Metadata:
-    """
-    Represents record metadata
-    fields have an internal structure of
-        field_name:
-            fragment_name:
-                metadata_type: [meta_data]
+    """Merged record metadata aggregated from one or more ``MetadataFragment`` objects.
+
+    The ``fields`` dict has the structure::
+
+        field_name -> fragment_name -> metadata_type -> [metadata_items]
     """
 
-    gretel_id: str
+    record_id: str
+
     fields: dict
+    """Nested dict of per-field, per-fragment metadata."""
+
     entities: dict
+    """Entity map produced by ``predictions_to_dict``."""
+
     received_at: str
+    """ISO-8601 timestamp of the earliest fragment."""
 
     def as_dict(self):
+        """Serialize to a plain dictionary."""
         return self.__dict__
 
 
 @dataclass
 class MetadataFragment:
-    gretel_id: str
-    gretel_fragment_ts: str
-    gretel_fragment_epoch: float
+    """A single annotation pass over a record (e.g., one NER model's output).
+
+    Fragments are later merged via ``merge_fragments`` into a single
+    ``Metadata`` object per record.
+
+    Args:
+        record_id: Unique identifier for the source record.
+        fragment_ts: ISO-8601 timestamp string.
+        fragment_epoch: Unix epoch of the fragment creation.
+        fragment_name: Identifier for this annotation pass (e.g., ``"ner"``).
+    """
+
+    record_id: str
+    fragment_ts: str
+    fragment_epoch: float
     fragment_name: str
 
     def __post_init__(self):
         self.fields = defaultdict(lambda: defaultdict(list))
 
     @property
-    def gretel_fragment_datetime(self) -> datetime:
-        return datetime.fromtimestamp(self.gretel_fragment_epoch)
+    def fragment_datetime(self) -> datetime:
+        """Fragment creation time as a ``datetime`` object."""
+        return datetime.fromtimestamp(self.fragment_epoch)
 
-    def add_field_data(self, field_name: str, metadata_type: str, field_data: Union[dict, List]):
-        """
-        Adds field data by type to the model_metadata fragment
+    def add_field_data(self, field_name: str, metadata_type: str, field_data: dict | list):
+        """Append metadata entries for a field.
+
         Args:
-            field_name - the name of the field to add model_metadata for
-            metadata_type - the type of model_metadata the data represents
-            field_data - object or list of objects to associate with
-                the model_metadata fragment.
+            field_name: Name of the field to annotate.
+            metadata_type: Category of metadata (e.g., ``"labels"``).
+            field_data: A dict (single entry) or list of entries to add.
+
+        Raises:
+            TypeError: If ``field_data`` is neither a dict nor a list.
         """
         if isinstance(field_data, list):
             self.fields[field_name][metadata_type].extend(field_data)
@@ -75,68 +102,76 @@ class MetadataFragment:
             raise TypeError("field_data must be a dict or list, got ", type(field_data))
 
     def as_dict(self):
+        """Serialize to a plain dictionary."""
         return self.__dict__
 
 
 def merge_fragments(*fragments, ts: str | None = None) -> Metadata:
-    """
-    Reduces a list of fragments to a single `Metadata` object.
+    """Merge one or more ``MetadataFragment`` objects into a single ``Metadata``.
+
     Args:
-        *fragments: a list of MetadataFragments to merge
+        *fragments: Fragments to merge. All must share the same ``gretel_id``.
+        ts: Override timestamp for ``received_at``. Defaults to the earliest
+            fragment timestamp.
+
     Returns:
-        a single Metadata object with all fragments merged
+        A single ``Metadata`` object with all fragment data merged.
+
     Raises:
-        MetadataError if all input fragments don't correspond to the
-            same id.
+        MetadataError: If the fragments have different ``gretel_id`` values.
     """
-    if len(set([fragment.gretel_id for fragment in fragments])) != 1:
-        raise MetadataError("cannot merge fragments from different gretel records")
+    if len(set([fragment.record_id for fragment in fragments])) != 1:
+        raise MetadataError("cannot merge fragments from different records")
     else:
-        gretel_id = fragments[0].gretel_id
+        record_id = fragments[0].record_id
 
     # todo(dn): there might be a better way to build up this object
     merged_fragment = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    ts = ts or min([f.gretel_fragment_datetime for f in fragments]).isoformat() + "Z"
+    ts = ts or min([f.fragment_datetime for f in fragments]).isoformat() + "Z"
     fragment: MetadataFragment
     for fragment in fragments:
         for field_name, field_data in fragment.fields.items():
             for meta_type, meta_data in field_data.items():
                 merged_fragment[field_name][fragment.fragment_name][meta_type].extend(meta_data)
-    return Metadata(gretel_id=gretel_id, fields=merged_fragment, received_at=ts, entities={})
+    return Metadata(record_id=record_id, fields=merged_fragment, received_at=ts, entities={})
 
 
-def fragment_for_record(gretel_id: str, fragment_name: str) -> MetadataFragment:
+def fragment_for_record(record_id: str, fragment_name: str) -> MetadataFragment:
+    """Create a new ``MetadataFragment`` timestamped to the current time."""
     epoch = time.time()
     ts = datetime.fromtimestamp(epoch).isoformat() + "Z"
     return MetadataFragment(
-        gretel_id=gretel_id,
-        gretel_fragment_epoch=epoch,
-        gretel_fragment_ts=ts,
+        record_id=record_id,
+        fragment_epoch=epoch,
+        fragment_ts=ts,
         fragment_name=fragment_name,
     )
 
 
 def predictions_to_dict(
-    predictions: List[NERPrediction],
+    predictions: list[NERPrediction],
     *,
     high_score: float = Score.HIGH,
     med_score: float = Score.MED,
-) -> Tuple[dict, dict]:
-    """
-    Reduces a list of prediction results into a single dict by field key. Also
-    creates an entity mapping to easily find entity data about a record.
-    Schema for entity map::
+) -> tuple[dict, dict]:
+    """Aggregate NER predictions into per-field results and an entity map.
+
+    Groups predictions by field and builds a score-bucketed entity map::
+
         {
-            "score_high": ["ip_address", "..."],
+            "score_high": ["ip_address", ...],
             "score_med": [],
             "score_low": [],
-            "fields_by_entity: {
-                "ip_address": ["conn_str"]
-            }
+            "fields_by_entity": {"ip_address": ["conn_str"]},
         }
+
+    Args:
+        predictions: List of NER prediction objects.
+        high_score: Minimum score threshold for the ``score_high`` bucket.
+        med_score: Minimum score threshold for the ``score_med`` bucket.
+
     Returns:
-        A tuple with a dict of field prediction results by field key and a mapping
-        entities to their fields and a list of all entities seen in the record.
+        A tuple of (predictions_by_field, entity_map).
     """
     entity_map = {
         SCORE_HIGH: set(),
@@ -179,14 +214,24 @@ def predictions_to_dict(
 
 def fragment_from_ner_predictions(
     fragment_name: str,
-    predictions: List[NERPrediction],
-    gretel_id: str,
-) -> Tuple[MetadataFragment, dict]:
+    predictions: list[NERPrediction],
+    record_id: str,
+) -> tuple[MetadataFragment, dict]:
+    """Build a ``MetadataFragment`` and entity map from NER predictions.
+
+    Args:
+        fragment_name: Identifier for this annotation pass (e.g., ``"ner"``).
+        predictions: List of NER predictions to aggregate.
+        gretel_id: Unique identifier for the source record.
+
+    Returns:
+        A tuple of (fragment, entity_map).
+    """
     epoch = time.time()
     fragment = MetadataFragment(
-        gretel_id=gretel_id,
-        gretel_fragment_ts=datetime.fromtimestamp(epoch).isoformat() + "Z",
-        gretel_fragment_epoch=epoch,
+        record_id=record_id,
+        fragment_ts=datetime.fromtimestamp(epoch).isoformat() + "Z",
+        fragment_epoch=epoch,
         fragment_name=fragment_name,
     )
     preds_by_field, ent_map = predictions_to_dict(predictions)
@@ -196,7 +241,8 @@ def fragment_from_ner_predictions(
     return fragment, ent_map
 
 
-def build_ner_metadata(preds: List[dict]) -> Metadata:
+def build_ner_metadata(preds: list[dict]) -> Metadata:
+    """Construct a ``Metadata`` object from raw prediction dicts."""
     preds = [NERPrediction.from_dict(p) for p in preds]
     fragment, ent_map = fragment_from_ner_predictions(
         "ner",
@@ -208,7 +254,17 @@ def build_ner_metadata(preds: List[dict]) -> Metadata:
     return meta.as_dict()
 
 
-def create_ner_api_response(records: List[dict], predictions: List[dict], pure_dict: bool = False) -> List[dict]:
+def create_ner_api_response(records: list[dict], predictions: list[dict], pure_dict: bool = False) -> list[dict]:
+    """Build an API-compatible list of ``{data, model_metadata}`` dicts.
+
+    Args:
+        records: Raw record dictionaries.
+        predictions: Per-record NER prediction lists (parallel with ``records``).
+        pure_dict: If True, round-trip through JSON to eliminate non-dict types.
+
+    Returns:
+        List of dicts, each containing ``data`` and ``model_metadata`` keys.
+    """
     out = [
         {"data": record, "model_metadata": build_ner_metadata(prediction)}
         for record, prediction in zip(records, predictions)
