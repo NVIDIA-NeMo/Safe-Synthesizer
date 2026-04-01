@@ -8,9 +8,10 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Prerequisites
 
-- Python 3.11+ (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any supported 3.11+ interpreter is fine)
+- Python 3.11–3.13 (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because ray, a transitive dependency of vLLM, does not yet publish `cp314` wheels)
 - [uv](https://docs.astral.sh/uv/) - Python package manager (>=0.9.14, <0.11.0)
 - NVIDIA GPU (A100 or larger) for training and generation
+- **Linux only** -- macOS and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
 
 ### Installation
 

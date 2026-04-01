@@ -18,6 +18,12 @@ does at each stage.
 - CUDA runtime 12.8
 - NVIDIA GPU (A100 or larger) for training and generation
 
+!!! failure "macOS and Apple Silicon are not supported"
+    NeMo Safe Synthesizer requires a machine with an NVIDIA GPU and CUDA 12.8
+    to run the training and generation pipeline. The [CPU install tab below](#install-the-package)
+    is for development and configuration validation only -- it cannot train models or
+    generate synthetic data.
+
 ### Install the Package
 
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
