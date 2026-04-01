@@ -33,7 +33,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --url /workspace/data/input.csv
+  run --data-source /workspace/data/input.csv
 
 
 # Run with a test dataset
@@ -42,7 +42,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --url /workspace/data/clinc_oos.csv
+  run --data-source /workspace/data/clinc_oos.csv
 
 # Run the full pipeline with a config file
 docker run --gpus all --shm-size=1g \
@@ -50,7 +50,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --config /workspace/data/config.yaml --url /workspace/data/input.csv
+  run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv
 
 # Interactive shell (mount your data, override entrypoint)
 docker run -it --gpus all --shm-size=1g \
@@ -72,7 +72,7 @@ Key flags:
 - `-v HOST:CONTAINER` -- bind-mount data and HF cache; Docker requires absolute paths (use `$(pwd)` to expand relative ones)
 - `-e HF_HOME=...` -- persist model downloads across container runs
 - `-e HF_TOKEN=...` -- Hugging Face token for gated models (Llama, Mistral, etc.)
-- `-e NIM_API_KEY=...` -- NIM endpoint key for PII classification (optional, only when `NIM_ENDPOINT_URL` is set)
+- `-e NSS_INFERENCE_KEY=...` -- inference API key for PII column classification (optional; `NSS_INFERENCE_ENDPOINT` defaults to the NVIDIA integrate URL if unset)
 - `-e WANDB_API_KEY=...` -- WandB API key for experiment tracking (optional)
 - `--user "$(id -u):$(id -g)"` -- match host uid if you get "Permission denied" writing artifacts
 

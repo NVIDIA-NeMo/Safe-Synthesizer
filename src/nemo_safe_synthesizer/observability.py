@@ -29,14 +29,16 @@ application's logging configuration.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import inspect
 import logging
 import os
 import sys
+import threading
 import time
 import warnings
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Generator, MutableMapping
 from datetime import datetime
 from enum import Enum
 from functools import wraps
@@ -76,6 +78,7 @@ __all__ = [
     "traced_runtime",
     "traced_system",
     "traced_backend",
+    "heartbeat",
 ]
 
 
@@ -93,7 +96,6 @@ PACKAGES_TO_SET_TO_WARN = [
     "arrow",
     "bitsandbytes",
     "datasets",
-    "faiss",
     "httpx",
     "matplotlib",
     "nvidia",
@@ -122,13 +124,22 @@ class NSSObservabilitySettings(BaseSettings):
 
     @field_validator("nss_log_format", mode="before")
     @classmethod
-    def set_log_format_default(cls, value: str | None) -> str:
-        """Set nss_log_format default based on whether stdout is a tty at instantiation time."""
+    def set_log_format_default(cls, value: str | None) -> Literal["json", "plain"]:
+        """Set nss_log_format default based on whether stdout is a tty or notebook."""
         match value:
             case str():
                 return value.lower()
+            case _ if sys.stdout.isatty():
+                return "plain"
             case _:
-                return "plain" if sys.stdout.isatty() else "json"
+                try:
+                    from IPython import get_ipython
+
+                    if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
+                        return "plain"
+                except (ImportError, AttributeError):
+                    pass
+                return "json"
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
@@ -214,9 +225,9 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
             # need special formatting (e.g., the "loss", "eval_loss" exclusion list).
             if isinstance(value, float):
                 if key not in ("loss", "eval_loss") and value < 1 and value > 0:
-                    display_value = f"{value:.3%}"
+                    display_value = f"{value:.2%}"
                 else:
-                    display_value = f"{value:.3f}"
+                    display_value = f"{value:.2f}"
             else:
                 display_value = str(value)
             table.add_row(display_key, display_value)
@@ -937,3 +948,52 @@ def traced_system(name: str | None = None, **kwargs) -> TracedContext:
 def traced_backend(name: str | None = None, **kwargs) -> TracedContext:
     """Log a backend operation."""
     return traced(name=name, category=LogCategory.BACKEND, **kwargs)
+
+
+@contextlib.contextmanager
+def heartbeat(
+    message: str,
+    interval: float = 60.0,
+    *,
+    logger_name: str | None = None,
+    **extra_fields,
+) -> Generator[None, None, None]:
+    """Context manager that logs a periodic heartbeat during a long-running operation.
+
+    Args:
+        message: Description of the operation (e.g. "Model loading", "Generation").
+        interval: Seconds between heartbeat log messages.
+        logger_name: Logger name (pass ``__name__`` so heartbeat logs attribute
+            to the calling module).
+        **extra_fields: Additional structured fields passed to the logger
+            (e.g. ``model="SmolLM3"``).
+    """
+    if interval <= 0:
+        raise ValueError(f"heartbeat interval must be positive, got {interval}")
+    _logger = get_logger(logger_name or __name__)
+    stop = threading.Event()
+    start = time.monotonic()
+
+    def _extra() -> dict:
+        return {"elapsed_seconds": round(time.monotonic() - start, 1), **extra_fields}
+
+    def _run() -> None:
+        while not stop.wait(timeout=interval):
+            _logger.info(f"{message} in progress", extra={"ctx": _extra()})
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    exc: BaseException | None = None
+    try:
+        yield
+    except BaseException as e:
+        exc = e
+        raise
+    finally:
+        stop.set()
+        thread.join(timeout=1)
+        if exc is not None:
+            ctx = {**_extra(), "error_type": type(exc).__name__}
+            _logger.error(f"{message} failed", extra={"ctx": ctx})
+        else:
+            _logger.info(f"{message} complete", extra={"ctx": _extra()})

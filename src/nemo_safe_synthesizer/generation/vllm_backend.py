@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from functools import partial
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 from transformers import TypicalLogitsWarper
@@ -30,7 +31,7 @@ from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import cleanup_memory, get_max_vram
-from ..observability import get_logger
+from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
 logger = get_logger(__name__)
@@ -204,15 +205,16 @@ class VllmBackend(GeneratorBackend):
         # check this when updating unsloth in the future.
         enforce_eager = self.config.training.use_unsloth is True
 
-        self.llm = vLLM(
-            model=self.config.training.pretrained_model,
-            gpu_memory_utilization=max_vram,
-            enable_lora=True,
-            max_lora_rank=self.config.training.lora_r,
-            structured_outputs_config=structured_outputs_config,
-            enforce_eager=enforce_eager,
-            attention_config=attention_config,
-        )
+        with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
+            self.llm = vLLM(
+                model=self.config.training.pretrained_model,
+                gpu_memory_utilization=max_vram,
+                enable_lora=True,
+                max_lora_rank=self.config.training.lora_r,
+                structured_outputs_config=structured_outputs_config,
+                enforce_eager=enforce_eager,
+                attention_config=attention_config,
+            )
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -318,9 +320,10 @@ class VllmBackend(GeneratorBackend):
 
         for param, val in kwargs.items():
             if action := api_mapping.get(param):
-                logger.info(f"updating {param} from {val}")
-                param, val = action(val)
-                logger.info(f"updated {param} to {val}")
+                new_param, new_val = action(val)
+                if new_param != param or new_val != val:
+                    logger.info(f"remapped {param}={val} -> {new_param}={new_val}")
+                param, val = new_param, new_val
 
             # Skip parameters that were mapped to None (signals exclusion)
             if param is not None:
@@ -345,6 +348,7 @@ class VllmBackend(GeneratorBackend):
         sampling_params = self._transform_kwargs_to_sampling_params(kwargs, api_mapping)
 
         real_params = SamplingParams(**sampling_params)
+        logger.debug(f"SamplingParams: {real_params!r}")
 
         # Create a partially parametrized version of the underlying vllm.LLM.generate
         # method that is immediately callable downstream.
@@ -354,13 +358,14 @@ class VllmBackend(GeneratorBackend):
             self.llm.generate,
             sampling_params=real_params,
             lora_request=self.lora_req,
-            use_tqdm=False,
+            # Show vLLM's tqdm progress bar only when debug logging is enabled.
+            use_tqdm=logger.isEnabledFor(logging.DEBUG),
         )
 
     def _generate(
         self,
         prompts: str | list[str] | None = None,
-        input_ids: torch.TensorType | list[list[int]] | None = None,
+        input_ids: torch.TensorType | list[int] | list[list[int]] | None = None,
         **kwargs,
     ) -> list[RequestOutput]:
         """Dispatch a generation call to the underlying vLLM engine.
@@ -369,7 +374,8 @@ class VllmBackend(GeneratorBackend):
 
         Args:
             prompts: Text prompts to generate from.
-            input_ids: Pre-tokenized prompt IDs (tensor or nested list).
+            input_ids: Pre-tokenized prompt IDs (tensor, flat list for a
+                single prompt, or nested list for multiple prompts).
 
         Returns:
             List of vLLM ``RequestOutput`` objects.
@@ -391,18 +397,25 @@ class VllmBackend(GeneratorBackend):
             case {"sampling_params": _, **rest_}:  # noqa: F841
                 result = None
                 match input_ids:
-                    case torch.Tensor(data=ids):
-                        result = self._gen_method(prompt_token_ids=ids.tolist())
-                    # read the below as:
-                    # if the ids passed are a list of a list of ints
-                    case [*ids] if all_equal_type(ids, int):
-                        result = self._gen_method(prompt_token_ids=ids)
+                    case torch.Tensor():
+                        logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
+                        result = self._gen_method(prompt_token_ids=input_ids.tolist())
+                    case [[*_inner], *_] if all_equal_type(input_ids, int):
+                        assert isinstance(input_ids, list)
+                        logger.debug(f"vllm generate: prompt_token_ids ({len(input_ids)} prompts)")
+                        result = self._gen_method(prompt_token_ids=input_ids)
+                    case [*ids] if all_equal_type(ids, int, flatten_iter=False):
+                        logger.debug("vllm generate: prompt_token_ids (single flat list)")
+                        result = self._gen_method(prompt_token_ids=[ids])
                     case None:
+                        logger.debug(
+                            f"vllm generate: processing {len(prompts) if isinstance(prompts, list) else 1} prompts"
+                        )
                         return self._gen_method(prompts=prompts)
                     case _:
                         raise ValueError("input_ids are not a tensor, list, or None!")
 
-                return cast(list[RequestOutput], [r.outputs[0].text for r in result])
+                return result
             case _:
                 raise ValueError("input ids are not a tensor or list!")
 
@@ -422,16 +435,24 @@ class VllmBackend(GeneratorBackend):
         Returns:
             Batch object that contains the generated records and associated statistics.
         """
-        logger.debug("prompt: ", self.prompt)
+        logger.debug(f"generation prompt ({len(self.prompt)} chars):\n{self.prompt}")
         prompt_list = [self.prompt] * num_prompts_per_batch
 
         # `n` is the number of output sequences per prompt.
         # Subsequent processing assumes `n=1`, so we hardcode it here.
         sampling_kwargs.update({"n": 1})
 
-        for idx, output in enumerate(self._generate(prompts=prompt_list, **sampling_kwargs)):
-            logger.debug(f"output: {output.outputs[0].text}")
-            batch.process(idx, output.outputs[0].text)
+        outputs = self._generate(prompts=prompt_list, **sampling_kwargs)
+
+        for idx, output in enumerate(outputs):
+            out = output.outputs[0]
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"prompt {idx}: {len(out.token_ids)} tokens, "
+                    f"finish_reason={out.finish_reason}, "
+                    f"stop_reason={out.stop_reason}"
+                )
+            batch.process(idx, out.text)
 
         return batch
 
@@ -502,8 +523,9 @@ class VllmBackend(GeneratorBackend):
             max_tokens=self.model_metadata.max_seq_length,
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,
-            ignore_eos=need_special_token_outputs,
+            ignore_eos=False,
         )
+
         self.prepare_params(**sampling_kwargs)
 
         # The batches object collects batches and keeps track of the stopping condition.
@@ -514,32 +536,38 @@ class VllmBackend(GeneratorBackend):
             data_actions_fn=data_actions_fn,
         )
 
-        while batches.num_valid_records < self.config.generation.num_records:
-            # Generate a batch from prompts and process the responses.
-            start_time = time.perf_counter()
-            batch: Batch = self._generate_batch(
-                num_prompts_per_batch=batches.get_next_num_prompts(),
-                batch=Batch(processor=self.processor),
-                **sampling_kwargs,
-            )
-            duration = time.perf_counter() - start_time
-            batches.add_batch(batch)
+        with heartbeat(
+            "Generation",
+            logger_name=__name__,
+            target_records=self.config.generation.num_records,
+        ):
+            while batches.num_valid_records < self.config.generation.num_records:
+                # Generate a batch from prompts and process the responses.
+                num_prompts = batches.get_next_num_prompts()
+                start_time = time.perf_counter()
+                batch: Batch = self._generate_batch(
+                    num_prompts_per_batch=num_prompts,
+                    batch=Batch(processor=self.processor),
+                    **sampling_kwargs,
+                )
+                duration = time.perf_counter() - start_time
+                batches.add_batch(batch)
 
-            # Log generation summary and progress.
-            batch.log_summary(detailed_errors=self.use_detailed_logs)
-            self._log_batch_timing_and_progress(
-                batch=batch,
-                duration=duration,
-                num_records=self.config.generation.num_records,
-                num_valid_records=batches.num_valid_records,
-                batches=batches,
-            )
-            # Check if the generation job should stop.
-            if batches.status in [
-                GenerationStatus.STOP_NO_RECORDS,
-                GenerationStatus.STOP_METRIC_REACHED,
-            ]:
-                break
+                # Log generation summary and progress.
+                batch.log_summary(detailed_errors=self.use_detailed_logs)
+                self._log_batch_timing_and_progress(
+                    batch=batch,
+                    duration=duration,
+                    num_records=self.config.generation.num_records,
+                    num_valid_records=batches.num_valid_records,
+                    batches=batches,
+                )
+                # Check if the generation job should stop.
+                if batches.status in [
+                    GenerationStatus.STOP_NO_RECORDS,
+                    GenerationStatus.STOP_METRIC_REACHED,
+                ]:
+                    break
 
         batches.job_complete()
         batches.log_status()

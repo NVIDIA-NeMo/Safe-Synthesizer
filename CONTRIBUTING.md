@@ -19,6 +19,9 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Testing](#testing)
 - [Code Style](#code-style)
 - [Documentation](#documentation)
+- [AI Agents](#ai-agents)
+- [Releasing](#releasing)
+- [NMP Integration](#nmp-integration)
 
 ## Getting Started
 
@@ -191,10 +194,6 @@ git rebase --force-rebase --gpg-sign --signoff upstream/main
 
 git push --force-with-lease
 ```
-
-### NMP Integration
-
-NeMo Safe Synthesizer is a standalone package. Changes flow into NMP via Artifactory publishing and vendor packaging. See the [NMP Integration](README.md#nmp-integration) section of the README for details on publishing, SDK vendoring, and local development workflows.
 
 ## Repository Settings
 
@@ -406,17 +405,22 @@ See the full [DCO](DCO) file for details.
 
 ## Testing
 
+See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and usage.
+
 ### Running Tests
 
 ```bash
-# Run unit tests (excludes slow and e2e)
+# Run unit tests (excludes slow unit tests, smoke and e2e)
 make test
 
-# Run all tests including slow tests (excludes e2e)
-make test-slow
+# Run all unit tests including slow tests (excludes smoke and e2e)
+make test-unit-slow
 
-# Run GPU integration tests (requires CUDA)
-make test-gpu-integration
+# Run CPU smoke tests (~10 seconds, no GPU required)
+make test-smoke
+
+# Run GPU smoke tests (requires CUDA)
+make test-smoke-gpu
 
 # Run end-to-end tests (requires CUDA)
 make test-e2e
@@ -431,9 +435,12 @@ make test-ci-container
 uv run pytest tests/cli/test_run.py
 ```
 
-### GPU E2E Tests (CI)
+### GPU Tests (CI)
 
-GPU E2E tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment.
+GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
+
+- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2, Unsloth). Required for merge.
+- GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
 
 When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
 
@@ -568,13 +575,88 @@ This project supports AI coding assistants. Configuration is layered so that con
 | `AGENTS.local.md` | All agents | Local developer preferences (git-ignored) |
 | `CLAUDE.md` | Claude Code | Entry point; references `AGENTS.md` and `AGENTS.local.md` |
 | `.cursor/rules/*.mdc` | Cursor only | Workflow rules, style enforcement, file-pattern triggers |
-| `.agent/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
-| `.cursor/skills/` | Cursor only | Symlinks to `.agent/skills/` for Cursor discoverability |
+| `.agents/skills/*/SKILL.md` | All agents (via skills index in `AGENTS.md`) | Domain-specific knowledge (testing, sync, typing, etc.) |
+| `.cursor/skills/` | Cursor only | Symlinks to `.agents/skills/` for Cursor discoverability |
 | `src/**/AGENTS.md`, `tests/AGENTS.md` | All agents | Per-module guides for non-obvious patterns and gotchas |
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
 Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
+
+## Releasing
+
+Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, and optionally publishes to the real PyPI and creates a GitHub release.
+
+### 1. Create and push a tag
+
+Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For release candidates, use the `rcN` pre-release suffix:
+
+```bash
+# Stable release
+git tag 0.1.0 <commit-sha>
+
+# Release candidate
+git tag 0.1.0rc1 <commit-sha>
+
+git push origin <tag>
+```
+
+### 2. Run the workflow
+
+Trigger the workflow from the GitHub UI or via `gh`:
+
+**GitHub UI:** Go to **Actions → Release NeMo Safe Synthesizer → Run workflow** and fill in the inputs.
+
+**CLI:**
+
+```bash
+gh workflow run release.yml \
+  --field release-ref=<tag> \
+  --field dry-run=true \
+  --field create-gh-release=false
+```
+
+### 3. Inputs
+
+| Input | Description | Default |
+|---|---|---|
+| `release-ref` | Full SHA or tag to build from | required |
+| `dry-run` | Publish to Test PyPI only; skip real PyPI | `true` |
+| `create-gh-release` | Create a GitHub release and attach the wheel | `true` |
+
+**Dry-run mode** (default): builds the wheel and publishes it to [Test PyPI](https://test.pypi.org/) only. Use this to verify the package before a real release. The workflow always publishes to Test PyPI regardless of `dry-run`.
+
+**Real release**: uncheck `dry-run` (or pass `--field dry-run=false`) to also publish to the real [PyPI](https://pypi.org/). Pre-release tags (`rc`, `alpha`, `beta`, `.dev`) are automatically marked as pre-releases on both PyPI and GitHub.
+
+## NMP Integration
+
+NeMo Safe Synthesizer is developed as a standalone package and published to PyPI and optionally published to the internal NVIDIA Artifactory. The NeMo Platform (NMP) consumes it as an external dependency.
+
+### Publishing to Artifactory
+
+The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
+
+```bash
+make publish-internal
+```
+
+This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
+
+### Local Development with NMP
+
+The NMP service (`services/safe-synthesizer/pyproject.toml` in the NVIDIA internal `nmp` repo) pulls `nemo-safe-synthesizer` from the `nv-shared-pypi-local` Artifactory index. It's used with a wrapper package called `safe-synthesizer-sdk`.
+
+When iterating on NSS changes that need to be tested in the NMP service, use the Makefile targets in the NMP repo's `services/safe-synthesizer/` directory:
+
+```bash
+# In the NMP repo, from services/safe-synthesizer/
+make use-nss-local          # Build local wheel and patch pyproject.toml
+make use-nss-artifactory    # Revert to Artifactory (always do this before committing)
+```
+
+See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
+
+Run `make help` to see all available Makefile targets.
 
 ---
 

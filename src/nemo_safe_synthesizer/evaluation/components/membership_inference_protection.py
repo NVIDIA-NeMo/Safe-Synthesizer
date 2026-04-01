@@ -22,17 +22,9 @@ from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
 from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
 from ...evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
+from ...evaluation.nearest_neighbors import NearestNeighborSearch
 from ...observability import get_logger
 from . import multi_modal_figures as figures
-
-faiss_available = False
-try:
-    import faiss
-
-    faiss_available = True
-except (ImportError, ModuleNotFoundError):
-    pass
-
 
 logger = get_logger(__name__)
 
@@ -80,9 +72,6 @@ class MembershipInferenceProtection(Component):
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> MembershipInferenceProtection:
         """Run the membership inference attack and return the protection score."""
-        if not faiss_available:
-            return MembershipInferenceProtection(score=EvaluationScore())
-
         score, attack_sum_df, tps_values, fps_values = MembershipInferenceProtection.mia(
             df_train=evaluation_dataset.reference,
             df_synth=evaluation_dataset.output,
@@ -250,7 +239,7 @@ class MembershipInferenceProtection(Component):
         df_train_norm: pd.DataFrame,
         df_test_norm: pd.DataFrame,
         df_synth_norm: pd.DataFrame,
-        index: faiss.IndexFlatL2 | None,
+        nn_index: NearestNeighborSearch | None,
         run: int,
         text_cnt: int,
         tabular_cnt: int,
@@ -264,14 +253,14 @@ class MembershipInferenceProtection(Component):
 
         Builds an attack dataset from a slice of training rows mixed with
         test rows, computes nearest-neighbor distances to the synthetic
-        data (text via semantic search, tabular via FAISS L2), and
+        data (text via semantic search, tabular via L2 nearest neighbor), and
         classifies each record as member or non-member.
 
         Args:
             df_train_norm: Normalized training dataframe.
             df_test_norm: Normalized holdout (test) dataframe.
             df_synth_norm: Normalized synthetic dataframe.
-            index: Pre-built FAISS L2 index over the tabular columns of
+            nn_index: Pre-built NearestNeighborSearch index over the tabular columns of
                 the synthetic data, or ``None`` if no tabular columns exist.
             run: Zero-based run index controlling which training slice to use.
             text_cnt: Number of text columns in the dataset.
@@ -335,18 +324,16 @@ class MembershipInferenceProtection(Component):
                 attacker_data_tabular = real_data.copy()
                 k = 1
 
-            if index is None:
-                raise RuntimeError("faiss index not provided for MIA calculation when expected.")
+            if nn_index is None:
+                raise RuntimeError("Nearest neighbor index not provided for MIA calculation when expected.")
 
-            # This usage matches documentation despite type annotation for
-            # IndexFlatL2.search, possibly related to swig handling that ty is
-            # not aware of. Similar for other calls for faiss indexes.
-            dists, indices = index.search(
-                np.float32(np.ascontiguousarray(np.array(attacker_data_tabular))),
-                len(df_synth_norm),
+            # Use nearest neighbor search (torch GPU or sklearn CPU fallback) for distance calculation
+            dists, indices = nn_index.kneighbors(
+                np.ascontiguousarray(np.array(attacker_data_tabular)).astype(np.float32),
+                n_neighbors=int(k),
             )
             # Scale the Euclidean distance to [0,1]
-            dists = np.sqrt(dists)
+            # NearestNeighborSearch.kneighbors() returns L2 distance directly, not squared
             max_dist = np.amax(dists)
             if max_dist > 0:
                 dist_scaled = dists / max_dist
@@ -556,15 +543,14 @@ class MembershipInferenceProtection(Component):
                     df_train_norm, df_test_norm, df_synth_norm = MembershipInferenceProtection._normalize_onehot(
                         df_train_use, df_test, df_synth
                     )
-                # Create the faiss index on the synthetic tabular data
-                dim = df_synth_norm.shape[1]
-                index = faiss.IndexFlatL2(dim)
-                index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))
+                # Create nearest neighbor index on the synthetic tabular data (torch GPU or sklearn CPU fallback)
+                nn_index = NearestNeighborSearch(n_neighbors=len(df_synth_norm))
+                nn_index.fit(np.ascontiguousarray(np.array(df_synth_norm)).astype(np.float32))
             else:
                 df_train_norm = pd.DataFrame()
                 df_test_norm = pd.DataFrame()
                 df_synth_norm = pd.DataFrame()
-                index = None
+                nn_index = None
 
             # Create embeddings for text fields and combine the normalized tabular and the
             # new text embeddings into one dataframe.
@@ -589,7 +575,7 @@ class MembershipInferenceProtection(Component):
                     df_train_norm,
                     df_test_norm,
                     df_synth_norm,
-                    index,
+                    nn_index,
                     i,
                     text_cnt,
                     tabular_cnt,

@@ -93,7 +93,7 @@ uv sync --frozen --extra cu128 --extra engine --group dev
 
 
 # for column classification
-export NIM_ENDPOINT_URL=https://integrate.api.nvidia.com/v1
+export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
 source "${LUSTRE_DIR}/.api_tokens.sh"
 
@@ -167,7 +167,7 @@ if [[ "${NSS_PHASE}" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
     uv run safe-synthesizer run train \
-        --url "$dataset" \
+        --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
         $dataset_registry_arg
@@ -183,7 +183,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
     fi
 
     uv run safe-synthesizer run generate \
-        --url "$dataset" \
+        --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
         $dataset_registry_arg \
@@ -191,7 +191,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
 else
     # Full end-to-end run
     uv run safe-synthesizer run \
-        --url "$dataset" \
+        --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
         $dataset_registry_arg

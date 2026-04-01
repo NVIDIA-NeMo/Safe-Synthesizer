@@ -11,7 +11,7 @@ Safe Synthesizer employs a novel approach to synthetic data generation:
 
 1. Tabular Fine-Tuning: fine-tunes a language model on your tabular data to learn patterns, correlations, and statistical properties
 2. Generation: uses the fine-tuned model to generate new synthetic records that maintain data utility
-3. Privacy Protection: optionally applies differential privacy during training for mathematical privacy guarantees
+3. Privacy Protection: applies differential privacy during training for mathematical privacy guarantees (off by default) and PII replacement as a pre-processing step (on by default)
 
 ## Pipeline Stages
 
@@ -36,9 +36,9 @@ The pipeline begins by loading your input data (CSV or DataFrame) and preparing 
 
 ### 2. PII Replacement
 
-On by default, the PII replacer detects personally identifiable information using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model has no chance of learning the most sensitive information like names and addresses. Disable with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
+On by default, the PII replacer detects personally identifiable information (PII) using NER models and regex patterns, then replaces detected entities with synthetic but realistic values. This ensures the model never has the opportunity to learn the most sensitive information (e.g. names, addresses, identifiers) from the training data. Disable with `--no-replace-pii` (CLI) or `.with_replace_pii(enable=False)` (SDK) if your data contains no PII.
 
-See [Privacy](privacy.md) for detailed PII documentation.
+See [PII Replacement](pii_replacement.md) for detailed PII Replacement documentation.
 
 ### 3. Example Assembly
 
@@ -46,12 +46,18 @@ Records are converted to a JSON format and tokenized for model training. The ass
 
 ### 4. Training
 
-The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two backends are available:
+The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two
+backends are available -- Unsloth (default, faster) and HuggingFace (required
+for differential privacy). Both perform LoRA fine-tuning; see
+[Running -- Training](../user-guide/running.md#training) for details.
 
-| Backend | Description |
-|---------|-------------|
-| **HuggingFace** | Standard training with quantization (4-bit/8-bit), LoRA via PEFT, and optional differential privacy via Opacus |
-| **Unsloth** | Optimized training for faster fine-tuning |
+Three models have been extensively tested:
+
+| Family | HuggingFace ID |
+|--------|----------------|
+| SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+| Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 
 ### 5. Generation
 
@@ -68,7 +74,7 @@ Safe Synthesizer supports diverse tabular data:
 - Numeric: continuous and discrete numerical values
 - Categorical: text labels and categories
 - Text: free-form text fields
-- Temporal: event sequences and time series
+- Temporal: event sequences and time series (Note: Temporal dataset support is currently experimental)
 
 ## Running the Pipeline
 
@@ -76,13 +82,13 @@ Safe Synthesizer supports diverse tabular data:
 
 ```bash
 # Full end-to-end pipeline
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 
 # Training only
-safe-synthesizer run train --config config.yaml --url data.csv
+safe-synthesizer run train --config config.yaml --data-source data.csv
 
 # Generation only (requires a trained adapter)
-safe-synthesizer run generate --config config.yaml --url data.csv --run-path /path/to/trained/run
+safe-synthesizer run generate --config config.yaml --data-source data.csv --run-path /path/to/trained/run
 ```
 
 ### Python SDK
@@ -107,36 +113,14 @@ results = synthesizer.results
 
 ### Resource Planning
 
+- NeMo Safe Synthesizer requires an NVIDIA GPU (A100 or larger) for training and generation
 - Larger datasets and models require more GPU memory (80GB+ VRAM recommended)
 - Training time scales with data size and model complexity
-- Plan for 15-60 minutes for typical jobs
+- Plan for 15-120 minutes for typical jobs
 - Ensure sufficient disk space for models and datasets (50GB+ recommended)
-
-### Configuration
-
-- Start with default settings
-- Enable PII replacement for sensitive data
-- Use differential privacy for maximum privacy guarantees
-- Adjust generation parameters based on evaluation results
 
 ### Troubleshooting
 
-GPU Memory Issues
+If results are poor, read [Synthetic Data Quality](../user-guide/evaluating-data.md) to see recommendations for adjusting data and configuration settings.
 
-- Reduce `batch_size` in training parameters
-- Use a smaller subset of data for initial testing
-- Increase `gradient_accumulation_steps` to maintain effective batch size with lower memory
-- Check GPU usage with `nvidia-smi`
-
-Invalid Data Format Errors
-
-- Ensure CSV is UTF-8 encoded
-- Validate column names don't contain special characters
-- Check for null values or inconsistent data types
-
-Generation Quality Issues
-
-- Increase training data or epochs for more training
-- Adjust `temperature` (try 0.7-1.0 range)
-- Enable structured generation for better format adherence
-- Review evaluation report for specific quality issues
+If your job fails to run, read [Program Runtime](../user-guide/troubleshooting.md) to see how to address common errors.

@@ -340,6 +340,7 @@ class TestWorkdir:
         assert gen.logs == gen.path / "logs.jsonl"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert gen.output == gen.path / "synthetic_data.csv"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert gen.report == gen.path / "evaluation_report.html"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        assert gen.evaluation_metrics == gen.path / "evaluation_metrics.json"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     # =========================================================================
     # Dataset directory structure
@@ -379,6 +380,10 @@ class TestWorkdir:
     def test_evaluation_report_alias(self, workdir: Workdir):
         """evaluation_report shortcut matches full path."""
         assert workdir.evaluation_report == workdir.generate.report  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+
+    def test_evaluation_metrics_alias(self, workdir: Workdir):
+        """evaluation_metrics shortcut matches full path."""
+        assert workdir.evaluation_metrics == workdir.generate.evaluation_metrics
 
     # =========================================================================
     # Directory creation

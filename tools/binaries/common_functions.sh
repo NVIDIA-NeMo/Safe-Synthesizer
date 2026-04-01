@@ -76,4 +76,3 @@ print_tool_manager_transition_warning() {
   echo "warning: bootstrap tooling may migrate to Mise en place in a future update."
   echo "warning: these scripts remain supported for now and are the current source of truth."
 }
-

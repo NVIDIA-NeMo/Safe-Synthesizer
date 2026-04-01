@@ -51,7 +51,7 @@ VERBOSITY_TO_LOG_LEVEL: dict[int, Literal["INFO", "DEBUG", "DEBUG_DEPENDENCIES"]
 def _create_workdir(
     artifacts_path: PathT | None,
     run_path: PathT | None,
-    url: str | None,
+    data_source: str | None,
     config_path: PathT | None,
     resume: bool = False,
     phase: str | None = None,
@@ -68,8 +68,8 @@ def _create_workdir(
         run_path: Explicit path for this run's output directory.
             When specified, outputs go directly to this path.
             Overrides artifacts_path.
-        url: URL or path to dataset (used to extract dataset_name). Can be None
-            for resume mode (generate) where the dataset is loaded from cached files.
+        data_source: Dataset name, URL, or path (used to extract dataset_name). Can be
+            None for resume mode (generate) where the dataset is loaded from cached files.
         config_path: Path to config file (used to extract config_name)
         resume: If True, attempt to load an existing workdir from run_path.
             Raises an error if no existing workdir is found. Also starts a new
@@ -85,14 +85,12 @@ def _create_workdir(
     Raises:
         click.ClickException: If resume=True but no existing workdir is found
         click.ClickException: If run_path already contains a training run
-        click.ClickException: If url is None and not in resume mode
+        click.ClickException: If data_source is None and not in resume mode
     """
-    # For resume mode, url is optional (will be loaded from cached files)
-    # For new runs, url is required
-    if url is None and not resume:
-        raise click.ClickException("--url is required for new runs")
+    if data_source is None and not resume:
+        raise click.ClickException("--data-source is required for new runs")
 
-    dataset_name = Path(url).stem if url else "unknown"
+    dataset_name = Path(data_source).stem if data_source else "unknown"
     config_name = Path(config_path).stem if config_path else "default"
     current_phase = phase or os.getenv("NSS_PHASE", "unknown")
 
@@ -137,16 +135,16 @@ def _create_workdir(
                 raise click.ClickException(
                     f"No trained adapter found in {search_path}.\n\n"
                     "Run training first:\n"
-                    f"  nss run train --url data.csv --artifacts-path {search_path}"
+                    f"  safe-synthesizer run train --data-source data.csv --artifact-path {search_path}"
                 ) from e
         else:
             # No run_path and no auto-discover - error with helpful message
             raise click.ClickException(
                 "--run-path is required for 'generate' command.\n\n"
                 "Specify the path to a trained run:\n"
-                "  nss run generate --url data.csv --run-path ./artifacts/<project>/<run>\n\n"
+                "  safe-synthesizer run generate --data-source data.csv --run-path ./artifacts/<project>/<run>\n\n"
                 "Or use --auto-discover-adapter to find the latest trained run:\n"
-                "  nss run generate --url data.csv --auto-discover-adapter"
+                "  safe-synthesizer run generate --data-source data.csv --auto-discover-adapter"
             )
 
         # Verify adapter exists using the workdir's adapter_path property
@@ -200,7 +198,7 @@ def common_setup(
     1. Create Workdir (establishes artifact paths)
     2. Initialize logging (using workdir.log_file)
     3. Create DatasetRegistry from settings.dataset_registry if present, otherwise create an empty registry
-    4. Load dataset from registry if settings.url is a known name, otherwise from url
+    4. Load dataset from registry if settings.data_source is a known name, otherwise from data_source
     5. Load config with overrides from dataset overrides and command line overrides
     6. Initialize wandb
 
@@ -219,7 +217,7 @@ def common_setup(
     workdir = _create_workdir(
         settings.artifact_path,
         settings.run_path,
-        settings.url,
+        settings.data_source,
         settings.config_path,
         resume=resume,
         phase=phase,
@@ -251,25 +249,25 @@ def common_setup(
     # is expected to work.
     synthesis_overrides: dict[str, Any] | None = dict()
     df: pd.DataFrame | None = None
-    if settings.url:
-        dataset_info = dataset_registry.get_dataset(settings.url)
+    if settings.data_source:
+        dataset_info = dataset_registry.get_dataset(settings.data_source)
         synthesis_overrides = merge_dicts(synthesis_overrides, dataset_info.overrides or dict())
         df = dataset_info.fetch()
     elif resume:
-        # For generate-only runs without --url, verify cached dataset exists
+        # For generate-only runs without --data-source, verify cached dataset exists
         cached_training: Path = workdir.source_dataset.training  # type: ignore[assignment]
         cached_test: Path = workdir.source_dataset.test  # type: ignore[assignment]
         if not cached_training.exists() or not cached_test.exists():
             raise click.ClickException(
                 f"No cached dataset found in workdir: {workdir.source_dataset.path}\n\n"
-                "Either provide --url to load a dataset, or ensure the workdir "
+                "Either provide --data-source to load a dataset, or ensure the workdir "
                 "contains cached training/test data from a previous run."
             )
         run_logger.info(f"Using cached dataset from: {workdir.source_dataset.path}")
         # df is None - SafeSynthesizer.load_from_save_path() will load from cached files
     else:
         # Should not happen - _create_workdir already validates this
-        raise click.ClickException("--url is required for new runs")
+        raise click.ClickException("--data-source is required for new runs")
 
     # 5. Load config with overrides from settings
     synthesis_overrides = merge_dicts(synthesis_overrides, settings.synthesis_overrides)

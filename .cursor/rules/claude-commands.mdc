@@ -17,9 +17,7 @@ Pre-defined command files live in `.claude/commands/`. When a user asks about a 
 | `gpu-test` | GPU integration and e2e tests |
 | `format` | Format code (ruff + copyright) |
 | `lint` | Lint and typecheck |
-| `pre-commit` | Run all pre-commit hooks |
 | `bootstrap` | Bootstrap dev environment |
 | `build-wheel` | Build Python wheel |
 | `build-docs` | Build documentation site |
 | `start-docs-server` | Local docs dev server |
-| `sync-nmp` | Sync with NMP repository |

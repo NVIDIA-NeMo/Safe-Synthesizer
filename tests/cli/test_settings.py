@@ -17,7 +17,7 @@ class TestCLISettings:
         settings = CLISettings()
 
         # CLI-specific defaults
-        assert settings.url is None
+        assert settings.data_source is None
         assert settings.config_path is None
         assert settings.artifact_path is None
         assert settings.run_path is None
@@ -56,13 +56,13 @@ class TestCLISettings:
     def test_from_cli_kwargs_filters_none(self):
         """Test that from_cli_kwargs filters out None values and passes through non-None."""
         settings = CLISettings.from_cli_kwargs(
-            url="data.csv",
+            data_source="data.csv",
             config_path=None,  # Should be filtered
             run_path="/tmp/run1",  # Should be passed through (no env var alias)
             output_file=None,  # Should be filtered
         )
 
-        assert settings.url == "data.csv"
+        assert settings.data_source == "data.csv"
         assert settings.run_path == "/tmp/run1"
         # None values should be filtered, so these come from defaults
         assert settings.config_path is None
@@ -71,7 +71,7 @@ class TestCLISettings:
     def test_from_cli_kwargs_all_values(self):
         """Test from_cli_kwargs with values that don't have env var aliases."""
         settings = CLISettings.from_cli_kwargs(
-            url="data.csv",
+            data_source="data.csv",
             run_path="/tmp/run1",  # No env var alias
             output_file="output.csv",  # No env var alias
             log_color=False,  # No env var alias
@@ -82,7 +82,7 @@ class TestCLISettings:
             dataset_registry="path/to/registry.yaml",
         )
 
-        assert settings.url == "data.csv"
+        assert settings.data_source == "data.csv"
         assert settings.run_path == "/tmp/run1"
         assert settings.output_file == "output.csv"
         assert settings.log_color is False
@@ -101,15 +101,15 @@ class TestCLISettings:
 
         # Create settings without providing those CLI kwargs
         settings = CLISettings.from_cli_kwargs(
-            url="data.csv",  # Only provide url
+            data_source="data.csv",  # Only provide data_source
         )
 
         # Env vars provide values for fields with AliasChoices
         assert settings.artifact_path == "/env/artifacts"
         assert settings.log_format == "json"
         assert settings.dataset_registry == "path/to/registry.yaml"
-        # url is set from CLI
-        assert settings.url == "data.csv"
+        # data_source is set from CLI
+        assert settings.data_source == "data.csv"
 
     def test_composed_settings_accessible(self):
         """Test that composed settings are accessible."""

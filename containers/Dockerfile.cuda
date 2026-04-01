@@ -18,7 +18,7 @@
 #     -v ~/.cache/huggingface:/workspace/.hf_cache \
 #     -e HF_HOME=/workspace/.hf_cache \
 #     nss-gpu:latest \
-#     run --url /workspace/data/input.csv
+#     run --data-source /workspace/data/input.csv
 #
 # Key flags:
 #   --gpus all          expose NVIDIA GPUs (requires nvidia-container-toolkit)
@@ -26,7 +26,7 @@
 #   -v HOST:CONTAINER   bind-mount data and HF cache (use absolute paths)
 #   -e HF_HOME=...      persist model downloads across container runs
 #   -e HF_TOKEN=...     HF token for gated models (Llama, Mistral, etc.)
-#   -e NIM_API_KEY=...  NIM endpoint key for PII classification (optional)
+#   -e NSS_INFERENCE_KEY=...  inference API key for PII column classification (optional)
 #
 # Interactive shell:
 #   docker run -it --gpus all --shm-size=1g \
@@ -151,7 +151,7 @@ LABEL org.opencontainers.image.title="Safe Synthesizer" \
       org.opencontainers.image.source="https://github.com/NVIDIA-NeMo/Safe-Synthesizer" \
       org.opencontainers.image.documentation="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/docker/" \
       org.opencontainers.image.base.name="nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}" \
-      org.opencontainers.image.usage="docker run --gpus all --shm-size=1g -v /path/to/data:/workspace/data -v ~/.cache/huggingface:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv"
+      org.opencontainers.image.usage="docker run --gpus all --shm-size=1g -v /path/to/data:/workspace/data -v ~/.cache/huggingface:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv"
 
 # Non-root user.
 RUN groupadd -r -g 1000 appuser && \

@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from pathlib import Path
+from unittest.mock import MagicMock
+
 import pandas as pd
 import pytest
 
@@ -12,6 +15,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
+_REPORT_HTML = "<html><body>report</body></html>"
 
 PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
@@ -362,3 +366,57 @@ def test_with_replace_pii_reenable_after_disable():
     )
     assert config is not None
     assert config.replace_pii is not None
+
+
+_METRICS_JSON = '{"timing": {}}'
+
+
+def _builder_with_mock_results(tmp_path: Path) -> SafeSynthesizer:
+    """Create a SafeSynthesizer with mocked results for save_results testing."""
+    nss = SafeSynthesizer(save_path=tmp_path / "artifacts")
+    nss.results = MagicMock()
+    nss.results.synthetic_data = _SMALL_DF
+    nss.results.evaluation_report_html = _REPORT_HTML
+    nss.results.summary.model_dump_json.return_value = _METRICS_JSON
+    return nss
+
+
+class TestSaveResults:
+    """Verify save_results persists CSV, HTML, and evaluation metrics."""
+
+    def test_saves_to_default_workdir(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+
+        nss.save_results()
+
+        csv_path = nss._workdir.output_file
+        report_path = nss._workdir.evaluation_report
+        metrics_path = nss._workdir.evaluation_metrics
+        assert csv_path.exists()
+        assert report_path.exists()
+        assert metrics_path.exists()
+        assert pd.read_csv(csv_path).equals(_SMALL_DF)
+        assert report_path.read_text() == _REPORT_HTML
+        assert metrics_path.read_text() == _METRICS_JSON
+
+    def test_output_file_override_writes_csv_to_custom_path(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        custom_csv = tmp_path / "custom" / "output.csv"
+
+        nss.save_results(output_file=custom_csv)
+
+        assert custom_csv.exists()
+        assert pd.read_csv(custom_csv).equals(_SMALL_DF)
+        # Report still goes to the workdir regardless of output_file
+        assert nss._workdir.evaluation_report.exists()
+        assert nss._workdir.evaluation_report.read_text() == _REPORT_HTML
+
+    def test_skips_report_when_html_is_none(self, tmp_path: Path):
+        nss = _builder_with_mock_results(tmp_path)
+        nss.results.evaluation_report_html = None
+
+        nss.save_results()
+
+        assert nss._workdir.output_file.exists()
+        assert not nss._workdir.evaluation_report.exists()
+        assert not nss._workdir.evaluation_metrics.exists()

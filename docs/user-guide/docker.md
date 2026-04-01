@@ -35,7 +35,7 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   nss-gpu:latest \
-  run --config /workspace/data/config.yaml --url /workspace/data/input.csv
+  run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv
 ```
 
 The entrypoint prints helpful warnings if it detects common mistakes
@@ -49,14 +49,14 @@ docker run --gpus all --shm-size=1g \
   -v /path/to/data:/workspace/data \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
-  nss-gpu:latest run train --url /workspace/data/input.csv
+  nss-gpu:latest run train --data-source /workspace/data/input.csv
 
 # Generate from a trained adapter
 docker run --gpus all --shm-size=1g \
   -v /path/to/data:/workspace/data \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
-  nss-gpu:latest run generate --url /workspace/data/input.csv --auto-discover-adapter
+  nss-gpu:latest run generate --data-source /workspace/data/input.csv --auto-discover-adapter
 
 # Validate a config file (no GPU needed)
 docker run \
@@ -75,7 +75,7 @@ by bind-mounting host directories with `-v`:
 docker run --gpus all --shm-size=1g \
   -v /home/user/project:/workspace/data \
   ...
-  nss-gpu:latest run --url /workspace/data/input.csv
+  nss-gpu:latest run --data-source /workspace/data/input.csv
 ```
 
 Docker requires absolute paths for bind mounts. Relative paths like
@@ -97,7 +97,7 @@ docker run --gpus all \
   -v /data/output:/workspace/output \
   -e NSS_ARTIFACTS_PATH=/workspace/output \
   ...
-  nss-gpu:latest run --config /workspace/configs/my_config.yaml --url /workspace/inputs/data.csv
+  nss-gpu:latest run --config /workspace/configs/my_config.yaml --data-source /workspace/inputs/data.csv
 ```
 
 Artifacts are written to `/workspace/safe-synthesizer-artifacts/` by default
@@ -117,14 +117,14 @@ docker run --gpus all --shm-size=1g \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   -e HF_TOKEN="hf_..." \
-  nss-gpu:latest run --url /workspace/data/input.csv
+  nss-gpu:latest run --data-source /workspace/data/input.csv
 ```
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `HF_TOKEN` | For gated models | Hugging Face token for downloading gated models (Llama, Mistral, etc.). Get one at [hf.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| `NIM_API_KEY` | For PII classification | API key for the NIM endpoint used by PII column classification. Only needed when `NIM_ENDPOINT_URL` is set |
-| `NIM_ENDPOINT_URL` | For PII classification | NIM/OpenAI-compatible endpoint URL for PII column classification |
+| `NSS_INFERENCE_KEY` | For PII classification | API key for `NSS_INFERENCE_ENDPOINT`. Set when using the CLI/SDK for column classification |
+| `NSS_INFERENCE_ENDPOINT` | For PII classification | NIM/OpenAI-compatible endpoint URL (default: `https://integrate.api.nvidia.com/v1`). Override for a custom endpoint |
 | `WANDB_API_KEY` | For experiment tracking | WandB API key. Only needed when `--wandb-mode online` is used |
 
 If `HF_TOKEN` is already stored in your HF cache (`~/.cache/huggingface/token`),
@@ -233,7 +233,7 @@ docker run --gpus all --shm-size=1g \
   -v /path/to/data:/workspace/data \
   -v ~/.cache/huggingface:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
-  nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv
+  nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv
 
 # Step 2: use in offline environment
 docker run --gpus all --shm-size=1g \
@@ -241,7 +241,7 @@ docker run --gpus all --shm-size=1g \
   -v /shared/hf_cache:/workspace/.hf_cache \
   -e HF_HOME=/workspace/.hf_cache \
   -e HF_HUB_OFFLINE=1 \
-  nss-gpu:latest run --config /workspace/data/config.yaml --url /workspace/data/input.csv
+  nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv
 ```
 
 See [Environment Variables -- Hugging Face Cache](environment.md#hugging-face-cache)
@@ -289,7 +289,7 @@ docker run -it --gpus all --shm-size=1g \
 Inside the container you can run `safe-synthesizer` commands directly:
 
 ```bash
-appuser@container:/workspace$ safe-synthesizer run --url /workspace/data/input.csv
+appuser@container:/workspace$ safe-synthesizer run --data-source /workspace/data/input.csv
 appuser@container:/workspace$ safe-synthesizer config validate --config /workspace/data/config.yaml
 ```
 
@@ -310,7 +310,7 @@ targets that handle GPU flags, HF cache mounts, and workspace bind mounts:
 Override variables as needed:
 
 ```bash
-make container-run-gpu CONTAINER_HF_CACHE=/shared/hf_cache CMD="run --url /workspace/data.csv"
+make container-run-gpu CONTAINER_HF_CACHE=/shared/hf_cache CMD="run --data-source /workspace/data.csv"
 ```
 
 Mount data from outside the repo tree with `CONTAINER_EXTRA_MOUNTS`:
@@ -318,7 +318,7 @@ Mount data from outside the repo tree with `CONTAINER_EXTRA_MOUNTS`:
 ```bash
 make container-run-gpu \
   CONTAINER_EXTRA_MOUNTS="-v /data/sensitive:/workspace/data" \
-  CMD="run --url /workspace/data/customers.csv"
+  CMD="run --data-source /workspace/data/customers.csv"
 ```
 
 ---

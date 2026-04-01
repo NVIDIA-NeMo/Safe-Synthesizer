@@ -134,16 +134,16 @@ MODEL_INIT_SCENARIOS = [
         expected_add_bos=False,
         expected_add_eos=False,
         expected_bos_token="<|im_start|>",
-        expected_bos_token_id=151644,
+        expected_bos_token_id=1,
         custom_max_position_embeddings=8192,
     ),
     ModelInitScenario(
         id="smollm3",
         model_class=SmolLM3,
         model_path="HuggingFaceTB/SmolLM3-3B",
-        expected_template="user\n {instruction} {schema} <|im_end|> \n <|im_start|>assistant\n{prefill}",
+        expected_template="user\n {instruction} {schema} <|im_end|> \n assistant\n{prefill}",
         expected_add_bos=True,
-        expected_add_eos=True,
+        expected_add_eos=False,
         expected_bos_token="<|im_start|>",
         expected_bos_token_id=128011,
         use_global_max_seq=True,
@@ -297,6 +297,8 @@ def mock_tokenizer():
     tokenizer.bos_token_id = 1
     tokenizer.eos_token = "</s>"
     tokenizer.eos_token_id = 2
+    _token_ids = {"<|im_start|>": 1, "<|im_end|>": 2}
+    tokenizer.convert_tokens_to_ids = lambda tok: _token_ids.get(tok, 0)
     return tokenizer
 
 

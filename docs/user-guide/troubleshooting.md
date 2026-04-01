@@ -24,6 +24,8 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | "Unsloth not compatible with DP" | Mutual exclusion | [Configuration Reference -- Differential Privacy](configuration.md#differential-privacy) |
 | "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](evaluating-data.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
+| Generation appears to hang | Normal for large-context models | [See Slow Generation](#slow-generation-with-large-context-models) |
+| Grouped data trains for only 1 step | Too few training examples | [See Grouped Training](#grouped-data-produces-very-few-training-examples) |
 | "exceeds context length" | Records too long | [Reduce record size](#context-length-and-record-fitting) |
 | "fraction of invalid records" | Generation quality too low | [Lower threshold or retrain](#generationerror) |
 | Metrics show UNAVAILABLE | Too few records / columns | [Ensure >= 200 records](evaluating-data.md#minimum-data-requirements) |
@@ -31,6 +33,34 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
+
+---
+
+## Enabling Debug Logging
+
+Most troubleshooting steps below recommend running with debug logging.
+Use the `-v` flag for debug output, or `-vv` to also include dependency
+logs (vLLM, HuggingFace, etc.):
+
+```bash
+safe-synthesizer run -v --config config.yaml --url data.csv
+```
+
+Debug logging adds:
+
+- Generation diagnostics: EOS token configuration, per-prompt finish
+  reasons and token counts, vLLM progress bars
+- Training details: data assembly statistics, example counts
+- SamplingParams: the full vLLM parameter object used for generation
+
+You can also set the log level via environment variable:
+
+```bash
+export NSS_LOG_LEVEL=DEBUG
+```
+
+See [Running -- Logging](running.md#logging) for the full logging
+configuration reference.
 
 ---
 
@@ -93,11 +123,9 @@ To diagnose:
 
 1. Verify NVIDIA drivers: `nvidia-smi`
 2. Verify PyTorch CUDA build: `python -c "import torch; print(torch.cuda.is_available())"`
-3. Ensure you installed the CUDA extras, not the CPU-only package:
-
-    ```bash
-    pip install "nemo-safe-synthesizer[cu128,engine]"
-    ```
+3. Ensure you installed the CUDA extras, not the CPU-only package.
+   See [Installation](getting-started.md#install-the-package) for the
+   full command with required index URLs.
 
 Switch to the HuggingFace backend for CPU-only environments (useful for
 development, not recommended for production training).
@@ -130,15 +158,30 @@ because the table has too many columns for the model's context window.
 
 #### How to Fix
 
-1. Increase `training.rope_scaling_factor` to extend the context window.
+1. Reduce record size -- shorten text fields, drop unnecessary columns,
+   or simplify the schema.
+2. When using `data.group_training_examples_by`, all records in the same group must fit
+   in context together, making the limit tighter. Consider reducing the number of records per group.
+
+    ??? tip "Sizing formula (approximate)"
+        Estimate token budget before adjusting parameters. The /4 divisor is
+        a rough heuristic for BPE tokenizers on JSON content (actual ratios
+        vary by tokenizer and content):
+
+        - `tokens_per_group ≈ (records_per_group × chars_per_record) / 4`
+        - `total ≈ prompt_tokens + tokens_per_group × max_sequences_per_example`
+
+        Example: 5 records × 200 chars ≈ 250 tokens/group; with a 400-token
+        prompt and 3 groups per example: `400 + 250 × 3 = 1150` tokens.
+
+        See [Example Generation -- Sizing](../developer-guide/example-generation.md#sizing-and-context-budget)
+        for per-mode formulas.
+
+3. If using `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, increase `training.rope_scaling_factor` to
+   extend the context window.
    When set to `"auto"`, it is estimated from dataset token counts using
    heuristics (4 chars per token for text, 1 token per digit) -- this can
-   underestimate for complex or multilingual data.
-2. Reduce record size -- shorten text fields, drop unnecessary columns,
-   or simplify the schema.
-3. When using `data.group_training_examples_by`, multiple records must fit
-   in context together, making the limit tighter. Consider reducing
-   `data.max_sequences_per_example` or simplifying the grouped records.
+   underestimate for complex or multilingual data. `training.rope_scaling_factor` is not applicable when using `HuggingFaceTB/SmolLM3-3B` (default model) or `mistralai/Mistral-7B-Instruct-v0.3`.
 
 !!! note "Error type clarification"
     These errors are typed as `GenerationError` in the codebase even though
@@ -149,6 +192,40 @@ Context-length issues can also surface as OOM during training (the model
 attempts to process sequences near the limit). See
 [Out of Memory During Training](#out-of-memory-during-training) for
 memory-specific fixes like quantization and batch size reduction.
+
+### Grouped Data Produces Very Few Training Examples
+
+When using `data.group_training_examples_by`, the assembler packs multiple
+groups into each training example to fill the context window. With
+large-context models (e.g. SmolLM3 at 12288 tokens) and small records,
+a 200-record dataset with 12 groups can compress into as few as 2 training
+examples. Combined with `gradient_accumulation_steps=8` (default), this
+yields only 1 gradient step -- effectively no training.
+
+The training log confirms this pattern:
+
+```text
+Num examples = 2 | Num Epochs = 1 | Total steps = 1
+```
+
+Training duration is controlled by `training.num_input_records_to_sample`,
+not epochs. The internal `data_fraction` is computed as
+`num_input_records_to_sample / total_training_records`. Values above 1.0
+duplicate and reshuffle the training examples. To get meaningful training
+with grouped data:
+
+- Decrease `max_sequences_per_example` -- this is the preferred first
+  step. Fewer groups per example means the assembler produces more
+  training examples, which means more gradient steps per epoch -- without
+  increasing training time per step. Start with
+  `max_sequences_per_example: 1` and increase only if quality suffers.
+  (Sequential/time-series mode already enforces one group per example,
+  so this knob only applies to grouped mode.)
+- If reducing groups per example is not enough, increase
+  `num_input_records_to_sample`. Set it to `N * dataset_size` for
+  approximately N passes over the data.
+- Watch for `Total steps = 1` in the Unsloth/Trainer output -- this means
+  the model barely trained
 
 ---
 
@@ -168,6 +245,50 @@ an equivalent config field.
 2. If the GPU has less memory than expected, check that the training teardown
    completed before generation started
 
+### Slow Generation with Large-Context Models
+
+Generation may appear to hang with large-context models (SmolLM3, Llama 3,
+etc.) when using `data.group_training_examples_by`. Two factors combine
+to cause long generation times:
+
+`max_tokens` scales with context window: each generation prompt is allowed
+up to `max_seq_length` output tokens (`12,288` for SmolLM3). If the model
+produces long outputs before the stop condition fires, each prompt in the
+batch takes proportionally longer. A heartbeat log (`"Generation in
+progress"`) is emitted every 60 seconds to confirm the pipeline is alive.
+
+Long-tail batch latency: vLLM processes all prompts in a batch
+simultaneously, but `llm.generate()` blocks until every prompt completes.
+With `temperature=0.9` (default), each prompt samples a different
+generation path. Most paths produce compact output and hit the EOS token
+quickly, but a few diverge into longer text before the model emits EOS.
+This variance is worse with undertrained models -- instead of reliably
+producing `<|im_start|> records... <|im_end|>`, the model sometimes
+wanders into chat-style explanations of unpredictable length.
+
+E.g., in one
+observed run with SmolLM3-3B, 96 of 100 prompts finished in 67 seconds,
+while the last 4 took an additional 93 seconds -- with a single prompt
+consuming 61 seconds and 1618 tokens on its own. The batch cannot return
+until the slowest prompt finishes. Run with `-v` to see vLLM's tqdm
+progress bar, which shows per-prompt completion rates and makes the tail
+effect visible. 
+
+If this stage takes more than 10 minutes, you might need to train the model
+more or examine the training parameters.
+
+To diagnose, run with `-v` (debug logging). The logs will show:
+
+- Sampling parameters, including EOS token configuration, `max_tokens`,
+  and stop conditions
+- Per-prompt output: token count, `finish_reason`, and `stop_reason`
+
+If every prompt shows `finish_reason=stop`, the stop condition is working
+and the generation time is real inference time. If any prompt shows
+`finish_reason=length`, it ran to `max_tokens` without producing an EOS
+token -- this typically indicates insufficient training (see
+[Grouped Data Produces Very Few Training Examples](#grouped-data-produces-very-few-training-examples)).
+
 ### GenerationError
 
 Generation failures during synthetic data production. The two most common:
@@ -186,9 +307,7 @@ Generation stopped prematurely because the average fraction of invalid records w
 ```
 
 : Too many invalid records across `generation.patience` consecutive batches.
-  Consider lowering `generation.invalid_fraction_threshold`, retraining with
-  more data, or increasing `training.rope_scaling_factor` if records are being
-  truncated.
+  Consider retraining with more records, adjusting `training.number_of_input_records_to_sample`, or setting `use_structured_generation=True`.
 
 For context-length errors during data assembly (`"The number of tokens in an
 example exceeds the available context length"`), see
@@ -232,7 +351,7 @@ Several defaults may not match your expectations:
 | `training.batch_size` | `1` | Effective batch = `batch_size` x `gradient_accumulation_steps` (8) |
 | `training.validation_ratio` | `0.0` | No validation split by default |
 | `data.holdout` | `0.05` | 5% of records held out for evaluation; capped by `data.max_holdout` (2000) |
-| `data.random_state` | `None` | Auto-generates a random seed -- set explicitly for reproducibility |
+| `data.random_state` | `None` | Auto-generates a random seed -- set this value explicitly if you need reproducibility |
 | `generation.num_records` | `1000` | May be too small for production use |
 
 ### Auto-Resolved Parameters
@@ -246,8 +365,7 @@ See [Configuration Reference](configuration.md) for the full list.
   for details and caveats
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
 - `training.use_unsloth` -- resolves to `true` unless DP is enabled.
-  DP uses Opacus per-sample gradients (`GradSampleModule`), which require
-  standard model layers and disable gradient checkpointing -- Unsloth's
+  DP uses [Opacus](https://opacus.ai/) per-sample gradients (`GradSampleModule`), which require standard model layers and disable gradient checkpointing -- Unsloth's
   custom layers and checkpointing are incompatible
 - `training.learning_rate` -- model-specific default from `ModelMetadata`:
   Mistral uses 0.0001, all other supported model families use 0.0005
@@ -341,7 +459,7 @@ export WANDB_API_KEY="your-api-key"  # pragma: allowlist secret
 Or switch to offline mode to avoid network access entirely:
 
 ```bash
-safe-synthesizer run --wandb-mode disabled --config config.yaml --url data.csv
+safe-synthesizer run --wandb-mode disabled --config config.yaml --data-source data.csv
 ```
 
 See [Running Safe Synthesizer -- WandB Integration](running.md#wandb-integration) for the full WandB setup.

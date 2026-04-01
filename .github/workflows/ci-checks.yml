@@ -57,8 +57,6 @@ jobs:
 
   format:
     name: Format
-    needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -85,7 +83,7 @@ jobs:
   typecheck:
     name: Typecheck
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -137,11 +135,33 @@ jobs:
           retention-days: 30
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.json
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  smoke-test:
+    name: Smoke Tests
+    needs: changes
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          bootstrap-tools: "true"
+
+      - name: Run CPU smoke tests
+        run: |
+          make bootstrap-nss cpu
+          make test-smoke
+
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
@@ -151,15 +171,16 @@ jobs:
   ci-status:
     name: CI Status
     if: always() && !cancelled()
-    needs: [changes, format, typecheck, unit-test]
+    needs: [changes, format, typecheck, unit-test, smoke-test]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
         run: |
-          echo "changes:   ${{ needs.changes.result }}"
-          echo "format:    ${{ needs.format.result }}"
-          echo "typecheck: ${{ needs.typecheck.result }}"
-          echo "unit-test: ${{ needs.unit-test.result }}"
+          echo "changes:    ${{ needs.changes.result }}"
+          echo "format:     ${{ needs.format.result }}"
+          echo "typecheck:  ${{ needs.typecheck.result }}"
+          echo "unit-test:  ${{ needs.unit-test.result }}"
+          echo "smoke-test: ${{ needs.smoke-test.result }}"
 
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
             echo "::error::One or more CI jobs failed"

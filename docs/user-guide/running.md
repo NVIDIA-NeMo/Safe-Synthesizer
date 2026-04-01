@@ -12,29 +12,29 @@ Full reference for pipeline execution. For a quick first run, see
 
 ## Configuration Interfaces
 
-NeMo Safe Synthesizer has two ways to run the pipeline and three and a half ways to configure it.
+NeMo Safe Synthesizer has two ways to run the pipeline and four-and-a-half ways to configure it.
 
 Two ways to run:
 
 - `safe-synthesizer` CLI -- the command-line application
 - Python SDK -- the [`SafeSynthesizer`][nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer] builder, for use in scripts, notebooks, and services
 
-Three and a half ways to configure:
+Four-and-a-half ways to configure:
 
 - YAML config file -- a portable, versionable snapshot of parameters; passed to the CLI via `--config` or loaded in the SDK with [`SafeSynthesizerParameters.from_yaml()`][nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters]
 - CLI flags -- `--generation__num_records 10000`, `--privacy__dp_enabled true`; override the YAML file when both are provided
 - Python SDK builder calls -- `.with_generate(num_records=10000)`, `.with_differential_privacy(dp_enabled=True)`; override the YAML file when both are used
+- [Dataset registry](#dataset-registry) -- a YAML file (passed via `--dataset-registry`) that defines named datasets and their parameter overrides so you can refer to them by name in the CLI
 - Environment variables (the half) -- control infrastructure only: artifact paths, logging, model cache locations, WandB mode. They do not set synthesis parameters like learning rate or record count
 
 The asymmetry matters: YAML and environment variables are *configuration only* -- they don't invoke the pipeline. CLI and SDK are *run and configure* -- they set parameters and execute.
 
 All configuration surfaces share the same underlying [Pydantic](https://docs.pydantic.dev/) parameter models defined in `src/nemo_safe_synthesizer/config/`. The `__` syntax used in CLI flags (e.g. `--privacy__dp_enabled true`) mirrors the nested structure of those models: `privacy` is the config section, `dp_enabled` is the field. Setting a parameter via YAML, CLI flag, or SDK call resolves to the same field in the same model.
 
-When multiple surfaces are used together, later layers override earlier ones:
+Exactly what avenues of configuration are available, and thus how precedence is resolved, depends on how you run the pipeline. Settings are resolved in this order, from highest (first) to lowest priority (last):
 
-```text
-CLI flags  >  dataset registry  >  YAML config file  >  model defaults
-```
+- CLI: `CLI flags` > `dataset registry` > `YAML config file` > `model defaults`
+- SDK: `Python SDK builder calls` > `YAML config file` > `model defaults`
 
 See [Configuration Precedence](configuration.md#configuration-precedence) for details.
 
@@ -44,7 +44,7 @@ The same run, three ways -- 10,000 records with DP-SGD:
 
     ```bash
     safe-synthesizer run \
-      --url data.csv \
+      --data-source data.csv \
       --generation__num_records 10000 \
       --privacy__dp_enabled true \
       --privacy__epsilon 8.0
@@ -76,14 +76,14 @@ The same run, three ways -- 10,000 records with DP-SGD:
     ```
 
     ```bash
-    safe-synthesizer run --config config.yaml --url data.csv
+    safe-synthesizer run --config config.yaml --data-source data.csv
     ```
 
 ---
 
 ## Running the Pipeline
 
-The pipeline runs five stages in sequence. PII replacement is on by default; disable it with `--no_replace_pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
+The pipeline runs five stages in sequence. PII replacement is on by default as a pre-processing step; disable it with `--no-replace-pii` (CLI) or `.with_replace_pii(enable=False)` (SDK).
 
 ```mermaid
 flowchart LR
@@ -100,7 +100,7 @@ Run the full end-to-end pipeline in one step:
     ```bash
     safe-synthesizer run \
       --config config.yaml \
-      --url data.csv \
+      --data-source data.csv \
       --artifact-path ./artifacts
     ```
 
@@ -135,12 +135,12 @@ Pass `--config` to load a base config, then override individual fields with
 
 ```bash
 # All defaults, no config file
-safe-synthesizer run --url data.csv
+safe-synthesizer run --data-source data.csv
 
 # Config file as base, override two fields
 safe-synthesizer run \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --training__learning_rate 0.001 \
   --generation__num_records 2000
 ```
@@ -184,18 +184,18 @@ Without a subcommand, `run` executes the full end-to-end pipeline (data processi
 PII replacement, training, generation, evaluation). PII replacement is on by default.
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv
+safe-synthesizer run --config config.yaml --data-source data.csv
 ```
 
 #### Common Options
 
-These options apply to `run` and `run generate`. Only `--url` is required;
+These options apply to `run` and `run generate`. Only `--data-source` is required;
 all others have defaults or are optional.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
 | `--config` | `NSS_CONFIG` | (model defaults) | Path to YAML config file; omit to use all model defaults |
-| `--url` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
+| `--data-source` | -- | (required) | Dataset path, URL, or name from `--dataset-registry` |
 | `--artifact-path` | `NSS_ARTIFACTS_PATH` | `./safe-synthesizer-artifacts` | Base directory for all runs |
 | `--run-path` | -- | -- | Explicit run directory (for `run generate`, must point to an existing trained run) |
 | `--output-file` | -- | -- | Path to output CSV file |
@@ -219,7 +219,7 @@ for the full syntax, examples, and precedence rules.
 Train only -- saves the adapter without generating or evaluating.
 
 ```bash
-safe-synthesizer run train --config config.yaml --url data.csv
+safe-synthesizer run train --config config.yaml --data-source data.csv
 ```
 
 Accepts the same common options and synthesis parameter overrides as `run`.
@@ -231,13 +231,13 @@ Generate only -- requires a previously trained adapter.
 ```bash
 safe-synthesizer run generate \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --auto-discover-adapter
 
 # Or specify an explicit run path
 safe-synthesizer run generate \
   --config config.yaml \
-  --url data.csv \
+  --data-source data.csv \
   --run-path ./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00
 ```
 
@@ -275,11 +275,11 @@ registry name.
 
 Data source options:
 
-- CLI / dataset registry: `--url data.csv` -- supports `.csv`, `.json`, `.jsonl`, `.parquet`, `.txt`
-- URL: `--url https://example.com/data.csv`
+- CLI / dataset registry: `--data-source data.csv` -- supports `.csv`, `.json`, `.jsonl`, `.parquet`, `.txt`
+- URL: `--data-source https://example.com/data.csv`
 - DataFrame (SDK): `.with_data_source(df)` -- supports any format you can load into pandas
 - CSV path (SDK): `.with_data_source("data.csv")` -- loaded via `pd.read_csv`; for non-CSV formats, load into a DataFrame first
-- Dataset registry name: `--url my_dataset` (with `--dataset-registry registry.yaml`)
+- Dataset registry name: `--data-source my_dataset` (with `--dataset-registry registry.yaml`)
 
 ### Grouping and Ordering
 
@@ -287,13 +287,20 @@ Use `data.group_training_examples_by` to group records by a column (e.g.,
 customer ID) so related rows are trained together. Use
 `data.order_training_examples_by` to sort within groups (requires group_by).
 
+!!! info "When to use grouped mode"
+    Grouping is recommended when there is a natural ordering within each
+    group -- i.e., `data.order_training_examples_by` points to a valid
+    ordering field such as a date or sequence number. If your data has no
+    meaningful intra-group order, tabular mode with shuffled records is
+    usually sufficient.
+
 === "CLI"
 
     ```bash
     safe-synthesizer run \
       --data__group_training_examples_by customer_id \
       --data__order_training_examples_by transaction_date \
-      --url transactions.csv
+      --data-source transactions.csv
     ```
 
 === "SDK"
@@ -319,6 +326,25 @@ customer ID) so related rows are trained together. Use
       order_training_examples_by: "transaction_date"
     ```
 
+!!! info "What the model sees"
+
+    With grouping enabled, each training example is tokenized as:
+
+    ```text
+    [schema prompt] <BOS> group1-record1
+    group1-record2 <EOS> <BOS> group2-record1
+    group2-record2 <EOS>
+    ```
+
+    Here `<BOS>` and `<EOS>` represent the model's begin-of-sequence and
+    end-of-sequence tokens; the exact strings are taken from the selected
+    model's metadata and may differ across model families.
+
+    `data.max_sequences_per_example` controls how many groups are packed
+    into a single example (default: `"auto"`, which resolves to 10 without
+    DP). Fewer groups per example means more training examples overall.
+    See [Example Generation](../developer-guide/example-generation.md) for a full walkthrough.
+
 ### Dataset Registry
 
 Define named datasets in a YAML file to reference them by name:
@@ -334,7 +360,7 @@ datasets:
 ```
 
 ```bash
-safe-synthesizer run --dataset-registry registry.yaml --url customer_transactions
+safe-synthesizer run --dataset-registry registry.yaml --data-source customer_transactions
 ```
 
 See [Configuration Reference -- Data](configuration.md#data) for the full parameter table.
@@ -357,20 +383,28 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
     If your dataset does not contain PII, you may disable this stage to reduce pipeline
     runtime:
 
-    - CLI: `--no_replace_pii`
+    - CLI: `--no-replace-pii`
     - SDK: `.with_replace_pii(enable=False)`
 
 === "CLI"
 
+    Default (PII on, no config needed):
+
     ```bash
-    safe-synthesizer run \
-      --url data.csv
+    safe-synthesizer run --data-source data.csv
     ```
 
-    Non-list PII settings can be overridden from the CLI, e.g.
-    `--replace_pii__globals__classify__enable_classify true`.
-    List-typed fields (like `entities`) cannot be set via CLI flags;
-    use YAML or the SDK for those at this time.
+    Customize (e.g. enable LLM classification and restrict entity types):
+    put the `replace_pii` block in a YAML file and pass it with `--config`.
+    List-typed fields like `entities` cannot be set via CLI flags; use the
+    config file (see Config reference tab) or SDK.
+
+    ```bash
+    safe-synthesizer run --config pii_config.yaml --url data.csv
+    ```
+
+    To override only non-list PII settings from the CLI, use the `__` syntax,
+    e.g. `--replace_pii__globals__classify__enable_classify true`.
 
 === "SDK"
 
@@ -422,7 +456,7 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
     ```
 
     `steps` is required and has no default. The snippet above shows a minimal
-    single-step config. For the full default ruleset (40+ entity types), use
+    single-step config. For the full default ruleset (50+ entity types), use
     [`PiiReplacerConfig.get_default_config()`][nemo_safe_synthesizer.config.replace_pii.PiiReplacerConfig]
     in the SDK and export it to YAML:
 
@@ -433,20 +467,22 @@ default in both the CLI and SDK. PII on by default means no config flag is neede
 
 ### LLM Column Classification
 
-To enable LLM-based PII column classification (optional), set the endpoint
-before running the pipeline. Any OpenAI-compatible inference endpoint
-works -- not just NVIDIA NIM:
+To enable LLM-based PII column classification (optional), set the API key
+before running the pipeline. The endpoint defaults to
+`https://integrate.api.nvidia.com/v1`; override `NSS_INFERENCE_ENDPOINT` for a
+custom OpenAI-compatible endpoint.
+
+When using the CLI, set both for column classification:
 
 ```bash
-export NIM_ENDPOINT_URL="https://integrate.api.nvidia.com/v1"  # or your own OpenAI-compatible endpoint
-
-export NIM_API_KEY="your-api-key"  # pragma: allowlist secret  (optional -- only needed for direct endpoints, not inference gateways)
+export NSS_INFERENCE_ENDPOINT="https://integrate.api.nvidia.com/v1"  # optional; this is the default
+export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret  (required for column classification with the inference endpoint)
 ```
 
-When `NIM_ENDPOINT_URL` is unset, the classification step is attempted but
+PII column classification requires `NSS_INFERENCE_KEY` (and optionally `NSS_INFERENCE_ENDPOINT` if not using the default).
+When `NSS_INFERENCE_KEY` is unset, the classification step is attempted but
 falls back to NER-only detection (with an error log). No environment
-variables are required for NER-only PII replacement; column classification
-requires `NIM_ENDPOINT_URL`.
+variables are required for NER-only PII replacement.
 
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii) for the full parameter reference.
 
@@ -464,8 +500,28 @@ Two backends are available:
 
 | Backend | Description | When to use |
 |---------|-------------|-------------|
-| Unsloth | Optimized kernels for faster fine-tuning | Default -- use unless you need DP or a custom quantization setup |
-| HuggingFace | Standard PEFT training with 4-bit/8-bit quantization and optional differential privacy via Opacus | Required for differential privacy; also the fallback when Unsloth is unavailable |
+| Unsloth | LoRA fine-tuning with optimized kernels for faster training and lower VRAM usage. Uses Unsloth's `FastLanguageModel` for model loading and PEFT wrapping | Default -- use unless you need DP or a custom quantization setup |
+| HuggingFace | LoRA fine-tuning via PEFT with 4-bit/8-bit quantization support and optional differential privacy (DP-SGD) via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
+
+If you enable differential privacy, the pipeline automatically switches to the HuggingFace backend.
+
+Three models have been extensively tested:
+
+| Family | HuggingFace ID |
+|--------|----------------|
+| SmolLM3 (default) | `HuggingFaceTB/SmolLM3-3B` |
+| Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
+| TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
+
+We recommend you start with the default, `HuggingFaceTB/SmolLM3-3B`. However, depending on your use case, you may find a different model to be a better fit.
+
+Based on testing, some trade-offs identified compared to SmolLM3 on average:
+
+- TinyLlama runs ~17% faster, while Mistral takes ~2x as long to run.
+- Mistral has ~6% increase in valid record fraction, while TinyLlama has ~7% decrease.
+- Mistral has ~5% higher job completion rate and TinyLlama has ~3% higher.
+- Mistral is comparable to SmolLM3 in Data Privacy Score, while TinyLlama has ~0.1 point decrease.
+- All 3 have comparable Synthetic Quality Scores.
 
 === "CLI"
 
@@ -473,7 +529,7 @@ Two backends are available:
     safe-synthesizer run \
       --training__learning_rate 0.001 \
       --training__batch_size 4 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -515,7 +571,7 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
     safe-synthesizer run \
       --training__quantize_model true \
       --training__quantization_bits 4 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -560,8 +616,7 @@ Common values:
 ### Differential Privacy
 
 Differential privacy (DP) provides a formal bound on what an adversary can
-learn about any individual record. Safe Synthesizer implements DP-SGD via
-Opacus.
+learn about any individual record. Safe Synthesizer implements Differentially Private Stochastic Gradient Descent (DP-SGD) via [Opacus](https://opacus.ai/).
 
 === "CLI"
 
@@ -569,7 +624,7 @@ Opacus.
     safe-synthesizer run \
       --privacy__dp_enabled true \
       --privacy__epsilon 8.0 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -600,7 +655,7 @@ Compatibility constraints when DP is enabled:
 
 !!! note "DP training trade-offs"
     DP training is slower and typically requires more epochs to reach the same
-    loss as non-DP training. Start with `epsilon: 8.0` -- a common practical
+    loss as non-DP training. Start with `epsilon: 8.0` -- a common, practical
     threshold -- and lower it only if your privacy requirements demand it.
     Very low epsilon values (e.g., below 1.0) significantly degrade model
     utility.
@@ -636,7 +691,7 @@ flowchart TD
     safe-synthesizer run \
       --generation__num_records 5000 \
       --generation__temperature 0.7 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -671,7 +726,7 @@ records. Use it when the pipeline struggles to produce valid records.
     ```bash
     safe-synthesizer run \
       --generation__use_structured_generation true \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -711,7 +766,7 @@ fraction per batch.
     safe-synthesizer run \
       --generation__patience 5 \
       --generation__invalid_fraction_threshold 0.6 \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -746,18 +801,18 @@ See [Configuration Reference -- Generation](configuration.md#generation) for the
 ## Evaluation
 
 Measures quality and privacy of synthetic data and produces an HTML report
-with interactive visualizations. Two composite scores are reported:
+with interactive visualizations. Scores are from 0-10, and higher is better. Two composite scores are reported:
 
-- Synthetic Quality Score (SQS): measures statistical fidelity -- how well
-  column distributions, correlations, and structure in the synthetic data match
-  the training data. Higher is better (scale of 0--10).
-- Data Privacy Score (DPS): measures resistance to privacy attacks. Higher
-  means the synthetic data leaks less information about individual training
-  records. DPS is a composite of three subscores:
-    - MIA (Membership Inference Attack) -- privacy risk assessment
-    - AIA (Attribute Inference Attack) -- quasi-identifier privacy; requires a
-      larger sample size to work well
-    - PII replay detection -- checks whether PII from training appears in synthetic data
+- SQS (Synthetic Quality Score) -- composite quality score with five subscores:
+    - Column Correlation Stability -- measures the correlation across every combination of two numeric and categorical columns
+    - Deep Structure Stability -- compares numeric and categorical columns in the training and synthetic data using Principal Component Analysis (PCA)
+    - Column Distribution Stability -- measures the distribution of each numeric and categorical column
+    - Text Structure Similarity -- measures the sentence, word, and character counts for text columns
+    - Text Semantic Similarity -- measures whether the semantic meaning in text columns held after synthesizing
+- DPS (Data Privacy Score) -- composite privacy score with three subscores:
+    - Membership Inference Protection -- measures whether a model trained on the data can distinguish training records from held-out records
+    - Attribute Inference Protection -- measures whether an attacker can infer a sensitive attribute from quasi-identifiers in the synthetic data
+    - PII Replay Detection -- checks whether PII from training appears in synthetic data
 
 See [Evaluation](../product-overview/evaluation.md) for details on score
 interpretation.
@@ -768,7 +823,7 @@ interpretation.
     safe-synthesizer run \
       --evaluation__mia_enabled false \
       --evaluation__aia_enabled false \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -801,7 +856,7 @@ To skip evaluation entirely (e.g., for faster iteration during development):
     ```bash
     safe-synthesizer run \
       --evaluation__enabled false \
-      --url data.csv
+      --data-source data.csv
     ```
 
 === "SDK"
@@ -846,7 +901,7 @@ to sort within groups.
       --time_series__timestamp_column timestamp \
       --time_series__timestamp_interval_seconds 60 \
       --data__group_training_examples_by sensor_id \
-      --url sensor_data.csv
+      --data-source sensor_data.csv
     ```
 
 === "SDK"
@@ -884,6 +939,12 @@ to sort within groups.
 See [Configuration Reference -- Time Series](configuration.md#time-series) for the full parameter table.
 See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common issues.
 
+!!! note "How time-series examples are assembled"
+    Each training example contains records from a single group in
+    chronological order. The model learns to continue a sequence --
+    not to produce independent records. See
+    [Example Generation](../developer-guide/example-generation.md) for assembly details.
+
 ---
 
 ## Run Individual Stages
@@ -893,7 +954,7 @@ See [Troubleshooting -- Time Series](troubleshooting.md#time-series) for common 
 === "CLI"
 
     ```bash
-    safe-synthesizer run train --config config.yaml --url data.csv
+    safe-synthesizer run train --config config.yaml --data-source data.csv
     ```
 
 === "SDK"
@@ -917,7 +978,7 @@ the CLI Commands section for all options.
     ```bash
     safe-synthesizer run generate \
       --config config.yaml \
-      --url data.csv \
+      --data-source data.csv \
       --auto-discover-adapter
     ```
 
@@ -934,10 +995,11 @@ the CLI Commands section for all options.
         Path("./safe-synthesizer-artifacts/myconfig---mydata/2026-01-15T12:00:00")
     )
     synthesizer = SafeSynthesizer(config, workdir=workdir)
-    synthesizer.process_data()
     synthesizer.load_from_save_path()
+    synthesizer.process_data()
     synthesizer.generate()
     synthesizer.evaluate()
+    synthesizer.save_results()
     ```
 
 ### Stepwise execution (SDK)
@@ -964,38 +1026,43 @@ synthesizer.save_results()
 
 Each run writes to a directory named `<config-stem>---<dataset-stem>/<run_name>`
 under the artifact path. The config and dataset stems are derived from the
-filenames you pass to `--config` and `--url`, making it easy to identify runs
+filenames you pass to `--config` and `--data-source`, making it easy to identify runs
 at a glance. `<run_name>` defaults to an ISO 8601 timestamp (e.g., `2026-01-15T12:00:00`).
 
 To use an explicit output directory (skipping the auto-generated
 `<config>---<dataset>/<run_name>` structure), pass `--run-path`:
 
 ```bash
-safe-synthesizer run --config config.yaml --url data.csv --run-path ./my-run
+safe-synthesizer run --config config.yaml --data-source data.csv --run-path ./my-run
 ```
 
 ```text
-safe-synthesizer-artifacts/
-└── <config>---<dataset>/
-    └── <run_name>/
-        ├── safe-synthesizer-config.json
-        ├── train/
-        │   └── adapter/
-        ├── generate/
-        │   ├── synthetic_data.csv
-        │   └── evaluation_report.html
-        └── dataset/
-            ├── training.csv
-            ├── test.csv
-            └── validation.csv  (only when training.validation_ratio > 0.0)
+<artifact-path>/<config>---<dataset>/<run_name>/
+├── train/
+│   ├── safe-synthesizer-config.json
+│   └── adapter/                     # trained PEFT adapter
+├── generate/
+│   ├── logs.jsonl                   # generate-only workflow
+│   ├── info.json                    # generate-only workflow
+│   ├── synthetic_data.csv
+│   ├── evaluation_report.html
+│   └── evaluation_metrics.json      # machine-readable metrics
+├── dataset/
+│   ├── training.csv
+│   ├── test.csv
+│   ├── validation.csv               # when training.validation_ratio > 0
+│   └── transformed_training.csv     # when PII replacement transforms the data
+└── logs/
+    └── <phase>.jsonl                # e.g. end_to_end.jsonl or train.jsonl
 ```
 
 Key outputs:
 
 - `generate/synthetic_data.csv`: the synthetic dataset
 - `generate/evaluation_report.html`: quality and privacy report
+- `generate/evaluation_metrics.json`: machine-readable evaluation scores and timing
 - `train/adapter/`: LoRA weights for resuming generation
-- `safe-synthesizer-config.json`: resolved config snapshot
+- `train/safe-synthesizer-config.json`: resolved config snapshot
 
 !!! tip "Clean up artifacts"
     Adapter weights and training caches can consume significant disk space
@@ -1005,11 +1072,16 @@ Key outputs:
 
 ### SDK Results Access
 
+`run()` automatically saves `synthetic_data.csv`, `evaluation_report.html`,
+and `evaluation_metrics.json` to the artifacts directory unless an
+`output_file` override is provided. For stepwise execution, call
+`save_results()` explicitly after `evaluate()`.
+
 ```python
 results = synthesizer.results
 df = results.synthetic_data
 summary = results.summary
-synthesizer.save_results()
+# synthesizer.save_results()  # only needed for stepwise execution; run() saves automatically
 ```
 
 ### Cleaning Up
@@ -1081,7 +1153,7 @@ config file.
     ```bash
     safe-synthesizer run \
       --config config.yaml \
-      --url data.csv \
+      --data-source data.csv \
       --wandb-mode online \
       --wandb-project my-experiments
     ```

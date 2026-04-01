@@ -158,6 +158,8 @@ nav:
       - Evaluation: product-overview/evaluation.md
   - Tutorials:
       - tutorials/index.md
+      - Safe Synthesizer 101: tutorials/safe-synthesizer-101.ipynb
+      - Differential Privacy: tutorials/differential-privacy.ipynb
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md
@@ -170,6 +172,7 @@ nav:
           - Environment Variables: user-guide/environment.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
+      - Example Generation: developer-guide/example-generation.md
       - Docker: developer-guide/docker.md
       - API Reference: reference/
   - Developer Notes:

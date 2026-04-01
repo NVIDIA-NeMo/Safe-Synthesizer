@@ -28,15 +28,8 @@ from ...observability import get_logger
 from ..components.component import Component
 from ..data_model.evaluation_dataset import EvaluationDataset
 from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
+from ..nearest_neighbors import NearestNeighborSearch
 from . import multi_modal_figures as figures
-
-faiss_available = False
-try:
-    import faiss
-
-    faiss_available = True
-except (ImportError, ModuleNotFoundError):
-    pass
 
 logger = get_logger(__name__)
 
@@ -78,10 +71,6 @@ class AttributeInferenceProtection(Component):
         evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
     ) -> AttributeInferenceProtection:
         """Run the attribute inference attack and return the protection score."""
-        if not faiss_available:
-            logger.info("FAISS is not available, skipping Attribute Inference Attack.")
-            return AttributeInferenceProtection(score=EvaluationScore())
-
         quasi_identifier_count = config.evaluation.quasi_identifier_count if config else QUASI_IDENTIFIER_COUNT
 
         score, col_accuracy_df = AttributeInferenceProtection._aia(
@@ -277,23 +266,17 @@ class AttributeInferenceProtection(Component):
                     df_train_use, df_synth_use
                 )
 
-        # If all tabular, just use FAISS to get NN
+        # If all tabular, use nearest neighbor search (torch CUDA or sklearn CPU fallback)
         if len(text_columns) == 0:
-            # Create the faiss index on the synthetic data
-            dim = df_synth_norm.shape[1]
-            index = faiss.IndexFlatL2(dim)
-
-            # This usage matches documentation. Specifying n= and x= parameters as
-            # the type annotation for IndexFlatL2.add suggests seems unnecessary, possibly related
-            # to swig handling that ty is not aware of. Similar for other faiss calls below
-            # which are using swig-generated code.
-            index.add(np.float32(np.ascontiguousarray(np.array(df_synth_norm))))
+            # Create the nearest neighbors index on the synthetic data
+            nn = NearestNeighborSearch(n_neighbors=k)
+            nn.fit(np.ascontiguousarray(np.array(df_synth_norm)).astype(np.float32))
 
             # Get nearest neighbors to this attack record
-            _, indexes = index.search(np.float32(np.ascontiguousarray(np.array(df_train_norm))), k)
+            _, indexes = nn.kneighbors(np.ascontiguousarray(np.array(df_train_norm)).astype(np.float32))
             synth_rows = pd.DataFrame()
-            for index in indexes:
-                synth_rows = pd.concat([synth_rows, df_synth.iloc[index].copy()])
+            for idx_row in indexes:
+                synth_rows = pd.concat([synth_rows, df_synth.iloc[idx_row].copy()])
             return synth_rows
 
         # If all text, just use Sentence Transformer to get NN
@@ -342,14 +325,11 @@ class AttributeInferenceProtection(Component):
             corpus_ids.append(corpus_id)
             synth_NN = pd.concat([synth_NN, pd.DataFrame([df_synth_norm.iloc[int(corpus_id)]])], ignore_index=True)
 
-        # Now get the tabular similarity for these 1000 NN
-
-        dim = synth_NN.shape[1]
-        index = faiss.IndexFlatL2(dim)
-        index.add(np.float32(np.ascontiguousarray(np.array(synth_NN))))
-        dists, indexes = index.search(np.float32(np.ascontiguousarray(np.array(df_train_norm))), search_synth_k)
+        # Now get the tabular similarity for these 1000 NN using nearest neighbor search
+        nn = NearestNeighborSearch(n_neighbors=search_synth_k)
+        nn.fit(np.ascontiguousarray(np.array(synth_NN)).astype(np.float32))
+        dists, indexes = nn.kneighbors(np.ascontiguousarray(np.array(df_train_norm)).astype(np.float32))
         # Scale the Euclidean distance to [0,1]
-        dists = np.sqrt(dists)
         max_dist = np.amax(dists)
         if max_dist > 0:
             dist_scaled = dists / max_dist
@@ -357,8 +337,8 @@ class AttributeInferenceProtection(Component):
             dist_scaled = dists
         tab_dist = {}
         for i in range(search_synth_k):
-            index = indexes[0][i]
-            tab_dist[index] = dist_scaled[0][i]
+            idx = indexes[0][i]
+            tab_dist[idx] = dist_scaled[0][i]
 
         # Now get the hybrid distance
 

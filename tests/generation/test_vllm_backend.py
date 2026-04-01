@@ -14,7 +14,9 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
+from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F401
 
 
@@ -520,3 +522,97 @@ class TestNoopRemoteCacheBackend:
         fake_redis = MagicMock()
         with patch.dict("sys.modules", {"redis": fake_redis}):
             assert _is_redis_available() is True
+
+
+class TestGroupedGenerationStopKwargs:
+    """Tests that grouped generation relies on native EOS stopping (ignore_eos=False)
+    rather than explicit stop/stop_token_ids kwargs.
+    """
+
+    def test_native_eos_stopping_for_grouped_processor(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """When processor is not TabularDataProcessor, ignore_eos must be False and
+        no explicit stop/stop_token_ids kwargs are passed.
+        """
+        mock_model_metadata.prompt_config.eos_token = "</s>"
+        mock_model_metadata.prompt_config.eos_token_id = 2
+        mock_model_metadata.max_seq_length = 2048
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        assert not isinstance(backend.processor, TabularDataProcessor)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert "stop" not in captured
+        assert "stop_token_ids" not in captured
+        assert captured["ignore_eos"] is False
+        assert captured["include_stop_str_in_output"] is True
+
+    def test_no_stop_kwargs_for_tabular_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+        """When processor is TabularDataProcessor, no explicit stop/stop_token_ids
+        kwargs are passed, ignore_eos is False, and special-token outputs are off.
+        """
+        mock_model_metadata.max_seq_length = 2048
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.processor = TabularDataProcessor(schema=mock_schema, config=ValidationParameters())
+        assert isinstance(backend.processor, TabularDataProcessor)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert "stop" not in captured
+        assert "stop_token_ids" not in captured
+        assert captured["ignore_eos"] is False
+        assert captured["skip_special_tokens"] is True
+        assert captured["include_stop_str_in_output"] is False
+
+    def test_large_context_grouped_generation_has_eos_stop(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """Regression: large-context models (e.g. SmolLM3) need explicit EOS stop tokens
+        for grouped generation, otherwise generation runs away to max_tokens.
+
+        With small context windows (e.g. TinyLlama 2048) the max_tokens limit masks
+        the missing stop condition. A large window like 8192+ exposes the bug.
+        """
+        mock_model_metadata.prompt_config.eos_token = "</s>"
+        mock_model_metadata.prompt_config.eos_token_id = 2
+        mock_model_metadata.max_seq_length = 8192
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        assert not isinstance(backend.processor, TabularDataProcessor)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["max_tokens"] == 8192
+        assert "stop" not in captured
+        assert "stop_token_ids" not in captured
+        assert captured["ignore_eos"] is False

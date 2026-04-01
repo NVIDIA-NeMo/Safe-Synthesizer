@@ -48,6 +48,9 @@ def naive_train_test_split(
         Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` if the
         split produces no test set.
     """
+    if test_size == 0:
+        return df.reset_index(drop=True), None
+
     train, test = train_test_split(df, test_size=test_size, random_state=random_state)
     if test is None:
         return train, None

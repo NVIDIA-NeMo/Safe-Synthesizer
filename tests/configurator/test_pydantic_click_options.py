@@ -315,7 +315,7 @@ def test_no_privacy_flag_on_nss_params():
 
 
 def test_no_replace_pii_end_to_end_via_click_runner():
-    """--no_replace_pii must produce replace_pii=None in parsed overrides."""
+    """--no-replace-pii must produce replace_pii=None in parsed overrides."""
     captured: dict = {}
 
     @pydantic_options(SafeSynthesizerParameters, field_separator="__")
@@ -323,13 +323,13 @@ def test_no_replace_pii_end_to_end_via_click_runner():
     def cmd(**kwargs):
         captured.update(parse_overrides(kwargs))
 
-    result = CliRunner().invoke(cmd, ["--no_replace_pii"])
+    result = CliRunner().invoke(cmd, ["--no-replace-pii"])
     assert result.exit_code == 0, result.output
     assert captured.get("replace_pii") is None
 
 
 def test_no_replace_pii_absent_does_not_inject():
-    """Omitting --no_replace_pii must not inject replace_pii into overrides."""
+    """Omitting --no-replace-pii must not inject replace_pii into overrides."""
     captured: dict = {}
 
     @pydantic_options(SafeSynthesizerParameters, field_separator="__")

@@ -41,7 +41,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
             "email": "email",
             "full address": "address",
             "height": None,
-            "date of birth": "date",
+            "date of birth": None,
             "notes": None,
         }
         assert {field.field_name: field.entity_count for field in classification} == {
@@ -50,7 +50,7 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
             "email": 20,
             "full address": 20,
             "height": None,
-            "date of birth": 20,
+            "date of birth": None,
             "notes": None,
         }
 

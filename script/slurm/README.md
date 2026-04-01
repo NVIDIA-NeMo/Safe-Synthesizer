@@ -22,7 +22,7 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 ### Prerequisites
 
 - Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
-- NIM API Key: You will need a `NIM_API_KEY` to run column classification. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com) using your `nvidian` organization account.
+- An LLM inference endpoint and the API Key: You will need a `NSS_INFERENCE_KEY` to run column classification, if using the default `NSS_INFERENCE_ENDPOINT`. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com).
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
 ```bash
@@ -52,7 +52,7 @@ export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 # With the above env vars, the usual make command should work.
 # Note this may be quite slow the first time due to very slow network
 # connectivity on slurm to download from pypi, but subsequent executions
-# (such as startup for your jobs) should be much faster since uv will 
+# (such as startup for your jobs) should be much faster since uv will
 # pull cached wheels from UV_CACHE_DIR.
 # (Be sure to run from the root of the Safe-Synthesizer repo)
 make bootstrap-nss cu128
@@ -85,9 +85,9 @@ export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 export USER_NAME=your_lustre_username
 ```
 
-2) Create your API token file with `NIM_API_KEY` and restrict permissions, recommended to inclue `HF_TOKEN` to avoid throttling by HF Hub and, if you're using W&B, `WANDB_API_KEY`:
+2) Create your API token file with `NSS_INFERENCE_KEY` and restrict permissions, recommended to inclue `HF_TOKEN` to avoid throttling by HF Hub and, if you're using W&B, `WANDB_API_KEY`:
 ```bash
-echo 'export NIM_API_KEY="<your_api_key>"' > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
+echo 'export NSS_INFERENCE_KEY="<your_api_key>"' > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
 chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
 ```
 
@@ -207,6 +207,37 @@ squeue -u ${USER_NAME}
 scancel <jobid>
 ```
 
+#### nss_top — interactive TUI monitor
+
+`nss_top.py` is a `k9s`-style terminal dashboard for watching your SLURM jobs and tailing their logs in real time. Run it from the login node:
+
+```bash
+# Simplest — username and log dir are inferred from $USER_NAME / $BASE_LOG_DIR / $LUSTRE_DIR
+uv run script/slurm/nss_top.py
+
+# Explicit log dir (searches recursively, so the top-level nss_results dir is fine)
+uv run script/slurm/nss_top.py --log-dir ${BASE_LOG_DIR}
+
+# Override username or refresh interval
+uv run script/slurm/nss_top.py --user mkornfield --refresh 15
+```
+
+Key bindings:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Select job |
+| `l` | Show stdout log |
+| `e` | Show stderr log |
+| `r` | Manual refresh |
+| `q` | Quit |
+
+Log directory resolution order (first match wins):
+1. `--log-dir` flag
+2. `$BASE_LOG_DIR` environment variable
+3. `$LUSTRE_DIR/nss_results` (constructed from `$LUSTRE_DIR`)
+4. `/lustre/fsw/portfolios/llmservice/users/<user>/nss_results` (default)
+
 ### Collect results
 
 Use W&B by setting `WANDB_MODE=online` in `env_variables.sh` and add your W&B token to `.api_tokens.sh`.
@@ -214,7 +245,7 @@ Use W&B by setting `WANDB_MODE=online` in `env_variables.sh` and add your W&B to
 ### Troubleshooting
 
 - "USER_NAME is not set": run `export USER_NAME=...` and retry.
-- Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NIM_API_KEY` and `chmod 600`.
+- Missing token file/key: create `${LUSTRE_DIR}/.api_tokens.sh` with `NSS_INFERENCE_KEY` and `chmod 600`.
 - Missing config files: verify `CONFIGS` in `env_variables.sh` and files in `CONFIG_DIR`.
 - Permission errors: confirm your `/lustre/.../${USER_NAME}` paths and file perms.
 

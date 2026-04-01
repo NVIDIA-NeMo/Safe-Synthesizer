@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from ..artifacts.analyzers.field_features import describe_field
 from ..artifacts.base.fields import FieldType
 from ..config.replace_pii import PiiReplacerConfig
+from ..defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
 from ..pii_replacer.data_editor.edit import Editor, TransformFnAccounting
 from ..pii_replacer.transform_result import ColumnStatistics, TransformResult
 from .data_editor.detect import (
@@ -87,32 +88,61 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
 
 
 def _get_classify_endpoint_url() -> str:
-    """Get the inference endpoint URL for column classification.
+    """Resolve the NIM/OpenAI-compatible base URL for PII column classification.
 
-    The endpoint is expected to be set in the NIM_ENDPOINT_URL environment variable.
+    If ``NSS_INFERENCE_ENDPOINT`` is present in the environment, that value is used.
+    If the variable is unset, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT`` from ``defaults``.
+
+    Note:
+        Emits an INFO log indicating whether the default or configured URL applies.
 
     Returns:
-        The inference endpoint URL.
-
-    Raises:
-        Exception: If no valid configuration is found.
+        inference endpoint for PII column classification.
     """
-    endpoint = os.environ.get("NIM_ENDPOINT_URL")
-    if endpoint:
-        return endpoint
+    configured = os.environ.get("NSS_INFERENCE_ENDPOINT")
+    if configured is None:
+        url = DEFAULT_NSS_INFERENCE_ENDPOINT
+        logging.info(
+            "PII column classification will call the default NVIDIA inference API at %s. "
+            "To use another server, set the NSS_INFERENCE_ENDPOINT environment variable to a NIM/OpenAI-compatible endpoint.",
+            url,
+        )
+    else:
+        url = configured
+        logging.info(
+            "PII column classification will use the inference API you configured (NSS_INFERENCE_ENDPOINT): %s",
+            url,
+        )
+    return url
 
-    raise Exception("Inference endpoint not configured for classify. Set NIM_ENDPOINT_URL environment variable.")
+
+def _inference_key_configured() -> bool:
+    """Return whether ``NSS_INFERENCE_KEY`` is set to a non-empty value."""
+    return bool((os.environ.get("NSS_INFERENCE_KEY") or "").strip())
+
+
+def _column_classify_failure_remediation(exc: BaseException) -> str:
+    """Extra log text after column classifier init or classify failures."""
+    if not _inference_key_configured():
+        return (
+            " Please set NSS_INFERENCE_KEY in the environment. Get an API key at https://build.nvidia.com/settings/api-keys. "
+            "NSS_INFERENCE_ENDPOINT is optional when using the default NVIDIA inference API."
+        )
+    return (
+        f" If this persists, check NSS_INFERENCE_ENDPOINT and that your API key is valid. ({type(exc).__name__}: {exc})"
+    )
 
 
 def get_column_classifier() -> ColumnClassifierLLM:
+    """Return a column classifier backed by the NSS inference endpoint (``NSS_INFERENCE_ENDPOINT``, ``NSS_INFERENCE_KEY``)."""
     classifier = ColumnClassifierLLM()
     classifier._num_samples = 5
 
     endpoint = _get_classify_endpoint_url()
 
     # When using Inference Gateway, no API key is needed (gateway handles auth).
-    # For legacy direct endpoint, NIM_API_KEY can be provided.
-    api_key = os.environ.get("NIM_API_KEY", "not-needed")
+    # For legacy direct endpoint, NSS_INFERENCE_KEY can be provided.
+    api_key = os.environ.get("NSS_INFERENCE_KEY", "not-needed")
 
     classifier._llm = OpenAI(api_key=api_key, base_url=endpoint)
     return classifier
@@ -242,9 +272,11 @@ class NemoPII(object):
                 # Try to initialize the column classifier
                 try:
                     column_classifier = get_column_classifier()
-                except Exception:
+                except Exception as exc:
                     logging.error(
-                        "Could not initialize column classifier, falling back to default entities.", exc_info=False
+                        "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
+                        _column_classify_failure_remediation(exc),
+                        exc_info=_inference_key_configured(),
                     )
 
                 # Try to perform classification if we successfully got a classifier
@@ -260,8 +292,12 @@ class NemoPII(object):
                             )
                             for (name, entity) in columns.items()
                         }
-                    except Exception:
-                        logging.error("Could not perform classify, falling back to default entities.", exc_info=False)
+                    except Exception as exc:
+                        logging.error(
+                            "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
+                            _column_classify_failure_remediation(exc),
+                            exc_info=_inference_key_configured(),
+                        )
             else:
                 logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")
         finally:

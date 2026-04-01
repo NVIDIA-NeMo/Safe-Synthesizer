@@ -9,41 +9,22 @@ from datasets import Dataset, load_dataset
 
 
 def pytest_collection_modifyitems(config, items):
-    """
-    Modify test items during collection.
-
-    Auto-marks tests based on their location:
-    - Tests in gpu_integration/ get the 'gpu_integration' marker
-    - Tests in e2e/ directories get the 'e2e' marker
-    - Tests in integration/ directories get the 'integration' marker
-    - Tests without category markers get the 'unit' marker
-    """
-    category_markers = {
-        "unit",
-        "e2e",
-        "integration",
-        "gpu_integration",
-    }
+    """Auto-mark tests by directory: `/e2e/` -> e2e, `/smoke/` -> smoke, else unit."""
+    category_markers = {"unit", "e2e", "smoke"}
 
     for item in items:
         marker_names = {marker.name for marker in item.iter_markers()}
         path_str = str(item.fspath)
-
-        # Auto-mark tests in gpu_integration/ directory
-        if "/gpu_integration/" in path_str:
-            if "gpu_integration" not in marker_names:
-                item.add_marker(pytest.mark.gpu_integration)
-                marker_names.add("gpu_integration")
 
         if "/e2e/" in path_str:
             if "e2e" not in marker_names:
                 item.add_marker(pytest.mark.e2e)
                 marker_names.add("e2e")
 
-        elif "/integration/" in path_str:
-            if "integration" not in marker_names:
-                item.add_marker(pytest.mark.integration)
-                marker_names.add("integration")
+        if "/smoke/" in path_str:
+            if "smoke" not in marker_names:
+                item.add_marker(pytest.mark.smoke)
+                marker_names.add("smoke")
 
         if not marker_names.intersection(category_markers):
             item.add_marker(pytest.mark.unit)
@@ -265,8 +246,8 @@ def fixture_lmsys_chat_non_english_dataset() -> pd.DataFrame:
 
 
 @pytest.fixture
-def fixture_adobe_sampled_dataset() -> pd.DataFrame:
-    return load_test_dataframe("adobe-sampled.csv")
+def fixture_doc_summaries_dataset() -> pd.DataFrame:
+    return load_test_dataframe("doc_summaries.csv")
 
 
 # Purpose: Clinc OOS dataset fixture for free text tests.

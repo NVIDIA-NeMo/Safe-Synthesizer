@@ -578,8 +578,8 @@ def test_assembler_to_processor_grouped(fixture_over_tokenizers, fixture_session
     _check_assembler_to_processor(config, df, tokenizer, cache_file_path=fixture_session_cache_dir)
 
 
-def test_assembler_to_processor_adobe(
-    fixture_over_tokenizers, fixture_session_cache_dir, fixture_adobe_sampled_dataset
+def test_assembler_to_processor_doc_summaries(
+    fixture_over_tokenizers, fixture_session_cache_dir, fixture_doc_summaries_dataset
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
@@ -589,7 +589,7 @@ def test_assembler_to_processor_adobe(
         pretrained_model=model_name,
     )
     _check_assembler_to_processor(
-        config=config, df=fixture_adobe_sampled_dataset, tokenizer=tokenizer, cache_file_path=fixture_session_cache_dir
+        config=config, df=fixture_doc_summaries_dataset, tokenizer=tokenizer, cache_file_path=fixture_session_cache_dir
     )
 
 
