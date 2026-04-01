@@ -106,7 +106,6 @@ The project has 7 GitHub Actions workflows:
 | CI Checks | `ci-checks.yml` | push to main, PRs, manual | format, lint, typecheck, unit-test |
 | GPU jobs | `gpu-tests.yml` | push to main, push to `pull-request/<N>`, manual | e2e on A100 (copy-pr-bot; see below) |
 | Conventional Commit | `conventional-commit.yml` | PR title changes | Validates PR title format |
-| Copyright Check | `copyright-check.yml` | push to main, release branches | NVIDIA copyright headers |
 | DCO Assistant | `dco-assistant.yml` | PR events, comments | Developer Certificate of Origin |
 | Release | `release.yml` | manual dispatch only | Build and publish to PyPI |
 | Secrets Detector | `secrets-detector.yml` | PRs to main | Scans for leaked secrets |
