@@ -55,7 +55,11 @@ EXP_NAME="${EXP_NAME:-multi_jobs}"
 BASE_LOG_DIR="${BASE_LOG_DIR:-./}"
 
 
-cd "${NSS_DIR}"
+# Only cd into the repo when using the repo-based install; in PyPI mode the
+# working directory does not matter for package resolution.
+if [[ -z "${NSS_VERSION:-}" ]]; then
+    cd "${NSS_DIR}"
+fi
 
 # Get dataset and config name from packed strings
 declare -a all_datasets
@@ -88,8 +92,24 @@ apt-get update && apt-get install -y --no-install-recommends \
 
 # Ensure Python environment is available inside the container
 source "${LUSTRE_DIR}/.uv/bin/env"
-source "${NSS_DIR}/.venv/bin/activate"
-uv sync --frozen --extra cu128 --extra engine --group dev
+if [[ -n "${NSS_VERSION:-}" ]]; then
+    # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
+    # lustre so concurrent array jobs can share it without redundant downloads.
+    PYPI_VENV="${LUSTRE_DIR}/.venv_nss_${NSS_VERSION}"
+    uv venv --python 3.11 "${PYPI_VENV}"
+    source "${PYPI_VENV}/bin/activate"
+    uv pip install "nemo-safe-synthesizer[cu128,engine]==${NSS_VERSION}" \
+        --extra-index-url https://download.pytorch.org/whl/cu128 \
+        --extra-index-url https://flashinfer.ai/whl/cu128 \
+        --index-strategy unsafe-best-match
+    NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
+    echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION}"
+else
+    source "${NSS_DIR}/.venv/bin/activate"
+    uv sync --frozen --extra cu128 --extra engine --group dev
+    NSS_RUN_CMD="uv run safe-synthesizer"
+fi
+echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 
 
 # for column classification
@@ -166,7 +186,7 @@ fi
 if [[ "${NSS_PHASE}" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
-    uv run safe-synthesizer run train \
+    ${NSS_RUN_CMD} run train \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
@@ -182,7 +202,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
         wandb_resume_arg="--wandb-resume-job-id $wandb_id_file"
     fi
 
-    uv run safe-synthesizer run generate \
+    ${NSS_RUN_CMD} run generate \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
@@ -190,7 +210,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
         $wandb_resume_arg
 else
     # Full end-to-end run
-    uv run safe-synthesizer run \
+    ${NSS_RUN_CMD} run \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
