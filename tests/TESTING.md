@@ -17,8 +17,8 @@ Comprehensive testing reference for Safe-Synthesizer developers. Covers commands
 All `make` targets, grouped by scope:
 
 ```bash
-make test                  # Unit (excludes slow, e2e)
-make test-slow             # All including slow (excludes e2e)
+make test                  # Unit (excludes slow, e2e, and smoke)
+make test-unit-slow        # Unit tests including slow (excludes e2e and smoke)
 make test-smoke            # CPU smoke tests (~few min, no GPU required)
 make test-smoke-gpu        # GPU smoke tests (requires CUDA)
 make test-e2e              # All e2e (requires CUDA) -- runs default + dp
@@ -66,17 +66,21 @@ Details:
 
 Defined in `pytest.ini` (`--strict-markers` is enabled):
 
-| Marker | Meaning |
-|--------|---------|
-| `unit` | Unit tests (default, no marker needed) |
-| `slow` | Long-running tests |
-| `smoke` | Quick smoke tests (training/generation hot paths, tiny models) |
-| `e2e` | End-to-end pipeline tests (requires CUDA) |
-| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on `smoke`/`e2e`) |
-| `vllm` | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
-| `smollm2` | SmolLM2 Hub download tests (Makefile uses for process isolation) |
-| `unsloth` | Unsloth backend tests (process-isolated from DP tests) |
-| `noautouse` | Skip autouse fixtures for specific tests |
+
+| Marker         | Meaning                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| `unit`         | Unit tests (default, no marker needed)                                                           |
+| `slow`         | Long-running tests                                                                               |
+| `smoke`        | Quick smoke tests (training/generation hot paths, tiny models)                                   |
+| `e2e`          | End-to-end pipeline tests (requires CUDA)                                                        |
+| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on any category: `unit`/`smoke`/`e2e`)                |
+| `vllm`         | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
+| `smollm2`      | SmolLM2 Hub download tests (Makefile uses for process isolation)                                 |
+| `unsloth`      | Unsloth backend tests (process-isolated from DP tests)                                           |
+| `noautouse`    | Skip autouse fixtures for specific tests                                                         |
+
+Every test should have exactly one of the category markers: `unit, smoke, e2e`.
+The other markers modify the 3 categories, indicating when they should be run (`slow, requires_gpu`), or when separate pytest invocations are required (`vllm, unsloth`).
 
 ## Auto-marking
 
@@ -86,17 +90,19 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 - `/smoke/` -> `smoke`
 - No match -> `unit`
 
-Markers are only added if not already present on the test item.
+Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`) are already present on the test item.
 
 ## Test Data Locations
 
-| Location | Contents |
-|----------|----------|
-| `tests/stub_datasets/` | Sample datasets including: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `doc_summaries.csv` (+ `licenses.md`) |
-| `tests/stub_tokenizer/` | Minimal tokenizer config |
-| `tests/test_data/tokenizers/` | Full tokenizers: `tinyllama/`, `mistral7b/`, `smollm3b/` |
-| `tests/pii_replacer/fake_people_dataset.csv` | PII test data for NER/replacement |
-| `tests/e2e/required_configs/` | 6 YAML configs: `tinyllama-unsloth`, `tinyllama-dp`, `smollm3-unsloth`, `smollm3-dp`, `mistral-nodp`, `mistral-dp` |
+
+| Location                                     | Contents                                                                                                                                                                                                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/stub_datasets/`                       | Sample datasets including: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `doc_summaries.csv` (+ `licenses.md`) |
+| `tests/stub_tokenizer/`                      | Minimal tokenizer config                                                                                                                                                                                                                                            |
+| `tests/test_data/tokenizers/`                | Full tokenizers: `tinyllama/`, `mistral7b/`, `smollm3b/`                                                                                                                                                                                                            |
+| `tests/pii_replacer/fake_people_dataset.csv` | PII test data for NER/replacement                                                                                                                                                                                                                                   |
+| `tests/e2e/required_configs/`                | 6 YAML configs: `tinyllama-unsloth`, `tinyllama-dp`, `smollm3-unsloth`, `smollm3-dp`, `mistral-nodp`, `mistral-dp`                                                                                                                                                  |
+
 
 Load helpers in root `conftest.py`:
 
@@ -151,7 +157,7 @@ GPU smoke tests use markers to express isolation requirements:
 
 `make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
 
-See [`tests/smoke/README.md`](smoke/README.md) for additional smoke-specific gotchas.
+See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotchas.
 
 ## Other Gotchas
 
