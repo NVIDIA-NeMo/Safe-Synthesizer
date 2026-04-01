@@ -90,7 +90,7 @@ The other markers modify the 3 categories, indicating when they should be run (`
 - `/smoke/` -> `smoke`
 - No match -> `unit`
 
-Markers are only added if one of the 3 category markers (`unit`, `smoke`, `e2e`) are not not already present on the test item.
+Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`) are already present on the test item.
 
 ## Test Data Locations
 
