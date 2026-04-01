@@ -317,9 +317,7 @@ def correlation_heatmap(matrix: pd.DataFrame, name: str = "Correlation") -> go.F
     return fig
 
 
-def _generate_correlation_hovertext(
-    corr_training: pd.DataFrame, corr_synthetic: pd.DataFrame, corr_diff: pd.DataFrame
-):
+def _generate_correlation_hovertext(corr_training: pd.DataFrame, corr_synthetic: pd.DataFrame, corr_diff: pd.DataFrame):
     """Build a 2-D hover-text matrix showing training, synthetic, and difference correlations."""
     hovertext = list()
     # Loop through the y values

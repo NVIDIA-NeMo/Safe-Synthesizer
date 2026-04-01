@@ -25,7 +25,9 @@ class EvaluationReport(BaseModel):
     consumed by the HTML report template.
     """
 
-    evaluation_datasets: EvaluationDatasets = Field(description="The paired training/synthetic data used for evaluation.")
+    evaluation_datasets: EvaluationDatasets = Field(
+        description="The paired training/synthetic data used for evaluation."
+    )
     components: list[Component] = Field(
         default=list(), description="Ordered list of evaluation components with their scores."
     )

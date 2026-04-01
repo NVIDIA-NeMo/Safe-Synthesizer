@@ -24,9 +24,7 @@ class DatasetStatistics(Component):
 
     name: str = Field(default="Dataset Statistics")
     # Copy these out for rendering convenience
-    training_rows: int = Field(
-        default=0, ge=0, description="Row count of the training dataframe used for evaluation."
-    )
+    training_rows: int = Field(default=0, ge=0, description="Row count of the training dataframe used for evaluation.")
     training_cols: int = Field(
         default=0, ge=0, description="Column count of the training dataframe used for evaluation."
     )

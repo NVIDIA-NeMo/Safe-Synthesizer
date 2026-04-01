@@ -106,7 +106,9 @@ class MembershipInferenceProtection(Component):
         df_norm = pd.DataFrame(num_encoder.transform(df_norm), columns=df_norm.columns).fillna(0)
 
         training_df_norm = df_norm.head(len(training_df))
-        synthetic_df_norm = df_norm.head(len(training_df) + len(synthetic_df)).tail(len(synthetic_df)).reset_index(drop=True)
+        synthetic_df_norm = (
+            df_norm.head(len(training_df) + len(synthetic_df)).tail(len(synthetic_df)).reset_index(drop=True)
+        )
         test_df_norm = df_norm.tail(len(test_df)).reset_index(drop=True)
 
         return training_df_norm, synthetic_df_norm, test_df_norm
@@ -279,8 +281,8 @@ class MembershipInferenceProtection(Component):
         prefix_head = training_df_norm.head(prefix)
         training_df_attack = prefix_head.tail(len(test_df_norm)).reset_index(drop=True)
         training_data_indexes = training_df_attack.index.tolist()
-        attack_df = pd.concat([training_df_attack, test_df_norm]).reset_index(drop=True).sample(
-            frac=1, random_state=run
+        attack_df = (
+            pd.concat([training_df_attack, test_df_norm]).reset_index(drop=True).sample(frac=1, random_state=run)
         )
 
         attack_synth_dist_text = [[0] for i in range(len(attack_df))]
@@ -543,8 +545,8 @@ class MembershipInferenceProtection(Component):
                         training_df_use, synthetic_df, test_df
                     )
                 except Exception:
-                    training_df_norm, synthetic_df_norm, test_df_norm = (
-                        MembershipInferenceProtection._normalize_onehot(training_df_use, synthetic_df, test_df)
+                    training_df_norm, synthetic_df_norm, test_df_norm = MembershipInferenceProtection._normalize_onehot(
+                        training_df_use, synthetic_df, test_df
                     )
                 # Create nearest neighbor index on the synthetic tabular data (torch GPU or sklearn CPU fallback)
                 nn_index = NearestNeighborSearch(n_neighbors=len(synthetic_df_norm))

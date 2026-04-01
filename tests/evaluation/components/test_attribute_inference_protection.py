@@ -58,7 +58,9 @@ def test_attribute_inference_protection_text_only(training_df_text_only, synthet
     This test exercises the text-only nearest neighbor path that uses
     only sentence-transformers for semantic similarity search.
     """
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_text_only, synthetic_df_text_only, test_df_text_only)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training_df_text_only, synthetic_df_text_only, test_df_text_only
+    )
     attribute_inference_protection = AttributeInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(f"AIA text-only columns evaluated: {attribute_inference_protection.col_accuracy_df}")

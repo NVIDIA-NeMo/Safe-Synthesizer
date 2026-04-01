@@ -263,7 +263,9 @@ class SafeSynthesizer(ConfigBuilder):
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
 
-        self._original_training_df = original_training_df  # The original training df that we use for evaluation at the end
+        self._original_training_df = (
+            original_training_df  # The original training df that we use for evaluation at the end
+        )
         self._training_df = original_training_df  # The active training df that might go through transformation
         self._column_statistics = None
 

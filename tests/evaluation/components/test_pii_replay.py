@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 @pytest.mark.slow
 def test_pii_replay(training_df_5k, synthetic_df_5k, test_df, column_statistics):
     """PII analysis on 5k rows - computationally expensive."""
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df, column_statistics)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training_df_5k, synthetic_df_5k, test_df, column_statistics
+    )
     pii_replay = PIIReplay.from_evaluation_datasets(evaluation_datasets)
 
     assert len(pii_replay.pii_replay_data) == 3

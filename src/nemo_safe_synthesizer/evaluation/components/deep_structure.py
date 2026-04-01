@@ -80,7 +80,9 @@ class DeepStructure(Component):
             synthetic_pca,
         )
 
-        return DeepStructure(score=principal_component_stability, training_pca=training_pca, synthetic_pca=synthetic_pca)
+        return DeepStructure(
+            score=principal_component_stability, training_pca=training_pca, synthetic_pca=synthetic_pca
+        )
 
     @staticmethod
     def _fill_in_numeric_columns(df: pd.DataFrame, numeric_columns: list[str]) -> pd.DataFrame | None:
@@ -228,12 +230,20 @@ class DeepStructure(Component):
             synthetic_rows = synthetic_df.shape[0]
 
             training_subsample = (
-                (training_df.sample(n=synthetic_rows, random_state=333) if training_rows > synthetic_rows else training_df)
+                (
+                    training_df.sample(n=synthetic_rows, random_state=333)
+                    if training_rows > synthetic_rows
+                    else training_df
+                )
                 .replace([np.inf, -np.inf], np.nan)
                 .dropna(axis="columns", how="all")
             )
             synthetic_subsample = (
-                (synthetic_df.sample(n=training_rows, random_state=333) if synthetic_rows > training_rows else synthetic_df)
+                (
+                    synthetic_df.sample(n=training_rows, random_state=333)
+                    if synthetic_rows > training_rows
+                    else synthetic_df
+                )
                 .replace([np.inf, -np.inf], np.nan)
                 .dropna(axis="columns", how="all")
             )

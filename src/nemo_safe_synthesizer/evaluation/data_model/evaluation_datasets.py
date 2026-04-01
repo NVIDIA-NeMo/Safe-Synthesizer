@@ -257,4 +257,6 @@ class EvaluationDatasets(BaseModel):
             )
             training, synthetic = EvaluationDatasets.subsample_rows(training, synthetic, rows)
 
-        return EvaluationDatasets(training=training, synthetic=synthetic, test=test, column_statistics=column_statistics)
+        return EvaluationDatasets(
+            training=training, synthetic=synthetic, test=test, column_statistics=column_statistics
+        )

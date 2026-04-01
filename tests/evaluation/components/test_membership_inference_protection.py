@@ -67,7 +67,9 @@ def test_membership_inference_protection_text_only(training_df_text_only, synthe
     This test exercises the text-only nearest neighbor path that uses
     only sentence-transformers for semantic similarity search.
     """
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_text_only, synthetic_df_text_only, test_df_text_only)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        training_df_text_only, synthetic_df_text_only, test_df_text_only
+    )
     membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(f"MIA text-only attack summary: {membership_inference_protection.attack_sum_df}")

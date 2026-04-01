@@ -80,9 +80,7 @@ class AttributeInferenceProtection(Component):
         return AttributeInferenceProtection(score=score, col_accuracy_df=col_accuracy_df)
 
     @staticmethod
-    def _normalize(
-        training_df: pd.DataFrame, synthetic_df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _normalize(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         training_df = training_df.infer_objects()
         synthetic_df = synthetic_df.infer_objects()
         df = pd.concat([training_df, synthetic_df])
@@ -110,9 +108,7 @@ class AttributeInferenceProtection(Component):
         return training_df_norm, synthetic_df_norm
 
     @staticmethod
-    def _normalize_onehot(
-        training_df: pd.DataFrame, synthetic_df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    def _normalize_onehot(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         training_df = training_df.infer_objects()
         synthetic_df = synthetic_df.infer_objects()
         df = pd.concat([training_df, synthetic_df])
@@ -330,9 +326,7 @@ class AttributeInferenceProtection(Component):
             dist = 1 - sim
             text_dist[i] = dist
             corpus_ids.append(corpus_id)
-            synth_NN = pd.concat(
-                [synth_NN, pd.DataFrame([synthetic_df_norm.iloc[int(corpus_id)]])], ignore_index=True
-            )
+            synth_NN = pd.concat([synth_NN, pd.DataFrame([synthetic_df_norm.iloc[int(corpus_id)]])], ignore_index=True)
 
         # Now get the tabular similarity for these 1000 NN using nearest neighbor search
         nn = NearestNeighborSearch(n_neighbors=search_synth_k)
