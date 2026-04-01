@@ -37,7 +37,7 @@ Several source modules also have their own `AGENTS.md` with internal patterns an
 
 See [STYLE_GUIDE.md](STYLE_GUIDE.md) for detailed code style conventions (Python, markdown, Dockerfiles, shell scripts, testing, config files, docstrings).
 
-Use `uv` for everything -- never `pip` or raw `python`. Python 3.11+ with modern syntax (`X | Y`, `list[str]`, `Self`).
+Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.13 with modern syntax (`X | Y`, `list[str]`, `Self`). Python 3.14+ is not supported (ray has no cp314 wheels).
 
 Common commands: `make test` (unit tests), `make format` (auto-fix formatting + lint + copyright), `make check` (all read-only CI checks), `make typecheck` (ty only). Always use Make targets or the wrapper scripts in `tools/` instead of running `ruff` or `ty` directly. Use `uv run` for Python execution. When in doubt, read the source (`make help`, `pytest --markers`).
 
