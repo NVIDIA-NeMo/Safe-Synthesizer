@@ -589,7 +589,7 @@ Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub 
 
 ### 1. Create and push a tag
 
-Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For release candidates, use the `-rc.N` pre-release suffix:
+Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For release candidates, use the `rcN` pre-release suffix:
 
 ```bash
 # Stable release
