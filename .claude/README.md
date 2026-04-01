@@ -46,5 +46,5 @@ Each file is a slash command available in Claude Code as `/command-name` (filena
 | `lint` | Lint and typecheck |
 | `start-docs-server` | Local docs dev server |
 | `test-ci-container` | CI tests in a container |
-| `test-slow` | All tests including slow |
+| `test-slow` | All unit tests including slow |
 | `unit-test` | Run unit tests |

@@ -73,7 +73,7 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 | `slow`         | Long-running tests                                                                               |
 | `smoke`        | Quick smoke tests (training/generation hot paths, tiny models)                                   |
 | `e2e`          | End-to-end pipeline tests (requires CUDA)                                                        |
-| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on `smoke`/`e2e`)                                     |
+| `requires_gpu` | Test needs CUDA hardware (modifier, stacks on any category: `unit`/`smoke`/`e2e`)                |
 | `vllm`         | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
 | `smollm2`      | SmolLM2 Hub download tests (Makefile uses for process isolation)                                 |
 | `unsloth`      | Unsloth backend tests (process-isolated from DP tests)                                           |
