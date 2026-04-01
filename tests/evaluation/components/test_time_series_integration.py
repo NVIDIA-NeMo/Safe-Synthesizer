@@ -4,9 +4,11 @@
 import numpy as np
 import pandas as pd
 import pytest
+from nemo_safe_synthesizer.config import DataParameters
 from nemo_safe_synthesizer.config.evaluate import TimeSeriesEvaluationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import EvaluationDataset
 from nemo_safe_synthesizer.evaluation.components.adf_stationarity import ADFStationarity
 from nemo_safe_synthesizer.evaluation.components.autocorrelation_similarity import AutocorrelationSimilarity
 from nemo_safe_synthesizer.evaluation.components.drift_similarity import DriftSimilarity
@@ -162,3 +164,143 @@ class TestMultimodalReportTimeSeries:
         assert ts_score is not None
         assert ts_score.score.score is not None
         assert 0 <= ts_score.score.score <= 10
+
+
+def _make_grouped_ts_data(
+    n_groups: int,
+    n_timesteps: int,
+    classes: list | None = None,
+    seed: int = 42,
+    noise_scale: float = 0.1,
+):
+    """Build reference and synthetic DataFrames with group_id, ts, label, and value columns."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for gid in range(n_groups):
+        cls = classes[gid % len(classes)] if classes else None
+        for t in range(n_timesteps):
+            rows.append(
+                {
+                    "group_id": gid,
+                    "ts": t,
+                    "label": cls,
+                    "value": np.sin(2 * np.pi * t / n_timesteps) + rng.normal(0, noise_scale),
+                }
+            )
+    ref = pd.DataFrame(rows)
+
+    # Synthetic: same structure, slightly perturbed
+    syn_rows = []
+    for gid in range(n_groups):
+        cls = classes[gid % len(classes)] if classes else None
+        for t in range(n_timesteps):
+            syn_rows.append(
+                {
+                    "group_id": gid + n_groups,  # new group_ids (no instance overlap)
+                    "ts": t,
+                    "label": cls,
+                    "value": np.sin(2 * np.pi * t / n_timesteps) + rng.normal(0, noise_scale * 1.5),
+                }
+            )
+    syn = pd.DataFrame(syn_rows)
+    return ref, syn
+
+
+def _dtw_config_with_groups():
+    return SafeSynthesizerParameters(
+        enable_synthesis=False,
+        data=DataParameters(group_training_examples_by="group_id"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="ts"),
+    )
+
+
+class TestDTWClassEnvelopeDTW:
+    """Tests for the class-mean + class-std envelope distributional DTW."""
+
+    def test_dtw_class_envelope_with_labels(self):
+        """2 classes, 3 groups each, shared timestamp range. Distributional match should score > 0.5."""
+        ref, syn = _make_grouped_ts_data(
+            n_groups=6, n_timesteps=50, classes=["A", "B"], seed=42, noise_scale=0.1,
+        )
+        config = _dtw_config_with_groups()
+        dataset = EvaluationDataset(reference=ref, output=syn)
+
+        result = DTWSimilarity.from_evaluation_dataset(dataset, config)
+
+        assert result.score.score is not None
+        similarity = result.score.raw_score
+        assert similarity > 0.5, f"Expected similarity > 0.5, got {similarity}"
+        assert "columns" in result.details
+        col_detail = result.details["columns"][0]
+        assert col_detail["label_stratified"] is True
+        assert col_detail["n_classes"] == 2
+        assert "mean_dtw_score" in col_detail
+        assert "std_dtw_score" in col_detail
+
+    def test_dtw_class_envelope_without_labels(self):
+        """No label column — falls back to global aggregation. Still produces valid score."""
+        ref, syn = _make_grouped_ts_data(
+            n_groups=6, n_timesteps=50, classes=["A", "B"], seed=42, noise_scale=0.1,
+        )
+        # Drop the label column
+        ref = ref.drop(columns=["label"])
+        syn = syn.drop(columns=["label"])
+        config = _dtw_config_with_groups()
+        dataset = EvaluationDataset(reference=ref, output=syn)
+
+        result = DTWSimilarity.from_evaluation_dataset(dataset, config)
+
+        assert result.score.score is not None
+        similarity = result.score.raw_score
+        assert similarity > 0.0
+        col_detail = result.details["columns"][0]
+        assert col_detail["label_stratified"] is False
+        assert col_detail["n_classes"] == 1
+
+    def test_dtw_single_group_per_class(self):
+        """1 group per class — std is all zeros. Should not crash; score driven by mean DTW only."""
+        ref, syn = _make_grouped_ts_data(
+            n_groups=2, n_timesteps=50, classes=["A", "B"], seed=42, noise_scale=0.1,
+        )
+        config = _dtw_config_with_groups()
+        dataset = EvaluationDataset(reference=ref, output=syn)
+
+        result = DTWSimilarity.from_evaluation_dataset(dataset, config)
+
+        assert result.score.score is not None
+        similarity = result.score.raw_score
+        assert similarity > 0.0
+        col_detail = result.details["columns"][0]
+        # With 1 group per class, std series should be all zeros → std_dtw_score = 0.0
+        assert col_detail["std_dtw_score"] == 0.0
+
+    def test_dtw_missing_class_in_synthetic(self):
+        """Ref has classes A, B, C; syn has A, B. Score should be based on A+B only."""
+        ref, syn = _make_grouped_ts_data(
+            n_groups=9, n_timesteps=50, classes=["A", "B", "C"], seed=42, noise_scale=0.1,
+        )
+        # Remove class C from synthetic
+        syn = syn[syn["label"] != "C"].reset_index(drop=True)
+        config = _dtw_config_with_groups()
+        dataset = EvaluationDataset(reference=ref, output=syn)
+
+        result = DTWSimilarity.from_evaluation_dataset(dataset, config)
+
+        assert result.score.score is not None
+        col_detail = result.details["columns"][0]
+        assert col_detail["n_classes"] == 2  # Only A and B
+        assert col_detail["label_stratified"] is True
+
+    def test_dtw_from_arrays_unchanged(self):
+        """Regression test: from_arrays() should still work as before."""
+        rng = np.random.default_rng(42)
+        original = np.sin(np.linspace(0, 4 * np.pi, 100)) + rng.normal(0, 0.05, 100)
+        synthetic = np.sin(np.linspace(0, 4 * np.pi, 100)) + rng.normal(0, 0.05, 100)
+
+        result = DTWSimilarity.from_arrays(original, synthetic, window=5)
+
+        assert result.score.score is not None
+        assert result.score.raw_score > 0.5
+        assert "dtw_raw" in result.details
+        assert "dtw_normalized" in result.details
+        assert "dtw_score" in result.details

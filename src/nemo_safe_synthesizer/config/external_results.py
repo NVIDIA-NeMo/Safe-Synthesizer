@@ -54,6 +54,16 @@ class SafeSynthesizerSummary(NSSBaseModel):
     text_semantic_similarity_score: float | None = None
     text_structure_similarity_score: float | None = None
 
+    time_series_similarity_score: float | None = None
+    autocorrelation_similarity_score: float | None = None
+    drift_similarity_score: float | None = None
+    hurst_similarity_score: float | None = None
+    dtw_similarity_score: float | None = None
+    rolling_stats_similarity_score: float | None = None
+    spectral_similarity_score: float | None = None
+    adf_stationarity_score: float | None = None
+    tsc_utility_score: float | None = None
+
     data_privacy_score: float | None = None
     membership_inference_protection_score: float | None = None
     attribute_inference_protection_score: float | None = None
@@ -95,6 +105,15 @@ class SafeSynthesizerSummary(NSSBaseModel):
                     "eval/column_distribution_stability_score": self.column_distribution_stability_score,
                     "eval/text_semantic_similarity_score": self.text_semantic_similarity_score,
                     "eval/text_structure_similarity_score": self.text_structure_similarity_score,
+                    "eval/time_series_similarity_score": self.time_series_similarity_score,
+                    "eval/autocorrelation_similarity_score": self.autocorrelation_similarity_score,
+                    "eval/drift_similarity_score": self.drift_similarity_score,
+                    "eval/hurst_similarity_score": self.hurst_similarity_score,
+                    "eval/dtw_similarity_score": self.dtw_similarity_score,
+                    "eval/rolling_stats_similarity_score": self.rolling_stats_similarity_score,
+                    "eval/spectral_similarity_score": self.spectral_similarity_score,
+                    "eval/adf_stationarity_score": self.adf_stationarity_score,
+                    "eval/tsc_utility_score": self.tsc_utility_score,
                     "eval/success": 1
                     if self.data_privacy_score is not None
                     and self.synthetic_data_quality_score is not None

@@ -188,6 +188,8 @@ class ModelMetadata(BaseModel):
     instruction: str = DEFAULT_INSTRUCTION
     rope_parameters_location: Literal["autoconfig", "automodel"] = "automodel"
     initial_prefill: dict[str, str] | str | None = None
+    avg_records_per_example: float | None = None
+    avg_tokens_per_record: float | None = None
 
     @model_validator(mode="before")
     @classmethod

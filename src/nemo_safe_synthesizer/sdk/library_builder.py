@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -178,6 +179,9 @@ class SafeSynthesizer(ConfigBuilder):
         self._pii_replacer_time: float | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
+        # Optional: set before calling generate() for resumable time-series generation
+        self._shutdown_event: "threading.Event | None" = None
+        self._checkpoint_dir: Path | None = None
 
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
     def load_from_save_path(self) -> SafeSynthesizer:
@@ -241,6 +245,21 @@ class SafeSynthesizer(ConfigBuilder):
         #         raise ValueError(f"Invalid run directory: {run_dir}")
         return self
 
+    def with_test_data(self, test_df: pd.DataFrame) -> SafeSynthesizer:
+        """Provide an external test dataset, skipping the automatic train/test split.
+
+        When set, process_data() will use the entire data source as training data
+        and this DataFrame as the test set for evaluation.
+
+        Args:
+            test_df: DataFrame containing the test data.
+
+        Returns:
+            Self for method chaining.
+        """
+        self._test_df = test_df
+        return self
+
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
     def process_data(self) -> SafeSynthesizer:
         """Process data: perform train/test split, auto-config resolution, and optional PII replacement.
@@ -266,8 +285,16 @@ class SafeSynthesizer(ConfigBuilder):
             logger.warning("Data already processed, skipping data processing...")
             return self
 
-        holdout = Holdout(self._nss_config)
-        original_train_df, self._test_df = holdout.train_test_split(self._data_source)
+        if self._test_df is not None:
+            # External test data provided via with_test_data() — use full source as training
+            logger.info(
+                f"Using external test data ({len(self._test_df)} rows), "
+                f"training on full data source ({len(self._data_source)} rows)"
+            )
+            original_train_df = self._data_source
+        else:
+            holdout = Holdout(self._nss_config)
+            original_train_df, self._test_df = holdout.train_test_split(self._data_source)
 
         self._train_df = original_train_df
         self._column_statistics = None
@@ -372,6 +399,13 @@ class SafeSynthesizer(ConfigBuilder):
             self.generator = VllmBackend(
                 config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
             )
+
+        # Wire up checkpoint/resume support for timeseries backends
+        if isinstance(self.generator, TimeseriesBackend):
+            if self._shutdown_event is not None:
+                self.generator._shutdown_requested = self._shutdown_event
+            if self._checkpoint_dir is not None:
+                self.generator._checkpoint_dir = self._checkpoint_dir
 
         self.generator.initialize()
         self.generator.generate(keep_llm_state=False)

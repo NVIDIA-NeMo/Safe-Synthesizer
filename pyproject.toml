@@ -36,6 +36,8 @@ dependencies = [
   "structlog>=25.4.0",
   "colorama>=0.4.6",
   "tqdm>=4.67.1",
+  "aeon>=1.0.0",
+  "wandb>=0.23.1",
 ]
 
 [dependency-groups]

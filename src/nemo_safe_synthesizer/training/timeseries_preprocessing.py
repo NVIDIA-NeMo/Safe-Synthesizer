@@ -149,6 +149,13 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
     if len(df) == 0:
         raise DataError("Cannot infer timestamp format from empty DataFrame")
 
+    if pd.api.types.is_numeric_dtype(df[ts_config.timestamp_column]):
+        ts_config.timestamp_format = "elapsed_seconds"
+        logger.info(
+            f"Timestamp column '{ts_config.timestamp_column}' has numeric dtype, treating as elapsed seconds"
+        )
+        return df
+
     first_timestamp = df[ts_config.timestamp_column].iloc[0]
     user_provided_format = ts_config.timestamp_format is not None
 
@@ -239,6 +246,11 @@ def process_timeseries_data(
     # Skip datetime conversion for elapsed_seconds format (either created or user-provided)
     if not is_elapsed_time and ts_config.timestamp_format != "elapsed_seconds":
         df_all = _infer_and_convert_timestamp_format(df_all, ts_config)
+
+    # Update flag: user-provided numeric columns or auto-detected numeric columns
+    # both need the elapsed-time diff logic in downstream processing.
+    if ts_config.timestamp_format == "elapsed_seconds":
+        is_elapsed_time = True
 
     # Step 6: Process groups and validate consistency
     ts_config = _process_grouped_timestamps(df_all, ts_config, group_by_col, is_elapsed_time)

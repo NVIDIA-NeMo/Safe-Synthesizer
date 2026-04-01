@@ -642,6 +642,8 @@ class HuggingFaceBackend(TrainingBackend):
 
         if self.params.time_series.is_timeseries:
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()
+            self.model_metadata.avg_records_per_example = assembler.stats["records_per_example"].mean
+            self.model_metadata.avg_tokens_per_record = assembler.stats["tokens_per_record"].mean
 
     @utils.time_function
     def train(self, **training_args):

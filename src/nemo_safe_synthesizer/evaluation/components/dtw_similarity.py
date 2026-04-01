@@ -18,6 +18,8 @@ from pydantic import ConfigDict, Field
 
 logger = get_logger(__name__)
 
+LABEL_COLUMN = "label"
+
 
 class DTWSimilarity(Component):
     """Measures overall shape similarity via Dynamic Time Warping.
@@ -71,12 +73,15 @@ class DTWSimilarity(Component):
             if timestamp_col is None and config and getattr(config, "time_series", None):
                 timestamp_col = getattr(config.time_series, "timestamp_column", None)
 
-            columns = resolve_columns(reference, None, exclude=set(filter(None, [timestamp_col, group_col])))
+            exclude_cols = set(filter(None, [timestamp_col, group_col]))
+            if LABEL_COLUMN in reference.columns:
+                exclude_cols.add(LABEL_COLUMN)
+            columns = resolve_columns(reference, None, exclude=exclude_cols)
             if not columns:
                 return DTWSimilarity(score=EvaluationScore(notes="No numeric columns available."))
 
-            # When group and timestamp columns are known, compare mean series across groups
-            # (one representative 47-point series per channel) rather than the full
+            # When group and timestamp columns are known, compare class-level
+            # mean+std envelopes (distributional DTW) rather than the full
             # flattened array, which produces meaningless cross-group discontinuities.
             use_mean_series = (
                 group_col is not None
@@ -87,19 +92,30 @@ class DTWSimilarity(Component):
                 and timestamp_col in synthetic.columns
             )
 
+            # Class-envelope DTW: compare class-mean and class-std series
+            # between reference and synthetic with a fixed absolute window.
+            max_window = 5
+
             per_column = []
             scores = []
-            for col in columns:
-                if col not in reference.columns or col not in synthetic.columns:
-                    continue
-                if use_mean_series:
-                    ref_values = (
-                        reference.groupby(timestamp_col)[col].mean().sort_index().dropna().astype(float).to_numpy()
-                    )
-                    syn_values = (
-                        synthetic.groupby(timestamp_col)[col].mean().sort_index().dropna().astype(float).to_numpy()
-                    )
-                else:
+
+            if use_mean_series:
+                label_col = LABEL_COLUMN if (
+                    LABEL_COLUMN in reference.columns and LABEL_COLUMN in synthetic.columns
+                ) else None
+
+                per_column, scores = DTWSimilarity._compute_class_envelope_dtw(
+                    reference=reference,
+                    synthetic=synthetic,
+                    columns=columns,
+                    timestamp_col=timestamp_col,
+                    label_col=label_col,
+                    max_window=max_window,
+                )
+            else:
+                for col in columns:
+                    if col not in reference.columns or col not in synthetic.columns:
+                        continue
                     ref_sorted = sort_time_series(
                         reference[[col] + [c for c in [timestamp_col] if c and c in reference.columns]],
                         timestamp_col,
@@ -113,18 +129,18 @@ class DTWSimilarity(Component):
                     ref_values = ref_sorted[col].dropna().astype(float).to_numpy()
                     syn_values = syn_sorted[col].dropna().astype(float).to_numpy()
 
-                dtw_raw = DTWSimilarity._dtw_distance(ref_values, syn_values)
-                dtw_norm = dtw_raw / np.sqrt(max(len(ref_values), len(syn_values)))
-                dtw_score = DTWSimilarity._normalize_dtw_score(ref_values, syn_values, dtw_norm)
-                scores.append(dtw_score)
-                per_column.append(
-                    {
-                        "column": col,
-                        "dtw_raw": round(dtw_raw, 4),
-                        "dtw_normalized": round(dtw_norm, 6),
-                        "dtw_score": round(dtw_score, 4),
-                    }
-                )
+                    dtw_raw = DTWSimilarity._dtw_distance(ref_values, syn_values, window=max_window)
+                    dtw_norm = dtw_raw / np.sqrt(max(len(ref_values), len(syn_values)))
+                    dtw_score = DTWSimilarity._normalize_dtw_score(ref_values, syn_values, dtw_norm)
+                    scores.append(dtw_score)
+                    per_column.append(
+                        {
+                            "column": col,
+                            "dtw_raw": round(dtw_raw, 4),
+                            "dtw_normalized": round(dtw_norm, 6),
+                            "dtw_score": round(dtw_score, 4),
+                        }
+                    )
 
             if not scores:
                 return DTWSimilarity(score=EvaluationScore(notes="No valid columns for DTW comparison."))
@@ -157,6 +173,113 @@ class DTWSimilarity(Component):
             "dtw_score": round(dtw_score, 4),
         }
         return DTWSimilarity(score=evaluation_score, details=details)
+
+    # ------------------------------------------------------------------
+    # Class-envelope distributional DTW
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_class_envelope_dtw(
+        reference,
+        synthetic,
+        columns: list[str],
+        timestamp_col: str,
+        label_col: str | None,
+        max_window: int,
+    ) -> tuple[list[dict], list[float]]:
+        """Compare class-level mean and std envelopes via DTW.
+
+        Instead of matching individual group_ids (instance-level), this computes
+        the mean and standard-deviation series for each class (or globally if no
+        label column), then DTWs the envelopes. This is consistent with how all
+        other similarity components compare distributional properties.
+
+        Returns ``(per_column_details, scores)`` ready for the existing
+        aggregation logic.
+        """
+        import pandas as pd
+
+        # Determine classes to stratify by
+        if label_col is not None:
+            ref_classes = set(reference[label_col].unique())
+            syn_classes = set(synthetic[label_col].unique())
+            common_classes = sorted(ref_classes & syn_classes, key=str)
+            if not common_classes:
+                # No overlapping classes — fall back to global aggregation
+                common_classes = [None]
+                label_col = None
+        else:
+            common_classes = [None]
+
+        per_column: list[dict] = []
+        scores: list[float] = []
+
+        for col in columns:
+            if col not in reference.columns or col not in synthetic.columns:
+                continue
+
+            class_combined_scores: list[float] = []
+            class_mean_scores: list[float] = []
+            class_std_scores: list[float] = []
+
+            for cls in common_classes:
+                # Filter by class
+                if cls is not None and label_col is not None:
+                    ref_subset = reference.loc[reference[label_col] == cls]
+                    syn_subset = synthetic.loc[synthetic[label_col] == cls]
+                else:
+                    ref_subset = reference
+                    syn_subset = synthetic
+
+                # Compute mean and std series
+                ref_mean = ref_subset.groupby(timestamp_col)[col].mean().sort_index()
+                syn_mean = syn_subset.groupby(timestamp_col)[col].mean().sort_index()
+                ref_std = ref_subset.groupby(timestamp_col)[col].std().sort_index().fillna(0.0)
+                syn_std = syn_subset.groupby(timestamp_col)[col].std().sort_index().fillna(0.0)
+
+                # Truncate to common length
+                min_len = min(len(ref_mean), len(syn_mean))
+                if min_len < 2:
+                    continue
+
+                ref_mean_arr = ref_mean.values[:min_len].astype(float)
+                syn_mean_arr = syn_mean.values[:min_len].astype(float)
+                ref_std_arr = ref_std.values[:min_len].astype(float)
+                syn_std_arr = syn_std.values[:min_len].astype(float)
+
+                # DTW on mean series (shape similarity)
+                mean_dtw_raw = DTWSimilarity._dtw_distance(ref_mean_arr, syn_mean_arr, window=max_window)
+                mean_dtw_norm = mean_dtw_raw / np.sqrt(min_len)
+                mean_score = DTWSimilarity._normalize_dtw_score(ref_mean_arr, syn_mean_arr, mean_dtw_norm)
+
+                # DTW on std series (spread similarity)
+                if np.all(ref_std_arr == 0.0) and np.all(syn_std_arr == 0.0):
+                    std_score = 0.0
+                else:
+                    std_dtw_raw = DTWSimilarity._dtw_distance(ref_std_arr, syn_std_arr, window=max_window)
+                    std_dtw_norm = std_dtw_raw / np.sqrt(min_len)
+                    std_score = DTWSimilarity._normalize_dtw_score(ref_std_arr, syn_std_arr, std_dtw_norm)
+
+                combined = 0.7 * mean_score + 0.3 * std_score
+                class_combined_scores.append(combined)
+                class_mean_scores.append(mean_score)
+                class_std_scores.append(std_score)
+
+            if class_combined_scores:
+                avg_col_score = float(np.mean(class_combined_scores))
+                scores.append(avg_col_score)
+                per_column.append(
+                    {
+                        "column": col,
+                        "dtw_score": round(avg_col_score, 4),
+                        "mean_dtw_score": round(float(np.mean(class_mean_scores)), 4),
+                        "std_dtw_score": round(float(np.mean(class_std_scores)), 4),
+                        "n_classes": len(class_combined_scores),
+                        "label_stratified": label_col is not None,
+                    }
+                )
+
+        return per_column, scores
 
     # ------------------------------------------------------------------
     # Core computation

@@ -15,6 +15,7 @@ import os
 from typing import TYPE_CHECKING
 
 import click
+import pandas as pd
 
 from ..config import SafeSynthesizerParameters
 from ..configurator.pydantic_click_options import (
@@ -153,6 +154,17 @@ def common_run_options(f):
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
     )
+    options.append(
+        click.option(
+            "--test-url",
+            type=str,
+            default=None,
+            required=False,
+            help="Path or URL to a separate test dataset CSV. "
+            "When provided, the full --url dataset is used for training "
+            "and this dataset is used for evaluation (no train/test split).",
+        )
+    )
 
     # Apply each option decorator in reverse order (decorators apply bottom-up)
     for option in reversed(options):
@@ -178,6 +190,7 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    test_url: str | None = None,
     **kwargs,
 ):
     """Run the Safe Synthesizer end-to-end pipeline.
@@ -219,6 +232,8 @@ def run(
         from ..sdk.library_builder import SafeSynthesizer
 
         ss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+        if test_url:
+            ss = ss.with_test_data(pd.read_csv(test_url))
         ss.run()
         ss.save_results(output_file=settings.output_file or workdir.output_file)
         ss.results.summary.log_summary(run_logger)
@@ -241,6 +256,7 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    test_url: str | None = None,
     **kwargs,
 ):
     """Run the training stage only.
@@ -273,7 +289,10 @@ def run_train(
     from ..sdk.library_builder import SafeSynthesizer
 
     with traced_user("SafeSynthesizer"):
-        SafeSynthesizer(config, workdir=workdir).with_data_source(df).process_data().train()
+        ss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
+        if test_url:
+            ss = ss.with_test_data(pd.read_csv(test_url))
+        ss.process_data().train()
         run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
 
 
@@ -310,6 +329,7 @@ def run_generate(
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
     dataset_registry: str | None = None,
+    test_url: str | None = None,
     **kwargs,
 ):
     """Run the generation stage only.
@@ -358,7 +378,10 @@ def run_generate(
         if df is not None:
             ss = ss.with_data_source(df)
 
-        ss = ss.load_from_save_path().process_data().generate().evaluate().save_results(output_file=final_output_file)
+        ss = ss.load_from_save_path()
+        if test_url:
+            ss = ss.with_test_data(pd.read_csv(test_url))
+        ss = ss.process_data().generate().evaluate().save_results(output_file=final_output_file)
         ss.generator.teardown()
         ss.results.summary.log_summary(run_logger)
         ss.results.summary.timing.log_timing(run_logger)

@@ -166,6 +166,21 @@ class GenerateParameters(Parameters, BaseModel):
         ),
     ] = "regex"
 
+    prefill_context_ratio: Annotated[
+        float,
+        ValueValidator(value_func=lambda v: v >= 0),
+        Field(
+            title="prefill_context_ratio",
+            description=(
+                "Ratio of average records per training example to use as the sliding window "
+                "prefill context size during time-series generation. The effective prefill size "
+                "is max(int(ratio * avg_records_per_example), 3), capped by model context length. "
+                "A value of 0.0 uses the default of 3 records. A value of 1.0 uses the full "
+                "average training example length."
+            ),
+        ),
+    ] = 0.0
+
     # TODO: We will merge this with `timestamp_validation_mode` described in the MR !5153
     enforce_timeseries_fidelity: Annotated[
         bool,
@@ -174,6 +189,20 @@ class GenerateParameters(Parameters, BaseModel):
             description="Enforce timeseries fidelity by enforcing the time series order, intervals, start and end times of the records.",
         ),
     ] = False
+
+    checkpoint_interval_batches: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 0),
+        Field(
+            title="checkpoint_interval_batches",
+            description=(
+                "How often (in batch iterations) to save a generation checkpoint for "
+                "resumable time-series generation. Set to 0 to disable periodic "
+                "checkpointing. Checkpoints are always saved on graceful shutdown "
+                "(SIGUSR1) regardless of this setting."
+            ),
+        ),
+    ] = 10
 
     validation: ValidationParameters = Field(
         description="Validation parameters controlling validation logic and automatic fixes when parsing LLM output and converting to tabular data.",

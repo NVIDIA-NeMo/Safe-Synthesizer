@@ -27,6 +27,8 @@ def _df_to_aeon(
     group_col: str,
     feature_cols: list[str],
     timestamp_col: str | None,
+    trim_start: int = 0,
+    target_length: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Convert a long-format DataFrame to aeon arrays (X, y).
 
@@ -35,6 +37,12 @@ def _df_to_aeon(
         group_col: Column identifying each time series instance.
         feature_cols: Ordered list of feature (channel) columns.
         timestamp_col: Optional timestamp column for ordering within each group.
+        trim_start: Number of leading timesteps to drop from each group
+            (e.g. 3 to align reference data with generated data that omits
+            the prompt context rows).
+        target_length: If set, truncate each group to exactly this many
+            timesteps (after trim_start).  Groups shorter than target_length
+            are dropped with a warning.
 
     Returns:
         X: shape (n_samples, n_channels, series_length)
@@ -47,11 +55,20 @@ def _df_to_aeon(
         if timestamp_col and timestamp_col in group_df.columns:
             group_df = sort_time_series(group_df, timestamp_col, None)
 
+        if trim_start > 0:
+            group_df = group_df.iloc[trim_start:]
+
+        if target_length is not None:
+            if len(group_df) < target_length:
+                continue
+            group_df = group_df.iloc[:target_length]
+
+        if group_df.empty:
+            continue
+
         label = group_df[LABEL_COLUMN].iloc[0]
-        # values: (series_length, n_channels)
         values = group_df[feature_cols].values.astype(float)
-        # transpose to (n_channels, series_length)
-        X_list.append(values.T)
+        X_list.append(values.T)  # (n_channels, series_length)
         y_list.append(str(label))
 
     if not X_list:
@@ -60,6 +77,13 @@ def _df_to_aeon(
     X = np.stack(X_list, axis=0)  # (n_samples, n_channels, series_length)
     y = np.array(y_list)
     return X, y
+
+
+def _min_group_length(
+    df: pd.DataFrame, group_col: str, trim_start: int = 0,
+) -> int:
+    """Return the minimum number of timesteps across all groups after trimming."""
+    return int(df.groupby(group_col).size().min()) - trim_start
 
 
 def _train_test(clf, X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, y_test: np.ndarray) -> dict:
@@ -117,7 +141,6 @@ class TSCUtility(Component):
         config: SafeSynthesizerParameters | None,
         n_trials: int = 1,
     ) -> TSCUtility:
-        from aeon.classification.distance_based import KNeighborsTimeSeriesClassifier
         from aeon.classification.convolution_based import MiniRocketClassifier
         from aeon.classification.feature_based import Catch22Classifier
 
@@ -167,10 +190,40 @@ class TSCUtility(Component):
                 )
             )
 
-        # Convert to aeon arrays
-        X_orig, y_orig = _df_to_aeon(reference, group_col, feature_cols, timestamp_col)
-        X_syn, y_syn = _df_to_aeon(synthetic, group_col, feature_cols, timestamp_col)
-        X_test, y_test = _df_to_aeon(test, group_col, feature_cols, timestamp_col)
+        # The generated data omits the first few context rows per group
+        # (typically 3). Trim reference/test to match, then align all
+        # datasets to the shortest group across all three splits.
+        CONTEXT_ROWS = 3
+        target_len = min(
+            _min_group_length(reference, group_col, trim_start=CONTEXT_ROWS),
+            _min_group_length(synthetic, group_col, trim_start=0),
+            _min_group_length(test, group_col, trim_start=CONTEXT_ROWS),
+        )
+        if target_len <= 0:
+            return TSCUtility(
+                score=EvaluationScore(
+                    grade=Grade.UNAVAILABLE,
+                    notes=f"Series too short after alignment (target_length={target_len}).",
+                )
+            )
+
+        logger.info(
+            f"TSCUtility: aligning series — trimming {CONTEXT_ROWS} context rows from "
+            f"reference/test, truncating all to length {target_len}"
+        )
+
+        X_orig, y_orig = _df_to_aeon(
+            reference, group_col, feature_cols, timestamp_col,
+            trim_start=CONTEXT_ROWS, target_length=target_len,
+        )
+        X_syn, y_syn = _df_to_aeon(
+            synthetic, group_col, feature_cols, timestamp_col,
+            trim_start=0, target_length=target_len,
+        )
+        X_test, y_test = _df_to_aeon(
+            test, group_col, feature_cols, timestamp_col,
+            trim_start=CONTEXT_ROWS, target_length=target_len,
+        )
 
         # Augmented = original + synthetic
         X_aug = np.concatenate([X_orig, X_syn], axis=0)
@@ -182,12 +235,7 @@ class TSCUtility(Component):
         n_channels = X_orig.shape[1]
         series_length = X_orig.shape[2]
 
-        # Seed-parameterized factories. DTW is deterministic so its seed arg is ignored,
-        # but we still run it every trial for consistent bookkeeping (std will be 0).
         classifier_factories = {
-            "DTW": lambda seed: KNeighborsTimeSeriesClassifier(
-                n_neighbors=1, distance="dtw", distance_params={"window": 0.1}
-            ),
             "MiniROCKET": lambda seed: MiniRocketClassifier(n_kernels=10_000, random_state=seed),
             "Catch22": lambda seed: Catch22Classifier(catch24=True, random_state=seed),
         }

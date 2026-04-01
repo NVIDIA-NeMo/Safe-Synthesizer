@@ -12,6 +12,12 @@ else
     source /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer/script/slurm/env_variables.sh
 fi
 
+# Allow callers to override ADAPTER_PATH after env_variables.sh sets it
+if [[ -n "${ADAPTER_PATH_OVERRIDE:-}" ]]; then
+    export ADAPTER_PATH="${ADAPTER_PATH_OVERRIDE}"
+    export NSS_ARTIFACTS_PATH="${ADAPTER_PATH}"
+fi
+
 # Ensure minimal build toolchain inside container (no-op if already present)
 apt-get update && apt-get install -y --no-install-recommends \
         curl \
@@ -160,15 +166,54 @@ else
     echo "No dataset registry file found at ${dataset_registry_file}"
 fi
 
+# Detect separate test dataset (convention: *_train_nss.csv → *_test_nss.csv)
+test_url_arg=""
+test_dataset="${dataset/_train_nss/_test_nss}"
+if [[ "$test_dataset" != "$dataset" ]] && [[ -f "$test_dataset" ]]; then
+    test_url_arg="--test-url $test_dataset"
+    echo "[Matrix] Using separate test dataset: $test_dataset"
+fi
+
+# Auto-scale num_input_records_to_sample based on training data size.
+# Only applies when the dataset is a local CSV file (full path).
+# Since `run train` doesn't support pydantic override flags, we create a
+# temporary copy of the config YAML with the value patched in.
+effective_config="${config}.yaml"
+if [[ "$dataset" == *.csv ]] && [[ -f "$dataset" ]]; then
+    # wc -l counts lines; subtract 1 for the header row
+    line_count=$(wc -l < "$dataset")
+    num_rows=$(( line_count > 0 ? line_count - 1 : 0 ))
+    if [[ $num_rows -gt 0 ]]; then
+        if [[ $num_rows -lt 10000 ]]; then
+            multiplier=15
+        elif [[ $num_rows -lt 50000 ]]; then
+            multiplier=10
+        elif [[ $num_rows -lt 100000 ]]; then
+            multiplier=3
+        else
+            multiplier=2
+        fi
+        scaled_records=$(( num_rows * multiplier ))
+        echo "[Matrix] Auto-scaled num_input_records_to_sample: ${num_rows} rows x ${multiplier} = ${scaled_records}"
+
+        # Create a temp config with the overridden value
+        tmp_config=$(mktemp /tmp/nss_config_XXXXXX.yaml)
+        sed "s/^\(\s*num_input_records_to_sample:\s*\).*/\1${scaled_records}/" "${config}.yaml" > "$tmp_config"
+        effective_config="$tmp_config"
+        echo "[Matrix] Using temp config: $effective_config"
+    fi
+fi
+
 PHASE=${PHASE:-end_to_end}
 if [[ "$PHASE" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
     safe-synthesizer run train \
         --url "$dataset" \
-        --config "$config.yaml" \
+        --config "$effective_config" \
         --run-path "$run_path" \
-        $dataset_registry_arg
+        $dataset_registry_arg \
+        $test_url_arg
 elif [[ "$PHASE" == "generate" ]]; then
     # Stage 2: generation (+ optional evaluation)
     # Resumes from existing workdir at run_path
@@ -182,7 +227,7 @@ elif [[ "$PHASE" == "generate" ]]; then
 
     safe-synthesizer run generate \
         --url "$dataset" \
-        --config "$config.yaml" \
+        --config "$effective_config" \
         --run-path "$run_path" \
         $dataset_registry_arg \
         $wandb_resume_arg
@@ -190,7 +235,8 @@ else
     # Full end-to-end run
     safe-synthesizer run \
         --url "$dataset" \
-        --config "$config.yaml" \
+        --config "$effective_config" \
         --run-path "$run_path" \
-        $dataset_registry_arg
+        $dataset_registry_arg \
+        $test_url_arg
 fi

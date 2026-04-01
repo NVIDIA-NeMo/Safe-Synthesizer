@@ -60,6 +60,7 @@ Additional generation parameters in `src/nemo_safe_synthesizer/config/generate.p
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `enforce_timeseries_fidelity` | `bool` | `False` | When enabled, enforces strict time series ordering, intervals, and start/end times during generation for consistent time intervals. |
+| `prefill_context_ratio` | `float` | `0.0` | Ratio of average records per training example to use as the sliding window prefill context size. Effective size is `max(int(ratio * avg_records_per_example), 3)`, capped by context length. `0.0` uses the default of 3 records. |
 | `invalid_fraction_threshold` | `float` | `0.95` | Threshold for invalid record fraction. Groups fail after `patience` consecutive batches exceeding this threshold. |
 | `patience` | `int` | `1` | Number of consecutive batches with high invalid fraction before a group fails. |
 | `num_records` | `int` | - | Target number of records (used for progress tracking, not to limit generation in time-series mode). |
@@ -227,7 +228,7 @@ TimeseriesBackend(VllmBackend)
 ### Key Concepts
 
 - **Time-Range Based Generation**: The number of records generated is determined by `(stop_timestamp - start_timestamp) / interval_seconds`, not by a target count. The `config.generation.num_records` parameter is used only for progress tracking.
-- **Sliding Window**: Maintains a window of recent records (controlled by `_prefill_context_size`) included in each prompt for context continuity.
+- **Sliding Window**: Maintains a window of recent records (controlled by `_prefill_context_size`) included in each prompt for context continuity. The window size is computed as `max(int(prefill_context_ratio * avg_records_per_example), 3)`, capped by the model's context length. When the ratio is 0 or training stats are unavailable, it defaults to 3.
 - **Groups from Training**: Groups are the same as those seen during training (from `model_metadata.initial_prefill`).
 
 ### Sliding Window Approach
@@ -244,7 +245,7 @@ TimeseriesBackend(VllmBackend)
 |-----------|-------|-------------|
 | `_samples_per_prompt` | 5 | Number of samples generated per prompt |
 | `_max_prompts_per_batch` | 100 | Max prompts per batch in parallel generation |
-| `_prefill_context_size` | 3 | Number of recent records in sliding window |
+| `_prefill_context_size` | dynamic | Number of recent records in sliding window. Computed as `max(int(prefill_context_ratio * avg_records_per_example), 3)`, capped by context length. Defaults to 3 when ratio is 0 or stats are unavailable. |
 
 ### Parallel Group Generation Flow
 
@@ -559,5 +560,5 @@ The `timestamp_validation_mode` parameter controls how timestamps are handled du
 | `generation/processors.py` | `TimeSeriesDataProcessor` class |
 | `generation/timeseries_backend.py` | `TimeseriesBackend` generation class |
 | `evaluation/components/autocorrelation_similarity.py` | ACF evaluation metric |
-| `llm/metadata.py` | `initial_prefill` field for time series |
+| `llm/metadata.py` | `initial_prefill`, `avg_records_per_example`, and `avg_tokens_per_record` fields for time series |
 | `defaults.py` | `PSEUDO_GROUP_COLUMN` constant |

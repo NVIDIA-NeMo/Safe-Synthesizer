@@ -177,7 +177,7 @@ for config in "${CONFIGS_LIST[@]}"; do
             --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%j.out \
             --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%j.err \
             --time=${TIME_LIMIT_TRAIN} \
-            --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
+            --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=64G --gres=gpu:1 \
             --export=ALL,PHASE=train,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_TRAIN},DATASET_URLS=${DATASET_URLS},RUN_INDEX=${run_idx},DATASET_INDEX=0,num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
             ${NSS_SLURM_DIR}/slurm_srun.sh )
         echo "[${config}] run_index=${run_idx} TRAIN submitted ${train_job_id}"
@@ -192,7 +192,7 @@ for config in "${CONFIGS_LIST[@]}"; do
             --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%j.out \
             --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%j.err \
             --time=${TIME_LIMIT_GEN} \
-            --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
+            --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=64G --gres=gpu:1 \
             --export=ALL,PHASE=generate,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_GEN},DATASET_URLS=${DATASET_URLS},RUN_INDEX=${run_idx},DATASET_INDEX=0,num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
             ${NSS_SLURM_DIR}/slurm_srun.sh )
         echo "[${config}] run_index=${run_idx} GEN submitted ${gen_job_id} (afterok ${train_job_id})"
@@ -209,7 +209,7 @@ for config in "${CONFIGS_LIST[@]}"; do
           --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%A_%a.out \
           --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_train_%A_%a.err \
           --time=${TIME_LIMIT_TRAIN} \
-          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
+          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=64G --gres=gpu:1 \
           --array=0-$((RUNS-1)) \
           --export=ALL,PHASE=train,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_TRAIN},DATASET_URLS=${DATASET_URLS},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
           ${NSS_SLURM_DIR}/slurm_srun.sh )
@@ -225,7 +225,7 @@ for config in "${CONFIGS_LIST[@]}"; do
           --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%A_%a.out \
           --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_gen_%A_%a.err \
           --time=${TIME_LIMIT_GEN} \
-          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
+          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=64G --gres=gpu:1 \
           --array=0-$((RUNS-1)) \
           --export=ALL,PHASE=generate,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT_GEN},DATASET_URLS=${DATASET_URLS},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
           ${NSS_SLURM_DIR}/slurm_srun.sh )
@@ -252,7 +252,7 @@ for config in "${CONFIGS_LIST[@]}"; do
             --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%j.out \
             --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%j.err \
             --time=${TIME_LIMIT} \
-            --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
+            --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=64G --gres=gpu:1 \
             ${dep_args:+${dep_args[@]}} \
             --export=ALL,PHASE=end_to_end,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT},DATASET_URLS=${DATASET_URLS},RUN_INDEX=${run_idx},DATASET_INDEX=0,num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
             ${NSS_SLURM_DIR}/slurm_srun.sh )
@@ -271,7 +271,7 @@ for config in "${CONFIGS_LIST[@]}"; do
           --output=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%A_%a.out \
           --error=${EXP_LOG_DIR}/${DATASET_GROUP}/${config}/slurm_%A_%a.err \
           --time=${TIME_LIMIT} \
-          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=32G --gres=gpu:1 \
+          --nodes=1 --ntasks-per-node=1 --cpus-per-task=16 --mem=64G --gres=gpu:1 \
           --array=0-$((RUNS-1)) \
           --export=ALL,PHASE=end_to_end,USER_NAME=${USER_NAME},ACCOUNT=llmservice_sdg_research,RUNS=${RUNS},EXP_NAME=${EXP_NAME},DATASET_GROUP=${DATASET_GROUP},CONFIG_NAMES=${config},TIME_LIMIT=${TIME_LIMIT},DATASET_URLS=${DATASET_URLS},num_configs=1,WANDB_PROJECT=${WANDB_PROJECT} \
           ${NSS_SLURM_DIR}/slurm_srun.sh )

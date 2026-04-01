@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 
@@ -18,7 +20,7 @@ from ..config import SafeSynthesizerParameters
 from ..data_processing.record_utils import _parse_timestamp_to_seconds, extract_records_from_jsonl_string
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..generation.batch import Batch
-from ..generation.processors import TimeSeriesDataProcessor
+from ..generation.processors import ParsedResponse, TimeSeriesDataProcessor
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_backend import VllmBackend
 from ..llm.metadata import ModelMetadata
@@ -167,7 +169,10 @@ class TimeseriesBackend(VllmBackend):
         _max_prompts_per_batch (int): Maximum number of prompts to include in a
             single LLM generation call. Controls parallelism. Default: 100.
         _prefill_context_size (int): Number of recent records to include in the
-            sliding window prefill context. Default: 3.
+            sliding window prefill context. Computed dynamically as
+            max(int(prefill_context_ratio * avg_records_per_example), 3),
+            capped by model context length. Falls back to 3 when the ratio
+            is 0 or training stats are unavailable.
         _time_column (str): Name of the timestamp column in the data.
         _time_format (str): Format string for parsing timestamps (strptime format),
             or "elapsed_seconds" for numeric elapsed time.
@@ -189,9 +194,9 @@ class TimeseriesBackend(VllmBackend):
         super().__init__(config, model_metadata, **kwargs)
 
         self._schema_fragment = ",".join([f'"{c}":<unk>' for c in self.columns])
-        self._samples_per_prompt = 5  # num of samples per prompt
-        self._max_prompts_per_batch = 100  # max prompts per batch for parallel group generation
-        self._prefill_context_size = 3  # number of records to prefill
+        self._samples_per_prompt = 3  # num of samples per prompt
+        self._max_prompts_per_batch = 120  # max prompts per batch for parallel group generation
+        self._prefill_context_size = self._compute_prefill_context_size(config, model_metadata)
         self._time_column = config.time_series.timestamp_column
         self._time_format = config.time_series.timestamp_format
         self._is_elapsed_time = self._time_format == "elapsed_seconds"
@@ -215,6 +220,55 @@ class TimeseriesBackend(VllmBackend):
         self._group_prefills: dict[str, str] = initial_prefill_value
         self._groups: list[str] = list(self._group_prefills.keys())
 
+        # Checkpoint/resume support
+        self._shutdown_requested = threading.Event()
+        self._checkpoint_dir: Path = self.model_metadata.adapter_path
+
+    @staticmethod
+    def _compute_prefill_context_size(
+        config: SafeSynthesizerParameters, model_metadata: ModelMetadata
+    ) -> int:
+        """Compute the sliding window prefill context size.
+
+        Uses ``config.generation.prefill_context_ratio`` scaled by the average
+        records per training example (stored in model metadata during training).
+        The result is floored at 3 and capped so the prefill cannot exceed the
+        model's context window.
+
+        Args:
+            config: Pipeline configuration (provides the ratio).
+            model_metadata: Trained model metadata (provides training stats).
+
+        Returns:
+            Number of recent records to include in each generation prompt.
+        """
+        _DEFAULT_PREFILL = 3
+        ratio = config.generation.prefill_context_ratio
+        avg_records = model_metadata.avg_records_per_example
+        avg_tokens = model_metadata.avg_tokens_per_record
+
+        if ratio <= 0 or avg_records is None:
+            logger.info(f"Using default prefill context size: {_DEFAULT_PREFILL}")
+            return _DEFAULT_PREFILL
+
+        prefill_size = max(int(ratio * avg_records), _DEFAULT_PREFILL)
+
+        if avg_tokens is not None and avg_tokens > 0:
+            max_prefill = int(model_metadata.max_seq_length // avg_tokens)
+            if prefill_size > max_prefill:
+                logger.warning(
+                    f"Prefill context size {prefill_size} exceeds context-length limit "
+                    f"({max_prefill} records at ~{avg_tokens:.0f} tokens/record). "
+                    f"Capping to {max_prefill}.",
+                )
+                prefill_size = max(max_prefill, _DEFAULT_PREFILL)
+
+        logger.info(
+            f"Prefill context size: {prefill_size} "
+            f"(ratio={ratio}, avg_records_per_example={avg_records:.1f})",
+        )
+        return prefill_size
+
     def _build_progress_snapshots(self, total: int, is_group_based: bool = False) -> list[ProgressSnapshot]:
         """Build progress snapshots for saving intermediate results.
 
@@ -229,7 +283,7 @@ class TimeseriesBackend(VllmBackend):
             return []
         snapshots: list[ProgressSnapshot] = []
         seen_thresholds: set[int] = set()
-        for fraction in (0.25, 0.5, 0.75):
+        for fraction in (0.25, 0.5, 0.75, 1.0):
             threshold = max(1, math.ceil(total * fraction))
             if threshold in seen_thresholds:
                 continue
@@ -304,6 +358,182 @@ class TimeseriesBackend(VllmBackend):
             if snapshot.saved or count < snapshot.threshold:
                 continue
             self._write_progress_snapshot(batches, snapshot, is_group_based=is_group_based)
+
+    # ── Checkpoint save/restore for resumable generation ────────────────────
+
+    _CHECKPOINT_JSON = ".generation_checkpoint.json"
+    _CHECKPOINT_CSV = ".generation_partial_records.csv"
+
+    @property
+    def _checkpoint_json_path(self) -> Path:
+        return self._checkpoint_dir / self._CHECKPOINT_JSON
+
+    @property
+    def _checkpoint_csv_path(self) -> Path:
+        return self._checkpoint_dir / self._CHECKPOINT_CSV
+
+    def _save_checkpoint(
+        self,
+        batches: GenerationBatches,
+        all_group_states: dict[str, GroupState],
+    ) -> None:
+        """Atomically save generation checkpoint (group states + partial records).
+
+        Writes to a temp file first, then renames to ensure crash safety.
+        """
+        self._checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        # Serialize group states
+        states_data = {}
+        for gid, state in all_group_states.items():
+            states_data[gid] = asdict(state)
+
+        manifest = {
+            "group_states": states_data,
+            "num_valid_records": batches.num_valid_records,
+            "num_invalid_records": batches.num_invalid_records,
+            "timestamp": time.time(),
+        }
+
+        # Write JSON atomically
+        json_tmp = self._checkpoint_json_path.with_suffix(".tmp")
+        try:
+            json_tmp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
+            os.rename(json_tmp, self._checkpoint_json_path)
+        except Exception:
+            logger.exception("Failed to save checkpoint JSON")
+            json_tmp.unlink(missing_ok=True)
+            return
+
+        # Write partial records CSV atomically
+        csv_tmp = self._checkpoint_csv_path.with_suffix(".tmp")
+        try:
+            df = batches.to_dataframe(self.columns)
+            if not df.empty:
+                df = self._sort_dataframe(df)
+                df.to_csv(csv_tmp, index=False)
+                os.rename(csv_tmp, self._checkpoint_csv_path)
+            else:
+                # Remove stale CSV if no records yet
+                self._checkpoint_csv_path.unlink(missing_ok=True)
+        except Exception:
+            logger.exception("Failed to save checkpoint CSV")
+            csv_tmp.unlink(missing_ok=True)
+            return
+
+        logger.info(
+            f"Saved generation checkpoint: {batches.num_valid_records} records, "
+            f"{sum(1 for s in all_group_states.values() if s.completed)} completed groups "
+            f"-> {self._checkpoint_json_path}",
+        )
+
+    def _load_checkpoint(self) -> dict | None:
+        """Load a generation checkpoint if one exists.
+
+        Returns:
+            Parsed checkpoint manifest dict, or None if no valid checkpoint found.
+        """
+        if not self._checkpoint_json_path.exists():
+            return None
+
+        try:
+            manifest = json.loads(self._checkpoint_json_path.read_text())
+            if "group_states" not in manifest:
+                raise ValueError("Checkpoint missing 'group_states' key")
+            logger.info(
+                f"Found generation checkpoint: {manifest.get('num_valid_records', 0)} records "
+                f"from {self._checkpoint_json_path}",
+            )
+            return manifest
+        except Exception:
+            logger.exception(
+                f"Corrupt checkpoint at {self._checkpoint_json_path}, starting fresh"
+            )
+            self._delete_checkpoint()
+            return None
+
+    def _restore_group_states(
+        self, manifest: dict
+    ) -> tuple[dict[str, GroupState], list[str], list[str]]:
+        """Restore GroupState objects from checkpoint manifest.
+
+        Returns:
+            Tuple of (all_group_states, pending_group_ids, completed_or_failed_ids).
+        """
+        saved_states = manifest["group_states"]
+        all_group_states: dict[str, GroupState] = {}
+        pending_groups: list[str] = []
+        finished_groups: list[str] = []
+
+        for group_id in self._groups:
+            if group_id in saved_states:
+                sd = saved_states[group_id]
+                state = GroupState(
+                    group_id=sd["group_id"],
+                    initial_prefill=sd["initial_prefill"],
+                    current_prefill=sd["current_prefill"],
+                    recent_records=sd.get("recent_records", []),
+                    expected_records=sd.get("expected_records", 0),
+                    last_timestamp_seconds=sd.get("last_timestamp_seconds"),
+                    low_valid_fraction_count=sd.get("low_valid_fraction_count", 0),
+                    completed=sd.get("completed", False),
+                    failed=sd.get("failed", False),
+                    total_valid_records=sd.get("total_valid_records", 0),
+                    total_invalid_records=sd.get("total_invalid_records", 0),
+                )
+            else:
+                # Group not in checkpoint — initialize fresh
+                state = self._init_group_state(group_id)
+
+            all_group_states[group_id] = state
+            if state.completed or state.failed:
+                finished_groups.append(group_id)
+            else:
+                pending_groups.append(group_id)
+
+        return all_group_states, pending_groups, finished_groups
+
+    def _load_checkpoint_records(self, batches: GenerationBatches) -> None:
+        """Load previously generated records from checkpoint CSV into batches.
+
+        Creates a synthetic Batch containing the restored records so that
+        GenerationBatches counters and to_dataframe() include them.
+        """
+        if not self._checkpoint_csv_path.exists():
+            return
+
+        try:
+            df = pd.read_csv(self._checkpoint_csv_path)
+        except Exception:
+            logger.exception("Failed to read checkpoint CSV, starting with no prior records")
+            return
+
+        if df.empty:
+            return
+
+        # Create a synthetic batch with restored records
+        restored_batch = Batch(processor=self.processor)
+        records = df.to_dict("records")
+        # Build a single ParsedResponse containing all restored records
+        restored_response = ParsedResponse(
+            valid_records=records,
+            invalid_records=[],
+            errors=[],
+        )
+        restored_batch._responses.append(restored_response)
+        batches.add_batch(restored_batch)
+
+        logger.info(f"Restored {len(records)} records from checkpoint CSV")
+
+    def _delete_checkpoint(self) -> None:
+        """Remove checkpoint files after successful completion."""
+        self._checkpoint_json_path.unlink(missing_ok=True)
+        self._checkpoint_csv_path.unlink(missing_ok=True)
+        # Also clean up any stale tmp files
+        self._checkpoint_json_path.with_suffix(".tmp").unlink(missing_ok=True)
+        self._checkpoint_csv_path.with_suffix(".tmp").unlink(missing_ok=True)
+
+    # ── End checkpoint methods ────────────────────────────────────────────
 
     def _format_prompt(self, prefill: str) -> str:
         return self.model_metadata.prompt_config.template.format(
@@ -675,6 +905,12 @@ class TimeseriesBackend(VllmBackend):
         multiple groups in a single batch. The maximum number of prompts per batch
         is controlled by `_max_prompts_per_batch`.
 
+        Supports checkpoint/resume: if a checkpoint exists from a previous run,
+        group states and partial records are restored and generation continues
+        from where it left off. Checkpoints are saved periodically (controlled by
+        ``config.generation.checkpoint_interval_batches``) and on graceful shutdown
+        (when ``_shutdown_requested`` event is set).
+
         Args:
             batches: The GenerationBatches object to accumulate results.
             sampling_params: Sampling parameters for generation.
@@ -685,23 +921,48 @@ class TimeseriesBackend(VllmBackend):
         """
         invalid_fraction_threshold = self.config.generation.invalid_fraction_threshold
         max_groups_per_batch = max(1, self._max_prompts_per_batch // self._samples_per_prompt)
+        checkpoint_interval = self.config.generation.checkpoint_interval_batches
 
-        # Initialize states for all groups
-        all_group_states: dict[str, GroupState] = {
-            group_id: self._init_group_state(group_id) for group_id in self._groups
-        }
+        # ── Try to resume from checkpoint ──────────────────────────────────
+        checkpoint = self._load_checkpoint()
+        if checkpoint is not None:
+            all_group_states, pending_groups, finished_groups = self._restore_group_states(checkpoint)
+            self._load_checkpoint_records(batches)
+            groups_completed = len(finished_groups)
+            all_groups_succeeded = all(
+                all_group_states[gid].completed for gid in finished_groups
+            )
+            logger.info(
+                f"Resumed from checkpoint: {groups_completed}/{len(self._groups)} groups done, "
+                f"{len(pending_groups)} pending, {batches.num_valid_records} records restored",
+            )
+        else:
+            # Initialize states for all groups (fresh start)
+            all_group_states = {
+                group_id: self._init_group_state(group_id) for group_id in self._groups
+            }
+            pending_groups = list(self._groups)
+            groups_completed = 0
+            all_groups_succeeded = True
 
-        pending_groups = list(self._groups)
         active_states: list[GroupState] = []
-        groups_completed = 0
-        all_groups_succeeded = True
+        batch_iteration = 0
 
         logger.info(
             f"Starting parallel generation for {len(self._groups)} groups "
             f"(max {max_groups_per_batch} groups per batch, {self._samples_per_prompt} samples per prompt)",
         )
 
+        shutdown_triggered = False
+
         while pending_groups or active_states:
+            # Check for graceful shutdown request
+            if self._shutdown_requested.is_set():
+                logger.info("Shutdown requested — saving checkpoint and exiting")
+                self._save_checkpoint(batches, all_group_states)
+                shutdown_triggered = True
+                break
+
             # Fill active slots with pending groups
             while len(active_states) < max_groups_per_batch and pending_groups:
                 next_group = pending_groups.pop(0)
@@ -784,6 +1045,11 @@ class TimeseriesBackend(VllmBackend):
                 effective_samples_per_prompt,
             )
 
+            # Periodic checkpoint save
+            batch_iteration += 1
+            if checkpoint_interval > 0 and batch_iteration % checkpoint_interval == 0:
+                self._save_checkpoint(batches, all_group_states)
+
             # Check for global stop conditions
             if batches.status in [
                 GenerationStatus.STOP_NO_RECORDS,
@@ -791,6 +1057,10 @@ class TimeseriesBackend(VllmBackend):
             ]:
                 all_groups_succeeded = False
                 break
+
+        # Clean up checkpoint on successful completion (not on shutdown)
+        if not shutdown_triggered and all_groups_succeeded:
+            self._delete_checkpoint()
 
         return all_groups_succeeded
 
@@ -894,11 +1164,19 @@ class TimeseriesBackend(VllmBackend):
             progress_snapshots=progress_snapshots,
         )
 
-        if all_groups_completed and batches.status == GenerationStatus.IN_PROGRESS:
-            batches.status = GenerationStatus.COMPLETE
-
-        batches.job_complete()
-        batches.log_status()
+        # If shutdown was requested, mark as INCOMPLETE rather than letting
+        # job_complete/log_status raise errors for partial results.
+        if self._shutdown_requested.is_set():
+            batches.status = GenerationStatus.INCOMPLETE
+            logger.info(
+                f"Generation checkpointed after shutdown request "
+                f"({batches.num_valid_records} records saved)",
+            )
+        else:
+            if all_groups_completed and batches.status == GenerationStatus.IN_PROGRESS:
+                batches.status = GenerationStatus.COMPLETE
+            batches.job_complete()
+            batches.log_status()
 
         if not keep_llm_state:
             self._clear_llm_state()
