@@ -1,7 +1,7 @@
-<div class="component" id="reference-columns">
+<div class="component" id="training-columns">
     <div class="header">
-        Reference Columns
-        <span data-toggle data-for="reference-columns-info" class="info"></span>
+        Training Columns
+        <span data-toggle data-for="training-columns-info" class="info"></span>
     </div>
     <table>
         <tr>
@@ -29,10 +29,10 @@
             {% else %}
                 <td class="first">{{ column.name }}</td>
             {% endif %}
-            <td class="tnum">{{ column.reference_field_features.unique_count }}</td>
-            <td class="tnum">{{ column.reference_field_features.missing_count }}</td>
-            <td class="tnum">{{ column.reference_field_features.avg_str_length | round(2) }}</td>
-            <td>{{ column.output_field_features.type | capitalize }}</td>
+            <td class="tnum">{{ column.training_field_features.unique_count }}</td>
+            <td class="tnum">{{ column.training_field_features.missing_count }}</td>
+            <td class="tnum">{{ column.training_field_features.avg_str_length | round(2) }}</td>
+            <td>{{ column.synthetic_field_features.type | capitalize }}</td>
             {% if ctx.with_synthesizer %}
                 {% if column.distribution_stability %}
                     <td class={{ "last" if not ctx.with_transform }}>
@@ -76,10 +76,10 @@
     </table>
     <div class="footer">
         <div class="footer-main">
-            <button data-toggle data-for="reference-columns-info">What do these values mean</button>
+            <button data-toggle data-for="training-columns-info">What do these values mean</button>
         </div>
-        <div class="tooltips" id="reference-columns-info" hidden>
-            {{ ctx.tooltips.reference_columns_info }}
+        <div class="tooltips" id="training-columns-info" hidden>
+            {{ ctx.tooltips.training_columns_info }}
         </div>
     </div>
 </div>

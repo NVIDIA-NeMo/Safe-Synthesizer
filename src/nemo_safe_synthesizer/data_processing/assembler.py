@@ -449,11 +449,10 @@ class TrainingExampleAssembler(ABC):
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Split the dataset into training and test sets."""
         if self.test_size is not None and self.test_size > 0:
-            split_dataset = naive_train_test_split(
+            training_df, test_df = naive_train_test_split(
                 dataset.to_pandas(), test_size=self.test_size, random_state=self.seed
             )
-            train_df, test_df = split_dataset
-            self.train_dataset = Dataset.from_pandas(train_df)
+            self.train_dataset = Dataset.from_pandas(training_df)
             self.validation_dataset = Dataset.from_pandas(test_df)
             self.validation_dataset.info.description += "is_val"
 
@@ -705,11 +704,11 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
 
         rng = utils.get_random_number_generator(self.seed)
         # Process both training and test datasets
-        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        train_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         examples = TrainingExamples(
-            train=training_dataset,
+            train=train_dataset,
             test=validation_dataset,
             stats={
                 "tokens_per_record": self.stats["tokens_per_record"],
@@ -1020,14 +1019,14 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         group_column = self.group_by_column
         subset = dataset.select_columns([group_column]).to_pandas().copy()
         subset["__record_idx__"] = range(len(subset))
-        train_df, test_df = grouped_train_test_split(
+        training_df, test_df = grouped_train_test_split(
             subset,
             group_by=group_column,
             test_size=self.test_size,
             random_state=self.seed,
         )
 
-        train_indices = train_df["__record_idx__"].tolist()
+        train_indices = training_df["__record_idx__"].tolist()
         train_dataset = dataset.select(train_indices).flatten_indices()
         # Re-sort needed: GroupShuffleSplit shuffles indices, losing chronological order
         train_dataset = self._sort_dataset_by_group_and_order(train_dataset)
@@ -1102,11 +1101,11 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         )
 
         rng = utils.get_random_number_generator(self.seed)
-        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        train_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         examples = TrainingExamples(
-            train=training_dataset,
+            train=train_dataset,
             test=validation_dataset,
             stats={
                 "tokens_per_record": self.stats["tokens_per_record"],
@@ -1560,11 +1559,11 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
         rng = utils.get_random_number_generator(self.seed)
         # Process both training and validation datasets
-        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        train_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         examples = TrainingExamples(
-            train=training_dataset,
+            train=train_dataset,
             test=validation_dataset,
             stats={
                 "tokens_per_record": self.stats["tokens_per_record"],

@@ -39,7 +39,7 @@
             {% endif %}
 
             {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
-                <a href="#reference-columns" class="level-2">Reference Columns</a>
+                <a href="#training-columns" class="level-2">Training Columns</a>
             {% endif %}
 
             {% if ctx.with_synthesizer %}
@@ -205,7 +205,7 @@
             {% endif %}
 
             {% if ctx.get('column_distribution_stability', {}).get('evaluation_fields') %}
-                {% include "jinja/components/reference_columns.j2" %}
+                {% include "jinja/components/training_columns.j2" %}
             {% endif %}
 
             {% if ctx.get('column_correlation_stability', {}).get('figure') %}

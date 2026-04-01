@@ -201,7 +201,7 @@ def grouped_train_test_split(
         seed: Random state for reproducibility.
 
     Returns:
-        Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` on
+        Tuple of ``(training_df, test_df)``, or ``(training_df, None)`` on
         failure.
     """
     # Convert to pandas for group operations

@@ -9,8 +9,8 @@ from functools import cached_property
 from pydantic import BaseModel, Field
 
 from ...evaluation.components.component import Component
-from ...evaluation.data_model.evaluation_dataset import (
-    EvaluationDataset,
+from ...evaluation.data_model.evaluation_datasets import (
+    EvaluationDatasets,
 )
 from ...observability import get_logger
 
@@ -25,7 +25,7 @@ class EvaluationReport(BaseModel):
     consumed by the HTML report template.
     """
 
-    evaluation_dataset: EvaluationDataset = Field(description="The paired reference/output data used for evaluation.")
+    evaluation_datasets: EvaluationDatasets = Field(description="The paired training/synthetic data used for evaluation.")
     components: list[Component] = Field(
         default=list(), description="Ordered list of evaluation components with their scores."
     )

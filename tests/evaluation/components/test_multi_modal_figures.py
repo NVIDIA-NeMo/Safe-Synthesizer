@@ -148,7 +148,7 @@ class TestScatter:
 
         assert isinstance(trace, go.Scatter)
         assert trace.mode == "markers"
-        assert trace.name == "Reference"
+        assert trace.name == "Training"
 
     def test_scatter_custom_params(self):
         x = pd.Series([1, 2, 3])
@@ -168,15 +168,15 @@ class TestHistogram:
         trace = histogram(x)
 
         assert isinstance(trace, go.Histogram)
-        assert trace.name == "Reference"
+        assert trace.name == "Training"
         assert trace.showlegend is False
 
     def test_histogram_custom_params(self):
         x = pd.Series([1, 2, 3, 4, 5])
-        trace = histogram(x, color="#00FF00", name="Output", histnorm="percent")
+        trace = histogram(x, color="#00FF00", name="Synthetic", histnorm="percent")
 
         assert isinstance(trace, go.Histogram)
-        assert trace.name == "Output"
+        assert trace.name == "Synthetic"
 
 
 class TestGetAutoBins:
@@ -365,11 +365,11 @@ class TestBarChart:
         fig = bar_chart(ref_dist, out_dist)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Reference and Output bars
+        assert len(fig.data) == 2  # Training and Synthetic bars
         assert all(isinstance(trace, go.Bar) for trace in fig.data)
 
     def test_bar_chart_missing_keys(self):
-        # Output has key that reference doesn't have
+        # Synthetic distribution has a key that training doesn't have
         ref_dist = {"A": 0.5, "B": 0.5}
         out_dist = {"A": 0.4, "C": 0.6}
 
@@ -410,7 +410,7 @@ class TestHistogramFigure:
         fig = histogram_figure(reference, output)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Reference and Output histograms
+        assert len(fig.data) == 2  # Training and Synthetic histograms
 
     def test_histogram_figure_with_nans(self):
         reference = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])

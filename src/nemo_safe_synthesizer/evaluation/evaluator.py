@@ -24,7 +24,7 @@ logger = get_logger(__name__)
 
 
 class Evaluator:
-    """Orchestrates evaluation of synthetic data against reference data.
+    """Orchestrates evaluation of synthetic data against training data.
 
     Computes quality and privacy metrics by delegating to
     ``MultimodalReport``, which assembles individual evaluation
@@ -37,7 +37,7 @@ class Evaluator:
             or a raw ``pd.DataFrame``.
         pii_replacer_time: Wall-clock seconds spent on PII replacement, if any.
         column_statistics: Per-column PII entity counts and transform metadata.
-        train_df: Reference (training) dataframe.
+        training_df: Training dataframe.
         test_df: Holdout (test) dataframe used by text-similarity and privacy metrics.
         workdir: Working directory for persisting artifacts.
     """
@@ -56,7 +56,7 @@ class Evaluator:
         generate_results: GenerateJobResults | pd.DataFrame,
         pii_replacer_time: float | None = None,
         column_statistics: dict[str, ColumnStatistics] | None = None,
-        train_df: pd.DataFrame | None = None,
+        training_df: pd.DataFrame | None = None,
         test_df: pd.DataFrame | None = None,
         workdir: Workdir | None = None,
     ):
@@ -64,7 +64,7 @@ class Evaluator:
         self.generate_results = generate_results
         self.pii_replacer_time = pii_replacer_time
         self.column_statistics = column_statistics
-        self.train_df = train_df
+        self.training_df = training_df
         self.test_df = test_df
         self.workdir = workdir
 
@@ -78,8 +78,8 @@ class Evaluator:
         evaluation_start = time.monotonic()
         output = self.generate_results if isinstance(self.generate_results, pd.DataFrame) else self.generate_results.df
         report = MultimodalReport.from_dataframes(
-            reference=self.train_df,  # ty: ignore[invalid-argument-type]
-            output=output,
+            training=self.training_df,  # ty: ignore[invalid-argument-type]
+            synthetic=output,
             test=self.test_df,
             config=self.config,
             column_statistics=self.column_statistics,

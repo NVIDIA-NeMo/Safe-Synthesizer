@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
@@ -33,9 +33,9 @@ class ColumnDistributionPlotRow(BaseModel):
     def _get_figure_for_field(f: EvaluationField | None, reference: pd.Series, output) -> Figure | None:
         if f is None:
             return None
-        if f.reference_field_features.type != FieldType.NUMERIC or f.output_field_features.type != FieldType.NUMERIC:
-            if f.reference_distribution is not None and f.output_distribution is not None:
-                figure = figures.bar_chart(f.reference_distribution, f.output_distribution)
+        if f.training_field_features.type != FieldType.NUMERIC or f.synthetic_field_features.type != FieldType.NUMERIC:
+            if f.training_distribution is not None and f.synthetic_distribution is not None:
+                figure = figures.bar_chart(f.training_distribution, f.synthetic_distribution)
             else:
                 figure = None
         else:
@@ -65,16 +65,16 @@ class ColumnDistributionPlotRow(BaseModel):
         return ColumnDistributionPlotRow(name1=field1.name, name2=field2.name if field2 else None, figure=fig)
 
     @staticmethod
-    def from_evaluation_dataset(evaluation_dataset: EvaluationDataset) -> list[dict[str, str]]:
+    def from_evaluation_datasets(evaluation_datasets: EvaluationDatasets) -> list[dict[str, str]]:
         tups = []
         result_rows = []
 
-        tabular_columns = set(evaluation_dataset.get_tabular_columns())
-        tabular_fields = [f for f in evaluation_dataset.evaluation_fields if f.name in tabular_columns]
+        tabular_columns = set(evaluation_datasets.get_tabular_columns())
+        tabular_fields = [f for f in evaluation_datasets.evaluation_fields if f.name in tabular_columns]
 
         for f in tabular_fields:
             figure = ColumnDistributionPlotRow._get_figure_for_field(
-                f, evaluation_dataset.reference[f.name], evaluation_dataset.output[f.name]
+                f, evaluation_datasets.training[f.name], evaluation_datasets.synthetic[f.name]
             )
             if figure is not None:
                 tups.append((f, figure))
@@ -92,10 +92,10 @@ class ColumnDistributionPlotRow(BaseModel):
 class ColumnDistribution(Component):
     """Column Distribution Stability metric.
 
-    Computes per-column Jensen-Shannon divergence between reference and
-    output distributions, averages across all tabular columns, and maps
+    Computes per-column Jensen-Shannon divergence between training and
+    synthetic distributions, averages across all tabular columns, and maps
     the result to a 0--10 score.  Also carries data for the per-column
-    histogram figures and the Reference Columns table in the HTML report.
+    histogram figures and the Training Columns table in the HTML report.
     """
 
     name: str = Field(default="Column Distribution Stability")
@@ -121,23 +121,23 @@ class ColumnDistribution(Component):
         return d
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> ColumnDistribution:
         """Compute column distribution stability from the evaluation dataset."""
-        tabular_columns = set(evaluation_dataset.get_tabular_columns())
-        tabular_fields = [f for f in evaluation_dataset.evaluation_fields if f.name in tabular_columns]
+        tabular_columns = set(evaluation_datasets.get_tabular_columns())
+        tabular_fields = [f for f in evaluation_datasets.evaluation_fields if f.name in tabular_columns]
         if tabular_fields:
             average_divergence = EvaluationField.get_average_divergence(tabular_fields)
             score = EvaluationField.get_field_distribution_stability(average_divergence)
             return ColumnDistribution(
                 score=score,
-                column_statistics=evaluation_dataset.column_statistics,
-                evaluation_fields=evaluation_dataset.evaluation_fields,
+                column_statistics=evaluation_datasets.column_statistics,
+                evaluation_fields=evaluation_datasets.evaluation_fields,
             )
         else:
             return ColumnDistribution(
                 score=EvaluationScore(notes="No tabular columns detected."),
-                column_statistics=evaluation_dataset.column_statistics,
-                evaluation_fields=evaluation_dataset.evaluation_fields,
+                column_statistics=evaluation_datasets.column_statistics,
+                evaluation_fields=evaluation_datasets.evaluation_fields,
             )

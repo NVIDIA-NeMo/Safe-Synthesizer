@@ -12,16 +12,16 @@ pytest.importorskip(
 import logging
 
 from nemo_safe_synthesizer.evaluation.components.membership_inference_protection import MembershipInferenceProtection
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import EvaluationDataset
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.requires_gpu
-def test_membership_inference_protection(train_df_5k, synth_df_5k, test_df):
+def test_membership_inference_protection(training_df_5k, synthetic_df_5k, test_df):
     """Test MIA with tabular-only data (sklearn NearestNeighbors path)."""
-    evaluation_dataset = EvaluationDataset.from_dataframes(train_df_5k, synth_df_5k, test_df)
-    membership_inference_protection = MembershipInferenceProtection.from_evaluation_dataset(evaluation_dataset)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
+    membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(membership_inference_protection.attack_sum_df)
     assert (
@@ -37,7 +37,7 @@ def test_membership_inference_protection(train_df_5k, synth_df_5k, test_df):
 
 
 @pytest.mark.requires_gpu
-def test_membership_inference_protection_mixed_text_tabular(train_df_mixed_5k, synth_df_mixed_5k, test_df_mixed):
+def test_membership_inference_protection_mixed_text_tabular(training_df_mixed_5k, synthetic_df_mixed_5k, test_df_mixed):
     """Test MIA with mixed text+tabular data (hybrid sklearn + sentence-transformers path).
 
     This test exercises the hybrid nearest neighbor path that combines:
@@ -45,8 +45,8 @@ def test_membership_inference_protection_mixed_text_tabular(train_df_mixed_5k, s
     - sklearn NearestNeighbors for tabular column similarity
     - weighted hybrid distance calculation
     """
-    evaluation_dataset = EvaluationDataset.from_dataframes(train_df_mixed_5k, synth_df_mixed_5k, test_df_mixed)
-    membership_inference_protection = MembershipInferenceProtection.from_evaluation_dataset(evaluation_dataset)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_mixed_5k, synthetic_df_mixed_5k, test_df_mixed)
+    membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(f"MIA attack summary: {membership_inference_protection.attack_sum_df}")
     assert membership_inference_protection.attack_sum_df is not None
@@ -61,14 +61,14 @@ def test_membership_inference_protection_mixed_text_tabular(train_df_mixed_5k, s
 
 
 @pytest.mark.requires_gpu
-def test_membership_inference_protection_text_only(train_df_text_only, synth_df_text_only, test_df_text_only):
+def test_membership_inference_protection_text_only(training_df_text_only, synthetic_df_text_only, test_df_text_only):
     """Test MIA with text-only data (sentence-transformers only, no sklearn).
 
     This test exercises the text-only nearest neighbor path that uses
     only sentence-transformers for semantic similarity search.
     """
-    evaluation_dataset = EvaluationDataset.from_dataframes(train_df_text_only, synth_df_text_only, test_df_text_only)
-    membership_inference_protection = MembershipInferenceProtection.from_evaluation_dataset(evaluation_dataset)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_text_only, synthetic_df_text_only, test_df_text_only)
+    membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(f"MIA text-only attack summary: {membership_inference_protection.attack_sum_df}")
     assert membership_inference_protection.attack_sum_df is not None
