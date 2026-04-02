@@ -83,6 +83,11 @@ jobs:
       - name: Bootstrap CUDA environment
         run: make bootstrap-nss cu128
 
+      - name: Check GPU availability
+        run: |
+          nvidia-smi
+          uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
+
       - name: Run GPU smoke tests
         timeout-minutes: 20
         run: make test-smoke-gpu
@@ -110,6 +115,11 @@ jobs:
 
       - name: Bootstrap CUDA environment
         run: make bootstrap-nss cu128
+
+      - name: Check GPU availability
+        run: |
+          nvidia-smi
+          uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
 
       - name: Run GPU E2E tests
         timeout-minutes: 45
