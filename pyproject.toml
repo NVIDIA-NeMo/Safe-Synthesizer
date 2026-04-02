@@ -150,26 +150,29 @@ cu128 = [
   "kernels>=0.12.1",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
   "nvidia-ml-py; sys_platform == 'linux'",
+  "onnxruntime",
   "opacus",
+  "opt_einsum",
   "peft",
   "sentence-transformers",
   "torch==2.9.1+cu128; sys_platform == 'linux'",
   "torch-c-dlpack-ext",
-  "torchvision==0.24.1+cu128; sys_platform == 'linux'",
-  "torchao==0.15.0; sys_platform == 'linux'",
+  "torchvision==0.24.1+cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "torchvision==0.24.1; sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "torchao==0.15.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4; sys_platform == 'linux'",
-  "unsloth_zoo==2025.12.4; sys_platform == 'linux'",
-  "vllm==0.15.0; sys_platform == 'linux'",
-  "xformers==v0.0.33.post2; sys_platform == 'linux'",
+  "unsloth[cu128-torch291]==2025.12.4",
+  "unsloth_zoo==2025.12.4",
+  "vllm==0.15.0",
+  "xformers==v0.0.33.post2; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 # at some point, do per-subpackage dependencies
 
 [tool.uv]
-required-version = ">=0.9.14, <0.11.0" # Allow current 0.10.x line while staying below the next minor
+required-version = ">=0.9.14, <0.12.0" # Allow current 0.11.x line while staying below the next minor
 cache-keys = [
   { file = "pyproject.toml" }, { git = { commit = true, tags = true } },
   { file = "uv.lock" }
@@ -189,8 +192,8 @@ dependency-metadata = [
 
 
 override-dependencies = [
-    "flashinfer-python==0.6.1; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
-    "flashinfer-cubin==0.6.1; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
+    "flashinfer-python==0.6.1; sys_platform != 'darwin' and platform_machine != 'aarch64'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
+    "flashinfer-cubin==0.6.1; sys_platform != 'darwin' and platform_machine != 'aarch64'",  # perhaps because the published wheels have some wrong metadata
     "xgrammar>=0.1.32,<1.0.0",                            # CVE-2026-25048: override vllm's pin on 0.1.29
 ]
 
