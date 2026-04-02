@@ -703,7 +703,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         # This info is needed inside the trainer for DP
         # Number of records, if group_training_examples_by is None, or else number of groups
-        self.true_dataset_size = len(assembler.train_dataset)
+        self.true_dataset_size = len(assembler.training_dataset)
 
         if self.params.time_series.is_timeseries:
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()

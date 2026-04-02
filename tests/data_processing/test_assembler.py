@@ -760,7 +760,7 @@ def test_sequential_assembler_sorts_records_by_group_and_order(
         seed=42,
     )
 
-    train_df = assembler.train_dataset.to_pandas()
+    train_df = assembler.training_dataset.to_pandas()
     for chick_id, group_df in train_df.groupby("Chick"):
         time_values = group_df["Time"].tolist()
         assert time_values == sorted(time_values), f"Time values not sorted for Chick {chick_id}"

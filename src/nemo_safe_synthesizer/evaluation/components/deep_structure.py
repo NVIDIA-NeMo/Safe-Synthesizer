@@ -66,7 +66,7 @@ class DeepStructure(Component):
         Returns:
             A ``DeepStructure`` with PCA dataframes and the stability score.
         """
-        tabular_columns = evaluation_datasets.get_tabular_columns(mode="both")
+        tabular_columns = evaluation_datasets.get_tabular_columns(based_on="both")
         if not tabular_columns:
             return DeepStructure(score=EvaluationScore(notes="No columns detected for PCA."))
 

@@ -59,22 +59,22 @@ class EvaluationDatasets(BaseModel):
         if df.empty:
             raise ValueError(f"{df_name} is empty!")
 
-    def get_columns_of_type(self, types: set[FieldType], mode="training") -> list[str]:
+    def get_columns_of_type(self, types: set[FieldType], based_on="training") -> list[str]:
         """Return column names whose ``FieldType`` is in ``types``.
 
         Args:
             types: Set of ``FieldType`` values to match.
-            mode: Which dataframe's field features to inspect --
+            based_on: Which dataframe's field features to inspect --
                 ``"training"``, ``"synthetic"``, or ``"both"`` (intersection).
 
         Returns:
             List of matching column names.
         """
-        if mode == "training":
+        if based_on == "training":
             return [f.name for f in self.evaluation_fields if f.training_field_features.type in types]
-        elif mode == "synthetic":
+        elif based_on == "synthetic":
             return [f.name for f in self.evaluation_fields if f.synthetic_field_features.type in types]
-        elif mode == "both":
+        elif based_on == "both":
             return [
                 f.name
                 for f in self.evaluation_fields
@@ -83,17 +83,17 @@ class EvaluationDatasets(BaseModel):
         else:
             return []
 
-    def get_tabular_columns(self, mode="training") -> list[str]:
+    def get_tabular_columns(self, based_on="training") -> list[str]:
         """Return columns classified as binary, categorical, or numeric."""
-        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, mode)
+        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, based_on)
 
-    def get_nominal_columns(self, mode="training") -> list[str]:
+    def get_nominal_columns(self, based_on="training") -> list[str]:
         """Return columns classified as binary or categorical."""
-        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, mode)
+        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, based_on)
 
-    def get_text_columns(self, mode="training") -> list[str]:
+    def get_text_columns(self, based_on="training") -> list[str]:
         """Return columns classified as free text."""
-        return self.get_columns_of_type({FieldType.TEXT}, mode)
+        return self.get_columns_of_type({FieldType.TEXT}, based_on)
 
     @model_validator(mode="after")
     def validate(self):
