@@ -280,7 +280,6 @@ class TestGetApiParamMapping:
         expected_keys = {
             "max_new_tokens",
             "eos_token_id",
-            "typical_p",
             "temperature",
             "num_beams",
             "early_stopping",
@@ -362,22 +361,6 @@ class TestGetApiParamMapping:
 
         assert key is None
         assert value is None
-
-    def test_typical_p_creates_logits_processor(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
-        """Test that typical_p creates a TypicalLogitsWarperWrapper."""
-        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
-
-        mapping = backend._get_api_param_mapping(resolved_temperature=0.5)
-        key, value = mapping["typical_p"](0.95)
-
-        assert key == "logits_processors"
-        assert len(value) == 1
-        # Verify it's a TypicalLogitsWarperWrapper
-        from nemo_safe_synthesizer.generation.vllm_backend import (
-            TypicalLogitsWarperWrapper,
-        )
-
-        assert isinstance(value[0], TypicalLogitsWarperWrapper)
 
 
 class TestTransformKwargsToSamplingParams:
