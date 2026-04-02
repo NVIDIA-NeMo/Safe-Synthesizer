@@ -538,8 +538,7 @@ class VllmBackend(GeneratorBackend):
             logger_name=__name__,
             target_records=self.config.generation.num_records,
             progress_note=(
-                "New records only appear after a full batch of prompts finishes, so long "
-                "stretches with no new records are normal while the run is still going."
+                "Long stretches with no new records are normal."
             ),
         ):
             while batches.num_valid_records < self.config.generation.num_records:
