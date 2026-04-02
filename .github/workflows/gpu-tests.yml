@@ -60,7 +60,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 30
-    runs-on: linux-amd64-gpu-a100-latest-1
+    runs-on: nemo-ci-aws-gpu-x2
     strategy:
       fail-fast: false
       matrix:
@@ -70,6 +70,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Install make
+        run: apt-get update && apt-get install -y --no-install-recommends make
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
@@ -89,12 +92,15 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 55
-    runs-on: linux-amd64-gpu-a100-latest-1
+    runs-on: nemo-ci-aws-gpu-x2
     steps:
       - name: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Install make
+        run: apt-get update && apt-get install -y --no-install-recommends make
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
