@@ -220,6 +220,7 @@ class SafeSynthesizer(ConfigBuilder):
             if test_path.exists() and test_path.stat().st_size > 0:
                 self._test_df = pd.read_csv(test_path)
             else:
+                logger.info("No test split loaded (holdout was disabled for this run)")
                 self._test_df = None
             # Mark that we have fully loaded from the saved run, including cached splits.
             self._loaded_from_save_path = True
