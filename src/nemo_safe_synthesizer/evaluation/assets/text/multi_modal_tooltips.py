@@ -51,9 +51,9 @@ tooltips = {
         word embeddings of the training and synthetic data for any free text columns.
     """,
     "text_semantic_similarity_info": """
-        Text Semantic Similarity is a measure of how well any free text columns in the synthetic data match the training data in terms of the meaning of the text.
+        Text Semantic Similarity is a measure of how well any free text columns in the synthetic data match the input data in terms of the meaning of the text.
         A higher similarity indicates a better match. The text semantic similarity is calculated using the cosine similarity between the
-        sentence embeddings of the training and synthetic data.
+        sentence embeddings of the training, test, and synthetic data.
     """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
