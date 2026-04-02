@@ -14,6 +14,7 @@ Provides ``PrivacyArguments`` (target epsilon/delta, noise multiplier, clipping 
 """
 
 import signal
+import threading
 import warnings
 from dataclasses import dataclass, field
 from typing import Literal, Optional
@@ -31,7 +32,12 @@ logger = get_logger()
 # Timeout (seconds) for PRV accountant construction.  The PRV library can
 # hang for small noise multipliers (high epsilon) due to numerical overflow
 # in its internal domain-size computation.
-_PRV_TIMEOUT_S = 60
+_PRV_TIMEOUT_SECONDS = 120
+
+
+def _can_use_sigalrm() -> bool:
+    """Check if SIGALRM is available and we're on the main thread."""
+    return hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread()
 
 
 def _create_prv_accountant(
@@ -40,15 +46,27 @@ def _create_prv_accountant(
     delta: float,
     max_compositions: int,
     eps_error: float,
-    timeout: int = _PRV_TIMEOUT_S,
+    timeout: int | None = None,
 ) -> PRVAccountant:
-    """Construct a PRV accountant, raising ``RuntimeError`` on overflow or hang."""
+    """Construct a PRV accountant, raising ``RuntimeError`` on overflow or hang.
+
+    Uses ``np.errstate`` to promote overflow to an error.  On Unix main
+    threads, also sets a SIGALRM timeout to interrupt hangs that don't
+    trigger an overflow warning.  On other platforms or from non-main
+    threads the timeout is skipped and only overflow detection is active.
+    """
+
+    if timeout is None:
+        timeout = _PRV_TIMEOUT_SECONDS
+    use_alarm = _can_use_sigalrm()
+    prev = None
 
     def _on_timeout(signum, frame):
         raise RuntimeError(f"PRV accountant timed out after {timeout}s (noise_multiplier={noise_multiplier})")
 
-    prev = signal.signal(signal.SIGALRM, _on_timeout)
-    signal.alarm(timeout)
+    if use_alarm:
+        prev = signal.signal(signal.SIGALRM, _on_timeout)
+        signal.alarm(timeout)
     try:
         with warnings.catch_warnings(), np.errstate(over="raise", invalid="raise"):
             warnings.filterwarnings("error", message="overflow", category=RuntimeWarning)
@@ -62,8 +80,9 @@ def _create_prv_accountant(
     except (FloatingPointError, RuntimeWarning, OverflowError) as exc:
         raise RuntimeError(f"PRV accountant overflowed (noise_multiplier={noise_multiplier})") from exc
     finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, prev)
+        if use_alarm:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, prev)
 
 
 @dataclass
