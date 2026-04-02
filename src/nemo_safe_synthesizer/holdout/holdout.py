@@ -59,7 +59,7 @@ def naive_train_test_split(
 
 
 def grouped_train_test_split(
-    df: pd.DataFrame, test_size: float | int, group_by: str | list[str], random_state: int | None = None
+    df: pd.DataFrame, test_size: int | float, group_by: str, random_state: int | None = None
 ) -> DataFrameOptionalTuple:
     """Split a dataframe so that all rows sharing a group stay in the same fold.
 
