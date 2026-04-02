@@ -278,8 +278,10 @@ to cause long generation times:
 `max_tokens` scales with context window: each generation prompt is allowed
 up to `max_seq_length` output tokens (`12,288` for SmolLM3). If the model
 produces long outputs before the stop condition fires, each prompt in the
-batch takes proportionally longer. A heartbeat log (`"Generation in
-progress"`) is emitted every 60 seconds to confirm the pipeline is alive.
+batch takes proportionally longer. Every 60 seconds a heartbeat line is
+logged starting with `Generation in progress`, plus a short note that new
+records only appear after a full batch of prompts finishes. Long
+stretches with no new records are normal while generation is still running.
 
 Long-tail batch latency: vLLM processes all prompts in a batch
 simultaneously, but `llm.generate()` blocks until every prompt completes.
