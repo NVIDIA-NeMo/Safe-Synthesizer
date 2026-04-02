@@ -55,7 +55,6 @@ def _create_prv_accountant(
     trigger an overflow warning.  On other platforms or from non-main
     threads the timeout is skipped and only overflow detection is active.
     """
-
     if timeout is None:
         timeout = _PRV_TIMEOUT_SECONDS
     use_alarm = _can_use_sigalrm()
