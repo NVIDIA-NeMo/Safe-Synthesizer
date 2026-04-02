@@ -1316,7 +1316,9 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         # `utils.grouped_train_test_split`. After the split we tokenize and perform the (potentially expensive) grouping step independently for
         # train and test.
         if test_size is not None and test_size > 0:
-            df_dataset = cast(pd.DataFrame, dataset.to_pandas())
+            df_dataset = dataset.to_pandas()
+            if not isinstance(df_dataset, pd.DataFrame):
+                raise TypeError("Expected a DataFrame from Dataset.to_pandas(), got an iterator")
             train_raw, test_raw = grouped_train_test_split(
                 df_dataset,
                 group_by=self.group_by[0],
