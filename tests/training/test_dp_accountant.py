@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
+from nemo_safe_synthesizer.privacy.dp_transformers import privacy_args as _privacy_args_mod
 from nemo_safe_synthesizer.privacy.dp_transformers.privacy_args import (
     PrivacyArguments,
     SafeSynthesizerAccountant,
@@ -116,6 +117,24 @@ class TestPRVFallbackToRDP:
             side_effect=RuntimeError("overflow"),
         ):
             args.initialize(sampling_probability=SAMPLING_PROBABILITY, num_steps=NUM_STEPS)
+        assert args.use_prv is False
+        assert args.noise_multiplier is not None
+        assert args.noise_multiplier > 0
+
+    @pytest.mark.slow
+    def test_initialize_high_epsilon_falls_back_without_mocking(self):
+        """End-to-end: high epsilon triggers real PRV overflow/timeout and falls back to RDP."""
+        args = PrivacyArguments(
+            target_epsilon=1000,
+            target_delta=DELTA,
+            per_sample_max_grad_norm=1.0,
+        )
+        orig = _privacy_args_mod._PRV_TIMEOUT_SECONDS
+        try:
+            _privacy_args_mod._PRV_TIMEOUT_SECONDS = 10
+            args.initialize(sampling_probability=SAMPLING_PROBABILITY, num_steps=100)
+        finally:
+            _privacy_args_mod._PRV_TIMEOUT_SECONDS = orig
         assert args.use_prv is False
         assert args.noise_multiplier is not None
         assert args.noise_multiplier > 0
