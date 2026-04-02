@@ -8486,9 +8486,16 @@ does at each stage.</p>
 <h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Python 3.11–3.13 (dev tooling currently pins 3.11 via <code>.python-version</code> in the repo root; Python 3.14+ is <strong>not</strong> supported — see <a href="../troubleshooting/#python-314-is-not-supported">Troubleshooting</a>)</li>
-<li>CUDA runtime 12.8</li>
+<li>CUDA runtime 12.8+</li>
 <li>NVIDIA GPU (A100 or larger) for training and generation</li>
 </ul>
+<div class="admonition failure">
+<p class="admonition-title">Linux only -- macOS, Windows, and Apple Silicon are not supported</p>
+<p>NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.8+
+to run the training and generation pipeline. The <a href="#install-the-package">CPU install tab below</a>
+is for development and configuration validation only -- it cannot train models or
+generate synthetic data.</p>
+</div>
 <h3 id="install-the-package">Install the Package<a class="headerlink" href="#install-the-package" title="Permanent link">&para;</a></h3>
 <p>The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.</p>
