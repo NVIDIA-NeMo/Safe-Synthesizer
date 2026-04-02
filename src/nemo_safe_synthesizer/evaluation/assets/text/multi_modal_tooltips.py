@@ -19,7 +19,7 @@ tooltips = {
         If there are no columns of the required type, the metrics will show up as N/A.
     """,
     "training_columns_info": """
-        This table shows the count of unique and missing column values, the average length of each column, as well as its data type.
+        This table shows the count of unique and missing column values, the average length of each column, as well as its data type in the training data.
         When a dataset contains a large number of highly unique columns or a large amount of missing data,
         these characteristics can impede the model's ability to accurately learn the statistical structure of the data.
         Exceptionally long columns can also have the same impact.
@@ -43,12 +43,10 @@ tooltips = {
         The lower the JS Distance score is on average across all numeric and categorical columns, the higher the column Distribution Stability quality score will be.
         Note, highly unique strings (neither numeric nor categorical) will not have a distributional distance score.
         To aid in the comparison of training versus synthetic column, a bar chart or histogram is shown for each numeric and categorical column.
-        Depending on the intended purpose of the synthetic data, maintaining the integrity of column distributions can be critical.
     """,
     "text_structure_similarity_info": """
-        Text Structure Similarity is a measure of how well the synthetic data matches the training data in terms of the structure of the text for any free text columns that are present.
-        A higher similarity indicates a better match. The text structure similarity is calculated using the cosine similarity between the
-        word embeddings of the training and synthetic data for any free text columns.
+        Text Structure Similarity is a measure of how well the synthetic data matches the training data in terms of the structure of the text for any free text columns that are present,
+        including character/word/sentence counts. A higher similarity indicates a better match.
     """,
     "text_semantic_similarity_info": """
         Text Semantic Similarity is a measure of how well any free text columns in the synthetic data match the input data in terms of the meaning of the text.
