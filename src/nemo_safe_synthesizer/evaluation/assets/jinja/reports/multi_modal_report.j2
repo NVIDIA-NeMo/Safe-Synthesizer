@@ -83,10 +83,12 @@
     <section class="main">
         <section class="overview" id="overview">
             <h1>Overview</h1>
+            {% if ctx.job_id %}
             <div>
                 <div class="field">Job ID</div>
                 <div class="text">{{ ctx.job_id }}</div>
             </div>
+            {% endif %}
             <div>
                 <div class="field">Generated</div>
                 <div class="text">{{ now.strftime("%m/%d/%Y") }}</div>
