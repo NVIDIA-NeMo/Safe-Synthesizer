@@ -212,11 +212,15 @@ class SafeSynthesizer(ConfigBuilder):
         # Only fall back to with_data_source() data if cached files are missing.
         training_path = self._workdir.source_dataset.training
         test_path = self._workdir.source_dataset.test
-        if training_path.exists() and test_path.exists():
+        if training_path.exists():
             logger.info("Loading cached train/test split from training run")
             # training_path persists the original training split for evaluation.
             self._original_train_df = pd.read_csv(training_path)
-            self._test_df = pd.read_csv(test_path)
+            # test.csv may not exist (holdout=0) or may be empty (old runs with holdout=0).
+            if test_path.exists() and test_path.stat().st_size > 0:
+                self._test_df = pd.read_csv(test_path)
+            else:
+                self._test_df = None
             # Mark that we have fully loaded from the saved run, including cached splits.
             self._loaded_from_save_path = True
         elif self._data_source is not None:
@@ -296,8 +300,6 @@ class SafeSynthesizer(ConfigBuilder):
             self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)
         if self._test_df is not None:
             self._test_df.to_csv(self._workdir.dataset.test, index=False)
-        else:
-            self._workdir.dataset.test.touch()
         return self
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)
