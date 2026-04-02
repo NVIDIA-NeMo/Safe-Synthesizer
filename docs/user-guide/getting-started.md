@@ -162,31 +162,16 @@ Commands:
 
 ## Quick Start
 
-Create a synthetic version of an input dataset in one step.
-
-!!! note "Config file"
-    Save the following as `config.yaml`:
-
-    ```yaml
-    training:
-      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-    generation:
-      num_records: 1000
-    ```
-
-    PII replacement as a pre-processing step is on by default. Pass `--no-replace-pii` on the CLI to skip it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
-    to customize entity types.
-
-Then run:
+Create a synthetic version of an input dataset in one step by running:
 
 ```bash
-safe-synthesizer run --config config.yaml --data-source data.csv
+safe-synthesizer run --data-source data.csv
 ```
 
 You can use [Clinc OOS](https://huggingface.co/datasets/clinc/clinc_oos) as an example dataset: export the split you want (for example the training split) to a CSV file, then point `--data-source` at that file:
 
 ```bash
-safe-synthesizer run --config config.yaml --data-source clinc_oos.csv
+safe-synthesizer run --data-source clinc_oos.csv
 ```
 
 Replace `data.csv` (or `clinc_oos.csv`) with your actual input file. Any `.csv`, `.json`, `.jsonl`,
