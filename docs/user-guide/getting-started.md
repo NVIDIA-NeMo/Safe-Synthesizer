@@ -15,11 +15,11 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11+ (dev tooling currently pins 3.11 via `.python-version` in the repo root)
-- CUDA runtime 12.8
+- CUDA runtime 12.8+
 - NVIDIA GPU (A100 or larger) for training and generation
 
-!!! failure "macOS and Apple Silicon are not supported"
-    NeMo Safe Synthesizer requires a machine with an NVIDIA GPU and CUDA 12.8
+!!! failure "Linux only -- macOS, Windows, and Apple Silicon are not supported"
+    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.8+
     to run the training and generation pipeline. The [CPU install tab below](#install-the-package)
     is for development and configuration validation only -- it cannot train models or
     generate synthetic data.

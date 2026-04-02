@@ -18,7 +18,7 @@ NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datase
 - Flexible interfaces -- CLI for scripting, Python SDK for programmatic workflows, YAML configuration
 
 !!! info "System Requirements"
-    NeMo Safe Synthesizer requires a **Linux** machine with an **NVIDIA GPU (A100 80GB+ recommended)** and **CUDA 12.8** to run the training and generation pipeline. macOS and Apple Silicon are not supported for pipeline execution. A CPU-only install is available for development and configuration validation -- see [Getting Started](user-guide/getting-started.md#install-the-package).
+    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU (A100 80GB+ recommended) and CUDA 12.8+ to run the training and generation pipeline. macOS, Windows, and Apple Silicon are not supported for pipeline execution. A CPU-only install is available for development and configuration validation -- see [Getting Started](user-guide/getting-started.md#install-the-package).
 
 ## Next Steps
 
