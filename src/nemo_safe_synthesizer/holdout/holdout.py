@@ -54,7 +54,9 @@ def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptiona
         return train.reset_index(drop=True), test.reset_index(drop=True)
 
 
-def grouped_train_test_split(df, test_size, group_by, random_state=None) -> DataFrameOptionalTuple:
+def grouped_train_test_split(
+    df: pd.DataFrame, test_size: int | float, group_by: str, random_state: int | None = None
+) -> DataFrameOptionalTuple:
     """Split a dataframe so that all rows sharing a group stay in the same fold.
 
     Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
