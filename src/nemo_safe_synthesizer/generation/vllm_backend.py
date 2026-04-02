@@ -10,7 +10,6 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import torch
-from transformers import TypicalLogitsWarper
 from vllm import LLM as vLLM
 from vllm import RequestOutput
 from vllm.config import StructuredOutputsConfig
@@ -291,10 +290,6 @@ class VllmBackend(GeneratorBackend):
             "eos_token_id": lambda x: (
                 "stop_token_ids",
                 x if isinstance(x, list) else [x],
-            ),
-            "typical_p": lambda x: (
-                "logits_processors",
-                [TypicalLogitsWarperWrapper(x)],
             ),
             "temperature": lambda x: ("temperature", resolved_temperature),
             "num_beams": lambda x: ("beam_width", x) if x > 1 else (None, None),
@@ -585,21 +580,3 @@ class VllmBackend(GeneratorBackend):
         )
 
         return self.gen_results
-
-
-class TypicalLogitsWarperWrapper:
-    """Adapter enabling locally typical sampling in vLLM.
-
-    Wraps the HuggingFace ``TypicalLogitsWarper`` to match the vLLM
-    logits-processor signature.  See
-    `vllm#1444 <https://github.com/vllm-project/vllm/issues/1444>`_.
-
-    Args:
-        mass: Probability mass for typical sampling.
-    """
-
-    def __init__(self, mass: float):
-        self.warper = TypicalLogitsWarper(mass=mass)
-
-    def __call__(self, token_ids: list[int], logits: torch.FloatTensor) -> torch.FloatTensor:
-        return self.warper(input_ids=None, scores=logits.reshape((1, -1)))
