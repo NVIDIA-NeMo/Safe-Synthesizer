@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+generation:
+  use_structured_generation: true
+privacy:
+  dp_enabled: true
+training:
+  batch_size: 8
+  pretrained_model: HuggingFaceTB/SmolLM3-3B

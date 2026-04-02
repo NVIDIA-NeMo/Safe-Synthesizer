@@ -13,6 +13,7 @@ Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `s
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
 - `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
+- `default_configs/*.yaml`: Major configs we support. Currently is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
 Pipeline entrypoints (invoked by Slurm scripts) via uv:
 - `uv run safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
