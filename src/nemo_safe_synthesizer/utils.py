@@ -206,6 +206,8 @@ def grouped_train_test_split(
     """
     # Convert to pandas for group operations
     df = dataset.to_pandas()
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Expected a DataFrame from Dataset.to_pandas(), got an iterator")
     # importing like this to avoid a dep for testing on the sdk side
     from .holdout import holdout as nss_holdout
 

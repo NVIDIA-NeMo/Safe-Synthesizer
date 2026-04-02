@@ -1312,6 +1312,8 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         # train and test.
         if test_size is not None and test_size > 0:
             df_dataset = dataset.to_pandas()
+            if not isinstance(df_dataset, pd.DataFrame):
+                raise TypeError("Expected a DataFrame from Dataset.to_pandas(), got an iterator")
             train_raw, test_raw = grouped_train_test_split(
                 df_dataset,
                 group_by=self.group_by[0],
