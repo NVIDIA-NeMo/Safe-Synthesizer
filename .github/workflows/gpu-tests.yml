@@ -22,9 +22,10 @@
 name: GPU Tests
 
 on:
+  schedule:
+    - cron: '0 2 * * *'
   push:
     branches:
-      - main
       - "pull-request/[0-9]+"
   workflow_dispatch:
 

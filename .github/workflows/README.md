@@ -12,7 +12,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | Workflow                                           | Trigger                                  | Description                                           |
 | -------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
 | [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, unit tests, and CPU smoke tests    |
-| [gpu-tests.yml](gpu-tests.yml)                     | Push to `main`/`pull-request/*`, manual  | GPU smoke tests (required) and E2E tests (A100)       |
+| [gpu-tests.yml](gpu-tests.yml)                     | Nightly , manual                         | GPU smoke tests (required) and E2E tests              |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
 | [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to Test PyPI or PyPI (production)     |
@@ -133,10 +133,10 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Tests Workflow
 
-The `gpu-tests.yml` workflow runs on pushes to `main` and `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
+The `gpu-tests.yml` workflow runs on a schedule and using `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
 
-- GPU Smoke Tests: Quick smoke tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 30-minute job timeout and 20-minute step timeout. Required for merge.
-- GPU E2E Tests: End-to-end tests on `linux-amd64-gpu-a100-latest-1` (A100) with a 55-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. Required for merge.
+- GPU E2E Tests: End-to-end tests on a gpu runner with a 55-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job -- single required check for branch protection. Fails if smoke tests fail; warns if E2E tests fail.
 
 The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so downstream jobs always run on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
@@ -154,8 +154,8 @@ To trigger from the PR UI and get a status check result, use `/sync` -- see [On-
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
-| GPU Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
-| GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (A100) |
+| GPU Tests | GPU Smoke Tests | `nemo-ci-aws-gpu-x2` | NVIDIA self-hosted GPU |
+| GPU Tests | GPU E2E Tests | `nemo-ci-aws-gpu-x2` | NVIDIA self-hosted GPU |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
