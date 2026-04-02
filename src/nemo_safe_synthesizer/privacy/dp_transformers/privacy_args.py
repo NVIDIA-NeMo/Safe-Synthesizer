@@ -13,6 +13,8 @@ Provides ``PrivacyArguments`` (target epsilon/delta, noise multiplier, clipping 
 ``prv_find_noise_multiplier()`` to solve for noise scale given a target epsilon.
 """
 
+import signal
+import warnings
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
@@ -25,6 +27,43 @@ from scipy import optimize
 from ...observability import get_logger
 
 logger = get_logger()
+
+# Timeout (seconds) for PRV accountant construction.  The PRV library can
+# hang for small noise multipliers (high epsilon) due to numerical overflow
+# in its internal domain-size computation.
+_PRV_TIMEOUT_S = 60
+
+
+def _create_prv_accountant(
+    noise_multiplier: float,
+    sampling_probability: float,
+    delta: float,
+    max_compositions: int,
+    eps_error: float,
+    timeout: int = _PRV_TIMEOUT_S,
+) -> PRVAccountant:
+    """Construct a PRV accountant, raising ``RuntimeError`` on overflow or hang."""
+
+    def _on_timeout(signum, frame):
+        raise RuntimeError(f"PRV accountant timed out after {timeout}s (noise_multiplier={noise_multiplier})")
+
+    prev = signal.signal(signal.SIGALRM, _on_timeout)
+    signal.alarm(timeout)
+    try:
+        with warnings.catch_warnings(), np.errstate(over="raise", invalid="raise"):
+            warnings.filterwarnings("error", message="overflow", category=RuntimeWarning)
+            return PRVAccountant(
+                noise_multiplier=noise_multiplier,
+                sampling_probability=sampling_probability,
+                delta=delta,
+                max_compositions=max_compositions,
+                eps_error=eps_error,
+            )
+    except (FloatingPointError, RuntimeWarning, OverflowError) as exc:
+        raise RuntimeError(f"PRV accountant overflowed (noise_multiplier={noise_multiplier})") from exc
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, prev)
 
 
 @dataclass
@@ -45,18 +84,25 @@ class SafeSynthesizerAccountant:
 
     def __init__(self, use_prv: bool, noise_multiplier, sampling_probability, delta, num_steps):
         self.max_compositions = num_steps + 1
+        self.delta = delta
+
         if use_prv:
-            self.accountant = PRVAccountant(
-                noise_multiplier=noise_multiplier,
-                sampling_probability=sampling_probability,
-                delta=delta,
-                max_compositions=self.max_compositions,
-                eps_error=0.01,
-            )
+            try:
+                self.accountant = _create_prv_accountant(
+                    noise_multiplier=noise_multiplier,
+                    sampling_probability=sampling_probability,
+                    delta=delta,
+                    max_compositions=self.max_compositions,
+                    eps_error=0.01,
+                )
+                self.use_prv = True
+            except RuntimeError as exc:
+                logger.warning(f"PRV accountant unavailable ({exc}), falling back to RDP")
+                self.accountant = RDPAccountant()
+                self.use_prv = False
         else:
             self.accountant = RDPAccountant()
-        self.use_prv = use_prv
-        self.delta = delta
+            self.use_prv = False
 
     def compute_epsilon(self, steps: int) -> float:
         """Compute epsilon consumed after the given number of steps.
@@ -136,23 +182,18 @@ class PrivacyArguments:
                     target_delta=self.target_delta,
                     target_epsilon=self.target_epsilon,
                 )
-            except Exception as known_error:
-                if "Discrete mean differs" in str(known_error):
-                    logger.warning(
-                        f"DP setup failed due to PRV accountant({known_error}), trying Opacus RDP Accountant"
-                    )
-
-                try:
-                    self.noise_multiplier = opacus_get_noise_multiplier(
-                        target_epsilon=self.target_epsilon,
-                        target_delta=self.target_delta,
-                        sample_rate=sampling_probability,
-                        steps=num_steps,
-                        accountant="rdp",
-                    )
-                    self.use_prv = False
-                except Exception as other_error:
-                    raise other_error
+            except Exception as prv_error:
+                logger.warning(
+                    f"PRV noise-multiplier search failed ({prv_error}), falling back to Opacus RDP accountant"
+                )
+                self.noise_multiplier = opacus_get_noise_multiplier(
+                    target_epsilon=self.target_epsilon,
+                    target_delta=self.target_delta,
+                    sample_rate=sampling_probability,
+                    steps=num_steps,
+                    accountant="rdp",
+                )
+                self.use_prv = False
 
         logger.info(
             f"The noise multiplier is set to: {self.noise_multiplier}",
@@ -215,7 +256,7 @@ def prv_find_noise_multiplier(
             The outer search uses ``[0]`` and ``[2]`` when comparing to ``target_epsilon``.
         """
         # TODO: +1 was added in max_compositions due to a bug in NSS-DP, this requires a fix.
-        acc = PRVAccountant(
+        acc = _create_prv_accountant(
             noise_multiplier=noise_multiplier,
             sampling_probability=sampling_probability,
             delta=target_delta,
