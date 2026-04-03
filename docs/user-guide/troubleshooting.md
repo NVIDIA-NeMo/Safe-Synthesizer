@@ -421,6 +421,23 @@ safe-synthesizer config validate --config config.yaml
   `data.group_training_examples_by`, config validation will fail. Ordering only
   makes sense within groups.
 
+`group_training_examples_by` with comma-separated column names:
+
+: Setting `data.group_training_examples_by: col1,col2` in YAML is parsed as the
+  single string `"col1,col2"`, not as two separate columns. The pipeline will
+  fail with a `KeyError` when it tries to find a column literally named
+  `"col1,col2"` in your data:
+
+    ```text
+    KeyError: 'patient_id,event_id'
+    ```
+
+  Only a single column name is supported. Multi-column grouping is not
+  currently available. If you need to group by multiple columns, consider
+  creating a composite column in your data before running the pipeline
+  (e.g. concatenate `patient_id` and `event_id` into a new
+  `patient_event_id` column).
+
 Unsupported file extensions:
 
 : The `url` parameter accepts `.csv`, `.json`, `.jsonl`, `.parquet`, and `.txt`
