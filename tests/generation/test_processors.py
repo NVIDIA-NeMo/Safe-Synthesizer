@@ -182,50 +182,6 @@ def test_grouped_data_processor_out_of_order_records(
     assert response.errors[-1] == ("Group not ordered", "groupby")
 
 
-# Re-enable when multi-column group_by is supported. (commented out in PR #344)
-# # Purpose: Composite group_by works when the tuple uniquely identifies groups.
-# # Data: Grouped by ["petal.width", "variety"].
-# # Asserts: 5 valid; 0 invalid/errors.
-# def test_grouped_data_processor_multiple_group_by(
-#     fixture_valid_iris_dataset_jsonl_and_schema,
-#     fixture_validation_config: ValidationParameters,
-# ):
-#     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-#     groups_jsonl_str = BOS + jsonl_str + EOS
-#     response = GroupedDataProcessor(
-#         schema=jsonl_schema,
-#         config=fixture_validation_config,
-#         group_by=["petal.width", "variety"],
-#         bos_token=BOS,
-#         eos_token=EOS,
-#     )(1, groups_jsonl_str)
-#     assert len(response.valid_records) == 5
-#     assert len(response.invalid_records) == 0
-#     assert len(response.errors) == 0
-#
-#
-# # Purpose: Composite group_by should fail when the tuple does not uniquely identify groups.
-# # Data: Grouped by ["sepal.length", "variety"] (non-unique).
-# # Asserts: 0 valid; 5 invalid/errors; last error indicates non-unique group value.
-# def test_grouped_data_processor_multiple_group_by_error(
-#     fixture_valid_iris_dataset_jsonl_and_schema,
-#     fixture_validation_config: ValidationParameters,
-# ):
-#     jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-#     groups_jsonl_str = BOS + jsonl_str + EOS
-#     response = GroupedDataProcessor(
-#         schema=jsonl_schema,
-#         config=fixture_validation_config,
-#         group_by=["sepal.length", "variety"],
-#         bos_token=BOS,
-#         eos_token=EOS,
-#     )(1, groups_jsonl_str)
-#     assert len(response.valid_records) == 0
-#     assert len(response.invalid_records) == 5
-#     assert len(response.errors) == 5
-#     assert response.errors[-1] == ("Groupby value is not unique", "groupby")
-
-
 # Purpose: group_by_accept_no_delineator=True treats raw JSONL (no BOS/EOS) as a single group.
 # Data: Raw JSONL without BOS/EOS (same as test_grouped_data_processor_with_no_groups).
 # Asserts: 5 valid; 0 invalid; 0 errors.

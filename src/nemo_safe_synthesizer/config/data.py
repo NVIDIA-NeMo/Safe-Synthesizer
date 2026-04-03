@@ -19,7 +19,6 @@ from ..configurator.validators import (
     DependsOnValidator,
     ValueValidator,
 )
-from ..observability import get_logger
 from .types import (
     AUTO_STR,
     OptionalAutoInt,
@@ -28,8 +27,6 @@ from .types import (
 __all__ = [
     "DataParameters",
 ]
-
-logger = get_logger(__name__)
 
 # Holdout constants
 DEFAULT_HOLDOUT = 0.05
@@ -104,18 +101,6 @@ class DataParameters(Parameters):
             description="Random state for holdout split to ensure reproducibility.",
         ),
     ] = None
-
-    @field_validator("group_training_examples_by", mode="after", check_fields=False)
-    @classmethod
-    def warn_if_comma_in_group_by(cls, v: str | None) -> str | None:
-        """Log a warning when the value looks like multiple comma-separated column names."""
-        if v is not None and "," in v:
-            logger.warning(
-                f"group_training_examples_by contains a comma: {v!r}. "
-                "Only a single column name is supported. If you intended to specify "
-                "multiple columns, note that multi-column grouping is not currently supported."
-            )
-        return v
 
     @field_validator("random_state", mode="after", check_fields=False)
     def set_random_state_if_none(cls, v: int | int | None) -> int | None:
