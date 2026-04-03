@@ -97,8 +97,7 @@ class DependsOnValidator:
                 except OSError:
                     condition_desc = getattr(self.depends_on_func, "__name__", repr(self.depends_on_func))
                 raise ValueError(
-                    f"{info.field_name} is only allowed when {self.depends_on} pass condition "
-                    f"`{condition_desc}`"
+                    f"{info.field_name} is only allowed when {self.depends_on} pass condition `{condition_desc}`"
                 )
 
         return value
