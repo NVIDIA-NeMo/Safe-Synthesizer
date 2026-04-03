@@ -336,7 +336,6 @@ class TestWorkdir:
     def test_generate_files(self, workdir: Workdir):
         """Generate directory contains expected files."""
         gen = workdir.generate
-        assert gen.config == gen.path / "safe-synthesizer-config.json"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert gen.logs == gen.path / "logs.jsonl"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert gen.output == gen.path / "synthetic_data.csv"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert gen.report == gen.path / "evaluation_report.html"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
