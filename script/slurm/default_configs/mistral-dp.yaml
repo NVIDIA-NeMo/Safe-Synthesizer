@@ -5,5 +5,5 @@ generation:
 privacy:
   dp_enabled: true
 training:
-  batch_size: 8
+  batch_size: 8  # DP is not constrained to batch size of 1
   pretrained_model: mistralai/Mistral-7B-Instruct-v0.3

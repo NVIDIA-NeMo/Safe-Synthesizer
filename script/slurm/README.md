@@ -13,7 +13,7 @@ Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `s
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
 - `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
-- `default_configs/*.yaml`: Major configs we support. Currently is the cross product of 3 pre-trained models and 2 DP settings (on or off).
+- `default_configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-unsloth`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
 Pipeline entrypoints (invoked by Slurm scripts) via uv:
 - `uv run safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
@@ -104,7 +104,7 @@ chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
 
 ### Configure
 Edit `env_variables.sh` to match your environment. Key items:
-- `CONFIGS=(...)`: base names of YAML configs to run (without `.yaml`), or provide via --config argument to `submit_slurm_jobs.sh`.
+- `CONFIGS=(...)`: base names of YAML configs to run (without `.yaml`), or provide via `--configs` argument to `submit_slurm_jobs.sh`.
 - `CONFIG_DIR`: directory where config files live.
 - `BASE_LOG_DIR`: where Slurm logs will be written.
 - `NSS_DIR`: path to this repository.
@@ -138,10 +138,10 @@ bash submit_slurm_jobs.sh --exp-name short_end_to_end --dataset-group short --ru
 # Example: two-stage (TRAIN→GEN) across "short" datasets with 1 hour train time limit and 30 minute generate time limit
 bash submit_slurm_jobs.sh --exp-name short_two_stage --dataset-group short --runs 1 --partition polar4 --pipeline-mode two_stage  --train-time-limit 1:00:00 --generate-time-limit 0:30:00
 
-# Example: Adult data (defined in NVIDIA internal dataset_registry.yaml), three configs, 5 runs each on polar4, use different wandb project from the exp name
+# Example: Adult data (defined in NVIDIA internal dataset_registry.yaml), two configs, 5 runs each on polar4, use different wandb project from the exp name
 bash submit_slurm_jobs.sh \
   --dataset-urls adult \
-  --configs unsloth,dp,dp_usg_guidance \
+  --configs smollm3-unsloth,smollm3-dp \
   --runs 5 \
   --partition polar4 \
   --exp-name regex_adult \
@@ -151,7 +151,7 @@ bash submit_slurm_jobs.sh \
 # Example: arbitrary path/url (not a named dataset from the dataset_registry.yaml), 1 config, 10 runs, with max 3 jobs running at a time
 bash submit_slurm_jobs.sh \
   --dataset-urls "https://raw.githubusercontent.com/gretelai/gretel-blueprints/refs/heads/main/sample_data/financial_transactions.csv" \
-  --configs unsloth \
+  --configs tinyllama-unsloth \
   --runs 10 \
   --partition polar,polar3,polar4 \
   --exp-name financial_repeats \
@@ -185,20 +185,13 @@ In two_stage mode, up to 2*N jobs might run, N each from TRAIN arrays and GENERA
 Using `--max-concurrent-slurm-jobs` is recommended for large experiments to reduce bursting and be friendlier to other users.
 Consider using a max of 2-3x the current allocation for llmservice_sdg_research PPP in the cluster to avoid bursting and rapidly dropping our Fair Share for everyone.
 
-### How long will my jobs take?
-
-With `num_input_records_to_sample=25000`
-- For the baseline config, the longest job typically finishes within 80 minutes. Total wall time estimate: `60 * RUNS` minutes.
-- For the `dp` config, the longest job typically finishes within 120 minutes. Total wall time estimate: `120 * RUNS` minutes.
-
-
 ### Logs and outputs
 - Slurm logs: `${BASE_LOG_DIR}/${EXP_NAME}/slurm_%A_%a.{out,err}`
 - You can tail logs while jobs run:
 ```bash
 tail -f ${BASE_LOG_DIR}/${EXP_NAME}/slurm_*.out
 ```
-- W&B logging: set the `WANDB_MODE` to `online` to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
+- W&B logging: `WANDB_MODE` is set to `online` by default to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
 
   - When running in `two_stage` mode, be mindful not to submit multiple bash commands that run simutaneously because we aren't able to guarantee unique adapter path for each single run. As a result, two runs might be logged as one on W&B.
 
@@ -241,7 +234,7 @@ Log directory resolution order (first match wins):
 
 ### Collect results
 
-Use W&B by setting `WANDB_MODE=online` in `env_variables.sh` and add your W&B token to `.api_tokens.sh`.
+W&B is enabled by default with `WANDB_MODE=online` in `env_variables.sh`. Make sure to add your W&B token to `.api_tokens.sh`. Set `WANDB_MODE=disabled` otherwise.
 
 ### Troubleshooting
 
