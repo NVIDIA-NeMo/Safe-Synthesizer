@@ -3,3 +3,5 @@
 
 training:
   pretrained_model: HuggingFaceTB/SmolLM3-3B
+generation:
+  num_records: 3000

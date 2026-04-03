@@ -3,3 +3,5 @@
 
 training:
   pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+generation:
+  num_records: 3000

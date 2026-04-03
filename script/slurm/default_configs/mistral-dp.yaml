@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 generation:
   use_structured_generation: true
+  num_records: 3000
 privacy:
   dp_enabled: true
 training:
