@@ -20,7 +20,6 @@ from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.preprocessing import QuantileTransformer
 
-from ...artifacts.analyzers.field_features import describe_field
 from ...config.evaluate import QUASI_IDENTIFIER_COUNT
 from ...config.parameters import SafeSynthesizerParameters
 from ...observability import get_logger
@@ -29,6 +28,7 @@ from ..data_model.evaluation_dataset import EvaluationDataset
 from ..data_model.evaluation_score import EvaluationScore, PrivacyGrade
 from ..nearest_neighbors import NearestNeighborSearch
 from . import multi_modal_figures as figures
+from .privacy_metric_utils import divide_tabular_text, embed_text, find_text_fields
 
 logger = get_logger(__name__)
 
@@ -183,42 +183,6 @@ class AttributeInferenceProtection(Component):
         return False
 
     @staticmethod
-    def _divide_tabular_text(df: pd.DataFrame, text_fields: list) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Split a dataframe into tabular-only and text-only subsets."""
-        tabular_fields = []
-        for col in df.columns:
-            if col not in text_fields:
-                tabular_fields.append(col)
-        df_tabular = df.filter(tabular_fields)
-        df_text = df.filter(text_fields)
-
-        return (df_tabular, df_text)
-
-    @staticmethod
-    def _embed_text(df: pd.DataFrame, embedder) -> pd.DataFrame:
-        """Embed each text column and average into a single embedding per row."""
-        embeddings = {}
-        for col in df.columns:
-            data = df[col].to_list()
-            data = [str(r) for r in data]
-            embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_numpy=True)
-
-        avg_embeddings = []
-        for i in range(len(df)):
-            # TODO: Is this average what we want? When there are more than 2 columns, we will
-            # overweight later columns relative to earlier columns.
-            norm = embeddings[df.columns[0]][i]
-            for j in range(1, len(df.columns)):
-                field = df.columns[j]
-                norm = np.average([norm, embeddings[field][i]], axis=0)
-
-            avg_embeddings.append(norm)
-
-        df_embeddings = pd.DataFrame({"embedding": list(avg_embeddings)})
-
-        return df_embeddings
-
-    @staticmethod
     def _parse_dates(value: str | int | float, scalar_type: str | None = None) -> list[tuple[str, datetime]] | None:
         if scalar_type == "number" and isinstance(value, str):
             # TODO(PROD-276): this is necessary, as our regex predictors change values from kv_pair
@@ -252,8 +216,8 @@ class AttributeInferenceProtection(Component):
 
         # First divide out text and non-text
         if len(text_columns) > 0:
-            df_train_use, df_train_text = AttributeInferenceProtection._divide_tabular_text(df_train_use, text_columns)
-            df_synth_use, df_synth_text = AttributeInferenceProtection._divide_tabular_text(df_synth_use, text_columns)
+            df_train_use, df_train_text = divide_tabular_text(df_train_use, text_columns)
+            df_synth_use, df_synth_text = divide_tabular_text(df_synth_use, text_columns)
 
         # Normalize the tabular data if there is any
         tabular_columns = numeric_columns + nominal_columns
@@ -281,8 +245,8 @@ class AttributeInferenceProtection(Component):
         # If all text, just use Sentence Transformer to get NN
         if len(tabular_columns) == 0:
             # Create embeddings for text fields
-            df_train_embeddings = AttributeInferenceProtection._embed_text(df_train_text, embedder)
-            df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
+            df_train_embeddings = embed_text(df_train_text, embedder)
+            df_synth_embeddings = embed_text(df_synth_text, embedder)
             hits = util.semantic_search(
                 np.array(list(df_train_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
                 np.array(list(df_synth_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
@@ -302,8 +266,8 @@ class AttributeInferenceProtection(Component):
 
         # Get the text embeddings and then the 1000 NN based on just the text
 
-        df_train_embeddings = AttributeInferenceProtection._embed_text(df_train_text, embedder)
-        df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
+        df_train_embeddings = embed_text(df_train_text, embedder)
+        df_synth_embeddings = embed_text(df_synth_text, embedder)
         search_synth_k = min(1000, len(df_synth_embeddings))
         hits = util.semantic_search(
             np.array(list(df_train_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
@@ -416,12 +380,7 @@ class AttributeInferenceProtection(Component):
             numeric_columns = [column for column in df_train.columns if column not in nominal_columns]
 
             # Now separate out the text columns from the nominal
-
-            text_columns = []
-            for col in nominal_columns:
-                result = describe_field(col, df_train[col])
-                if result.type.value == "text":
-                    text_columns.append(col)
+            text_columns = find_text_fields(cast(pd.DataFrame, df_train[nominal_columns]))
             nominal_columns = [x for x in nominal_columns if x not in text_columns]
 
             # If there are text columns, create an embedder
