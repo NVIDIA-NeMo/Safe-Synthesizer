@@ -532,6 +532,7 @@ class VllmBackend(GeneratorBackend):
             "Generation",
             logger_name=__name__,
             target_records=self.config.generation.num_records,
+            progress_note=("Long stretches with no new records are normal."),
         ):
             while batches.num_valid_records < self.config.generation.num_records:
                 # Generate a batch from prompts and process the responses.
