@@ -41,8 +41,7 @@ def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches
     try:
         workdir = Workdir.from_path(Path(artifact_path))
     except ValueError as e:
-        click.secho(f"Error: {e}", fg="red", err=True)
-        return
+        raise click.ClickException(str(e))
 
     # Determine what to clean
     if caches_only:
@@ -76,4 +75,4 @@ def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches
                 target.unlink()
             click.secho(f"Successfully deleted: {target}", fg="green")
         except Exception as e:
-            click.secho(f"Error deleting {target}: {e}", fg="red", err=True)
+            raise click.ClickException(f"Error deleting {target}: {e}")
