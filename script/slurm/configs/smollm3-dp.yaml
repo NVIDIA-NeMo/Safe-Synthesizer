@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+training:
+  batch_size: 8  # DP is not constrained to batch size of 1
+  pretrained_model: HuggingFaceTB/SmolLM3-3B
+privacy:
+  dp_enabled: true
 generation:
   use_structured_generation: true
   num_records: 3000
-privacy:
-  dp_enabled: true
-training:
-  batch_size: 8  # DP is not constrained to batch size of 1
-  pretrained_model: TinyLlama/TinyLlama-1.1B-Chat-v1.0

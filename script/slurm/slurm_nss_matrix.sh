@@ -97,13 +97,6 @@ export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
 source "${LUSTRE_DIR}/.api_tokens.sh"
 
-if [[ "${WANDB_MODE:-disabled}" == "online" && -z "${WANDB_API_KEY:-}" ]]; then
-    echo "ERROR: WANDB_MODE is 'online' but WANDB_API_KEY is not set." >&2
-    echo "Add 'export WANDB_API_KEY=\"<your_key>\"' to ${LUSTRE_DIR}/.api_tokens.sh" >&2
-    echo "Or set WANDB_MODE=disabled in env_variables.sh to skip W&B logging." >&2
-    exit 1
-fi
-
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"
 # Supports: .csv, .parquet, .json, .jsonl

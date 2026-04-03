@@ -2,6 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 training:
-  pretrained_model: mistralai/Mistral-7B-Instruct-v0.3
+  pretrained_model: HuggingFaceTB/SmolLM3-3B
 generation:
   num_records: 3000
