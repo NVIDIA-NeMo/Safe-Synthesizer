@@ -8,6 +8,8 @@ Pydantic v2 core schemas so that configuration values carry metadata
 (e.g. ``name``) while remaining transparent to serialization and comparison.
 """
 
+from __future__ import annotations
+
 import operator
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass

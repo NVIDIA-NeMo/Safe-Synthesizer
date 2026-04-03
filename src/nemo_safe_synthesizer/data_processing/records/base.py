@@ -9,6 +9,8 @@ entries, and helpers for tokenizing field names (``tokenize_header``,
 ``tokenize_on_upper``).
 """
 
+from __future__ import annotations
+
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Iterable

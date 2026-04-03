@@ -10,6 +10,8 @@ utility that recursively collapses nested dicts/lists into a single-level
 dict using the ``NESTING_DELIM`` / ``ARRAY_POS`` markers.
 """
 
+from __future__ import annotations
+
 from itertools import chain, starmap
 from typing import Optional
 

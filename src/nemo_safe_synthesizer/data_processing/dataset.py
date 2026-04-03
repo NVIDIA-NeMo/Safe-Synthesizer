@@ -7,6 +7,8 @@ Provides utilities for standardizing DataFrames (type coercion, missing-value
 handling) and deriving JSON schemas used for validating generated records.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 

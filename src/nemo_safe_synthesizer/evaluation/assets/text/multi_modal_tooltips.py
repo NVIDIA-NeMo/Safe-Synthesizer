@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 # ruff: noqa
 
 """Tooltip text displayed in the multi-modal HTML evaluation report."""
+
+from __future__ import annotations
 
 tooltips = {
     "dataset_statistics_info": """
