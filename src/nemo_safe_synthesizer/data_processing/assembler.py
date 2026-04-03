@@ -449,16 +449,15 @@ class TrainingExampleAssembler(ABC):
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Split the dataset into training and test sets."""
         if self.test_size is not None and self.test_size > 0:
-            split_dataset = naive_train_test_split(
+            training_df, test_df = naive_train_test_split(
                 dataset.to_pandas(), test_size=self.test_size, random_state=self.seed
             )
-            train_df, test_df = split_dataset
-            self.train_dataset = Dataset.from_pandas(train_df)
+            self.training_dataset = Dataset.from_pandas(training_df)
             self.validation_dataset = Dataset.from_pandas(test_df)
             self.validation_dataset.info.description += "is_val"
 
         else:
-            self.train_dataset = dataset
+            self.training_dataset = dataset
             self.validation_dataset = None
 
     def _order_records(self, dataset: Dataset, order_by: str) -> Dataset:
@@ -568,7 +567,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
     @property
     def num_records_train(self) -> int:
         """Number of records in the training split."""
-        return len(self.train_dataset)
+        return len(self.training_dataset)
 
     @property
     def num_records_validation(self) -> int:
@@ -705,7 +704,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
 
         rng = utils.get_random_number_generator(self.seed)
         # Process both training and test datasets
-        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        training_dataset = self._prepare_dataset_for_training(self.training_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         examples = TrainingExamples(
@@ -958,7 +957,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
     @property
     def num_groups_train(self) -> int:
         """Number of unique groups in the training split."""
-        return self._count_groups(self.train_dataset)
+        return self._count_groups(self.training_dataset)
 
     @property
     def num_groups_validation(self) -> int:
@@ -978,16 +977,16 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         Returns:
             Dict mapping group values to prefill strings (first 3 samples per group).
         """
-        if self.train_dataset is None or len(self.train_dataset) == 0:
+        if self.training_dataset is None or len(self.training_dataset) == 0:
             return {}
 
-        if self.group_by_column not in self.train_dataset.column_names:
+        if self.group_by_column not in self.training_dataset.column_names:
             return {}
 
         # Get first 3 samples from each group, return as dict
         # Use the preserved 'text' column directly to avoid encode/decode roundtrip issues
         seen_groups: dict[str, list[str]] = {}
-        for record in self.train_dataset:
+        for record in self.training_dataset:
             group_value = record[self.group_by_column]
             if group_value not in seen_groups:
                 seen_groups[group_value] = []
@@ -1007,31 +1006,31 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         With only 1 group, all records go to train and validation is None.
         """
         if len(dataset) == 0:
-            self.train_dataset = _maybe_add_row_indices(dataset, self._ROW_INDEX_COLUMN)
+            self.training_dataset = _maybe_add_row_indices(dataset, self._ROW_INDEX_COLUMN)
             self.validation_dataset = None
             return
 
         if self.test_size is None or self.test_size == 0:
             sorted_dataset = self._sort_dataset_by_group_and_order(dataset)
-            self.train_dataset = _maybe_add_row_indices(sorted_dataset, self._ROW_INDEX_COLUMN)
+            self.training_dataset = _maybe_add_row_indices(sorted_dataset, self._ROW_INDEX_COLUMN)
             self.validation_dataset = None
             return
 
         group_column = self.group_by_column
         subset = dataset.select_columns([group_column]).to_pandas().copy()
         subset["__record_idx__"] = range(len(subset))
-        train_df, test_df = grouped_train_test_split(
+        training_df, test_df = grouped_train_test_split(
             subset,
             group_by=group_column,
             test_size=self.test_size,
             random_state=self.seed,
         )
 
-        train_indices = train_df["__record_idx__"].tolist()
-        train_dataset = dataset.select(train_indices).flatten_indices()
+        train_indices = training_df["__record_idx__"].tolist()
+        training_dataset = dataset.select(train_indices).flatten_indices()
         # Re-sort needed: GroupShuffleSplit shuffles indices, losing chronological order
-        train_dataset = self._sort_dataset_by_group_and_order(train_dataset)
-        self.train_dataset = _maybe_add_row_indices(train_dataset, self._ROW_INDEX_COLUMN)
+        training_dataset = self._sort_dataset_by_group_and_order(training_dataset)
+        self.training_dataset = _maybe_add_row_indices(training_dataset, self._ROW_INDEX_COLUMN)
 
         if test_df is None or len(test_df) == 0:
             self.validation_dataset = None
@@ -1102,7 +1101,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         )
 
         rng = utils.get_random_number_generator(self.seed)
-        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        training_dataset = self._prepare_dataset_for_training(self.training_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         examples = TrainingExamples(
@@ -1350,7 +1349,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
     @property
     def num_records_train(self) -> int:
         """Total number of individual records across all training groups."""
-        return sum(self.train_dataset["num_records"])
+        return sum(self.training_dataset["num_records"])
 
     @property
     def num_records_validation(self) -> int:
@@ -1360,7 +1359,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
     @property
     def num_groups_train(self) -> int:
         """Number of groups in the training split."""
-        return len(self.train_dataset)
+        return len(self.training_dataset)
 
     @property
     def num_groups_validation(self) -> int:
@@ -1560,7 +1559,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
         rng = utils.get_random_number_generator(self.seed)
         # Process both training and validation datasets
-        training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
+        training_dataset = self._prepare_dataset_for_training(self.training_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
         examples = TrainingExamples(

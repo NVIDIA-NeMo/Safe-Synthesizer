@@ -201,7 +201,7 @@ def grouped_train_test_split(
         seed: Random state for reproducibility.
 
     Returns:
-        Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` on
+        Tuple of ``(training_df, test_df)``, or ``(training_df, None)`` on
         failure.
     """
     # Convert to pandas for group operations
@@ -209,7 +209,7 @@ def grouped_train_test_split(
     # importing like this to avoid a dep for testing on the sdk side
     from .holdout import holdout as nss_holdout
 
-    return nss_holdout.grouped_train_test_split(df=df, test_size=test_size, group_by=group_by, random_state=seed)
+    return nss_holdout.grouped_train_test_split(input_df=df, test_size=test_size, group_by=group_by, random_state=seed)
 
 
 class DataActionsFn(Protocol):

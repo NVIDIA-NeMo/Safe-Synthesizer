@@ -655,7 +655,7 @@ class HuggingFaceBackend(TrainingBackend):
         Runs auto-config resolution, time-series processing, groupby /
         orderby validation, and assembles tokenized training examples.
         Populates ``training_examples``, ``dataset_schema``,
-        ``df_train``, and ``data_fraction``.
+        ``training_df``, and ``data_fraction``.
 
         Raises:
             DataError: If the training dataset is missing or malformed.
@@ -665,28 +665,28 @@ class HuggingFaceBackend(TrainingBackend):
         if self.training_dataset is None:
             raise DataError("training_dataset must be set before preparing training data")
 
-        df_all = self.training_dataset.to_pandas()
-        if not isinstance(df_all, pd.DataFrame):
+        training_df = self.training_dataset.to_pandas()
+        if not isinstance(training_df, pd.DataFrame):
             raise DataError("Expected DataFrame from to_pandas(), got an iterator")
 
-        self.params = AutoConfigResolver(df_all, self.params).resolve()
+        self.params = AutoConfigResolver(training_df, self.params).resolve()
 
         # Validate groupby/orderby parameters as a preprocessing step.
-        self._validate_groupby_column(df_all)
-        self._validate_orderby_column(df_all)
+        self._validate_groupby_column(training_df)
+        self._validate_orderby_column(training_df)
 
         # Process time series data (sort by timestamp, infer intervals, etc.)
-        df_all = self._process_timeseries(df_all)
+        training_df = self._process_timeseries(training_df)
 
-        df_train = self._apply_preprocessing(df_all)
-        df_test = None
+        training_df = self._apply_preprocessing(training_df)
+        test_df = None
 
-        hf_dataset = Dataset.from_pandas(df_train, preserve_index=False)
+        hf_dataset = Dataset.from_pandas(training_df, preserve_index=False)
         # Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)
-        schema_df = df_train.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
+        schema_df = training_df.drop(columns=[PSEUDO_GROUP_COLUMN], errors="ignore")
         self.dataset_schema = make_json_schema(schema_df)
-        self.df_train = df_train
-        self.df_test = df_test
+        self.training_df = training_df
+        self.test_df = test_df
 
         assembler = self._create_example_assembler(hf_dataset)
 
@@ -703,7 +703,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         # This info is needed inside the trainer for DP
         # Number of records, if group_training_examples_by is None, or else number of groups
-        self.true_dataset_size = len(assembler.train_dataset)
+        self.true_dataset_size = len(assembler.training_dataset)
 
         if self.params.time_series.is_timeseries:
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()
@@ -728,8 +728,8 @@ class HuggingFaceBackend(TrainingBackend):
         self.save_model()
 
         self.results = NSSTrainerResult(
-            df_train=self.df_train,
-            df_ml_utility_holdout=self.df_test,
+            training_df=self.training_df,
+            df_ml_utility_holdout=self.test_df,
             config=self.params,
             training_complete=is_complete,
             log_history=log_history,

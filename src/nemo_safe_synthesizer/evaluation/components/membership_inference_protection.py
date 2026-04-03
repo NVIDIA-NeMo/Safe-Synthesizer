@@ -19,7 +19,7 @@ from ...artifacts.analyzers.field_features import describe_field
 from ...config.evaluate import DEFAULT_RECORD_COUNT
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore, PrivacyGrade
 from ...evaluation.nearest_neighbors import NearestNeighborSearch
 from ...observability import get_logger
@@ -67,14 +67,14 @@ class MembershipInferenceProtection(Component):
         return d
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> MembershipInferenceProtection:
         """Run the membership inference attack and return the protection score."""
         score, attack_sum_df, tps_values, fps_values = MembershipInferenceProtection.mia(
-            df_train=evaluation_dataset.reference,
-            df_synth=evaluation_dataset.output,
-            df_test=evaluation_dataset.test,
+            training_df=evaluation_datasets.training,
+            synthetic_df=evaluation_datasets.synthetic,
+            test_df=evaluation_datasets.test,
             # FIXME config setting?
             # column_name: str | None = None,
         )
@@ -84,9 +84,9 @@ class MembershipInferenceProtection(Component):
 
     @staticmethod
     def _normalize(
-        df_train: pd.DataFrame, df_test: pd.DataFrame, df_synth: pd.DataFrame
+        training_df: pd.DataFrame, synthetic_df: pd.DataFrame, test_df: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        df = pd.concat([df_train, df_test, df_synth]).reset_index(drop=True)
+        df = pd.concat([training_df, synthetic_df, test_df]).reset_index(drop=True)
 
         numeric_columns = df.select_dtypes(include=np.number).columns.tolist()
         df[numeric_columns] = df[numeric_columns].fillna(0)  # Fill NaNs with 0 for numeric values
@@ -105,17 +105,19 @@ class MembershipInferenceProtection(Component):
         num_encoder.fit(df_norm)
         df_norm = pd.DataFrame(num_encoder.transform(df_norm), columns=df_norm.columns).fillna(0)
 
-        df_train_norm = df_norm.head(len(df_train))
-        df_test_norm = df_norm.head(len(df_train) + len(df_test)).tail(len(df_test)).reset_index(drop=True)
-        df_synth_norm = df_norm.tail(len(df_synth)).reset_index(drop=True)
+        training_df_norm = df_norm.head(len(training_df))
+        synthetic_df_norm = (
+            df_norm.head(len(training_df) + len(synthetic_df)).tail(len(synthetic_df)).reset_index(drop=True)
+        )
+        test_df_norm = df_norm.tail(len(test_df)).reset_index(drop=True)
 
-        return df_train_norm, df_test_norm, df_synth_norm
+        return training_df_norm, synthetic_df_norm, test_df_norm
 
     @staticmethod
     def _normalize_onehot(
-        df_train: pd.DataFrame, df_test: pd.DataFrame, df_synth: pd.DataFrame
+        training_df: pd.DataFrame, synthetic_df: pd.DataFrame, test_df: pd.DataFrame
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        df = pd.concat([df_train, df_test, df_synth]).reset_index(drop=True).fillna(0)
+        df = pd.concat([training_df, synthetic_df, test_df]).reset_index(drop=True).fillna(0)
 
         numeric_columns = df.select_dtypes(include=np.number).columns.tolist()
         nominal_columns = []
@@ -129,18 +131,18 @@ class MembershipInferenceProtection(Component):
         num_encoder.fit(df_norm)
         df_norm = pd.DataFrame(num_encoder.transform(df_norm), columns=df_norm.columns).fillna(0)
 
-        df_train_norm = df_norm.head(len(df_train))
-        df_test_norm = df_norm.head(len(df_train) + len(df_test)).tail(len(df_test))
-        df_synth_norm = df_norm.tail(len(df_synth))
+        training_df_norm = df_norm.head(len(training_df))
+        synthetic_df_norm = df_norm.head(len(training_df) + len(synthetic_df)).tail(len(synthetic_df))
+        test_df_norm = df_norm.tail(len(test_df))
 
-        return df_train_norm, df_test_norm, df_synth_norm
+        return training_df_norm, synthetic_df_norm, test_df_norm
 
     @staticmethod
-    def _get_true_labels(train_data_indexes: list[int], attacker_data_indexes: list[int]) -> list[int]:
+    def _get_true_labels(training_data_indexes: list[int], attacker_data_indexes: list[int]) -> list[int]:
         true_labels = []
 
         for index in attacker_data_indexes:
-            if index in train_data_indexes:
+            if index in training_data_indexes:
                 true_labels.append(1)
             else:
                 true_labels.append(0)
@@ -235,9 +237,9 @@ class MembershipInferenceProtection(Component):
 
     @staticmethod
     def _compute_mia(
-        df_train_norm: pd.DataFrame,
-        df_test_norm: pd.DataFrame,
-        df_synth_norm: pd.DataFrame,
+        training_df_norm: pd.DataFrame,
+        synthetic_df_norm: pd.DataFrame,
+        test_df_norm: pd.DataFrame,
         nn_index: NearestNeighborSearch | None,
         run: int,
         text_cnt: int,
@@ -256,9 +258,9 @@ class MembershipInferenceProtection(Component):
         classifies each record as member or non-member.
 
         Args:
-            df_train_norm: Normalized training dataframe.
-            df_test_norm: Normalized holdout (test) dataframe.
-            df_synth_norm: Normalized synthetic dataframe.
+            training_df_norm: Normalized training dataframe.
+            synthetic_df_norm: Normalized synthetic dataframe.
+            test_df_norm: Normalized holdout (test) dataframe.
             nn_index: Pre-built NearestNeighborSearch index over the tabular columns of
                 the synthetic data, or ``None`` if no tabular columns exist.
             run: Zero-based run index controlling which training slice to use.
@@ -272,17 +274,19 @@ class MembershipInferenceProtection(Component):
         # For multimodal we will first get the 1000 NN for each attack record using the text embedding
         # We then adjust these scores by the tabular distance and then the min of all these score
         # is the nearest neighbor distance
-        search_synth_k = min(1000, len(df_synth_norm))
+        search_synth_k = min(1000, len(synthetic_df_norm))
 
         # Gather the attack data
-        prefix = len(df_test_norm) * (run + 1)
-        prefix_head = df_train_norm.head(prefix)
-        df_train_attack = prefix_head.tail(len(df_test_norm)).reset_index(drop=True)
-        train_data_indexes = df_train_attack.index.tolist()
-        real_data = pd.concat([df_train_attack, df_test_norm]).reset_index(drop=True).sample(frac=1, random_state=run)
+        prefix = len(test_df_norm) * (run + 1)
+        prefix_head = training_df_norm.head(prefix)
+        training_df_attack = prefix_head.tail(len(test_df_norm)).reset_index(drop=True)
+        training_data_indexes = training_df_attack.index.tolist()
+        attack_df = (
+            pd.concat([training_df_attack, test_df_norm]).reset_index(drop=True).sample(frac=1, random_state=run)
+        )
 
-        attack_synth_dist_text = [[0] for i in range(len(real_data))]
-        attack_synth_indices_text = [[0] for i in range(len(real_data))]
+        attack_synth_dist_text = [[0] for i in range(len(attack_df))]
+        attack_synth_indices_text = [[0] for i in range(len(attack_df))]
 
         # Get the NN dist for text for the entire attack dataset
 
@@ -294,11 +298,11 @@ class MembershipInferenceProtection(Component):
             else:
                 k = 1
             hits = util.semantic_search(
-                np.array(list(real_data["embedding"])),  # ty: ignore[invalid-argument-type]
-                np.array(list(df_synth_norm["embedding"])),  # ty: ignore[invalid-argument-type]
+                np.array(list(attack_df["embedding"])),  # ty: ignore[invalid-argument-type]
+                np.array(list(synthetic_df_norm["embedding"])),  # ty: ignore[invalid-argument-type]
                 top_k=k,
             )
-            for i in range(len(real_data)):
+            for i in range(len(attack_df)):
                 all_dist = []
                 all_indices = []
                 for j in range(k):
@@ -313,14 +317,14 @@ class MembershipInferenceProtection(Component):
         # Gather the dist from attack to synth for tabular.  For multimodal, we are gathering the
         # distance between every record in the attack dataset and every record in the synth dataset.
 
-        attack_synth_dist_tabular = np.zeros((len(real_data), len(df_synth_norm)))
+        attack_synth_dist_tabular = np.zeros((len(attack_df), len(synthetic_df_norm)))
 
         if tabular_cnt > 0:
             if text_cnt > 0:
-                attacker_data_tabular = real_data.drop(["embedding"], axis=1)
-                k = len(df_synth_norm)
+                attacker_data_tabular = attack_df.drop(["embedding"], axis=1)
+                k = len(synthetic_df_norm)
             else:
-                attacker_data_tabular = real_data.copy()
+                attacker_data_tabular = attack_df.copy()
                 k = 1
 
             if nn_index is None:
@@ -346,7 +350,7 @@ class MembershipInferenceProtection(Component):
                 else:
                     attack_synth_dist_tabular[i] = dist_scaled[i]
 
-        true_labels = MembershipInferenceProtection._get_true_labels(train_data_indexes, real_data.index.tolist())
+        true_labels = MembershipInferenceProtection._get_true_labels(training_data_indexes, attack_df.index.tolist())
 
         # We repeat MIA for different similarity thresholds and
         # different sized attack datasets
@@ -465,9 +469,9 @@ class MembershipInferenceProtection(Component):
 
     @staticmethod
     def mia(
-        df_train: pd.DataFrame,
-        df_test: pd.DataFrame | None,
-        df_synth: pd.DataFrame,
+        training_df: pd.DataFrame,
+        synthetic_df: pd.DataFrame,
+        test_df: pd.DataFrame | None,
         column_name: str | None = None,
     ) -> tuple[
         EvaluationScore,
@@ -482,9 +486,9 @@ class MembershipInferenceProtection(Component):
         is the average across all runs, mapped to a 0--10 privacy grade.
 
         Args:
-            df_train: Training dataframe.
-            df_test: Holdout dataframe (required -- returns unavailable if ``None``).
-            df_synth: Synthetic dataframe.
+            training_df: Training dataframe.
+            synthetic_df: Synthetic dataframe.
+            test_df: Holdout dataframe (required -- returns unavailable if ``None``).
             column_name: Optional single column to restrict the attack to.
 
         Returns:
@@ -494,72 +498,74 @@ class MembershipInferenceProtection(Component):
         attack_sum_df = None
         tps_values = {}
         fps_values = {}
-        if df_test is None:
+        if test_df is None:
             logger.info("No test data provided for Membership Inference Attack. Skipping Membership Inference Attack.")
             return ias, attack_sum_df, tps_values, fps_values
 
         try:
             # If user entered column_name, reduce dataframes down to that field
             if column_name:
-                df_train = df_train.filter([column_name])
-                df_test = df_test.filter([column_name])
-                df_synth = df_synth.filter([column_name])
+                training_df = training_df.filter([column_name])
+                test_df = test_df.filter([column_name])
+                synthetic_df = synthetic_df.filter([column_name])
 
-            text_fields = MembershipInferenceProtection.find_text_fields(df_train)
+            text_fields = MembershipInferenceProtection.find_text_fields(training_df)
             text_cnt = len(text_fields)
-            tabular_cnt = len(df_train.columns) - text_cnt
+            tabular_cnt = len(training_df.columns) - text_cnt
 
             # For multimodal we limit the test size to DEFAULT_RECORD_COUNT
             if text_cnt > 0 and tabular_cnt > 0:
-                if len(df_test) > DEFAULT_RECORD_COUNT:
-                    df_test = df_test.sample(n=DEFAULT_RECORD_COUNT, random_state=2)
+                if len(test_df) > DEFAULT_RECORD_COUNT:
+                    test_df = test_df.sample(n=DEFAULT_RECORD_COUNT, random_state=2)
 
             # Repeat MIA for stability
             repeat_count = 10
             # Sampling what we need for all MIA runs upfront speeds things up
-            train_size_needed = len(df_test) * repeat_count
-            df_train_use = df_train.copy()
-            df_train_use.columns = df_train.columns
-            if len(df_train_use) > train_size_needed:
-                df_train_use = df_train.sample(n=train_size_needed, random_state=1)
+            training_size_needed = len(test_df) * repeat_count
+            training_df_use = training_df.copy()
+            training_df_use.columns = training_df.columns
+            if len(training_df_use) > training_size_needed:
+                training_df_use = training_df.sample(n=training_size_needed, random_state=1)
 
             # Divide the dataframes into text and tabular
-            text_fields = MembershipInferenceProtection.find_text_fields(df_train_use)
+            text_fields = MembershipInferenceProtection.find_text_fields(training_df_use)
             if len(text_fields) > 0:
-                df_train_use, df_train_text = MembershipInferenceProtection.divide_tabular_text(
-                    df_train_use, text_fields
+                training_df_use, training_df_text = MembershipInferenceProtection.divide_tabular_text(
+                    training_df_use, text_fields
                 )
-                df_test, df_test_text = MembershipInferenceProtection.divide_tabular_text(df_test, text_fields)
-                df_synth, df_synth_text = MembershipInferenceProtection.divide_tabular_text(df_synth, text_fields)
+                test_df, test_df_text = MembershipInferenceProtection.divide_tabular_text(test_df, text_fields)
+                synthetic_df, synthetic_df_text = MembershipInferenceProtection.divide_tabular_text(
+                    synthetic_df, text_fields
+                )
 
             # Normalize the tabular data (adjusted for multimodal)
             if tabular_cnt > 0:
                 try:
-                    df_train_norm, df_test_norm, df_synth_norm = MembershipInferenceProtection._normalize(
-                        df_train_use, df_test, df_synth
+                    training_df_norm, synthetic_df_norm, test_df_norm = MembershipInferenceProtection._normalize(
+                        training_df_use, synthetic_df, test_df
                     )
                 except Exception:
-                    df_train_norm, df_test_norm, df_synth_norm = MembershipInferenceProtection._normalize_onehot(
-                        df_train_use, df_test, df_synth
+                    training_df_norm, synthetic_df_norm, test_df_norm = MembershipInferenceProtection._normalize_onehot(
+                        training_df_use, synthetic_df, test_df
                     )
                 # Create nearest neighbor index on the synthetic tabular data (torch GPU or sklearn CPU fallback)
-                nn_index = NearestNeighborSearch(n_neighbors=len(df_synth_norm))
-                nn_index.fit(np.ascontiguousarray(np.array(df_synth_norm)).astype(np.float32))
+                nn_index = NearestNeighborSearch(n_neighbors=len(synthetic_df_norm))
+                nn_index.fit(np.ascontiguousarray(np.array(synthetic_df_norm)).astype(np.float32))
             else:
-                df_train_norm = pd.DataFrame()
-                df_test_norm = pd.DataFrame()
-                df_synth_norm = pd.DataFrame()
+                training_df_norm = pd.DataFrame()
+                test_df_norm = pd.DataFrame()
+                synthetic_df_norm = pd.DataFrame()
                 nn_index = None
 
             # Create embeddings for text fields and combine the normalized tabular and the
             # new text embeddings into one dataframe.
             if len(text_fields) > 0:
-                df_train_embeddings = MembershipInferenceProtection.embed_text(df_train_text)
-                df_test_embeddings = MembershipInferenceProtection.embed_text(df_test_text)
-                df_synth_embeddings = MembershipInferenceProtection.embed_text(df_synth_text)
-                df_train_norm = pd.concat([df_train_norm, df_train_embeddings], axis=1)
-                df_test_norm = pd.concat([df_test_norm, df_test_embeddings], axis=1)
-                df_synth_norm = pd.concat([df_synth_norm, df_synth_embeddings], axis=1)
+                training_df_embeddings = MembershipInferenceProtection.embed_text(training_df_text)
+                synthetic_df_embeddings = MembershipInferenceProtection.embed_text(synthetic_df_text)
+                test_df_embeddings = MembershipInferenceProtection.embed_text(test_df_text)
+                training_df_norm = pd.concat([training_df_norm, training_df_embeddings], axis=1)
+                synthetic_df_norm = pd.concat([synthetic_df_norm, synthetic_df_embeddings], axis=1)
+                test_df_norm = pd.concat([test_df_norm, test_df_embeddings], axis=1)
 
             scores = []
             attack_sum_values = []
@@ -571,9 +577,9 @@ class MembershipInferenceProtection(Component):
 
             for i in range(repeat_count):
                 score, attack_sum, tp_cnts, fp_cnts = MembershipInferenceProtection._compute_mia(
-                    df_train_norm,
-                    df_test_norm,
-                    df_synth_norm,
+                    training_df_norm,
+                    synthetic_df_norm,
+                    test_df_norm,
                     nn_index,
                     i,
                     text_cnt,

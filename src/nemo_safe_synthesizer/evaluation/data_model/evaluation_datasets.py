@@ -18,8 +18,8 @@ from ...pii_replacer.transform_result import ColumnStatistics
 logger = get_logger(__name__)
 
 
-class EvaluationDataset(BaseModel):
-    """Paired reference and output dataframes prepared for evaluation.
+class EvaluationDatasets(BaseModel):
+    """Training, synthetic, and optionally test dataframes prepared for evaluation.
 
     On construction the validator computes per-column ``EvaluationField``
     instances, counts memorized lines, and records dataset dimensions.
@@ -27,18 +27,18 @@ class EvaluationDataset(BaseModel):
     subsampling.
     """
 
-    reference: pd.DataFrame = Field(default=pd.DataFrame(), description="Training (reference) dataframe.")
-    output: pd.DataFrame = Field(default=pd.DataFrame(), description="Synthetic (output) dataframe.")
+    training: pd.DataFrame = Field(default=pd.DataFrame(), description="Training dataframe.")
+    synthetic: pd.DataFrame = Field(default=pd.DataFrame(), description="Synthetic dataframe.")
     test: pd.DataFrame | None = Field(
         default=None, description="Optional holdout dataframe for text-similarity and privacy metrics."
     )
 
-    reference_rows: int = Field(default=0, ge=0, description="Row count of the reference dataframe.")
-    reference_cols: int = Field(default=0, ge=0, description="Column count of the reference dataframe.")
-    output_rows: int = Field(default=0, ge=0, description="Row count of the output dataframe.")
-    output_cols: int = Field(default=0, ge=0, description="Column count of the output dataframe.")
+    training_rows: int = Field(default=0, ge=0, description="Row count of the training dataframe.")
+    training_cols: int = Field(default=0, ge=0, description="Column count of the training dataframe.")
+    synthetic_rows: int = Field(default=0, ge=0, description="Row count of the synthetic dataframe.")
+    synthetic_cols: int = Field(default=0, ge=0, description="Column count of the synthetic dataframe.")
     memorized_lines: int = Field(
-        default=0, ge=0, description="Number of exact row matches between reference and output."
+        default=0, ge=0, description="Number of exact row matches between training and synthetic."
     )
 
     column_statistics: dict[str, ColumnStatistics] | None = Field(
@@ -59,75 +59,75 @@ class EvaluationDataset(BaseModel):
         if df.empty:
             raise ValueError(f"{df_name} is empty!")
 
-    def get_columns_of_type(self, types: set[FieldType], mode="reference") -> list[str]:
+    def get_columns_of_type(self, types: set[FieldType], based_on="training") -> list[str]:
         """Return column names whose ``FieldType`` is in ``types``.
 
         Args:
             types: Set of ``FieldType`` values to match.
-            mode: Which dataframe's field features to inspect --
-                ``"reference"``, ``"output"``, or ``"both"`` (intersection).
+            based_on: Which dataframe's field features to inspect --
+                ``"training"``, ``"synthetic"``, or ``"both"`` (intersection).
 
         Returns:
             List of matching column names.
         """
-        if mode == "reference":
-            return [f.name for f in self.evaluation_fields if f.reference_field_features.type in types]
-        elif mode == "output":
-            return [f.name for f in self.evaluation_fields if f.output_field_features.type in types]
-        elif mode == "both":
+        if based_on == "training":
+            return [f.name for f in self.evaluation_fields if f.training_field_features.type in types]
+        elif based_on == "synthetic":
+            return [f.name for f in self.evaluation_fields if f.synthetic_field_features.type in types]
+        elif based_on == "both":
             return [
                 f.name
                 for f in self.evaluation_fields
-                if f.reference_field_features.type in types and f.output_field_features.type in types
+                if f.training_field_features.type in types and f.synthetic_field_features.type in types
             ]
         else:
             return []
 
-    def get_tabular_columns(self, mode="reference") -> list[str]:
+    def get_tabular_columns(self, based_on="training") -> list[str]:
         """Return columns classified as binary, categorical, or numeric."""
-        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, mode)
+        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL, FieldType.NUMERIC}, based_on)
 
-    def get_nominal_columns(self, mode="reference") -> list[str]:
+    def get_nominal_columns(self, based_on="training") -> list[str]:
         """Return columns classified as binary or categorical."""
-        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, mode)
+        return self.get_columns_of_type({FieldType.BINARY, FieldType.CATEGORICAL}, based_on)
 
-    def get_text_columns(self, mode="reference") -> list[str]:
+    def get_text_columns(self, based_on="training") -> list[str]:
         """Return columns classified as free text."""
-        return self.get_columns_of_type({FieldType.TEXT}, mode)
+        return self.get_columns_of_type({FieldType.TEXT}, based_on)
 
     @model_validator(mode="after")
     def validate(self):
         # Expected raw input data:
-        # reference
-        # output
+        # training
+        # synthetic
         # test (optional)
         # column_statistics (optional)
 
-        # Check input df's
-        EvaluationDataset.check_dataframe(self.reference, "Reference")
-        EvaluationDataset.check_dataframe(self.output, "Output")
+        # Check that df's exist and are not empty
+        EvaluationDatasets.check_dataframe(self.training, "Training")
+        EvaluationDatasets.check_dataframe(self.synthetic, "Synthetic")
 
         # Make all the evaluation fields.
         column_statistics: dict[str, ColumnStatistics] = self.column_statistics if self.column_statistics else dict()
         evaluation_fields: list[EvaluationField] = []
-        for col in self.reference.columns:
+        for col in self.training.columns:
             evaluation_fields.append(
                 EvaluationField.from_series(
                     name=col,
-                    reference=self.reference[col],
-                    output=self.output[col],
+                    training=self.training[col],
+                    synthetic=self.synthetic[col],
                     column_statistics=column_statistics.get(col),
                 )
             )
 
-        reference_rows, reference_cols = self.reference.shape
-        output_rows, output_cols = self.output.shape
-        memorized_lines = stats.count_memorized_lines(self.reference, self.output)
+        training_rows, training_cols = self.training.shape
+        synthetic_rows, synthetic_cols = self.synthetic.shape
+        memorized_lines = stats.count_memorized_lines(self.training, self.synthetic)
 
-        self.reference_rows = reference_rows
-        self.reference_cols = reference_cols
-        self.output_rows = output_rows
-        self.output_cols = output_cols
+        self.training_rows = training_rows
+        self.training_cols = training_cols
+        self.synthetic_rows = synthetic_rows
+        self.synthetic_cols = synthetic_cols
         self.memorized_lines = memorized_lines
 
         self.evaluation_fields = evaluation_fields
@@ -135,8 +135,8 @@ class EvaluationDataset(BaseModel):
 
     @staticmethod
     def subsample_columns(
-        reference: pd.DataFrame,
-        output: pd.DataFrame,
+        training: pd.DataFrame,
+        synthetic: pd.DataFrame,
         test: pd.DataFrame | None = None,
         target_column_count: int = DEFAULT_SQS_REPORT_COLUMNS,
         mandatory_columns: list[str] | None = None,
@@ -147,29 +147,28 @@ class EvaluationDataset(BaseModel):
         reproducible column selection across evaluation components.
 
         Args:
-            reference: Training dataframe.
-            output: Synthetic dataframe.
+            training: Training dataframe.
+            synthetic: Synthetic dataframe.
             test: Optional holdout dataframe.
             target_column_count: Maximum number of columns to keep.
             mandatory_columns: Columns that must be included regardless.
 
         Returns:
-            Tuple of (reference, output, test) dataframes restricted to the
+            Tuple of (training, synthetic, test) dataframes restricted to the
             selected column set.
 
         Raises:
-            ValueError: If reference and output share no columns.
+            ValueError: If training and synthetic share no columns.
         """
         if mandatory_columns is None:
             mandatory_columns = []
         # Check and subsample columns
-        shared_columns = set(reference.columns).intersection(set(output.columns))
+        shared_columns = set(training.columns).intersection(set(synthetic.columns))
         if len(shared_columns) == 0:
             raise ValueError(
-                "Reference and Output dataframes contain no columns in common. Please check dataframes for mismatch."
+                "Training and Synthetic dataframes contain no columns in common. Please check dataframes for mismatch."
             )
         if target_column_count < len(shared_columns):
-            # Really sample columns.
             logger.info(
                 f"Found {len(shared_columns)} shared columns. Attempting to sample down to {target_column_count} columns. Will include {len(mandatory_columns)} mandatory columns."
             )
@@ -186,57 +185,57 @@ class EvaluationDataset(BaseModel):
         else:
             # Even without sampling, we only want to use shared columns.
             col_set = shared_columns
-        reference = reference[list(col_set)]  # ty: ignore[invalid-assignment]
-        output = output[list(col_set)]  # ty: ignore[invalid-assignment]
+        training = training[list(col_set)]  # ty: ignore[invalid-assignment]
+        synthetic = synthetic[list(col_set)]  # ty: ignore[invalid-assignment]
 
         # Check and subsample test columns, or split out a test set if not provided.
         if test is not None and not test.empty:
             test_shared_columns = shared_columns.intersection(set(test.columns))
             if len(test_shared_columns) == 0:
                 raise ValueError(
-                    "Test dataframe has no columns in common with Reference and Output dataframes. Please check dataframes for mismatch."
+                    "Test dataframe has no columns in common with Training and Synthetic dataframes. Please check dataframes for mismatch."
                 )
             else:
                 test = test[list(test_shared_columns)]  # ty: ignore[invalid-assignment]
 
-        return reference, output, test
+        return training, synthetic, test
 
     @staticmethod
     def subsample_rows(
-        reference: pd.DataFrame,
-        output: pd.DataFrame,
+        training: pd.DataFrame,
+        synthetic: pd.DataFrame,
         target_record_count: int = DEFAULT_RECORD_COUNT,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Downsample both dataframes to at most ``target_record_count`` rows."""
-        target_record_count = min(target_record_count, reference.shape[0], output.shape[0])
-        if target_record_count < reference.shape[0]:
-            logger.info(f"Subsampling reference data from {reference.shape[0]} records to {target_record_count}.")
-            reference = reference.sample(target_record_count, ignore_index=True, random_state=424242)
-        if target_record_count < output.shape[0]:
-            logger.info(f"Subsampling output data from {output.shape[0]} records to {target_record_count}.")
-            output = output.sample(target_record_count, ignore_index=True, random_state=424242)
-        return reference, output
+        target_record_count = min(target_record_count, training.shape[0], synthetic.shape[0])
+        if target_record_count < training.shape[0]:
+            logger.info(f"Subsampling training data from {training.shape[0]} records to {target_record_count}.")
+            training = training.sample(target_record_count, ignore_index=True, random_state=424242)
+        if target_record_count < synthetic.shape[0]:
+            logger.info(f"Subsampling synthetic data from {synthetic.shape[0]} records to {target_record_count}.")
+            synthetic = synthetic.sample(target_record_count, ignore_index=True, random_state=424242)
+        return training, synthetic
 
     @staticmethod
     def from_dataframes(
-        reference: pd.DataFrame,
-        output: pd.DataFrame,
+        training: pd.DataFrame,
+        synthetic: pd.DataFrame,
         test: pd.DataFrame | None = None,
         column_statistics: dict[str, ColumnStatistics] | None = None,
         rows: int = DEFAULT_RECORD_COUNT,
         cols: int = DEFAULT_SQS_REPORT_COLUMNS,
         mandatory_columns: list[str] | None = None,
         enable_sampling: bool = True,
-    ) -> EvaluationDataset:
-        """Build an ``EvaluationDataset`` with optional column/row subsampling.
+    ) -> EvaluationDatasets:
+        """Build an ``EvaluationDatasets`` with optional column/row subsampling.
 
         This is the primary constructor for evaluation. It validates inputs,
         optionally subsamples columns and rows, then delegates to the
         Pydantic model validator which computes per-column evaluation fields.
 
         Args:
-            reference: Training dataframe.
-            output: Synthetic dataframe.
+            training: Training dataframe.
+            synthetic: Synthetic dataframe.
             test: Optional holdout dataframe for text-similarity and privacy metrics.
             column_statistics: Per-column PII entity metadata.
             rows: Target row count for subsampling.
@@ -245,17 +244,19 @@ class EvaluationDataset(BaseModel):
             enable_sampling: When ``False``, skip all subsampling.
 
         Returns:
-            A fully initialized ``EvaluationDataset``.
+            A fully initialized ``EvaluationDatasets``.
         """
         # Spot check df's before doing anything.
-        EvaluationDataset.check_dataframe(reference, "Reference")
-        EvaluationDataset.check_dataframe(output, "Output")
+        EvaluationDatasets.check_dataframe(training, "Training")
+        EvaluationDatasets.check_dataframe(synthetic, "Synthetic")
 
         # Sample while we have config params in hand.
         if enable_sampling:
-            reference, output, test = EvaluationDataset.subsample_columns(
-                reference, output, test, cols, mandatory_columns
+            training, synthetic, test = EvaluationDatasets.subsample_columns(
+                training, synthetic, test, cols, mandatory_columns
             )
-            reference, output = EvaluationDataset.subsample_rows(reference, output, rows)
+            training, synthetic = EvaluationDatasets.subsample_rows(training, synthetic, rows)
 
-        return EvaluationDataset(reference=reference, output=output, test=test, column_statistics=column_statistics)
+        return EvaluationDatasets(
+            training=training, synthetic=synthetic, test=test, column_statistics=column_statistics
+        )

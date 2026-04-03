@@ -17,10 +17,10 @@
         <tr>
             <th rowspan="2" scope="colgroup" class="first">Column Name</th>
             <th rowspan="2" scope="colgroup">PII Type</th>
-            <th colspan="2" scope="colgroup" style="text-align:center">Reference Data
-                ({{ ctx.pii_replay.reference_total_records }} rows)</th>
-            <th colspan="2" scope="colgroup" style="text-align:center" class="last">Output Data PII Replay
-                ({{ ctx.pii_replay.output_total_records }}
+            <th colspan="2" scope="colgroup" style="text-align:center">Training Data
+                ({{ ctx.pii_replay.training_total_records }} rows)</th>
+            <th colspan="2" scope="colgroup" style="text-align:center" class="last">Synthetic Data PII Replay
+                ({{ ctx.pii_replay.synthetic_total_records }}
                 rows)</th>
         </tr>
         <tr>
@@ -33,11 +33,11 @@
         <tr>
             <td class="first">{{ field.column_name }}</td>
             <td><span class="score-label">{{ field.pii_type }}</span></td>
-            <td class="tnum">{{ field.total_ref_data }}</td>
-            <td class="tnum">{{ field.unique_ref_data }}</td>
-            <td class="tnum">{{ field.total_synth_data }}</td>
-            <td class="last tnum">{{ field.unique_synth_data }}/{{ field.unique_ref_data }} ({{
-                field.unique_synth_data_percentage }}%)</td>
+            <td class="tnum">{{ field.total_training_data }}</td>
+            <td class="tnum">{{ field.unique_training_data }}</td>
+            <td class="tnum">{{ field.total_synthetic_data }}</td>
+            <td class="last tnum">{{ field.unique_synthetic_data }}/{{ field.unique_training_data }} ({{
+                field.unique_synthetic_data_percentage }}%)</td>
         </tr>
         {% endfor %}
     </table>

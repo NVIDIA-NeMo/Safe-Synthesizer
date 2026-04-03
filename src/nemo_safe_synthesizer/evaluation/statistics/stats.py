@@ -32,12 +32,12 @@ _DEFAULT_REPLACE_VALUE = 0.0
 UNIQUENESS_THRESHOLD = 0.1
 
 
-def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
+def count_memorized_lines(training_df: pd.DataFrame, synthetic_df: pd.DataFrame) -> int:
     """Count exact row matches between training and synthetic data.
 
     Args:
-        df1: Training dataframe.
-        df2: Synthetic dataframe.
+        training_df: Training dataframe.
+        synthetic_df: Synthetic dataframe.
 
     Returns:
         Number of rows present in both dataframes after deduplication.
@@ -80,7 +80,7 @@ def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
         return l.astype(conversions), r.astype(conversions)
 
     # Do the casts.
-    l, r = _uptype_object_to_float(df1, df2)  # noqa: E741
+    l, r = _uptype_object_to_float(training_df, synthetic_df)  # noqa: E741
     l, r = _objectify(_floatify(l), _floatify(r))  # noqa: E741
 
     # Do an inner join on the intersection of columns present in both dfs.
@@ -535,32 +535,32 @@ def compute_pca(df: pd.DataFrame, n_components: int = 2) -> pd.DataFrame:
 
 
 def compute_joined_pcas(
-    reference_df: pd.DataFrame,
-    output_df: pd.DataFrame,
+    training_df: pd.DataFrame,
+    synthetic_df: pd.DataFrame,
     n_components: int = 2,
     include_variance: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Run joined PCA: fit on reference, transform both reference and output.
+    """Run joined PCA: fit on training, transform both training and synthetic.
 
     Args:
-        reference_df: Training dataframe (used to fit the scaler and PCA).
-        output_df: Synthetic dataframe (transformed only).
+        training_df: Training dataframe (used to fit the scaler and PCA).
+        synthetic_df: Synthetic dataframe (transformed only).
         n_components: Number of principal components to keep.
         include_variance: If ``True``, column names include explained variance ratios.
 
     Returns:
-        Tuple of (reference PCA dataframe, output PCA dataframe).
+        Tuple of (training PCA dataframe, synthetic PCA dataframe).
     """
     seed = 444
 
-    # Normalize the train and synthetic dataframes to mean 0 and std 1
+    # Normalize the training and synthetic dataframes to mean 0 and std 1
     sc = StandardScaler()
-    reference_norm = sc.fit_transform(reference_df)
-    output_norm = sc.transform(output_df)
+    training_norm = sc.fit_transform(training_df)
+    synthetic_norm = sc.transform(synthetic_df)
 
     pca = PCA(n_components=n_components, random_state=seed)
-    projected_reference = pca.fit_transform(reference_norm)
-    projected_output = pca.transform(output_norm)
+    projected_training = pca.fit_transform(training_norm)
+    projected_synthetic = pca.transform(synthetic_norm)
 
     if include_variance:
         eigenvalues = pca.explained_variance_ratio_
@@ -568,10 +568,10 @@ def compute_joined_pcas(
     else:
         columns = [f"pc{i + 1}" for i in range(n_components)]
 
-    reference_pca = pd.DataFrame(data=projected_reference, columns=columns)
-    output_pca = pd.DataFrame(data=projected_output, columns=columns)
+    training_pca = pd.DataFrame(data=projected_training, columns=columns)
+    synthetic_pca = pd.DataFrame(data=projected_synthetic, columns=columns)
 
-    return (reference_pca, output_pca)
+    return (training_pca, synthetic_pca)
 
 
 def count_missing(df: pd.DataFrame) -> int:

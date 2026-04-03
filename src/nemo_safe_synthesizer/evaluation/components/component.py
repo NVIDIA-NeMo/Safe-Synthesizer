@@ -11,7 +11,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from ...config.parameters import SafeSynthesizerParameters
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from . import multi_modal_figures as figures
 
@@ -20,10 +20,10 @@ class Component(ABC, BaseModel):
     """Abstract base for all evaluation components.
 
     Each component computes one quality or privacy metric from an
-    ``EvaluationDataset`` and exposes a ``jinja_context`` property
+    ``EvaluationDatasets`` and exposes a ``jinja_context`` property
     for HTML report rendering.
 
-    Subclasses should override ``from_evaluation_dataset`` to perform
+    Subclasses should override ``from_evaluation_datasets`` to perform
     their metric-specific computation.
     """
 
@@ -33,15 +33,15 @@ class Component(ABC, BaseModel):
     )
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> Component:
-        """Create a component from an ``EvaluationDataset``.
+        """Create a component from an ``EvaluationDatasets``.
 
         Subclasses override this to compute their specific metric.
 
         Args:
-            evaluation_dataset: Paired reference/output data.
+            evaluation_datasets: Paired training/synthetic data.
             config: Optional pipeline configuration parameters.
 
         Returns:

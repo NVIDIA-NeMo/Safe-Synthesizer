@@ -24,12 +24,12 @@ def test_multimodal_report_from_dataframes(iris_df):
     config = SafeSynthesizerParameters(
         evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=False),
     )
-    reference = iris_df.copy()
-    output = iris_df.sample(frac=0.8, random_state=42).reset_index(drop=True)
+    training_df = iris_df.copy()
+    synthetic_df = iris_df.sample(frac=0.8, random_state=42).reset_index(drop=True)
 
     report = MultimodalReport.from_dataframes(
-        reference=reference,
-        output=output,
+        training=training_df,
+        synthetic=synthetic_df,
         config=config,
     )
     assert report is not None

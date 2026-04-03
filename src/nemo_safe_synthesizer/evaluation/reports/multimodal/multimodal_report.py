@@ -38,7 +38,7 @@ from ....evaluation.components.pii_replay import PIIReplay
 from ....evaluation.components.sqs_score import SQSScore
 from ....evaluation.components.text_semantic_similarity import TextSemanticSimilarity
 from ....evaluation.components.text_structure_similarity import TextStructureSimilarity
-from ....evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ....evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ....evaluation.data_model.evaluation_report import EvaluationReport
 from ....evaluation.data_model.evaluation_score import (
     EvaluationScore,
@@ -54,7 +54,7 @@ class MultimodalReport(EvaluationReport):
     """Multi-modal evaluation report combining quality and privacy components.
 
     Assembles all evaluation components (SQS sub-metrics for tabular and/or text columns,
-    privacy scores, PII replay, dataset statistics) from paired reference/output
+    privacy scores, PII replay, dataset statistics) from paired training/synthetic
     dataframes and renders them into an HTML report via Jinja2 templates.
 
     Use ``from_dataframes`` to construct a fully populated report.
@@ -87,9 +87,9 @@ class MultimodalReport(EvaluationReport):
 
             ctx["with_transform"] = False
             if (
-                self.evaluation_dataset is not None
-                and self.evaluation_dataset.column_statistics is not None
-                and len(self.evaluation_dataset.column_statistics) > 0
+                self.evaluation_datasets is not None
+                and self.evaluation_datasets.column_statistics is not None
+                and len(self.evaluation_datasets.column_statistics) > 0
             ):
                 ctx["with_transform"] = True
 
@@ -100,8 +100,8 @@ class MultimodalReport(EvaluationReport):
 
             # Numeric per-column figures require access to the original data, a little hacky.
             if "column_distribution_stability" in ctx:
-                ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_dataset(
-                    self.evaluation_dataset
+                ctx["column_distribution_stability"]["figures"] = ColumnDistributionPlotRow.from_evaluation_datasets(
+                    self.evaluation_datasets
                 )
 
             return ctx
@@ -118,20 +118,20 @@ class MultimodalReport(EvaluationReport):
 
     @staticmethod
     def from_dataframes(
-        reference: pd.DataFrame,
-        output: pd.DataFrame,
+        training: pd.DataFrame,
+        synthetic: pd.DataFrame,
         test: pd.DataFrame | None = None,
         column_statistics: dict[str, ColumnStatistics] | None = None,
         config: SafeSynthesizerParameters | None = None,
     ) -> MultimodalReport:
         """Build a complete multi-modal evaluation report from dataframes.
 
-        Constructs an ``EvaluationDataset``, runs all enabled evaluation
+        Constructs an ``EvaluationDatasets``, runs all enabled evaluation
         components (quality and privacy), and assembles them into a report.
 
         Args:
-            reference: Training (reference) dataframe.
-            output: Synthetic (output) dataframe.
+            training: Training dataframe.
+            synthetic: Synthetic dataframe.
             test: Optional holdout dataframe for privacy metrics.
             column_statistics: Per-column PII entity metadata.
             config: Pipeline configuration controlling which metrics are enabled.
@@ -139,9 +139,9 @@ class MultimodalReport(EvaluationReport):
         Returns:
             A fully populated ``MultimodalReport`` ready for rendering.
         """
-        evaluation_dataset = EvaluationDataset.from_dataframes(
-            reference=reference,
-            output=output,
+        evaluation_datasets = EvaluationDatasets.from_dataframes(
+            training=training,
+            synthetic=synthetic,
             test=test,
             column_statistics=column_statistics,
             rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
@@ -155,8 +155,8 @@ class MultimodalReport(EvaluationReport):
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         )
         if config and config.get("aia_enabled"):
-            attribute_inference_protection = AttributeInferenceProtection.from_evaluation_dataset(
-                evaluation_dataset, config
+            attribute_inference_protection = AttributeInferenceProtection.from_evaluation_datasets(
+                evaluation_datasets, config
             )
         components.append(attribute_inference_protection)
 
@@ -164,7 +164,9 @@ class MultimodalReport(EvaluationReport):
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)
         )
         if config and config.get("mia_enabled"):
-            membership_inference_protection = MembershipInferenceProtection.from_evaluation_dataset(evaluation_dataset)
+            membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(
+                evaluation_datasets
+            )
         components.append(membership_inference_protection)
 
         data_privacy_score = DataPrivacyScore(score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE))
@@ -177,10 +179,10 @@ class MultimodalReport(EvaluationReport):
         pii_replay = PIIReplay()
         if column_statistics and config is not None and config.get("pii_replay_enabled"):
             # PII Replay requires full df's. Make a one-off dataset for that call.
-            pii_replay = PIIReplay.from_evaluation_dataset(
-                EvaluationDataset.from_dataframes(
-                    reference=reference,
-                    output=output,
+            pii_replay = PIIReplay.from_evaluation_datasets(
+                EvaluationDatasets.from_dataframes(
+                    training=training,
+                    synthetic=synthetic,
                     test=test,
                     column_statistics=column_statistics,
                     rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
@@ -197,13 +199,13 @@ class MultimodalReport(EvaluationReport):
         ]
         components.append(pii_replay)
 
-        dataset_statistics = DatasetStatistics.from_evaluation_dataset(evaluation_dataset)
+        dataset_statistics = DatasetStatistics.from_evaluation_datasets(evaluation_datasets)
 
-        column_distribution = ColumnDistribution.from_evaluation_dataset(evaluation_dataset)
-        correlation = Correlation.from_evaluation_dataset(evaluation_dataset)
-        deep_structure = DeepStructure.from_evaluation_dataset(evaluation_dataset)
-        text_semantic_similarity = TextSemanticSimilarity.from_evaluation_dataset(evaluation_dataset)
-        text_structure_similarity = TextStructureSimilarity.from_evaluation_dataset(evaluation_dataset)
+        column_distribution = ColumnDistribution.from_evaluation_datasets(evaluation_datasets)
+        correlation = Correlation.from_evaluation_datasets(evaluation_datasets)
+        deep_structure = DeepStructure.from_evaluation_datasets(evaluation_datasets)
+        text_semantic_similarity = TextSemanticSimilarity.from_evaluation_datasets(evaluation_datasets)
+        text_structure_similarity = TextStructureSimilarity.from_evaluation_datasets(evaluation_datasets)
         sqs_score = SQSScore.from_components(
             [column_distribution, correlation, deep_structure, text_semantic_similarity, text_structure_similarity]
         )
@@ -218,6 +220,6 @@ class MultimodalReport(EvaluationReport):
             sqs_score,
         ]
 
-        report = MultimodalReport(config=config, evaluation_dataset=evaluation_dataset, components=components)
-        report.evaluation_dataset = evaluation_dataset
+        report = MultimodalReport(config=config, evaluation_datasets=evaluation_datasets, components=components)
+        report.evaluation_datasets = evaluation_datasets
         return report

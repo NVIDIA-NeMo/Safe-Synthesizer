@@ -38,8 +38,8 @@ def deep_structure_stability():
 
 
 @pytest.fixture
-def column_distribution_stability(evaluation_dataset_5k):
-    return ColumnDistribution.from_evaluation_dataset(evaluation_dataset_5k)
+def column_distribution_stability(evaluation_datasets_5k):
+    return ColumnDistribution.from_evaluation_datasets(evaluation_datasets_5k)
 
 
 @pytest.fixture

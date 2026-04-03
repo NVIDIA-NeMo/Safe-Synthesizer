@@ -90,7 +90,7 @@ def test_zero_max_holdout(df):
 
 
 def test_naive_train_test_split_zero_int_test_size(df):
-    train, test = naive_train_test_split(df, test_size=0)
+    train, test = naive_train_test_split(input_df=df, test_size=0)
     assert len(train) == 200
     assert test is None
 
