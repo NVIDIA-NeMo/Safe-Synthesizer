@@ -99,7 +99,7 @@ chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
     - Select the cluster: `cs-oci-ord` (primary cluster for NSS experiments), `cw-dfw-cs-001`
     - Filter by account using the regex: `sdg`.
     - Set the interval to 1 hour for a detailed view.
-- Use `sshare -U $USER_NAME -l` to check your instanteous [Fair Share](https://confluence.nvidia.com/display/HWINFCSSUP/Fairshare+Deep+dive) (FS) on a cluster
+- Use `sshare -U $USER_NAME -l` to check your instantaneous [Fair Share](https://confluence.nvidia.com/display/HWINFCSSUP/Fairshare+Deep+dive) (FS) on a cluster
 
 
 ### Configure
