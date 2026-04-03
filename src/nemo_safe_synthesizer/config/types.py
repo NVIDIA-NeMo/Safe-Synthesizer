@@ -5,8 +5,8 @@
 
 The ``Auto*Param`` and ``Optional*`` aliases let config fields accept the
 sentinel string ``"auto"`` alongside their native type, enabling deferred
-resolution at runtime. Collection aliases reduce boilerplate in downstream
-Pydantic models. For path types, see ``nemo_safe_synthesizer._types.PathLike``.
+resolution at runtime. Collection aliases reduce boilerplate indownstream
+Pydantic models.
 """
 
 from __future__ import annotations
