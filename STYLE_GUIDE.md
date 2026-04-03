@@ -114,7 +114,7 @@ How to write clear, testable Python -- independent of which library primitives y
 
 ### Type hints
 
-The codebase targets Python 3.11+ and uses native typing syntax throughout. Expect this minimum for the foreseeable future.
+The codebase targets Python 3.11–3.13 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (currently ray/vLLM lack `cp314` wheels).
 
 ```python
 from typing import Self, Sequence

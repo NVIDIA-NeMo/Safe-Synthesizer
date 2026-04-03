@@ -14,9 +14,15 @@ does at each stage.
 
 ### Prerequisites
 
-- Python 3.11+ (dev tooling currently pins 3.11 via `.python-version` in the repo root)
-- CUDA runtime 12.8
+- Python 3.11–3.13 (dev tooling currently pins 3.11 via `.python-version` in the repo root; Python 3.14+ is **not** supported — see [Troubleshooting](troubleshooting.md#python-314-is-not-supported))
+- CUDA runtime 12.8+
 - NVIDIA GPU (A100 or larger) for training and generation
+
+!!! failure "Linux only -- macOS, Windows, and Apple Silicon are not supported"
+    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.8+
+    to run the training and generation pipeline. The [CPU install tab below](#install-the-package)
+    is for development and configuration validation only -- it cannot train models or
+    generate synthetic data.
 
 ### Install the Package
 
@@ -156,31 +162,16 @@ Commands:
 
 ## Quick Start
 
-Create a synthetic version of an input dataset in one step.
-
-!!! note "Config file"
-    Save the following as `config.yaml`:
-
-    ```yaml
-    training:
-      pretrained_model: "HuggingFaceTB/SmolLM3-3B"
-    generation:
-      num_records: 1000
-    ```
-
-    PII replacement as a pre-processing step is on by default. Pass `--no-replace-pii` on the CLI to skip it, or see [Configuration -- Replacing PII](configuration.md#replacing-pii)
-    to customize entity types.
-
-Then run:
+Create a synthetic version of an input dataset in one step by running:
 
 ```bash
-safe-synthesizer run --config config.yaml --data-source data.csv
+safe-synthesizer run --data-source data.csv
 ```
 
 You can use [Clinc OOS](https://huggingface.co/datasets/clinc/clinc_oos) as an example dataset: export the split you want (for example the training split) to a CSV file, then point `--data-source` at that file:
 
 ```bash
-safe-synthesizer run --config config.yaml --data-source clinc_oos.csv
+safe-synthesizer run --data-source clinc_oos.csv
 ```
 
 Replace `data.csv` (or `clinc_oos.csv`) with your actual input file. Any `.csv`, `.json`, `.jsonl`,

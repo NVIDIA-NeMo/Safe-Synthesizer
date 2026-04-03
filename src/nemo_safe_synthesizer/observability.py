@@ -956,6 +956,7 @@ def heartbeat(
     interval: float = 60.0,
     *,
     logger_name: str | None = None,
+    progress_note: str | None = None,
     **extra_fields,
 ) -> Generator[None, None, None]:
     """Context manager that logs a periodic heartbeat during a long-running operation.
@@ -965,6 +966,8 @@ def heartbeat(
         interval: Seconds between heartbeat log messages.
         logger_name: Logger name (pass ``__name__`` so heartbeat logs attribute
             to the calling module).
+        progress_note: Optional sentence appended only to periodic ``... in progress``
+            lines (so ``message`` can stay short for ``... complete`` / ``... failed``).
         **extra_fields: Additional structured fields passed to the logger
             (e.g. ``model="SmolLM3"``).
     """
@@ -979,7 +982,10 @@ def heartbeat(
 
     def _run() -> None:
         while not stop.wait(timeout=interval):
-            _logger.info(f"{message} in progress", extra={"ctx": _extra()})
+            event = f"{message} in progress"
+            if progress_note:
+                event = f"{event}. {progress_note}"
+            _logger.info(event, extra={"ctx": _extra()})
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()

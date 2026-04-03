@@ -14,6 +14,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
+| Install fails on Python 3.14 | ray has no `cp314` wheels | [Use Python 3.11–3.13](#python-314-is-not-supported) |
 | "kernels package not installed" | No network for Kernels Hub | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
@@ -61,6 +62,29 @@ export NSS_LOG_LEVEL=DEBUG
 
 See [Running -- Logging](running.md#logging) for the full logging
 configuration reference.
+
+---
+
+## Installation
+
+### Python 3.14 Is Not Supported
+
+Safe Synthesizer requires **Python 3.11, 3.12, or 3.13**. Python 3.14+ is not
+supported because [ray](https://github.com/ray-project/ray) (a transitive
+dependency of vLLM) does not publish `cp314` wheels. Attempting to install on
+Python 3.14 fails with an unresolvable dependency error during `pip install` or
+`uv pip install`.
+
+To fix, create a virtual environment with a supported interpreter:
+
+```bash
+uv venv --python 3.13
+source .venv/bin/activate
+```
+
+The project's `pyproject.toml` enforces `requires-python = ">=3.11, <3.14"`, so
+package managers will reject the install on unsupported versions. This upper
+bound will be raised once all transitive dependencies ship `cp314` wheels.
 
 ---
 
@@ -254,8 +278,10 @@ to cause long generation times:
 `max_tokens` scales with context window: each generation prompt is allowed
 up to `max_seq_length` output tokens (`12,288` for SmolLM3). If the model
 produces long outputs before the stop condition fires, each prompt in the
-batch takes proportionally longer. A heartbeat log (`"Generation in
-progress"`) is emitted every 60 seconds to confirm the pipeline is alive.
+batch takes proportionally longer. Every 60 seconds a heartbeat line is
+logged starting with `Generation in progress`, plus a short note that new
+records only appear after a full batch of prompts finishes. Long
+stretches with no new records are normal while generation is still running.
 
 Long-tail batch latency: vLLM processes all prompts in a batch
 simultaneously, but `llm.generate()` blocks until every prompt completes.

@@ -42,6 +42,20 @@ if [ -z "${LUSTRE_DIR:-}" ]; then
     exit 1
 fi
 
+if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
+    echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
+    echo "Create it with at least NSS_INFERENCE_KEY (and WANDB_API_KEY if WANDB_MODE=online)." >&2
+    exit 1
+fi
+source "${LUSTRE_DIR}/.api_tokens.sh"
+
+if [[ "${WANDB_MODE:-disabled}" == "online" && -z "${WANDB_API_KEY:-}" ]]; then
+    echo "ERROR: WANDB_MODE is 'online' but WANDB_API_KEY is not set." >&2
+    echo "Add 'export WANDB_API_KEY=\"<your_key>\"' to ${LUSTRE_DIR}/.api_tokens.sh" >&2
+    echo "Or set WANDB_MODE=disabled in env_variables.sh to skip W&B logging." >&2
+    exit 1
+fi
+
 if [ -z "${NSS_SHARED_DIR:-}" ]; then
     echo "NSS_SHARED_DIR must be set" >&2
     echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
@@ -55,7 +69,11 @@ EXP_NAME="${EXP_NAME:-multi_jobs}"
 BASE_LOG_DIR="${BASE_LOG_DIR:-./}"
 
 
-cd "${NSS_DIR}"
+# Only cd into the repo when using the repo-based install; in PyPI mode the
+# working directory does not matter for package resolution.
+if [[ -z "${NSS_VERSION:-}" ]]; then
+    cd "${NSS_DIR}"
+fi
 
 # Get dataset and config name from packed strings
 declare -a all_datasets
@@ -88,15 +106,29 @@ apt-get update && apt-get install -y --no-install-recommends \
 
 # Ensure Python environment is available inside the container
 source "${LUSTRE_DIR}/.uv/bin/env"
-source "${NSS_DIR}/.venv/bin/activate"
-uv sync --frozen --extra cu128 --extra engine --group dev
+if [[ -n "${NSS_VERSION:-}" ]]; then
+    # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
+    # lustre so concurrent array jobs can share it without redundant downloads.
+    PYPI_VENV="${LUSTRE_DIR}/.venv_nss_${NSS_VERSION}"
+    uv venv --python 3.11 "${PYPI_VENV}"
+    source "${PYPI_VENV}/bin/activate"
+    uv pip install "nemo-safe-synthesizer[cu128,engine]==${NSS_VERSION}" \
+        --extra-index-url https://download.pytorch.org/whl/cu128 \
+        --extra-index-url https://flashinfer.ai/whl/cu128 \
+        --index-strategy unsafe-best-match
+    NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
+    echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION}"
+else
+    source "${NSS_DIR}/.venv/bin/activate"
+    uv sync --frozen --extra cu128 --extra engine --group dev
+    NSS_RUN_CMD="uv run safe-synthesizer"
+fi
+echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 
 
 # for column classification
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
-source "${LUSTRE_DIR}/.api_tokens.sh"
-
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"
@@ -166,7 +198,7 @@ fi
 if [[ "${NSS_PHASE}" == "train" ]]; then
     # Stage 1: PII replacement + training
     # Creates new workdir at run_path with adapter
-    uv run safe-synthesizer run train \
+    ${NSS_RUN_CMD} run train \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
@@ -182,7 +214,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
         wandb_resume_arg="--wandb-resume-job-id $wandb_id_file"
     fi
 
-    uv run safe-synthesizer run generate \
+    ${NSS_RUN_CMD} run generate \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \
@@ -190,7 +222,7 @@ elif [[ "${NSS_PHASE}" == "generate" ]]; then
         $wandb_resume_arg
 else
     # Full end-to-end run
-    uv run safe-synthesizer run \
+    ${NSS_RUN_CMD} run \
         --data-source "$dataset" \
         --config "$full_config_path" \
         --run-path "$run_path" \

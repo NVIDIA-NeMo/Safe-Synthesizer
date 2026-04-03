@@ -254,14 +254,14 @@ def common_setup(
         synthesis_overrides = merge_dicts(synthesis_overrides, dataset_info.overrides or dict())
         df = dataset_info.fetch()
     elif resume:
-        # For generate-only runs without --data-source, verify cached dataset exists
-        cached_training: Path = workdir.source_dataset.training  # ty: ignore[invalid-assignment]
-        cached_test: Path = workdir.source_dataset.test  # ty: ignore[invalid-assignment]
-        if not cached_training.exists() or not cached_test.exists():
+        # For generate-only runs without --data-source, verify cached dataset exists.
+        # test.csv may legitimately be absent when holdout=0.
+        cached_training: Path = workdir.source_dataset.training  # type: ignore[assignment]
+        if not cached_training.exists():
             raise click.ClickException(
                 f"No cached dataset found in workdir: {workdir.source_dataset.path}\n\n"
                 "Either provide --data-source to load a dataset, or ensure the workdir "
-                "contains cached training/test data from a previous run."
+                "contains cached training data from a previous run."
             )
         run_logger.info(f"Using cached dataset from: {workdir.source_dataset.path}")
         # df is None - SafeSynthesizer.load_from_save_path() will load from cached files
