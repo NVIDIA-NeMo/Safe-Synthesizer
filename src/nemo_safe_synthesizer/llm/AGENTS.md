@@ -44,7 +44,7 @@ Each model sets its own template and BOS/EOS via `LLMPromptConfig.from_tokenizer
 ## Gotchas
 
 - `rope_scaling` defaults to `None`; `populate_derived_fields` resolves any input (float, int, dict, RopeScaling, None) to `RopeScaling | None`
-- trust_remote_code — `trust_remote_code_for_model()` returns True only for `nvidia/` and `gretel/` prefixes
+- trust_remote_code — `trust_remote_code_for_model()` in `utils.py` returns True only for `nvidia/` prefixes; used by `metadata.py` and `HuggingFaceBackend`
 - initial_prefill — can be `dict[str, str]` (grouped) or `str` (single column)
 - rope_parameters_location — `"autoconfig"` vs `"automodel"`; all current subclasses use `"autoconfig"`
 - from_str_or_path — raises on unknown model; no base `ModelMetadata` fallback
@@ -59,4 +59,4 @@ Each model sets its own template and BOS/EOS via `LLMPromptConfig.from_tokenizer
 ## Read First
 
 - `metadata.py` — core (567 lines): ModelMetadata, RopeScaling, LLMPromptConfig, subclasses, `from_str_or_path`, `resolve_rope_scaling_factor`
-- `utils.py` — helpers (239 lines): `cleanup_memory`, `get_max_vram`, `trust_remote_code_for_model`, `get_quantization_config`, `get_device_map`, `add_bos_eos_tokens_to_tokenizer`
+- `utils.py` — helpers: `trust_remote_code_for_model`, `cleanup_memory`, `get_max_vram`, `get_quantization_config`, `get_device_map`, `add_bos_eos_tokens_to_tokenizer`

@@ -52,6 +52,7 @@ from ..llm.utils import (
     get_device_map,
     get_max_vram,
     get_quantization_config,
+    trust_remote_code_for_model,
 )
 from ..observability import get_logger, traced_runtime, traced_user
 from ..privacy.dp_transformers.dp_utils import (
@@ -103,7 +104,8 @@ class HuggingFaceBackend(TrainingBackend):
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
         self.autoconfig = AutoConfig.from_pretrained(
-            self.params.training.pretrained_model, trust_remote_code=self._trust_remote_code_for_model()
+            self.params.training.pretrained_model,
+            trust_remote_code=trust_remote_code_for_model(self.params.training.pretrained_model),
         )
 
     def _load_pretrained_model(self, **model_args):
@@ -115,7 +117,9 @@ class HuggingFaceBackend(TrainingBackend):
 
         self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
             AutoTokenizer.from_pretrained(
-                self.params.training.pretrained_model, model_max_length=model_args.get("max_seq_length", None)
+                self.params.training.pretrained_model,
+                trust_remote_code=trust_remote_code_for_model(self.params.training.pretrained_model),
+                model_max_length=model_args.get("max_seq_length", None),
             )
         )
 
@@ -185,10 +189,17 @@ class HuggingFaceBackend(TrainingBackend):
         Returns:
             Dictionary of parameters for ``from_pretrained``.
         """
+        trust_remote_code = trust_remote_code_for_model(self.params.training.pretrained_model)
         return dict(
             pretrained_model_name_or_path=self.params.training.pretrained_model,
+            trust_remote_code=trust_remote_code,
             device_map=model_kwargs.pop(
-                "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
+                "device_map",
+                get_device_map(
+                    self.params.training.pretrained_model,
+                    autoconfig=self.autoconfig,
+                    trust_remote_code=trust_remote_code,
+                ),
             ),
             attn_implementation=model_kwargs.pop(
                 "attn_implementation", self._resolve_attn_implementation(self.params.training.attn_implementation)

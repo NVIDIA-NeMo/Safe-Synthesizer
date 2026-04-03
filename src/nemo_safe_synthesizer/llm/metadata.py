@@ -49,6 +49,7 @@ from ..defaults import (
 )
 from ..observability import get_logger
 from ..utils import load_json, write_json
+from .utils import trust_remote_code_for_model as _trust_remote_code
 
 logger = get_logger(__name__)
 
@@ -111,7 +112,7 @@ class LLMPromptConfig(BaseModel):
         Returns:
             A new ``LLMPromptConfig`` populated from the tokenizer.
         """
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(name)
+        tokenizer = tokenizer or AutoTokenizer.from_pretrained(name, trust_remote_code=_trust_remote_code(name))
         bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
         bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
         eos_token = kwargs.get("eos_token", getattr(tokenizer, "eos_token", None))
@@ -341,7 +342,9 @@ class ModelMetadata(BaseModel):
             The mutated ``data`` dict with derived fields populated.
         """
         if data.get("autoconfig") is None:
-            data["autoconfig"] = AutoConfig.from_pretrained(data["model_name_or_path"])
+            data["autoconfig"] = AutoConfig.from_pretrained(
+                data["model_name_or_path"], trust_remote_code=_trust_remote_code(data["model_name_or_path"])
+            )
 
         if data.get("base_max_seq_length") is None:
             data["base_max_seq_length"] = get_base_max_seq_length(data["autoconfig"])
@@ -551,8 +554,14 @@ class Granite(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
+        config: PretrainedConfig = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
 
         super().__init__(
             autoconfig=config,
@@ -590,8 +599,14 @@ class Llama32(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
+        config: PretrainedConfig = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
+        tokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
 
         super().__init__(
             autoconfig=config,
@@ -633,8 +648,14 @@ class Mistral(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer: AutoTokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
+        config: PretrainedConfig = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
@@ -674,8 +695,14 @@ class Nemotron(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer: AutoTokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
+        config: PretrainedConfig = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
 
         super().__init__(
             autoconfig=config,
@@ -711,8 +738,14 @@ class Qwen(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
+        config = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
 
         super().__init__(
             autoconfig=config,
@@ -752,8 +785,14 @@ class SmolLM2(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
+        config = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
@@ -800,8 +839,14 @@ class SmolLM3(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer = (
+            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            if tokenizer is None
+            else tokenizer
+        )
+        config = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
 
         # we use the bos token here explicitly for support during group-by SFT.
         # the groupby assumes there is a bos token at the start of the prompt.
@@ -850,8 +895,12 @@ class TinyLlama(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_name_or_path)
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        tokenizer = tokenizer or AutoTokenizer.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
+        config = AutoConfig.from_pretrained(
+            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+        )
 
         super().__init__(
             autoconfig=config,
