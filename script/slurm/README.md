@@ -24,6 +24,7 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 
 - Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
 - An LLM inference endpoint and the API Key: You will need a `NSS_INFERENCE_KEY` to run column classification, if using the default `NSS_INFERENCE_ENDPOINT`. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com).
+- Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
 - Clone Safe-Synthesizer
 ```bash
@@ -86,9 +87,13 @@ export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 export USER_NAME=your_lustre_username
 ```
 
-2) Create your API token file with `NSS_INFERENCE_KEY` and restrict permissions, recommended to inclue `HF_TOKEN` to avoid throttling by HF Hub and, if you're using W&B, `WANDB_API_KEY`:
+2) Create your API token file and restrict permissions. `NSS_INFERENCE_KEY` and `WANDB_API_KEY` are required by default. `HF_TOKEN` is recommended to avoid throttling by HF Hub:
 ```bash
-echo 'export NSS_INFERENCE_KEY="<your_api_key>"' > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
+cat > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh << 'TOKENS'
+export NSS_INFERENCE_KEY="<your_inference_api_key>"
+export WANDB_API_KEY="<your_wandb_api_key>"
+export HF_TOKEN="<your_hf_token>"
+TOKENS
 chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
 ```
 
@@ -191,7 +196,7 @@ Consider using a max of 2-3x the current allocation for llmservice_sdg_research 
 ```bash
 tail -f ${BASE_LOG_DIR}/${EXP_NAME}/slurm_*.out
 ```
-- W&B logging: set the `WANDB_MODE` to `online` to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
+- W&B logging: `WANDB_MODE` is set to `online` by default to additionally log experiment configs and metrics to W&B. Make sure to export your `WANDB_API_KEY` (request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account)) in `${LUSTRE_DIR}/.api_tokens.sh`. There is an optional flag `--wandb-project` to specify a W&B project name if you don't want to use the experiment name.
 
   - When running in `two_stage` mode, be mindful not to submit multiple bash commands that run simutaneously because we aren't able to guarantee unique adapter path for each single run. As a result, two runs might be logged as one on W&B.
 
@@ -234,7 +239,7 @@ Log directory resolution order (first match wins):
 
 ### Collect results
 
-Use W&B by setting `WANDB_MODE=online` in `env_variables.sh` and add your W&B token to `.api_tokens.sh`.
+W&B is enabled by default with `WANDB_MODE=online` in `env_variables.sh`. Make sure to add your W&B token to `.api_tokens.sh`. Set `WANDB_MODE=disabled` otherwise.
 
 ### Troubleshooting
 
