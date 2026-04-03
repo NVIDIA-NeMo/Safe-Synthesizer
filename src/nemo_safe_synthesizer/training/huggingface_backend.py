@@ -543,7 +543,9 @@ class HuggingFaceBackend(TrainingBackend):
             return
 
         if col not in df.columns:
-            msg = f"Group by column '{col}' not found in the input data."
+            msg = f"Group by column {col!r} not found in the input data."
+            if "," in col:
+                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
             logger.error(msg)
             raise ParameterError(msg)
 

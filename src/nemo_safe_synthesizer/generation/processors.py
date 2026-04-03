@@ -178,8 +178,8 @@ class GroupedDataProcessor(Processor):
     """Processor for grouped data generation tasks.
 
     Used when training examples are grouped (and optionally ordered) by
-    one or more columns.  Validates that each group has a unique
-    ``group_by`` value and respects the ``order_by`` ordering.
+    a column.  Validates that each group has a unique ``group_by`` value
+    and respects the ``order_by`` ordering.
 
     Args:
         schema: JSON schema as a dictionary.
@@ -198,13 +198,11 @@ class GroupedDataProcessor(Processor):
         config: ValidationParameters,
         bos_token: str,
         eos_token: str,
-        group_by: str | list[str],
+        group_by: str,
         order_by: str | None = None,
     ):
         super().__init__(schema=schema, config=config)
-        if isinstance(group_by, str):
-            group_by = [group_by]
-        self.group_by = group_by
+        self.group_by: list[str] = [group_by]
         self.order_by = order_by
         self.bos_token = bos_token
         self.eos_token = eos_token

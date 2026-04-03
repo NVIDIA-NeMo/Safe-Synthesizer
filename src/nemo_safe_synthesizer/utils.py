@@ -186,7 +186,7 @@ def time_function(func):
 def grouped_train_test_split(
     dataset: Dataset,
     test_size: float,
-    group_by: str | list[str],
+    group_by: str,
     seed: int | None = None,
 ) -> tuple[DataFrame, DataFrame | None]:
     """Split a HuggingFace Dataset preserving group membership.
@@ -197,7 +197,7 @@ def grouped_train_test_split(
     Args:
         dataset: The HuggingFace ``Dataset`` to split.
         test_size: Fraction or absolute number of test rows.
-        group_by: Column name or list of column names defining groups.
+        group_by: Column name defining groups.
         seed: Random state for reproducibility.
 
     Returns:
@@ -206,6 +206,8 @@ def grouped_train_test_split(
     """
     # Convert to pandas for group operations
     df = dataset.to_pandas()
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Expected a DataFrame from Dataset.to_pandas(), got an iterator")
     # importing like this to avoid a dep for testing on the sdk side
     from .holdout import holdout as nss_holdout
 

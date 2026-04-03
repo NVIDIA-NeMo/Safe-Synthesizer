@@ -864,7 +864,10 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             ParameterError: If group or order column is not found in dataset.
         """
         if self.group_by_column not in dataset.column_names:
-            raise ParameterError(f"Group by column '{self.group_by_column}' not found in dataset.")
+            msg = f"Group by column {self.group_by_column!r} not found in dataset."
+            if "," in self.group_by_column:
+                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
+            raise ParameterError(msg)
 
         if self.order_by_column not in dataset.column_names:
             raise ParameterError(f"Order by column '{self.order_by_column}' not found in dataset.")
@@ -1312,6 +1315,8 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         # train and test.
         if test_size is not None and test_size > 0:
             df_dataset = dataset.to_pandas()
+            if not isinstance(df_dataset, pd.DataFrame):
+                raise TypeError("Expected a DataFrame from Dataset.to_pandas(), got an iterator")
             train_raw, test_raw = grouped_train_test_split(
                 df_dataset,
                 group_by=self.group_by[0],

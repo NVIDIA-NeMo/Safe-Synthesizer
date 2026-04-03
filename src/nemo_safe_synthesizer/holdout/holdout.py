@@ -54,7 +54,9 @@ def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptiona
         return train.reset_index(drop=True), test.reset_index(drop=True)
 
 
-def grouped_train_test_split(df, test_size, group_by, random_state=None) -> DataFrameOptionalTuple:
+def grouped_train_test_split(
+    df: pd.DataFrame, test_size: int | float, group_by: str, random_state: int | None = None
+) -> DataFrameOptionalTuple:
     """Split a dataframe so that all rows sharing a group stay in the same fold.
 
     Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
@@ -174,7 +176,10 @@ class Holdout:
             )
 
         if self.group_by is not None and self.group_by not in input_df.columns:
-            logger.warning(f"Group By column {self.group_by} not found in input Dataset columns! Doing a normal split.")
+            msg = f"Group by column {self.group_by!r} not found in input dataset columns. Doing a normal split."
+            if "," in self.group_by:
+                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
+            logger.warning(msg)
             self.group_by = None
         if self.group_by is not None and input_df[self.group_by].isna().any():
             raise ValueError(f"Group by column '{self.group_by}' has missing values. Please remove/replace them.")
