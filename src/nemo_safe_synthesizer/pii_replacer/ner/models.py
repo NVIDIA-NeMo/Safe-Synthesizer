@@ -15,11 +15,11 @@ from ...observability import get_logger
 
 logger = get_logger(__name__)
 
-DEFAULT_BUCKET = os.getenv("GRETEL_OPT_BUCKET", "gretel-opt-dev-use2")
+DEFAULT_BUCKET = os.getenv("NSS_OPT_BUCKET", "nss-opt-dev-use2")
 """Default bucket environment variable. If it's not found, use dev."""
 
-DEFAULT_CACHE_DIR = os.getenv("GRETEL_OPT_CACHE_DIR", ".optcache")
-"""``StorageConfig`` default cache directory. Searches the GRETEL_OPT_CACHE_DIR environment
+DEFAULT_CACHE_DIR = os.getenv("NSS_OPT_CACHE_DIR", ".optcache")
+"""``StorageConfig`` default cache directory. Searches the NSS_OPT_CACHE_DIR environment
 for a cache directory. By default it will fallback to `.optcache`. If this is set to
 ``disabled`` files wont be cached to disk.
 """
@@ -32,10 +32,10 @@ class Visibility(Enum):
     """Packages that are open to the public with a public-read ACL"""
 
     PRIVATE = "priv"
-    """Packages available to customers via "paywall" behind gretel api key"""
+    """Packages available to customers via "paywall" behind an api key"""
 
     INTERNAL = "int"
-    """Only available from internal gretel infrastructure."""
+    """Only available from internal infrastructure."""
 
 
 @dataclass
@@ -95,7 +95,7 @@ class StorageConfig:
     def from_system(cls) -> StorageConfig:
         """Return a default ``StorageConfig`` based on a system's environment variables.
 
-        By convention, it looks for the environment variable ``GRETEL_OPT_BUCKET`` as
+        By convention, it looks for the environment variable ``NSS_OPT_BUCKET`` as
         the bucket location. The default settings from this function are appropriate
         for development without additional configuration.
         """
@@ -113,7 +113,7 @@ def get_cache_manager(storage_config: StorageConfig = None) -> CacheManager:
 
 
 class CacheManager:
-    """Handles downloading model files from the gretel "opt" package repo.
+    """Handles downloading model files from the "opt" package repo.
 
     This class will also optionally cache these files to disk. This is useful for
     environments with local persistent state such as a local development laptop.

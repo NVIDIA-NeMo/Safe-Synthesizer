@@ -91,7 +91,6 @@ install_binary_tool() {
     version=$(yq -r ".tools.${name}.version" "$TOOLS_YAML")
 
     # Check if already installed at the desired version
-    # Check if already installed at the desired version
     if eval "$check_command" >/dev/null 2>&1; then
         local installed_output version_bare version_token matched_version
         installed_output=$(eval "$check_command" 2>&1 || true)

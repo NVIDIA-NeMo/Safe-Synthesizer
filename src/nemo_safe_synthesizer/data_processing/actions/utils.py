@@ -20,7 +20,6 @@ from typing import (
     Annotated,
     Any,
     Literal,
-    Optional,
     Self,
     TypeVar,
     Union,
@@ -85,7 +84,7 @@ class TransformsUpdate(BaseModel):
 
     name: str = Field(description="Target column name for the update.")
     value: str = Field(description="Jinja expression evaluated by the transforms_v2 engine.")
-    position: Optional[int] = Field(default=None, description="Column insertion index when adding a new column.")
+    position: int | None = Field(default=None, description="Column insertion index when adding a new column.")
 
 
 class TransformsUtil:
@@ -95,7 +94,7 @@ class TransformsUtil:
         seed: Random seed passed to the underlying ``Environment``.
     """
 
-    def __init__(self, seed: Optional[int] = None) -> None:
+    def __init__(self, seed: int | None = None) -> None:
         from ...pii_replacer.data_editor.edit import (
             Environment,
         )
@@ -233,7 +232,7 @@ def concrete_subclasses(klass: type[T]) -> set[type[T]]:
     return set(c for c in all_subclasses(klass) if not is_abstract(c))
 
 
-def guess_datetime_format(datetime_str: str) -> Optional[str]:
+def guess_datetime_format(datetime_str: str) -> str | None:
     """Infer a ``strftime``-compatible format string from a date string, or None."""
     # TODO: use `pandas.tseries.api.guess_datetime_format` in the future?
     format = parse_date(datetime_str)
@@ -249,7 +248,7 @@ class ActionCtx(BaseModel):
     and a lazily-initialized ``TransformsUtil`` for expression evaluation.
     """
 
-    seed: Optional[int] = Field(default=None, description="Seed used for all random generation tasks.")
+    seed: int | None = Field(default=None, description="Seed used for all random generation tasks.")
 
     state: dict[str, str] = Field(
         default={}, description="Per-action state persisted across phases (keyed by BaseAction.hash())."
