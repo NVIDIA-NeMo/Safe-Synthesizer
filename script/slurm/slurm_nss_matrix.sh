@@ -42,6 +42,20 @@ if [ -z "${LUSTRE_DIR:-}" ]; then
     exit 1
 fi
 
+if [[ ! -f "${LUSTRE_DIR}/.api_tokens.sh" ]]; then
+    echo "ERROR: ${LUSTRE_DIR}/.api_tokens.sh not found." >&2
+    echo "Create it with at least NSS_INFERENCE_KEY (and WANDB_API_KEY if WANDB_MODE=online)." >&2
+    exit 1
+fi
+source "${LUSTRE_DIR}/.api_tokens.sh"
+
+if [[ "${WANDB_MODE:-disabled}" == "online" && -z "${WANDB_API_KEY:-}" ]]; then
+    echo "ERROR: WANDB_MODE is 'online' but WANDB_API_KEY is not set." >&2
+    echo "Add 'export WANDB_API_KEY=\"<your_key>\"' to ${LUSTRE_DIR}/.api_tokens.sh" >&2
+    echo "Or set WANDB_MODE=disabled in env_variables.sh to skip W&B logging." >&2
+    exit 1
+fi
+
 if [ -z "${NSS_SHARED_DIR:-}" ]; then
     echo "NSS_SHARED_DIR must be set" >&2
     echo "Run script through submit_slurm_jobs.sh, or if running manually source env_variables.sh before running" >&2
@@ -95,8 +109,6 @@ uv sync --frozen --extra cu128 --extra engine --group dev
 # for column classification
 export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
 export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
-source "${LUSTRE_DIR}/.api_tokens.sh"
-
 
 # Extract dataset name for path construction (handles both full paths and simple names)
 # e.g., "/path/to/adult.csv" -> "adult", "/path/to/data.parquet" -> "data", "adult" -> "adult"
