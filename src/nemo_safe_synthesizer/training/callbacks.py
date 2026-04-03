@@ -175,7 +175,7 @@ class InferenceEvalCallback(TrainerCallback):
                     state.log_history.append({"training_incomplete": "no_records"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
                 elif self.generation.status == GenerationStatus.STOP_METRIC_REACHED:
                     stop_frac = (
-                        self.generation.stop_condition.last_value or 0.0 if self.generation.stop_condition else 0.0
+                        (self.generation.stop_condition.last_value or 0.0) if self.generation.stop_condition else 0.0
                     )
                     logger.error(
                         "🛑 Stopping generation prematurely. The stopping "
