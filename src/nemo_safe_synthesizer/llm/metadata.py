@@ -28,7 +28,7 @@ Classes:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, cast
 
 from pydantic import (
     BaseModel,
@@ -38,7 +38,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
+from transformers import AutoConfig, AutoTokenizer, PretrainedConfig, PreTrainedTokenizer
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
@@ -94,7 +94,7 @@ class LLMPromptConfig(BaseModel):
     """Integer id for the EOS token."""
 
     @classmethod
-    def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
+    def from_tokenizer(cls, name: str, tokenizer: PreTrainedTokenizer | None = None, **kwargs) -> LLMPromptConfig:
         """Create a prompt config by reading from settings of a tokenizer.
 
         If no ``tokenizer`` is supplied one is loaded from ``name``
@@ -111,11 +111,13 @@ class LLMPromptConfig(BaseModel):
         Returns:
             A new ``LLMPromptConfig`` populated from the tokenizer.
         """
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(name)
-        bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
-        bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
-        eos_token = kwargs.get("eos_token", getattr(tokenizer, "eos_token", None))
-        eos_token_id = kwargs.get("eos_token_id", getattr(tokenizer, "eos_token_id", None))
+        _tokenizer: PreTrainedTokenizer = cast(
+            PreTrainedTokenizer, AutoTokenizer.from_pretrained(name) if tokenizer is None else tokenizer
+        )
+        bos_token = kwargs.get("bos_token", getattr(_tokenizer, "bos_token", None))
+        bos_token_id = kwargs.get("bos_token_id", getattr(_tokenizer, "bos_token_id", None))
+        eos_token = kwargs.get("eos_token", getattr(_tokenizer, "eos_token", None))
+        eos_token_id = kwargs.get("eos_token_id", getattr(_tokenizer, "eos_token_id", None))
         template = kwargs.get("template", PROMPT_TEMPLATE)
         add_bos_token_to_prompt = kwargs.get("add_bos_token_to_prompt", True)
         add_eos_token_to_prompt = kwargs.get("add_eos_token_to_prompt", True)
@@ -547,7 +549,7 @@ class Granite(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -559,6 +561,7 @@ class Granite(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
+                tokenizer=tokenizer,
                 template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=True,
@@ -573,8 +576,8 @@ class Granite(ModelMetadata):
 class Llama32(ModelMetadata):
     """Metadata for Meta Llama 3.2 model family.
 
-    Uses ``<|im_start|>`` (id 151644) as the BOS token and disables
-    automatic BOS/EOS injection in prompts.
+    Uses ``<|im_start|>`` as the BOS token and disables automatic
+    BOS/EOS injection in prompts.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -586,21 +589,23 @@ class Llama32(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
 
+        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
         super().__init__(
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
+                tokenizer=tokenizer,
                 template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 bos_token="<|im_start|>",
-                bos_token_id=151644,
+                bos_token_id=im_start_id,
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=False,
             ),
@@ -629,11 +634,11 @@ class Mistral(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer: AutoTokenizer | None = None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
         if rope_scaling_factor:
             logger.warning(
@@ -646,6 +651,7 @@ class Mistral(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
+                tokenizer=tokenizer,
                 template=template,
                 add_bos_token_to_prompt=True,
                 add_eos_token_to_prompt=True,
@@ -670,11 +676,11 @@ class Nemotron(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
 
         super().__init__(
@@ -707,7 +713,7 @@ class Qwen(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -748,7 +754,7 @@ class SmolLM2(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
@@ -782,9 +788,9 @@ class SmolLM2(ModelMetadata):
 class SmolLM3(ModelMetadata):
     """Metadata for HuggingFace SmolLM3 model family.
 
-    Uses ``<|im_start|>`` (id 128011) as the BOS token.  RoPE scaling
-    is not supported. Any supplied ``rope_scaling_factor`` will be
-    ignored with a warning.
+    Uses ``<|im_start|>`` as the BOS token.  RoPE scaling is not
+    supported. Any supplied ``rope_scaling_factor`` will be ignored
+    with a warning.
 
     Args:
         model_name_or_path: HuggingFace model identifier or local path.
@@ -796,19 +802,16 @@ class SmolLM3(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
         config = AutoConfig.from_pretrained(model_name_or_path)
 
-        # we use the bos token here explicitly for support during group-by SFT.
-        # the groupby assumes there is a bos token at the start of the prompt.
-        bos_token = "<|im_start|>"
-        bos_token_id = 128011
+        # Group-by SFT assumes a BOS token at the start of the prompt.
+        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
 
-        # SmolLM3 uses high theta values (1.5M-5M) so it's important to read from config
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM3 due to longer default context lengths. Ignoring."
@@ -823,8 +826,8 @@ class SmolLM3(ModelMetadata):
                 add_eos_token_to_prompt=False,
                 tokenizer=tokenizer,
                 name=model_name_or_path,
-                bos_token=bos_token,
-                bos_token_id=bos_token_id,
+                bos_token="<|im_start|>",
+                bos_token_id=im_start_id,
             ),
             model_name_or_path=model_name_or_path,
             rope_scaling=None,
@@ -846,7 +849,7 @@ class TinyLlama(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer=None,
+        tokenizer: PreTrainedTokenizer | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
