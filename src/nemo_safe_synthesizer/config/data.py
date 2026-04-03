@@ -15,11 +15,11 @@ from pydantic import (
 from ..configurator.parameters import (
     Parameters,
 )
-from ..observability import get_logger
 from ..configurator.validators import (
     DependsOnValidator,
     ValueValidator,
 )
+from ..observability import get_logger
 from .types import (
     AUTO_STR,
     OptionalAutoInt,
