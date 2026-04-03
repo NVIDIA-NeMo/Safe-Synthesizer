@@ -120,7 +120,7 @@ def _unflatten_path(result: Optional[dict | list], path: ValuePath, value: Any) 
             raise InvalidPath(f"Cannot unflatten: at index '_root' was expecting list, but was {type(result)}.")
 
         _ensure_array_size(result, item)
-        _unflatten_recursive(result, item, items, value)  # ty: ignore[invalid-argument-type]
+        _unflatten_recursive(result, item, items, value)
 
         return result
     else:

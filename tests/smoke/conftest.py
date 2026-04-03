@@ -177,4 +177,4 @@ def _patch_attn_eager():
 
     HuggingFaceBackend._build_base_framework_params = patched_build  # ty: ignore[invalid-assignment] -- test monkey-patch
     yield
-    HuggingFaceBackend._build_base_framework_params = original_build  # ty: ignore[invalid-assignment] -- restore original
+    HuggingFaceBackend._build_base_framework_params = original_build

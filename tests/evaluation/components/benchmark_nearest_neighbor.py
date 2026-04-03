@@ -43,7 +43,7 @@ cuvs_brute_force = None
 cp = None
 
 try:
-    import cupy as _cp  # ty: ignore[unresolved-import]
+    import cupy as _cp
     from cuvs.neighbors import brute_force as _cuvs_brute_force  # ty: ignore[unresolved-import]
 
     # Test that cuVS is actually usable (not just that imports work)

@@ -553,7 +553,7 @@ class DatetimeCol(ColAction):
             logger.warning("Invalid datetime value(s) detected.")
 
         # Remove rows with invalid datetime values (NaT)
-        df = df[df[self.name].notna()]  # ty: ignore[invalid-assignment]
+        df = df[df[self.name].notna()]
 
         return df
 

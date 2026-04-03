@@ -215,8 +215,8 @@ class SafeSynthesizer(ConfigBuilder):
         # Always prefer cached train/test splits to preserve the exact split from training.
         # This ensures evaluation metrics are consistent and privacy guarantees are maintained.
         # Only fall back to with_data_source() data if cached files are missing.
-        training_path = self._workdir.source_dataset.training  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-        test_path = self._workdir.source_dataset.test  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        training_path = self._workdir.source_dataset.training
+        test_path = self._workdir.source_dataset.test
         assert isinstance(training_path, Path) and isinstance(test_path, Path)
         if training_path.exists():
             logger.info("Loading cached train/test split from training run")
@@ -302,13 +302,13 @@ class SafeSynthesizer(ConfigBuilder):
         assert self._workdir is not None
         self._workdir.ensure_directories()
         # ``training.csv`` is the canonical persisted original training split.
-        self._original_train_df.to_csv(self._workdir.dataset.training, index=False)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        self._original_train_df.to_csv(self._workdir.dataset.training, index=False)
         if not self._train_df.equals(self._original_train_df):
             # The transformed (e.g. PII-replaced) training data is saved for
             # inspection only -- we don't need it in the generation or evaluation phase.
-            self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            self._train_df.to_csv(self._workdir.dataset.transformed_training, index=False)
         if self._test_df is not None:
-            self._test_df.to_csv(self._workdir.dataset.test, index=False)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            self._test_df.to_csv(self._workdir.dataset.test, index=False)
         return self
 
     @traced("SafeSynthesizer.train", category=LogCategory.RUNTIME)

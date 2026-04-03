@@ -436,7 +436,7 @@ class Workdir:
         """Log file path for the current phase."""
         phase = self._current_phase or "unknown"
         if phase == "generate":
-            return cast(Path, self.generate.logs)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            return cast(Path, self.generate.logs)
         return self.run_dir / "logs" / f"{phase}.jsonl"
 
     @property
@@ -478,12 +478,12 @@ class Workdir:
     @property
     def output_file(self) -> Path:
         """Shortcut to generate.output."""
-        return cast(Path, self.generate.output)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        return cast(Path, self.generate.output)
 
     @property
     def evaluation_report(self) -> Path:
         """Shortcut to generate.report."""
-        return cast(Path, self.generate.report)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        return cast(Path, self.generate.report)
 
     @property
     def evaluation_metrics(self) -> Path:
@@ -517,7 +517,7 @@ class Workdir:
             return root_config
 
         # Fallback to train directory config (older training runs)
-        train_config = cast(Path, source_workdir.train.config)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        train_config = cast(Path, source_workdir.train.config)
         if train_config.exists():
             return train_config
 
@@ -563,14 +563,14 @@ class Workdir:
         if self._current_phase == "generate" and self._parent_workdir is not None:
             # Generation-only run - only create generate directory
             # Train and dataset are in the parent workdir
-            cast(Path, self.generate.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            cast(Path, self.generate.path).mkdir(parents=True, exist_ok=True)
             self._write_generation_info()
         else:
             # Training run or end-to-end - create all directories
             cast(Path, self.train.cache.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
             cast(Path, self.train.adapter.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-            cast(Path, self.generate.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-            cast(Path, self.dataset.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            cast(Path, self.generate.path).mkdir(parents=True, exist_ok=True)
+            cast(Path, self.dataset.path).mkdir(parents=True, exist_ok=True)
 
         return self
 
@@ -588,13 +588,13 @@ class Workdir:
             },
             "Source Files": {
                 "Config": str(self.source_config),
-                "Original training data": str(self.source_dataset.training),  # ty: ignore[possibly-missing-attribute] -- BoundDir delegates via __getattr__
-                "Test data": str(self.source_dataset.test),  # ty: ignore[possibly-missing-attribute] -- BoundDir delegates via __getattr__
+                "Original training data": str(self.source_dataset.training),
+                "Test data": str(self.source_dataset.test),
                 "Schema": str(self.schema_file),
             },
         }
 
-        info_file = self.generate.info  # ty: ignore[possibly-missing-attribute] -- BoundDir delegates via __getattr__
+        info_file = self.generate.info
         write_json(info_dict, info_file, indent=2)
 
     def new_generation_run(self) -> Self:

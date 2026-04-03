@@ -277,7 +277,7 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             regexes = [_build_regex({"type": t}, whitespace_pattern) for t in instance_type if t != "object"]
             return rf"({'|'.join(regexes)})"
         case x if x in dispatch:
-            return dispatch[x](**kwargs)  # ty: ignore[invalid-argument-type]
+            return dispatch[x](**kwargs)
 
         case "number":
             return NUMBER

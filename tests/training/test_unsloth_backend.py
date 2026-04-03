@@ -504,7 +504,7 @@ class TestLoadModel:
                 import sys
 
                 actual_loader = sys.modules["unsloth.models.loader"]
-                assert actual_loader.SUPPORTS_LLAMA32 is False  # ty: ignore[unresolved-attribute]
+                assert actual_loader.SUPPORTS_LLAMA32 is False
 
 
 class TestInvalidQuantizationBits:
