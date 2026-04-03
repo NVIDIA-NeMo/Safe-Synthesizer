@@ -13,6 +13,7 @@ Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `s
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
 - `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
+- `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-unsloth`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
 Pipeline entrypoints (invoked by Slurm scripts) via uv:
 - `uv run safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
@@ -98,12 +99,12 @@ chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
     - Select the cluster: `cs-oci-ord` (primary cluster for NSS experiments), `cw-dfw-cs-001`
     - Filter by account using the regex: `sdg`.
     - Set the interval to 1 hour for a detailed view.
-- Use `sshare -U $USER_NAME -l` to check your instanteous [Fair Share[(https://confluence.nvidia.com/display/HWINFCSSUP/Fairshare+Deep+dive)] (FS) on a cluster
+- Use `sshare -U $USER_NAME -l` to check your instantaneous [Fair Share](https://confluence.nvidia.com/display/HWINFCSSUP/Fairshare+Deep+dive) (FS) on a cluster
 
 
 ### Configure
 Edit `env_variables.sh` to match your environment. Key items:
-- `CONFIGS=(...)`: base names of YAML configs to run (without `.yaml`), or provide via --config argument to `submit_slurm_jobs.sh`.
+- `CONFIGS=(...)`: base names of YAML configs to run (without `.yaml`), or provide via `--configs` argument to `submit_slurm_jobs.sh`.
 - `CONFIG_DIR`: directory where config files live.
 - `BASE_LOG_DIR`: where Slurm logs will be written.
 - `NSS_DIR`: path to this repository.
@@ -137,10 +138,10 @@ bash submit_slurm_jobs.sh --exp-name short_end_to_end --dataset-group short --ru
 # Example: two-stage (TRAIN→GEN) across "short" datasets with 1 hour train time limit and 30 minute generate time limit
 bash submit_slurm_jobs.sh --exp-name short_two_stage --dataset-group short --runs 1 --partition polar4 --pipeline-mode two_stage  --train-time-limit 1:00:00 --generate-time-limit 0:30:00
 
-# Example: Adult data (defined in NVIDIA internal dataset_registry.yaml), three configs, 5 runs each on polar4, use different wandb project from the exp name
+# Example: Adult data (defined in NVIDIA internal dataset_registry.yaml), two configs, 5 runs each on polar4, use different wandb project from the exp name
 bash submit_slurm_jobs.sh \
   --dataset-urls adult \
-  --configs unsloth,dp,dp_usg_guidance \
+  --configs smollm3-unsloth,smollm3-dp \
   --runs 5 \
   --partition polar4 \
   --exp-name regex_adult \
@@ -150,7 +151,7 @@ bash submit_slurm_jobs.sh \
 # Example: arbitrary path/url (not a named dataset from the dataset_registry.yaml), 1 config, 10 runs, with max 3 jobs running at a time
 bash submit_slurm_jobs.sh \
   --dataset-urls "https://raw.githubusercontent.com/gretelai/gretel-blueprints/refs/heads/main/sample_data/financial_transactions.csv" \
-  --configs unsloth \
+  --configs tinyllama-unsloth \
   --runs 10 \
   --partition polar,polar3,polar4 \
   --exp-name financial_repeats \
@@ -183,13 +184,6 @@ This only restricts within an array, so with end_to_end mode, this will restrict
 In two_stage mode, up to 2*N jobs might run, N each from TRAIN arrays and GENERATE arrays.
 Using `--max-concurrent-slurm-jobs` is recommended for large experiments to reduce bursting and be friendlier to other users.
 Consider using a max of 2-3x the current allocation for llmservice_sdg_research PPP in the cluster to avoid bursting and rapidly dropping our Fair Share for everyone.
-
-### How long will my jobs take?
-
-With `num_input_records_to_sample=25000`
-- For the baseline config, the longest job typically finishes within 80 minutes. Total wall time estimate: `60 * RUNS` minutes.
-- For the `dp` config, the longest job typically finishes within 120 minutes. Total wall time estimate: `120 * RUNS` minutes.
-
 
 ### Logs and outputs
 - Slurm logs: `${BASE_LOG_DIR}/${EXP_NAME}/slurm_%A_%a.{out,err}`
