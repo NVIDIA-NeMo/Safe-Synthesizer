@@ -390,7 +390,7 @@ class OpacusDPTrainer(Trainer):
         entity_column_values: list | None = None,
         callbacks: list[TrainerCallback] | None = None,
         secure_mode: bool | None = True,
-        **kwargs: dict,
+        **kwargs: Any,
     ) -> None:
         if args is None:
             raise ValueError("TrainingArguments (args) is required for OpacusDPTrainer")
