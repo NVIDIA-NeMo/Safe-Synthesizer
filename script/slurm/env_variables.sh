@@ -23,7 +23,7 @@ export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
 export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
-export WANDB_MODE="disabled" # "online", "offline" or "disabled"
+export WANDB_MODE="online" # "online", "offline" or "disabled"
 
 # NSS CLI environment variables (used by safe-synthesizer CLI via pydantic-settings)
 # These are picked up automatically by CLISettings in the CLI:
