@@ -70,8 +70,9 @@ class MultimodalReport(EvaluationReport):
         try:
             ctx = super().jinja_context
             ctx["tooltips"] = tooltips
-            # Get the job ID if it exist or create a new one.
-            ctx["job_id"] = os.environ.get("NEMO_JOB_ID") or "N/A"
+            # Job ID from the runtime environment (e.g. cluster); omit from HTML when unset.
+            raw_job_id = os.environ.get("NEMO_JOB_ID")
+            ctx["job_id"] = (raw_job_id or "").strip() or None
 
             # Shorthands used in template
             ctx["with_synthesizer"] = False
