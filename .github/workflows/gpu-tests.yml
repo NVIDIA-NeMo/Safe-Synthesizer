@@ -61,7 +61,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 30
-    runs-on: nemo-ci-aws-gpu-x2
+    runs-on: nemo-ci-aws-gpu-x2-container
     strategy:
       fail-fast: false
       matrix:
@@ -97,7 +97,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 55
-    runs-on: nemo-ci-aws-gpu-x2
+    runs-on: nemo-ci-aws-gpu-x2-container
     steps:
       - name: checkout
         uses: actions/checkout@v6
