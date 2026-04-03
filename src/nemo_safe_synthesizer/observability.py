@@ -124,7 +124,7 @@ class NSSObservabilitySettings(BaseSettings):
 
     @field_validator("nss_log_format", mode="before")
     @classmethod
-    def set_log_format_default(cls, value: str | None) -> Literal["json", "plain"]:
+    def set_log_format_default(cls, value: str | None) -> str:
         """Set nss_log_format default based on whether stdout is a tty or notebook."""
         match value:
             case str():

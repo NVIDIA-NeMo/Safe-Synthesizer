@@ -55,6 +55,8 @@ def test_membership_inference_protection_mixed_text_tabular(train_df_mixed_5k, s
     assert not membership_inference_protection.attack_sum_df.empty
 
     # Verify TPR/FPR values were computed
+    assert membership_inference_protection.tps_values is not None
+    assert membership_inference_protection.fps_values is not None
     assert len(membership_inference_protection.tps_values) > 0
     assert len(membership_inference_protection.fps_values) > 0
 
@@ -77,6 +79,8 @@ def test_membership_inference_protection_text_only(train_df_text_only, synth_df_
     assert not membership_inference_protection.attack_sum_df.empty
 
     # Verify TPR/FPR values were computed
+    assert membership_inference_protection.tps_values is not None
+    assert membership_inference_protection.fps_values is not None
     assert len(membership_inference_protection.tps_values) > 0
     assert len(membership_inference_protection.fps_values) > 0
 

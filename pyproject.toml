@@ -51,6 +51,7 @@ dev = [
   "typer>=0.15.0",
   "types-click",
   "types-colorama>=0.4.6",
+  "textual",
   {include-group = "docs"},
   {include-group = "test"},
 ]

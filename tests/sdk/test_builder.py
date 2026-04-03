@@ -388,6 +388,7 @@ class TestSaveResults:
         nss = _builder_with_mock_results(tmp_path)
 
         nss.save_results()
+        assert nss._workdir is not None
 
         csv_path = nss._workdir.output_file
         report_path = nss._workdir.evaluation_report
@@ -408,6 +409,7 @@ class TestSaveResults:
         assert custom_csv.exists()
         assert pd.read_csv(custom_csv).equals(_SMALL_DF)
         # Report still goes to the workdir regardless of output_file
+        assert nss._workdir is not None
         assert nss._workdir.evaluation_report.exists()
         assert nss._workdir.evaluation_report.read_text() == _REPORT_HTML
 
@@ -416,6 +418,7 @@ class TestSaveResults:
         nss.results.evaluation_report_html = None
 
         nss.save_results()
+        assert nss._workdir is not None
 
         assert nss._workdir.output_file.exists()
         assert not nss._workdir.evaluation_report.exists()
