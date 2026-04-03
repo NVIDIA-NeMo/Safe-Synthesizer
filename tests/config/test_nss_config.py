@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 from typing import Annotated, Literal
 
 import pytest
@@ -179,3 +180,24 @@ class TestSafeSynthesizerParameters:
     def test_read_from_yaml(self, yaml_config_str):
         p = SafeSynthesizerParameters.from_yaml_str(yaml_config_str)
         assert p.get("gradient_accumulation_steps") == 8
+
+
+class TestGroupTrainingExamplesBy:
+    def test_single_column_string_accepted(self):
+        params = DataParameters(group_training_examples_by="patient_id")
+        assert params.group_training_examples_by == "patient_id"
+
+    def test_none_accepted(self):
+        params = DataParameters(group_training_examples_by=None)
+        assert params.group_training_examples_by is None
+
+    def test_list_rejected_by_pydantic(self):
+        with pytest.raises(ValidationError):
+            DataParameters(group_training_examples_by=["patient_id", "event_id"])
+
+    def test_comma_separated_string_logs_warning(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            params = DataParameters(group_training_examples_by="patient_id,event_id")
+            assert params.group_training_examples_by == "patient_id,event_id"
+        assert any("comma" in r.message.lower() for r in caplog.records)
+        assert any("multi-column grouping is not currently supported" in r.message for r in caplog.records)
