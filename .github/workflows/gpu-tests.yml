@@ -86,7 +86,6 @@ jobs:
 
       - name: Check GPU availability
         run: |
-          nvidia-smi
           uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
 
       - name: Run GPU smoke tests
@@ -119,7 +118,6 @@ jobs:
 
       - name: Check GPU availability
         run: |
-          nvidia-smi
           uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
 
       - name: Run GPU E2E tests
