@@ -255,8 +255,8 @@ def common_setup(
         df = dataset_info.fetch()
     elif resume:
         # For generate-only runs without --data-source, verify cached dataset exists
-        cached_training: Path = workdir.source_dataset.training  # type: ignore[assignment]
-        cached_test: Path = workdir.source_dataset.test  # type: ignore[assignment]
+        cached_training: Path = workdir.source_dataset.training  # ty: ignore[invalid-assignment]
+        cached_test: Path = workdir.source_dataset.test  # ty: ignore[invalid-assignment]
         if not cached_training.exists() or not cached_test.exists():
             raise click.ClickException(
                 f"No cached dataset found in workdir: {workdir.source_dataset.path}\n\n"

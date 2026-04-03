@@ -52,7 +52,7 @@ tools:
     bootstrap: true
 
   ty:
-    version: "0.0.23"
+    version: "0.0.27"
     check_command: "ty --version"
     url: "https://github.com/astral-sh/ty/releases/download/{version}/ty-{arch}-{os}.tar.gz"
     extract: "ty-{arch}-{os}/ty"

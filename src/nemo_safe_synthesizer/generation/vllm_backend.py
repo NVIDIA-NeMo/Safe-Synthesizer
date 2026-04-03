@@ -95,7 +95,7 @@ def _install_noop_remote_cache_backends() -> None:
     try:
         from torch._inductor.remote_cache import RemoteAutotuneCache
 
-        RemoteAutotuneCache.backend_override_cls = _NoopRemoteCacheBackend  # type: ignore[invalid-assignment]
+        RemoteAutotuneCache.backend_override_cls = _NoopRemoteCacheBackend  # ty: ignore[invalid-assignment]
         logger.debug("Installed no-op backend for RemoteAutotuneCache (redis unavailable)")
     except ImportError:
         pass

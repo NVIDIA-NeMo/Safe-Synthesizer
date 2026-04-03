@@ -242,7 +242,7 @@ class TestWorkdir:
     def test_base_path_string_conversion(self):
         """base_path is converted from string to Path."""
         workdir = Workdir(
-            base_path="/string/path",  # type: ignore[arg-type]
+            base_path=Path("/string/path"),
             config_name="cfg",
             dataset_name="data",
             run_name="2026-01-15T12:00:00",

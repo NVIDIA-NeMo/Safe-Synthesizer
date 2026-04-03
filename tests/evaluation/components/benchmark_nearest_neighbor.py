@@ -149,7 +149,7 @@ def benchmark_torch(data: np.ndarray, queries: np.ndarray, k: int = 5) -> Benchm
     torch.cuda.synchronize()
     query_time = time.perf_counter() - t0
 
-    device_label = TORCH_DEVICE.type  # type: ignore[union-attr]
+    device_label = TORCH_DEVICE.type if TORCH_DEVICE else "none"
     return BenchmarkResult(
         name=f"torch_{device_label}",
         fit_time_sec=fit_time,

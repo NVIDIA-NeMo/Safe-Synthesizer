@@ -488,7 +488,7 @@ class Workdir:
     @property
     def evaluation_metrics(self) -> Path:
         """Shortcut to generate.evaluation_metrics."""
-        return self.generate.evaluation_metrics  # type: ignore[return-value]
+        return cast(Path, self.generate.evaluation_metrics)
 
     # =========================================================================
     # Source paths (for generation runs that have a parent training run)
