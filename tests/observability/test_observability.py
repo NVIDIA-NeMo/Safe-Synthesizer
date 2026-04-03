@@ -638,6 +638,19 @@ class TestHeartbeat:
         assert "Slow op in progress" in caplog.text
         assert "Slow op complete" in caplog.text
 
+    def test_heartbeat_progress_note_on_periodic_logs_only(self, caplog):
+        caplog.set_level(logging.INFO)
+        message = "Generation"
+        progress_note = "Records update only after each batch finishes."
+        with heartbeat(message, interval=0.05, progress_note=progress_note):
+            time.sleep(0.15)
+
+        assert f"{message} in progress. {progress_note}" in caplog.text
+        assert f"{message} complete" in caplog.text
+        for record in caplog.records:
+            if "complete" in record.getMessage():
+                assert progress_note not in record.getMessage()
+
     def test_heartbeat_includes_extra_fields(self, caplog):
         caplog.set_level(logging.INFO)
         with heartbeat("Loading", interval=0.05, model="test-model"):
