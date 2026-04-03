@@ -298,7 +298,7 @@ while the last 4 took an additional 93 seconds -- with a single prompt
 consuming 61 seconds and 1618 tokens on its own. The batch cannot return
 until the slowest prompt finishes. Run with `-v` to see vLLM's tqdm
 progress bar, which shows per-prompt completion rates and makes the tail
-effect visible. 
+effect visible.
 
 If this stage takes more than 10 minutes, you might need to train the model
 more or examine the training parameters.
