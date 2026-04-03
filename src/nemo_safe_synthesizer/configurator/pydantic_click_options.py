@@ -27,7 +27,7 @@ import click
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-__all__ = ["pydantic_options", "parse_overrides"]
+__all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
 
 
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
@@ -128,6 +128,45 @@ _CLICK_TYPE_PRIORITY: list[tuple[type, click.ParamType]] = [
 ]
 
 
+class AutoParamType(click.ParamType):
+    """A Click type that accepts the sentinel ``"auto"`` or a base numeric/bool value.
+
+    Used for ``Auto*Param`` fields (``AutoIntParam``, ``AutoFloatParam``,
+    ``AutoBoolParam``) so that ``--flag auto`` and ``--flag 2`` both work.
+    The ``--help`` display shows ``integer|auto``, ``float|auto``, or
+    ``boolean|auto`` instead of the generic ``TEXT`` label.
+
+    Args:
+        base_type: The underlying Click type (``click.INT``, ``click.FLOAT``,
+            or ``click.BOOL``) used to parse and validate non-``"auto"`` values.
+    """
+
+    def __init__(self, base_type: click.ParamType) -> None:
+        self.base_type = base_type
+        self.name = f"{base_type.name}|auto"
+
+    def convert(
+        self,
+        value: object,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str | int | float | bool:
+        """Convert the raw CLI value to ``"auto"`` or the base numeric/bool type.
+
+        Args:
+            value: Raw value from the CLI or the option default.
+            param: The Click parameter object (passed through to the base type).
+            ctx: The Click context (passed through to the base type).
+
+        Returns:
+            The string ``"auto"`` if ``value`` is ``"auto"``, otherwise the
+            result of delegating to ``self.base_type.convert()``.
+        """
+        if value == "auto":
+            return "auto"
+        return self.base_type.convert(value, param, ctx)  # type: ignore[return-value]
+
+
 def _has_string_literal(args: set) -> bool:
     """Check if any member is a ``Literal`` containing a string value."""
     return any(get_origin(a) is Literal and any(isinstance(v, str) for v in get_args(a)) for a in args)
@@ -148,6 +187,12 @@ def _click_type(annotation: Any) -> click.ParamType:
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
     if _has_string_literal(args):
+        # Auto*Param: Literal["auto"] | <numeric> -- use AutoParamType so that
+        # --help shows "integer|auto" instead of "TEXT" and Click validates the
+        # numeric side before handing the value to Pydantic.
+        for py_type, click_type in _CLICK_TYPE_PRIORITY[1:]:  # skip str
+            if py_type in args:
+                return AutoParamType(click_type)
         return click.STRING
     for py_type, click_type in _CLICK_TYPE_PRIORITY:
         if py_type in args:
