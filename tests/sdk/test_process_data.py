@@ -535,6 +535,7 @@ class TestLoadFromSavePathHoldoutZero:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
+        assert builder._original_train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
@@ -556,13 +557,16 @@ class TestLoadFromSavePathHoldoutZero:
         """
         workdir, train_split = self._prepare_workdir_no_holdout(tmp_path, fixture_sample_patient_dataframe)
         # Simulate old behavior: empty 0-byte test.csv
-        workdir.dataset.test.touch()
+        test_csv = workdir.dataset.test
+        assert isinstance(test_csv, Path)
+        test_csv.touch()
 
         mock_metadata_cls.from_metadata_json.return_value = MagicMock()
 
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
+        assert builder._original_train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True

@@ -217,6 +217,7 @@ class SafeSynthesizer(ConfigBuilder):
         # Only fall back to with_data_source() data if cached files are missing.
         training_path = self._workdir.source_dataset.training  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         test_path = self._workdir.source_dataset.test  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        assert isinstance(training_path, Path) and isinstance(test_path, Path)
         if training_path.exists():
             logger.info("Loading cached train/test split from training run")
             # training_path persists the original training split for evaluation.
