@@ -3,7 +3,6 @@
 
 """Unit tests for the TimeseriesBackend class private methods."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -54,7 +53,6 @@ def timeseries_model_metadata(fixture_session_cache_dir, fixture_tokenizer, fixt
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
         workdir=mock_workdir,
     )
     # TimeseriesBackend requires initial_prefill to be a dict mapping group -> prefill

@@ -41,7 +41,6 @@ For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](t
 - Use American English spelling: "initialize" not "initialise", "recognize" not "recognise", "color" not "colour".
 - Tools enforce what they can (`ruff`, `ty`, `pre-commit`). This guide covers what tools can't enforce.
 - Some rules below are aspirational -- legacy code is being migrated. New code must follow these conventions; existing deviations are tolerated during migration.
-- The current ruff rule set ([ruff.toml](ruff.toml)) does not enforce `UP006`/`UP007`/`B006`/`T201`. These rules are review-enforced until the ruff config is expanded.
 - `__all__` defines the public API surface. Identifiers with a leading `_` are private and can change without notice.
 
 ---
@@ -139,7 +138,7 @@ def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self:
 - Avoid `Any` -- prefer `object`, generics, or `Protocol`
 - `TYPE_CHECKING` guards for heavy imports (`pandas`, `torch`, `transformers`); not needed for stdlib or lightweight imports
 
-Legacy modules (`pii_replacer/`, `data_processing/`, `privacy/`, `artifacts/`) still use `Optional`/`List`/`Dict` in ~250 places -- migration in progress.
+Legacy modules (`pii_replacer/`) still use `Optional`/`List`/`Dict`. Only `pii_replacer/` is excluded from `ty` type-checking (see `[tool.ty.src] exclude` in `pyproject.toml`). The remaining legacy usages will be migrated when those modules come under the type checker.
 
 ### Control flow
 
@@ -344,7 +343,7 @@ raise DataError(f"The {column} column could not be processed.")
 - Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)
 - Relative imports in `src/` (`from ..observability import get_logger`), absolute imports in `tests/` (`from nemo_safe_synthesizer.observability import get_logger`)
 - `TYPE_CHECKING` blocks for heavy imports (`pandas`, `torch`, `transformers`)
-- `from __future__ import annotations` -- do not add to modules that don't already have it (adding it can surface subtle type issues in legacy code). New modules may omit it since modern syntax (`X | Y`, `list[str]`) works natively.
+- `from __future__ import annotations` -- add to every module. While Python 3.11+ supports `X | Y` and `list[str]` natively in annotations, the import makes all annotations strings consistently, preventing accidental runtime evaluation of type expressions (e.g., forward references, heavy imports used only for type checking). It also keeps behavior uniform across the codebase and aligns with type-checker expectations.
 
 ### Resource cleanup
 

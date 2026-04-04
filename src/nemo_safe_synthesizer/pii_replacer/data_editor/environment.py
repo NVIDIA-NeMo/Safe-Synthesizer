@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import hashlib
 import random
 import re
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from functools import partial
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 import dateutil.parser
 import jinja2

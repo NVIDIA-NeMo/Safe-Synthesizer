@@ -35,7 +35,7 @@ class SQSScore(CompositeScore):
             # wrap with a list and continue
             components = [components]
         if components is None or len(components) == 0:
-            return SQSScore(score=EvaluationScore())
+            return SQSScore(name=name, score=EvaluationScore())
 
         # We need to recover the number of text and tabular fields to get proper weighted sum below.
         text_cols = 0
@@ -50,7 +50,7 @@ class SQSScore(CompositeScore):
 
         if tabular_cols + text_cols == 0:
             logger.warning("Failed to detect text/tabular columns for SQS.")
-            return SQSScore(score=EvaluationScore())
+            return SQSScore(name="Synthetic Quality Score", score=EvaluationScore())
 
         # Make it easier to pick out components by name
         component_dict = {c.name: c.score.score for c in components}

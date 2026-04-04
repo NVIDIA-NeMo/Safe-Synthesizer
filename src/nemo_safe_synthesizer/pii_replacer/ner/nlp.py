@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import string
+from collections.abc import Callable
 from dataclasses import dataclass
 from numbers import Number
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord

@@ -16,7 +16,7 @@ from .base import ReportBaseModel
 def convert_to_report(metadata: DatasetMetadata) -> DatasetMetadataReport:
     """Converts internal model_metadata object to the report."""
     fields_report = [_convert_field(field) for field in metadata.data.fields]
-    entity_summary_report = [EntitySummaryReport(**e.dict()) for e in metadata.data.entities]
+    entity_summary_report = [EntitySummaryReport(**e.model_dump()) for e in metadata.data.entities]
 
     return DatasetMetadataReport(
         record_count=metadata.project_record_count,

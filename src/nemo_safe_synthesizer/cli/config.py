@@ -9,16 +9,18 @@ CLI overrides, and either validates, prints, or writes the result.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 import rich
 
 from ..config import SafeSynthesizerParameters
 from ..configurator.pydantic_click_options import parse_overrides, pydantic_options
-from .utils import CLI_NESTED_FIELD_SEPARATOR, PathT, merge_overrides
+from .utils import CLI_NESTED_FIELD_SEPARATOR, merge_overrides
 
 
 @click.group()
-def config():
+def config() -> None:
     """Manage Safe Synthesizer configurations."""
     pass
 
@@ -32,7 +34,7 @@ def config():
     help="path to a yaml config file",
 )
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
-def validate(config_path: PathT, **kwargs):
+def validate(config_path: str | Path, **kwargs) -> None:
     """Validate a Safe Synthesizer configuration."""
     overrides = parse_overrides(kwargs)
     my_config = merge_overrides(config_path, overrides)
@@ -51,7 +53,7 @@ def validate(config_path: PathT, **kwargs):
 )
 @click.option("--output", required=False, default=None, help="write modified config to this path")
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
-def modify(config_path: PathT, output: str, **kwargs):
+def modify(config_path: str | Path, output: str, **kwargs) -> None:
     """Modify a Safe Synthesizer configuration."""
     overrides = parse_overrides(kwargs)
     my_config = merge_overrides(config_path, overrides)
@@ -73,7 +75,7 @@ def modify(config_path: PathT, output: str, **kwargs):
     help="path to the output yaml config file",
 )
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
-def create(output: str, **kwargs):
+def create(output: str, **kwargs) -> None:
     """Create a new Safe Synthesizer configuration."""
     overrides = parse_overrides(kwargs)
     my_config = merge_overrides(None, overrides)

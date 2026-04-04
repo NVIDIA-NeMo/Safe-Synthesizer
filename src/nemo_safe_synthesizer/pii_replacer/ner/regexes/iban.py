@@ -12,6 +12,8 @@ An IBAN checker is available here: https://www.iban.com/iban-checker
 # under MIT license.
 """
 
+from __future__ import annotations
+
 import string
 
 # Import 're2' regex engine if installed, if not- import 'regex'

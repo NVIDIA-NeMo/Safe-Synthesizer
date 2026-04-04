@@ -22,10 +22,10 @@ class DataPrivacyScore(CompositeScore):
     name: str = Field(default="Data Privacy Score")
 
     @staticmethod
-    def from_components(components: list[Component] | Component, name: str = "Data Privacy Score") -> CompositeScore:
+    def from_components(components: list[Component] | Component, name: str = "Data Privacy Score") -> DataPrivacyScore:
         """Compute the Data Privacy Score from privacy sub-metric components."""
         if isinstance(components, Component):
-            return CompositeScore(score=components.score, name=name)
+            return DataPrivacyScore(name=name, score=components.score)
         if (
             components is None
             or len(components) == 0
@@ -36,7 +36,7 @@ class DataPrivacyScore(CompositeScore):
                 ]
             )
         ):
-            return DataPrivacyScore(score=EvaluationScore())
+            return DataPrivacyScore(name=name, score=EvaluationScore())
 
         # Take the mean
         total = 0.0
@@ -47,6 +47,9 @@ class DataPrivacyScore(CompositeScore):
                 total_components += 1
         if total_components > 0:
             score = total / total_components
-            return DataPrivacyScore(score=EvaluationScore.finalize_grade(raw_score=score, score=score, is_privacy=True))
+            return DataPrivacyScore(
+                name=name,
+                score=EvaluationScore.finalize_grade(raw_score=score, score=score, is_privacy=True),
+            )
         else:
-            return DataPrivacyScore(score=EvaluationScore())
+            return DataPrivacyScore(name=name, score=EvaluationScore())

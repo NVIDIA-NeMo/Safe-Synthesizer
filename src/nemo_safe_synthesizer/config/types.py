@@ -5,13 +5,12 @@
 
 The ``Auto*Param`` and ``Optional*`` aliases let config fields accept the
 sentinel string ``"auto"`` alongside their native type, enabling deferred
-resolution at runtime. Collection and path aliases reduce boilerplate in
-downstream Pydantic models.
+resolution at runtime. Collection aliases reduce boilerplate indownstream
+Pydantic models.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Literal, TypeAlias
 
 __all__ = [
@@ -30,7 +29,6 @@ __all__ = [
     "OptionalListOrInt",
     "OptionalDictNestedStr",
     "OptionalStrDict",
-    "PathLike",
 ]
 
 AUTO_STR = "auto"
@@ -54,5 +52,3 @@ OptionalIntList: TypeAlias = list[int] | None
 
 OptionalDictNestedStr = dict[str, str | dict | list] | None
 OptionalStrDict = dict[str, str] | None
-
-PathLike: TypeAlias = str | Path

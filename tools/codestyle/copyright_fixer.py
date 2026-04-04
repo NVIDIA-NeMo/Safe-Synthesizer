@@ -16,6 +16,8 @@ Copyright header fixer for Safe Synthesizer.
 Scans source files and adds SPDX copyright headers where missing.
 """
 
+from __future__ import annotations
+
 import os
 import tomllib
 from datetime import datetime

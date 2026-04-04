@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Self
 
 from pydantic import Field, field_validator, model_validator
 
@@ -94,7 +94,7 @@ class TimeSeriesParameters(Parameters):
     ] = None
 
     @model_validator(mode="after")
-    def check_timestamp_column_or_interval_when_timeseries(self):
+    def check_timestamp_column_or_interval_when_timeseries(self) -> Self:
         """Validate that time-series mode has a timestamp source and non-timeseries mode has no `timestamp_column`."""
         if self.is_timeseries:
             if self.timestamp_column is None and self.timestamp_interval_seconds is None:

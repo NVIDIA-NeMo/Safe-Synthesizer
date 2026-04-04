@@ -3,6 +3,8 @@
 
 """vLLM-based generation backend for tabular data synthesis."""
 
+from __future__ import annotations
+
 import logging
 import os
 import time
@@ -48,7 +50,7 @@ else:
 def _is_redis_available() -> bool:
     """Return True if the ``redis`` package is importable."""
     try:
-        import redis  # noqa: F401 # type: ignore[unresolved-import]
+        import redis  # noqa: F401  # ty:ignore[unresolved-import]
 
         return True
     except ImportError:
@@ -92,7 +94,7 @@ def _install_noop_remote_cache_backends() -> None:
     try:
         from torch._inductor.remote_cache import RemoteAutotuneCache
 
-        RemoteAutotuneCache.backend_override_cls = _NoopRemoteCacheBackend  # type: ignore[invalid-assignment]
+        RemoteAutotuneCache.backend_override_cls = _NoopRemoteCacheBackend  # ty: ignore[invalid-assignment]
         logger.debug("Installed no-op backend for RemoteAutotuneCache (redis unavailable)")
     except ImportError:
         pass
@@ -226,11 +228,12 @@ class VllmBackend(GeneratorBackend):
 
         if self.config.generation.structured_generation_schema_method == "regex":
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
+            pc = self.model_metadata.prompt_config
             regex = build_json_based_regex(
                 self.schema,
                 self.config,
-                self.model_metadata.prompt_config.bos_token,
-                self.model_metadata.prompt_config.eos_token,
+                bos_token=pc.bos_token,
+                eos_token=pc.eos_token,
             )
             params["regex"] = regex
         elif self.config.generation.structured_generation_schema_method == "json_schema":
@@ -392,7 +395,7 @@ class VllmBackend(GeneratorBackend):
                     case torch.Tensor():
                         logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
                         result = self._gen_method(prompt_token_ids=input_ids.tolist())
-                    case [[*_inner], *_] if all_equal_type(input_ids, int):
+                    case [[*_inner], *_] if all_equal_type(input_ids, int):  # ty: ignore[invalid-argument-type]
                         assert isinstance(input_ids, list)
                         logger.debug(f"vllm generate: prompt_token_ids ({len(input_ids)} prompts)")
                         result = self._gen_method(prompt_token_ids=input_ids)

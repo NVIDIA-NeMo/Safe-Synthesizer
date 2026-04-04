@@ -3,19 +3,21 @@
 
 """Custom module for Person Name detection."""
 
+from __future__ import annotations
+
 import gzip
 import io
 import itertools
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable
 
 from flashtext import KeywordProcessor
 
 try:
     from re import Pattern
 except ImportError:
-    from typing import Pattern
+    from re import Pattern
 
 from ...data_processing.records.base import KVPair, tokenize_header
 from ...data_processing.records.json_record import JSONRecord

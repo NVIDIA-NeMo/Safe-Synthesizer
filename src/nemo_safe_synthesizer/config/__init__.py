@@ -3,6 +3,8 @@
 
 """Configuration models for the Safe Synthesizer pipeline."""
 
+from __future__ import annotations
+
 from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters

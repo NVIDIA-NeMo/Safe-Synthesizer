@@ -45,7 +45,7 @@ def mock_workdir(fixture_session_cache_dir: Path) -> Workdir:
 def mock_model_metadata(mock_workdir: Workdir):
     """Create a mock model metadata object."""
     metadata = MagicMock()
-    metadata.adapter_path = mock_workdir.train.adapter.path
+    metadata.adapter_path = mock_workdir.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
     metadata.save_path = mock_workdir.run_dir
     metadata.metadata_path = mock_workdir.metadata_file
     return metadata
@@ -504,7 +504,7 @@ class TestLoadModel:
                 import sys
 
                 actual_loader = sys.modules["unsloth.models.loader"]
-                assert actual_loader.SUPPORTS_LLAMA32 is False  # type: ignore[union-attr]
+                assert actual_loader.SUPPORTS_LLAMA32 is False
 
 
 class TestInvalidQuantizationBits:

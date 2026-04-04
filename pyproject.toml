@@ -53,6 +53,7 @@ dev = [
   "typer>=0.15.0",
   "types-click",
   "types-colorama>=0.4.6",
+  "textual",
   {include-group = "docs"},
   {include-group = "test"},
 ]
@@ -333,14 +334,18 @@ artifacts = [
 safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
 
 
+[tool.ty.rules]
+# Platform-specific imports (e.g. unsloth on macOS) use ty: ignore[unresolved-import]
+# that appear unused when the package is installed. Suppress the noise.
+unused-ignore-comment = "ignore"
+
+[tool.ty.environment]
+extra-paths = ["typings"]
+
 [tool.ty.src]
 # Below is a list of excluded directories from ty typechecks.
 exclude = [
     ".uv_cache", # Cache Dir in CI
     "./docs/**/*.ipynb",
-    "./src/nemo_safe_synthesizer/artifacts/",
     "./src/nemo_safe_synthesizer/pii_replacer/",
-    "./tests/",
-    "./tools/",
-    "./script/slurm/nss_top.py",
 ]

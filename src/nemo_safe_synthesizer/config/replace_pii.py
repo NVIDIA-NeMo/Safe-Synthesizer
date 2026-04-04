@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any, Self
 
 from faker.config import AVAILABLE_LOCALES
 from pydantic import Field, field_validator, model_validator
-from typing_extensions import Self
 
 from ..configurator.parameters import (
     Parameters,
@@ -51,7 +50,7 @@ class Column(NSSBaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def identifier_required(cls, values):
+    def identifier_required(cls, values: Any) -> Any:
         """Ensure at least one column identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):
@@ -99,7 +98,7 @@ class Row(NSSBaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def identifier_required(cls, values):
+    def identifier_required(cls, values: Any) -> Any:
         """Ensure at least one row identifier field is provided."""
         # Handle both dict and model instance cases (Pydantic v2 compatibility)
         if not isinstance(values, dict):

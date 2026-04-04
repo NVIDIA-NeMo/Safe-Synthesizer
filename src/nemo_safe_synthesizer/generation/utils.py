@@ -3,6 +3,8 @@
 
 """Shared constants and enums for the generation pipeline."""
 
+from __future__ import annotations
+
 from enum import StrEnum
 
 

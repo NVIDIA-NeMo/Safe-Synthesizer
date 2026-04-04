@@ -14,6 +14,8 @@ correctly for Linear layers. Import this module for its side effect; do not
 call ``compute_linear_grad_sample`` directly.
 """
 
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 from opacus.grad_sample.utils import register_grad_sampler

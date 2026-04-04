@@ -20,7 +20,7 @@ def test_safe_synthesizer_parameters():
 
 def test_pii_replacer_default():
     with pytest.raises(ValidationError):
-        PiiReplacerConfig()
+        PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally testing validation error
 
 
 # --- replace_pii default_factory invariants ---

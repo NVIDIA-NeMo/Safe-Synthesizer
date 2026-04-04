@@ -13,8 +13,10 @@ Provides ``PrivacyArguments`` (target epsilon/delta, noise multiplier, clipping 
 ``prv_find_noise_multiplier()`` to solve for noise scale given a target epsilon.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal, cast
 
 import numpy as np
 from opacus.accountants import RDPAccountant
@@ -43,7 +45,11 @@ class SafeSynthesizerAccountant:
             (i.e. "would one more step exceed the budget?").
     """
 
+    accountant: RDPAccountant | PRVAccountant = field(init=False)
+
     def __init__(self, use_prv: bool, noise_multiplier, sampling_probability, delta, num_steps):
+        # +1 provides headroom for a forward-looking epsilon check
+        # (i.e. "would one more step exceed the budget?").
         self.max_compositions = num_steps + 1
         if use_prv:
             self.accountant = PRVAccountant(
@@ -73,9 +79,11 @@ class SafeSynthesizerAccountant:
             # HF Trainer runs an extra optimizer step for an incomplete
             # gradient-accumulation batch at the end of an epoch.
             steps = min(steps, self.max_compositions)
-            return self.accountant.compute_epsilon(steps)[2]
+            acct = cast(PRVAccountant, self.accountant)
+            return acct.compute_epsilon(steps)[2]
         else:
-            return self.accountant.get_epsilon(self.delta)
+            acct = cast(RDPAccountant, self.accountant)
+            return acct.get_epsilon(self.delta)
 
 
 @dataclass
@@ -95,26 +103,31 @@ class PrivacyArguments:
         use_prv: If True, use PRV accountant; fallback to RDP if PRV fails to converge.
     """
 
-    target_epsilon: Optional[float] = field(
+    target_epsilon: float | None = field(
         default=None,
         metadata={"help": "Target epsilon at end of training (mutually exclusive with noise multiplier)"},
     )
     target_delta: float | Literal["auto"] | None = field(default=None, metadata={"help": "Target delta"})
-    per_sample_max_grad_norm: Optional[float] = field(
+    per_sample_max_grad_norm: float | None = field(
         default=None, metadata={"help": "Max L2 norm for per-sample gradient clipping."}
     )
 
-    noise_multiplier: Optional[float] = field(
+    noise_multiplier: float | None = field(
         default=None, metadata={"help": "Gaussian noise scale for gradients. Mutually exclusive with target_epsilon."}
     )
 
-    poisson_sampling: Optional[bool] = field(
+    poisson_sampling: bool = field(
         default=False,
         metadata={"help": "Enable Poisson sampling for proper DP accounting"},
     )
-    use_prv: Optional[bool] = field(
+    use_prv: bool = field(
         default=True,
-        metadata={"help": "If True, use PRV accountant; fallback to RDP if PRV fails to converge."},
+        metadata={
+            "help": "Flag indicating whether PRV accountant was used. "
+            "Due to numerical instability issues, sometimes "
+            "PRV accountant fails to converge on a value for noise "
+            "multiplier, requiring a switch to RDPAccountant."
+        },
     )
 
     def initialize(self, sampling_probability: float, num_steps: int) -> None:
@@ -129,12 +142,16 @@ class PrivacyArguments:
             num_steps: Expected number of optimization steps.
         """
         if self.noise_multiplier is None:
+            target_eps = self.target_epsilon
+            target_del = self.target_delta
+            if target_eps is None or target_del is None or target_del == "auto":
+                raise ValueError("target_epsilon and target_delta (numeric) are required for DP initialization")
             try:
                 self.noise_multiplier = prv_find_noise_multiplier(
                     sampling_probability=sampling_probability,
                     num_steps=num_steps,
-                    target_delta=self.target_delta,
-                    target_epsilon=self.target_epsilon,
+                    target_delta=target_del,
+                    target_epsilon=target_eps,
                 )
             except Exception as known_error:
                 if "Discrete mean differs" in str(known_error):
@@ -144,8 +161,8 @@ class PrivacyArguments:
 
                 try:
                     self.noise_multiplier = opacus_get_noise_multiplier(
-                        target_epsilon=self.target_epsilon,
-                        target_delta=self.target_delta,
+                        target_epsilon=target_eps,
+                        target_delta=target_del,
                         sample_rate=sampling_probability,
                         steps=num_steps,
                         accountant="rdp",

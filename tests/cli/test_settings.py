@@ -182,7 +182,7 @@ class TestCLISettings:
 
     def test_verbose_string_conversion(self):
         """Test that verbose accepts string values (for env var loading)."""
-        settings = CLISettings(verbose="2")  # type: ignore[arg-type]
+        settings = CLISettings(verbose="2")  # ty: ignore[invalid-argument-type]
         assert settings.verbose == 2
 
     def test_synthesis_overrides_default(self):

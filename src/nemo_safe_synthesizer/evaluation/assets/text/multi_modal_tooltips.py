@@ -5,6 +5,8 @@
 
 """Tooltip text displayed in the multi-modal HTML evaluation report."""
 
+from __future__ import annotations
+
 tooltips = {
     "dataset_statistics_info": """
         The dataset statistics provide a summary of the datasets. The table includes the number of rows and columns,

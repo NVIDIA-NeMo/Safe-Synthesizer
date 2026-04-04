@@ -3,8 +3,10 @@
 
 """HuggingFace Trainer callbacks for Safe Synthesizer training."""
 
+from __future__ import annotations
+
 import time
-from typing import Optional
+from typing import TYPE_CHECKING, Any
 
 from tqdm.auto import tqdm
 from transformers import (
@@ -13,6 +15,9 @@ from transformers import (
     TrainerState,
     TrainingArguments,
 )
+
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
 
 from ..defaults import (
     DEFAULT_SAMPLING_PARAMETERS,
@@ -60,11 +65,11 @@ class InferenceEvalCallback(TrainerCallback):
 
     def __init__(
         self,
-        schema: dict,
+        schema: dict[str, Any],
         metadata: ModelMetadata,
         processor: Processor,
         num_prompts_per_batch: int = 16,
-        num_batches: Optional[int] = None,
+        num_batches: int | None = None,
         patience: int = 3,
         invalid_fraction_threshold: float = 0.8,
         generate_kwargs: dict | None = None,
@@ -72,7 +77,7 @@ class InferenceEvalCallback(TrainerCallback):
         self.schema = schema
         self.metadata = metadata
         self.templated_prompt = create_schema_prompt(
-            schema["properties"].keys(),
+            list(schema["properties"].keys()),
             instruction=self.metadata.instruction,
             prompt_template=self.metadata.prompt_config.template,
         )
@@ -167,14 +172,17 @@ class InferenceEvalCallback(TrainerCallback):
                         "🛑 Stopping generation prematurely. No records were generated. "
                         "Please consider adjusting the sampling parameters.",
                     )
-                    state.log_history.append({"training_incomplete": "no_records"})
+                    state.log_history.append({"training_incomplete": "no_records"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
                 elif self.generation.status == GenerationStatus.STOP_METRIC_REACHED:
+                    stop_frac = (
+                        (self.generation.stop_condition.last_value or 0.0) if self.generation.stop_condition else 0.0
+                    )
                     logger.error(
                         "🛑 Stopping generation prematurely. The stopping "
                         "condition was reached with a running average invalid "
-                        f"fraction of {self.generation.stop_condition.last_value:.2%}",
+                        f"fraction of {stop_frac:.2%}",
                     )
-                    state.log_history.append({"training_incomplete": "stopping_condition_reached"})
+                    state.log_history.append({"training_incomplete": "stopping_condition_reached"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
 
 
 class ProgressBarCallback(TrainerCallback):
@@ -188,7 +196,7 @@ class ProgressBarCallback(TrainerCallback):
         self.training_bar = None
         self.prediction_bar = None
 
-    def on_train_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+    def on_train_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
         if state.is_world_process_zero:
             self.training_bar = tqdm(
                 total=state.max_steps,
@@ -197,14 +205,19 @@ class ProgressBarCallback(TrainerCallback):
             )
         self.current_step = 0
 
-    def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        if state.is_world_process_zero:
+    def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
+        if state.is_world_process_zero and self.training_bar is not None:
             self.training_bar.update(state.global_step - self.current_step)
             self.current_step = state.global_step
 
     def on_prediction_step(
-        self, args: TrainingArguments, state: TrainerState, control: TrainerControl, eval_dataloader=None, **kwargs
-    ):
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        eval_dataloader: DataLoader | None = None,
+        **kwargs,
+    ) -> None:
         if not state.is_world_process_zero:
             return
 
@@ -220,19 +233,33 @@ class ProgressBarCallback(TrainerCallback):
             )
         self.prediction_bar.update(1)
 
-    def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+    def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
         if state.is_world_process_zero:
             if self.prediction_bar is not None:
                 self.prediction_bar.close()
             self.prediction_bar = None
 
-    def on_predict(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
+    def on_predict(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        metrics: dict[str, float] | None = None,
+        **kwargs,
+    ) -> None:
         if state.is_world_process_zero:
             if self.prediction_bar is not None:
                 self.prediction_bar.close()
             self.prediction_bar = None
 
-    def on_log(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, logs=None, **kwargs):
+    def on_log(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        logs: dict[str, float] | None = None,
+        **kwargs,
+    ) -> None:
         if not isinstance(logs, dict):
             return
 
@@ -248,8 +275,8 @@ class ProgressBarCallback(TrainerCallback):
             if "loss" in logs:
                 self.training_bar.set_description(f"Training in progress [loss = {logs['loss']: .4f}]")
 
-    def on_train_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
-        if state.is_world_process_zero:
+    def on_train_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
+        if state.is_world_process_zero and self.training_bar is not None:
             self.training_bar.close()
             self.training_bar = None
 
@@ -280,7 +307,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
-    ):
+    ) -> None:
         self._start_ts = time.monotonic()
 
     def _checked_log_if(self, cond: bool, state: TrainerState, control: TrainerControl) -> TrainerControl | None:
@@ -289,6 +316,8 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         The HuggingFace Trainer triggers a division-by-zero if the same
         ``global_step`` is logged twice, so this method tracks the last
         logged step and skips if it hasn't advanced.
+
+        See https://github.com/huggingface/transformers/blob/v4.29.0/src/transformers/trainer.py#L2279.
         """
         if state.is_local_process_zero and state.global_step > self._last_log_global_step and cond:
             control.should_log = True
@@ -300,7 +329,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
-    ):
+    ) -> TrainerControl | None:
         # Ensure a log is emitted at the end of every epoch, regardless of
         # when the last log was emitted.
         return self._checked_log_if(True, state, control)
@@ -311,7 +340,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
-    ):
+    ) -> TrainerControl | None:
         # Ensure a log is emitted at least on the given update interval. There
         # is nothing particularly interesting about substeps, it is just the
         # most fine-grained callback provided by the interface.
@@ -323,9 +352,9 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         args: TrainingArguments,
         state: TrainerState,
         control: TrainerControl,
-        logs=None,
+        logs: dict[str, float] | None = None,
         **kwargs,
-    ):
+    ) -> None:
         if not isinstance(logs, dict):
             return
 

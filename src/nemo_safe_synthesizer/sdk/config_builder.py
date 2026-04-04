@@ -11,7 +11,8 @@ via fluent ``with_*`` methods before resolving them into a single
 
 from __future__ import annotations
 
-from typing import Mapping, Self, TypeAlias, TypeVar
+from collections.abc import Mapping
+from typing import Any, Self, TypeAlias, TypeVar, cast
 
 import pandas as pd
 from pydantic import BaseModel
@@ -45,21 +46,9 @@ NSSParameters = (
     | PiiReplacerConfig
 )
 
-NSSParametersT = (
-    type[DataParameters]
-    | type[EvaluationParameters]
-    | type[GenerateParameters]
-    | type[DifferentialPrivacyHyperparams]
-    | type[TimeSeriesParameters]
-    | type[TrainingHyperparams]
-    | type[SafeSynthesizerParameters]
-    | type[PiiReplacerConfig]
-)
-
-
-ParamT = TypeVar("ParamT", bound=NSSParameters)
+ParamT = TypeVar("ParamT", bound=BaseModel)
 DataSource = pd.DataFrame | str
-ParamDict: TypeAlias = dict[str, str | int | float | bool | None | Mapping[KT, VT]]
+ParamDict: TypeAlias = dict[str, str | int | float | bool | None | list[Any] | Mapping[KT, VT]]
 
 
 class ConfigBuilder(object):
@@ -114,7 +103,7 @@ class ConfigBuilder(object):
             "_time_series_config",
         ]
 
-    def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: NSSParametersT, **kwargs) -> NSSParameters:
+    def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: type[ParamT], **kwargs) -> ParamT:
         """Resolve configuration from various input types.
 
         Precedence: ``kwargs`` override ``values``; ``values`` override
@@ -132,11 +121,13 @@ class ConfigBuilder(object):
         overrides = kwargs
         match values:
             case BaseModel() as model:
-                return model.model_copy(update=overrides)
+                return cast(ParamT, model.model_copy(update=overrides))
             case dict() as d:
                 return cls.model_validate(d).model_copy(update=overrides)
             case None:
                 return cls(**overrides)
+            case _:
+                raise TypeError(f"Unsupported config type: {type(values)}")
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.
@@ -160,7 +151,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with data processing settings applied.
         """
-        self._data_config: DataParameters | None = self._resolve_config(values=config, cls=DataParameters, **kwargs)
+        self._data_config = self._resolve_config(values=config, cls=DataParameters, **kwargs)
         return self
 
     def with_train(self, config: TrainingHyperparams | ParamDict | None = None, **kwargs) -> Self:
@@ -176,6 +167,7 @@ class ConfigBuilder(object):
         self._training_config: TrainingHyperparams | None = self._resolve_config(
             values=config, cls=TrainingHyperparams, **kwargs
         )
+        self._enable_synthesis = True
         return self
 
     def with_generate(self, config: GenerateParameters | ParamDict | None = None, **kwargs) -> Self:
@@ -191,6 +183,7 @@ class ConfigBuilder(object):
         self._generation_config: GenerateParameters | None = self._resolve_config(
             values=config, cls=GenerateParameters, **kwargs
         )
+        self._enable_synthesis = True
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
@@ -203,9 +196,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with time-series synthesis settings applied.
         """
-        self._time_series_config: TimeSeriesParameters | None = self._resolve_config(
-            values=config, cls=TimeSeriesParameters, **kwargs
-        )
+        self._time_series_config = self._resolve_config(values=config, cls=TimeSeriesParameters, **kwargs)
         return self
 
     def with_differential_privacy(
@@ -220,9 +211,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with differential privacy settings applied.
         """
-        self._privacy_config: DifferentialPrivacyHyperparams | None = self._resolve_config(
-            values=config, cls=DifferentialPrivacyHyperparams, **kwargs
-        )
+        self._privacy_config = self._resolve_config(values=config, cls=DifferentialPrivacyHyperparams, **kwargs)
         return self
 
     def with_replace_pii(
@@ -290,9 +279,7 @@ class ConfigBuilder(object):
         Returns:
             This builder instance with evaluation settings applied.
         """
-        self._evaluation_config: EvaluationParameters | None = self._resolve_config(
-            values=config, cls=EvaluationParameters, **kwargs
-        )
+        self._evaluation_config = self._resolve_config(values=config, cls=EvaluationParameters, **kwargs)
         return self
 
     def resolve(self) -> Self:

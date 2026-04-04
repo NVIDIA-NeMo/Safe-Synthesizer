@@ -65,7 +65,7 @@ class MultimodalReport(EvaluationReport):
     )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with tooltips, flags, and per-column distribution figures."""
         try:
             ctx = super().jinja_context
@@ -93,10 +93,11 @@ class MultimodalReport(EvaluationReport):
             ):
                 ctx["with_transform"] = True
 
-            ctx["dp_enabled"] = self.config and self.config.get("dp_enabled")
-            if ctx["dp_enabled"]:
-                ctx["delta"] = self.config.get("delta")  # ty: ignore[unresolved-attribute]
-                ctx["epsilon"] = self.config.get("epsilon")  # ty: ignore[unresolved-attribute]
+            config = self.config
+            ctx["dp_enabled"] = config is not None and config.get("dp_enabled")
+            if ctx["dp_enabled"] and config is not None:
+                ctx["delta"] = config.get("delta")
+                ctx["epsilon"] = config.get("epsilon")
 
             # Numeric per-column figures require access to the original data, a little hacky.
             if "column_distribution_stability" in ctx:
@@ -110,7 +111,7 @@ class MultimodalReport(EvaluationReport):
             raise
 
     @staticmethod
-    def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None):
+    def _get_config_value(param: str, default: Any, config: SafeSynthesizerParameters | None = None) -> Any:
         """Return a config parameter value, falling back to ``default``."""
         if config and config.get(param):
             return config.get(param)

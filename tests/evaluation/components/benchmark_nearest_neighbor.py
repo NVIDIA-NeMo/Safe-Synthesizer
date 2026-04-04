@@ -44,7 +44,7 @@ cp = None
 
 try:
     import cupy as _cp
-    from cuvs.neighbors import brute_force as _cuvs_brute_force
+    from cuvs.neighbors import brute_force as _cuvs_brute_force  # ty: ignore[unresolved-import]
 
     # Test that cuVS is actually usable (not just that imports work)
     _test_data = _cp.array([[1.0, 2.0], [3.0, 4.0]], dtype=_cp.float32)
@@ -69,7 +69,7 @@ FAISS_GPU_AVAILABLE = False
 faiss = None
 
 try:
-    import faiss as _faiss
+    import faiss as _faiss  # ty: ignore[unresolved-import]
 
     # Check if GPU support is available
     if _faiss.get_num_gpus() > 0:
@@ -149,7 +149,7 @@ def benchmark_torch(data: np.ndarray, queries: np.ndarray, k: int = 5) -> Benchm
     torch.cuda.synchronize()
     query_time = time.perf_counter() - t0
 
-    device_label = TORCH_DEVICE.type  # type: ignore[union-attr]
+    device_label = TORCH_DEVICE.type if TORCH_DEVICE else "none"
     return BenchmarkResult(
         name=f"torch_{device_label}",
         fit_time_sec=fit_time,
@@ -166,6 +166,7 @@ def benchmark_cuvs(data: np.ndarray, queries: np.ndarray, k: int = 5) -> Benchma
     """Benchmark cuVS brute force nearest neighbors on GPU (comparison only)."""
     if not CUVS_AVAILABLE:
         return None
+    assert cp is not None and cuvs_brute_force is not None
 
     t0 = time.perf_counter()
     data_gpu = cp.asarray(data, dtype=cp.float32)
@@ -194,6 +195,7 @@ def benchmark_faiss_gpu(data: np.ndarray, queries: np.ndarray, k: int = 5) -> Be
     """Benchmark FAISS GPU for exact L2 nearest neighbors (comparison only)."""
     if not FAISS_GPU_AVAILABLE:
         return None
+    assert faiss is not None
 
     t0 = time.perf_counter()
     d = data.shape[1]

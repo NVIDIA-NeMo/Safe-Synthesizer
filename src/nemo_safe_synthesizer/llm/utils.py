@@ -3,10 +3,13 @@
 
 """GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading."""
 
+from __future__ import annotations
+
 import gc
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Generator, Literal, Union
+from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -22,7 +25,7 @@ from transformers import (
 )
 
 if TYPE_CHECKING:
-    from unsloth import FastLanguageModel  # noqa: F401  # ty: ignore[unresolved-import]
+    from unsloth import FastLanguageModel
 
 from ..observability import get_logger
 
@@ -187,7 +190,7 @@ def get_device_map(
     trust_remote_code: bool = False,
     local_files_only: bool = False,
     force_single_device: int | None = None,
-):
+) -> str | dict[str, int | str]:
     """Infer the device map for a model and optionally pin all layers to one device.
 
     Uses ``accelerate.infer_auto_device_map`` on an empty-weight model
@@ -242,7 +245,7 @@ def count_trainable_params(model: PeftModel) -> tuple[int, int]:
 
 @contextmanager
 def optimize_for_inference(
-    model: Union["FastLanguageModel", "AutoModelForCausalLM"],
+    model: "FastLanguageModel" | "AutoModelForCausalLM",
 ) -> Generator[None, Any, Any]:
     """Context manager that applies Unsloth inference-time optimizations.
 
@@ -259,7 +262,7 @@ def optimize_for_inference(
         None
     """
     if torch.cuda.is_available() and type(model).__name__ == "FastLanguageModel":
-        from unsloth import FastLanguageModel  # noqa: F401  # ty: ignore[unresolved-import]
+        from unsloth import FastLanguageModel  # noqa: F401
 
         FastLanguageModel.for_inference(model)
         yield

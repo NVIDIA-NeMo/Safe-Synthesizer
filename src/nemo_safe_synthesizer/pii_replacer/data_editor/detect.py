@@ -6,11 +6,12 @@ from __future__ import annotations
 import logging
 import os
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from itertools import chain, islice
 from time import monotonic
 from timeit import default_timer as timer
-from typing import Callable, Iterable, Iterator, Optional
+from typing import Optional
 
 import json_repair
 import pandas as pd

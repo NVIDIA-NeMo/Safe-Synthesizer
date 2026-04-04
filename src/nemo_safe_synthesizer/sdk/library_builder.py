@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from datasets import Dataset
@@ -116,6 +116,9 @@ class SafeSynthesizer(ConfigBuilder):
         results = builder.results
     """
 
+    _workdir: Workdir | None
+    """Artifact directory layout, always set to a ``Workdir`` instance after ``__init__``."""
+
     trainer: TrainingBackend
     """Training backend instance, populated after ``train()``."""
 
@@ -175,6 +178,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         if _INITIALIZED_OBSERVABILITY:
             return
+        assert self._workdir is not None
         configure_logging_from_workdir(self._workdir)
         initialize_observability()
 
@@ -194,6 +198,7 @@ class SafeSynthesizer(ConfigBuilder):
             Self for method chaining.
         """
         self._ensure_observability()
+        assert self._workdir is not None
         # Use source paths which point to parent workdir when resuming for generation
         config_file = self._workdir.source_config
 
@@ -212,6 +217,7 @@ class SafeSynthesizer(ConfigBuilder):
         # Only fall back to with_data_source() data if cached files are missing.
         training_path = self._workdir.source_dataset.training
         test_path = self._workdir.source_dataset.test
+        assert isinstance(training_path, Path) and isinstance(test_path, Path)
         if training_path.exists():
             logger.info("Loading cached train/test split from training run")
             # training_path persists the original training split for evaluation.
@@ -279,6 +285,7 @@ class SafeSynthesizer(ConfigBuilder):
         if self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_train_df)
+            assert replacer.result is not None
             self._train_df = replacer.result.transformed_df
             self._column_statistics = replacer.result.column_statistics
             self._pii_replacer_time = replacer.elapsed_time
@@ -292,6 +299,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Always persist the original training split -- this is the version
         # reloaded by load_from_save_path and used for evaluation metrics.
+        assert self._workdir is not None
         self._workdir.ensure_directories()
         # ``training.csv`` is the canonical persisted original training split.
         self._original_train_df.to_csv(self._workdir.dataset.training, index=False)
@@ -375,8 +383,9 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Clean up trainer model if it exists (only present when train->generate in same session)
         if hasattr(self, "trainer") and self.trainer is not None:
-            self.trainer.delete_trainable_model()
+            self.trainer.delete_trainable_model()  # ty: ignore[unresolved-attribute] -- delete_trainable_model is defined on HuggingFaceBackend/UnslothTrainer but not the abstract TrainingBackend base
 
+        assert self._workdir is not None
         # Select backend based on time_series configuration
         if self._nss_config.time_series and self._nss_config.time_series.is_timeseries:
             self.generator = TimeseriesBackend(
@@ -473,7 +482,7 @@ class SafeSynthesizer(ConfigBuilder):
         self.save_results(output_file=output_file)
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
-    def save_results(self, output_file: Path | str | None = None) -> Self:
+    def save_results(self, output_file: Path | str | None = None) -> SafeSynthesizer:
         """Save synthetic data, evaluation report, and metrics to the workdir.
 
         Writes ``synthetic_data.csv``, ``evaluation_report.html`` (when
@@ -490,6 +499,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert self.results is not None
             assert isinstance(self.results.synthetic_data, pd.DataFrame)
 
+        assert self._workdir is not None
         match output_file:
             case Path() as p:
                 output_file = p

@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import reduce
-from typing import Callable
 
 import numpy as np
 import pandas as pd

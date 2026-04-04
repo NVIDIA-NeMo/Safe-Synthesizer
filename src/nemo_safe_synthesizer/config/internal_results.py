@@ -3,6 +3,8 @@
 
 """Internal result container used between pipeline stages (not public API)."""
 
+from __future__ import annotations
+
 import pandas as pd
 from pydantic import Field
 

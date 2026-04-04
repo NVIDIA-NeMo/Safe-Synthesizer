@@ -42,19 +42,22 @@ class Correlation(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with combined correlation heatmap figure."""
         d = super().jinja_context
         d["anchor_link"] = "#correlation-stability"
+        d["figure"] = None
 
         if Component.is_nonempty([self.reference_correlation, self.output_correlation, self.correlation_difference]):
-            d["figure"] = figures.generate_combined_correlation_figure(
-                reference_correlation=self.reference_correlation,  # ty: ignore[invalid-argument-type]
-                output_correlation=self.output_correlation,  # ty: ignore[invalid-argument-type]
-                correlation_difference=self.correlation_difference,  # ty: ignore[invalid-argument-type]
-            ).to_html(full_html=False, include_plotlyjs=False)
-        else:
-            d["figure"] = None
+            ref_corr = self.reference_correlation
+            out_corr = self.output_correlation
+            diff_corr = self.correlation_difference
+            if ref_corr is not None and out_corr is not None and diff_corr is not None:
+                d["figure"] = figures.generate_combined_correlation_figure(
+                    reference_correlation=ref_corr,
+                    output_correlation=out_corr,
+                    correlation_difference=diff_corr,
+                ).to_html(full_html=False, include_plotlyjs=False)
         return d
 
     @staticmethod
@@ -73,8 +76,8 @@ class Correlation(Component):
             correlation_difference,
             mean_absolute_error,
         ) = Correlation._get_correlation_calculations(
-            reference=evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            output=evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+            reference=evaluation_dataset.reference[tabular_columns],
+            output=evaluation_dataset.output[tabular_columns],
             nominal_columns=nominal_columns,
             fields=evaluation_dataset.evaluation_fields,
         )
@@ -92,7 +95,7 @@ class Correlation(Component):
         output: pd.DataFrame,
         nominal_columns: list[str],
         fields: list[EvaluationField],
-    ):
+    ) -> tuple:
         """Compute reference and output correlation matrices and their difference.
 
         Args:

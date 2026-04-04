@@ -1,13 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 import concurrent.futures as futures
 import multiprocessing as mp
 import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from itertools import islice
 from threading import BoundedSemaphore
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Optional
 
 import joblib.externals.loky as loky
 

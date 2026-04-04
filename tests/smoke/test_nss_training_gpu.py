@@ -23,6 +23,7 @@ pytestmark = [
 def test_nss_train_one_batch(base_smoke_config, iris_df, tmp_path):
     """Train one batch through the SafeSynthesizer SDK with local tiny model."""
     nss = train_with_sdk(base_smoke_config, iris_df, tmp_path)
+    assert nss._workdir is not None
     assert_adapter_saved(nss._workdir)
 
 
@@ -46,4 +47,5 @@ def test_nss_train_dp_one_batch(local_tinyllama_dir, iris_df, tmp_path):
         epsilon=100.0,
     )
     nss = train_with_sdk(config, iris_df, tmp_path)
+    assert nss._workdir is not None
     assert_adapter_saved(nss._workdir)

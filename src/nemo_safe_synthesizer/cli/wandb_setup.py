@@ -23,8 +23,6 @@ from .artifact_structure import Workdir
 
 logger = get_logger(__name__)
 
-PathT = str | Path
-
 
 def resolve_wandb_run_id(id_or_path: str) -> str:
     """Resolve a wandb run ID from a string or file path.

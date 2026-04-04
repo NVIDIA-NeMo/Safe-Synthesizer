@@ -30,7 +30,7 @@ class ColumnDistributionPlotRow(BaseModel):
     figure: str = Field(description="Rendered HTML of the side-by-side distribution plot.")
 
     @staticmethod
-    def _get_figure_for_field(f: EvaluationField | None, reference: pd.Series, output) -> Figure | None:
+    def _get_figure_for_field(f: EvaluationField | None, reference: pd.Series, output: pd.Series) -> Figure | None:
         if f is None:
             return None
         if f.reference_field_features.type != FieldType.NUMERIC or f.output_field_features.type != FieldType.NUMERIC:
@@ -108,14 +108,14 @@ class ColumnDistribution(Component):
     )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with evaluation fields and column statistics for the report."""
         d = super().jinja_context
         d["anchor_link"] = "#distribution-stability"
         if self.evaluation_fields:
             d["evaluation_fields"] = [f.model_dump(mode="json") for f in self.evaluation_fields]
         if self.column_statistics:
-            d["column_statistics"] = {k: v.model_dump for k, v in self.column_statistics.items()}
+            d["column_statistics"] = {k: v.model_dump() for k, v in self.column_statistics.items()}
         # Figures are set up with ColumnDistributionPlotRow. It requires an EvaluateDataset so needs
         # to be done out of band as separate call from enclosing report class.
         return d

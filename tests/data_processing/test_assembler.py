@@ -49,9 +49,7 @@ def fixture_autoconfig() -> PretrainedConfig:
 def fixture_llm_metadata(
     fixture_session_cache_dir, fixture_assembler_config: SafeSynthesizerParameters
 ) -> ModelMetadata:
-    metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model, save_path=fixture_session_cache_dir
-    )
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assert metadata is not None
     return metadata
 
@@ -134,9 +132,7 @@ def test_tabular_data_assembler(
     fixture_assembler_config: SafeSynthesizerParameters,
     fixture_session_cache_dir: str,
 ):
-    metadata = ModelMetadata.from_str_or_path(
-        model_name_or_path=fixture_assembler_config.training.pretrained_model, save_path=fixture_session_cache_dir
-    )
+    metadata = ModelMetadata.from_str_or_path(model_name_or_path=fixture_assembler_config.training.pretrained_model)
     assembler = TabularDataExampleAssembler(
         dataset=fixture_iris_dataset,
         tokenizer=fixture_tokenizer,
@@ -174,6 +170,7 @@ def test_tabular_data_assembler_shorter_context_with_test_split(
     assert assembler.num_records_validation == 30
 
     examples = assembler.assemble_training_examples()
+    assert examples.test is not None
     assert examples.test.num_rows == 3  # depends on tokenizer/model: we fill context with records for the test set
     assert examples.train.num_rows == 11
 
@@ -272,7 +269,6 @@ def test_grouped_data_assembler(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
     assembler = TrainingExampleAssembler.from_data(
@@ -380,7 +376,6 @@ def test_grouped_data_assembler_training_examples_high_decimal(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_sample_patient_dataset,
@@ -434,7 +429,6 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_chickweight_dataset,
@@ -453,12 +447,13 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
     assert assembler.num_groups_validation == 10
     assert (
         assembler.num_groups_train + assembler.num_groups_validation
-        == fixture_chickweight_dataset.to_pandas()["Chick"].nunique()
+        == cast(pd.DataFrame, fixture_chickweight_dataset.to_pandas())["Chick"].nunique()
     )
 
     examples = assembler.assemble_training_examples()
 
     assert examples.train.num_rows == 37
+    assert examples.test is not None
     assert examples.test.num_rows == 9
     assert round(examples.stats["tokens_per_record"].mean, 4) == 19.0
     assert round(examples.stats["tokens_per_group"].mean, 4) == 219.64
@@ -497,7 +492,6 @@ def test_grouped_data_assembler_dp(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
         # Set max_sequences_per_example=1 for DP mode (1 group per example)
         max_sequences_per_example=1,
     )
@@ -547,7 +541,6 @@ def test_grouped_data_assembler_context_width_exception(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
     assembler = TrainingExampleAssembler.from_data(
         dataset=fixture_dow_jones_index_dataset,
@@ -625,7 +618,6 @@ def test_create_group_example_assembler(
             eos_token="</s>",
             eos_token_id=2,
         ),
-        save_path=Path(fixture_session_cache_dir),
     )
     assert isinstance(
         TrainingExampleAssembler.from_data(
@@ -659,7 +651,6 @@ def fixture_sequential_metadata(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
 
@@ -727,7 +718,7 @@ def test_sequential_assembler_excludes_pseudo_group_from_schema(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler excludes PSEUDO_GROUP_COLUMN from schema."""
-    df = fixture_iris_dataset.to_pandas()
+    df = cast(pd.DataFrame, fixture_iris_dataset.to_pandas())
     df[PSEUDO_GROUP_COLUMN] = 0
     dataset_with_pseudo = Dataset.from_pandas(df)
 
@@ -760,7 +751,8 @@ def test_sequential_assembler_sorts_records_by_group_and_order(
         seed=42,
     )
 
-    train_df = assembler.train_dataset.to_pandas()
+    assert assembler.train_dataset is not None
+    train_df = cast(pd.DataFrame, assembler.train_dataset.to_pandas())
     for chick_id, group_df in train_df.groupby("Chick"):
         time_values = group_df["Time"].tolist()
         assert time_values == sorted(time_values), f"Time values not sorted for Chick {chick_id}"
@@ -962,7 +954,6 @@ def test_sequential_assembler_end_to_end(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
     assembler = TrainingExampleAssembler.from_data(
@@ -1015,7 +1006,7 @@ def test_sequential_assembler_single_group_with_pseudo_column(
     """Test SequentialExampleAssembler with a single group using pseudo column."""
     # Add pseudo group column to simulate ungrouped time series
     # Adding pseudo group is already tested in test_timeseries_preprocessing.py
-    df = fixture_iris_dataset.to_pandas()
+    df = cast(pd.DataFrame, fixture_iris_dataset.to_pandas())
     df[PSEUDO_GROUP_COLUMN] = 0  # All records in one group
     df["timestamp"] = range(len(df))  # Add a synthetic timestamp column
     dataset_with_pseudo = Dataset.from_pandas(df)
@@ -1034,7 +1025,6 @@ def test_sequential_assembler_single_group_with_pseudo_column(
         ),
         model_name_or_path=fixture_tokenizer.name_or_path,
         autoconfig=fixture_autoconfig,
-        save_path=Path(fixture_session_cache_dir),
     )
 
     assembler = SequentialExampleAssembler(
