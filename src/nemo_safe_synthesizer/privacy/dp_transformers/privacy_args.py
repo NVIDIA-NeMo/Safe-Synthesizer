@@ -16,7 +16,7 @@ Provides ``PrivacyArguments`` (target epsilon/delta, noise multiplier, clipping 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Optional, cast
+from typing import Literal, cast
 
 import numpy as np
 from opacus.accountants import RDPAccountant
@@ -103,24 +103,24 @@ class PrivacyArguments:
         use_prv: If True, use PRV accountant; fallback to RDP if PRV fails to converge.
     """
 
-    target_epsilon: Optional[float] = field(
+    target_epsilon: float | None = field(
         default=None,
         metadata={"help": "Target epsilon at end of training (mutually exclusive with noise multiplier)"},
     )
     target_delta: float | Literal["auto"] | None = field(default=None, metadata={"help": "Target delta"})
-    per_sample_max_grad_norm: Optional[float] = field(
+    per_sample_max_grad_norm: float | None = field(
         default=None, metadata={"help": "Max L2 norm for per-sample gradient clipping."}
     )
 
-    noise_multiplier: Optional[float] = field(
+    noise_multiplier: float | None = field(
         default=None, metadata={"help": "Gaussian noise scale for gradients. Mutually exclusive with target_epsilon."}
     )
 
-    poisson_sampling: Optional[bool] = field(
+    poisson_sampling: bool = field(
         default=False,
         metadata={"help": "Enable Poisson sampling for proper DP accounting"},
     )
-    use_prv: Optional[bool] = field(
+    use_prv: bool = field(
         default=True,
         metadata={
             "help": "Flag indicating whether PRV accountant was used. "

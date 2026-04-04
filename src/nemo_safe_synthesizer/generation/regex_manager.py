@@ -273,7 +273,7 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             # doesn't emit those right now, would be nice to emit those, but
             # then the handling here needs to change, alternately we use the
             # anyOf keyword as at
-            # https://cswr.github.io/dict[str, Any]/spec/multiple_types/
+            # https://cswr.github.io/JsonSchema/spec/multiple_types/
             regexes = [_build_regex({"type": t}, whitespace_pattern) for t in instance_type if t != "object"]
             return rf"({'|'.join(regexes)})"
         case x if x in dispatch:
