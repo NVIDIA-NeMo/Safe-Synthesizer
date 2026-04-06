@@ -22,22 +22,9 @@
 name: "Release NeMo Safe Synthesizer"
 
 on:
-  workflow_dispatch:
-    inputs:
-      release-ref:
-        description: Full SHA (not short) or tag of the commit to build
-        required: true
-        type: string
-      dry-run:
-        description: "Dry Run: only publish to Test PyPI"
-        required: true
-        default: true
-        type: boolean
-      create-gh-release:
-        description: Create a GitHub release
-        required: true
-        default: true
-        type: boolean
+  push:
+    tags:
+      - 'v*'
 
 defaults:
   run:
@@ -48,7 +35,7 @@ permissions:
 
 jobs:
   publish-wheel:
-    name: Publish wheel (${{ inputs.dry-run && 'Test PyPI' || 'PyPI' }})
+    name: Publish wheel Test PyPI and PyPI
     runs-on: linux-amd64-cpu4
     outputs:
       version: ${{ steps.build.outputs.version }}
@@ -56,7 +43,6 @@ jobs:
       - name: Checkout at release ref
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.release-ref }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -98,7 +84,6 @@ jobs:
             dist/*.whl
 
       - name: Publish to PyPI
-        if: ${{ !inputs.dry-run }}
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_PERSONAL_TOKEN }}
@@ -111,13 +96,11 @@ jobs:
   create-gh-release:
     name: Create GitHub release
     needs: publish-wheel
-    if: ${{ inputs.create-gh-release }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout at release ref
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.release-ref }}
           fetch-depth: 0
 
       - name: Download wheel artifact
@@ -139,5 +122,5 @@ jobs:
           gh release create "v${VERSION}" \
             dist/*.whl \
             --title "v${VERSION}" \
-            --notes-file CHANGELOG.md \
+            --generate-notes \
             $PRERELEASE_FLAG
