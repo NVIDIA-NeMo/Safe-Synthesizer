@@ -36,11 +36,11 @@ from ..utils import all_equal_type, load_json
 logger = get_logger(__name__)
 
 if torch.cuda.is_available():
-    _gpu_count = torch.cuda.device_count()
-    if _gpu_count <= 1:
-        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
-    else:
-        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "1")
+    # Always enable V1 multiprocessing so vLLM spawns a clean worker
+    # process.  This isolates generation from unsloth's in-process
+    # monkey-patches (torch.compiler.disable on attention forwards)
+    # that conflict with vLLM's fullgraph=True compilation.
+    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "1")
 else:
     # When CUDA is unavailable, avoid triggering CUDA initialization and
     # default to disabling vLLM v1 multiprocessing.
@@ -193,14 +193,6 @@ class VllmBackend(GeneratorBackend):
         structured_outputs_config = StructuredOutputsConfig(
             backend=self.config.generation.structured_generation_backend,
         )
-        # Unsloth patches model attention forward functions with torch.compiler.disable().
-        # vLLM compiles TransformersForCausalLM with fullgraph=True via @support_torch_compile.
-        # PyTorch >= 2.9.1 changed fullgraph=True to raise immediately on torch.compiler.disable()
-        # rather than silently breaking the graph (pytorch#8e83e24). This combination produces:
-        #   torch._dynamo.exc.Unsupported: Skip inlining `torch.compiler.disable()`d function
-        # Passing enforce_eager=True skips vLLM's torch.compile pipeline entirely for these runs.
-        # check this when updating unsloth in the future.
-        enforce_eager = self.config.training.use_unsloth is True
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
@@ -209,7 +201,6 @@ class VllmBackend(GeneratorBackend):
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
-                enforce_eager=enforce_eager,
                 attention_config=attention_config,
             )
 
