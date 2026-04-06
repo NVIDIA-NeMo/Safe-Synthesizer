@@ -120,8 +120,8 @@ engine = [
 cpu = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "flashinfer-python==0.6.1; sys_platform=='linux'",
-  "flashinfer-cubin==0.6.1; sys_platform=='linux'",
+  "flashinfer-python==0.6.6; sys_platform=='linux'",
+  "flashinfer-cubin==0.6.6; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1",
   "peft",
@@ -143,9 +143,9 @@ cpu = [
 cu128 = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "flashinfer-python==0.6.1; sys_platform == 'linux'",
-  "flashinfer-cubin==0.6.1; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.6.1+cu128; sys_platform == 'linux'",
+  "flashinfer-python==0.6.6; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.6; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.6+cu128; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1",
   "nvidia-cublas-cu12; sys_platform == 'linux'",
@@ -189,9 +189,8 @@ dependency-metadata = [
 
 
 override-dependencies = [
-    "flashinfer-python==0.6.1; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
-    "flashinfer-cubin==0.6.1; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
-    "xgrammar>=0.1.32,<1.0.0",                            # CVE-2026-25048: override vllm's pin on 0.1.29
+    "flashinfer-python; sys_platform != 'darwin'", # uv locking won't find the matching versions of flashinfer-python and -cubin without overriding
+    "flashinfer-cubin; sys_platform != 'darwin'",  # perhaps because the published wheels have some wrong metadata
 ]
 
 environments = [
