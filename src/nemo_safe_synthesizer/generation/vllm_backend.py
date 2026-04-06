@@ -137,7 +137,6 @@ class VllmBackend(GeneratorBackend):
             prompt_template=self.model_metadata.prompt_config.template,
         )
         self.llm: vLLM | None = None
-        self.logits_processors = []
 
         # Do not generate detailed error messages in production to avoid leaking sensitive data.
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
@@ -191,7 +190,6 @@ class VllmBackend(GeneratorBackend):
         # vllm requires this "config" to set the backend ahead of time.
         structured_outputs_config = StructuredOutputsConfig(
             backend=self.config.generation.structured_generation_backend,
-            disable_fallback=True,
         )
         # Unsloth patches model attention forward functions with torch.compiler.disable().
         # vLLM compiles TransformersForCausalLM with fullgraph=True via @support_torch_compile.
@@ -222,7 +220,7 @@ class VllmBackend(GeneratorBackend):
         if not self.config.generation.use_structured_generation:
             return None
 
-        params: dict[str, Any] = {"disable_fallback": True}
+        params: dict[str, Any] = {}
 
         if self.config.generation.structured_generation_schema_method == "regex":
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
@@ -511,7 +509,6 @@ class VllmBackend(GeneratorBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            logits_processors=self.logits_processors,
             max_tokens=self.model_metadata.max_seq_length,
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,

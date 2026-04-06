@@ -127,17 +127,17 @@ cpu = [
   "peft",
   "opacus",
   "sentence-transformers",
-  "torch==2.9.1; sys_platform == 'darwin'",
-  "torch==2.9.1+cpu; sys_platform == 'linux'",
-  "torchvision==0.24.1; sys_platform == 'darwin'",
-  "torchvision==0.24.1+cpu; sys_platform == 'linux'",
-  "torchao==0.15.0",
+  "torch==2.10.0; sys_platform == 'darwin'",
+  "torch==2.10.0+cpu; sys_platform == 'linux'",
+  "torchvision==0.25.0; sys_platform == 'darwin'",
+  "torchvision==0.25.0+cpu; sys_platform == 'linux'",
+  "torchao==0.16.0",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4; sys_platform=='linux'",
-  "unsloth_zoo==2025.12.4; sys_platform=='linux'",
-  "vllm==0.15.0; sys_platform=='linux'",
+  "unsloth[cu128-torch2100]==2026.3.18; sys_platform=='linux'",
+  "unsloth_zoo==2026.3.7; sys_platform=='linux'",
+  "vllm==0.18.0; sys_platform=='linux'",
 ]
 
 cu128 = [
@@ -153,17 +153,17 @@ cu128 = [
   "opacus",
   "peft",
   "sentence-transformers",
-  "torch==2.9.1+cu128; sys_platform == 'linux'",
+  "torch==2.10.0+cu128; sys_platform == 'linux'",
   "torch-c-dlpack-ext",
-  "torchvision==0.24.1+cu128; sys_platform == 'linux'",
-  "torchao==0.15.0; sys_platform == 'linux'",
+  "torchvision==0.25.0+cu128; sys_platform == 'linux'",
+  "torchao==0.16.0; sys_platform == 'linux'",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
-  "unsloth[cu128-torch291]==2025.12.4; sys_platform == 'linux'",
-  "unsloth_zoo==2025.12.4; sys_platform == 'linux'",
-  "vllm==0.15.0; sys_platform == 'linux'",
-  "xformers==v0.0.33.post2; sys_platform == 'linux'",
+  "unsloth[cu128-torch2100]==2026.3.18; sys_platform == 'linux'",
+  "unsloth_zoo==2026.3.7; sys_platform == 'linux'",
+  "vllm==0.18.0; sys_platform == 'linux'",
+  "xformers==v0.0.34; sys_platform == 'linux'",
 ]
 
 # at some point, do per-subpackage dependencies
@@ -204,7 +204,7 @@ environments = [
     "sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 
-constraint-dependencies = ["torch==2.9.1", "regex==2025.07.34", "pandas<3"]
+constraint-dependencies = ["torch==2.10.0", "regex==2025.07.34", "pandas<3"]
 
 
 
