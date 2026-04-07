@@ -193,7 +193,7 @@ class TestGroupTrainingExamplesBy:
 
     def test_list_rejected_by_pydantic(self):
         with pytest.raises(ValidationError):
-            DataParameters(group_training_examples_by=["patient_id", "event_id"])
+            DataParameters(group_training_examples_by=["patient_id", "event_id"])  # type: ignore[arg-type]
 
     def test_comma_separated_string_accepted_by_pydantic(self):
         params = DataParameters(group_training_examples_by="patient_id,event_id")
