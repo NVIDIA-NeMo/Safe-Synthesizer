@@ -167,7 +167,6 @@ class ConfigBuilder(object):
         self._training_config: TrainingHyperparams | None = self._resolve_config(
             values=config, cls=TrainingHyperparams, **kwargs
         )
-        self._enable_synthesis = True
         return self
 
     def with_generate(self, config: GenerateParameters | ParamDict | None = None, **kwargs) -> Self:
@@ -183,7 +182,6 @@ class ConfigBuilder(object):
         self._generation_config: GenerateParameters | None = self._resolve_config(
             values=config, cls=GenerateParameters, **kwargs
         )
-        self._enable_synthesis = True
         return self
 
     def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:

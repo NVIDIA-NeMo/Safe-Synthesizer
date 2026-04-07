@@ -7,17 +7,7 @@ import itertools
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from re import Pattern as PatternType
-from typing import AnyStr, Optional
-
-# We import as RePattern here separately from PatternType
-# so we can use it for isinstance checks. But if the first
-# part of this import succeeds, we cannot use it for type
-# hinting so we import that one separately
-try:
-    from re import Pattern as RePattern
-except ImportError:
-    from re import Pattern as RePattern
+from typing import Optional
 
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord
@@ -27,9 +17,9 @@ from .predictor import ContextSpan, Predictor, is_context_matched
 
 
 def split_header_contexts(
-    contexts: list[str | RePattern],
-) -> tuple[RePattern | None, RePattern | None]:
-    """Split a list of strings and RePatterns into two distcit regexes.
+    contexts: list[str | re.Pattern],
+) -> tuple[re.Pattern | None, re.Pattern | None]:
+    """Split a list of strings and re.Patterns into two distcit regexes.
 
     Returns (regexes, tokens)
     """
@@ -37,7 +27,7 @@ def split_header_contexts(
     _header_patterns = []
     _header_tokens = []
     for context in contexts:
-        if isinstance(context, RePattern):
+        if isinstance(context, re.Pattern):
             _header_patterns.append(context)
         elif isinstance(context, str):
             _header_tokens.append(context)
@@ -66,7 +56,7 @@ class Pattern:
         `NERError` if `pattern` is not a string or regex Pattern
     """
 
-    pattern: str | RePattern
+    pattern: str | re.Pattern
 
     context_score: Optional[float] = Score.HIGH
     """This is the optimal score that you want to assign when context exists
@@ -82,21 +72,21 @@ class Pattern:
     """If set, do not emit a match if only the raw regex matches without any context
     """
 
-    header_contexts: Optional[list[str | RePattern]] = field(default_factory=list)
+    header_contexts: Optional[list[str | re.Pattern]] = field(default_factory=list)
     """A list of strings or regexes that should be used to check the
     name of the field / header for a match. If there are any matches here, then
     the ``context_score`` value will be used as the matched score
     """
 
-    header_regexes: Optional[RePattern] = field(init=False, default=None)
-    header_tokens: Optional[RePattern] = field(init=False, default=None)
+    header_regexes: Optional[re.Pattern] = field(init=False, default=None)
+    header_tokens: Optional[re.Pattern] = field(init=False, default=None)
 
-    neg_header_contexts: Optional[list[str | RePattern]] = field(default_factory=list)
+    neg_header_contexts: Optional[list[str | re.Pattern]] = field(default_factory=list)
     """A list of strings or regexes that can be used to disqualify a field from being analyzed.
     If used, any matches were will short-circuit processing for a given key/value pair."""
 
-    neg_header_regexes: Optional[RePattern] = field(init=False, default=None)
-    neg_header_tokens: Optional[RePattern] = field(init=False, default=None)
+    neg_header_regexes: Optional[re.Pattern] = field(init=False, default=None)
+    neg_header_tokens: Optional[re.Pattern] = field(init=False, default=None)
 
     header_context_source: int = Predictor.KEY
     """If doing header context searching, this dictates where to search for the context. We default
@@ -110,12 +100,12 @@ class Pattern:
     matching regular expressions. See the ``ContextSpan`` usage for more details.
     """
 
-    compiled_regex: PatternType[AnyStr] = field(init=False)
+    compiled_regex: re.Pattern[str] = field(init=False)
 
     def __post_init__(self):
         if isinstance(self.pattern, str):
             self.compiled_regex = re.compile(self.pattern)
-        elif isinstance(self.pattern, RePattern):
+        elif isinstance(self.pattern, re.Pattern):
             self.compiled_regex = self.pattern
         else:
             raise NERError(f"Could not initialize regex with {self.pattern}")
@@ -411,7 +401,7 @@ def phrase_predictors_from_entity_ruler(name: str, er_patterns: list[dict], enti
     return builder.get_predictors()
 
 
-def create_exact_field_matcher(match: str) -> RePattern:
+def create_exact_field_matcher(match: str) -> re.Pattern:
     """Helper function that takes a full string that should be matched
     for exactly in a field name and put it into a regex that supports
     finding that exact string in potentially flattened fields.
