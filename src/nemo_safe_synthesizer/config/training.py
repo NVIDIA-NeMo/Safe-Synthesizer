@@ -276,7 +276,6 @@ class TrainingHyperparams(Parameters):
     @model_validator(mode="after")
     def _resolve_platform_defaults(self) -> Self:
         """Override defaults that are incompatible with the current platform."""
-        if platform.machine() == "aarch64":
-            if self.attn_implementation == "kernels-community/vllm-flash-attn3":
-                self.attn_implementation = "sdpa"
+        if platform.machine() == "aarch64" and self.attn_implementation == "kernels-community/vllm-flash-attn3":
+            self.attn_implementation = "sdpa"
         return self

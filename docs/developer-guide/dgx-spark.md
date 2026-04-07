@@ -3,7 +3,7 @@
 
 # NeMo Safe Synthesizer on DGX Spark
 
-Generate synthetic tabular data with quality and privacy guarantees — train, generate, and evaluate in one command.
+Run NeMo Safe Synthesizer on DGX Spark (aarch64 / GB10) using a pre-built container with the correct Triton, vLLM, and PyTorch versions.
 
 ## Quick Start
 
@@ -15,9 +15,6 @@ cd Safe-Synthesizer
 docker build -f containers/Dockerfile.cuda-aarch64 -t nss-spark .
 docker run --gpus all --ipc=host --ulimit memlock=-1 -it --ulimit stack=67108864 nss-spark
 ```
-
-> If HTTPS clone fails with authentication errors, use SSH:
-> `git clone git@github.com:NVIDIA-NeMo/Safe-Synthesizer.git`
 
 ### 2. Run
 
@@ -107,4 +104,4 @@ sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
 
 **Why a container?** DGX Spark's CUDA 13 + aarch64 requires specific Triton, vLLM, and PyTorch versions. The container (`nvcr.io/nvidia/vllm:26.02-py3`) provides a tested stack where Unsloth training and vLLM generation work natively.
 
-**Full documentation:** [Safe Synthesizer User Guide](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/docs/user-guide/getting-started.md)
+**Full documentation:** [Safe Synthesizer User Guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/)
