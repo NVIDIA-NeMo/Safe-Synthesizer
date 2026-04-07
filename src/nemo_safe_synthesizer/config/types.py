@@ -5,7 +5,7 @@
 
 The ``Auto*Param`` and ``Optional*`` aliases let config fields accept the
 sentinel string ``"auto"`` alongside their native type, enabling deferred
-resolution at runtime. Collection aliases reduce boilerplate indownstream
+resolution at runtime. Collection aliases reduce boilerplate in downstream
 Pydantic models.
 """
 
