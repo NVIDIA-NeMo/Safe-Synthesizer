@@ -33,7 +33,7 @@ def artifacts(ctx: click.Context):
 @click.option("--dry-run", is_flag=True, help="Dry run the command.")
 @click.option("--caches-only", is_flag=True, help="Only clean caches.")
 @click.option("--force", is_flag=True, help="Force clean.")
-def clean(ctx: click.Context, artifact_path: PathT | None, dry_run: bool, caches_only: bool, force: bool):
+def clean(artifact_path: PathT | None, dry_run: bool, caches_only: bool, force: bool):
     """Clean artifacts in a Workdir structure."""
     if artifact_path is None:
         artifact_path = Path("safe-synthesizer-artifacts")
