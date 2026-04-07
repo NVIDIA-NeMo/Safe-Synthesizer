@@ -72,7 +72,7 @@ class TextSemanticSimilarity(Component):
     )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with per-column PCA scatter figures."""
         ctx = super().jinja_context
         ctx["anchor_link"] = "#semantic-similarity"
@@ -266,9 +266,9 @@ class TextSemanticSimilarity(Component):
         """
         try:
             return sentence_transformer_model.encode(
-                text_data.values,
+                text_data.tolist(),
                 normalize_embeddings=True,
-            )  # ty: ignore[no-matching-overload]
+            )
         except Exception:
             logger.exception("Error getting embedding vector.")
             return np.ndarray(shape=0)

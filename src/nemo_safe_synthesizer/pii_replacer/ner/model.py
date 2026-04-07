@@ -1,19 +1,18 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
 """This module provides an interface to Nemo Safe Synthesizer Pii Replacer NER functionality."""
 
+from __future__ import annotations
+
 import re
-from typing import Pattern
+from re import Pattern
 
 from ...data_processing.records.fragment import create_ner_api_response
 from ...pii_replacer.ner.entity import Score
 from ...pii_replacer.ner.ner import ner
 from ...pii_replacer.ner.pipeline import pipeline
 from ...pii_replacer.ner.regex import regex
-
-InputData = str | dict | list[str] | list[dict]
 
 INPUT_ERR = "Input data must be a string, dict, or a list of either"
 
@@ -48,7 +47,7 @@ class Model:
     def predictors(self) -> list[str]:
         return [pred.source for pred in self._ner.pipeline.predictors]
 
-    def predict(self, input_data: InputData, *, timings_only=False) -> list[dict] | dict:
+    def predict(self, input_data: str | dict | list[str] | list[dict], *, timings_only=False) -> list[dict] | dict:
         if isinstance(input_data, (str, dict)):
             input_data = [input_data]
 

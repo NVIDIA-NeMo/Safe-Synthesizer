@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 from ..config import SafeSynthesizerParameters
 from ..config.generate import ValidationParameters
@@ -47,13 +48,13 @@ class Processor(ABC):
         schema: JSON schema as a dictionary.
     """
 
-    def __init__(self, schema: dict, config: ValidationParameters):
+    def __init__(self, schema: dict[str, Any], config: ValidationParameters):
         self.schema = schema
         self.config = config
         logger.debug(f"Initialized processor with schema={schema} and config={config}")
 
     @property
-    def name(self):
+    def name(self) -> str:
         """The processor's name with spaces, for logging."""
         n = self.__class__.__name__
         return n[0] + "".join(" " + c if c.isupper() else c for c in n[1:])
@@ -136,7 +137,7 @@ class TimeSeriesDataProcessor(Processor):
 
     def __init__(
         self,
-        schema: dict,
+        schema: dict[str, Any],
         config: ValidationParameters,
         time_column: str | None,
         interval_seconds: int | None,
@@ -194,7 +195,7 @@ class GroupedDataProcessor(Processor):
 
     def __init__(
         self,
-        schema: dict,
+        schema: dict[str, Any],
         config: ValidationParameters,
         bos_token: str,
         eos_token: str,
@@ -305,7 +306,7 @@ class GroupedDataProcessor(Processor):
         )
 
 
-def create_processor(schema: dict, metadata: ModelMetadata, config: SafeSynthesizerParameters) -> Processor:
+def create_processor(schema: dict[str, Any], metadata: ModelMetadata, config: SafeSynthesizerParameters) -> Processor:
     """Create the appropriate record processor for the current pipeline mode.
 
     Selects ``TimeSeriesDataProcessor``, ``GroupedDataProcessor``, or

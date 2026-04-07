@@ -372,7 +372,7 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot get adapter_path: workdir is not set")
-        return self.workdir.train.adapter.path.resolve()
+        return self.workdir.train.adapter.path.resolve()  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     @property
     def metadata_path(self) -> Path:
@@ -402,7 +402,7 @@ class ModelMetadata(BaseModel):
         rsf = 1.0
         if isinstance(self.rope_scaling, RopeScaling) and self.rope_scaling.factor > 1.0:
             rsf = self.rope_scaling.factor
-        return int(self.base_max_seq_length * rsf)
+        return int((self.base_max_seq_length or DEFAULT_MAX_SEQ_LENGTH) * rsf)
 
     def save_metadata(self) -> None:
         """Save model metadata to JSON file.
@@ -414,7 +414,7 @@ class ModelMetadata(BaseModel):
             raise ValueError("Cannot save metadata: workdir is not set")
         write_json(
             self.model_dump(mode="json"),
-            path=self.workdir.train.adapter.metadata,
+            path=self.workdir.train.adapter.metadata,  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
             indent=4,
         )
 
@@ -564,7 +564,7 @@ class Granite(ModelMetadata):
                 add_eos_token_to_prompt=True,
             ),
             model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,
+            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
             **kwargs,
         )
@@ -605,7 +605,7 @@ class Llama32(ModelMetadata):
                 add_eos_token_to_prompt=False,
             ),
             model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,
+            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
             **kwargs,
         )
@@ -688,7 +688,7 @@ class Nemotron(ModelMetadata):
                 name=model_name_or_path,
             ),
             model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,
+            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
             **kwargs,
         )
@@ -726,7 +726,7 @@ class Qwen(ModelMetadata):
                 name=model_name_or_path,
             ),
             model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,
+            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
             **kwargs,
         )
@@ -864,7 +864,7 @@ class TinyLlama(ModelMetadata):
                 name=model_name_or_path,
             ),
             model_name_or_path=model_name_or_path,
-            rope_scaling=rope_scaling_factor,
+            rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
             **kwargs,
         )

@@ -1,12 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-
 """
 Detection for Slack webhooks and tokens
 
 We set both score values to 1.0 here because these are such precise matches.
 """
+
+from __future__ import annotations
 
 from ..entity import Entity, Score
 from ..regex import Pattern, RegexPredictor

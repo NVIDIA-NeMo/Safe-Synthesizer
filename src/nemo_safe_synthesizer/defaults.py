@@ -8,6 +8,8 @@ defaults, prompt templates, and miscellaneous constants shared across
 modules.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 # default artifacts path

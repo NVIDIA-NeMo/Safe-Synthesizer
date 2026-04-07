@@ -17,6 +17,8 @@ Classes:
     GenerationError: Sampling/generation failures.
 """
 
+from __future__ import annotations
+
 
 class SafeSynthesizerError(Exception):
     """Base class for all known Safe Synthesizer errors."""

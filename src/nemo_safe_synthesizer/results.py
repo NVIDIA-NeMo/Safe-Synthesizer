@@ -8,6 +8,8 @@ Assembles generation output, evaluation scores, and timing into the
 consumed by the SDK and CLI.
 """
 
+from __future__ import annotations
+
 import pandas as pd
 
 from .config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming

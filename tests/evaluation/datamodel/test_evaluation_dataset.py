@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import cast
+
 import pandas as pd
 import pytest
 
@@ -18,6 +20,7 @@ def test_from_dataframes_happy_path(train_df, synth_df, test_df):
     assert evaluation_dataset is not None
     assert len(evaluation_dataset.reference) == 100
     assert len(evaluation_dataset.output) == 100
+    assert evaluation_dataset.test is not None
     assert len(evaluation_dataset.test) == 100
 
     assert len(evaluation_dataset.evaluation_fields) == 8
@@ -25,14 +28,16 @@ def test_from_dataframes_happy_path(train_df, synth_df, test_df):
         if f.name in ["num", "num_Int64"]:
             assert f.reference_field_features.type == FieldType.NUMERIC
             assert f.output_field_features.type == FieldType.NUMERIC
+            assert f.reference_distribution is not None
             assert len(f.reference_distribution) > 0
-            assert f.distribution_distance > 0.01
+            assert f.distribution_distance is not None and f.distribution_distance > 0.01
         elif f.name in ["num_cat", "num_cat_Int64", "small_cat"]:
             assert f.reference_field_features.type == FieldType.CATEGORICAL
             assert f.output_field_features.type == FieldType.CATEGORICAL
             assert f.reference_field_features.unique_count < 10
+            assert f.reference_distribution is not None
             assert len(f.reference_distribution) > 0
-            assert f.distribution_distance > 0.01
+            assert f.distribution_distance is not None and f.distribution_distance > 0.01
         elif f.name in ["other"]:
             assert f.reference_field_features.type == FieldType.OTHER
             assert f.output_field_features.type == FieldType.OTHER
@@ -43,8 +48,9 @@ def test_from_dataframes_happy_path(train_df, synth_df, test_df):
             assert f.reference_field_features.type == FieldType.BINARY
             assert f.output_field_features.type == FieldType.BINARY
             assert f.reference_field_features.unique_count == 2
+            assert f.reference_distribution is not None
             assert len(f.reference_distribution) > 0
-            assert f.distribution_distance > 0.01
+            assert f.distribution_distance is not None and f.distribution_distance > 0.01
         elif f.name in ["text"]:
             assert f.reference_field_features.type == FieldType.TEXT
             assert f.output_field_features.type == FieldType.TEXT
@@ -59,6 +65,7 @@ def test_from_dataframes_with_sampling(train_df_5k, synth_df_5k, test_df):
     assert evaluation_dataset is not None
     assert len(evaluation_dataset.reference) == 1000
     assert len(evaluation_dataset.output) == 1000
+    assert evaluation_dataset.test is not None
     assert len(evaluation_dataset.test) == 100
 
     assert len(evaluation_dataset.evaluation_fields) == 8
@@ -66,7 +73,7 @@ def test_from_dataframes_with_sampling(train_df_5k, synth_df_5k, test_df):
 
 def test_degenerate_input(synth_df_5k, test_df):
     with pytest.raises(ValueError):
-        EvaluationDataset.from_dataframes(None, synth_df_5k, test_df)
+        EvaluationDataset.from_dataframes(cast(pd.DataFrame, None), synth_df_5k, test_df)
     with pytest.raises(ValueError):
         EvaluationDataset.from_dataframes(pd.DataFrame(), synth_df_5k, test_df)
 

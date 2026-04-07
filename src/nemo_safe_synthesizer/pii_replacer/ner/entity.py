@@ -7,6 +7,8 @@ When doing data discovery, all discovered data should map
 back to an Enum here
 """
 
+from __future__ import annotations
+
 from enum import Enum
 
 

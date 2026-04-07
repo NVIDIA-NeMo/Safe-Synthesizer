@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from enum import Enum
 from numbers import Number
 from pathlib import Path
-from typing import Iterator, Sequence
 
 from ...observability import get_logger
 from . import person_name

@@ -102,6 +102,7 @@ def _create_process_data_setup(
 
     builder = SafeSynthesizer(config=config, workdir=fixture_workdir)
     builder._data_source = original_df
+    assert builder._nss_config is not None
     if replace_pii:
         from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
@@ -372,6 +373,7 @@ class TestLoadFromSavePath:
         builder.load_from_save_path()
 
         assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
+        assert builder._original_train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -395,6 +397,7 @@ class TestLoadFromSavePath:
         builder.process_data()
 
         assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
+        assert builder._original_train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -539,6 +542,7 @@ class TestLoadFromSavePathHoldoutZero:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
+        assert builder._original_train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
@@ -560,13 +564,16 @@ class TestLoadFromSavePathHoldoutZero:
         """
         workdir, train_split = self._prepare_workdir_no_holdout(tmp_path, fixture_sample_patient_dataframe)
         # Simulate old behavior: empty 0-byte test.csv
-        workdir.dataset.test.touch()
+        test_csv = workdir.dataset.test
+        assert isinstance(test_csv, Path)
+        test_csv.touch()
 
         mock_metadata_cls.from_metadata_json.return_value = MagicMock()
 
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
+        assert builder._original_train_df is not None
         pd.testing.assert_frame_equal(builder._original_train_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True

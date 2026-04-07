@@ -147,7 +147,7 @@ def assert_adapter_saved(workdir: Workdir) -> None:
 
     Reusable assertion helper for any test that trains via the SDK.
     """
-    adapter_dir = workdir.train.adapter.path
+    adapter_dir = workdir.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
     assert (adapter_dir / "adapter_config.json").exists(), "adapter_config.json missing"
     assert any(adapter_dir.glob("*.safetensors")), "No safetensors files found"
 
@@ -175,6 +175,6 @@ def _patch_attn_eager():
         model_kwargs.setdefault("attn_implementation", "sdpa")
         return original_build(self, model_kwargs)
 
-    HuggingFaceBackend._build_base_framework_params = patched_build
+    HuggingFaceBackend._build_base_framework_params = patched_build  # ty: ignore[invalid-assignment] -- test monkey-patch
     yield
     HuggingFaceBackend._build_base_framework_params = original_build

@@ -45,4 +45,5 @@ def test_nss_unsloth_train_one_batch(iris_df, tmp_path):
         max_holdout=0,
     )
     nss = train_with_sdk(config, iris_df, tmp_path)
+    assert nss._workdir is not None
     assert_adapter_saved(nss._workdir)

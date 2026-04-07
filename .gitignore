@@ -27,7 +27,7 @@ integration-report.xml
 build
 dist
 .mypy_cache
-.python-version
+# .python-version is tracked -- uv reads it to select the interpreter
 .history
 .venv
 .ruff_cache

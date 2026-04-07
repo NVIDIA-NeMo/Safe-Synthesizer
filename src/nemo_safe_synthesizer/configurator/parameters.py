@@ -19,14 +19,14 @@ from __future__ import annotations
 import json
 import typing
 from abc import ABCMeta
+from collections.abc import Generator, Iterator, Mapping
 from pathlib import Path
-from typing import Any, Generator, Iterable, Mapping, get_args
+from typing import Any, Self, get_args
 
 import yaml
 from pydantic import (
     BaseModel,
 )
-from typing_extensions import Self
 
 from ..config.base import (
     pydantic_model_config,
@@ -95,7 +95,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             else:
                 pass
 
-    def _iter_parameters(self, recursive: bool = True) -> Generator[Mapping[str, DataT | Parameters], None, None]:
+    def _iter_parameters(self, recursive: bool = True) -> Generator[Mapping[str, Any], None, None]:
         """Yield ``{name: value}`` dicts for every parameter in this collection.
 
         Args:
@@ -111,7 +111,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             for pg in param_groups:
                 yield from pg._iter_parameters(recursive=True)
 
-    def __iter__(self) -> Iterable[DataT]:
+    def __iter__(self) -> Iterator[Mapping[str, Any]]:  # ty: ignore[invalid-method-override] -- intentionally overrides pydantic BaseModel.__iter__ with parameter-group semantics
         """Iterate over all parameters, recursing into nested groups."""
         return self._iter_parameters(recursive=True)
 
@@ -231,8 +231,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         """
         return cls.model_validate(kwargs)
 
-    def get_auto_params(self) -> Iterable[Any]:
-        """Yield parameters whose current value is the ``"auto"`` sentinel."""
+    def get_auto_params(self) -> Iterator[str]:
+        """Yield field names whose current value is the ``"auto"`` sentinel."""
         for param in self:
-            if param == "auto":
-                yield param
+            for field_name, value in param.items():
+                if value == "auto":
+                    yield field_name

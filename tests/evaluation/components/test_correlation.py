@@ -21,16 +21,19 @@ def test_correlation(train_df_5k, synth_df_5k, test_df):
     correlation = Correlation.from_evaluation_dataset(evaluation_dataset)
 
     assert correlation.name == "Column Correlation Stability"
-    assert correlation.score.raw_score > 0
+    assert correlation.score.raw_score is not None and correlation.score.raw_score > 0
     assert correlation.score.score == 10
     assert correlation.score.grade == Grade.EXCELLENT
     assert correlation.score.notes is None
 
     # Text and Other columns excluded
+    assert correlation.reference_correlation is not None
     assert correlation.reference_correlation.shape == (6, 6)
     assert ((correlation.reference_correlation >= -1) & (correlation.reference_correlation <= 1)).all().all()
+    assert correlation.output_correlation is not None
     assert correlation.output_correlation.shape == (6, 6)
     assert ((correlation.output_correlation >= -1) & (correlation.output_correlation <= 1)).all().all()
+    assert correlation.correlation_difference is not None
     assert correlation.correlation_difference.shape == (6, 6)
     assert ((correlation.correlation_difference >= 0) & (correlation.correlation_difference <= 1)).all().all()
 
@@ -47,11 +50,12 @@ def test_correlation_all_numeric(train_df_5k, synth_df_5k, test_df):
     correlation = Correlation.from_evaluation_dataset(evaluation_dataset)
 
     assert correlation.name == "Column Correlation Stability"
-    assert correlation.score.raw_score > 0
+    assert correlation.score.raw_score is not None and correlation.score.raw_score > 0
     assert correlation.score.score == 10
     assert correlation.score.grade == Grade.EXCELLENT
     assert correlation.score.notes is None
 
+    assert correlation.reference_correlation is not None
     assert correlation.reference_correlation.shape == (2, 2)
 
 

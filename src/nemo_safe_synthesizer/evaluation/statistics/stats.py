@@ -9,9 +9,12 @@ computation (Pearson, Theil's U, Correlation Ratio), PCA, and
 data-overlap detection used by the evaluation components.
 """
 
+from __future__ import annotations
+
 import math
 import uuid
 import warnings
+from typing import TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -22,6 +25,8 @@ from scipy.spatial.distance import jensenshannon
 from scipy.stats import pearsonr
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+
+DistributionDict: TypeAlias = dict[str, float]
 
 warnings.filterwarnings("ignore", module="dython")
 warnings.filterwarnings("ignore", module="dython.nominal")
@@ -89,7 +94,7 @@ def count_memorized_lines(df1: pd.DataFrame, df2: pd.DataFrame) -> int:
     return len(inner_join)
 
 
-def get_categorical_field_distribution(field: pd.Series) -> dict:
+def get_categorical_field_distribution(field: pd.Series) -> DistributionDict:
     """Compute the normalized value-count distribution of a categorical column.
 
     Args:
@@ -108,7 +113,7 @@ def get_categorical_field_distribution(field: pd.Series) -> dict:
     return distribution
 
 
-def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series):
+def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series) -> np.ndarray:
     """Compute shared histogram bin edges for two numeric series.
 
     Uses the ``"doane"`` strategy on the combined data, falling back to
@@ -150,7 +155,7 @@ def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series):
     return bins
 
 
-def get_numeric_field_distribution(field: pd.Series, bins) -> dict:
+def get_numeric_field_distribution(field: pd.Series, bins: np.ndarray | pd.IntervalIndex | int) -> DistributionDict:
     """Compute the normalized distribution of a numeric column cut into bins.
 
     Args:
@@ -160,7 +165,7 @@ def get_numeric_field_distribution(field: pd.Series, bins) -> dict:
     Returns:
         Mapping of ``{bin_label: proportion}`` where proportions are in ``[0, 1]``.
     """
-    binned_data = pd.cut(field, bins, include_lowest=True)
+    binned_data = pd.cut(field, bins, include_lowest=True)  # ty: ignore[no-matching-overload]
     distribution = {}
     for d in binned_data:
         if str(d) != "nan":
@@ -171,7 +176,7 @@ def get_numeric_field_distribution(field: pd.Series, bins) -> dict:
     return distribution
 
 
-def compute_distribution_distance(d1: dict, d2: dict) -> float:
+def compute_distribution_distance(d1: DistributionDict, d2: DistributionDict) -> float:
     """Compute the Jensen-Shannon distance between two distributions.
 
     Args:
@@ -248,7 +253,7 @@ def calculate_correlation_ratio(x: pd.Series, y: pd.Series, opt: bool) -> float:
         return correlation_ratio(x, y, nan_strategy="none")
 
 
-def calculate_theils_u(x, y):
+def calculate_theils_u(x: pd.Series, y: pd.Series) -> float:
     """Compute Theil's U (uncertainty coefficient) for two categorical columns.
 
     Args:
@@ -477,7 +482,9 @@ def normalize_dataset(df: pd.DataFrame) -> pd.DataFrame:
     nominal_columns = list(df_cp.select_dtypes(include=["object", "category", "boolean"]).columns)
     int64_dtypes = df_cp.columns[df_cp.dtypes == pd.Int64Dtype()]
     # Convert pandas boolean dtype columns to object to replace possible NaNs with "Missing" values:
-    boolean_dtypes = df_cp[nominal_columns].columns[df_cp[nominal_columns].dtypes == pd.BooleanDtype()]
+    boolean_dtypes = df_cp[nominal_columns].columns[
+        df_cp[nominal_columns].dtypes.apply(lambda x: isinstance(x, pd.BooleanDtype))
+    ]
     df_cp[boolean_dtypes] = df_cp[boolean_dtypes].astype("object")
     numeric_columns = []
     for c in df_cp.columns:

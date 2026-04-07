@@ -8,6 +8,8 @@ Orchestrates metric computation and report assembly by delegating
 to ``MultimodalReport`` and collecting timing information.
 """
 
+from __future__ import annotations
+
 import time
 
 import pandas as pd
@@ -68,7 +70,7 @@ class Evaluator:
         self.test_df = test_df
         self.workdir = workdir
 
-    def evaluate(self):
+    def evaluate(self) -> None:
         """Run all configured evaluation components and store results.
 
         Populates ``self.report`` with the completed ``MultimodalReport``

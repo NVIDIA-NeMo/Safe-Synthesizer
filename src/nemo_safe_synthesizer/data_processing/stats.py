@@ -3,6 +3,8 @@
 
 """Lightweight running statistics using Welford's online algorithm."""
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 

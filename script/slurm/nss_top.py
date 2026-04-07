@@ -274,9 +274,13 @@ class NSSTop(App[None]):
     @on(DataTable.RowHighlighted)
     async def on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key and event.row_key.value:
-            self._selected_job = str(event.row_key.value)
-            await self._refresh_stats(self._selected_job)
+            # Use a separate variable for selected_job and assign at the end to
+            # be explicit and avoid type check issues where ty wasn't able to
+            # correctly narrow the type.
+            selected_job = str(event.row_key.value)
+            await self._refresh_stats(selected_job)
             await self._load_log()
+            self._selected_job = selected_job
 
     # ── Actions ────────────────────────────────────────────────────────────────
 

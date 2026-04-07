@@ -41,7 +41,7 @@ class DatasetStatistics(Component):
     )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context merging all dataset summary fields into the base context."""
         d = super().jinja_context
         stats = self.model_dump()

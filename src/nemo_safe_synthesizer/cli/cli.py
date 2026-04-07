@@ -17,7 +17,7 @@ from .run import run
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """NeMo Safe Synthesizer command-line interface.
     This application is used to run the Safe Synthesizer pipeline.
     It can be used to train a model, generate synthetic data, and evaluate the synthetic data.

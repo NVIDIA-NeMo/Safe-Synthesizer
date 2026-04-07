@@ -7,10 +7,11 @@ import ast
 import json
 import random
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
-from typing import Any, Iterable
+from typing import Any
 
 import pandas as pd
 import yaml
@@ -356,8 +357,8 @@ class Step:
         self,
         rule: Rule,
         df: pd.DataFrame,
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
     ) -> tuple[list[str], Template | None]:
         """Resolve a drop rule to a list of column names and optional condition template.
 
@@ -401,8 +402,8 @@ class Step:
         self,
         df: pd.DataFrame,
         rules: list[Rule],
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
         fnreport: TransformFnAccounting | None = None,
     ) -> None:
         """Drop columns per rules (by name/entity/type/position/condition); respect ``lock_columns``; update ``fnreport``."""
@@ -447,8 +448,8 @@ class Step:
         self,
         rule: Rule,
         df: pd.DataFrame,
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
     ) -> tuple[list[str], Template | None]:
         """Resolve an update rule to a list of column names and optional condition template."""
         column_name = rule.get("name")
@@ -488,8 +489,8 @@ class Step:
         self,
         df: pd.DataFrame,
         rules: list[Rule],
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
         progress: ProgressLog,
         fnreport: TransformFnAccounting,
     ) -> None:
@@ -577,8 +578,8 @@ class Step:
     def execute(
         cls,
         df: pd.DataFrame,
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
         step_config: dict[str, dict],
         env: Environment,
         progress: ProgressLog,
@@ -706,8 +707,8 @@ class Editor:
     def _process_df(
         self,
         df: pd.DataFrame,
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
         fnreport: TransformFnAccounting | None = None,
     ) -> pd.DataFrame:
         """Run all steps in order on ``df`` (in place); progress logged every 30s."""
@@ -724,8 +725,8 @@ class Editor:
     def process_df(
         self,
         df: pd.DataFrame,
-        entities: dict[str, str],
-        column_types: dict[str, str],
+        entities: dict[str, str | None],
+        column_types: dict[str, str | None],
         fnreport: TransformFnAccounting | None = None,
     ) -> pd.DataFrame:
         """Apply all transformation steps to a deep copy of ``df`` and return the result.
