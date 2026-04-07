@@ -48,9 +48,7 @@ class TestCleanExitCodes:
             mock_workdir.run_dir.mkdir()
 
             with patch("shutil.rmtree", side_effect=PermissionError("denied")):
-                result = cli_runner.invoke(
-                    artifacts, ["clean", "--artifact-path", str(tmp_path), "--force"]
-                )
+                result = cli_runner.invoke(artifacts, ["clean", "--artifact-path", str(tmp_path), "--force"])
 
         assert result.exit_code != 0
         assert "denied" in result.output
@@ -62,8 +60,6 @@ class TestCleanExitCodes:
             mock_workdir.run_dir = tmp_path / "run"
             mock_workdir.run_dir.mkdir()
 
-            result = cli_runner.invoke(
-                artifacts, ["clean", "--artifact-path", str(tmp_path), "--force"]
-            )
+            result = cli_runner.invoke(artifacts, ["clean", "--artifact-path", str(tmp_path), "--force"])
 
         assert result.exit_code == 0

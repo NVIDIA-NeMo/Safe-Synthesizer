@@ -8,6 +8,8 @@ group membership) -- and a ``Holdout`` class that selects the appropriate
 strategy based on pipeline configuration.
 """
 
+from __future__ import annotations
+
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
@@ -26,10 +28,12 @@ INPUT_DATA_TOO_SMALL_ERROR = (
 
 logger = get_logger(__name__)
 
-DataFrameOptionalTuple = tuple[pd.DataFrame, pd.DataFrame] | tuple[pd.DataFrame, None]
+DataFrameOptionalTuple = tuple[pd.DataFrame, pd.DataFrame | None]
 
 
-def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptionalTuple:
+def naive_train_test_split(
+    df: pd.DataFrame, test_size: float | int, random_state: int | None = None
+) -> DataFrameOptionalTuple:
     """Split a dataframe into train and test sets with a random shuffle.
 
     Thin wrapper around ``sklearn.model_selection.train_test_split`` that
@@ -54,7 +58,9 @@ def naive_train_test_split(df, test_size, random_state=None) -> DataFrameOptiona
         return train.reset_index(drop=True), test.reset_index(drop=True)
 
 
-def grouped_train_test_split(df, test_size, group_by, random_state=None) -> DataFrameOptionalTuple:
+def grouped_train_test_split(
+    df: pd.DataFrame, test_size: float | int, group_by: str | list[str], random_state: int | None = None
+) -> DataFrameOptionalTuple:
     """Split a dataframe so that all rows sharing a group stay in the same fold.
 
     Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
@@ -149,7 +155,7 @@ class Holdout:
                 computed holdout is smaller than ``MIN_HOLDOUT``, or if
                 the ``group_by`` column contains missing values.
         """
-        if self.holdout == 0 or self.max_holdout == 0:
+        if not self.holdout or not self.max_holdout:
             return input_df, None
 
         # Check if the input dataset is large enough to hold out
@@ -158,14 +164,23 @@ class Holdout:
                 INPUT_DATA_TOO_SMALL_ERROR,
             )
 
+        holdout_val = self.holdout
+        max_holdout_val = self.max_holdout
+        if holdout_val is None or max_holdout_val is None:
+            return input_df, None
+
+        # Narrow from Unknown (Pydantic descriptor) so ty can check arithmetic.
+        holdout: float | int = holdout_val
+        max_holdout: float | int = max_holdout_val
+
         # Find the number of records to hold out
-        if self.holdout < 1.0:
-            final_holdout = len(input_df) * self.holdout
+        if holdout < 1.0:
+            final_holdout = len(input_df) * holdout
         else:
-            final_holdout = self.holdout
+            final_holdout = holdout
 
         # Clip the number of records to hold out as needed. We always want an int at this point, do a cast.
-        final_holdout = int(min(final_holdout, self.max_holdout))
+        final_holdout = int(min(final_holdout, max_holdout))
 
         # Check that the holdout is at least 10 records
         if final_holdout < MIN_HOLDOUT:
@@ -193,4 +208,4 @@ class Holdout:
                 random_state=self.random_state,
             )
 
-        return df, test_df
+        return (df, test_df)

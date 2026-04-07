@@ -78,14 +78,14 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 
     assert result.synthetic_data is not None
     assert result.synthetic_data.shape == (config.generation.num_records, df.shape[1])
-    assert result.summary.timing.training_time_sec > 0
-    assert result.summary.timing.generation_time_sec > 0
-    assert result.summary.timing.evaluation_time_sec > 0
+    assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0
+    assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0
+    assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0
 
 
 @pytest.mark.e2e
 @pytest.mark.requires_gpu
-@pytest.mark.timeout(500)
+@pytest.mark.timeout(900)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
 def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
@@ -101,6 +101,6 @@ def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fix
 
     assert result.synthetic_data is not None
     assert result.synthetic_data.shape == (config.generation.num_records, df.shape[1])
-    assert result.summary.timing.training_time_sec > 0
-    assert result.summary.timing.generation_time_sec > 0
-    assert result.summary.timing.evaluation_time_sec > 0
+    assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0
+    assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0
+    assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0

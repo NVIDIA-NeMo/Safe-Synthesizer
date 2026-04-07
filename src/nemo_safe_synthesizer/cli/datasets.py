@@ -118,7 +118,7 @@ class DatasetInfo(BaseModel):
         final_load_args = {**default_load_args, **(self.load_args or {})}
 
         try:
-            return reader(url, **final_load_args)
+            return reader(url, **final_load_args)  # ty: ignore[invalid-argument-type] -- reader union includes parquet which has stricter signature
         except Exception as e:
             logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
             raise

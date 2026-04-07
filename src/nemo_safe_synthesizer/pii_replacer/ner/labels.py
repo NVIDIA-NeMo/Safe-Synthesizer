@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import re
-from typing import Iterator, Pattern
+from collections.abc import Iterator
+from re import Pattern
 
 from ...data_processing.records.base import normalize_label, normalize_labels
 from ...observability import get_logger

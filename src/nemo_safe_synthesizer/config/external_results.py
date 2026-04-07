@@ -3,8 +3,10 @@
 
 """Public result models returned by the Safe Synthesizer pipeline."""
 
+from __future__ import annotations
+
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
@@ -36,7 +38,7 @@ class SafeSynthesizerTiming(NSSBaseModel):
             extra={"ctx": {"render_table": True, "tabular_data": self.model_dump(), "title": "Pipeline Timing"}},
         )
 
-    def log_wandb(self, run: Optional["wandb.Run"] = None) -> None:
+    def log_wandb(self, run: wandb.Run | None = None) -> None:
         """Log timing metrics to an active Weights & Biases run.
 
         Args:

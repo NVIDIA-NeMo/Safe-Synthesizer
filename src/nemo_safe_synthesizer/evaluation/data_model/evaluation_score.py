@@ -74,7 +74,7 @@ class EvaluationScore(BaseModel):
         return max(0.0, min(10.0, round(score, 1)))
 
     @staticmethod
-    def score_to_grade(score: float | None, is_privacy=False) -> Grade | PrivacyGrade:
+    def score_to_grade(score: float | None, is_privacy: bool = False) -> Grade | PrivacyGrade:
         """Map a 0--10 numeric score to a qualitative grade."""
         if score is None:
             return PrivacyGrade.UNAVAILABLE if is_privacy else Grade.UNAVAILABLE
@@ -89,7 +89,7 @@ class EvaluationScore(BaseModel):
         return grades[idx]
 
     @staticmethod
-    def finalize_grade(raw_score: float | None, score: float | None, is_privacy=False) -> EvaluationScore:
+    def finalize_grade(raw_score: float | None, score: float | None, is_privacy: bool = False) -> EvaluationScore:
         """Build a complete ``EvaluationScore`` from raw and scaled values.
 
         Rounds, clips, and maps to a grade in one step. Returns a default

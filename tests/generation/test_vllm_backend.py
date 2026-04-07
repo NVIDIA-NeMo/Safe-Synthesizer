@@ -53,7 +53,7 @@ def mock_workdir(fixture_session_cache_dir):
     assert workdir.run_dir.exists(), f"Run dir not created: {workdir.run_dir}"
     assert workdir.train.path.exists(), f"Train dir not created: {workdir.train.path}"
     assert workdir.generate.path.exists(), f"Generate dir not created: {workdir.generate.path}"
-    assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"
+    assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     return workdir
 
@@ -170,8 +170,8 @@ class TestBuildStructuredOutputParams:
             mock_build_regex.assert_called_once_with(
                 mock_schema,
                 params_with_structured_generation_regex,
-                mock_model_metadata.prompt_config.bos_token,
-                mock_model_metadata.prompt_config.eos_token,
+                bos_token=mock_model_metadata.prompt_config.bos_token,
+                eos_token=mock_model_metadata.prompt_config.eos_token,
             )
             assert result is not None
             assert result.regex == "test_regex_pattern"

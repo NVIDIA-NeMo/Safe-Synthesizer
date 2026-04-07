@@ -3,6 +3,8 @@
 
 """Entry point for ``python -m nemo_safe_synthesizer``."""
 
+from __future__ import annotations
+
 import os
 import sys
 

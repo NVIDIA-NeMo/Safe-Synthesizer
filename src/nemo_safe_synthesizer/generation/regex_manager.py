@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from outlines_core.json_schema import (
     BOOLEAN,
@@ -42,7 +42,7 @@ JSON_STRING = rf'"{JSON_STRING_INNER}*"'
 
 # Helper method not exported by outlines_core and outlines doesn't have it anymore
 # past outlines==0.11.8
-def _get_num_items_pattern(min_items, max_items, **kwargs):
+def _get_num_items_pattern(min_items: int | None, max_items: int | None, **kwargs) -> str | None:
     """Return a regex quantifier ``{min,max}`` for array/object items."""
     min_items = int(min_items or 0)
     if max_items is None:
@@ -60,7 +60,7 @@ def _build_object_key_prefix(name: str, whitespace_pattern: str) -> str:
     return f'{whitespace_pattern}"{re.escape(key_inner)}"{whitespace_pattern}:{whitespace_pattern}'
 
 
-def _properties_regex(instance, whitespace_pattern, **kwargs):
+def _properties_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     """Build a regex matching a JSON object with known property names."""
     regex = ""
     regex += r"\{"
@@ -115,7 +115,7 @@ def _properties_regex(instance, whitespace_pattern, **kwargs):
     return regex
 
 
-def _enum_regex(instance, **kwargs):
+def _enum_regex(instance: dict[str, Any], **kwargs) -> str:
     """Build a regex matching any value in the schema's ``enum`` array."""
     choices = []
     for choice in instance["enum"]:
@@ -141,7 +141,7 @@ def _enum_regex(instance, **kwargs):
     return f"({'|'.join(choices)})"
 
 
-def _string_type_regex(instance, **kwargs):
+def _string_type_regex(instance: dict[str, Any], **kwargs) -> str:
     if "maxLength" in instance or "minLength" in instance:
         max_items = instance.get("maxLength", "")
         min_items = instance.get("minLength", "")
@@ -177,7 +177,7 @@ def _string_type_regex(instance, **kwargs):
     return JSON_STRING
 
 
-def _type_array_regex(instance, whitespace_pattern, **kwargs):
+def _type_array_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     num_repeats = _get_num_items_pattern(instance.get("minItems"), instance.get("maxItems"))
     if num_repeats is None:
         return rf"\[{whitespace_pattern}\]"
@@ -191,7 +191,7 @@ def _type_array_regex(instance, whitespace_pattern, **kwargs):
         # Here we need to make the choice to exclude generating list of objects
         # if the specification of the object is not given, even though a JSON
         # object that contains an object here would be valid under the specification.
-        types = [
+        types: list[dict[str, Any]] = [
             {"type": "boolean"},
             {"type": "null"},
             {"type": "number"},
@@ -202,7 +202,7 @@ def _type_array_regex(instance, whitespace_pattern, **kwargs):
         return rf"\[{whitespace_pattern}({'|'.join(regexes)})(,{whitespace_pattern}({'|'.join(regexes)})){num_repeats}){allow_empty}{whitespace_pattern}\]"
 
 
-def _type_object_regex(instance, whitespace_pattern, **kwargs):
+def _type_object_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     # pattern for json object with values defined by instance["additionalProperties"]
     # enforces value type constraints recursively, "minProperties", and "maxProperties"
     # doesn't enforce "required", "dependencies", "propertyNames" "any/all/on Of"
@@ -223,7 +223,7 @@ def _type_object_regex(instance, whitespace_pattern, **kwargs):
     return r"\{" + whitespace_pattern + multiple_key_value_pattern + whitespace_pattern + r"\}"
 
 
-def _type_int_regex(instance, **kwargs):
+def _type_int_regex(instance: dict[str, Any], **kwargs) -> str:
     if "minimum" in instance and "maximum" in instance:
         min_int = int(instance["minimum"])
         max_int = int(instance["maximum"])
@@ -245,7 +245,7 @@ def _type_int_regex(instance, **kwargs):
     return regex
 
 
-def _type_regex(instance, whitespace_pattern, **kwargs):
+def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     """Dispatch to the appropriate regex builder based on the ``type`` keyword.
 
     The ``type`` keyword may be a string naming a single basic type or an
@@ -289,7 +289,7 @@ def _type_regex(instance, whitespace_pattern, **kwargs):
             raise NotImplementedError(f"Unsupported type={instance_type}")
 
 
-def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
+def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
     """Convert a JSON schema fragment into a regex string.
 
     Supports the subset of JSON Schema needed for TabFT schemas --
@@ -322,12 +322,12 @@ def _build_regex(instance: dict, whitespace_pattern: str, **kwargs) -> str:
 
 
 def build_json_based_regex(
-    schema: dict,
+    schema: dict[str, Any],
     config: SafeSynthesizerParameters,
     bos_token: str,
     eos_token: str,
     whitespace_pattern: str | None = None,
-):
+) -> str:
     """Build a regex that constrains LLM output to valid JSONL records.
 
     Args:

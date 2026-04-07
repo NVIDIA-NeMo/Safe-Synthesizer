@@ -17,6 +17,7 @@ PIPELINE_MODE="end_to_end"  # values: two_stage | end_to_end
 CONFIGS_CSV=""  # optional override for CONFIGS array (comma-separated)
 WANDB_PROJECT="" # optional wandb project name; uses EXP_NAME if not provided
 MAX_CONCURRENT_SLURM_JOBS="" # optional max number of concurrent slurm jobs to run within each array; if not provided, no restriction is applied
+NSS_VERSION="" # optional: install nemo-safe-synthesizer from PyPI at this version instead of syncing the repo
 ACCOUNT="${ACCOUNT:-llmservice_sdg_research}"
 TIME_LIMIT="04:00:00"
 TRAIN_TIME_LIMIT=""
@@ -43,6 +44,8 @@ while [ $# -gt 0 ]; do
       WANDB_PROJECT="${2:-}"; shift 2;;
     --max-concurrent-slurm-jobs)
       MAX_CONCURRENT_SLURM_JOBS="${2:-$MAX_CONCURRENT_SLURM_JOBS}"; shift 2;;
+    --nss-version|-V)
+      NSS_VERSION="${2:-}"; shift 2;;
     --time-limit|-t)
       TIME_LIMIT="${2:-$TIME_LIMIT}"; shift 2;;
     --train-time-limit)
@@ -52,12 +55,16 @@ while [ $# -gt 0 ]; do
     --dry-run)
       DRY_RUN="true"; shift;;
     --help|-h)
-      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--dry-run]"
+      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--nss-version VERSION] [--dry-run]"
       echo ""
       echo "Provide either --dataset-urls to specify a list of datasets by name, url, or path, or --dataset-group to use a predefined set of datasets."
       echo "Time limits:"
       echo "    --time-limit is used for end_to_end mode (defaults to 4 hours)"
       echo "    --train-time-limit and --generate-time-limit are used for two_stage mode, and will default to --time-limit if the more more specific train and generate limits are not provided"
+      echo "Package installation:"
+      echo "    --nss-version VERSION  install nemo-safe-synthesizer==VERSION from PyPI instead of syncing the repo"
+      echo "                           example: --nss-version 0.2.3"
+      echo "                           if omitted, the repo at NSS_DIR is used (default behavior)"
 
       exit 0;;
     --) shift; break;;
@@ -115,6 +122,7 @@ fi
 
 export ACCOUNT
 export EXP_NAME
+export NSS_VERSION
 
 # Build configs list: CLI override (comma-separated) takes precedence; otherwise use CONFIGS from env
 declare -a CONFIGS_LIST

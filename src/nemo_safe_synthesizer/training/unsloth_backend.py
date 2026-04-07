@@ -3,13 +3,19 @@
 
 """Optimized training backend using Unsloth."""
 
+from __future__ import annotations
+
 import os
+from typing import TYPE_CHECKING, Any
 
 import torch
 
 from ..llm.utils import add_bos_eos_tokens_to_tokenizer
 from ..observability import get_logger
 from ..training.huggingface_backend import HuggingFaceBackend
+
+if TYPE_CHECKING:
+    from unsloth import FastLanguageModel
 
 logger = get_logger(__name__)
 
@@ -29,6 +35,9 @@ class UnslothTrainer(HuggingFaceBackend):
     * ``torch_dtype`` -- Data type for model weights.
     * ``quantization_config`` -- Configuration for model quantization.
 
+    Attributes:
+        model_loader_type: Reference to FastLanguageModel class for model loading.
+
     See Also:
         HuggingFaceBackend: Parent class providing base training functionality.
 
@@ -36,8 +45,10 @@ class UnslothTrainer(HuggingFaceBackend):
         RuntimeError: If CUDA is not available.
     """
 
+    model_loader_type: type[FastLanguageModel]
+
     def __init__(self, *args, **kwargs):
-        from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
+        from unsloth import FastLanguageModel
 
         super().__init__(*args, **kwargs)
         self.model_loader_type = FastLanguageModel
@@ -47,7 +58,7 @@ class UnslothTrainer(HuggingFaceBackend):
         self.prepare_config(**kwargs)
         self._update_for_unsloth(**kwargs)
 
-    def _update_for_unsloth(self, **model_args):
+    def _update_for_unsloth(self, **model_args: Any) -> None:
         """Translate HuggingFace-style framework params to Unsloth conventions."""
         # Unsloth uses max_seq_length instead of max_position_embeddings and passes it internally
         # to AutoModelForCausalLM.from_pretrained(), so we must remove it to avoid duplicate kwargs
@@ -89,7 +100,7 @@ class UnslothTrainer(HuggingFaceBackend):
             self.framework_load_params["load_in_4bit"] = False
             self.framework_load_params["load_in_8bit"] = False
 
-    def maybe_quantize(self):
+    def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply PEFT wrapping via Unsloth's ``FastLanguageModel.get_peft_model``.
 
         This method configures and applies Parameter-Efficient Fine-Tuning (PEFT)
@@ -100,7 +111,7 @@ class UnslothTrainer(HuggingFaceBackend):
             Unlike the parent class implementation, this method uses Unsloth's
             ``FastLanguageModel.get_peft_model``.
         """
-        from unsloth import FastLanguageModel  # ty: ignore[unresolved-import]
+        from unsloth import FastLanguageModel
 
         self._prepare_quantize_base()
         qparams = self.quant_params.copy()
@@ -109,7 +120,7 @@ class UnslothTrainer(HuggingFaceBackend):
         # Always wrap the model as a PEFT model to ensure adapter is saved correctly
         self.model = FastLanguageModel.get_peft_model(self.model, **qparams)
 
-    def _load_pretrained_model(self, **model_args):
+    def _load_pretrained_model(self, **model_args: Any) -> None:
         """Load model and tokenizer via Unsloth and add BOS/EOS tokens."""
         model, tokenizer = self.model_loader_type.from_pretrained(**self.framework_load_params)
 
@@ -118,7 +129,7 @@ class UnslothTrainer(HuggingFaceBackend):
         )
         self.model = model
 
-    def load_model(self, **model_args):
+    def load_model(self, **model_args: Any) -> None:
         """Load a pretrained model using Unsloth's ``FastLanguageModel``.
 
         Applies a workaround that disables Unsloth's LLAMA32 support
@@ -136,7 +147,7 @@ class UnslothTrainer(HuggingFaceBackend):
         """
         # NOTE: this hack stops unsloth from reaching out to huggingface, see
         # https://github.com/unslothai/unsloth/blob/main/unsloth/models/loader.py#L235
-        from unsloth.models import loader  # ty: ignore[unresolved-import]
+        from unsloth.models import loader
 
         loader.SUPPORTS_LLAMA32 = False
         logger.info(f"load_model: Loading model {self.params.training.pretrained_model} with args: {model_args}")

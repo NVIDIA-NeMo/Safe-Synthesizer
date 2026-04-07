@@ -17,7 +17,7 @@ class CompositeScore(Component):
     """
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with duplicate gauge figures for overview and detail sections."""
         d = super().jinja_context
         # This is some "plotly magic."  The figure is a div with an id and an inlined script.
@@ -30,13 +30,13 @@ class CompositeScore(Component):
     def from_components(components: list[Component] | Component, name: str) -> CompositeScore:
         """Compute a composite score as the mean of child component scores."""
         if isinstance(components, Component):
-            return CompositeScore(score=components.score, name=name)
+            return CompositeScore(name=name, score=components.score)
         if (
             components is None
             or len(components) == 0
             or all([True for c in components if c.score is None or c.score.score is None])
         ):
-            return CompositeScore(score=EvaluationScore(), name=name)
+            return CompositeScore(name=name, score=EvaluationScore())
 
         # Take the mean
         total = 0.0

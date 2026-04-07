@@ -3,6 +3,8 @@
 
 """Shared strings for core modules"""
 
+from __future__ import annotations
+
 
 class ConstDict(dict):
     def __getattr__(self, key):

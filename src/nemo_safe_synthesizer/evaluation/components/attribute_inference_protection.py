@@ -15,6 +15,7 @@ from typing import cast
 import category_encoders as ce
 import numpy as np
 import pandas as pd
+import torch
 from pandas.api.types import is_float_dtype
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
@@ -195,13 +196,13 @@ class AttributeInferenceProtection(Component):
         return (df_tabular, df_text)
 
     @staticmethod
-    def _embed_text(df: pd.DataFrame, embedder) -> pd.DataFrame:
+    def _embed_text(df: pd.DataFrame, embedder: SentenceTransformer) -> pd.DataFrame:
         """Embed each text column and average into a single embedding per row."""
         embeddings = {}
         for col in df.columns:
             data = df[col].to_list()
             data = [str(r) for r in data]
-            embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_numpy=True)
+            embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_tensor=True)
 
         avg_embeddings = []
         for i in range(len(df)):
@@ -210,7 +211,7 @@ class AttributeInferenceProtection(Component):
             norm = embeddings[df.columns[0]][i]
             for j in range(1, len(df.columns)):
                 field = df.columns[j]
-                norm = np.average([norm, embeddings[field][i]], axis=0)
+                norm = torch.mean(torch.stack([norm, embeddings[field][i]]), dim=0)
 
             avg_embeddings.append(norm)
 
@@ -243,7 +244,7 @@ class AttributeInferenceProtection(Component):
         text_columns: list[str],
         numeric_columns: list[str],
         nominal_columns: list[str],
-        embedder,
+        embedder: SentenceTransformer | None,
     ) -> pd.DataFrame:
         # Note, when entering this function, df_train_use is exactly one record
 
@@ -281,16 +282,17 @@ class AttributeInferenceProtection(Component):
         # If all text, just use Sentence Transformer to get NN
         if len(tabular_columns) == 0:
             # Create embeddings for text fields
+            assert embedder is not None
             df_train_embeddings = AttributeInferenceProtection._embed_text(df_train_text, embedder)
             df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
             hits = util.semantic_search(
-                np.array(list(df_train_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
-                np.array(list(df_synth_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
+                torch.stack(df_train_embeddings["embedding"].tolist()),
+                torch.stack(df_synth_embeddings["embedding"].tolist()),
                 top_k=k,
             )
             synth_rows = pd.DataFrame()
             for i in range(k):
-                corpus_id = hits[0][i]["corpus_id"]
+                corpus_id = int(hits[0][i]["corpus_id"])
                 synth_rows = pd.concat(
                     [synth_rows, pd.DataFrame([df_synth.iloc[int(corpus_id)]])],
                     ignore_index=True,
@@ -302,12 +304,13 @@ class AttributeInferenceProtection(Component):
 
         # Get the text embeddings and then the 1000 NN based on just the text
 
+        assert embedder is not None
         df_train_embeddings = AttributeInferenceProtection._embed_text(df_train_text, embedder)
         df_synth_embeddings = AttributeInferenceProtection._embed_text(df_synth_text, embedder)
         search_synth_k = min(1000, len(df_synth_embeddings))
         hits = util.semantic_search(
-            np.array(list(df_train_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
-            np.array(list(df_synth_embeddings["embedding"])),  # ty: ignore[invalid-argument-type]
+            torch.stack(df_train_embeddings["embedding"].tolist()),
+            torch.stack(df_synth_embeddings["embedding"].tolist()),
             top_k=search_synth_k,
         )
         synth_NN = pd.DataFrame()
@@ -315,7 +318,7 @@ class AttributeInferenceProtection(Component):
         corpus_ids = []
 
         for i in range(search_synth_k):
-            corpus_id = hits[0][i]["corpus_id"]
+            corpus_id = int(hits[0][i]["corpus_id"])
             sim = hits[0][i]["score"]
             dist = 1 - sim
             text_dist[i] = dist
@@ -451,8 +454,9 @@ class AttributeInferenceProtection(Component):
 
             # As we process the attack dataset, we'll accumulate for each column the number of
             # correct and incorrect predictions
-            correct = {predict_column: 0 for predict_column in df_train.columns}
-            incorrect = {predict_column: 0 for predict_column in df_train.columns}
+            train_columns = [str(column) for column in df_train.columns]
+            correct = {predict_column: 0 for predict_column in train_columns}
+            incorrect = {predict_column: 0 for predict_column in train_columns}
 
             qi_index = 0
 
@@ -475,7 +479,7 @@ class AttributeInferenceProtection(Component):
                     continue
 
                 # Predict columns are all but the `qi`
-                predict_columns = [column for column in df_train if column not in qi]
+                predict_columns = [column for column in train_columns if column not in qi]
 
                 # Filter down to the `qi`
                 train_row_all = attack_data.iloc[[next]].copy()
@@ -538,7 +542,7 @@ class AttributeInferenceProtection(Component):
                 # Lat/lon values inspired this. Text must be dist .35 or less
                 for column in predict_columns:
                     synth_val = synth_values[column]
-                    train_val = train_row_all.iloc[0][column]  # ty: ignore[invalid-argument-type]
+                    train_val = train_row_all[column].iloc[0]
 
                     if pd.isna(train_val):
                         continue
@@ -548,8 +552,8 @@ class AttributeInferenceProtection(Component):
                             d = Decimal(train_val)
                             # Skip nan value
                             try:
-                                # Ignoring the type error is okay because the try/except handles that case.
-                                d = abs(d.as_tuple().exponent)  # ty: ignore[invalid-argument-type]
+                                exp = d.as_tuple().exponent
+                                d = abs(exp) if isinstance(exp, int) else 0
                             except (ValueError, AttributeError):
                                 continue
 
@@ -593,7 +597,7 @@ class AttributeInferenceProtection(Component):
             # Compute overall accuracy for each column
             accuracy = {}
             col_assess_cnt = {}
-            for column in df_train.columns:
+            for column in train_columns:
                 col_assess_cnt[column] = correct[column] + incorrect[column]
                 if (col_assess_cnt[column]) <= 0:
                     accuracy[column] = 0

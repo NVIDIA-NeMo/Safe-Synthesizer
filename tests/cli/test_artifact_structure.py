@@ -216,7 +216,7 @@ class TestBoundDir:
                 )
             },
         )
-        assert bound.level1.level2.file == Path("/test/level1/level2/deep.txt")
+        assert bound.level1.level2.file == Path("/test/level1/level2/deep.txt")  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     def test_missing_child_raises_attribute_error(self):
         """Accessing non-existent child raises AttributeError."""
@@ -242,7 +242,7 @@ class TestWorkdir:
     def test_base_path_string_conversion(self):
         """base_path is converted from string to Path."""
         workdir = Workdir(
-            base_path="/string/path",  # type: ignore[arg-type]
+            base_path=Path("/string/path"),
             config_name="cfg",
             dataset_name="data",
             run_name="2026-01-15T12:00:00",
@@ -260,6 +260,7 @@ class TestWorkdir:
 
     def test_run_dir(self, workdir: Workdir):
         """run_dir is project_dir/run_name."""
+        assert workdir.run_name is not None
         assert workdir.run_dir == workdir.project_dir / workdir.run_name
 
     def test_workdir_with_arbitrary_run_name(self, fixture_session_cache_dir: Path):
@@ -315,14 +316,14 @@ class TestWorkdir:
 
     def test_train_adapter_path(self, workdir: Workdir):
         """train.adapter.path is train/adapter."""
-        assert workdir.train.adapter.path == workdir.train.path / "adapter"
+        assert workdir.train.adapter.path == workdir.train.path / "adapter"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     def test_train_model_files(self, workdir: Workdir):
         """Adapter directory contains expected files."""
         adapter = workdir.train.adapter
-        assert adapter.adapter_config == adapter.path / "adapter_config.json"
-        assert adapter.metadata == adapter.path / "metadata_v2.json"
-        assert adapter.schema == adapter.path / "dataset_schema.json"
+        assert adapter.adapter_config == adapter.path / "adapter_config.json"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        assert adapter.metadata == adapter.path / "metadata_v2.json"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        assert adapter.schema == adapter.path / "dataset_schema.json"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     # =========================================================================
     # Generate directory structure
@@ -361,15 +362,15 @@ class TestWorkdir:
 
     def test_adapter_path_alias(self, workdir: Workdir):
         """adapter_path shortcut matches full path."""
-        assert workdir.adapter_path == workdir.train.adapter.path
+        assert workdir.adapter_path == workdir.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     def test_metadata_file_alias(self, workdir: Workdir):
         """metadata_file shortcut matches full path."""
-        assert workdir.metadata_file == workdir.train.adapter.metadata
+        assert workdir.metadata_file == workdir.train.adapter.metadata  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     def test_schema_file_alias(self, workdir: Workdir):
         """schema_file shortcut matches full path."""
-        assert workdir.schema_file == workdir.train.adapter.schema
+        assert workdir.schema_file == workdir.train.adapter.schema  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     def test_output_file_alias(self, workdir: Workdir):
         """output_file shortcut matches full path."""
@@ -391,7 +392,7 @@ class TestWorkdir:
         """ensure_directories creates the expected directory structure."""
         workdir_tmp.ensure_directories()
 
-        assert workdir_tmp.train.adapter.path.is_dir()
+        assert workdir_tmp.train.adapter.path.is_dir()  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert workdir_tmp.generate.path.is_dir()
         assert workdir_tmp.dataset.path.is_dir()
 
@@ -405,7 +406,7 @@ class TestWorkdir:
         workdir_tmp.ensure_directories()
         workdir_tmp.ensure_directories()  # Should not raise
 
-        assert workdir_tmp.train.adapter.path.is_dir()
+        assert workdir_tmp.train.adapter.path.is_dir()  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     # =========================================================================
     # from_path tests
@@ -414,7 +415,7 @@ class TestWorkdir:
     def test_from_path_with_run_dir(self, workdir_tmp: Workdir):
         """from_path correctly loads a workdir from a run_dir."""
         # Create adapter directory and dummy safetensors file
-        adapter_dir = workdir_tmp.train.adapter.path
+        adapter_dir = workdir_tmp.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         adapter_dir.mkdir(parents=True, exist_ok=True)
         adapter_file = adapter_dir / "adapter_model.safetensors"
         adapter_file.touch()
@@ -428,7 +429,7 @@ class TestWorkdir:
     def test_from_path_with_project_dir(self, workdir_tmp: Workdir):
         """from_path finds latest run when given a project_dir."""
         # Create adapter directory and dummy safetensors file
-        adapter_dir = workdir_tmp.train.adapter.path
+        adapter_dir = workdir_tmp.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         adapter_dir.mkdir(parents=True, exist_ok=True)
         adapter_file = adapter_dir / "adapter_model.safetensors"
         adapter_file.touch()
@@ -442,7 +443,7 @@ class TestWorkdir:
     def test_from_path_with_base_path(self, workdir_tmp: Workdir):
         """from_path finds latest run across all projects when given a base_path."""
         # Create adapter directory and dummy safetensors file
-        adapter_dir = workdir_tmp.train.adapter.path
+        adapter_dir = workdir_tmp.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         adapter_dir.mkdir(parents=True, exist_ok=True)
         adapter_file = adapter_dir / "adapter_model.safetensors"
         adapter_file.touch()
@@ -559,7 +560,7 @@ class TestWorkdir:
     def test_new_generation_run_adapter_path_uses_parent(self, workdir_tmp: Workdir):
         """Child workdir's adapter_path returns parent's adapter path."""
         # Create adapter in parent
-        adapter_dir = workdir_tmp.train.adapter.path
+        adapter_dir = workdir_tmp.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         adapter_dir.mkdir(parents=True, exist_ok=True)
         adapter_file = adapter_dir / "adapter_model.safetensors"
         adapter_file.touch()
@@ -567,7 +568,7 @@ class TestWorkdir:
         child = workdir_tmp.new_generation_run()
 
         # Child's adapter_path should point to parent's adapter
-        assert child.adapter_path == workdir_tmp.train.adapter.path
+        assert child.adapter_path == workdir_tmp.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
         assert child.adapter_path.exists()
 
     def test_new_generation_run_source_config_uses_parent(self, workdir_tmp: Workdir):

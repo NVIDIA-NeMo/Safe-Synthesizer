@@ -158,7 +158,7 @@ def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
     """
     if time_format == "elapsed_seconds":
         # Value is already in seconds (int for now and float for future)
-        return int(float(value))
+        return int(float(value))  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
 
     # Parse using strptime format
     dt = datetime.strptime(str(value), time_format)

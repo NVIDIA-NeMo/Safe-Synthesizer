@@ -157,6 +157,7 @@ def test_nemo_pii_default_config_national_id(_build_entity_extractor):
         classifications = nemo_pii.classify_df(df)
         nemo_pii.transform_df(df, classifications)
         result = nemo_pii.result
+        assert result is not None
         # check that the transformed dataframe is not the same as the original dataframe for ID fields
         assert not result.transformed_df["national_id"].equals(df["national_id"])
         assert not result.transformed_df["tax_id"].equals(df["tax_id"])
@@ -221,7 +222,7 @@ def test_build_column_statistics():
     column_statistics = _build_column_statistics(
         mock_classifications,
         mock_transform_fn_accounting,
-        mock_column_report,
+        mock_column_report,  # ty: ignore[invalid-argument-type] -- mock object
     )
     # Test for correct column names in column statistics
     assert set(column_statistics.keys()) == {"notes", "fname", "height"}

@@ -8,10 +8,11 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
-from typing import Callable, Generator
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -49,7 +50,7 @@ NUM_SPECIAL_TOKENS = 2
 GeneratorType = Generator[dict[str, list], None, None]
 
 
-def _get_max_tokens_action(rope_scaling_factor: int | None) -> str:
+def _get_max_tokens_action(rope_scaling_factor: float | None) -> str:
     """Build a user-facing suggestion message for resolving token-budget overflows.
 
     Returns different advice depending on whether the RoPE scaling factor
@@ -450,10 +451,11 @@ class TrainingExampleAssembler(ABC):
         """Split the dataset into training and test sets."""
         if self.test_size is not None and self.test_size > 0:
             split_dataset = naive_train_test_split(
-                dataset.to_pandas(), test_size=self.test_size, random_state=self.seed
+                cast(pd.DataFrame, dataset.to_pandas()), test_size=self.test_size, random_state=self.seed
             )
             train_df, test_df = split_dataset
             self.train_dataset = Dataset.from_pandas(train_df)
+            assert test_df is not None
             self.validation_dataset = Dataset.from_pandas(test_df)
             self.validation_dataset.info.description += "is_val"
 
@@ -649,7 +651,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
                 num_sequences = 0
 
     def _prepare_dataset_for_training(
-        self, dataset: Dataset, data_fraction: float, rng: np.random.Generator
+        self, dataset: Dataset | None, data_fraction: float, rng: np.random.Generator
     ) -> Dataset | None:
         """Prepare a dataset for training by shuffling and potentially duplicating it.
 
@@ -708,6 +710,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
         training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
+        assert training_dataset is not None
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,
@@ -1045,7 +1048,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         self.validation_dataset = _maybe_add_row_indices(validation_dataset, self._ROW_INDEX_COLUMN)
 
     def _prepare_dataset_for_training(
-        self, dataset: Dataset, data_fraction: float, rng: np.random.Generator
+        self, dataset: Dataset | None, data_fraction: float, rng: np.random.Generator
     ) -> Dataset | None:
         """Prepare a dataset for training by duplicating records sequentially.
 
@@ -1105,6 +1108,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
+        assert training_dataset is not None
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,
@@ -1232,6 +1236,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
                     example_dict = self._flush_example(dataset, example_start, current_idx, stats_target)
                     if example_dict is not None:
                         num_examples += 1
+                        assert current_group_value is not None
                         examples_per_group[current_group_value] += 1
                         pbar.set_postfix({"num_examples": num_examples})
                         yield example_dict
@@ -1311,7 +1316,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         # `utils.grouped_train_test_split`. After the split we tokenize and perform the (potentially expensive) grouping step independently for
         # train and test.
         if test_size is not None and test_size > 0:
-            df_dataset = dataset.to_pandas()
+            df_dataset = cast(pd.DataFrame, dataset.to_pandas())
             train_raw, test_raw = grouped_train_test_split(
                 df_dataset,
                 group_by=self.group_by[0],
@@ -1334,7 +1339,6 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             test_size=None,  # we already did the split
             cache_file_path=cache_file_path,
             seed=seed,
-            *args,
             **kwargs,
         )
 
@@ -1491,7 +1495,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
                 )
 
     def _prepare_dataset_for_training(
-        self, dataset: Dataset, data_fraction: float, rng: np.random.Generator
+        self, dataset: Dataset | None, data_fraction: float, rng: np.random.Generator
     ) -> Dataset | None:
         """Prepare a grouped dataset for training by shuffling and potentially duplicating it.
 
@@ -1563,6 +1567,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         training_dataset = self._prepare_dataset_for_training(self.train_dataset, data_fraction, rng)
         validation_dataset = self._prepare_dataset_for_training(self.validation_dataset, 1.0, rng)
 
+        assert training_dataset is not None
         examples = TrainingExamples(
             train=training_dataset,
             test=validation_dataset,

@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
 
 from ..entity import Entity, Score
 from ..regex import Pattern, RegexPredictor
@@ -14,11 +15,11 @@ class SHA512(RegexPredictor):
     isolation (not embedded in a longer string), regardless of label or lack thereof.
 
     Examples:
-        {"foo": "f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # noqa
-        "f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"
+        {"foo": "f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # pragma: allowlist secret
+        "f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8" # pragma: allowlist secret
 
     Counterexamples:
-        {"bar": "baz f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # noqa
+        {"bar": "baz f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # pragma: allowlist secret
     """
 
     def __init__(self):

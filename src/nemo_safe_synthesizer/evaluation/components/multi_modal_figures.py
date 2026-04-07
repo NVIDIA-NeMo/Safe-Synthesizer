@@ -4,7 +4,9 @@
 
 """Plotly figure builders for the multi-modal evaluation report."""
 
-from typing import cast
+from __future__ import annotations
+
+from typing import Protocol
 
 import numpy as np
 import pandas as pd
@@ -33,12 +35,18 @@ INFERENCE_ATTACK_VALUES_FOR_GRAPHS = {
 }
 
 
-def degree_to_radian(degrees):
+def degree_to_radian(degrees: float) -> float:
     """Convert degrees to radians."""
     return degrees * pi / 180
 
 
-def gauge_chart(evaluation_score: EvaluationScore, degree_start=210, degree_end=-30, min=False, dps=False) -> go.Figure:
+def gauge_chart(
+    evaluation_score: EvaluationScore,
+    degree_start: int = 210,
+    degree_end: int = -30,
+    min: bool = False,
+    dps: bool = False,
+) -> go.Figure:
     """Render a semicircular gauge chart for a single evaluation score."""
     if isinstance(evaluation_score.grade, PrivacyGrade):
         dps = True
@@ -217,7 +225,7 @@ def generate_mia_figure(df: pd.DataFrame) -> go.Figure:
     df.sort_values(by=PROTECTION_COLUMN, inplace=True, ascending=False)
 
     fig = pie(
-        labels=cast(list[str], df[PROTECTION_COLUMN].dropna().astype(str).tolist()),
+        labels=df[PROTECTION_COLUMN].dropna().astype(str).tolist(),
         values=df["Attack Percentage"].replace({0: np.nan}),
         sort=False,
     )
@@ -317,7 +325,9 @@ def correlation_heatmap(matrix: pd.DataFrame, name: str = "Correlation") -> go.F
     return fig
 
 
-def _generate_correlation_hovertext(corr_reference: pd.DataFrame, corr_output: pd.DataFrame, corr_diff: pd.DataFrame):
+def _generate_correlation_hovertext(
+    corr_reference: pd.DataFrame, corr_output: pd.DataFrame, corr_diff: pd.DataFrame
+) -> list[list[str]]:
     """Build a 2-D hover-text matrix showing reference, output, and difference correlations."""
     hovertext = list()
     # Loop through the y values
@@ -389,7 +399,7 @@ def generate_combined_correlation_figure(
     return fig
 
 
-def scatter_plot(x: pd.Series, y: pd.Series, color=_REPORT_PALETTE[0], maximum_points=5000) -> go.Figure:
+def scatter_plot(x: pd.Series, y: pd.Series, color: str = _REPORT_PALETTE[0], maximum_points: int = 5000) -> go.Figure:
     """Create a scatter plot, capping the number of points to avoid browser crashes.
 
     Args:
@@ -452,10 +462,10 @@ def combine_subplots(
     titles: list[str] | None = None,
     general_title: str | None = None,
     subplot_type: str = "xy",
-    shared_xaxes=True,
-    shared_yaxes=True,
-    height=None,
-    margin=None,
+    shared_xaxes: bool = True,
+    shared_yaxes: bool = True,
+    height: int | None = None,
+    margin: dict | None = None,
 ) -> go.Figure:
     """Combine multiple Plotly figures into a single-row subplot figure.
 
@@ -588,7 +598,7 @@ def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | Non
     else:
         # number of bins/bin size match the ones in JS divenrgence calculation.
         bins = get_numeric_distribution_bins(reference, output)
-        binsize = bins[1] - bins[0]
+        binsize = float(bins[1] - bins[0])
 
     xbins = dict(start=min_range, end=max_range, size=binsize)
     fig.add_trace(
@@ -611,8 +621,12 @@ def histogram_figure(reference: pd.Series, output: pd.Series) -> go.Figure | Non
     return fig
 
 
+class _TextStatsLike(Protocol):
+    per_record_statistics: pd.DataFrame
+
+
 def generate_text_structure_similarity_figures(
-    training_statistics: pd.DataFrame, synthetic_statistics: pd.DataFrame, title: str
+    training_statistics: _TextStatsLike, synthetic_statistics: _TextStatsLike, title: str
 ) -> go.Figure | None:
     """Generate overlaid histograms of sentence/word/character distributions."""
     statistics_keys = [
@@ -716,7 +730,10 @@ def generate_text_semantic_similarity_figures(
         for subkey in synthetic_pca.columns:
             if key != subkey and key == synthetic_pca.columns[-1]:
                 continue
-            col = synthetic_pca.columns.get_loc(key) + synthetic_pca.columns.get_loc(subkey) + 1  # ty: ignore[unsupported-operator]
+            key_loc = synthetic_pca.columns.get_loc(key)
+            subkey_loc = synthetic_pca.columns.get_loc(subkey)
+            assert isinstance(key_loc, int) and isinstance(subkey_loc, int)
+            col = key_loc + subkey_loc + 1
             result.update_xaxes(
                 title_text=key,
                 row=1,

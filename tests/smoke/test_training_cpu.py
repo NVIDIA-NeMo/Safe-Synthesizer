@@ -7,7 +7,10 @@ All tests run on CPU with max_steps=1. The point is catching dep breakage
 (torch + transformers + peft + opacus) and exercising the NSS data pipeline.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import Any
 
 from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
@@ -24,7 +27,7 @@ from nemo_safe_synthesizer.privacy.dp_transformers.privacy_args import PrivacyAr
 
 def _cpu_training_args(tmp_path, **overrides):
     """Build TrainingArguments for CPU smoke tests with sensible defaults."""
-    defaults = dict(
+    defaults: dict[str, Any] = dict(
         output_dir=str(tmp_path),
         max_steps=1,
         use_cpu=True,
@@ -138,7 +141,7 @@ def test_training_example_assembler(iris_df, stub_tokenizer, tmp_path):
     assembler = TrainingExampleAssembler.from_data(
         dataset=hf_dataset,
         tokenizer=stub_tokenizer,
-        metadata=stub_metadata,
+        metadata=stub_metadata,  # ty: ignore[invalid-argument-type] -- deliberate test stub
         config=config,
         seed=42,
         cache_file_path=str(tmp_path / "cache"),

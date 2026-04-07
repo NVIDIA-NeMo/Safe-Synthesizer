@@ -72,7 +72,7 @@ class TextStructureSimilarity(Component):
     )
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with per-column text structure histogram figures."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-similarity"
@@ -80,8 +80,8 @@ class TextStructureSimilarity(Component):
         if self.training_statistics:
             maybe_figs = [
                 figures.generate_text_structure_similarity_figures(
-                    self.training_statistics[col],  # ty: ignore[invalid-argument-type]
-                    self.synthetic_statistics[col],  # ty: ignore[invalid-argument-type]
+                    self.training_statistics[col],
+                    self.synthetic_statistics[col],
                     col,
                 )
                 for col in self.training_statistics

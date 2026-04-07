@@ -16,6 +16,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from ...pii_replacer.ner.entity import Score
 from ...pii_replacer.ner.predictor import NERPrediction
@@ -173,7 +174,7 @@ def predictions_to_dict(
     Returns:
         A tuple of (predictions_by_field, entity_map).
     """
-    entity_map = {
+    entity_map: dict[str, Any] = {
         SCORE_HIGH: set(),
         SCORE_MED: set(),
         SCORE_LOW: set(),
@@ -181,6 +182,8 @@ def predictions_to_dict(
     }
     predictions_by_key = defaultdict(list)
     for prediction in predictions:
+        if prediction.field is None:
+            continue
         predictions_by_key[prediction.field].append(
             {
                 "start": prediction.start,
@@ -243,10 +246,10 @@ def fragment_from_ner_predictions(
 
 def build_ner_metadata(preds: list[dict]) -> Metadata:
     """Construct a ``Metadata`` object from raw prediction dicts."""
-    preds = [NERPrediction.from_dict(p) for p in preds]
+    ner_preds = [NERPrediction.from_dict(p) for p in preds]
     fragment, ent_map = fragment_from_ner_predictions(
         "ner",
-        preds,
+        ner_preds,
         uuid.uuid4().hex,
     )
     meta = merge_fragments(fragment)

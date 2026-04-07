@@ -31,7 +31,9 @@ def main():
 
     column_classifications = nemo_pii.classify_df(df.head(10))
     print(column_classifications)
-    result = nemo_pii.transform_df(df)
+    nemo_pii.transform_df(df)
+    result = nemo_pii.result
+    assert result is not None
 
     print("Result df:")
     print(result.transformed_df.to_csv(index=False))

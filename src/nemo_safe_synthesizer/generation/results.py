@@ -321,15 +321,20 @@ class GenerationBatches:
                 " Please consider increasing the 'num_input_records_to_sample' parameter."
             )
         elif self.status == GenerationStatus.STOP_METRIC_REACHED:
+            stop = self.stop_condition
+            if stop is None:
+                raise GenerationError("Generation stopped: metric reached but stop_condition is None.")
+            stop_val: float | int | None = stop.last_value
+            frac_str = f"{stop_val:.2%}" if stop_val is not None else "?"
             logger.error(
                 "🛑 Stopping generation prematurely. The stopping "
                 "condition was reached with a running average invalid "
-                f"fraction of {self.stop_condition.last_value:.2%}."
+                f"fraction of {frac_str}."
                 " Please consider increasing the 'num_input_records_to_sample' parameter.",
             )
             raise GenerationError(
                 "Generation stopped prematurely because "
-                f"the average fraction of invalid records was higher than {self.stop_condition.last_value:.2%}."
+                f"the average fraction of invalid records was higher than {frac_str}."
                 " Please consider increasing the 'num_input_records_to_sample' parameter.",
             )
 

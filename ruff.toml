@@ -29,6 +29,7 @@ exclude = [
     "unsloth_compiled_cache"
     ]
 
+target-version = "py311"
 line-length = 120
 indent-width = 4
 
@@ -50,6 +51,9 @@ select = [
     # pyupgrade -- modern Python 3.11+ syntax
     "UP006", # use builtin generics (list, dict, set, tuple)
     "UP007", # use X | Y for unions and optionals
+    "UP035", # deprecated typing imports (List, Dict, Optional, Union, etc.)
+    # flake8-future-annotations
+    "FA100", # missing `from __future__ import annotations`
     # flake8-bugbear
     "B006",  # mutable default argument
     # flake8-print

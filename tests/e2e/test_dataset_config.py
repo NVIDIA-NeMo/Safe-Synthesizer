@@ -89,9 +89,15 @@ def test_clinc_oos_dataset(fixture_clinc_oos_dataset, config_file, quality_thres
     assert result.synthetic_data.shape == (config.generation.num_records, df.shape[1]), (
         f"Expected {config.generation.num_records} rows and {df.shape[1]} columns"
     )
-    assert result.summary.timing.training_time_sec > 0, "Training time should be recorded"
-    assert result.summary.timing.generation_time_sec > 0, "Generation time should be recorded"
-    assert result.summary.timing.evaluation_time_sec > 0, "Evaluation time should be recorded"
+    assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0, (
+        "Training time should be recorded"
+    )
+    assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0, (
+        "Generation time should be recorded"
+    )
+    assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0, (
+        "Evaluation time should be recorded"
+    )
     assert result.summary.synthetic_data_quality_score is not None, "Quality score should be computed"
     assert result.summary.synthetic_data_quality_score >= quality_threshold, (
         f"Quality score {result.summary.synthetic_data_quality_score} below threshold of {quality_threshold}"
@@ -153,9 +159,15 @@ def test_dow_jones_index_dataset(fixture_dow_jones_index_dataset, config_file, q
     # When group by is used, we don't currently truncate the synthetic data to the number of records specified in the config.
     assert result.synthetic_data.shape[0] >= config.generation.num_records
     assert result.synthetic_data.shape[1] == df.shape[1]
-    assert result.summary.timing.training_time_sec > 0, "Training time should be recorded"
-    assert result.summary.timing.generation_time_sec > 0, "Generation time should be recorded"
-    assert result.summary.timing.evaluation_time_sec > 0, "Evaluation time should be recorded"
+    assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0, (
+        "Training time should be recorded"
+    )
+    assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0, (
+        "Generation time should be recorded"
+    )
+    assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0, (
+        "Evaluation time should be recorded"
+    )
     assert result.summary.synthetic_data_quality_score is not None, "Quality score should be computed"
     assert result.summary.synthetic_data_quality_score >= quality_threshold, (
         f"Quality score {result.summary.synthetic_data_quality_score} below threshold of {quality_threshold}"

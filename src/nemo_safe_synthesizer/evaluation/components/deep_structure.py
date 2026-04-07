@@ -40,17 +40,19 @@ class DeepStructure(Component):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @cached_property
-    def jinja_context(self):
+    def jinja_context(self) -> dict:
         """Template context with PCA scatter plot figure."""
         d = super().jinja_context
         d["anchor_link"] = "#structure-stability"
+        d["figure"] = None
         if Component.is_nonempty([self.reference_pca, self.output_pca]):
-            d["figure"] = figures.structure_stability_figure(
-                reference=self.reference_pca,  # ty: ignore[invalid-argument-type]
-                output=self.output_pca,  # ty: ignore[invalid-argument-type]
-            ).to_html(full_html=False, include_plotlyjs=False)
-        else:
-            d["figure"] = None
+            ref_pca = self.reference_pca
+            out_pca = self.output_pca
+            if ref_pca is not None and out_pca is not None:
+                d["figure"] = figures.structure_stability_figure(
+                    reference=ref_pca,
+                    output=out_pca,
+                ).to_html(full_html=False, include_plotlyjs=False)
         return d
 
     @staticmethod
@@ -71,8 +73,8 @@ class DeepStructure(Component):
             return DeepStructure(score=EvaluationScore(notes="No columns detected for PCA."))
 
         reference_pca, output_pca = DeepStructure._calculate_pca(
-            evaluation_dataset.reference[tabular_columns],  # ty: ignore[invalid-argument-type]
-            evaluation_dataset.output[tabular_columns],  # ty: ignore[invalid-argument-type]
+            evaluation_dataset.reference.reindex(columns=tabular_columns),
+            evaluation_dataset.output.reindex(columns=tabular_columns),
         )
 
         principal_component_stability = DeepStructure.get_principal_component_stability(
@@ -205,7 +207,7 @@ class DeepStructure(Component):
         return reference_df, output_df
 
     @staticmethod
-    def _calculate_pca(reference: pd.DataFrame, output: pd.DataFrame):
+    def _calculate_pca(reference: pd.DataFrame, output: pd.DataFrame) -> tuple:
         """Compute PCA projections for reference and output dataframes.
 
         Subsamples, preprocesses, and runs joined PCA. Returns ``(None, None)``

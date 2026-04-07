@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Callable
+from collections.abc import Callable
 
 from .. import utils
 from ..cli.artifact_structure import Workdir

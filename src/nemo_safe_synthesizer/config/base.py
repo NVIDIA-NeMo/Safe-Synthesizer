@@ -3,6 +3,8 @@
 
 """Shared Pydantic base model and enumerations for NeMo Safe Synthesizer configs."""
 
+from __future__ import annotations
+
 from enum import Enum
 from typing import Any
 
@@ -32,7 +34,7 @@ class NSSBaseModel(BaseModel):
 
     model_config = pydantic_model_config
 
-    def dict(self, **kwargs: Any) -> dict[str, Any]:
+    def dict(self, **kwargs: Any) -> dict[str, Any]:  # ty: ignore[invalid-type-form] -- method name shadows builtin dict; backward-compat shim for model_dump
         """Return a dict representation via ``model_dump`` for backward compatibility."""
         return self.model_dump(**kwargs)
 
