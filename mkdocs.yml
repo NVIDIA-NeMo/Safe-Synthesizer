@@ -172,6 +172,7 @@ nav:
       - Architecture: developer-guide/architecture.md
       - Example Generation: developer-guide/example-generation.md
       - Docker: developer-guide/docker.md
+      - DGX Spark: developer-guide/dgx-spark.md
       - API Reference: reference/
   - Developer Notes:
       - blog/index.md
