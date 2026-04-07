@@ -8719,10 +8719,7 @@ absolute difference.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/components/correlation.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-60">60</a></span>
-<span class="normal"><a href="#__codelineno-0-61">61</a></span>
-<span class="normal"><a href="#__codelineno-0-62">62</a></span>
-<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-63">63</a></span>
 <span class="normal"><a href="#__codelineno-0-64">64</a></span>
 <span class="normal"><a href="#__codelineno-0-65">65</a></span>
 <span class="normal"><a href="#__codelineno-0-66">66</a></span>
@@ -8746,34 +8743,37 @@ absolute difference.</p>
 <span class="normal"><a href="#__codelineno-0-84">84</a></span>
 <span class="normal"><a href="#__codelineno-0-85">85</a></span>
 <span class="normal"><a href="#__codelineno-0-86">86</a></span>
-<span class="normal"><a href="#__codelineno-0-87">87</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_dataset</span><span class="p">(</span>
-</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a>    <span class="n">evaluation_dataset</span><span class="p">:</span> <span class="n">EvaluationDataset</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Correlation</span><span class="p">:</span>
-</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute correlation matrices and the correlation stability score.&quot;&quot;&quot;</span>
-</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="c1"># We only want to use these types for correlation.</span>
-</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="n">tabular_columns</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_tabular_columns</span><span class="p">()</span>
-</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a>    <span class="c1"># We use different calculations (Theil&#39;s U) for nominal columns.</span>
-</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="n">nominal_columns</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_nominal_columns</span><span class="p">()</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>
-</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="p">(</span>
-</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>        <span class="n">reference_correlation</span><span class="p">,</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>        <span class="n">output_correlation</span><span class="p">,</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="n">correlation_difference</span><span class="p">,</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>        <span class="n">mean_absolute_error</span><span class="p">,</span>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="p">)</span> <span class="o">=</span> <span class="n">Correlation</span><span class="o">.</span><span class="n">_get_correlation_calculations</span><span class="p">(</span>
-</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>        <span class="n">reference</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>        <span class="n">output</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>        <span class="n">nominal_columns</span><span class="o">=</span><span class="n">nominal_columns</span><span class="p">,</span>
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>        <span class="n">fields</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">evaluation_fields</span><span class="p">,</span>
-</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="p">)</span>
-</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>    <span class="n">evaluation_score</span> <span class="o">=</span> <span class="n">Correlation</span><span class="o">.</span><span class="n">_get_field_correlation_stability</span><span class="p">(</span><span class="n">mean_absolute_error</span><span class="p">)</span>
-</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="k">return</span> <span class="n">Correlation</span><span class="p">(</span>
-</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="n">reference_correlation</span><span class="o">=</span><span class="n">reference_correlation</span><span class="p">,</span>
-</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>        <span class="n">output_correlation</span><span class="o">=</span><span class="n">output_correlation</span><span class="p">,</span>
-</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>        <span class="n">correlation_difference</span><span class="o">=</span><span class="n">correlation_difference</span><span class="p">,</span>
-</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>        <span class="n">score</span><span class="o">=</span><span class="n">evaluation_score</span><span class="p">,</span>
-</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-87">87</a></span>
+<span class="normal"><a href="#__codelineno-0-88">88</a></span>
+<span class="normal"><a href="#__codelineno-0-89">89</a></span>
+<span class="normal"><a href="#__codelineno-0-90">90</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="nd">@staticmethod</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_dataset</span><span class="p">(</span>
+</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="n">evaluation_dataset</span><span class="p">:</span> <span class="n">EvaluationDataset</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Correlation</span><span class="p">:</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute correlation matrices and the correlation stability score.&quot;&quot;&quot;</span>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="c1"># We only want to use these types for correlation.</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="n">tabular_columns</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_tabular_columns</span><span class="p">()</span>
+</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="c1"># We use different calculations (Theil&#39;s U) for nominal columns.</span>
+</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="n">nominal_columns</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_nominal_columns</span><span class="p">()</span>
+</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>
+</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>    <span class="p">(</span>
+</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>        <span class="n">reference_correlation</span><span class="p">,</span>
+</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>        <span class="n">output_correlation</span><span class="p">,</span>
+</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>        <span class="n">correlation_difference</span><span class="p">,</span>
+</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>        <span class="n">mean_absolute_error</span><span class="p">,</span>
+</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="p">)</span> <span class="o">=</span> <span class="n">Correlation</span><span class="o">.</span><span class="n">_get_correlation_calculations</span><span class="p">(</span>
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>        <span class="n">reference</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>
+</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>        <span class="n">output</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span><span class="p">[</span><span class="n">tabular_columns</span><span class="p">],</span>
+</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="n">nominal_columns</span><span class="o">=</span><span class="n">nominal_columns</span><span class="p">,</span>
+</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>        <span class="n">fields</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">evaluation_fields</span><span class="p">,</span>
+</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>    <span class="p">)</span>
+</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>    <span class="n">evaluation_score</span> <span class="o">=</span> <span class="n">Correlation</span><span class="o">.</span><span class="n">_get_field_correlation_stability</span><span class="p">(</span><span class="n">mean_absolute_error</span><span class="p">)</span>
+</span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>    <span class="k">return</span> <span class="n">Correlation</span><span class="p">(</span>
+</span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>        <span class="n">reference_correlation</span><span class="o">=</span><span class="n">reference_correlation</span><span class="p">,</span>
+</span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="n">output_correlation</span><span class="o">=</span><span class="n">output_correlation</span><span class="p">,</span>
+</span><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a>        <span class="n">correlation_difference</span><span class="o">=</span><span class="n">correlation_difference</span><span class="p">,</span>
+</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>        <span class="n">score</span><span class="o">=</span><span class="n">evaluation_score</span><span class="p">,</span>
+</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

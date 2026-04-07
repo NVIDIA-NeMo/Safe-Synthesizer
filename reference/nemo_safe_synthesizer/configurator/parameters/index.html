@@ -8913,7 +8913,7 @@ serialization from this class.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing_extensions.Self">Self</span></code>
+                  <code><span title="typing.Self">Self</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9032,7 +9032,7 @@ serialization from this class.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing_extensions.Self">Self</span></code>
+                  <code><span title="typing.Self">Self</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9161,7 +9161,7 @@ serialization from this class.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing_extensions.Self">Self</span></code>
+                  <code><span title="typing.Self">Self</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9396,7 +9396,7 @@ serialization from this class.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="typing_extensions.Self">Self</span></code>
+                  <code><span title="typing.Self">Self</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9448,7 +9448,7 @@ serialization from this class.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Yield parameters whose current value is the <code>"auto"</code> sentinel.</p>
+        <p>Yield field names whose current value is the <code>"auto"</code> sentinel.</p>
 
 
             <details class="mkdocstrings-source">
@@ -9457,11 +9457,13 @@ serialization from this class.</p>
 <span class="normal"><a href="#__codelineno-0-235">235</a></span>
 <span class="normal"><a href="#__codelineno-0-236">236</a></span>
 <span class="normal"><a href="#__codelineno-0-237">237</a></span>
-<span class="normal"><a href="#__codelineno-0-238">238</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_auto_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
-</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Yield parameters whose current value is the ``&quot;auto&quot;`` sentinel.&quot;&quot;&quot;</span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+<span class="normal"><a href="#__codelineno-0-239">239</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_auto_params</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Yield field names whose current value is the ``&quot;auto&quot;`` sentinel.&quot;&quot;&quot;</span>
 </span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a>    <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">:</span>
-</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>        <span class="k">if</span> <span class="n">param</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>            <span class="k">yield</span> <span class="n">param</span>
+</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>        <span class="k">for</span> <span class="n">field_name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">param</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>            <span class="k">if</span> <span class="n">value</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>                <span class="k">yield</span> <span class="n">field_name</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

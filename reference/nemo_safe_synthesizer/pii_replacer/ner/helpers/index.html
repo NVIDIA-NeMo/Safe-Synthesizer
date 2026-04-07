@@ -8409,9 +8409,7 @@ entities: a list of <code>NERPrediction</code> objects</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/helpers.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-9"> 9</a></span>
-<span class="normal"><a href="#__codelineno-0-10">10</a></span>
-<span class="normal"><a href="#__codelineno-0-11">11</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-11">11</a></span>
 <span class="normal"><a href="#__codelineno-0-12">12</a></span>
 <span class="normal"><a href="#__codelineno-0-13">13</a></span>
 <span class="normal"><a href="#__codelineno-0-14">14</a></span>
@@ -8446,44 +8444,46 @@ entities: a list of <code>NERPrediction</code> objects</p>
 <span class="normal"><a href="#__codelineno-0-43">43</a></span>
 <span class="normal"><a href="#__codelineno-0-44">44</a></span>
 <span class="normal"><a href="#__codelineno-0-45">45</a></span>
-<span class="normal"><a href="#__codelineno-0-46">46</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">entities_to_html</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">):</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Visualize detected entities as HTML</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11"></a><span class="sd">    text: raw text containing entities</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12"></a><span class="sd">    entities: a list of ``NERPrediction`` objects</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13"></a>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="sd">    Returns: an HTML string</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16"></a>    <span class="n">palette</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a>        <span class="s2">&quot;#7aecec&quot;</span><span class="p">,</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a>        <span class="s2">&quot;#bfeeb7&quot;</span><span class="p">,</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>        <span class="s2">&quot;#feca74&quot;</span><span class="p">,</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a>        <span class="s2">&quot;#ff9561&quot;</span><span class="p">,</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a>        <span class="s2">&quot;#aa9cfc&quot;</span><span class="p">,</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>        <span class="s2">&quot;#c887fb&quot;</span><span class="p">,</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23"></a>        <span class="s2">&quot;#9cc9cc&quot;</span><span class="p">,</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a>        <span class="s2">&quot;#ffeb80&quot;</span><span class="p">,</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a>        <span class="s2">&quot;#ff8197&quot;</span><span class="p">,</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a>        <span class="s2">&quot;#ff8197&quot;</span><span class="p">,</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>        <span class="s2">&quot;#f0d0ff&quot;</span><span class="p">,</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>        <span class="s2">&quot;#bfe1d9&quot;</span><span class="p">,</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>        <span class="s2">&quot;#e4e7d2&quot;</span><span class="p">,</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="p">]</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="n">colors</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">Entity</span><span class="p">):</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34"></a>        <span class="n">colors</span><span class="p">[</span><span class="n">name</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">palette</span><span class="p">[</span><span class="n">index</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">palette</span><span class="p">)]</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">options</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ents&quot;</span><span class="p">:</span> <span class="n">colors</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="s2">&quot;colors&quot;</span><span class="p">:</span> <span class="n">colors</span><span class="p">}</span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">entities_to_html</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">):</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Visualize detected entities as HTML</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13"></a><span class="sd">    text: raw text containing entities</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="sd">    entities: a list of ``NERPrediction`` objects</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="sd">    Returns: an HTML string</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a>    <span class="n">palette</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>        <span class="s2">&quot;#7aecec&quot;</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a>        <span class="s2">&quot;#bfeeb7&quot;</span><span class="p">,</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a>        <span class="s2">&quot;#feca74&quot;</span><span class="p">,</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>        <span class="s2">&quot;#ff9561&quot;</span><span class="p">,</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23"></a>        <span class="s2">&quot;#aa9cfc&quot;</span><span class="p">,</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a>        <span class="s2">&quot;#c887fb&quot;</span><span class="p">,</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a>        <span class="s2">&quot;#9cc9cc&quot;</span><span class="p">,</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a>        <span class="s2">&quot;#ffeb80&quot;</span><span class="p">,</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>        <span class="s2">&quot;#ff8197&quot;</span><span class="p">,</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>        <span class="s2">&quot;#ff8197&quot;</span><span class="p">,</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>        <span class="s2">&quot;#f0d0ff&quot;</span><span class="p">,</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>        <span class="s2">&quot;#bfe1d9&quot;</span><span class="p">,</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>        <span class="s2">&quot;#e4e7d2&quot;</span><span class="p">,</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="p">]</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34"></a>    <span class="n">colors</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">Entity</span><span class="p">):</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a>        <span class="n">colors</span><span class="p">[</span><span class="n">name</span><span class="o">.</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">palette</span><span class="p">[</span><span class="n">index</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">palette</span><span class="p">)]</span>
 </span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="c1"># Manually create display object in SpaCy format</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">ents</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="n">i</span><span class="o">.</span><span class="n">start</span><span class="p">):</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>        <span class="n">ents</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;start&quot;</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="s2">&quot;end&quot;</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">label</span><span class="p">})</span>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>
-</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>    <span class="n">ex</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">text</span><span class="p">,</span> <span class="s2">&quot;ents&quot;</span><span class="p">:</span> <span class="n">ents</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}]</span>
-</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a>    <span class="n">html</span> <span class="o">=</span> <span class="n">spacy</span><span class="o">.</span><span class="n">displacy</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;ent&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="n">options</span><span class="p">,</span> <span class="n">manual</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="k">return</span> <span class="n">html</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>    <span class="n">options</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;ents&quot;</span><span class="p">:</span> <span class="n">colors</span><span class="o">.</span><span class="n">keys</span><span class="p">(),</span> <span class="s2">&quot;colors&quot;</span><span class="p">:</span> <span class="n">colors</span><span class="p">}</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>    <span class="c1"># Manually create display object in SpaCy format</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="n">ents</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="n">i</span><span class="o">.</span><span class="n">start</span><span class="p">):</span>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>        <span class="n">ents</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;start&quot;</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="s2">&quot;end&quot;</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">label</span><span class="p">})</span>
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>    <span class="n">ex</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">text</span><span class="p">,</span> <span class="s2">&quot;ents&quot;</span><span class="p">:</span> <span class="n">ents</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="kc">None</span><span class="p">}]</span>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a>    <span class="n">html</span> <span class="o">=</span> <span class="n">spacy</span><span class="o">.</span><span class="n">displacy</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;ent&quot;</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="n">options</span><span class="p">,</span> <span class="n">manual</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="k">return</span> <span class="n">html</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

@@ -8439,9 +8439,7 @@
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/regexes/facebook.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-11">11</a></span>
-<span class="normal"><a href="#__codelineno-0-12">12</a></span>
-<span class="normal"><a href="#__codelineno-0-13">13</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-13">13</a></span>
 <span class="normal"><a href="#__codelineno-0-14">14</a></span>
 <span class="normal"><a href="#__codelineno-0-15">15</a></span>
 <span class="normal"><a href="#__codelineno-0-16">16</a></span>
@@ -8449,17 +8447,19 @@
 <span class="normal"><a href="#__codelineno-0-18">18</a></span>
 <span class="normal"><a href="#__codelineno-0-19">19</a></span>
 <span class="normal"><a href="#__codelineno-0-20">20</a></span>
-<span class="normal"><a href="#__codelineno-0-21">21</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12"></a>    <span class="n">entity</span> <span class="o">=</span> <span class="n">Entity</span><span class="o">.</span><span class="n">FACEBOOK_DATA</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13"></a>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14"></a>    <span class="c1"># https://developers.facebook.com/docs/facebook-login/access-tokens/</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15"></a>    <span class="n">_access_token</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16"></a>        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;EAACEdE[A-Za-z0-9-_.]{0,255}$&quot;</span><span class="p">,</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a>        <span class="n">context_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a>        <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>    <span class="p">)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="p">[</span><span class="n">_access_token</span><span class="p">])</span>
+<span class="normal"><a href="#__codelineno-0-21">21</a></span>
+<span class="normal"><a href="#__codelineno-0-22">22</a></span>
+<span class="normal"><a href="#__codelineno-0-23">23</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14"></a>    <span class="n">entity</span> <span class="o">=</span> <span class="n">Entity</span><span class="o">.</span><span class="n">FACEBOOK_DATA</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16"></a>    <span class="c1"># https://developers.facebook.com/docs/facebook-login/access-tokens/</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a>    <span class="n">_access_token</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a>        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;EAACEdE[A-Za-z0-9-_.]{0,255}$&quot;</span><span class="p">,</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>        <span class="n">context_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a>        <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a>    <span class="p">)</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="p">[</span><span class="n">_access_token</span><span class="p">])</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 

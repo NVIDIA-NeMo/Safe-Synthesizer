@@ -11363,7 +11363,7 @@ config, and resolves the <code>rope_scaling</code> specification into a
 </span><span id="__span-0-414"><a id="__codelineno-0-414" name="__codelineno-0-414"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot save metadata: workdir is not set&quot;</span><span class="p">)</span>
 </span><span id="__span-0-415"><a id="__codelineno-0-415" name="__codelineno-0-415"></a>    <span class="n">write_json</span><span class="p">(</span>
 </span><span id="__span-0-416"><a id="__codelineno-0-416" name="__codelineno-0-416"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-</span><span id="__span-0-417"><a id="__codelineno-0-417" name="__codelineno-0-417"></a>        <span class="n">path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">workdir</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">metadata</span><span class="p">,</span>
+</span><span id="__span-0-417"><a id="__codelineno-0-417" name="__codelineno-0-417"></a>        <span class="n">path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">workdir</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">metadata</span><span class="p">,</span>  <span class="c1"># ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__</span>
 </span><span id="__span-0-418"><a id="__codelineno-0-418" name="__codelineno-0-418"></a>        <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
 </span><span id="__span-0-419"><a id="__codelineno-0-419" name="__codelineno-0-419"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
@@ -12168,7 +12168,7 @@ model artifacts.</p>
 </span><span id="__span-0-564"><a id="__codelineno-0-564" name="__codelineno-0-564"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 </span><span id="__span-0-565"><a id="__codelineno-0-565" name="__codelineno-0-565"></a>        <span class="p">),</span>
 </span><span id="__span-0-566"><a id="__codelineno-0-566" name="__codelineno-0-566"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>
+</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
 </span><span id="__span-0-568"><a id="__codelineno-0-568" name="__codelineno-0-568"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
 </span><span id="__span-0-569"><a id="__codelineno-0-569" name="__codelineno-0-569"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 </span><span id="__span-0-570"><a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="p">)</span>
@@ -12472,7 +12472,7 @@ automatic BOS/EOS injection in prompts.</p>
 </span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a>        <span class="p">),</span>
 </span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>
+</span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
 </span><span id="__span-0-609"><a id="__codelineno-0-609" name="__codelineno-0-609"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
 </span><span id="__span-0-610"><a id="__codelineno-0-610" name="__codelineno-0-610"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 </span><span id="__span-0-611"><a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="p">)</span>
@@ -13083,7 +13083,7 @@ automatic BOS/EOS injection in prompts.</p>
 </span><span id="__span-0-688"><a id="__codelineno-0-688" name="__codelineno-0-688"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
 </span><span id="__span-0-689"><a id="__codelineno-0-689" name="__codelineno-0-689"></a>        <span class="p">),</span>
 </span><span id="__span-0-690"><a id="__codelineno-0-690" name="__codelineno-0-690"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-691"><a id="__codelineno-0-691" name="__codelineno-0-691"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>
+</span><span id="__span-0-691"><a id="__codelineno-0-691" name="__codelineno-0-691"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
 </span><span id="__span-0-692"><a id="__codelineno-0-692" name="__codelineno-0-692"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
 </span><span id="__span-0-693"><a id="__codelineno-0-693" name="__codelineno-0-693"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 </span><span id="__span-0-694"><a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="p">)</span>
@@ -13385,7 +13385,7 @@ automatic BOS/EOS injection in prompts.</p>
 </span><span id="__span-0-726"><a id="__codelineno-0-726" name="__codelineno-0-726"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
 </span><span id="__span-0-727"><a id="__codelineno-0-727" name="__codelineno-0-727"></a>        <span class="p">),</span>
 </span><span id="__span-0-728"><a id="__codelineno-0-728" name="__codelineno-0-728"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-729"><a id="__codelineno-0-729" name="__codelineno-0-729"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>
+</span><span id="__span-0-729"><a id="__codelineno-0-729" name="__codelineno-0-729"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
 </span><span id="__span-0-730"><a id="__codelineno-0-730" name="__codelineno-0-730"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
 </span><span id="__span-0-731"><a id="__codelineno-0-731" name="__codelineno-0-731"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 </span><span id="__span-0-732"><a id="__codelineno-0-732" name="__codelineno-0-732"></a>    <span class="p">)</span>
@@ -14330,7 +14330,7 @@ ignored with a warning.</p>
 </span><span id="__span-0-864"><a id="__codelineno-0-864" name="__codelineno-0-864"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
 </span><span id="__span-0-865"><a id="__codelineno-0-865" name="__codelineno-0-865"></a>        <span class="p">),</span>
 </span><span id="__span-0-866"><a id="__codelineno-0-866" name="__codelineno-0-866"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-867"><a id="__codelineno-0-867" name="__codelineno-0-867"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>
+</span><span id="__span-0-867"><a id="__codelineno-0-867" name="__codelineno-0-867"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
 </span><span id="__span-0-868"><a id="__codelineno-0-868" name="__codelineno-0-868"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
 </span><span id="__span-0-869"><a id="__codelineno-0-869" name="__codelineno-0-869"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 </span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a>    <span class="p">)</span>

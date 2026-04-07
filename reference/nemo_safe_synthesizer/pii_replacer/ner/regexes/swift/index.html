@@ -8446,8 +8446,7 @@ Matches are validated against the same list of country codes used for IBAN regex
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/regexes/swift.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-46">46</a></span>
-<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-47">47</a></span>
 <span class="normal"><a href="#__codelineno-0-48">48</a></span>
 <span class="normal"><a href="#__codelineno-0-49">49</a></span>
 <span class="normal"><a href="#__codelineno-0-50">50</a></span>
@@ -8455,16 +8454,17 @@ Matches are validated against the same list of country codes used for IBAN regex
 <span class="normal"><a href="#__codelineno-0-52">52</a></span>
 <span class="normal"><a href="#__codelineno-0-53">53</a></span>
 <span class="normal"><a href="#__codelineno-0-54">54</a></span>
-<span class="normal"><a href="#__codelineno-0-55">55</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a>    <span class="n">patterns</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a>        <span class="n">Pattern</span><span class="p">(</span>
-</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a>            <span class="n">pattern</span><span class="o">=</span><span class="n">SWIFT_GENERIC_REGEX</span><span class="p">,</span>
-</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a>            <span class="n">header_contexts</span><span class="o">=</span><span class="n">LABELS</span><span class="p">,</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a>            <span class="n">ignore_raw_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a>        <span class="p">)</span>
-</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="p">]</span>
-</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>
-</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">SWIFT_CODE</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="n">patterns</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a>    <span class="n">patterns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a>        <span class="n">Pattern</span><span class="p">(</span>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a>            <span class="n">pattern</span><span class="o">=</span><span class="n">SWIFT_GENERIC_REGEX</span><span class="p">,</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a>            <span class="n">header_contexts</span><span class="o">=</span><span class="n">LABELS</span><span class="p">,</span>
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a>            <span class="n">ignore_raw_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a>        <span class="p">)</span>
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>    <span class="p">]</span>
+</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a>
+</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">SWIFT_CODE</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="n">patterns</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 

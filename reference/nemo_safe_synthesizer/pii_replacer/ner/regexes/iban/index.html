@@ -8499,9 +8499,7 @@ and https://en.wikipedia.org/wiki/International_Bank_Account_Number</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/regexes/iban.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-211">211</a></span>
-<span class="normal"><a href="#__codelineno-0-212">212</a></span>
-<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-213">213</a></span>
 <span class="normal"><a href="#__codelineno-0-214">214</a></span>
 <span class="normal"><a href="#__codelineno-0-215">215</a></span>
 <span class="normal"><a href="#__codelineno-0-216">216</a></span>
@@ -8509,17 +8507,19 @@ and https://en.wikipedia.org/wiki/International_Bank_Account_Number</p>
 <span class="normal"><a href="#__codelineno-0-218">218</a></span>
 <span class="normal"><a href="#__codelineno-0-219">219</a></span>
 <span class="normal"><a href="#__codelineno-0-220">220</a></span>
-<span class="normal"><a href="#__codelineno-0-221">221</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-211"><a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-212"><a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="n">patterns</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-0-213"><a id="__codelineno-0-213" name="__codelineno-0-213"></a>        <span class="n">Pattern</span><span class="p">(</span>
-</span><span id="__span-0-214"><a id="__codelineno-0-214" name="__codelineno-0-214"></a>            <span class="n">pattern</span><span class="o">=</span><span class="n">IBAN_GENERIC_REGEX</span><span class="p">,</span>
-</span><span id="__span-0-215"><a id="__codelineno-0-215" name="__codelineno-0-215"></a>            <span class="n">context_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
-</span><span id="__span-0-216"><a id="__codelineno-0-216" name="__codelineno-0-216"></a>            <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">MED</span><span class="p">,</span>
-</span><span id="__span-0-217"><a id="__codelineno-0-217" name="__codelineno-0-217"></a>            <span class="n">header_contexts</span><span class="o">=</span><span class="n">LABELS</span><span class="p">,</span>
-</span><span id="__span-0-218"><a id="__codelineno-0-218" name="__codelineno-0-218"></a>        <span class="p">)</span>
-</span><span id="__span-0-219"><a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="p">]</span>
-</span><span id="__span-0-220"><a id="__codelineno-0-220" name="__codelineno-0-220"></a>
-</span><span id="__span-0-221"><a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">IBAN_CODE</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="n">patterns</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-213"><a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-214"><a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="n">patterns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-0-215"><a id="__codelineno-0-215" name="__codelineno-0-215"></a>        <span class="n">Pattern</span><span class="p">(</span>
+</span><span id="__span-0-216"><a id="__codelineno-0-216" name="__codelineno-0-216"></a>            <span class="n">pattern</span><span class="o">=</span><span class="n">IBAN_GENERIC_REGEX</span><span class="p">,</span>
+</span><span id="__span-0-217"><a id="__codelineno-0-217" name="__codelineno-0-217"></a>            <span class="n">context_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+</span><span id="__span-0-218"><a id="__codelineno-0-218" name="__codelineno-0-218"></a>            <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">MED</span><span class="p">,</span>
+</span><span id="__span-0-219"><a id="__codelineno-0-219" name="__codelineno-0-219"></a>            <span class="n">header_contexts</span><span class="o">=</span><span class="n">LABELS</span><span class="p">,</span>
+</span><span id="__span-0-220"><a id="__codelineno-0-220" name="__codelineno-0-220"></a>        <span class="p">)</span>
+</span><span id="__span-0-221"><a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="p">]</span>
+</span><span id="__span-0-222"><a id="__codelineno-0-222" name="__codelineno-0-222"></a>
+</span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">IBAN_CODE</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="n">patterns</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 

@@ -8676,11 +8676,11 @@
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-26">26</a></span>
-<span class="normal"><a href="#__codelineno-0-27">27</a></span>
-<span class="normal"><a href="#__codelineno-0-28">28</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Prediction</span><span class="p">]):</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">index</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">entities</span> <span class="o">=</span> <span class="n">entities</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#__codelineno-0-30">30</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Prediction</span><span class="p">]):</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">index</span> <span class="o">=</span> <span class="n">index</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">entities</span> <span class="o">=</span> <span class="n">entities</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -8916,9 +8916,7 @@ the outside.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-71">71</a></span>
-<span class="normal"><a href="#__codelineno-0-72">72</a></span>
-<span class="normal"><a href="#__codelineno-0-73">73</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-73">73</a></span>
 <span class="normal"><a href="#__codelineno-0-74">74</a></span>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span>
 <span class="normal"><a href="#__codelineno-0-76">76</a></span>
@@ -8926,17 +8924,19 @@ the outside.</p>
 <span class="normal"><a href="#__codelineno-0-78">78</a></span>
 <span class="normal"><a href="#__codelineno-0-79">79</a></span>
 <span class="normal"><a href="#__codelineno-0-80">80</a></span>
-<span class="normal"><a href="#__codelineno-0-81">81</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExporterConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">config</span><span class="p">:</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">ExporterConfig</span><span class="p">()</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pass_through_fields</span><span class="p">}</span>
+<span class="normal"><a href="#__codelineno-0-81">81</a></span>
+<span class="normal"><a href="#__codelineno-0-82">82</a></span>
+<span class="normal"><a href="#__codelineno-0-83">83</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExporterConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">config</span><span class="p">:</span>
+</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>        <span class="n">config</span> <span class="o">=</span> <span class="n">ExporterConfig</span><span class="p">()</span>
 </span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">include_json_path</span><span class="p">:</span>
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span><span class="p">[</span><span class="s2">&quot;json_path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_path&quot;</span>
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>
-</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">include_match</span><span class="p">:</span>
-</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;match&quot;</span>
+</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pass_through_fields</span><span class="p">}</span>
+</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">include_json_path</span><span class="p">:</span>
+</span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span><span class="p">[</span><span class="s2">&quot;json_path&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_path&quot;</span>
+</span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>
+</span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">include_match</span><span class="p">:</span>
+</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_keys_to_export</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;match&quot;</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -9015,15 +9015,15 @@ may be a lot of results).</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-113">113</a></span>
-<span class="normal"><a href="#__codelineno-0-114">114</a></span>
-<span class="normal"><a href="#__codelineno-0-115">115</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-115">115</a></span>
 <span class="normal"><a href="#__codelineno-0-116">116</a></span>
-<span class="normal"><a href="#__codelineno-0-117">117</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">results</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DatasetPredictions</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-</span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">results</span><span class="p">:</span>
-</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>
-</span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="n">results</span>
+<span class="normal"><a href="#__codelineno-0-117">117</a></span>
+<span class="normal"><a href="#__codelineno-0-118">118</a></span>
+<span class="normal"><a href="#__codelineno-0-119">119</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">results</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">DatasetPredictions</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">results</span><span class="p">:</span>
+</span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>        <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-118"><a id="__codelineno-0-118" name="__codelineno-0-118"></a>
+</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="n">results</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -9114,9 +9114,7 @@ may be a lot of results).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/report/results.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-122">122</a></span>
-<span class="normal"><a href="#__codelineno-0-123">123</a></span>
-<span class="normal"><a href="#__codelineno-0-124">124</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-124">124</a></span>
 <span class="normal"><a href="#__codelineno-0-125">125</a></span>
 <span class="normal"><a href="#__codelineno-0-126">126</a></span>
 <span class="normal"><a href="#__codelineno-0-127">127</a></span>
@@ -9125,18 +9123,20 @@ may be a lot of results).</p>
 <span class="normal"><a href="#__codelineno-0-130">130</a></span>
 <span class="normal"><a href="#__codelineno-0-131">131</a></span>
 <span class="normal"><a href="#__codelineno-0-132">132</a></span>
-<span class="normal"><a href="#__codelineno-0-133">133</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="k">def</span><span class="w"> </span><span class="nf">jsonl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exporter_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExporterConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">    Serializes results into a JSONL-formatted string.</span>
-</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>
-</span><span id="__span-0-126"><a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="sd">        exporter_config: Config to use for the result exporter.</span>
-</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>
-</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">    Returns: JSONL representation of results. Each line contains classification</span>
-</span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">        result for corresponding row in the input dataset.</span>
-</span><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a>    <span class="n">exporter</span> <span class="o">=</span> <span class="n">RecordResultExporter</span><span class="p">(</span><span class="n">exporter_config</span><span class="p">)</span>
-</span><span id="__span-0-133"><a id="__codelineno-0-133" name="__codelineno-0-133"></a>    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">exporter</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">result</span><span class="p">))</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#__codelineno-0-134">134</a></span>
+<span class="normal"><a href="#__codelineno-0-135">135</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="k">def</span><span class="w"> </span><span class="nf">jsonl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exporter_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ExporterConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-0-126"><a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">    Serializes results into a JSONL-formatted string.</span>
+</span><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a>
+</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">        exporter_config: Config to use for the result exporter.</span>
+</span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a>
+</span><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">    Returns: JSONL representation of results. Each line contains classification</span>
+</span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">        result for corresponding row in the input dataset.</span>
+</span><span id="__span-0-133"><a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-134"><a id="__codelineno-0-134" name="__codelineno-0-134"></a>    <span class="n">exporter</span> <span class="o">=</span> <span class="n">RecordResultExporter</span><span class="p">(</span><span class="n">exporter_config</span><span class="p">)</span>
+</span><span id="__span-0-135"><a id="__codelineno-0-135" name="__codelineno-0-135"></a>    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">exporter</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">result</span><span class="p">))</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">results</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

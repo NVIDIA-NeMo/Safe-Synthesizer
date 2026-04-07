@@ -8439,23 +8439,23 @@
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_zipcode.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-35">35</a></span>
-<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-36">36</a></span>
 <span class="normal"><a href="#__codelineno-0-37">37</a></span>
 <span class="normal"><a href="#__codelineno-0-38">38</a></span>
 <span class="normal"><a href="#__codelineno-0-39">39</a></span>
 <span class="normal"><a href="#__codelineno-0-40">40</a></span>
 <span class="normal"><a href="#__codelineno-0-41">41</a></span>
 <span class="normal"><a href="#__codelineno-0-42">42</a></span>
-<span class="normal"><a href="#__codelineno-0-43">43</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="n">likely_match</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a>        <span class="n">pattern</span><span class="o">=</span><span class="n">US_ZIPCODE_REGEX</span><span class="p">,</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>        <span class="n">header_contexts</span><span class="o">=</span><span class="n">LABELS</span><span class="p">,</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>        <span class="n">span_contexts</span><span class="o">=</span><span class="n">SPANNER</span><span class="p">,</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>        <span class="n">ignore_raw_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="p">)</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">US_ZIP_CODE</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="p">[</span><span class="n">likely_match</span><span class="p">])</span>
+<span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">likely_match</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>        <span class="n">pattern</span><span class="o">=</span><span class="n">US_ZIPCODE_REGEX</span><span class="p">,</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>        <span class="n">header_contexts</span><span class="o">=</span><span class="n">LABELS</span><span class="p">,</span>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>        <span class="n">span_contexts</span><span class="o">=</span><span class="n">SPANNER</span><span class="p">,</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a>        <span class="n">ignore_raw_score</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="p">)</span>
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">US_ZIP_CODE</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="p">[</span><span class="n">likely_match</span><span class="p">])</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 

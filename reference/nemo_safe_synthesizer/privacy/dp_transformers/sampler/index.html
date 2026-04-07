@@ -8494,7 +8494,7 @@ entity-level DP and when training for less than one epoch).</p>
                 <code>entity_mapping</code>
             </td>
             <td>
-                  <code><span title="typing.Sequence">Sequence</span>[<span title="typing.Sequence">Sequence</span>[<span title="int">int</span>]]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="collections.abc.Sequence">Sequence</span>[<span title="int">int</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8540,11 +8540,11 @@ sample of entity i.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/privacy/dp_transformers/sampler.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-88">88</a></span>
-<span class="normal"><a href="#__codelineno-0-89">89</a></span>
-<span class="normal"><a href="#__codelineno-0-90">90</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-88"><a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-89"><a id="__codelineno-0-89" name="__codelineno-0-89"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">BatchSampler</span><span class="p">(</span><span class="n">RandomSampler</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-0-90"><a id="__codelineno-0-90" name="__codelineno-0-90"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-92">92</a></span>
+<span class="normal"><a href="#__codelineno-0-93">93</a></span>
+<span class="normal"><a href="#__codelineno-0-94">94</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-92"><a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-93"><a id="__codelineno-0-93" name="__codelineno-0-93"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">BatchSampler</span><span class="p">(</span><span class="n">RandomSampler</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-94"><a id="__codelineno-0-94" name="__codelineno-0-94"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -8607,7 +8607,7 @@ Empty batches are skipped but counted toward the step budget.</p>
                 <code>entity_mapping</code>
             </td>
             <td>
-                  <code><span title="typing.Sequence">Sequence</span>[<span title="typing.Sequence">Sequence</span>[<span title="int">int</span>]]</code>
+                  <code><span title="collections.abc.Sequence">Sequence</span>[<span title="collections.abc.Sequence">Sequence</span>[<span title="int">int</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -8652,17 +8652,17 @@ indices for that entity.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/privacy/dp_transformers/sampler.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-106">106</a></span>
-<span class="normal"><a href="#__codelineno-0-107">107</a></span>
-<span class="normal"><a href="#__codelineno-0-108">108</a></span>
-<span class="normal"><a href="#__codelineno-0-109">109</a></span>
-<span class="normal"><a href="#__codelineno-0-110">110</a></span>
-<span class="normal"><a href="#__codelineno-0-111">111</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">sample_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">UniformWithReplacementNonNullSampler</span><span class="p">(</span>
-</span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="n">num_samples</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span>
-</span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>        <span class="n">sample_rate</span><span class="o">=</span><span class="n">sample_rate</span><span class="p">,</span>
-</span><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a>    <span class="p">)</span>
-</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-110">110</a></span>
+<span class="normal"><a href="#__codelineno-0-111">111</a></span>
+<span class="normal"><a href="#__codelineno-0-112">112</a></span>
+<span class="normal"><a href="#__codelineno-0-113">113</a></span>
+<span class="normal"><a href="#__codelineno-0-114">114</a></span>
+<span class="normal"><a href="#__codelineno-0-115">115</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-110"><a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="n">sample_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-111"><a id="__codelineno-0-111" name="__codelineno-0-111"></a>    <span class="n">entity_sampler</span> <span class="o">=</span> <span class="n">UniformWithReplacementNonNullSampler</span><span class="p">(</span>
+</span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>        <span class="n">num_samples</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">entity_mapping</span><span class="p">),</span>
+</span><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a>        <span class="n">sample_rate</span><span class="o">=</span><span class="n">sample_rate</span><span class="p">,</span>
+</span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>    <span class="p">)</span>
+</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity_sampler</span><span class="p">,</span> <span class="n">entity_mapping</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -8748,13 +8748,13 @@ start of each <code>__iter__</code>; only meaningful during iteration).</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/privacy/dp_transformers/sampler.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-127">127</a></span>
-<span class="normal"><a href="#__codelineno-0-128">128</a></span>
-<span class="normal"><a href="#__codelineno-0-129">129</a></span>
-<span class="normal"><a href="#__codelineno-0-130">130</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>    <span class="c1"># NOTE: we might want to log empty_batches for debugging purposes</span>
-</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">empty_batches</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-131">131</a></span>
+<span class="normal"><a href="#__codelineno-0-132">132</a></span>
+<span class="normal"><a href="#__codelineno-0-133">133</a></span>
+<span class="normal"><a href="#__codelineno-0-134">134</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+</span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a>    <span class="c1"># NOTE: we might want to log empty_batches for debugging purposes</span>
+</span><span id="__span-0-133"><a id="__codelineno-0-133" name="__codelineno-0-133"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">empty_batches</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-134"><a id="__codelineno-0-134" name="__codelineno-0-134"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 

@@ -8428,13 +8428,13 @@ isolation (not embedded in a longer string), regardless of label or lack thereof
 
 
 <p><span class="doc-section-title">Examples:</span></p>
-    <p>{"foo": "f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # noqa
-"f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"</p>
+    <p>{"foo": "f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # pragma: allowlist secret
+"f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8" # pragma: allowlist secret</p>
 
 
 <details class="counterexamples" open>
   <summary>Counterexamples</summary>
-  <p>{"bar": "baz f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # noqa</p>
+  <p>{"bar": "baz f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8f63e93baeb60ca18fdc9a81e9358417dacbd18db4cc2f85cedef654fccc4a4d8"}  # pragma: allowlist secret</p>
 </details>
 
 
@@ -8450,13 +8450,13 @@ isolation (not embedded in a longer string), regardless of label or lack thereof
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/regexes/sha512.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-24">24</a></span>
-<span class="normal"><a href="#__codelineno-0-25">25</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-25">25</a></span>
 <span class="normal"><a href="#__codelineno-0-26">26</a></span>
-<span class="normal"><a href="#__codelineno-0-27">27</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a>    <span class="n">patterns</span> <span class="o">=</span> <span class="p">[</span><span class="n">Pattern</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="n">SHA512_REGEX</span><span class="p">,</span> <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">)]</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">SHA512</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="n">patterns</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-27">27</a></span>
+<span class="normal"><a href="#__codelineno-0-28">28</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a>    <span class="n">patterns</span> <span class="o">=</span> <span class="p">[</span><span class="n">Pattern</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="n">SHA512_REGEX</span><span class="p">,</span> <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">)]</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">SHA512</span><span class="p">,</span> <span class="n">patterns</span><span class="o">=</span><span class="n">patterns</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 

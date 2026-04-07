@@ -8439,8 +8439,7 @@
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/ner/regexes/ip_address.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-16">16</a></span>
-<span class="normal"><a href="#__codelineno-0-17">17</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-17">17</a></span>
 <span class="normal"><a href="#__codelineno-0-18">18</a></span>
 <span class="normal"><a href="#__codelineno-0-19">19</a></span>
 <span class="normal"><a href="#__codelineno-0-20">20</a></span>
@@ -8455,23 +8454,24 @@
 <span class="normal"><a href="#__codelineno-0-29">29</a></span>
 <span class="normal"><a href="#__codelineno-0-30">30</a></span>
 <span class="normal"><a href="#__codelineno-0-31">31</a></span>
-<span class="normal"><a href="#__codelineno-0-32">32</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a>    <span class="n">possible_match</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a>        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;(?:[0-9]{1,3}\.)</span><span class="si">{3}</span><span class="s2">[0-9]{1,3}&quot;</span><span class="p">,</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>        <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a>        <span class="n">neg_header_contexts</span><span class="o">=</span><span class="n">NEG_HEADERS</span><span class="p">,</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a>    <span class="p">)</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23"></a>    <span class="n">likely_match</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a>        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)</span><span class="si">{3}</span><span class="s2">(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)&quot;</span><span class="p">,</span>  <span class="c1"># noqa</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a>        <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a>        <span class="n">neg_header_contexts</span><span class="o">=</span><span class="n">NEG_HEADERS</span><span class="p">,</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>    <span class="p">)</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>        <span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">IP_ADDRESS</span><span class="p">,</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>        <span class="n">patterns</span><span class="o">=</span><span class="p">[</span><span class="n">possible_match</span><span class="p">,</span> <span class="n">likely_match</span><span class="p">],</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a>    <span class="n">possible_match</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;(?:[0-9]{1,3}\.)</span><span class="si">{3}</span><span class="s2">[0-9]{1,3}&quot;</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a>        <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">LOW</span><span class="p">,</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a>        <span class="n">neg_header_contexts</span><span class="o">=</span><span class="n">NEG_HEADERS</span><span class="p">,</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>    <span class="p">)</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23"></a>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a>    <span class="n">likely_match</span> <span class="o">=</span> <span class="n">Pattern</span><span class="p">(</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a>        <span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.)</span><span class="si">{3}</span><span class="s2">(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)&quot;</span><span class="p">,</span>  <span class="c1"># noqa</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a>        <span class="n">raw_score</span><span class="o">=</span><span class="n">Score</span><span class="o">.</span><span class="n">HIGH</span><span class="p">,</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>        <span class="n">neg_header_contexts</span><span class="o">=</span><span class="n">NEG_HEADERS</span><span class="p">,</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a>    <span class="p">)</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>        <span class="n">entity</span><span class="o">=</span><span class="n">Entity</span><span class="o">.</span><span class="n">IP_ADDRESS</span><span class="p">,</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a>        <span class="n">patterns</span><span class="o">=</span><span class="p">[</span><span class="n">possible_match</span><span class="p">,</span> <span class="n">likely_match</span><span class="p">],</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
