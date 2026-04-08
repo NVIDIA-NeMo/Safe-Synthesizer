@@ -281,11 +281,18 @@ class GenerationBatches:
         if self.target_num_records is None:
             return num_prompts
 
-        if self.num_valid_records > 0:
-            num_records_remaining = self.target_num_records - self.num_valid_records
-            valid_records_per_prompt = 0 if self.num_prompts == 0 else self.num_valid_records / self.num_prompts
+        num_records_remaining = self.target_num_records - self.num_valid_records
+
+        if self.num_valid_records > 0 and self.num_prompts > 0:
+            valid_records_per_prompt = self.num_valid_records / self.num_prompts
             num_prompts_needed = round(num_records_remaining / (valid_records_per_prompt + EPS))
             num_prompts = min(num_prompts, num_prompts_needed + NUM_PROMPT_BUFFER)
+        else:
+            # First batch: no records-per-prompt history yet.  Assume at
+            # least 1 record per prompt (the actual ratio is typically much
+            # higher) to avoid sending max_num_prompts_per_batch prompts
+            # when the target is small.
+            num_prompts = min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)
 
         return num_prompts
 
