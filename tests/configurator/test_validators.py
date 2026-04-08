@@ -35,5 +35,7 @@ class TestDependsOnValidatorGetsourceFallback:
 
     def test_validation_error_when_source_unavailable(self):
         with patch("nemo_safe_synthesizer.configurator.validators.inspect.getsource", side_effect=OSError):
-            with pytest.raises(ValidationError, match="order_by is only allowed when group_by passes its dependency condition"):
+            with pytest.raises(
+                ValidationError, match="order_by is only allowed when group_by passes its dependency condition"
+            ):
                 MyModel(order_by="time")
