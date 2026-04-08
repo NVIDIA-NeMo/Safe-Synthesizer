@@ -427,11 +427,13 @@ safe-synthesizer config validate --config config.yaml
 
 : Setting `data.group_training_examples_by: col1,col2` in YAML is parsed as the
   single string `"col1,col2"`, not as two separate columns. The pipeline will
-  fail with a `KeyError` when it tries to find a column literally named
+  fail with a `ParameterError` when it tries to find a column literally named
   `"col1,col2"` in your data:
 
     ```text
-    KeyError: 'patient_id,event_id'
+    ParameterError: Group by column 'patient_id,event_id' not found in the input data.
+    The column name contains a comma -- multi-column grouping is not supported.
+    Use a single column name.
     ```
 
   Only a single column name is supported. Multi-column grouping is not
