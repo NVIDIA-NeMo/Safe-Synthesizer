@@ -428,10 +428,11 @@ class MembershipInferenceProtection(Component):
         return text_fields
 
     @staticmethod
-    def embed_text(df: pd.DataFrame) -> pd.DataFrame:
+    def embed_text(df: pd.DataFrame, embedder: SentenceTransformer | None = None) -> pd.DataFrame:
         """Embed each text column and average into a single embedding per row."""
         embeddings = {}
-        embedder = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+        if embedder is None:
+            embedder = SentenceTransformer("distiluse-base-multilingual-cased-v2")
         for col in df.columns:
             data = df[col].to_list()
             data = [str(r) for r in data]
@@ -555,9 +556,10 @@ class MembershipInferenceProtection(Component):
             # Create embeddings for text fields and combine the normalized tabular and the
             # new text embeddings into one dataframe.
             if len(text_fields) > 0:
-                df_train_embeddings = MembershipInferenceProtection.embed_text(df_train_text)
-                df_test_embeddings = MembershipInferenceProtection.embed_text(df_test_text)
-                df_synth_embeddings = MembershipInferenceProtection.embed_text(df_synth_text)
+                embedder = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+                df_train_embeddings = MembershipInferenceProtection.embed_text(df_train_text, embedder)
+                df_test_embeddings = MembershipInferenceProtection.embed_text(df_test_text, embedder)
+                df_synth_embeddings = MembershipInferenceProtection.embed_text(df_synth_text, embedder)
                 df_train_norm = pd.concat([df_train_norm, df_train_embeddings], axis=1)
                 df_test_norm = pd.concat([df_test_norm, df_test_embeddings], axis=1)
                 df_synth_norm = pd.concat([df_synth_norm, df_synth_embeddings], axis=1)
