@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
 import pandas as pd
+import torch
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
@@ -65,14 +65,14 @@ def embed_text(df: pd.DataFrame, embedder: SentenceTransformer) -> pd.DataFrame:
 
     Returns:
         Single-column DataFrame with column ``"embedding"`` whose values are
-        1-D numpy arrays of shape ``(embed_dim,)``.
+        1-D tensors of shape ``(embed_dim,)``.
     """
     embeddings = {}
     for col in df.columns:
         data = [str(r) for r in df[col].to_list()]
-        embeddings[col] = embedder.encode(data, show_progress_bar=False, convert_to_numpy=True)
+        embeddings[col] = torch.as_tensor(embedder.encode(data, show_progress_bar=False, convert_to_tensor=True))
 
-    stacked = np.stack([embeddings[col] for col in df.columns], axis=0)  # shape: (n_cols, n_rows, embed_dim)
-    avg_embeddings = np.mean(stacked, axis=0)  # shape: (n_rows, embed_dim)
+    stacked = torch.stack([embeddings[col] for col in df.columns], dim=0)  # shape: (n_cols, n_rows, embed_dim)
+    avg_embeddings = torch.mean(stacked, dim=0)  # shape: (n_rows, embed_dim)
 
     return pd.DataFrame({"embedding": list(avg_embeddings)})
