@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
+import torch
 
 from nemo_safe_synthesizer.evaluation.components.privacy_metric_utils import (
     divide_tabular_text,
@@ -15,13 +16,15 @@ from nemo_safe_synthesizer.evaluation.components.privacy_metric_utils import (
 
 @pytest.fixture
 def mock_embedder():
-    """A mock SentenceTransformer whose .encode() returns deterministic arrays."""
+    """A mock SentenceTransformer whose .encode() returns deterministic tensors."""
     embedder = MagicMock()
 
     def _encode(data, **kwargs):
         # Return a distinct but deterministic embedding per string.
         # Use the length of each string as a simple seed for reproducibility.
-        return np.array([[float(len(s)), float(len(s)) * 2, float(len(s)) * 3] for s in data])
+        return torch.tensor(
+            [[float(len(s)), float(len(s)) * 2, float(len(s)) * 3] for s in data], dtype=torch.float32
+        )
 
     embedder.encode = MagicMock(side_effect=_encode)
     return embedder
@@ -40,7 +43,7 @@ def test_divide_tabular_text(train_df):
 
 def test_embed_text(mock_embedder):
     """Regression test: with 3+ columns the old pairwise-averaging code
-    over-weighted later columns.  The corrected np.stack/np.mean must give
+    over-weighted later columns. The corrected stack/mean reduction must give
     each column equal weight.
     """
     df = pd.DataFrame(
@@ -55,4 +58,5 @@ def test_embed_text(mock_embedder):
     # True mean of [1,2,3], [2,4,6], [4,8,12] across columns:
     # = [(1+2+4)/3, (2+4+8)/3, (3+6+12)/3] = [7/3, 14/3, 21/3]
     expected = np.array([7 / 3, 14 / 3, 7.0])
-    np.testing.assert_array_almost_equal(result["embedding"].iloc[0], expected)
+    assert isinstance(result["embedding"].iloc[0], torch.Tensor)
+    np.testing.assert_array_almost_equal(result["embedding"].iloc[0].numpy(), expected)
