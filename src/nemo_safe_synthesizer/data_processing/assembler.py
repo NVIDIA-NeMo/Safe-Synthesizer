@@ -1315,7 +1315,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         if keep_columns:
             required_columns = list(set(required_columns + keep_columns))
 
-        # We need to split the dataset first so that the grouping column(s) are still present when we invoke
+        # We need to split the dataset first so that the grouping column is still present when we invoke
         # `utils.grouped_train_test_split`. After the split we tokenize and perform the (potentially expensive) grouping step independently for
         # train and test.
         if test_size is not None and test_size > 0:
