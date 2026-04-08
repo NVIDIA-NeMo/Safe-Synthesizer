@@ -21,8 +21,8 @@ SQS is a measure of how well the synthetic data matches the training data. It is
 SQS comprises five metrics:
 
 - Column Correlation Stability: analyzes correlations across every pair of columns
-- Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the original and synthetic data
-- Column Distribution Stability: compares the distribution for each column in the original data to its counterpart in the synthetic data
+- Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the training and synthetic data
+- Column Distribution Stability: compares the distribution for each column in the training data to its counterpart in the synthetic data
 - Text Structure Similarity: compares sentence, word, and character counts across the two datasets
 - Text Semantic Similarity: determines whether the semantic meaning of the text is preserved after synthesis
 
@@ -60,7 +60,7 @@ DPS includes three metrics:
 
 - Membership Inference Protection: tests whether attackers can determine if specific records were in the training data
 - Attribute Inference Protection: assesses whether sensitive attributes can be inferred from synthetic data
-- PII Replay: evaluates the frequency with which sensitive values from the original data appear in the synthetic version
+- PII Replay: evaluates the frequency with which sensitive values from the training data appear in the synthetic version
 
 We average the first two to provide an overall DPS. We do not factor PII Replay into DPS; you should analyze it separately. Read more about these privacy metrics [here](https://arxiv.org/abs/2501.03941).
 

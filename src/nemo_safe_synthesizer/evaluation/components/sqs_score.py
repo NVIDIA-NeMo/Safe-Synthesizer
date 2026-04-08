@@ -45,7 +45,7 @@ class SQSScore(CompositeScore):
             # If it is absent, something is really wrong -- we get that field info before even trying to make any components.
             # So if we don't have this, it's not worth trying to get consolation field counts from other components.
             if isinstance(c, ColumnDistribution):
-                text_cols = len([f for f in c.evaluation_fields if f.reference_field_features.type == FieldType.TEXT])
+                text_cols = len([f for f in c.evaluation_fields if f.training_field_features.type == FieldType.TEXT])
                 tabular_cols = len(c.evaluation_fields) - text_cols
 
         if tabular_cols + text_cols == 0:

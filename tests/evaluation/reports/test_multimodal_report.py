@@ -37,9 +37,9 @@ def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.M
 
 
 @pytest.mark.skip(reason="Times out")
-def test_multimodal_report(train_df_5k, synth_df_5k, test_df, skip_privacy_metrics_config):
+def test_multimodal_report(training_df_5k, synthetic_df_5k, test_df, skip_privacy_metrics_config):
     report = MultimodalReport.from_dataframes(
-        reference=train_df_5k, output=synth_df_5k, test=test_df, config=skip_privacy_metrics_config
+        training=training_df_5k, synthetic=synthetic_df_5k, test=test_df, config=skip_privacy_metrics_config
     )
 
     assert len(report.components) == 11

@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_field import EvaluationField
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...observability import get_logger
@@ -34,7 +34,7 @@ class TextDataSetStatistics(BaseModel):
     column_count: int = Field(default=0, description="Always 1; each instance describes a single text column.")
     duplicate_lines: int = Field(
         default=0,
-        description="Number of text values appearing in both reference and synthetic series. Populated on the synthetic instance only; 0 on reference.",
+        description="Number of text values appearing in both training and synthetic series. Populated on the synthetic instance only; 0 on training.",
     )
     missing_values: int = Field(
         default=0, description="Always 0; NAs are dropped during preprocessing before statistics are computed."
@@ -49,7 +49,7 @@ class TextDataSetStatistics(BaseModel):
     average_characters_per_word: float = Field(default=0, description="Mean per-record characters-per-word ratio.")
     text_statistic_score: EvaluationScore | None = Field(
         default=None,
-        description="JS-divergence-based similarity score comparing reference and synthetic structure. Populated on the synthetic instance only.",
+        description="JS-divergence-based similarity score comparing training and synthetic structure. Populated on the synthetic instance only.",
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -59,13 +59,13 @@ class TextStructureSimilarity(Component):
     """Text Structure Similarity metric.
 
     Compares per-record sentence count, words-per-sentence, and
-    characters-per-word distributions between reference and output
+    characters-per-word distributions between training and synthetic
     text columns using Jensen-Shannon divergence.
     """
 
     name: str = Field(default="Text Structure Similarity")
     training_statistics: dict[str, TextDataSetStatistics] = Field(
-        default=dict(), description="Per-column text structure statistics for the reference data."
+        default=dict(), description="Per-column text structure statistics for the training data."
     )
     synthetic_statistics: dict[str, TextDataSetStatistics] = Field(
         default=dict(), description="Per-column text structure statistics for the synthetic data."
@@ -93,17 +93,17 @@ class TextStructureSimilarity(Component):
         return d
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> TextStructureSimilarity:
         """Compute text structure similarity across all text columns."""
         text_fields = [
-            f.name for f in evaluation_dataset.evaluation_fields if f.reference_field_features.type == FieldType.TEXT
+            f.name for f in evaluation_datasets.evaluation_fields if f.training_field_features.type == FieldType.TEXT
         ]
 
-        training = evaluation_dataset.reference
-        synthetic = evaluation_dataset.output
-        nrows = min(len(evaluation_dataset.reference), len(evaluation_dataset.output))
+        training_df = evaluation_datasets.training
+        synthetic_df = evaluation_datasets.synthetic
+        nrows = min(len(evaluation_datasets.training), len(evaluation_datasets.synthetic))
 
         # Initialize a stub instance before trying anything.
         training_statistics_dict = dict()
@@ -112,17 +112,17 @@ class TextStructureSimilarity(Component):
         try:
             for field in text_fields:
                 try:
-                    training = evaluation_dataset.reference[field]
-                    synthetic = evaluation_dataset.output[field]
+                    training_df = evaluation_datasets.training[field]
+                    synthetic_df = evaluation_datasets.synthetic[field]
 
-                    training = TextStructureSimilarity._preprocess_text_data(training, nrows)
-                    synthetic = TextStructureSimilarity._preprocess_text_data(synthetic, nrows)
+                    training_df = TextStructureSimilarity._preprocess_text_data(training_df, nrows)
+                    synthetic_df = TextStructureSimilarity._preprocess_text_data(synthetic_df, nrows)
 
                     # Text statistics.
-                    training_statistics = TextStructureSimilarity._get_text_statistics(training)
-                    synthetic_statistics = TextStructureSimilarity._get_text_statistics(synthetic)
+                    training_statistics = TextStructureSimilarity._get_text_statistics(training_df)
+                    synthetic_statistics = TextStructureSimilarity._get_text_statistics(synthetic_df)
                     synthetic_statistics.duplicate_lines = TextStructureSimilarity._count_duplicate_lines(
-                        training, synthetic
+                        training_df, synthetic_df
                     )
 
                     synthetic_statistics.text_statistic_score = TextStructureSimilarity._get_text_statistics_score(
@@ -251,7 +251,7 @@ class TextStructureSimilarity(Component):
         words-per-sentence, and characters-per-word, then averages.
 
         Args:
-            training_statistics: Per-record text statistics for the reference data.
+            training_statistics: Per-record text statistics for the training data.
             synthetic_statistics: Per-record text statistics for the synthetic data.
 
         Returns:
@@ -263,8 +263,8 @@ class TextStructureSimilarity(Component):
                 count_df_fields.append(
                     EvaluationField.from_series(
                         col,
-                        reference=training_statistics.per_record_statistics[col],
-                        output=synthetic_statistics.per_record_statistics[col],
+                        training=training_statistics.per_record_statistics[col],
+                        synthetic=synthetic_statistics.per_record_statistics[col],
                     )
                 )
             count_average_divergence = EvaluationField.get_average_divergence(count_df_fields)

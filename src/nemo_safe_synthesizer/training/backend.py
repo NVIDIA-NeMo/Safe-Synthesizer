@@ -59,7 +59,7 @@ class NSSTrainerResult:
     adapter_path: Path
     """Filesystem path to the saved LoRA adapter."""
 
-    df_train: pd.DataFrame
+    training_df: pd.DataFrame
     """Training DataFrame (after preprocessing)."""
 
     df_ml_utility_holdout: pd.DataFrame | None
@@ -142,10 +142,10 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     training_examples: TrainingExamples
     """Tokenized and assembled training (and optional validation) splits."""
 
-    df_train: pd.DataFrame
+    training_df: pd.DataFrame
     """Training DataFrame after preprocessing."""
 
-    df_test: pd.DataFrame | None
+    test_df: pd.DataFrame | None
     """Hold-out DataFrame for ML-utility evaluation, or ``None``."""
 
     dataset_schema: dict | None
@@ -223,7 +223,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         Runs auto-config resolution, validates groupby/orderby columns,
         applies time-series processing and ``action_executor`` preprocessing,
         then assembles tokenized training examples. Populates
-        ``training_examples``, ``dataset_schema``, ``df_train``, and
+        ``training_examples``, ``dataset_schema``, ``training_df``, and
         ``data_fraction``.
         """
         ...

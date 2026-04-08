@@ -29,7 +29,7 @@ from ...evaluation.constants import (
     MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS,
     MIN_RECORDS_FOR_TEXT_METRICS_WITHOUT_WARNING,
 )
-from ...evaluation.data_model.evaluation_dataset import EvaluationDataset
+from ...evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
 from ...observability import get_logger
@@ -51,7 +51,7 @@ class TextSemanticSimilarityDatum(BaseModel):
         default=EvaluationScore(), description="Overfitting factor score for this column."
     )
 
-    training_pca: pd.DataFrame = Field(default=pd.DataFrame(), description="PCA-projected reference embeddings.")
+    training_pca: pd.DataFrame = Field(default=pd.DataFrame(), description="PCA-projected training embeddings.")
     synthetic_pca: pd.DataFrame = Field(default=pd.DataFrame(), description="PCA-projected synthetic embeddings.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -61,8 +61,8 @@ class TextSemanticSimilarity(Component):
     """Text Semantic Similarity metric.
 
     Embeds text columns with a sentence transformer and compares the
-    distribution of cosine similarities between reference-synthetic and
-    reference-reference (or test-test) pairs using two-sided
+    distribution of cosine similarities between training-synthetic and
+    training-training (or test-test) pairs using two-sided
     Kolmogorov-Smirnov tests to capture both underfitting and overfitting.
     """
 
@@ -92,11 +92,11 @@ class TextSemanticSimilarity(Component):
         return ctx
 
     @staticmethod
-    def from_evaluation_dataset(
-        evaluation_dataset: EvaluationDataset, config: SafeSynthesizerParameters | None = None
+    def from_evaluation_datasets(
+        evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> TextSemanticSimilarity:
         """Compute text semantic similarity across all text columns."""
-        if evaluation_dataset.test is None or evaluation_dataset.test.empty:
+        if evaluation_datasets.test is None or evaluation_datasets.test.empty:
             return TextSemanticSimilarity(
                 score=EvaluationScore(
                     notes="Unable to calculate Text Semantic Similarity. No holdout dataframe provided."
@@ -104,18 +104,18 @@ class TextSemanticSimilarity(Component):
             )
 
         nrows = min(
-            len(evaluation_dataset.reference), len(evaluation_dataset.output)
+            len(evaluation_datasets.training), len(evaluation_datasets.synthetic)
         )  # MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS ?
 
         text_semantic_similarity_dict = dict()
         text_fields = [
-            f.name for f in evaluation_dataset.evaluation_fields if f.reference_field_features.type == FieldType.TEXT
+            f.name for f in evaluation_datasets.evaluation_fields if f.training_field_features.type == FieldType.TEXT
         ]
 
         for field in text_fields:
-            training = evaluation_dataset.reference[field]
-            synthetic = evaluation_dataset.output[field]
-            test = evaluation_dataset.test[field]
+            training = evaluation_datasets.training[field]
+            synthetic = evaluation_datasets.synthetic[field]
+            test = evaluation_datasets.test[field]
 
             # Initialize a stub instance before trying anything.
             text_semantic_similarity = EvaluationScore()
@@ -170,8 +170,8 @@ class TextSemanticSimilarity(Component):
                         text_semantic_similarity_underfitting_factor,
                         text_semantic_similarity_overfitting_factor,
                     ) = TextSemanticSimilarity._get_text_semantic_similarity(
-                        real_embed=training_embedding_vector,
-                        synth_embed=synthetic_embedding_vector,
+                        training_embed=training_embedding_vector,
+                        synthetic_embed=synthetic_embedding_vector,
                         test_embed=test_embedding_vector,
                         warning_message=warning_message,
                     )
@@ -292,23 +292,23 @@ class TextSemanticSimilarity(Component):
             return np.ndarray(shape=0)
 
     @staticmethod
-    def _get_cosine_similarity(real_mean: npt.NDArray[np.single], synth_mean: npt.NDArray[np.single]) -> float:
+    def _get_cosine_similarity(training_mean: npt.NDArray[np.single], synthetic_mean: npt.NDArray[np.single]) -> float:
         """Compute cosine similarity between two mean embedding vectors.
 
         Args:
-            real_mean: Mean embedding of the real (reference) data.
-            synth_mean: Mean embedding of the synthetic data.
+            training_mean: Mean embedding of the training data.
+            synthetic_mean: Mean embedding of the synthetic data.
 
         Returns:
             Cosine similarity in ``[-1, 1]``, or ``0`` on failure.
         """
         try:
-            denom = norm(real_mean) * norm(synth_mean)
+            denom = norm(training_mean) * norm(synthetic_mean)
             if denom == 0:
                 return 0
             else:
                 # Cast to plain float to avoid 'Object of type float32 is not JSON serializable'
-                return float(np.dot(real_mean, synth_mean) / denom)
+                return float(np.dot(training_mean, synthetic_mean) / denom)
         except Exception:
             logger.exception("Error getting cosine similarity.")
             return 0
@@ -329,12 +329,12 @@ class TextSemanticSimilarity(Component):
 
     @staticmethod
     def _get_text_semantic_similarity(
-        real_embed: npt.NDArray[np.single],
-        synth_embed: npt.NDArray[np.single],
+        training_embed: npt.NDArray[np.single],
+        synthetic_embed: npt.NDArray[np.single],
         test_embed: npt.NDArray[np.single],
         warning_message: str | None = None,
     ) -> tuple[EvaluationScore, EvaluationScore, EvaluationScore]:
-        """Compute semantic similarity between real and synthetic embeddings.
+        """Compute semantic similarity between training and synthetic embeddings.
 
         The embeddings are normalized to unit length. The metric is based on
         two one-sided Kolmogorov-Smirnov tests:
@@ -368,18 +368,18 @@ class TextSemanticSimilarity(Component):
 
         # Calculate cosine similarity using the dot product (equivalent as
         # embeddings are normalized)
-        real_similarity_matrix = real_embed @ real_embed.T
-        for i in range(len(real_similarity_matrix)):
-            real_similarity_matrix[i, i] = 0
-        real_synth_similarity_matrix = real_embed @ synth_embed.T
+        training_similarity_matrix = training_embed @ training_embed.T
+        for i in range(len(training_similarity_matrix)):
+            training_similarity_matrix[i, i] = 0
+        training_synth_similarity_matrix = training_embed @ synthetic_embed.T
 
         test_similarity_matrix = test_embed @ test_embed.T
         for i in range(len(test_similarity_matrix)):
             test_similarity_matrix[i, i] = 0
-        test_synth_similarity_matrix = test_embed @ synth_embed.T
+        test_synth_similarity_matrix = test_embed @ synthetic_embed.T
 
         # KS tests:
-        # Using the train set to calculate the overfitting metric and the test
+        # Using the training set to calculate the overfitting metric and the test
         # set to calculate the underfitting metric.
 
         # Overfitting is measured as the extent to which the synthetic
@@ -392,8 +392,8 @@ class TextSemanticSimilarity(Component):
         # distribution functions of the samples. The range of this statistic is
         # [0, 1], where 0 indicates no overfitting.
         ks_test_overfitting = ks_2samp(
-            real_synth_similarity_matrix.max(axis=0),  # F(x)
-            real_similarity_matrix.max(axis=0),  # G(x)
+            training_synth_similarity_matrix.max(axis=0),  # F(x)
+            training_similarity_matrix.max(axis=0),  # G(x)
             alternative="less",
             method="auto",
         )
@@ -454,33 +454,33 @@ class TextSemanticSimilarity(Component):
 
     @staticmethod
     def _get_pca(
-        reference: pd.DataFrame, output: pd.DataFrame, n_components: int = 4
+        training_embd_df: pd.DataFrame, synthetic_embd_df: pd.DataFrame, n_components: int = 4
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Compute joined PCA on text embedding dataframes.
 
         Args:
-            reference: Training text embeddings (all numeric).
-            output: Synthetic text embeddings (all numeric).
+            training_embd_df: Training text embeddings (all numeric).
+            synthetic_embd_df: Synthetic text embeddings (all numeric).
             n_components: Number of principal components to keep.
 
         Returns:
-            Tuple of (reference PCA dataframe, output PCA dataframe).
+            Tuple of (training PCA dataframe, synthetic PCA dataframe).
         """
         try:
-            reference = reference.replace([np.inf, -np.inf], np.nan).dropna(axis="columns", how="all")
-            output = output.replace([np.inf, -np.inf], np.nan).dropna(axis="columns", how="all")
+            training_embd_df = training_embd_df.replace([np.inf, -np.inf], np.nan).dropna(axis="columns", how="all")
+            synthetic_embd_df = synthetic_embd_df.replace([np.inf, -np.inf], np.nan).dropna(axis="columns", how="all")
 
-            reference_pca, output_pca = stats.compute_joined_pcas(
-                reference,
-                output,
+            training_pca, synthetic_pca = stats.compute_joined_pcas(
+                training_embd_df,
+                synthetic_embd_df,
                 n_components=n_components,
                 include_variance=True,
             )
 
-            reference_pca["data"] = "train"
-            output_pca["data"] = "synthetic"
+            training_pca["data"] = "training"
+            synthetic_pca["data"] = "synthetic"
 
-            return (reference_pca, output_pca)
+            return (training_pca, synthetic_pca)
         except Exception:
             logger.exception("Error calculating PCA.")
             return pd.DataFrame(), pd.DataFrame()
