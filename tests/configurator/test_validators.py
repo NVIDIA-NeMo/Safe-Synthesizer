@@ -14,12 +14,12 @@ from pydantic import BaseModel, ValidationError
 from nemo_safe_synthesizer.configurator.validators import DependsOnValidator
 
 
-class MyModel(BaseModel):
-    group_by: str | None = None
-    order_by: Annotated[
+class MinimalDataModel(BaseModel):
+    group_training_examples_by: str | None = None
+    order_training_examples_by: Annotated[
         str | None,
         DependsOnValidator(
-            depends_on="group_by",
+            depends_on="group_training_examples_by",
             depends_on_func=lambda v: v is not None,
             value_func=lambda v: v is not None,
         ),
@@ -30,12 +30,16 @@ class TestDependsOnValidatorGetsourceFallback:
     """The error message must not crash when inspect.getsource() is unavailable."""
 
     def test_validation_error_when_source_available(self):
-        with pytest.raises(ValidationError, match="order_by is only allowed when group_by passes"):
-            MyModel(order_by="time")
+        with pytest.raises(
+            ValidationError,
+            match="order_training_examples_by is only allowed when group_training_examples_by passes",
+        ):
+            MinimalDataModel(order_training_examples_by="time")
 
     def test_validation_error_when_source_unavailable(self):
         with patch("nemo_safe_synthesizer.configurator.validators.inspect.getsource", side_effect=OSError):
             with pytest.raises(
-                ValidationError, match="order_by is only allowed when group_by passes its dependency condition"
+                ValidationError,
+                match="order_training_examples_by is only allowed when group_training_examples_by passes its dependency condition",
             ):
-                MyModel(order_by="time")
+                MinimalDataModel(order_training_examples_by="time")
