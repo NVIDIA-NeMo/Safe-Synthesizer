@@ -22,9 +22,7 @@ def mock_embedder():
     def _encode(data, **kwargs):
         # Return a distinct but deterministic embedding per string.
         # Use the length of each string as a simple seed for reproducibility.
-        return torch.tensor(
-            [[float(len(s)), float(len(s)) * 2, float(len(s)) * 3] for s in data], dtype=torch.float32
-        )
+        return torch.tensor([[float(len(s)), float(len(s)) * 2, float(len(s)) * 3] for s in data], dtype=torch.float32)
 
     embedder.encode = MagicMock(side_effect=_encode)
     return embedder
