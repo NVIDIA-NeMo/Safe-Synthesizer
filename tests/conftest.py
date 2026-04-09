@@ -89,30 +89,60 @@ training:
 
 
 @pytest.fixture(scope="session")
+def tests_dir(request) -> Path:
+    return Path(request.config.rootdir / "tests")
+
+
+@pytest.fixture(scope="session")
+def stub_datasets_dir(tests_dir) -> Path:
+    return tests_dir / "stub_datasets"
+
+
+@pytest.fixture(scope="session")
+def test_data_dir(tests_dir) -> Path:
+    return tests_dir / "test_data"
+
+
+@pytest.fixture(scope="session")
+def tokenizers_dir(test_data_dir) -> Path:
+    return test_data_dir / "tokenizers"
+
+
+@pytest.fixture(scope="session")
+def stub_tokenizer_dir(tests_dir) -> Path:
+    return tests_dir / "stub_tokenizer"
+
+
+@pytest.fixture(scope="session")
+def pii_test_data_dir(test_data_dir) -> Path:
+    return test_data_dir / "pii"
+
+
+@pytest.fixture(scope="session")
+def e2e_config_dir(tests_dir) -> Path:
+    return tests_dir / "e2e" / "required_configs"
+
+
+@pytest.fixture(scope="session")
 def fixture_session_cache_dir(tmp_path_factory) -> Path:
     dir = tmp_path_factory.mktemp("nss_pytest_cache")
     return dir
 
 
-# Purpose: Load a small stub dataset from disk via HuggingFace datasets (train split only).
-# Data: CSV files under tests/generation/stub_datasets; cached in the tests directory.
 def load_test_dataset(
     dataset_file_name: str,
-    fixture_session_cache_dir: Path | None = None,
+    datasets_dir: Path,
     data_format: str = "csv",
 ) -> Dataset:
-    dir_path = Path(__file__).parent
-    dataset_path = dir_path / "stub_datasets" / dataset_file_name
+    dataset_path = datasets_dir / dataset_file_name
     data = load_dataset(data_format, data_files=str(dataset_path), cache_dir=None)["train"]
     if isinstance(data, Dataset):
         return data
     raise ValueError(f"Unsupported data type: {type(data)}")
 
 
-# Purpose: Load a small stub DataFrame from a file for edge-case testing.
-# Data: files under ./stub_datasets.
-def load_test_dataframe(filename: str) -> pd.DataFrame:
-    dataset_path = Path(__file__).parent / "stub_datasets" / filename
+def load_test_dataframe(filename: str, datasets_dir: Path) -> pd.DataFrame:
+    dataset_path = datasets_dir / filename
     match dataset_path.suffix:
         case ".csv":
             return pd.read_csv(str(dataset_path))
@@ -129,22 +159,22 @@ def load_test_dataframe(filename: str) -> pd.DataFrame:
 
 
 @pytest.fixture
-def fixture_smollm3_tokenizer() -> str:
-    return str(Path(__file__).parent / "test_data" / "tokenizers" / "smollm3b")
+def fixture_smollm3_tokenizer(tokenizers_dir) -> str:
+    return str(tokenizers_dir / "smollm3b")
 
 
 # Purpose: Iris dataset fixture (train split) for quick test sampling.
 # Used by: fixture_valid_iris_dataset_jsonl_and_schema (internal consumer)
 @pytest.fixture
-def fixture_iris_dataset() -> Dataset:
-    return load_test_dataset("iris.csv")
+def fixture_iris_dataset(stub_datasets_dir) -> Dataset:
+    return load_test_dataset("iris.csv", stub_datasets_dir)
 
 
 # Purpose: ChickWeight dataset fixture (train split) for sampling.
 # Used by: (no direct test references currently)
 @pytest.fixture
-def fixture_chickweight_dataset() -> Dataset:
-    return load_test_dataset("chickweight.csv")
+def fixture_chickweight_dataset(stub_datasets_dir) -> Dataset:
+    return load_test_dataset("chickweight.csv", stub_datasets_dir)
 
 
 # Purpose: Dow Jones Index dataset fixture for group-by-order-by tests.
@@ -152,20 +182,20 @@ def fixture_chickweight_dataset() -> Dataset:
 #   - data_processing/test_assembler.py::test_assembler_dow_jones_index_dataset
 #   - e2e/test_safe_synthesizer.py::test_dow_jones_index_dataset
 @pytest.fixture
-def fixture_dow_jones_index_dataset() -> Dataset:
-    return load_test_dataset("dow_jones_index_group_size_8.csv")
+def fixture_dow_jones_index_dataset(stub_datasets_dir) -> Dataset:
+    return load_test_dataset("dow_jones_index_group_size_8.csv", stub_datasets_dir)
 
 
 # Purpose: Sample patient events dataset with multiple groups for grouped tests.
 # Used by: (no direct test references currently)
 @pytest.fixture
-def fixture_sample_patient_dataset() -> Dataset:
-    return load_test_dataset("sample-patient-events-12groups-200-records.csv")
+def fixture_sample_patient_dataset(stub_datasets_dir) -> Dataset:
+    return load_test_dataset("sample-patient-events-12groups-200-records.csv", stub_datasets_dir)
 
 
 @pytest.fixture
-def fixture_sample_patient_dataframe() -> pd.DataFrame:
-    return load_test_dataframe("sample-patient-events-12groups-200-records.csv")
+def fixture_sample_patient_dataframe(stub_datasets_dir) -> pd.DataFrame:
+    return load_test_dataframe("sample-patient-events-12groups-200-records.csv", stub_datasets_dir)
 
 
 @pytest.fixture
@@ -180,15 +210,15 @@ def fixture_sample_patient_redacted_dataframe(
 # Purpose: PEMS-SF sample dataset fixture for time-series like tests.
 # Used by: (no direct test references currently)
 @pytest.fixture
-def fixture_pems_sf_sample_dataset() -> Dataset:
-    return load_test_dataset("pems_sf_sample.csv")
+def fixture_pems_sf_sample_dataset(stub_datasets_dir) -> Dataset:
+    return load_test_dataset("pems_sf_sample.csv", stub_datasets_dir)
 
 
 # Purpose: DataFrame with embedded carriage returns to exercise serialization/regex edge cases.
 # Used by: (no direct test references currently)
 @pytest.fixture
-def fixture_embedded_carriage_return_dataframe() -> pd.DataFrame:
-    return load_test_dataframe("embedded_carriage_return.parquet")
+def fixture_embedded_carriage_return_dataframe(stub_datasets_dir) -> pd.DataFrame:
+    return load_test_dataframe("embedded_carriage_return.parquet", stub_datasets_dir)
 
 
 # Purpose: Minimal processor returning a predictable ParsedResponse (3 valid, 1 invalid).
@@ -241,17 +271,17 @@ def fixture_mock_processor_without_valid_records():
 
 
 @pytest.fixture
-def fixture_lmsys_chat_non_english_dataset() -> pd.DataFrame:
-    return load_test_dataframe("lmsys_chat_non_english_sample.jsonl")
+def fixture_lmsys_chat_non_english_dataset(stub_datasets_dir) -> pd.DataFrame:
+    return load_test_dataframe("lmsys_chat_non_english_sample.jsonl", stub_datasets_dir)
 
 
 @pytest.fixture
-def fixture_doc_summaries_dataset() -> pd.DataFrame:
-    return load_test_dataframe("doc_summaries.csv")
+def fixture_doc_summaries_dataset(stub_datasets_dir) -> pd.DataFrame:
+    return load_test_dataframe("doc_summaries.csv", stub_datasets_dir)
 
 
 # Purpose: Clinc OOS dataset fixture for free text tests.
 # Used by: e2e/test_safe_synthesizer.py::test_clinc_oos_dataset
 @pytest.fixture
-def fixture_clinc_oos_dataset() -> pd.DataFrame:
-    return load_test_dataframe("clinc_oos.csv")
+def fixture_clinc_oos_dataset(stub_datasets_dir) -> pd.DataFrame:
+    return load_test_dataframe("clinc_oos.csv", stub_datasets_dir)
