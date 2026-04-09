@@ -15,7 +15,7 @@ from nemo_safe_synthesizer.data_processing.actions.data_actions import (
 from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import ParsedResponse
-from nemo_safe_synthesizer.generation.results import GenerationBatches, GenerationStatus
+from nemo_safe_synthesizer.generation.results import NUM_PROMPT_BUFFER, GenerationBatches, GenerationStatus
 
 
 # Purpose: Builds reusable good/bad Batch sets for generation tests.
@@ -160,6 +160,22 @@ def test_get_next_num_prompts(fixture_stub_batches):
     # so far the average is 3 records per prompt so we only need around 6 more but
     # we are expecting a higher number of prompts because of the NUM_PROMPT_BUFFER minimum
     assert generation_with_target.get_next_num_prompts() == 16
+
+
+# Purpose: First batch (no history) caps prompts to target + buffer instead of max.
+# Data: Empty GenerationBatches with small target_num_records and no prior batches.
+# Asserts: Returns target + NUM_PROMPT_BUFFER when that's less than max; returns max otherwise.
+@pytest.mark.parametrize(
+    "target, expected",
+    [
+        (10, 10 + NUM_PROMPT_BUFFER),
+        (50, 50 + NUM_PROMPT_BUFFER),
+        (200, 100),  # target + buffer exceeds max (100), so capped
+    ],
+)
+def test_get_next_num_prompts_first_batch(target, expected):
+    generation = GenerationBatches(target_num_records=target)
+    assert generation.get_next_num_prompts() == expected
 
 
 # Purpose: Build a DataFrame of valid records across batches, honoring max record cap and validity.
