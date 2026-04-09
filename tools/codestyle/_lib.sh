@@ -9,7 +9,6 @@
 #
 # Provides:
 #   REPO_ROOT                    -- absolute path to the repo root
-#   require_tool <name>          -- die if <name> is not on PATH; warn on version mismatch
 #   collect_py_files "$@"        -- populate PY_FILES array and CHECK_MODE
 #
 # collect_py_files recognises --check and exports CHECK_MODE=true/false

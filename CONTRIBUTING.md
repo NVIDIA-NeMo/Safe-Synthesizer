@@ -77,8 +77,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
   ```bash
    # Add to your shell profile (~/.bashrc, ~/.zshrc)
-   echo "export MISE_TRUSTED_CONFIG_PATHS=\"$(cd "$(git rev-parse --show-toplevel)" && pwd -P)\"" \
-     >> ~/.bashrc   # or ~/.zshrc
+   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
+   printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
   ```
 
   Alternatively, set `MISE_YES=1` and `DIRENV_TRUST_ALLOW_ALL=1` to trust all configs globally (appropriate for dev machines and CI).
