@@ -21,7 +21,6 @@ WARNING: Tests are not currently hermetic and require internet access for:
 
 # ruff: noqa: E402
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -50,9 +49,6 @@ from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 logger = get_logger(__name__)
-
-# Path to config files
-CONFIG_DIR = Path(__file__).parent / "required_configs"
 
 
 @pytest.mark.e2e
