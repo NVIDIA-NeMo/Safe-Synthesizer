@@ -15,7 +15,9 @@ set -eu
 # Ensure tools installed in ~/.local/bin (gh, glab, etc.) are on PATH.
 export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 
-if command -v mise >/dev/null 2>&1; then
+# Auto-trusting repo-local mise config is security-sensitive; only do it when
+# the caller opts in (or set MISE_TRUSTED_CONFIG_PATHS in your shell profile).
+if command -v mise >/dev/null 2>&1 && [ "${CURSOR_ALLOW_MISE_TRUST:-0}" = "1" ]; then
     mise trust --quiet 2>/dev/null || true
 fi
 
