@@ -12,13 +12,11 @@ from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
-STUB_DATASETS_DIR = Path(__file__).parent.parent / "stub_datasets"
-
 
 @pytest.fixture(scope="session")
-def fixture_stub_tokenizer_path() -> str:
+def fixture_stub_tokenizer_path(stub_tokenizer_dir) -> str:
     """Path to the Llama stub tokenizer in tests/stub_tokenizer/."""
-    return str(Path(__file__).parent.parent / "stub_tokenizer")
+    return str(stub_tokenizer_dir)
 
 
 @pytest.fixture(scope="session")
@@ -89,9 +87,9 @@ def local_tinyllama_dir(tmp_path_factory, tiny_llama_config, stub_tokenizer):
 
 
 @pytest.fixture(scope="session")
-def iris_df():
+def iris_df(stub_datasets_dir):
     """Load iris.csv from stub_datasets."""
-    return pd.read_csv(STUB_DATASETS_DIR / "iris.csv")
+    return pd.read_csv(stub_datasets_dir / "iris.csv")
 
 
 @pytest.fixture(scope="session")

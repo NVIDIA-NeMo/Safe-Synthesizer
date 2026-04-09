@@ -27,8 +27,6 @@ logger = get_logger(__name__)
 BOS = "<s>"
 EOS = "</s>"
 
-TOKENIZERS_DIR = Path(__file__).parent.parent / "test_data" / "tokenizers"
-
 
 @pytest.fixture(scope="session")
 def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
@@ -39,20 +37,20 @@ def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
     params=["TinyLlama/TinyLlama-1.1B-Chat-v1.0", "HuggingFaceTB/SmolLM3-3B", "mistralai/Mistral-7B-Instruct-v0.3"],
     ids=["tinyllama", "smollm3", "mistral"],
 )
-def fixture_over_tokenizers(request) -> tuple[str, PreTrainedTokenizer]:
+def fixture_over_tokenizers(request, tokenizers_dir) -> tuple[str, PreTrainedTokenizer]:
     """Fixture parameterized over multiple tokenizers of interest."""
     model_name = request.param
 
     repo_name = model_name
     local_files_only = False
     if model_name == "TinyLlama/TinyLlama-1.1B-Chat-v1.0":
-        repo_name = str(TOKENIZERS_DIR / "tinyllama")
+        repo_name = str(tokenizers_dir / "tinyllama")
         local_files_only = True
     elif model_name == "HuggingFaceTB/SmolLM3-3B":
-        repo_name = str(TOKENIZERS_DIR / "smollm3b")
+        repo_name = str(tokenizers_dir / "smollm3b")
         local_files_only = True
     elif model_name == "mistralai/Mistral-7B-Instruct-v0.3":
-        repo_name = str(TOKENIZERS_DIR / "mistral7b")
+        repo_name = str(tokenizers_dir / "mistral7b")
         local_files_only = True
     else:
         logger.warning(f"Tokenizer for {model_name} not stored in repo, loading from HF Hub")
