@@ -256,9 +256,15 @@ To reduce size:
 | Base | `nvidia/cuda:12.8.1-runtime-ubuntu22.04` | `python:3.11-slim` |
 | Extras | `cu128` + `engine` | `cpu` + `engine` |
 | GPU | Required | Not needed |
-| Stages | `deps` / `runtime` / `dev` | Single stage |
+| Stages | `deps` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |
 | Build target | `make container-build-gpu` | `make container-build-test` |
+
+The `setup` stage installs system packages and mise-managed dev tools
+(ruff, ty, uv, etc.). The `install-deps` stage extends it with the Python
+environment (`make bootstrap-nss cpu`). `make container-build-test` builds
+the full image; `make container-build-test-setup` builds only the `setup`
+stage for fast tool-installation verification (`make test-tool-install`).
 
 Both follow the conventions in [STYLE_GUIDE.md -- Dockerfiles](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#dockerfiles).
 

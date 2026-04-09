@@ -104,7 +104,7 @@ Build backend: `hatchling` with wheel target `packages = ["src/nemo_safe_synthes
 
 | Section | Purpose |
 |---------|---------|
-| `[tool.uv]` | Cache-keys, conflicts, overrides, environments |
+| `[tool.uv]` | Required version, cache-keys, conflicts, overrides, environments |
 | `[tool.uv.sources]` | Map packages to specific indexes by extra/marker |
 | `[[tool.uv.index]]` | Define named package indexes |
 | `[build-system]` | hatchling + uv-dynamic-versioning |
