@@ -574,7 +574,13 @@ class TestValidateGroupbyColumn:
         """Test that ParameterError is raised when column is missing."""
         backend.params.data.group_training_examples_by = "nonexistent_col"
 
-        with pytest.raises(ParameterError, match="Group by column 'nonexistent_col' not found"):
+        with pytest.raises(ParameterError, match="not found in the input data"):
+            backend._validate_groupby_column(sample_dataframe)
+
+    def test_raises_with_comma_hint_when_column_has_comma(self, backend, sample_dataframe):
+        backend.params.data.group_training_examples_by = "patient_id,event_id"
+
+        with pytest.raises(ParameterError, match="multi-column grouping is not supported"):
             backend._validate_groupby_column(sample_dataframe)
 
     def test_raises_when_column_has_nulls(self, backend, dataframe_with_null_group):

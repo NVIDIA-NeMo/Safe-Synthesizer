@@ -867,7 +867,10 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             ParameterError: If group or order column is not found in dataset.
         """
         if self.group_by_column not in dataset.column_names:
-            raise ParameterError(f"Group by column '{self.group_by_column}' not found in dataset.")
+            msg = f"Group by column {self.group_by_column!r} not found in dataset."
+            if "," in self.group_by_column:
+                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
+            raise ParameterError(msg)
 
         if self.order_by_column not in dataset.column_names:
             raise ParameterError(f"Order by column '{self.order_by_column}' not found in dataset.")
@@ -1312,11 +1315,12 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         if keep_columns:
             required_columns = list(set(required_columns + keep_columns))
 
-        # We need to split the dataset first so that the grouping column(s) are still present when we invoke
+        # We need to split the dataset first so that the grouping column is still present when we invoke
         # `utils.grouped_train_test_split`. After the split we tokenize and perform the (potentially expensive) grouping step independently for
         # train and test.
         if test_size is not None and test_size > 0:
-            df_dataset = cast(pd.DataFrame, dataset.to_pandas())
+            df_dataset = dataset.to_pandas()
+            assert isinstance(df_dataset, pd.DataFrame)
             train_raw, test_raw = grouped_train_test_split(
                 df_dataset,
                 group_by=self.group_by[0],

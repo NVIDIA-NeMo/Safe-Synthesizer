@@ -33,7 +33,7 @@ def artifacts(ctx: click.Context) -> None:
 @click.option("--dry-run", is_flag=True, help="Dry run the command.")
 @click.option("--caches-only", is_flag=True, help="Only clean caches.")
 @click.option("--force", is_flag=True, help="Force clean.")
-def clean(ctx: click.Context, artifact_path: str | Path | None, dry_run: bool, caches_only: bool, force: bool) -> None:
+def clean(artifact_path: str | Path | None, dry_run: bool, caches_only: bool, force: bool) -> None:
     """Clean artifacts in a Workdir structure."""
     if artifact_path is None:
         artifact_path = Path("safe-synthesizer-artifacts")
@@ -41,8 +41,7 @@ def clean(ctx: click.Context, artifact_path: str | Path | None, dry_run: bool, c
     try:
         workdir = Workdir.from_path(Path(artifact_path))
     except ValueError as e:
-        click.secho(f"Error: {e}", fg="red", err=True)
-        return
+        raise click.ClickException(str(e))
 
     # Determine what to clean
     if caches_only:
@@ -76,4 +75,4 @@ def clean(ctx: click.Context, artifact_path: str | Path | None, dry_run: bool, c
                 target.unlink()
             click.secho(f"Successfully deleted: {target}", fg="green")
         except Exception as e:
-            click.secho(f"Error deleting {target}: {e}", fg="red", err=True)
+            raise click.ClickException(f"Error deleting {target}: {e}")
