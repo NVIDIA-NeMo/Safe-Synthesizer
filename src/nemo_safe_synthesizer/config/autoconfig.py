@@ -46,7 +46,7 @@ def choose_num_input_records_to_sample(rope_scaling_factor: int) -> int:
     return rope_scaling_factor * 25_000
 
 
-def get_max_token_count(data: pd.DataFrame, group_by: list[str] | str | None) -> int:
+def get_max_token_count(data: pd.DataFrame, group_by: str | None) -> int:
     """Estimate the maximum tokens per training example.
 
     Accounts for prompt overhead (~40 tokens), column names (repeated in JSON
@@ -56,7 +56,7 @@ def get_max_token_count(data: pd.DataFrame, group_by: list[str] | str | None) ->
 
     Args:
         data: Training dataframe to analyze.
-        group_by: Column(s) used to group records into single training examples.
+        group_by: Column used to group records into single training examples.
             When set, grouped records are concatenated before token estimation.
 
     Returns:
