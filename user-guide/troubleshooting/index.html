@@ -9560,6 +9560,24 @@ output and only resolve during an actual run:</p>
   <code>data.group_training_examples_by</code>, config validation will fail. Ordering only
   makes sense within groups.</p>
 </dd>
+<dt><code>group_training_examples_by</code> with comma-separated column names:</dt>
+<dd>
+<p>Setting <code>data.group_training_examples_by: col1,col2</code> in YAML is parsed as the
+  single string <code>"col1,col2"</code>, not as two separate columns. The pipeline will
+  fail with a <code>ParameterError</code> when it tries to find a column literally named
+  <code>"col1,col2"</code> in your data:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ParameterError: Group by column &#39;patient_id,event_id&#39; not found in the input data.
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>The column name contains a comma -- multi-column grouping is not supported.
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Use a single column name.
+</span></code></pre></div>
+</dd>
+</dl>
+<p>Only a single column name is supported. Multi-column grouping is not
+  currently available. If you need to group by multiple columns, consider
+  creating a composite column in your data before running the pipeline
+  (e.g. concatenate <code>patient_id</code> and <code>event_id</code> into a new
+  <code>patient_event_id</code> column).</p>
+<dl>
 <dt>Unsupported file extensions:</dt>
 <dd>
 <p>The <code>url</code> parameter accepts <code>.csv</code>, <code>.json</code>, <code>.jsonl</code>, <code>.parquet</code>, and <code>.txt</code>
@@ -9598,13 +9616,13 @@ optionally reduce CPU parallelism so each worker has more resources.</p>
 <h3 id="authentication-failures">Authentication Failures<a class="headerlink" href="#authentication-failures" title="Permanent link">&para;</a></h3>
 <p>WandB requires an API key when running in <code>online</code> mode. If the key is missing
 or invalid, training will fail when the WandB run is initialized.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>wandb: ERROR api_key not configured (no-auth)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>wandb: ERROR api_key not configured (no-auth)
 </span></code></pre></div>
 <p>Set the API key before running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
 </span></code></pre></div>
 <p>Or switch to offline mode to avoid network access entirely:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>See <a href="../running/#wandb-integration">Running Safe Synthesizer -- WandB Integration</a> for the full WandB setup.</p>
 <h3 id="resume-errors">Resume Errors<a class="headerlink" href="#resume-errors" title="Permanent link">&para;</a></h3>
@@ -9626,8 +9644,8 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 <dd>
 <p>Any <code>NaN</code> or <code>null</code> values in the timestamp column raise a <code>DataError</code>.
   Clean your data before running the pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
 </span></code></pre></div>
 </dd>
 <dt>Interval mismatch:</dt>
@@ -9661,12 +9679,12 @@ groups.</p>
 <p>Safe Synthesizer uses a structured error hierarchy. Understanding which error
 class you received helps narrow down the cause and write targeted <code>except</code> clauses.</p>
 <p>Inheritance:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>SafeSynthesizerError
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>├── InternalError (also RuntimeError)
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>└── UserError
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    ├── DataError (also ValueError)
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    ├── ParameterError (also ValueError)
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    └── GenerationError (also RuntimeError)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>SafeSynthesizerError
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>├── InternalError (also RuntimeError)
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>└── UserError
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    ├── DataError (also ValueError)
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    ├── ParameterError (also ValueError)
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    └── GenerationError (also RuntimeError)
 </span></code></pre></div>
 <p>SDK callers can catch <a class="autorefs autorefs-internal" title="            UserError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.UserError"><code>UserError</code></a> to handle all user-facing errors, or
 <a class="autorefs autorefs-internal" title="            SafeSynthesizerError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.SafeSynthesizerError"><code>SafeSynthesizerError</code></a> to also catch internal errors. Catching the built-in

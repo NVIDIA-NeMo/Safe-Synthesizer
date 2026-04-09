@@ -9135,8 +9135,8 @@ timestamps, or <code>None</code> if intervals vary.</p>
 
         <p>Processor for grouped data generation tasks.</p>
 <p>Used when training examples are grouped (and optionally ordered) by
-one or more columns.  Validates that each group has a unique
-<code>group_by</code> value and respects the <code>order_by</code> ordering.</p>
+a column.  Validates that each group has a unique <code>group_by</code> value
+and respects the <code>order_by</code> ordering.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -9225,7 +9225,7 @@ invalid records, non-unique group values, etc.</p>
                 <code>group_by</code>
             </td>
             <td>
-                  <code><span title="str">str</span> | <span title="list">list</span>[<span title="str">str</span>]</code>
+                  <code><span title="str">str</span></code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -9283,24 +9283,20 @@ invalid records, non-unique group values, etc.</p>
 <span class="normal"><a href="#__codelineno-0-206">206</a></span>
 <span class="normal"><a href="#__codelineno-0-207">207</a></span>
 <span class="normal"><a href="#__codelineno-0-208">208</a></span>
-<span class="normal"><a href="#__codelineno-0-209">209</a></span>
-<span class="normal"><a href="#__codelineno-0-210">210</a></span>
-<span class="normal"><a href="#__codelineno-0-211">211</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-196"><a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-196"><a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
 </span><span id="__span-0-197"><a id="__codelineno-0-197" name="__codelineno-0-197"></a>    <span class="bp">self</span><span class="p">,</span>
 </span><span id="__span-0-198"><a id="__codelineno-0-198" name="__codelineno-0-198"></a>    <span class="n">schema</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
 </span><span id="__span-0-199"><a id="__codelineno-0-199" name="__codelineno-0-199"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">ValidationParameters</span><span class="p">,</span>
 </span><span id="__span-0-200"><a id="__codelineno-0-200" name="__codelineno-0-200"></a>    <span class="n">bos_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-201"><a id="__codelineno-0-201" name="__codelineno-0-201"></a>    <span class="n">eos_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-202"><a id="__codelineno-0-202" name="__codelineno-0-202"></a>    <span class="n">group_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+</span><span id="__span-0-202"><a id="__codelineno-0-202" name="__codelineno-0-202"></a>    <span class="n">group_by</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-203"><a id="__codelineno-0-203" name="__codelineno-0-203"></a>    <span class="n">order_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-204"><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="p">):</span>
 </span><span id="__span-0-205"><a id="__codelineno-0-205" name="__codelineno-0-205"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">schema</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-0-206"><a id="__codelineno-0-206" name="__codelineno-0-206"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">group_by</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-</span><span id="__span-0-207"><a id="__codelineno-0-207" name="__codelineno-0-207"></a>        <span class="n">group_by</span> <span class="o">=</span> <span class="p">[</span><span class="n">group_by</span><span class="p">]</span>
-</span><span id="__span-0-208"><a id="__codelineno-0-208" name="__codelineno-0-208"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">group_by</span> <span class="o">=</span> <span class="n">group_by</span>
-</span><span id="__span-0-209"><a id="__codelineno-0-209" name="__codelineno-0-209"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">order_by</span> <span class="o">=</span> <span class="n">order_by</span>
-</span><span id="__span-0-210"><a id="__codelineno-0-210" name="__codelineno-0-210"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">bos_token</span> <span class="o">=</span> <span class="n">bos_token</span>
-</span><span id="__span-0-211"><a id="__codelineno-0-211" name="__codelineno-0-211"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">eos_token</span> <span class="o">=</span> <span class="n">eos_token</span>
+</span><span id="__span-0-206"><a id="__codelineno-0-206" name="__codelineno-0-206"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">group_by</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">group_by</span><span class="p">]</span>
+</span><span id="__span-0-207"><a id="__codelineno-0-207" name="__codelineno-0-207"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">order_by</span> <span class="o">=</span> <span class="n">order_by</span>
+</span><span id="__span-0-208"><a id="__codelineno-0-208" name="__codelineno-0-208"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">bos_token</span> <span class="o">=</span> <span class="n">bos_token</span>
+</span><span id="__span-0-209"><a id="__codelineno-0-209" name="__codelineno-0-209"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">eos_token</span> <span class="o">=</span> <span class="n">eos_token</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -9440,7 +9436,9 @@ invalid records, non-unique group values, etc.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/generation/processors.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-309">309</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
 <span class="normal"><a href="#__codelineno-0-310">310</a></span>
 <span class="normal"><a href="#__codelineno-0-311">311</a></span>
 <span class="normal"><a href="#__codelineno-0-312">312</a></span>
@@ -9473,44 +9471,42 @@ invalid records, non-unique group values, etc.</p>
 <span class="normal"><a href="#__codelineno-0-339">339</a></span>
 <span class="normal"><a href="#__codelineno-0-340">340</a></span>
 <span class="normal"><a href="#__codelineno-0-341">341</a></span>
-<span class="normal"><a href="#__codelineno-0-342">342</a></span>
-<span class="normal"><a href="#__codelineno-0-343">343</a></span>
-<span class="normal"><a href="#__codelineno-0-344">344</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_processor</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">ModelMetadata</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Processor</span><span class="p">:</span>
-</span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create the appropriate record processor for the current pipeline mode.</span>
-</span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a>
-</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">    Selects ``TimeSeriesDataProcessor``, ``GroupedDataProcessor``, or</span>
-</span><span id="__span-0-313"><a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">    ``TabularDataProcessor`` based on the pipeline configuration.</span>
-</span><span id="__span-0-314"><a id="__codelineno-0-314" name="__codelineno-0-314"></a>
-</span><span id="__span-0-315"><a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        schema: JSON schema describing the expected record format.</span>
-</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">        metadata: Model metadata (prompt template, BOS/EOS tokens, etc.).</span>
-</span><span id="__span-0-318"><a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">        config: Pipeline configuration determining the generation mode.</span>
-</span><span id="__span-0-319"><a id="__codelineno-0-319" name="__codelineno-0-319"></a>
-</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">        Processor instance matching the configured generation mode.</span>
-</span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">is_timeseries</span><span class="p">:</span>
-</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="n">processor</span> <span class="o">=</span> <span class="n">TimeSeriesDataProcessor</span><span class="p">(</span>
-</span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>            <span class="n">schema</span><span class="p">,</span>
-</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">validation</span><span class="p">,</span>
-</span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a>            <span class="n">time_column</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">timestamp_column</span><span class="p">,</span>
-</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a>            <span class="n">interval_seconds</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">timestamp_interval_seconds</span><span class="p">,</span>
-</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a>            <span class="n">time_format</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">timestamp_format</span><span class="p">,</span>
-</span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="p">)</span>
-</span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_training_examples_by</span><span class="p">:</span>
-</span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a>        <span class="n">processor</span> <span class="o">=</span> <span class="n">GroupedDataProcessor</span><span class="p">(</span>
-</span><span id="__span-0-333"><a id="__codelineno-0-333" name="__codelineno-0-333"></a>            <span class="n">schema</span><span class="p">,</span>
-</span><span id="__span-0-334"><a id="__codelineno-0-334" name="__codelineno-0-334"></a>            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">validation</span><span class="p">,</span>
-</span><span id="__span-0-335"><a id="__codelineno-0-335" name="__codelineno-0-335"></a>            <span class="n">group_by</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_training_examples_by</span><span class="p">,</span>
-</span><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a>            <span class="n">order_by</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">order_training_examples_by</span><span class="p">,</span>
-</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="n">metadata</span><span class="o">.</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">bos_token</span><span class="p">,</span>
-</span><span id="__span-0-338"><a id="__codelineno-0-338" name="__codelineno-0-338"></a>            <span class="n">eos_token</span><span class="o">=</span><span class="n">metadata</span><span class="o">.</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">eos_token</span><span class="p">,</span>
-</span><span id="__span-0-339"><a id="__codelineno-0-339" name="__codelineno-0-339"></a>        <span class="p">)</span>
-</span><span id="__span-0-340"><a id="__codelineno-0-340" name="__codelineno-0-340"></a>    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-341"><a id="__codelineno-0-341" name="__codelineno-0-341"></a>        <span class="n">processor</span> <span class="o">=</span> <span class="n">TabularDataProcessor</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">validation</span><span class="p">)</span>
-</span><span id="__span-0-342"><a id="__codelineno-0-342" name="__codelineno-0-342"></a>
-</span><span id="__span-0-343"><a id="__codelineno-0-343" name="__codelineno-0-343"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialized the </span><span class="si">{</span><span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-344"><a id="__codelineno-0-344" name="__codelineno-0-344"></a>    <span class="k">return</span> <span class="n">processor</span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-307"><a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_processor</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">metadata</span><span class="p">:</span> <span class="n">ModelMetadata</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Processor</span><span class="p">:</span>
+</span><span id="__span-0-308"><a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Create the appropriate record processor for the current pipeline mode.</span>
+</span><span id="__span-0-309"><a id="__codelineno-0-309" name="__codelineno-0-309"></a>
+</span><span id="__span-0-310"><a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">    Selects ``TimeSeriesDataProcessor``, ``GroupedDataProcessor``, or</span>
+</span><span id="__span-0-311"><a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="sd">    ``TabularDataProcessor`` based on the pipeline configuration.</span>
+</span><span id="__span-0-312"><a id="__codelineno-0-312" name="__codelineno-0-312"></a>
+</span><span id="__span-0-313"><a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-314"><a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">        schema: JSON schema describing the expected record format.</span>
+</span><span id="__span-0-315"><a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">        metadata: Model metadata (prompt template, BOS/EOS tokens, etc.).</span>
+</span><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">        config: Pipeline configuration determining the generation mode.</span>
+</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a>
+</span><span id="__span-0-318"><a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-319"><a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">        Processor instance matching the configured generation mode.</span>
+</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a>    <span class="k">if</span> <span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">is_timeseries</span><span class="p">:</span>
+</span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a>        <span class="n">processor</span> <span class="o">=</span> <span class="n">TimeSeriesDataProcessor</span><span class="p">(</span>
+</span><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a>            <span class="n">schema</span><span class="p">,</span>
+</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a>            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">validation</span><span class="p">,</span>
+</span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>            <span class="n">time_column</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">timestamp_column</span><span class="p">,</span>
+</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>            <span class="n">interval_seconds</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">timestamp_interval_seconds</span><span class="p">,</span>
+</span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a>            <span class="n">time_format</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">timestamp_format</span><span class="p">,</span>
+</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="p">)</span>
+</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="k">elif</span> <span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_training_examples_by</span><span class="p">:</span>
+</span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="n">processor</span> <span class="o">=</span> <span class="n">GroupedDataProcessor</span><span class="p">(</span>
+</span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>            <span class="n">schema</span><span class="p">,</span>
+</span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a>            <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">validation</span><span class="p">,</span>
+</span><span id="__span-0-333"><a id="__codelineno-0-333" name="__codelineno-0-333"></a>            <span class="n">group_by</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_training_examples_by</span><span class="p">,</span>
+</span><span id="__span-0-334"><a id="__codelineno-0-334" name="__codelineno-0-334"></a>            <span class="n">order_by</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">order_training_examples_by</span><span class="p">,</span>
+</span><span id="__span-0-335"><a id="__codelineno-0-335" name="__codelineno-0-335"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="n">metadata</span><span class="o">.</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">bos_token</span><span class="p">,</span>
+</span><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a>            <span class="n">eos_token</span><span class="o">=</span><span class="n">metadata</span><span class="o">.</span><span class="n">prompt_config</span><span class="o">.</span><span class="n">eos_token</span><span class="p">,</span>
+</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a>        <span class="p">)</span>
+</span><span id="__span-0-338"><a id="__codelineno-0-338" name="__codelineno-0-338"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-339"><a id="__codelineno-0-339" name="__codelineno-0-339"></a>        <span class="n">processor</span> <span class="o">=</span> <span class="n">TabularDataProcessor</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">generation</span><span class="o">.</span><span class="n">validation</span><span class="p">)</span>
+</span><span id="__span-0-340"><a id="__codelineno-0-340" name="__codelineno-0-340"></a>
+</span><span id="__span-0-341"><a id="__codelineno-0-341" name="__codelineno-0-341"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Initialized the </span><span class="si">{</span><span class="n">processor</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-342"><a id="__codelineno-0-342" name="__codelineno-0-342"></a>    <span class="k">return</span> <span class="n">processor</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
