@@ -16,13 +16,13 @@ MISSING_GROUP_BY_VALUES_ERROR = "Group by column '{group_by}' has missing values
 MISSING_ORDER_BY_COLUMN_ERROR = "Order by column '{order_by}' not found in the input data."
 
 
-def _get_column_names(data: pd.DataFrame |Collection[str]) -> Collection[str]:
+def _get_column_names(data: pd.DataFrame | Collection[str]) -> Collection[str]:
     if isinstance(data, pd.DataFrame):
         return data.columns
     return data
 
 
-def validate_groupby_column(data: pd.DataFrame |Collection[str], group_by: str | None) -> None:
+def validate_groupby_column(data: pd.DataFrame | Collection[str], group_by: str | None) -> None:
     """Validate that the configured group-by column exists and has no missing values.
 
     Args:
@@ -45,16 +45,14 @@ def validate_groupby_column(data: pd.DataFrame |Collection[str], group_by: str |
                 " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
             )
         else:
-            message += (
-                " Please set `data.group_training_examples_by` to an existing column or to `null`/`None` to disable grouping."
-            )
+            message += " Please set `data.group_training_examples_by` to an existing column or to `null`/`None` to disable grouping."
         raise ParameterError(message)
 
     if isinstance(data, pd.DataFrame) and data[group_by].isna().any():
         raise DataError(MISSING_GROUP_BY_VALUES_ERROR.format(group_by=group_by))
 
 
-def validate_orderby_column(data: pd.DataFrame |Collection[str], order_by: str | None) -> None:
+def validate_orderby_column(data: pd.DataFrame | Collection[str], order_by: str | None) -> None:
     """Validate that the configured order-by column exists.
 
     Args:
