@@ -47,11 +47,25 @@ help:
 
 ### BOOTSTRAP AND SETUP ###
 
+MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
+
 .PHONY: install-mise
-install-mise: ## Install mise
+install-mise: ## Install mise (GPG-verified when gpg is available)
 	@command -v mise >/dev/null 2>&1 || { \
 		echo "mise not found -- installing..."; \
-		curl -sSf https://mise.run | sh; \
+		if command -v gpg >/dev/null 2>&1; then \
+			echo "Verifying installer signature..."; \
+			gpg --keyserver hkps://keys.openpgp.org \
+				--recv-keys $(MISE_GPG_KEY) 2>/dev/null; \
+			tmpscript=$$(mktemp); \
+			curl -fsSL https://mise.jdx.dev/install.sh.sig \
+				| gpg --decrypt > "$$tmpscript" 2>/dev/null; \
+			sh "$$tmpscript"; \
+			rm -f "$$tmpscript"; \
+		else \
+			echo "WARNING: gpg not available -- installing without signature verification"; \
+			curl -fsSL https://mise.run | sh; \
+		fi; \
 	}
 
 .PHONY: setup
