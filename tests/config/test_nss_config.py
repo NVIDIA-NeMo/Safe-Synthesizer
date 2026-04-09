@@ -177,6 +177,16 @@ class TestSafeSynthesizerParameters:
         params = TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time")
         assert params.timestamp_column == "event_time"
 
+    def test_data_validation_error_without_phantom_dp_error(self):
+        """A bad data section should not produce a phantom 'DP is enabled' error when DP is disabled."""
+        with pytest.raises(ValidationError) as exc_info:
+            SafeSynthesizerParameters.from_yaml_str(
+                "data:\n  order_training_examples_by: event_id\n  group_training_examples_by: null\n"
+            )
+        error_messages = [e["msg"] for e in exc_info.value.errors()]
+        assert any("order_training_examples_by" in msg for msg in error_messages)
+        assert not any("DP is enabled" in msg for msg in error_messages)
+
     def test_read_from_yaml(self, yaml_config_str):
         p = SafeSynthesizerParameters.from_yaml_str(yaml_config_str)
         assert p.get("gradient_accumulation_steps") == 8

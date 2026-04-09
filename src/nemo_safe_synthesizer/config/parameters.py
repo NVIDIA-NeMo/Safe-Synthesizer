@@ -82,24 +82,30 @@ class SafeSynthesizerParameters(Parameters):
         ``max_sequences_per_example`` is ``"auto"``, defaults it to
         ``10``.
 
+        The ``dp_enabled`` check runs before inspecting ``data`` so that
+        an upstream data-section validation failure does not produce a
+        misleading "Data parameters must be provided when DP is enabled"
+        error when DP is actually disabled.
+
         Raises:
-            ParameterError: If ``data`` or ``training`` parameters are
-                missing, ``max_sequences_per_example`` is not ``1``, or
-                Unsloth is enabled alongside DP.
+            ParameterError: If DP is enabled and ``data`` or ``training``
+                parameters are missing, ``max_sequences_per_example`` is
+                not ``1``, or Unsloth is enabled alongside DP.
         """
         if dp_params is None:
             return dp_params
         logger.debug("Checking DP compatibility for privacy parameters. ")
-        # logger.debug(f"Privacy parameters: {dp_params}")
-        data: DataParameters | None = info.data.get("data")
-        if not data:
-            raise ParameterError("Data parameters must be provided when DP is enabled.")
 
         if not dp_params.dp_enabled:
-            if data.max_sequences_per_example is not None and data.max_sequences_per_example == AUTO_STR:
+            data: DataParameters | None = info.data.get("data")
+            if data and data.max_sequences_per_example is not None and data.max_sequences_per_example == AUTO_STR:
                 logger.debug("setting max_sequences_per_example to the default of 10 because DP is disabled")
                 data.max_sequences_per_example = 10
             return dp_params
+
+        data = info.data.get("data")
+        if not data:
+            raise ParameterError("Data parameters must be provided when DP is enabled.")
 
         match data.max_sequences_per_example:
             # this should be a valid none or parameter[int|str|none]
