@@ -31,7 +31,7 @@ from ..data_processing.stats import (
     RunningStatistics,
     Statistics,
 )
-from ..data_processing.validation import MISSING_GROUP_BY_COLUMN_ERROR, MISSING_ORDER_BY_COLUMN_ERROR
+from ..data_processing.validation import validate_groupby_column, validate_orderby_column
 from ..defaults import (
     DEFAULT_CACHE_PREFIX,
     PSEUDO_GROUP_COLUMN,
@@ -866,14 +866,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         Raises:
             ParameterError: If group or order column is not found in dataset.
         """
-        if self.group_by_column not in dataset.column_names:
-            msg = MISSING_GROUP_BY_COLUMN_ERROR.format(group_by=self.group_by_column)
-            if "," in self.group_by_column:
-                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
-            raise ParameterError(msg)
-
-        if self.order_by_column not in dataset.column_names:
-            raise ParameterError(MISSING_ORDER_BY_COLUMN_ERROR.format(order_by=self.order_by_column))
+        validate_groupby_column(dataset.column_names, self.group_by_column)
+        validate_orderby_column(dataset.column_names, self.order_by_column)
 
     def _reorder_columns(self, dataset: Dataset) -> Dataset:
         """Reorder columns: group_by first, order_by second, then the rest.
