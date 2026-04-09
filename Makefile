@@ -4,7 +4,7 @@
 ### CONFIGURATION ###
 
 SHELL := /bin/bash
-export PATH := $(HOME)/.local/bin:$(PATH)
+export PATH := $(HOME)/.local/share/mise/shims:$(HOME)/.local/bin:$(PATH)
 UNAME_S := $(shell uname -s)
 ARCH := $(shell uname -m)
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
