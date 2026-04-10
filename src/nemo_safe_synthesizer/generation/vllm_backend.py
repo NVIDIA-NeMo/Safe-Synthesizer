@@ -36,10 +36,11 @@ from ..utils import all_equal_type, load_json
 logger = get_logger(__name__)
 
 if torch.cuda.is_available():
-    # Always enable V1 multiprocessing so vLLM spawns a clean worker
-    # process.  This isolates generation from unsloth's in-process
-    # monkey-patches (torch.compiler.disable on attention forwards)
-    # that conflict with vLLM's fullgraph=True compilation.
+    # Default to enabling V1 multiprocessing so vLLM spawns a clean
+    # worker process when the environment variable is not already set.
+    # This isolates generation from unsloth's in-process monkey-patches
+    # (torch.compiler.disable on attention forwards) that conflict with
+    # vLLM's fullgraph=True compilation.
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "1")
 else:
     # When CUDA is unavailable, avoid triggering CUDA initialization and
