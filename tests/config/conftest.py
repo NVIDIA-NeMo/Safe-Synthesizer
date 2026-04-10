@@ -14,6 +14,7 @@ from nemo_safe_synthesizer.config import (
 
 @pytest.fixture
 def training_hyperparams():
+    """Training hyperparameters for the Safe Synthesizer."""
     return TrainingHyperparams(
         num_input_records_to_sample=100,
         batch_size=10,
@@ -24,6 +25,7 @@ def training_hyperparams():
 
 @pytest.fixture
 def simple_safe_synthesizer_parameters():
+    """Simple Safe Synthesizer parameters for the Safe Synthesizer."""
     return SafeSynthesizerParameters(
         data=DataParameters(
             group_training_examples_by="my_col",

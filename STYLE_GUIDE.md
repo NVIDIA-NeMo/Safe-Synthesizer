@@ -718,7 +718,7 @@ The before/after examples above demonstrate most rules. These additional points 
 Testing conventions are substantial enough to warrant their own section. For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](tests/TESTING.md). This section covers style conventions for writing tests.
 
 - File naming: `test_*.py`; class naming: `Test*`; function naming: `test_<module>_<expected_behavior>`
-- Fixtures: `fixture_` prefix convention for grep-ability and to separate fixtures from test functions. Add `# Purpose:` comments describing usage and data.
+- Fixtures: `fixture_` prefix convention for grep-ability and to separate fixtures from test functions. Add a one-line docstring describing the fixture's purpose and data.
 - Fixture scope: function-scoped by default. Session scope only when empirically justified by test runtime -- not based on assumptions about cost.
 - Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
 - Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
