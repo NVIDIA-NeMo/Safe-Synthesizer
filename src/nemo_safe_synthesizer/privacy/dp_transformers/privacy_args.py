@@ -34,7 +34,7 @@ logger = get_logger()
 # Timeout (seconds) for PRV accountant construction.  The PRV library can
 # hang for small noise multipliers (high epsilon) due to numerical overflow
 # in its internal domain-size computation.
-_PRV_TIMEOUT_SECONDS = 120
+_PRV_TIMEOUT_SECONDS: int = 120
 
 
 def _can_use_sigalrm() -> bool:
@@ -222,8 +222,8 @@ class PrivacyArguments:
                     f"PRV noise-multiplier search failed ({prv_error}), falling back to Opacus RDP accountant"
                 )
                 self.noise_multiplier = opacus_get_noise_multiplier(
-                    target_epsilon=self.target_epsilon,
-                    target_delta=self.target_delta,
+                    target_epsilon=target_eps,
+                    target_delta=target_del,
                     sample_rate=sampling_probability,
                     steps=num_steps,
                     accountant="rdp",
