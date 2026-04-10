@@ -30,7 +30,6 @@ from nemo_safe_synthesizer.llm.metadata import DEFAULT_MAX_SEQ_LENGTH, LLMPrompt
 STUB_PROMPT = "Test prompt"
 STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])
 
-LOCAL_SMOLLM3_PATH = str(Path(__file__).parent.parent / "test_data" / "tokenizers" / "smollm3b")
 
 
 # Purpose: Session-scoped assembler config pointing at a local SmolLM3 tokenizer directory
@@ -38,7 +37,7 @@ LOCAL_SMOLLM3_PATH = str(Path(__file__).parent.parent / "test_data" / "tokenizer
 @pytest.fixture(scope="session")
 def fixture_assembler_config() -> SafeSynthesizerParameters:
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False, rope_scaling_factor=1, pretrained_model=LOCAL_SMOLLM3_PATH
+        use_unsloth=False, rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer
     )
     return config
 
