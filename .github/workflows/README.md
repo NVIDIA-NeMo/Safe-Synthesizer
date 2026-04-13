@@ -232,12 +232,12 @@ Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_
 
 Locally (via Makefile):
 
-Add the required env vars to your `.local.envrc` (git-ignored):
+Add the required env vars to your `.env.local` (git-ignored, auto-loaded by mise):
 
 ```bash
-export TWINE_REPOSITORY_URL=<artifactory-repo-url>
-export TWINE_USERNAME=<your-username>
-export TWINE_PASSWORD=<your-api-key>
+TWINE_REPOSITORY_URL=<artifactory-repo-url>
+TWINE_USERNAME=<your-username>
+TWINE_PASSWORD=<your-api-key>
 ```
 
 Then run:

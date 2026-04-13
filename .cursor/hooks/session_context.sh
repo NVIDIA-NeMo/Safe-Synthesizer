@@ -22,11 +22,12 @@ if command -v mise >/dev/null 2>&1 && [ "${CURSOR_ALLOW_MISE_TRUST:-0}" = "1" ];
 fi
 
 # Source project-local env if present (API keys, secrets, etc.).
-for _envfile in .local.envrc .envrc.local .env.local; do
+# mise.local.toml, .env, and .env.local are loaded automatically by mise;
+# source them here as a fallback for hook contexts.
+for _envfile in .env .env.local .local.envrc; do
     if [ -f "$_envfile" ]; then
         # shellcheck disable=SC1090
         set -a && . "./$_envfile" && set +a
-        break
     fi
 done
 unset _envfile

@@ -32,7 +32,7 @@ make setup # installs mise (if missing) + pinned tool versions from mise.lock
 make bootstrap-nss cuda
 ```
 
-Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed).
+Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
 
 ### Running
 
@@ -243,7 +243,15 @@ using the default) so column classification can run.
 
 ### Local Endpoint
 
-To point to a locally hosted LLM:
+To point to a locally hosted LLM, add the variables to `.env.local` (git-ignored, auto-loaded by mise):
+
+```bash
+# .env.local
+NSS_INFERENCE_ENDPOINT=https://your-local-nim-endpoint
+NSS_INFERENCE_KEY=your-api-key  # pragma: allowlist secret
+```
+
+Or export them in your shell:
 
 ```bash
 export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"

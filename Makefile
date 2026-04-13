@@ -48,6 +48,7 @@ help:
 ### BOOTSTRAP AND SETUP ###
 
 MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
+MISE_VERSION := v2026.4.11
 
 .PHONY: install-mise
 install-mise: ## Install mise (GPG-verified when gpg is available)
@@ -301,7 +302,6 @@ test-tool-install: container-build-test-setup ## Verify mise-managed tools insta
 			yq --version && \
 			gh --version && \
 			osv-scanner --version && \
-			direnv --version && \
 			echo "=== All tools OK ==="'
 
 .PHONY: test-ci-container

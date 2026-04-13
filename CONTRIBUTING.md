@@ -63,17 +63,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
 
-3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise and direnv trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
-
-  ```bash
-   # Append a direnv whitelist entry for this repo
-   mkdir -p ~/.config/direnv
-   REPO="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
-   cat >> ~/.config/direnv/direnv.toml <<EOF
-   [whitelist]
-   prefix = ["$REPO"]
-   EOF
-  ```
+3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
 
   ```bash
    # Add to your shell profile (~/.bashrc, ~/.zshrc)
@@ -81,15 +71,18 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    printf 'export MISE_TRUSTED_CONFIG_PATHS="%s"\n' "$REPO" >> ~/.bashrc   # or ~/.zshrc
   ```
 
-  Alternatively, set `MISE_YES=1` and `DIRENV_TRUST_ALLOW_ALL=1` to trust all configs globally (appropriate for dev machines and CI).
+  Alternatively, set `MISE_YES=1` to trust all configs globally (appropriate for dev machines and CI).
 
-4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.local.envrc` (git-ignored, auto-loaded by `.envrc`):
+4. (Optional) Set a worktree base directory for working on multiple branches simultaneously. Add it to `.env.local` (git-ignored, auto-loaded by mise):
 
   ```bash
-   echo 'export SS_WORKTREE_DIR="/path/to/worktrees"' >> .local.envrc
+   # .env.local -- project-local overrides (git-ignored)
+   SS_WORKTREE_DIR="/path/to/worktrees"
   ```
 
    Defaults to the parent of the repo root if unset. This is also useful for AI agents that create worktrees for isolated branch work. See the `git-worktrees` skill for details.
+
+   mise automatically loads `.env` and `.env.local` from the project root (configured in `.mise.toml`). Use `.env` for shared defaults and `.env.local` for machine-specific overrides -- both are git-ignored.
 
 ### Commit Signing
 
@@ -498,8 +491,8 @@ CI calls the same tools through atomic read-only `make` targets, so the Makefile
 You can also run tools directly on specific files:
 
 ```bash
-ruff format --check src/nemo_safe_synthesizer/cli/run.py
-ruff check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/check.sh src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.

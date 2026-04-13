@@ -63,7 +63,7 @@ ARG UBUNTU_VERSION=22.04
 ARG CUDA_IMAGE_TYPE=runtime
 ARG PYTHON_VERSION=3.11.13
 # Pinned to match .mise.toml; used by the deps stage which doesn't have mise.
-ARG UV_VERSION=0.10.11
+ARG UV_VERSION=0.9.30
 
 # CUDA compute capabilities to compile for (used with CUDA_IMAGE_TYPE=devel).
 # Recommended values per architecture:

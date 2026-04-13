@@ -13,15 +13,14 @@ if command -v mise >/dev/null 2>&1 && [ "${CURSOR_ALLOW_MISE_TRUST:-0}" = "1" ];
     mise trust --quiet 2>/dev/null
 fi
 
-# Load project-local env vars (if the file exists and auto-trust is opted in).
-# Without CURSOR_ALLOW_DIRENV_TRUST, the file is still sourced directly but
-# direnv won't be told to trust/execute the repo's .envrc.
-if [ -f .local.envrc ]; then
-    if command -v direnv >/dev/null 2>&1 && [ "${CURSOR_ALLOW_DIRENV_TRUST:-0}" = "1" ]; then
-        direnv allow
-    fi
-    source .local.envrc
-fi
+# Load project-local env vars. mise.local.toml, .env, and .env.local are
+# handled automatically by mise; source them here as a fallback for contexts
+# where mise is not fully activated.
+for _envfile in .env .env.local .local.envrc; do
+    # shellcheck disable=SC1090
+    [ -f "$_envfile" ] && . "./$_envfile"
+done
+unset _envfile
 
 # Exit successfully
 exit 0
