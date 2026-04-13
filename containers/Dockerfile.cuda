@@ -4,6 +4,7 @@
 # Multistage CUDA Dockerfile for Safe-Synthesizer.
 #
 # Stages:
+#   tools   -- install mise and all dev tools (uv, ruff, etc.)
 #   deps    -- install Python, uv, and all cu128+engine dependencies
 #   runtime -- minimal CLI wrapper (ENTRYPOINT entrypoint.sh -> safe-synthesizer)
 #   dev     -- extends runtime with dev tools, tests, and interactive shell
@@ -47,9 +48,10 @@
 # BuildKit sets TARGETARCH automatically when building with:
 #   docker buildx build --platform linux/arm64 ...
 #
-# The nvidia/cuda base images and uv binaries are already multi-platform,
-# so no conditional logic is needed for the core build. CUDA_ARCH_FLAGS is
-# provided as forward-compatibility for when CUDA_IMAGE_TYPE=devel is used
+# The nvidia/cuda base images, ubuntu base images, and mise binaries are
+# already multi-platform, so no conditional logic is needed for the core
+# build. CUDA_ARCH_FLAGS is provided as forward-compatibility for when
+# CUDA_IMAGE_TYPE=devel is used
 # and kernels must be compiled for specific GPU architectures.
 ARG TARGETARCH
 
@@ -62,8 +64,6 @@ ARG UBUNTU_VERSION=22.04
 # Switch to "devel" if a future dependency requires CUDA compilation.
 ARG CUDA_IMAGE_TYPE=runtime
 ARG PYTHON_VERSION=3.11.13
-# Pinned to match .mise.toml; used by the deps stage which doesn't have mise.
-ARG UV_VERSION=0.9.30
 
 # CUDA compute capabilities to compile for (used with CUDA_IMAGE_TYPE=devel).
 # Recommended values per architecture:
@@ -75,14 +75,44 @@ ARG UV_VERSION=0.9.30
 ARG CUDA_ARCH_FLAGS="80;86;90;90a"
 
 # ---------------------------------------------------------------------------
-# Stage 1: deps -- build dependencies in a CUDA environment
+# Stage 1: tools -- install mise and all dev tools
+# ---------------------------------------------------------------------------
+# Lightweight base (no CUDA needed for tool binaries). Mise is the single
+# source of truth for tool versions via .mise.toml.
+# See: https://mise.jdx.dev/mise-cookbook/docker.html
+FROM ubuntu:${UBUNTU_VERSION} AS tools
+
+ARG UBUNTU_VERSION
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        git curl build-essential make ca-certificates gnupg
+
+ENV MISE_DATA_DIR="/mise" \
+    MISE_CONFIG_DIR="/mise" \
+    MISE_CACHE_DIR="/mise/cache" \
+    MISE_INSTALL_PATH="/usr/local/bin/mise" \
+    PATH="/mise/shims:${PATH}"
+
+WORKDIR /build
+COPY .mise.toml mise.lock Makefile ./
+RUN make setup
+
+# Stage real binaries to /usr/local/bin for stages that need the tool
+# without the full mise runtime (shims require mise to resolve).
+RUN cp "$(mise which uv)" /usr/local/bin/uv && \
+    cp "$(mise which uvx)" /usr/local/bin/uvx
+
+# ---------------------------------------------------------------------------
+# Stage 2: deps -- build dependencies in a CUDA environment
 # ---------------------------------------------------------------------------
 FROM nvidia/cuda:${CUDA_VERSION}-${CUDA_IMAGE_TYPE}-ubuntu${UBUNTU_VERSION} AS deps
 
 ARG PYTHON_VERSION
-ARG UV_VERSION
 
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+COPY --from=tools /usr/local/bin/uv /usr/local/bin/uv
+COPY --from=tools /usr/local/bin/uvx /usr/local/bin/uvx
 
 # Cache apt downloads across rebuilds instead of deleting them each time.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -121,7 +151,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable --extra cu128 --extra engine --no-group dev
 
 # ---------------------------------------------------------------------------
-# Stage 2: runtime -- minimal image wrapping the safe-synthesizer CLI
+# Stage 3: runtime -- minimal image wrapping the safe-synthesizer CLI
 # ---------------------------------------------------------------------------
 FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS runtime
 
@@ -168,7 +198,7 @@ ENTRYPOINT ["tini", "--", "entrypoint.sh"]
 CMD ["--help"]
 
 # ---------------------------------------------------------------------------
-# Stage 3: dev -- interactive development and testing
+# Stage 4: dev -- interactive development and testing (also CI test target)
 # ---------------------------------------------------------------------------
 FROM runtime AS dev
 
@@ -179,22 +209,26 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         git curl build-essential make
 
-ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+# Mise toolchain from the tools stage -- no re-download needed.
+COPY --from=tools /usr/local/bin/mise /usr/local/bin/mise
+COPY --from=tools /mise /mise
+
+ENV MISE_DATA_DIR="/mise" \
+    MISE_CONFIG_DIR="/mise" \
+    MISE_CACHE_DIR="/mise/cache" \
+    MISE_YES=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
-    UV_FROZEN=true
+    UV_FROZEN=true \
+    PATH="/mise/shims:${PATH}"
 
 WORKDIR /build
 
 # Copy the full repo (.dockerignore filters out .git, .venv, caches, etc.).
 # Bind-mount at /workspace overrides this at runtime for live editing.
 COPY . .
-
-# Install mise and all dev tools including uv
-RUN make setup
-
-ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
 
 # Install dev dependencies into the existing venv.
 RUN --mount=type=cache,target=/root/.cache/uv \
