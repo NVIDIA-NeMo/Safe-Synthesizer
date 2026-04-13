@@ -53,24 +53,27 @@ MISE_VERSION := v2026.4.11
 .PHONY: install-mise
 install-mise: ## Install mise (GPG-verified when gpg is available)
 	@command -v mise >/dev/null 2>&1 || { \
+		set -euo pipefail; \
 		echo "mise not found -- installing..."; \
 		if command -v gpg >/dev/null 2>&1; then \
 			echo "Verifying installer signature..."; \
-			gpg --keyserver hkps://keys.openpgp.org \
-				--recv-keys $(MISE_GPG_KEY) 2>/dev/null; \
-			tmpscript=$$(mktemp); \
+			gpg --batch --no-tty --keyserver hkps://keys.openpgp.org \
+				--recv-keys $(MISE_GPG_KEY); \
+			tmpscript=$$(mktemp) && \
 			curl -fsSL https://mise.jdx.dev/install.sh.sig \
-				| gpg --decrypt > "$$tmpscript" 2>/dev/null; \
-			sh "$$tmpscript"; \
+				| gpg --batch --no-tty --decrypt > "$$tmpscript" && \
+			sh "$$tmpscript" && \
 			rm -f "$$tmpscript"; \
 		else \
 			echo "WARNING: gpg not available -- installing without signature verification"; \
 			curl -fsSL https://mise.run | sh; \
 		fi; \
+		command -v mise >/dev/null 2>&1 || { echo "ERROR: mise not found after install"; exit 1; }; \
 	}
 
 .PHONY: setup
 setup: install-mise ## Install dev tools via mise (installs mise itself if missing)
+	mise trust
 	MISE_YES=1 mise install
 	@echo "tools installed successfully via mise"
 
