@@ -492,7 +492,7 @@ You can also run tools directly on specific files:
 
 ```bash
 bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
-bash tools/codestyle/check.sh src/nemo_safe_synthesizer/cli/run.py
+bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
 ```
 
 All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
