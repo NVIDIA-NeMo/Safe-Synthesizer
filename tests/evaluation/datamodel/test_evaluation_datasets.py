@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import cast
 
 import pandas as pd
 import pytest
@@ -30,6 +29,7 @@ def test_from_dataframes_happy_path(training_df, synthetic_df, test_df):
             assert f.synthetic_field_features.type == FieldType.NUMERIC
             assert f.training_distribution is not None
             assert len(f.training_distribution) > 0
+            assert f.distribution_distance is not None
             assert f.distribution_distance > 0.01
         elif f.name in ["num_cat", "num_cat_Int64", "small_cat"]:
             assert f.training_field_features.type == FieldType.CATEGORICAL
@@ -37,6 +37,7 @@ def test_from_dataframes_happy_path(training_df, synthetic_df, test_df):
             assert f.training_field_features.unique_count < 10
             assert f.training_distribution is not None
             assert len(f.training_distribution) > 0
+            assert f.distribution_distance is not None
             assert f.distribution_distance > 0.01
         elif f.name in ["other"]:
             assert f.training_field_features.type == FieldType.OTHER
@@ -50,6 +51,7 @@ def test_from_dataframes_happy_path(training_df, synthetic_df, test_df):
             assert f.training_field_features.unique_count == 2
             assert f.training_distribution is not None
             assert len(f.training_distribution) > 0
+            assert f.distribution_distance is not None
             assert f.distribution_distance > 0.01
         elif f.name in ["text"]:
             assert f.training_field_features.type == FieldType.TEXT
@@ -73,7 +75,7 @@ def test_from_dataframes_with_sampling(training_df_5k, synthetic_df_5k, test_df)
 
 def test_degenerate_input(synthetic_df_5k, test_df):
     with pytest.raises(ValueError):
-        EvaluationDatasets.from_dataframes(None, synthetic_df_5k, test_df)
+        EvaluationDatasets.from_dataframes(None, synthetic_df_5k, test_df)  # ty: ignore[invalid-argument-type]
     with pytest.raises(ValueError):
         EvaluationDatasets.from_dataframes(pd.DataFrame(), synthetic_df_5k, test_df)
 

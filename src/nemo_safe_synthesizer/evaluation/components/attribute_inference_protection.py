@@ -217,12 +217,8 @@ class AttributeInferenceProtection(Component):
 
         # First divide out text and non-text
         if len(text_columns) > 0:
-            training_df_use, training_df_text = divide_tabular_text(
-                training_df_use, text_columns
-            )
-            synthetic_df_use, synthetic_df_text = divide_tabular_text(
-                synthetic_df_use, text_columns
-            )
+            training_df_use, training_df_text = divide_tabular_text(training_df_use, text_columns)
+            synthetic_df_use, synthetic_df_text = divide_tabular_text(synthetic_df_use, text_columns)
 
         # Normalize the tabular data if there is any
         tabular_columns = numeric_columns + nominal_columns

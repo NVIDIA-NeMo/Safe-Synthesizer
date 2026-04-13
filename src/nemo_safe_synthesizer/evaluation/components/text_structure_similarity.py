@@ -194,8 +194,8 @@ class TextStructureSimilarity(Component):
         return float(np.mean([len(w) for w in words]))
 
     @staticmethod
-    def _count_duplicate_lines(train: pd.Series, synth: pd.Series) -> int:
-        return len(pd.merge(pd.DataFrame(train), pd.DataFrame(synth), how="inner"))
+    def _count_duplicate_lines(training: pd.Series, synthetic: pd.Series) -> int:
+        return len(pd.merge(pd.DataFrame(training), pd.DataFrame(synthetic), how="inner"))
 
     @staticmethod
     def _get_text_statistics(text: pd.Series) -> TextDataSetStatistics:
@@ -228,7 +228,7 @@ class TextStructureSimilarity(Component):
                 row_count=_row_count,
                 # For now we only support 1 column.
                 column_count=1,
-                # We need to examine both train and synth to set this, we do so elsewhere.
+                # We need to examine both training and synthetic to set this, we do so elsewhere.
                 duplicate_lines=0,
                 missing_values=_missing_values,
                 unique_values=_unique_values,

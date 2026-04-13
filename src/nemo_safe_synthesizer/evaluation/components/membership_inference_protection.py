@@ -485,9 +485,7 @@ class MembershipInferenceProtection(Component):
             if len(text_fields) > 0:
                 training_df_use, training_df_text = divide_tabular_text(training_df_use, text_fields)
                 test_df, test_df_text = divide_tabular_text(test_df, text_fields)
-                synthetic_df, synthetic_df_text = divide_tabular_text(
-                    synthetic_df, text_fields
-                )
+                synthetic_df, synthetic_df_text = divide_tabular_text(synthetic_df, text_fields)
 
             # Normalize the tabular data (adjusted for multimodal)
             if tabular_cnt > 0:

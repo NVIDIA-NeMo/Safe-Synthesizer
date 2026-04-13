@@ -30,7 +30,7 @@ class ColumnDistributionPlotRow(BaseModel):
     figure: str = Field(description="Rendered HTML of the side-by-side distribution plot.")
 
     @staticmethod
-    def _get_figure_for_field(f: EvaluationField | None, reference: pd.Series, output: pd.Series) -> Figure | None:
+    def _get_figure_for_field(f: EvaluationField | None, training: pd.Series, synthetic: pd.Series) -> Figure | None:
         if f is None:
             return None
         if f.training_field_features.type != FieldType.NUMERIC or f.synthetic_field_features.type != FieldType.NUMERIC:
@@ -39,7 +39,7 @@ class ColumnDistributionPlotRow(BaseModel):
             else:
                 figure = None
         else:
-            figure = figures.histogram_figure(reference, output)
+            figure = figures.histogram_figure(training, synthetic)
         return figure
 
     @staticmethod
@@ -95,7 +95,7 @@ class ColumnDistribution(Component):
     Computes per-column Jensen-Shannon divergence between training and
     synthetic distributions, averages across all tabular columns, and maps
     the result to a 0--10 score.  Also carries data for the per-column
-    histogram figures and the Training Columns table in the HTML report.
+    histogram figures and the Training Data Columns table in the HTML report.
     """
 
     name: str = Field(default="Column Distribution Stability")

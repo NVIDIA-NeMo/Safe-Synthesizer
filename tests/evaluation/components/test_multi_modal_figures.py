@@ -323,10 +323,10 @@ class TestStructureStabilityFigure:
     """Tests for structure_stability_figure function."""
 
     def test_structure_stability_figure_basic(self):
-        reference = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
-        output = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        training_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        synthetic_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
 
-        fig = structure_stability_figure(reference, output)
+        fig = structure_stability_figure(training_df, synthetic_df)
 
         assert isinstance(fig, go.Figure)
         assert fig.layout.height == 420
@@ -404,38 +404,37 @@ class TestHistogramFigure:
     """Tests for histogram_figure function."""
 
     def test_histogram_figure_basic(self):
-        reference = pd.Series(np.random.randn(1000))
-        output = pd.Series(np.random.randn(1000))
+        training = pd.Series(np.random.randn(1000))
+        synthetic = pd.Series(np.random.randn(1000))
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 2  # Training and Synthetic histograms
 
     def test_histogram_figure_with_nans(self):
-        reference = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
-        output = pd.Series([1.5, np.nan, 2.5, 3.5, 4.0])
+        training = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
+        synthetic = pd.Series([1.5, np.nan, 2.5, 3.5, 4.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
 
     def test_histogram_figure_empty_after_dropna(self):
-        reference = pd.Series([np.nan, np.nan])
-        output = pd.Series([1.0, 2.0])
+        training = pd.Series([np.nan, np.nan])
+        synthetic = pd.Series([1.0, 2.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         # Should return empty figure when one series is all NaN
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 0
 
     def test_histogram_figure_same_values(self):
-        # Edge case: all values are the same (no variance)
-        reference = pd.Series([5.0, 5.0, 5.0, 5.0])
-        output = pd.Series([5.0, 5.0, 5.0, 5.0])
+        training = pd.Series([5.0, 5.0, 5.0, 5.0])
+        synthetic = pd.Series([5.0, 5.0, 5.0, 5.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
 

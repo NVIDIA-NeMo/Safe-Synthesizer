@@ -50,8 +50,8 @@ class DeepStructure(Component):
             synthetic_pca = self.synthetic_pca
             if training_pca is not None and synthetic_pca is not None:
                 d["figure"] = figures.structure_stability_figure(
-                    training_pca=training_pca,
-                    synthetic_pca=synthetic_pca,
+                    training_df=training_pca,
+                    synthetic_df=synthetic_pca,
                 ).to_html(full_html=False, include_plotlyjs=False)
         return d
 

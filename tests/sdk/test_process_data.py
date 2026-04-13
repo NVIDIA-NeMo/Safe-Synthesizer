@@ -542,8 +542,8 @@ class TestLoadFromSavePathHoldoutZero:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
-        assert builder._original_train_df is not None
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        assert builder._original_training_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
 
@@ -573,8 +573,8 @@ class TestLoadFromSavePathHoldoutZero:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
-        assert builder._original_train_df is not None
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        assert builder._original_training_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
 

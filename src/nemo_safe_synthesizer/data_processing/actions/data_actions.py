@@ -145,7 +145,7 @@ class BaseAction(BaseModel, ABC):
 
         Args:
             batch: Newly generated data to validate.
-            df: Reference dataset providing context for validation.
+            df: Accumulated dataset providing context for validation.
 
         Returns:
             A tuple of (valid_rows, rejected_rows) DataFrames.
