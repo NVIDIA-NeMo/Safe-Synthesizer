@@ -16,9 +16,13 @@ fi
 # Load project-local env vars. mise.local.toml, .env, and .env.local are
 # handled automatically by mise; source them here as a fallback for contexts
 # where mise is not fully activated.
+# set -a auto-exports so KEY=VALUE lines (without export) are visible to
+# subprocesses; set +a restores the default after sourcing.
 for _envfile in .env .env.local .local.envrc; do
-    # shellcheck disable=SC1090
-    [ -f "$_envfile" ] && . "./$_envfile"
+    if [ -f "$_envfile" ]; then
+        # shellcheck disable=SC1090
+        set -a && . "./$_envfile" && set +a
+    fi
 done
 unset _envfile
 

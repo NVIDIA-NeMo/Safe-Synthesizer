@@ -92,7 +92,7 @@ command).
 | `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
 | `CUDA_IMAGE_TYPE` | `runtime` | Base image variant for the deps stage. Change to `devel` if a dependency requires CUDA headers for compilation |
 | `PYTHON_VERSION` | `3.11.13` | Python version installed via `uv python install` |
-| `UV_VERSION` | `0.10.11` | uv version for the deps stage (matches `.mise.toml` pin) |
+| `UV_VERSION` | `0.9.30` | uv version for the deps stage (matches `.mise.toml` pin) |
 | `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`). Automatically populated by `docker buildx build --platform` |
 | `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc`. Override for arm64: `90;90a;120;120a` |
 
