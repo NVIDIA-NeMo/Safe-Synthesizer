@@ -50,6 +50,9 @@ help:
 MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
 MISE_VERSION := v2026.4.11
 
+# install.sh.sig is a GPG clearsigned document (not a detached signature).
+# gpg --decrypt verifies the signature and extracts the script in one step.
+# See: https://mise.jdx.dev/installing-mise.html
 .PHONY: install-mise
 install-mise: ## Install mise (GPG-verified when gpg is available)
 	@command -v mise >/dev/null 2>&1 || { \
