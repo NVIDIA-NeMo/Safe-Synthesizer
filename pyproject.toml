@@ -171,7 +171,7 @@ cu128 = [
 
 [tool.uv]
 # Version pinned in .mise.toml but keep here as a fallback constraint
-# Allow current 0.10.x line while staying below the next minor
+# Allow current 0.9.x line while staying below 0.10.0
 required-version = ">=0.9.30, <0.10.0"
 
 
