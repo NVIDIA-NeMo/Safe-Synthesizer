@@ -73,7 +73,7 @@ install-mise: ## Install mise (GPG-verified when gpg is available)
 
 .PHONY: setup
 setup: install-mise ## Install dev tools via mise (installs mise itself if missing)
-	mise trust
+	MISE_YES=1 mise trust
 	MISE_YES=1 mise install
 	@echo "tools installed successfully via mise"
 
