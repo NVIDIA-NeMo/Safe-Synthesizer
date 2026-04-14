@@ -52,8 +52,8 @@ tooltips = {
     """,
     "text_semantic_similarity_info": """
         Text Semantic Similarity measures how well free text columns in the synthetic data capture the meaning of the original text,
-        while penalizing memorization. A higher score is better. The text semantic similarity is higher with higher similarity between the
-        synthetic and test data, penalized for memorization by the similarity between the synthetic and training data being too high.
+        while penalizing memorization. A higher score is better. The text semantic similarity is based on cosine similarities of sentence embeddings, 
+        and is higher with higher similarity between the synthetic and test data, penalized for memorization by the similarity between the synthetic and training data being too high.
     """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
