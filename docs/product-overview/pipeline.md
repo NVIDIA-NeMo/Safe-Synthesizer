@@ -21,7 +21,7 @@ flowchart LR
     data --> pii("PII Replacement\non by default")
     pii --> assemble("Assemble Examples")
     assemble --> train("Fine-tune LLM")
-    train --> generate["Generate Syntheic Data"]
+    train --> generate["Generate Synthetic Data"]
     generate --> evaluate["Evaluate"]
 ```
 

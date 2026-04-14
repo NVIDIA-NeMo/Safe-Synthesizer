@@ -51,9 +51,9 @@ tooltips = {
         including character/word/sentence counts. A higher similarity indicates a better match.
     """,
     "text_semantic_similarity_info": """
-        Text Semantic Similarity is a measure of how well any free text columns in the synthetic data match the input data in terms of the meaning of the text.
-        A higher similarity indicates a better match. The text semantic similarity is calculated using the cosine similarity between the
-        sentence embeddings of the training, test, and synthetic data.
+        Text Semantic Similarity measures how well free text columns in the synthetic data capture the meaning of the original text,
+        while penalizing memorization. A higher score is better. The text semantic similarity is higher with higher similarity between the
+        synthetic and test data, penalized for memorization by the similarity between the synthetic and training data being too high.
     """,
     "differential_privacy_info": """
     Differential Privacy (DP) is generally regarded as the highest level of privacy, providing mathematical guarantees around the protection of individual training
