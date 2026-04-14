@@ -12,7 +12,10 @@ from __future__ import annotations
 import calendar
 import json
 import re
+import time
+from collections.abc import Callable
 from csv import QUOTE_NONNUMERIC
+from dataclasses import dataclass, field
 from datetime import datetime
 from io import StringIO
 
@@ -25,6 +28,32 @@ RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
 RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
 
 logger = get_logger()
+
+
+@dataclass(frozen=True)
+class ExtractionResult:
+    """Result of extracting and validating records from a JSONL string.
+
+    Token count lists are parallel to ``valid_records`` and ``invalid_records``
+    so that counts can follow records through reclassification (e.g. group-level
+    rejection or data-fidelity checks).  When no ``encode`` callable is provided
+    to the extraction function, token count lists are empty.
+
+    Attributes:
+        valid_records: Records that passed schema validation (as dicts).
+        invalid_records: Raw text of records that failed validation.
+        errors: ``(detailed_msg, validator)`` tuples for each invalid record.
+        valid_record_token_counts: Token count per valid record (parallel to ``valid_records``).
+        invalid_record_token_counts: Token count per invalid record (parallel to ``invalid_records``).
+        tokenization_time_sec: Wall-clock seconds spent in ``encode()`` calls.
+    """
+
+    valid_records: list[dict] = field(default_factory=list)
+    invalid_records: list[str] = field(default_factory=list)
+    errors: list[tuple[str, str]] = field(default_factory=list)
+    valid_record_token_counts: list[int] = field(default_factory=list)
+    invalid_record_token_counts: list[int] = field(default_factory=list)
+    tokenization_time_sec: float = 0.0
 
 
 def is_safe_for_float_conversion(value: str | int | float | None | list | dict) -> bool:
@@ -111,35 +140,81 @@ def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> l
     return re.findall(rf"{bos_re}\s?(?:{RECORD_REGEX_PATTERN}\s?)+\s?{eos_re}", jsonl_string)
 
 
+def _timed_encode(
+    encode: Callable[[str], list[int]] | None,
+) -> Callable[[str], tuple[int, float]]:
+    """Wrap an encode callable with timing, or return a no-op.
+
+    Returns a function ``timed(text)`` that returns ``(n_tokens,
+    elapsed_seconds)``.  When *encode* is ``None`` the returned
+    function always returns ``(0, 0.0)``.
+    """
+    if encode is not None:
+        def _timed(text: str) -> tuple[int, float]:
+            t0 = time.monotonic()
+            n = len(encode(text))
+            return n, time.monotonic() - t0
+
+        return _timed
+
+    def _noop(_text: str) -> tuple[int, float]:
+        return 0, 0.0
+
+    return _noop
+
+
 def extract_and_validate_records(
-    jsonl_string: str, schema: dict
-) -> tuple[list[dict], list[str], list[tuple[str, str]]]:
+    jsonl_string: str,
+    schema: dict,
+    encode: Callable[[str], list[int]] | None = None,
+) -> ExtractionResult:
     """Extract and validate records from the given JSONL string.
 
-    The records are validated against the given schema using jsonschema.
+    Each regex-matched JSON string is tokenized (when *encode* is provided)
+    before validation so that exact token counts are available for both valid
+    and invalid records.
 
     Args:
         jsonl_string: Single JSONL string containing tabular records.
         schema: JSON schema as a dictionary.
+        encode: Optional tokenizer encode callable.  When provided, each
+            matched record string is tokenized and its token count stored
+            in the result.
 
     Returns:
-        valid_records (list[dict]): List of valid records.
-        invalid_records (list[str]): List of invalid records.
-        invalid_record_errors (list[tuple[str, str]]): List of errors for invalid records, each a (message, validator) tuple.
+        An ``ExtractionResult`` with valid/invalid records, errors, and
+        per-record token counts.
     """
-    valid_records = []
-    invalid_records = []
-    invalid_record_errors = []
+    valid_records: list[dict] = []
+    invalid_records: list[str] = []
+    invalid_record_errors: list[tuple[str, str]] = []
+    valid_token_counts: list[int] = []
+    invalid_token_counts: list[int] = []
+    tokenization_time = 0.0
+
+    _timed = _timed_encode(encode)
 
     for matched_json in extract_records_from_jsonl_string(jsonl_string):
+        n_tokens, dt = _timed(matched_json)
+        tokenization_time += dt
+
         matched_dict, error = _parse_and_validate_json(matched_json, schema)
         if error:
             invalid_records.append(matched_json)
             invalid_record_errors.append(error)
+            invalid_token_counts.append(n_tokens)
         else:
             valid_records.append(matched_dict)
+            valid_token_counts.append(n_tokens)
 
-    return valid_records, invalid_records, invalid_record_errors
+    return ExtractionResult(
+        valid_records=valid_records,
+        invalid_records=invalid_records,
+        errors=invalid_record_errors,
+        valid_record_token_counts=valid_token_counts,
+        invalid_record_token_counts=invalid_token_counts,
+        tokenization_time_sec=tokenization_time,
+    )
 
 
 def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
@@ -295,8 +370,13 @@ def extract_and_validate_timeseries_records(
     time_column: str,
     interval_seconds: int | None,
     time_format: str,
-) -> tuple[list[dict], list[str], list[tuple[str, str]]]:
+    encode: Callable[[str], list[int]] | None = None,
+) -> ExtractionResult:
     """Extract and validate sequential records with enforced time interval constraints.
+
+    Each regex-matched JSON string is tokenized (when *encode* is provided)
+    before validation so that exact token counts are available for both valid
+    and invalid records, including cascade-invalidated records.
 
     Args:
         jsonl_string: JSONL string containing series data.
@@ -305,13 +385,22 @@ def extract_and_validate_timeseries_records(
         interval_seconds: (Optional) Expected interval in seconds between consecutive
             timestamps. If not provided, no time interval validation is performed.
         time_format: Format of the timestamp column (required, should be set from config).
+        encode: Optional tokenizer encode callable.  When provided, each
+            matched record string is tokenized and its token count stored
+            in the result.
 
     Returns:
-        Tuple of valid records, invalid record strings, and their associated errors.
+        An ``ExtractionResult`` with valid/invalid records, errors, and
+        per-record token counts.
     """
     valid_records: list[dict] = []
     invalid_records: list[str] = []
     invalid_record_errors: list[tuple[str, str]] = []
+    valid_token_counts: list[int] = []
+    invalid_token_counts: list[int] = []
+    tokenization_time = 0.0
+
+    _timed = _timed_encode(encode)
 
     last_absolute_seconds: int | None = None
     day_offset = 0
@@ -328,12 +417,16 @@ def extract_and_validate_timeseries_records(
     all_json_records = list(extract_records_from_jsonl_string(jsonl_string))
 
     for idx, matched_json in enumerate(all_json_records):
+        n_tokens, dt = _timed(matched_json)
+        tokenization_time += dt
+
         # Step 1: Parse and validate JSON/schema
         matched_dict, error = _parse_and_validate_json(matched_json, schema)
         if error or matched_dict is None:
             invalid_records.append(matched_json)
             if error:
                 invalid_record_errors.append(error)
+            invalid_token_counts.append(n_tokens)
             break
 
         # Step 2: Extract and parse timestamp
@@ -342,6 +435,7 @@ def extract_and_validate_timeseries_records(
             invalid_records.append(matched_json)
             if error:
                 invalid_record_errors.append(error)
+            invalid_token_counts.append(n_tokens)
             break
 
         # Step 3: Validate time interval (if interval_seconds is specified)
@@ -355,20 +449,32 @@ def extract_and_validate_timeseries_records(
                 allow_rollover,
             )
             if error:
-                # Mark current record with the specific error, and remaining records with cascade error
                 invalid_records.append(matched_json)
                 invalid_record_errors.append(error)
-                # Mark remaining records (after current) as invalid due to previous error
+                invalid_token_counts.append(n_tokens)
+                # Cascade: remaining records after this one are also invalid
                 remaining_records = all_json_records[idx + 1 :]
                 cascade_error = ("Invalid due to previous record error", "TimeSeries")
                 invalid_records.extend(remaining_records)
                 invalid_record_errors.extend([cascade_error] * len(remaining_records))
+                for remaining_json in remaining_records:
+                    n_remaining, dt = _timed(remaining_json)
+                    invalid_token_counts.append(n_remaining)
+                    tokenization_time += dt
                 break
             last_absolute_seconds = absolute_seconds
 
         valid_records.append(matched_dict)
+        valid_token_counts.append(n_tokens)
 
-    return valid_records, invalid_records, invalid_record_errors
+    return ExtractionResult(
+        valid_records=valid_records,
+        invalid_records=invalid_records,
+        errors=invalid_record_errors,
+        valid_record_token_counts=valid_token_counts,
+        invalid_record_token_counts=invalid_token_counts,
+        tokenization_time_sec=tokenization_time,
+    )
 
 
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:

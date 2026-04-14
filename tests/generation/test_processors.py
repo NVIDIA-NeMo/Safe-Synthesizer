@@ -564,3 +564,88 @@ def test_assembler_to_processor_non_english(
         tokenizer=tokenizer,
         cache_file_path=fixture_session_cache_dir,
     )
+
+
+# ---------------------------------------------------------------------------
+# Token-counting tests for processors
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock
+
+
+def _make_mock_tokenizer(chars_per_token: int = 1) -> MagicMock:
+    """Create a mock tokenizer whose encode returns one token per `chars_per_token` chars."""
+    tokenizer = MagicMock()
+
+    def _encode(text: str, add_special_tokens: bool = True) -> list[int]:
+        n = max(1, len(text) // chars_per_token)
+        return list(range(n))
+
+    tokenizer.encode = _encode
+    return tokenizer
+
+
+class TestTabularProcessorTokenCounts:
+    def test_populates_token_counts(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+        tokenizer = _make_mock_tokenizer()
+        proc = TabularDataProcessor(schema=jsonl_schema, config=fixture_validation_config, tokenizer=tokenizer)
+        response = proc(1, jsonl_str)
+
+        assert len(response.valid_record_token_counts) == len(response.valid_records)
+        assert all(tc > 0 for tc in response.valid_record_token_counts)
+        assert response.tokenization_time_sec >= 0
+
+    def test_no_tokenizer_gives_zero_counts(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+        proc = TabularDataProcessor(schema=jsonl_schema, config=fixture_validation_config, tokenizer=None)
+        response = proc(1, jsonl_str)
+
+        assert len(response.valid_record_token_counts) == len(response.valid_records)
+        assert all(tc == 0 for tc in response.valid_record_token_counts)
+        assert response.tokenization_time_sec == 0.0
+
+
+class TestGroupedProcessorTokenShift:
+    """Token counts shift from valid to invalid when group-level checks fail."""
+
+    def test_non_unique_group_shifts_tokens(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+
+        jsonl_schema_copy = copy.deepcopy(jsonl_schema)
+        jsonl_schema_copy["properties"]["variety"]["enum"].append("NewSetosa")
+        groups_jsonl_str = (
+            BOS
+            + jsonl_str
+            + '{"sepal.length":5.1,"sepal.width":3.5,"petal.length":1.4,"petal.width":0.2,"variety":"NewSetosa"}\n'
+            + EOS
+        )
+        tokenizer = _make_mock_tokenizer()
+        proc = GroupedDataProcessor(
+            schema=jsonl_schema_copy, config=fixture_validation_config,
+            group_by="variety", bos_token=BOS, eos_token=EOS,
+            tokenizer=tokenizer,
+        )
+        response = proc(1, groups_jsonl_str)
+
+        assert len(response.valid_records) == 0
+        assert len(response.invalid_records) == 6
+        assert len(response.invalid_record_token_counts) == 6
+        assert all(tc > 0 for tc in response.invalid_record_token_counts)
+        assert response.valid_record_token_counts == []
+
+    def test_valid_group_keeps_tokens(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+        jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+        groups_jsonl_str = BOS + jsonl_str + EOS
+        tokenizer = _make_mock_tokenizer()
+        proc = GroupedDataProcessor(
+            schema=jsonl_schema, config=fixture_validation_config,
+            group_by="variety", bos_token=BOS, eos_token=EOS,
+            tokenizer=tokenizer,
+        )
+        response = proc(1, groups_jsonl_str)
+
+        assert len(response.valid_records) == 5
+        assert len(response.valid_record_token_counts) == 5
+        assert all(tc > 0 for tc in response.valid_record_token_counts)
+        assert response.invalid_record_token_counts == []

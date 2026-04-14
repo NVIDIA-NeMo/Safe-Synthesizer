@@ -220,3 +220,78 @@ def test_log_summary_data_config(caplog, fixture_mock_processor_rejected_records
     assert error_ctx is not None
     error_data = error_ctx["tabular_data"]
     assert any("Failed data_config validation due to [reason1]" in key for key in error_data)
+
+
+# ---------------------------------------------------------------------------
+# Token-counting tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def fixture_mock_processor_with_tokens():
+    """Mock processor returning a ``ParsedResponse`` with per-record token counts."""
+    mock_processor = MagicMock()
+    mock_processor.return_value = ParsedResponse(
+        valid_records=[{"a": 1}, {"a": 2}, {"a": 3}],
+        invalid_records=["bad1"],
+        errors=[("err", "err")],
+        prompt_number=1,
+        valid_record_token_counts=[10, 20, 30],
+        invalid_record_token_counts=[15],
+        tokenization_time_sec=0.01,
+    )
+    return mock_processor
+
+
+def test_batch_completion_tokens(fixture_mock_processor_with_tokens):
+    batch = Batch(processor=fixture_mock_processor_with_tokens)
+    batch.process(prompt_number=1, text="stub", completion_tokens=100)
+    batch.process(prompt_number=2, text="stub", completion_tokens=150)
+    assert batch.total_completion_tokens == 250
+
+
+def test_batch_aggregate_token_properties(fixture_mock_processor_with_tokens):
+    batch = Batch(processor=fixture_mock_processor_with_tokens)
+    batch.process(prompt_number=1, text="stub", completion_tokens=200)
+
+    assert batch.total_valid_record_tokens == 60  # 10+20+30
+    assert batch.total_invalid_record_tokens == 15
+    assert batch.total_non_record_tokens == 200 - 60 - 15  # 125
+    assert batch.total_tokenization_time_sec == pytest.approx(0.01)
+
+
+def test_batch_non_record_tokens_clamped_to_zero():
+    """If completion_tokens < valid + invalid, clamp to 0."""
+    mock_processor = MagicMock()
+    mock_processor.return_value = ParsedResponse(
+        valid_records=[{"a": 1}],
+        invalid_records=[],
+        errors=[],
+        valid_record_token_counts=[100],
+        invalid_record_token_counts=[],
+        tokenization_time_sec=0.0,
+    )
+    batch = Batch(processor=mock_processor)
+    batch.process(prompt_number=1, text="stub", completion_tokens=50)
+    assert batch.total_non_record_tokens == 0
+
+
+def test_batch_no_completion_tokens_defaults_zero(fixture_mock_processor):
+    """Default completion_tokens=0 when not provided."""
+    batch = Batch(processor=fixture_mock_processor)
+    batch.process(prompt_number=1, text="stub")
+    assert batch.total_completion_tokens == 0
+
+
+def test_batch_log_summary_includes_token_data(caplog, fixture_mock_processor_with_tokens):
+    caplog.set_level(INFO)
+    batch = Batch(processor=fixture_mock_processor_with_tokens)
+    batch.process(prompt_number=1, text="stub", completion_tokens=200)
+    batch.log_summary()
+
+    ctx_data = [getattr(record, "ctx", None) for record in caplog.records if hasattr(record, "ctx")]
+    summary_ctx = ctx_data[0]
+    assert summary_ctx["tabular_data"]["completion_tokens"] == 200
+    assert summary_ctx["tabular_data"]["valid_record_tokens"] == 60
+    assert summary_ctx["tabular_data"]["invalid_record_tokens"] == 15
+    assert summary_ctx["tabular_data"]["non_record_tokens"] == 125

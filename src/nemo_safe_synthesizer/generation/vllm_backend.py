@@ -25,7 +25,7 @@ from ..config import SafeSynthesizerParameters
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
-from ..generation.processors import TabularDataProcessor, create_processor
+from ..generation.processors import Processor, TabularDataProcessor, create_processor
 from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
@@ -145,7 +145,7 @@ class VllmBackend(GeneratorBackend):
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
         self.gen_method: partial | None = None
         self._gen_method: partial | None = None
-        self.processor = create_processor(self.schema, self.model_metadata, self.config)
+        self.processor: Processor | None = None
         adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
         self._torn_down = False
@@ -178,7 +178,12 @@ class VllmBackend(GeneratorBackend):
             pass
 
     def initialize(self, **kwargs) -> None:
-        """Initialize and load the model into memory."""
+        """Initialize and load the model into memory.
+
+        Creates the vLLM engine and then builds the record processor
+        with the engine's tokenizer so that exact token counts are
+        available during generation.
+        """
         self._torn_down = False
 
         # vLLM 0.12+ accepts attention_config as a constructor arg (replaces the
@@ -204,6 +209,11 @@ class VllmBackend(GeneratorBackend):
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
             )
+
+        tokenizer = self.llm.get_tokenizer()
+        self.processor = create_processor(
+            self.schema, self.model_metadata, self.config, tokenizer=tokenizer,
+        )
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -437,7 +447,7 @@ class VllmBackend(GeneratorBackend):
                     f"finish_reason={out.finish_reason}, "
                     f"stop_reason={out.stop_reason}"
                 )
-            batch.process(idx, out.text)
+            batch.process(idx, out.text, completion_tokens=len(out.token_ids))
 
         return batch
 
@@ -458,13 +468,16 @@ class VllmBackend(GeneratorBackend):
         records_per_second = 0 if duration == 0 else batch.num_valid_records / duration
 
         # Build structured data - processor renders as table for console
-        progress_data = {
+        progress_data: dict[str, int | float] = {
             "records_per_second": round(records_per_second, 2),
             "duration_seconds": round(duration, 2),
             "valid_records_generated": batches.num_valid_records,
             "target_records": self.config.generation.num_records,
             "progress_fraction": round(batches.num_valid_records / self.config.generation.num_records, 4),
         }
+        if batch.total_completion_tokens > 0 and duration > 0:
+            progress_data["tokens_per_second"] = round(batch.total_completion_tokens / duration, 1)
+            progress_data["valid_tokens_per_second"] = round(batch.total_valid_record_tokens / duration, 1)
 
         # Pass structured data - processor renders for console, JSON keeps as-is
         logger.user.info(

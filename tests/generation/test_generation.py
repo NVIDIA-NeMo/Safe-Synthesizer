@@ -289,3 +289,98 @@ def test_log_status_raises_generation_error_on_no_records(fixture_stub_batches):
     assert generation.status == GenerationStatus.STOP_NO_RECORDS
     with pytest.raises(GenerationError):
         generation.log_status()
+
+
+# ---------------------------------------------------------------------------
+# Token-aggregation tests
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock
+
+from nemo_safe_synthesizer.generation.results import GenerateJobResults
+
+
+def _make_batch_with_tokens(
+    valid_counts: list[int],
+    invalid_counts: list[int],
+    completion_tokens: int,
+    tok_time: float = 0.01,
+) -> Batch:
+    """Build a Batch with a mock processor that returns specific token counts."""
+    n_valid = len(valid_counts)
+    n_invalid = len(invalid_counts)
+    mock_proc = MagicMock()
+    mock_proc.return_value = ParsedResponse(
+        valid_records=[{"a": i} for i in range(n_valid)],
+        invalid_records=[f"bad{i}" for i in range(n_invalid)],
+        errors=[("err", "err")] * n_invalid,
+        valid_record_token_counts=valid_counts,
+        invalid_record_token_counts=invalid_counts,
+        tokenization_time_sec=tok_time,
+    )
+    batch = Batch(processor=mock_proc)
+    batch.process(0, "stub", completion_tokens=completion_tokens)
+    return batch
+
+
+class TestGenerationBatchesTokenAggregation:
+    """GenerationBatches aggregates token properties across batches."""
+
+    def test_total_completion_tokens(self):
+        b1 = _make_batch_with_tokens([10, 20], [5], completion_tokens=100)
+        b2 = _make_batch_with_tokens([30], [10, 15], completion_tokens=200)
+        gen = GenerationBatches(batches=[b1, b2])
+        assert gen.total_completion_tokens == 300
+
+    def test_total_valid_record_tokens(self):
+        b1 = _make_batch_with_tokens([10, 20], [5], completion_tokens=100)
+        b2 = _make_batch_with_tokens([30], [10], completion_tokens=200)
+        gen = GenerationBatches(batches=[b1, b2])
+        assert gen.total_valid_record_tokens == 60  # 10+20+30
+
+    def test_total_invalid_record_tokens(self):
+        b1 = _make_batch_with_tokens([10], [5, 15], completion_tokens=100)
+        gen = GenerationBatches(batches=[b1])
+        assert gen.total_invalid_record_tokens == 20
+
+    def test_total_non_record_tokens(self):
+        b1 = _make_batch_with_tokens([10], [5], completion_tokens=100)
+        gen = GenerationBatches(batches=[b1])
+        assert gen.total_non_record_tokens == 85  # 100 - 10 - 5
+
+    def test_total_tokenization_time_sec(self):
+        b1 = _make_batch_with_tokens([10], [5], completion_tokens=100, tok_time=0.01)
+        b2 = _make_batch_with_tokens([20], [10], completion_tokens=200, tok_time=0.02)
+        gen = GenerationBatches(batches=[b1, b2])
+        assert gen.total_tokenization_time_sec == pytest.approx(0.03)
+
+
+class TestGenerateJobResultsFromBatches:
+    """GenerateJobResults.from_batches populates token fields correctly."""
+
+    def test_with_token_data(self):
+        b = _make_batch_with_tokens([10, 20], [5], completion_tokens=100, tok_time=0.05)
+        gen = GenerationBatches(batches=[b])
+        gen.job_complete()
+        results = GenerateJobResults.from_batches(gen, max_num_records=None, columns=["a"], elapsed_time=2.0)
+
+        assert results.num_completion_tokens == 100
+        assert results.num_valid_record_tokens == 30
+        assert results.num_invalid_record_tokens == 5
+        assert results.num_non_record_tokens == 65
+        assert results.tokens_per_completion == pytest.approx(100.0)  # 100/1 prompt
+        assert results.tokens_per_second == pytest.approx(50.0)  # 100/2.0
+        assert results.valid_tokens_per_second == pytest.approx(15.0)  # 30/2.0
+        assert results.tokenization_overhead_sec == pytest.approx(0.05)
+
+    def test_without_token_data(self):
+        """When completion_tokens=0, all token fields stay None."""
+        b = _make_batch_with_tokens([], [], completion_tokens=0)
+        gen = GenerationBatches(batches=[b])
+        gen.job_complete()
+        results = GenerateJobResults.from_batches(gen, max_num_records=None, columns=["a"], elapsed_time=2.0)
+
+        assert results.num_completion_tokens is None
+        assert results.tokens_per_second is None
+        assert results.valid_tokens_per_second is None
+        assert results.tokenization_overhead_sec is None
