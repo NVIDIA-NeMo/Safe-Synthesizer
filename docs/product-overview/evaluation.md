@@ -10,7 +10,7 @@ Evaluation is a critical component of Safe Synthesizer that helps you understand
 The pipeline splits your input data into two parts before any model training begins:
 
 - Training data: the portion used for PII replacement, fine-tuning, and generation. This is the reference dataset for most evaluation metrics.
-- Test data: a small portion (5% by default) withheld from training entirely. Used by Membership Inference Protection and Text Semantic Similarity to detect memorization.
+- Test (holdout) data: a small portion (5% by default) withheld from training entirely. Used by Membership Inference Protection and Text Semantic Similarity to detect memorization.
 - Synthetic data: the records produced by the fine-tuned model during the generation step.
 
 ```mermaid
@@ -18,7 +18,7 @@ flowchart LR
     data[("Input Data")]
     data --> split{"Train / Test\nSplit"}
     split -- "Training\nSplit" --> pipeline["PII Replacement\n→ Assemble\n→ Fine-tune\n→ Generate"]
-    split -. "Test Split" .-> evaluate
+    split -. "Test (holdout)\nSplit" .-> evaluate
     pipeline --> synthetic[("Synthetic\nData")]
     synthetic --> evaluate["Evaluate"]
     split -- "Training Split" --> evaluate

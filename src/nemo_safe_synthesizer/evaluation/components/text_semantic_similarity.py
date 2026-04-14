@@ -99,7 +99,7 @@ class TextSemanticSimilarity(Component):
         if evaluation_datasets.test is None or evaluation_datasets.test.empty:
             return TextSemanticSimilarity(
                 score=EvaluationScore(
-                    notes="Unable to calculate Text Semantic Similarity. No holdout dataframe provided."
+                    notes="Unable to calculate Text Semantic Similarity. No holdout test dataframe provided."
                 )
             )
 
