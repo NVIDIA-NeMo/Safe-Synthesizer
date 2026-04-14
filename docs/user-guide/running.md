@@ -120,6 +120,28 @@ You can also run stages individually:
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
+## Pre-flight validation
+
+Use `--validate` to validate your dataset and configuration before committing to a full training run:
+
+```bash
+safe-synthesizer run --data-source data.csv --validate
+```
+
+This runs holdout splitting, auto-configuration resolution, and 9 pre-flight checks
+(GPU resources, inference environment, config consistency, column validation,
+token budget, timeseries, dataset size, training adequacy, column cardinality)
+without downloading the model or starting training.
+
+The resolved configuration is saved as YAML, directly reusable for the actual run:
+
+```bash
+safe-synthesizer run --data-source data.csv \
+  --config ./safe-synthesizer-artifacts/<project>/<timestamp>/safe-synthesizer-config.yaml
+```
+
+`--validate` is also available on `run train`.
+
 ---
 
 ## Using YAML Config Files

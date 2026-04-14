@@ -62,6 +62,7 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `errors.py` | Error hierarchy: `SafeSynthesizerError` → `UserError` (`DataError`/`ParameterError` are also `ValueError`; `GenerationError` is also `RuntimeError`) and `InternalError` (also `RuntimeError`). See `diagnose-failures` skill |
 | `defaults.py` | Default settings, constants (`DEFAULT_ARTIFACTS_PATH`, `PSEUDO_GROUP_COLUMN`) |
 | `package_info.py` | Package version (uv-dynamic-versioning) |
+| `preflight.py` | Pre-flight validation checks, `run_preflight` orchestrator, `format_preflight_report` |
 | `results.py` | Result compilation (`make_nss_results`, `make_nss_summary`) |
 | `utils.py` | Schema prompt creation, pattern matching helpers |
 

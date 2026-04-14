@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,8 @@ from .utils import (
 
 if TYPE_CHECKING:
     from ..sdk.library_builder import SafeSynthesizer
+
+warnings.filterwarnings("ignore", message="stdout is a tty")
 
 
 def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
@@ -161,6 +164,12 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
 @click.pass_context
 @common_run_options
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--validate",
+    is_flag=True,
+    default=False,
+    help="Run pre-flight validation only, then exit without training or generating.",
+)
 def run(
     ctx: click.Context,
     config_path: PathT | None,
@@ -175,6 +184,7 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    validate: bool = False,
     **kwargs: object,
 ) -> None:
     """Run the Safe Synthesizer end-to-end pipeline.
@@ -186,7 +196,6 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    # Create unified settings from CLI kwargs (CLI values override env vars)
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -203,36 +212,75 @@ def run(
         dataset_registry=dataset_registry,
     )
 
-    # Full pipeline execution
-    os.environ["NSS_PHASE"] = "end_to_end"
+    if validate:
+        os.environ["NSS_PHASE"] = "process_data"
+    else:
+        os.environ["NSS_PHASE"] = "end_to_end"
+
     run_logger, config, df, workdir = common_setup(
         settings=settings,
-        phase="end_to_end",
+        phase="process_data" if validate else "end_to_end",
+        skip_wandb=validate,
+        quiet=validate,
+        run_name="validate" if validate else None,
     )
-    run_logger.warning("Nemo Safe Synthesizer starting")
-    run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
-    with traced_user("SafeSynthesizer"):
-        from ..sdk.library_builder import SafeSynthesizer
+    from ..errors import UserError
 
-        assert df is not None
-        nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
-        # nss.run() calls train + generate + evaluate + save_results. The generate step has its
-        # own try/finally, but train or evaluate failures leave the generator loaded; this guard
-        # ensures teardown on all exit paths of the full pipeline.
-        try:
-            nss.run(output_file=settings.output_file)
-            nss.results.summary.log_summary(run_logger)
-            nss.results.summary.timing.log_timing(run_logger)
-            nss.results.summary.log_wandb()
-        finally:
-            if hasattr(nss, "generator") and nss.generator is not None:
-                nss.generator.teardown()
+    try:
+        run_logger.warning("Nemo Safe Synthesizer starting")
+        run_logger.debug("running with: ", extra={"config": config.model_dump()})
+
+        with traced_user("SafeSynthesizer"):
+            from ..sdk.library_builder import SafeSynthesizer
+
+            assert df is not None
+            nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+
+            if validate:
+                click.echo("Running pre-flight validation...", nl=False)
+                nss.process_data(check_only=True)
+                click.echo("\r\033[K", nl=False)
+                from ..package_info import __version__
+                from ..preflight import format_preflight_report
+
+                format_preflight_report(
+                    nss.preflight_report,
+                    nss._preflight_config_path,
+                    data_source=settings.data_source,
+                    artifact_dir=workdir.run_dir,
+                    log_file=workdir.log_file,
+                    run_info={
+                        "nemo-safe-synthesizer": __version__,
+                        "model": config.training.pretrained_model,
+                        "data": f"{len(df)}r × {len(df.columns)}c",
+                        "log level": os.environ.get("NSS_LOG_LEVEL", "INFO"),
+                    },
+                )
+                return
+
+            try:
+                nss.run(output_file=settings.output_file)
+                nss.results.summary.log_summary(run_logger)
+                nss.results.summary.timing.log_timing(run_logger)
+                nss.results.summary.log_wandb()
+            finally:
+                if hasattr(nss, "generator") and nss.generator is not None:
+                    nss.generator.teardown()
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
 
 
 @run.command("train")
 @common_run_options
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--validate",
+    is_flag=True,
+    default=False,
+    help="Run pre-flight validation only, then exit without training or generating.",
+)
 def run_train(
     config_path: PathT,
     data_source: str,
@@ -246,6 +294,7 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    validate: bool = False,
     **kwargs: object,
 ) -> None:
     """Run the training stage only.
@@ -253,7 +302,6 @@ def run_train(
     This command processes data and trains the model, saving the adapter to the run directory.
     Use 'run generate' afterwards to generate synthetic data from the trained adapter.
     """
-    # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -270,17 +318,53 @@ def run_train(
         dataset_registry=dataset_registry,
     )
 
-    os.environ["NSS_PHASE"] = "train"
+    if validate:
+        os.environ["NSS_PHASE"] = "process_data"
+    else:
+        os.environ["NSS_PHASE"] = "train"
+
     run_logger, config, df, workdir = common_setup(
         settings=settings,
-        phase="train",
+        phase="process_data" if validate else "train",
+        skip_wandb=validate,
+        quiet=validate,
+        run_name="validate" if validate else None,
     )
+    from ..errors import UserError
     from ..sdk.library_builder import SafeSynthesizer
 
-    with traced_user("SafeSynthesizer"):
-        assert df is not None
-        SafeSynthesizer(config, workdir=workdir).with_data_source(df).process_data().train()
-        run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
+    try:
+        with traced_user("SafeSynthesizer"):
+            assert df is not None
+            nss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
+
+            if validate:
+                click.echo("Running pre-flight validation...", nl=False)
+                nss.process_data(check_only=True)
+                click.echo("\r\033[K", nl=False)
+                from ..package_info import __version__
+                from ..preflight import format_preflight_report
+
+                format_preflight_report(
+                    nss.preflight_report,
+                    nss._preflight_config_path,
+                    data_source=settings.data_source,
+                    artifact_dir=workdir.run_dir,
+                    log_file=workdir.log_file,
+                    run_info={
+                        "nemo-safe-synthesizer": __version__,
+                        "model": config.training.pretrained_model,
+                        "data": f"{len(df)}r × {len(df.columns)}c",
+                        "log level": os.environ.get("NSS_LOG_LEVEL", "INFO"),
+                    },
+                )
+                return
+
+            nss.process_data().train()
+            run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
 
 
 @run.command("generate")

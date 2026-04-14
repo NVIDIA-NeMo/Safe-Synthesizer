@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+import warnings
+from typing import Any, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_core.core_schema import ValidationInfo
 
 from ..configurator.parameters import Parameters
@@ -117,6 +118,17 @@ class SafeSynthesizerParameters(Parameters):
                 )
 
         return dp_params
+
+    @model_validator(mode="after")
+    def check_timeseries_group_column(self) -> Self:
+        if self.time_series is not None and self.time_series.is_timeseries:
+            if self.data.group_training_examples_by is None:
+                warnings.warn(
+                    "is_timeseries=True without group_training_examples_by: "
+                    "an internal __nss_sequence_id column will be added automatically.",
+                    stacklevel=2,
+                )
+        return self
 
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":

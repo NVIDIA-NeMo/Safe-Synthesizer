@@ -70,6 +70,11 @@ def _patch_heavy_deps(monkeypatch, original_df: pd.DataFrame, replaced_df: pd.Da
         type("MM", (), {"from_config": staticmethod(lambda c, workdir: None)}),
     )
 
+    # run_preflight: no-op so process_data doesn't raise on GPU/env checks
+    from nemo_safe_synthesizer.preflight import PreflightReport
+
+    monkeypatch.setattr(f"{MODULE}.run_preflight", lambda *args, **kwargs: PreflightReport(checks=[]))
+
 
 # ---------------------------------------------------------------------------
 # PII replacement: original data must survive for evaluation

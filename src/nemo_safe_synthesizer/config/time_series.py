@@ -104,4 +104,6 @@ class TimeSeriesParameters(Parameters):
         else:
             if self.timestamp_column is not None:
                 raise ValueError("timestamp_column can only be set when is_timeseries is True.")
+        if self.timestamp_interval_seconds is not None and self.timestamp_interval_seconds <= 0:
+            raise ValueError("timestamp_interval_seconds must be a positive integer.")
         return self

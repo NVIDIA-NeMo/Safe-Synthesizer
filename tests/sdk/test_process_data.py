@@ -21,7 +21,10 @@ import pytest
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.preflight import PreflightReport
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+_EMPTY_PREFLIGHT = PreflightReport(checks=[])
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -150,6 +153,7 @@ def _wire_process_data_mocks(
 class TestProcessDataPiiSeparation:
     """``process_data`` must keep original and PII-replaced DataFrames separate."""
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -158,6 +162,7 @@ class TestProcessDataPiiSeparation:
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
+        mock_preflight,
         fixture_process_data_setup_without_pii,
     ):
         """Without PII replacement, ``_original_training_df`` matches the training split."""
@@ -172,6 +177,7 @@ class TestProcessDataPiiSeparation:
         assert builder._training_df is not None
         pd.testing.assert_frame_equal(builder._training_df, train_split)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
@@ -182,6 +188,7 @@ class TestProcessDataPiiSeparation:
         mock_resolver_cls,
         mock_metadata_cls,
         mock_pii_cls,
+        mock_preflight,
         fixture_process_data_setup_with_pii,
     ):
         """With PII replacement, ``_original_training_df`` preserves the pre-PII data."""
@@ -197,6 +204,7 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._training_df, pii_replaced_df)
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
@@ -207,6 +215,7 @@ class TestProcessDataPiiSeparation:
         mock_resolver_cls,
         mock_metadata_cls,
         mock_pii_cls,
+        mock_preflight,
         fixture_process_data_setup_with_pii,
         fixture_workdir,
     ):
@@ -233,6 +242,7 @@ class TestProcessDataPiiSeparation:
         saved_transformed = pd.read_csv(transformed_csv)
         pd.testing.assert_frame_equal(saved_transformed, pii_replaced_df)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -241,6 +251,7 @@ class TestProcessDataPiiSeparation:
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
+        mock_preflight,
         fixture_process_data_setup_without_pii,
         fixture_workdir,
     ):
@@ -491,6 +502,7 @@ class TestLoadFromSavePathHoldoutZero:
 
         return workdir, train_split
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -499,6 +511,7 @@ class TestLoadFromSavePathHoldoutZero:
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
+        mock_preflight,
         fixture_workdir,
         fixture_sample_patient_dataframe,
     ):

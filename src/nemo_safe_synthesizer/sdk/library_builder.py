@@ -26,6 +26,7 @@ from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..pii_replacer.nemo_pii import NemoPII
+from ..preflight import PreflightReport, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
@@ -120,6 +121,9 @@ class SafeSynthesizer(ConfigBuilder):
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
+        self.preflight_report: PreflightReport | None = None
+        self._data_processed: bool = False
+        self._preflight_config_path: Path | None = None
 
     def _ensure_observability(self) -> None:
         """Initialize structured logging when running via the SDK.
@@ -204,7 +208,7 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
-    def process_data(self) -> SafeSynthesizer:
+    def process_data(self, check_only: bool = False) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
 
         Validates configured grouping/ordering columns against the input
@@ -212,6 +216,12 @@ class SafeSynthesizer(ConfigBuilder):
         ``AutoConfigResolver`` to resolve ``"auto"`` parameters, applies
         PII replacement to the training set when enabled, and persists the
         splits to the workdir.
+
+        When ``check_only`` is ``True``, PII replacement and CSV writes
+        are skipped; a resolved config YAML is written instead.
+
+        Args:
+            check_only: If ``True``, run preflight checks only (validation mode).
 
         Returns:
             Self for method chaining.
@@ -249,7 +259,7 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        if self._nss_config.replace_pii is not None:
+        if not check_only and self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_training_df)
             assert replacer.result is not None
@@ -261,7 +271,36 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
         if self._llm_metadata is None:
-            self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+            if check_only:
+                try:
+                    self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                except Exception:
+                    logger.user.warning(
+                        "Could not load model metadata (network/cache); token budget checks will be skipped."
+                    )
+                    self._llm_metadata = ModelMetadata.stub(self._nss_config)
+            else:
+                self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+
+        self.preflight_report = run_preflight(self._train_df, self._nss_config, self._llm_metadata)
+        for issue in self.preflight_report.warnings:
+            logger.user.warning(issue.message, extra={"preflight_code": issue.code, "preflight_check": issue.check})
+        if self.preflight_report.errors:
+            from ..errors import ParameterError
+
+            summary = "\n".join(f"  {e.code}: {e.message}" for e in self.preflight_report.errors)
+            raise ParameterError(
+                f"Pre-flight check failed with {len(self.preflight_report.errors)} error(s):\n{summary}"
+            )
+
+        if check_only:
+            assert self._workdir is not None
+            self._workdir.ensure_directories()
+            config_path = self._workdir.run_dir / "safe-synthesizer-config.yaml"
+            self._nss_config.to_yaml(config_path, exclude_unset=False)
+            self._preflight_config_path = config_path
+            return self
+
         self._data_processed = True
 
         # Always persist the original training split -- this is the version

@@ -324,6 +324,8 @@ class ModelMetadata(BaseModel):
     fine-tuned LoRAs that fail to emit EOS on short structured outputs do
     not decode wasted tokens to the full context-window cap."""
 
+    tokenizer: PreTrainedTokenizerBase | None = Field(default=None, exclude=True, repr=False)
+
     @model_validator(mode="before")
     @classmethod
     def populate_derived_fields(cls, data: dict) -> dict:
@@ -557,6 +559,21 @@ class ModelMetadata(BaseModel):
         return ModelMetadata.from_str_or_path(config.training.pretrained_model, **kwargs)
 
     @classmethod
+    def stub(cls, config: "SafeSynthesizerParameters") -> "ModelMetadata":
+        """Create a minimal ModelMetadata without network access.
+
+        Used when ``check_only=True`` and ``from_config`` fails (e.g. model
+        not cached, no network). The returned instance has ``tokenizer=None``,
+        which causes ``check_token_budget`` to skip with a warning.
+        """
+        return cls.model_construct(
+            model_name_or_path=config.training.pretrained_model,
+            max_seq_length=DEFAULT_MAX_SEQ_LENGTH,
+            tokenizer=None,
+            autoconfig=None,
+        )
+
+    @classmethod
     def from_metadata_json(
         cls: type["ModelMetadata"],
         path: Path | str,
@@ -636,6 +653,7 @@ class Granite(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -677,6 +695,7 @@ class Llama32(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -723,6 +742,7 @@ class Mistral(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=None,
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,  # ty: ignore[invalid-argument-type] -- re-annotated local shadows param type
             **kwargs,
         )
 
@@ -759,6 +779,7 @@ class Nemotron(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -796,6 +817,7 @@ class Qwen(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -842,6 +864,7 @@ class SmolLM2(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=None,
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -895,6 +918,7 @@ class SmolLM3(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=None,
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
 
@@ -931,5 +955,6 @@ class TinyLlama(ModelMetadata):
             model_name_or_path=model_name_or_path,
             rope_scaling=rope_scaling_factor,  # ty: ignore[invalid-argument-type] -- third-party stub
             rope_parameters_location="autoconfig",
+            tokenizer=tokenizer,
             **kwargs,
         )
