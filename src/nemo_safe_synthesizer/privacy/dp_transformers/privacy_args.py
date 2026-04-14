@@ -79,7 +79,9 @@ def _create_prv_accountant(
                 eps_error=eps_error,
             )
     except (FloatingPointError, RuntimeWarning, OverflowError) as exc:
-        raise RuntimeError(f"PRV accountant overflowed (noise_multiplier={noise_multiplier})") from exc
+        raise RuntimeError(
+            f"PRV accountant construction failed (noise_multiplier={noise_multiplier}): {type(exc).__name__}: {exc}"
+        ) from exc
     finally:
         if use_alarm:
             signal.alarm(0)

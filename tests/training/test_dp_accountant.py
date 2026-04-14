@@ -95,7 +95,7 @@ class TestPRVFallbackToRDP:
 
     def test_create_prv_accountant_raises_on_overflow(self):
         """_create_prv_accountant raises RuntimeError for overflow-prone params."""
-        with pytest.raises(RuntimeError, match="overflowed"):
+        with pytest.raises(RuntimeError, match="PRV accountant construction failed"):
             _create_prv_accountant(
                 noise_multiplier=0.05,
                 sampling_probability=SAMPLING_PROBABILITY,
