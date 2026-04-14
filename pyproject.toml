@@ -108,7 +108,7 @@ engine = [
     "tldextract",
     "tqdm>=4.67.1",
     "urllib3>=2.6.1",
-    "wandb==0.23.1",
+    "wandb==0.26.0",
 ]
 
 
@@ -157,14 +157,14 @@ cu128 = [
   "torch==2.10.0+cu128; sys_platform == 'linux'",
   "torch-c-dlpack-ext",
   "torchvision==0.25.0+cu128; sys_platform == 'linux'",
-  "torchao==0.16.0; sys_platform == 'linux'",
+  "torchao==0.16.0+cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
   "unsloth[cu128-torch2100]==2026.3.18; sys_platform == 'linux'",
   "unsloth_zoo==2026.3.7; sys_platform == 'linux'",
   "vllm==0.18.0; sys_platform == 'linux'",
-  "xformers==v0.0.34; sys_platform == 'linux'",
+  "xformers==v0.0.34; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 # at some point, do per-subpackage dependencies
