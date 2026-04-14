@@ -21,7 +21,7 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_structured_generation(local_tinyllama_dir, iris_df, tmp_path):
+def test_nss_structured_generation(fixture_local_tinyllama_dir, fixture_iris_df, tmp_path):
     """Train and generate with outlines structured generation backend.
 
     The tiny random model produces garbage, so GenerationError (no valid records)
@@ -29,7 +29,7 @@ def test_nss_structured_generation(local_tinyllama_dir, iris_df, tmp_path):
     """
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
-        pretrained_model=str(local_tinyllama_dir),
+        pretrained_model=str(fixture_local_tinyllama_dir),
         num_input_records_to_sample=10,
         num_records=5,
         lora_r=8,
@@ -40,7 +40,7 @@ def test_nss_structured_generation(local_tinyllama_dir, iris_df, tmp_path):
         structured_generation_schema_method="json_schema",
     )
     nss = SafeSynthesizer(config=config, save_path=tmp_path)
-    nss.with_data_source(iris_df).process_data().train()
+    nss.with_data_source(fixture_iris_df).process_data().train()
     try:
         nss.generate()
     except GenerationError as exc:

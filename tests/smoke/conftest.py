@@ -1,12 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Smoke-test fixtures: tiny models, stub tokenizers, minimal datasets."""
+
+from __future__ import annotations
+
+from collections.abc import Generator
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from datasets import Dataset
-from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM
+from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -20,10 +25,10 @@ def fixture_stub_tokenizer_path(stub_tokenizer_dir) -> str:
 
 
 @pytest.fixture(scope="session")
-def tiny_llama_config(stub_tokenizer):
+def fixture_tiny_llama_config(fixture_stub_tokenizer) -> LlamaConfig:
     """LlamaConfig with minimal dimensions for fast smoke testing."""
     return LlamaConfig(
-        vocab_size=stub_tokenizer.vocab_size,  # 32000 -- must match stub tokenizer
+        vocab_size=fixture_stub_tokenizer.vocab_size,  # 32000 -- must match stub tokenizer
         hidden_size=64,
         intermediate_size=128,
         num_hidden_layers=2,
@@ -34,19 +39,19 @@ def tiny_llama_config(stub_tokenizer):
 
 
 @pytest.fixture
-def tiny_model(tiny_llama_config):
+def fixture_tiny_model(fixture_tiny_llama_config) -> LlamaForCausalLM:
     """Randomly initialized LlamaForCausalLM. Tiny (~few KB), no download."""
-    return LlamaForCausalLM(tiny_llama_config)
+    return LlamaForCausalLM(fixture_tiny_llama_config)
 
 
 @pytest.fixture(scope="session")
-def stub_tokenizer(fixture_stub_tokenizer_path):
+def fixture_stub_tokenizer(fixture_stub_tokenizer_path) -> PreTrainedTokenizerBase:
     """Load the Llama stub tokenizer from tests/stub_tokenizer/."""
     return AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path)
 
 
 @pytest.fixture(scope="session")
-def tiny_training_dataset(stub_tokenizer):
+def fixture_tiny_training_dataset(fixture_stub_tokenizer) -> Dataset:
     """~8 tokenized training examples as a datasets.Dataset."""
     texts = [
         '{"col1":"a","col2":"1"}',
@@ -58,7 +63,7 @@ def tiny_training_dataset(stub_tokenizer):
         '{"col1":"g","col2":"7"}',
         '{"col1":"h","col2":"8"}',
     ]
-    tokenized = stub_tokenizer(texts, padding="max_length", truncation=True, max_length=64, return_tensors="np")
+    tokenized = fixture_stub_tokenizer(texts, padding="max_length", truncation=True, max_length=64, return_tensors="np")
     return Dataset.from_dict(
         {
             "input_ids": tokenized["input_ids"].tolist(),
@@ -69,31 +74,31 @@ def tiny_training_dataset(stub_tokenizer):
 
 
 @pytest.fixture(scope="session")
-def tiny_training_dataset_with_position_ids(tiny_training_dataset):
+def fixture_tiny_training_dataset_with_position_ids(fixture_tiny_training_dataset) -> Dataset:
     """Training dataset with position_ids column, required by DataCollatorForPrivateTokenClassification."""
-    seq_len = len(tiny_training_dataset[0]["input_ids"])
-    position_ids = [list(range(seq_len))] * len(tiny_training_dataset)
-    return tiny_training_dataset.add_column("position_ids", position_ids)
+    seq_len = len(fixture_tiny_training_dataset[0]["input_ids"])
+    position_ids = [list(range(seq_len))] * len(fixture_tiny_training_dataset)
+    return fixture_tiny_training_dataset.add_column("position_ids", position_ids)
 
 
 @pytest.fixture(scope="session")
-def local_tinyllama_dir(tmp_path_factory, tiny_llama_config, stub_tokenizer):
+def fixture_local_tinyllama_dir(tmp_path_factory, fixture_tiny_llama_config, fixture_stub_tokenizer) -> Path:
     """Save tiny model + tokenizer to a local dir named with 'tinyllama' for NSS compatibility."""
     local_dir = tmp_path_factory.mktemp("smoke-tinyllama-model")
-    model = LlamaForCausalLM(tiny_llama_config)
+    model = LlamaForCausalLM(fixture_tiny_llama_config)
     model.save_pretrained(local_dir)
-    stub_tokenizer.save_pretrained(local_dir)
+    fixture_stub_tokenizer.save_pretrained(local_dir)
     return local_dir
 
 
 @pytest.fixture(scope="session")
-def iris_df(stub_datasets_dir):
+def fixture_iris_df() -> pd.DataFrame:
     """Load iris.csv from stub_datasets."""
     return pd.read_csv(stub_datasets_dir / "iris.csv")
 
 
 @pytest.fixture(scope="session")
-def timeseries_df():
+def fixture_timeseries_df() -> pd.DataFrame:
     """Minimal timeseries stub: 2 groups, 5 rows each, 60s intervals."""
     return pd.DataFrame(
         {
@@ -116,13 +121,13 @@ def timeseries_df():
 
 
 @pytest.fixture(scope="session")
-def smoke_save_path(tmp_path_factory):
+def fixture_smoke_save_path(tmp_path_factory) -> Path:
     """Shared temp directory for Tier B (SmolLM2) train -> generate flow."""
     return tmp_path_factory.mktemp("smoke-tier-b")
 
 
 @pytest.fixture(scope="session")
-def base_smoke_config(local_tinyllama_dir):
+def fixture_base_smoke_config(fixture_local_tinyllama_dir) -> SafeSynthesizerParameters:
     """Base SafeSynthesizerParameters shared by all GPU smoke tests with local tiny model.
 
     Session-scoped because the config is immutable (Pydantic frozen model).
@@ -130,7 +135,7 @@ def base_smoke_config(local_tinyllama_dir):
     """
     return SafeSynthesizerParameters.from_params(
         replace_pii=None,
-        pretrained_model=str(local_tinyllama_dir),
+        pretrained_model=str(fixture_local_tinyllama_dir),
         num_input_records_to_sample=10,
         num_records=5,
         lora_r=8,
@@ -157,7 +162,7 @@ def train_with_sdk(config: SafeSynthesizerParameters, data_df: pd.DataFrame, sav
 
 
 @pytest.fixture(scope="session")
-def _patch_attn_eager():
+def _patch_attn_eager() -> Generator[None, None, None]:
     """Override attn_implementation from 'flashinfer' (not a valid HF option) to 'sdpa'.
 
     Session-scoped so class-scoped and function-scoped fixtures can depend on it.

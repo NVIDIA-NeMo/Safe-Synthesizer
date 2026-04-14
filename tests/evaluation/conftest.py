@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Evaluation test fixtures: synthetic/training/test DataFrames and evaluation configs."""
+
+from __future__ import annotations
+
 import random
 
 import faker
@@ -58,52 +62,64 @@ def make_df(seed: int, n: int = 100):
 
 
 @pytest.fixture
-def training_df():
+def fixture_training_df() -> pd.DataFrame:
+    """100-row training DataFrame seeded at 370."""
     return make_df(370)
 
 
 @pytest.fixture
-def training_df_5k():
+def fixture_training_df_5k() -> pd.DataFrame:
+    """5 000-row training DataFrame seeded at 370."""
     return make_df(370, 5000)
 
 
 @pytest.fixture
-def training_df_10k():
+def fixture_training_df_10k() -> pd.DataFrame:
+    """10 000-row training DataFrame seeded at 370."""
     return make_df(370, 10000)
 
 
 @pytest.fixture
-def synthetic_df():
+def fixture_synthetic_df() -> pd.DataFrame:
+    """100-row synthetic DataFrame seeded at 753."""
     return make_df(753)
 
 
 @pytest.fixture
-def synthetic_df_5k():
+def fixture_synthetic_df_5k() -> pd.DataFrame:
+    """5 000-row synthetic DataFrame seeded at 753."""
     return make_df(753, 5000)
 
 
 @pytest.fixture
-def synthetic_df_10k():
+def fixture_synthetic_df_10k() -> pd.DataFrame:
+    """10 000-row synthetic DataFrame seeded at 753."""
     return make_df(753, 10000)
 
 
 @pytest.fixture
-def test_df():
+def fixture_test_df() -> pd.DataFrame:
+    """100-row holdout test DataFrame seeded at 476."""
     return make_df(476)
 
 
 @pytest.fixture
-def evaluation_datasets_5k(training_df_5k, synthetic_df_5k, test_df):
-    return EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
+def fixture_evaluation_datasets_5k(
+    fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df
+) -> EvaluationDatasets:
+    """EvaluationDatasets built from 5k training/synthetic and 100-row test."""
+    return EvaluationDatasets.from_dataframes(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df)
 
 
 @pytest.fixture
-def skip_privacy_metrics_config():
+def fixture_skip_privacy_metrics_config() -> SafeSynthesizerParameters:
+    """Config with MIA and AIA disabled."""
     return SafeSynthesizerParameters(evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=False))
 
 
 @pytest.fixture
-def dp_enabled_config():
+def fixture_dp_enabled_config() -> SafeSynthesizerParameters:
+    """Config with DP enabled (epsilon=0.2, delta=0.1) and AIA on."""
     return SafeSynthesizerParameters(
         privacy=DifferentialPrivacyHyperparams(dp_enabled=True, delta=0.1, epsilon=0.2),
         evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=True),
@@ -111,16 +127,17 @@ def dp_enabled_config():
 
 
 @pytest.fixture
-def dp_not_enabled_config():
+def fixture_dp_not_enabled_config() -> SafeSynthesizerParameters:
+    """Config with DP disabled but AIA enabled."""
     return SafeSynthesizerParameters(evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=True))
 
 
 @pytest.fixture
-def column_statistics(training_df_5k):
+def fixture_column_statistics(fixture_training_df_5k) -> dict[str, ColumnStatistics]:
     small_cat_values = {"foo", "bar"}
-    small_cat_count = len(training_df_5k["small_cat"].to_frame().query("`small_cat` in @small_cat_values"))
+    small_cat_count = len(fixture_training_df_5k["small_cat"].to_frame().query("`small_cat` in @small_cat_values"))
     other_cat_values = {"barf"}
-    other_cat_count = len(training_df_5k["small_cat"].to_frame().query("`small_cat` in @other_cat_values"))
+    other_cat_count = len(fixture_training_df_5k["small_cat"].to_frame().query("`small_cat` in @other_cat_values"))
     small_cat_col_stats = ColumnStatistics(
         assigned_type="text",
         assigned_entity="some_cats",
@@ -130,7 +147,7 @@ def column_statistics(training_df_5k):
         transform_functions={"fake", "munge"},
     )
 
-    other_values = set(training_df_5k["other"].head(250))
+    other_values = set(fixture_training_df_5k["other"].head(250))
     other_count = len(other_values)
     other_col_stats = ColumnStatistics(
         assigned_type="text",
@@ -152,7 +169,7 @@ def column_statistics(training_df_5k):
 
 
 @pytest.fixture
-def mia_aia_df():
+def fixture_mia_aia_df() -> pd.DataFrame:
     fake = faker.Faker("en_US")
     fake.seed_instance(546)
     random.seed(302)
@@ -250,43 +267,43 @@ def make_text_only_df(seed: int, n: int = 100):
 
 
 @pytest.fixture
-def training_df_text_only():
+def fixture_training_df_text_only() -> pd.DataFrame:
     """Training DataFrame with only text columns (500 rows)."""
     return make_text_only_df(seed=444, n=500)
 
 
 @pytest.fixture
-def synthetic_df_text_only():
+def fixture_synthetic_df_text_only() -> pd.DataFrame:
     """Synthetic DataFrame with only text columns (500 rows)."""
     return make_text_only_df(seed=555, n=500)
 
 
 @pytest.fixture
-def test_df_text_only():
+def fixture_test_df_text_only() -> pd.DataFrame:
     """Test DataFrame with only text columns (100 rows)."""
     return make_text_only_df(seed=666, n=100)
 
 
 @pytest.fixture
-def training_df_mixed_5k():
+def fixture_training_df_mixed_5k() -> pd.DataFrame:
     """Training DataFrame with mixed text+tabular columns (5000 rows)."""
     return make_mixed_text_tabular_df(seed=111, n=5000)
 
 
 @pytest.fixture
-def synthetic_df_mixed_5k():
+def fixture_synthetic_df_mixed_5k() -> pd.DataFrame:
     """Synthetic DataFrame with mixed text+tabular columns (5000 rows)."""
     return make_mixed_text_tabular_df(seed=222, n=5000)
 
 
 @pytest.fixture
-def test_df_mixed():
+def fixture_test_df_mixed() -> pd.DataFrame:
     """Test DataFrame with mixed text+tabular columns (100 rows)."""
     return make_mixed_text_tabular_df(seed=333, n=100)
 
 
 @pytest.fixture
-def mia_aia_df_with_nan_protection():
+def fixture_mia_aia_df_with_nan_protection() -> pd.DataFrame:
     """I'm not sure how often we get nans like this
     but we've seen errors like this in the wild:
     """

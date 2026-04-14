@@ -24,19 +24,19 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_resume_generate_after_train(local_tinyllama_dir, iris_df, tmp_path):
+def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_iris_df, tmp_path):
     """Train, then create a new SafeSynthesizer instance and generate from saved state.
 
-    Uses doubled iris_df (302 rows) with holdout=0.05 so load_from_save_path()
+    Uses doubled fixture_iris_df (302 rows) with holdout=0.05 so load_from_save_path()
     has a non-empty test.csv to read. The base holdout=0 config produces an empty
     test split which causes EmptyDataError on resume.
     """
     # Double the dataset to exceed the 200-row holdout minimum
-    large_df = pd.concat([iris_df, iris_df], ignore_index=True)
+    large_df = pd.concat([fixture_iris_df, fixture_iris_df], ignore_index=True)
 
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
-        pretrained_model=str(local_tinyllama_dir),
+        pretrained_model=str(fixture_local_tinyllama_dir),
         num_input_records_to_sample=10,
         num_records=5,
         lora_r=8,

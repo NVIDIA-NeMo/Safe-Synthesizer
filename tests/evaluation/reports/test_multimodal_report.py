@@ -16,9 +16,9 @@ from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report impor
 
 
 def _minimal_multimodal_report() -> MultimodalReport:
-    training_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
-    synthetic_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
-    datasets = EvaluationDatasets(training=training_df, synthetic=synthetic_df)
+    fixture_training_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    fixture_synthetic_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    datasets = EvaluationDatasets(training=fixture_training_df, synthetic=fixture_synthetic_df)
     return MultimodalReport(evaluation_datasets=datasets, components=[])
 
 
@@ -37,9 +37,14 @@ def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.M
 
 
 @pytest.mark.skip(reason="Times out")
-def test_multimodal_report(training_df_5k, synthetic_df_5k, test_df, skip_privacy_metrics_config):
+def test_multimodal_report(
+    fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df, fixture_skip_privacy_metrics_config
+):
     report = MultimodalReport.from_dataframes(
-        training=training_df_5k, synthetic=synthetic_df_5k, test=test_df, config=skip_privacy_metrics_config
+        training=fixture_training_df_5k,
+        synthetic=fixture_synthetic_df_5k,
+        test=fixture_test_df,
+        config=fixture_skip_privacy_metrics_config,
     )
 
     assert len(report.components) == 11

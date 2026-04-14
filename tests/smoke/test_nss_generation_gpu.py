@@ -20,11 +20,11 @@ pytestmark = [
 
 
 @pytest.fixture(scope="class")
-def trained_nss(_patch_attn_eager, base_smoke_config, iris_df, tmp_path_factory):
+def trained_nss(_patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, tmp_path_factory):
     """Train once per class; both SDK chain and manual VllmBackend tests consume this."""
     save_path = tmp_path_factory.mktemp("gen-smoke")
-    nss = SafeSynthesizer(config=base_smoke_config, save_path=save_path)
-    nss.with_data_source(iris_df).process_data().train()
+    nss = SafeSynthesizer(config=fixture_base_smoke_config, save_path=save_path)
+    nss.with_data_source(fixture_iris_df).process_data().train()
     return nss
 
 
@@ -42,7 +42,7 @@ class TestNSSGenerationGPU:
         except GenerationError as exc:
             assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
 
-    def test_manual_vllm_backend_with_local_model(self, trained_nss, local_tinyllama_dir):
+    def test_manual_vllm_backend_with_local_model(self, trained_nss, fixture_local_tinyllama_dir):
         """Manually construct VllmBackend and generate with the saved adapter."""
         from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend
         from nemo_safe_synthesizer.llm.metadata import ModelMetadata

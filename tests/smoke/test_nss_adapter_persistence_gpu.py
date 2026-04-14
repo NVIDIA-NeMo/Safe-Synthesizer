@@ -21,11 +21,13 @@ pytestmark = [
 
 
 @pytest.fixture(scope="class")
-def adapter_train_artifacts(_patch_attn_eager, base_smoke_config, iris_df, tmp_path_factory, local_tinyllama_dir):
+def adapter_train_artifacts(
+    _patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, tmp_path_factory, fixture_local_tinyllama_dir
+):
     """Train once per class, return (workdir, local_model_dir) for all adapter tests."""
     save_path = tmp_path_factory.mktemp("adapter-smoke")
-    nss = train_with_sdk(base_smoke_config, iris_df, save_path)
-    return nss._workdir, local_tinyllama_dir
+    nss = train_with_sdk(fixture_base_smoke_config, fixture_iris_df, save_path)
+    return nss._workdir, fixture_local_tinyllama_dir
 
 
 class TestAdapterPersistence:

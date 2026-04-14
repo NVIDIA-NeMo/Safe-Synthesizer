@@ -19,17 +19,17 @@ from nemo_safe_synthesizer.config.parameters import EvaluationParameters, SafeSy
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 
 
-def test_multimodal_report_from_dataframes(iris_df):
-    """Build a MultimodalReport from iris_df on CPU with privacy metrics off."""
+def test_multimodal_report_from_dataframes(fixture_iris_df):
+    """Build a MultimodalReport from fixture_iris_df on CPU with privacy metrics off."""
     config = SafeSynthesizerParameters(
         evaluation=EvaluationParameters(mia_enabled=False, aia_enabled=False),
     )
-    training_df = iris_df.copy()
-    synthetic_df = iris_df.sample(frac=0.8, random_state=42).reset_index(drop=True)
+    fixture_training_df = fixture_iris_df.copy()
+    fixture_synthetic_df = fixture_iris_df.sample(frac=0.8, random_state=42).reset_index(drop=True)
 
     report = MultimodalReport.from_dataframes(
-        training=training_df,
-        synthetic=synthetic_df,
+        training=fixture_training_df,
+        synthetic=fixture_synthetic_df,
         config=config,
     )
     assert report is not None

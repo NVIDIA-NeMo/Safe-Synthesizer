@@ -28,15 +28,15 @@ def mock_embedder():
     return embedder
 
 
-def test_divide_tabular_text(training_df):
+def test_divide_tabular_text(fixture_training_df):
     text_fields = ["text", "other"]
-    tabular, text = divide_tabular_text(training_df, text_fields)
+    tabular, text = divide_tabular_text(fixture_training_df, text_fields)
 
     assert "text" not in tabular.columns
     assert "other" not in tabular.columns
     assert set(text.columns) == {"other", "text"}
-    assert len(tabular) == len(training_df)
-    assert len(text) == len(training_df)
+    assert len(tabular) == len(fixture_training_df)
+    assert len(text) == len(fixture_training_df)
 
 
 def test_embed_text(mock_embedder):

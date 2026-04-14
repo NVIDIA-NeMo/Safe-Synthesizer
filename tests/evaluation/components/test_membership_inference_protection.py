@@ -18,9 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.requires_gpu
-def test_membership_inference_protection(training_df_5k, synthetic_df_5k, test_df):
+def test_membership_inference_protection(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df):
     """Test MIA with tabular-only data (sklearn NearestNeighbors path)."""
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df
+    )
     membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(membership_inference_protection.attack_sum_df)
@@ -39,7 +41,9 @@ def test_membership_inference_protection(training_df_5k, synthetic_df_5k, test_d
 
 
 @pytest.mark.requires_gpu
-def test_membership_inference_protection_mixed_text_tabular(training_df_mixed_5k, synthetic_df_mixed_5k, test_df_mixed):
+def test_membership_inference_protection_mixed_text_tabular(
+    fixture_training_df_mixed_5k, fixture_synthetic_df_mixed_5k, fixture_test_df_mixed
+):
     """Test MIA with mixed text+tabular data (hybrid sklearn + sentence-transformers path).
 
     This test exercises the hybrid nearest neighbor path that combines:
@@ -47,7 +51,9 @@ def test_membership_inference_protection_mixed_text_tabular(training_df_mixed_5k
     - sklearn NearestNeighbors for tabular column similarity
     - weighted hybrid distance calculation
     """
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_mixed_5k, synthetic_df_mixed_5k, test_df_mixed)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        fixture_training_df_mixed_5k, fixture_synthetic_df_mixed_5k, fixture_test_df_mixed
+    )
     membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 
     logger.info(f"MIA attack summary: {membership_inference_protection.attack_sum_df}")
@@ -65,14 +71,16 @@ def test_membership_inference_protection_mixed_text_tabular(training_df_mixed_5k
 
 
 @pytest.mark.requires_gpu
-def test_membership_inference_protection_text_only(training_df_text_only, synthetic_df_text_only, test_df_text_only):
+def test_membership_inference_protection_text_only(
+    fixture_training_df_text_only, fixture_synthetic_df_text_only, fixture_test_df_text_only
+):
     """Test MIA with text-only data (sentence-transformers only, no sklearn).
 
     This test exercises the text-only nearest neighbor path that uses
     only sentence-transformers for semantic similarity search.
     """
     evaluation_datasets = EvaluationDatasets.from_dataframes(
-        training_df_text_only, synthetic_df_text_only, test_df_text_only
+        fixture_training_df_text_only, fixture_synthetic_df_text_only, fixture_test_df_text_only
     )
     membership_inference_protection = MembershipInferenceProtection.from_evaluation_datasets(evaluation_datasets)
 

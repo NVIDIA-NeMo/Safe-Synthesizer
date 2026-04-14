@@ -98,11 +98,11 @@ class TestValueValidation:
 
 
 class TestParametersClass:
-    def test_parameters_get_method(self, simple_safe_synthesizer_parameters):
-        assert simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
+    def test_parameters_get_method(self, fixture_simple_safe_synthesizer_parameters):
+        assert fixture_simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
 
-    def test_parameters_nesting(self, simple_safe_synthesizer_parameters):
-        assert simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
+    def test_parameters_nesting(self, fixture_simple_safe_synthesizer_parameters):
+        assert fixture_simple_safe_synthesizer_parameters.get("num_input_records_to_sample") == 100
 
     def test_nested_auto_param_round_trip(self, subgroup_fixture, parent_fixture):
         subgroup_py = subgroup_fixture.model_dump()
@@ -146,8 +146,8 @@ class TestSafeSynthesizerParameters:
         )
         assert params.get("max_sequences_per_example") == expected
 
-    def test_parameter_values(self, simple_safe_synthesizer_parameters):
-        params = simple_safe_synthesizer_parameters
+    def test_parameter_values(self, fixture_simple_safe_synthesizer_parameters):
+        params = fixture_simple_safe_synthesizer_parameters
         assert params.get("num_input_records_to_sample") == 100
         assert params.get("batch_size") == 10
         print(params.training)
@@ -187,8 +187,8 @@ class TestSafeSynthesizerParameters:
         assert any("order_training_examples_by" in msg for msg in error_messages)
         assert not any("DP is enabled" in msg for msg in error_messages)
 
-    def test_read_from_yaml(self, yaml_config_str):
-        p = SafeSynthesizerParameters.from_yaml_str(yaml_config_str)
+    def test_read_from_yaml(self, fixture_yaml_config_str):
+        p = SafeSynthesizerParameters.from_yaml_str(fixture_yaml_config_str)
         assert p.get("gradient_accumulation_steps") == 8
 
 
