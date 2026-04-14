@@ -201,18 +201,17 @@ The production release workflow publishes to test PyPI and regular PyPI. It also
 
 ### How to Release
 
-1. Push a tag to the repository
+1. Push a tag to the repository (start with a release candidate like `v0.0.5rc0` for big changes)
 2. Monitor the release pipeline to see it makes its way to Test PyPI/PyPI.
 
 ### Release Process
 
 The workflow performs the following steps:
 
-1. Dry-run build - Validates the wheel can be built
-2. Build wheel - Builds the production wheel
-3. Push to test PyPI
-4. Publish to PyPI - Uploads to PyPI (or test PyPI for dry runs)
-5. Create GitHub release
+1. Build wheel - Builds the production wheel
+2. Push to test PyPI
+3. Publish to PyPI - Uploads to PyPI
+4. Create GitHub release
 
 ## Reusable Workflows
 
