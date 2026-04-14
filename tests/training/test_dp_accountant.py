@@ -93,6 +93,7 @@ class TestPRVFallbackToRDP:
             )
         assert acc.use_prv is False
 
+    @pytest.mark.slow
     def test_create_prv_accountant_raises_on_overflow(self):
         """_create_prv_accountant raises RuntimeError for overflow-prone params."""
         with pytest.raises(RuntimeError, match="PRV accountant construction failed"):
