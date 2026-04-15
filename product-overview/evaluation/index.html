@@ -8607,6 +8607,9 @@
 <ul>
 <li>Training data: the portion used for PII replacement, fine-tuning, and generation. This is the reference dataset for most evaluation metrics.</li>
 <li>Test (holdout) data: a small portion (5% by default) withheld from training entirely. Used by Membership Inference Protection and Text Semantic Similarity to detect memorization.</li>
+</ul>
+<p>After generation, one new dataset is produced:</p>
+<ul>
 <li>Synthetic data: the records produced by the fine-tuned model during the generation step.</li>
 </ul>
 <pre class="mermaid"><code>flowchart LR
