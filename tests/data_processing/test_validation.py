@@ -16,9 +16,23 @@ def test_validate_groupby_column_noop_when_groupby_is_none() -> None:
     validate_groupby_column(df, None)
 
 
+def test_validate_groupby_column_passes_when_column_exists() -> None:
+    df = pd.DataFrame(
+        {
+            "col1": [1, 2, 3, 4, 5],
+            "col2": ["a", "b", "c", "d", "e"],
+            "group_col": ["g1", "g1", "g2", "g2", "g3"],
+        }
+    )
+    validate_groupby_column(df, "group_col")
+
+
 def test_validate_groupby_column_raises_for_missing_column() -> None:
     df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-    with pytest.raises(ParameterError, match="disable grouping"):
+    with pytest.raises(
+        ParameterError,
+        match=r"Group by column 'missing_group' not found in input dataset columns.*disable grouping",
+    ):
         validate_groupby_column(df, "missing_group")
 
 

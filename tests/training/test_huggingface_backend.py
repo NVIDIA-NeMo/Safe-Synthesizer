@@ -18,8 +18,7 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
-from nemo_safe_synthesizer.data_processing.validation import validate_groupby_column
-from nemo_safe_synthesizer.errors import DataError, ParameterError
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
     compute_metrics,
@@ -205,17 +204,6 @@ def sample_dataframe():
             "col2": ["a", "b", "c", "d", "e"],
             "group_col": ["g1", "g1", "g2", "g2", "g3"],
             "order_col": [1, 2, 3, 4, 5],
-        }
-    )
-
-
-@pytest.fixture
-def dataframe_with_null_group():
-    """Create a DataFrame with null values in the group column."""
-    return pd.DataFrame(
-        {
-            "col1": [1, 2, 3],
-            "group_col": ["g1", None, "g2"],
         }
     )
 
@@ -559,31 +547,6 @@ class TestConfigureStandardTraining:
 
         assert data_collator == custom_collator
         assert "data_collator" not in training_args
-
-
-class TestValidateGroupbyColumn:
-    def test_does_nothing_when_no_groupby(self, sample_dataframe):
-        """Test that nothing happens when groupby is None."""
-        validate_groupby_column(sample_dataframe, None)  # Should not raise
-
-    def test_passes_when_column_exists(self, sample_dataframe):
-        """Test that validation passes when column exists."""
-        validate_groupby_column(sample_dataframe, "group_col")  # Should not raise
-
-    def test_raises_when_column_missing(self, sample_dataframe):
-        """Test that ParameterError is raised when column is missing."""
-        with pytest.raises(ParameterError, match="Group by column 'nonexistent_col' not found"):
-            validate_groupby_column(sample_dataframe, "nonexistent_col")
-
-    def test_raises_with_comma_hint_when_column_has_comma(self, sample_dataframe):
-        """Test that ParameterError is raised when column name has a comma."""
-        with pytest.raises(ParameterError, match="multi-column grouping is not supported"):
-            validate_groupby_column(sample_dataframe, "patient_id,event_id")
-
-    def test_raises_when_column_has_nulls(self, dataframe_with_null_group):
-        """Test that DataError is raised when column has null values."""
-        with pytest.raises(DataError, match="has missing values"):
-            validate_groupby_column(dataframe_with_null_group, "group_col")
 
 
 class TestValidateOrderbyColumn:
