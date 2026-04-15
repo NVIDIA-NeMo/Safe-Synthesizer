@@ -338,6 +338,23 @@ raise DataError(f"The {column} column could not be processed.")
 - Type variables: PascalCase with `T` suffix (`DataT`, `ParameterT`)
 - Private methods: `_determine_*` for internal resolution, `_resolve_*` for config handling
 
+#### Dataset naming
+
+The pipeline works with four canonical datasets. Use these names consistently in code, docs, configs, logs, and tests.
+
+| Dataset | Definition | Pydantic fields | DataFrame variables |
+|---------|-----------|-----------------|---------------------|
+| **Input** | The full user-supplied data before any splitting | `input` | `input_df` |
+| **Training** | The split used for fine-tuning and as the reference for evaluation | `training` | `training_df` |
+| **Test** | The holdout split withheld from training, used by privacy and text-similarity metrics | `test` | `test_df` |
+| **Synthetic** | The records produced by the fine-tuned model | `synthetic` | `synthetic_df` |
+
+When multiple datasets appear together, order parameters as `training, synthetic, test`.
+
+The user-facing config parameter for the test split is `data.holdout` (the fraction to hold out). In user-facing text (docs, logs, error messages), "holdout" refers to the *action* of withholding data; "test" is the *resulting dataset*. Use "holdout test set" when both concepts need to appear together.
+
+Old names that should not appear in new code: `reference`, `real`, `original`, `train`, `df1`, `df_all` (for training); `output`, `synth`, `df2` (for synthetic).
+
 ### Imports
 
 - Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)

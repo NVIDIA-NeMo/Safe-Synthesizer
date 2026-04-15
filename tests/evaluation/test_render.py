@@ -27,6 +27,16 @@ def test_render(training_df_10k, synthetic_df_10k, test_df, skip_privacy_metrics
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report.html")
     assert len(output) > 0
 
+    # Section headings rendered (catch wholesale template breakage)
+    assert "Dataset Statistics" in output
+    assert "Synthetic Quality Score" in output
+    assert "Training Data Columns" in output
+
+    # Dynamic values from Pydantic models made it into HTML (catch silent blanks
+    # from Jinja variable typos -- default Undefined renders as empty string)
+    assert "10000" in output
+    assert "Missing %" in output
+
 
 @pytest.mark.slow
 def test_render_dp_enabled(training_df_5k, synthetic_df_5k, test_df, dp_enabled_config, column_statistics):
@@ -42,6 +52,11 @@ def test_render_dp_enabled(training_df_5k, synthetic_df_5k, test_df, dp_enabled_
     assert output is not None
     assert len(output) > 0
 
+    assert "Dataset Statistics" in output
+    assert "Synthetic Quality Score" in output
+    assert "Data Privacy Score" in output
+    assert "5000" in output
+
 
 @pytest.mark.slow
 def test_render_dp_not_enabled(training_df_5k, synthetic_df_5k, test_df, dp_not_enabled_config, column_statistics):
@@ -56,3 +71,8 @@ def test_render_dp_not_enabled(training_df_5k, synthetic_df_5k, test_df, dp_not_
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report_dp_not_enabled.html")
     assert output is not None
     assert len(output) > 0
+
+    assert "Dataset Statistics" in output
+    assert "Synthetic Quality Score" in output
+    assert "Data Privacy Score" in output
+    assert "5000" in output
