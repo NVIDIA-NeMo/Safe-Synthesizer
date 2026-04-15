@@ -183,8 +183,9 @@ nav:
           - Environment Variables: user-guide/environment.md
   - Developer Guide:
       - Architecture: developer-guide/architecture.md
-      - Example Generation: developer-guide/example-generation.md
       - Docker: developer-guide/docker.md
+      - Example Generation: developer-guide/example-generation.md
+      - Preflight Plugins: developer-guide/preflight-plugins.md
       - API Reference: reference/
   - Developer Notes:
       - blog/index.md

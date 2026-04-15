@@ -31,7 +31,7 @@ from ..data_processing.stats import (
     RunningStatistics,
     Statistics,
 )
-from ..data_processing.validation import validate_groupby_column, validate_orderby_column
+from ..data_processing.validation import check_groupby_column, check_orderby_column
 from ..defaults import (
     DEFAULT_CACHE_PREFIX,
     PSEUDO_GROUP_COLUMN,
@@ -44,10 +44,11 @@ from ..errors import (
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
+from .budget import NUM_SPECIAL_TOKENS, compute_max_new_tokens
 
 logger = get_logger(__name__)
 
-NUM_SPECIAL_TOKENS = 2
+
 GeneratorType = Generator[dict[str, list], None, None]
 
 
@@ -484,12 +485,8 @@ class TrainingExampleAssembler(ABC):
             exclude_columns=[PSEUDO_GROUP_COLUMN],
         )
         tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
-        # Both the prompt and the records are enclosed by special tokens.
-        # TODO: This is no longer always accurate, sometimes only a bos token is
-        # added to the prompt, and eventually we may experiment with multi-token
-        # delimiters for each group
-        max_new_tokens -= 2 * NUM_SPECIAL_TOKENS
+
+        max_new_tokens = compute_max_new_tokens(self.schema_prompt_ids, self.metadata.max_seq_length)
         for ids in tokenized["input_ids"]:
             if len(ids) > max_new_tokens:
                 max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
@@ -866,8 +863,8 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         Raises:
             ParameterError: If group or order column is not found in dataset.
         """
-        validate_groupby_column(dataset.column_names, self.group_by_column)
-        validate_orderby_column(dataset.column_names, self.order_by_column)
+        check_groupby_column(dataset.column_names, self.group_by_column)
+        check_orderby_column(dataset.column_names, self.order_by_column)
 
     def _reorder_columns(self, dataset: Dataset) -> Dataset:
         """Reorder columns: group_by first, order_by second, then the rest.

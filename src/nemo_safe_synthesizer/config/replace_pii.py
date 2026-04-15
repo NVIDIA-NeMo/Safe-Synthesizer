@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any, Self
 
 from faker.config import AVAILABLE_LOCALES
@@ -27,6 +28,7 @@ __all__ = [
     "GlinerConfig",
     "ColumnActions",
     "ClassifyConfig",
+    "has_inference_key",
     "DEFAULT_PII_TRANSFORM_CONFIG",
 ]
 
@@ -231,6 +233,16 @@ class Globals(NSSBaseModel):
             validated_locales.append(canonical_locale)
 
         return validated_locales
+
+
+def has_inference_key() -> bool:
+    """Return whether ``NSS_INFERENCE_KEY`` is set to a non-empty value.
+
+    Shared by ``nemo_pii`` (remediation messaging) and ``preflight`` (PII
+    classification warning) so both paths apply the same "set and
+    non-whitespace" definition.
+    """
+    return bool((os.environ.get("NSS_INFERENCE_KEY") or "").strip())
 
 
 class PiiReplacerConfig(Parameters):

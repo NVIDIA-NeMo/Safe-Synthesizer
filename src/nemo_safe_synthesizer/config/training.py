@@ -291,3 +291,14 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = "kernels-community/vllm-flash-attn3"
+
+    @property
+    def effective_batch_size(self) -> int:
+        """Effective batch size = ``batch_size * gradient_accumulation_steps``.
+
+        This is the number of examples that contribute to each optimizer
+        update (the "global" batch seen by the loss curve). Canonical
+        source for any caller that needs this product -- used by preflight
+        checks and logged by the training callbacks.
+        """
+        return self.batch_size * self.gradient_accumulation_steps

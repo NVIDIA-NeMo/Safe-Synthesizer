@@ -18,7 +18,8 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
-from ..data_processing.validation import validate_groupby_column, validate_orderby_column
+from ..data_processing.validation import check_groupby_column, check_orderby_column
+from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
@@ -217,8 +218,14 @@ class SafeSynthesizer(ConfigBuilder):
         PII replacement to the training set when enabled, and persists the
         splits to the workdir.
 
-        When ``check_only`` is ``True``, PII replacement and CSV writes
-        are skipped; a resolved config YAML is written instead.
+        When ``check_only`` is ``True`` (the ``--validate`` path), PII
+        replacement is intentionally skipped and CSV writes are elided; a
+        resolved config YAML is written instead. Preflight therefore sees
+        the *pre-replacement* training split, which is a known gap: PII
+        replacement can change token lengths, so a clean ``--validate``
+        does not guarantee a full run will pass token-budget checks. See
+        the "``--validate`` is best-effort" callout in
+        ``docs/user-guide/running.md``.
 
         Args:
             check_only: If ``True``, run preflight checks only (validation mode).
@@ -243,8 +250,13 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        validate_groupby_column(self._data_source, self._nss_config.data.group_training_examples_by)
-        validate_orderby_column(self._data_source, self._nss_config.data.order_training_examples_by)
+        check_groupby_column(self._data_source, self._nss_config.data.group_training_examples_by)
+        check_orderby_column(
+            self._data_source,
+            self._nss_config.data.order_training_examples_by,
+            is_timeseries=self._nss_config.time_series.is_timeseries,
+            timestamp_column=self._nss_config.time_series.timestamp_column,
+        )
 
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
@@ -259,6 +271,13 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
+        # PII replacement is skipped on the validate path (``check_only=True``).
+        # Rationale: the replacer makes network calls to the PII classifier
+        # and can take minutes on large datasets -- incompatible with the
+        # fast fail-fast semantics of ``--validate``. The consequence is
+        # that preflight sees the pre-replacement training split; replacement
+        # text can shift token lengths, so ``--validate`` is documented as
+        # best-effort rather than a guarantee (see user-guide/running.md).
         if not check_only and self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_training_df)
@@ -270,29 +289,37 @@ class SafeSynthesizer(ConfigBuilder):
             # privacy metrics are valid.
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
-        if self._llm_metadata is None:
+        metadata_for_preflight = self._llm_metadata
+        if metadata_for_preflight is None:
             if check_only:
                 try:
-                    self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                    metadata_for_preflight = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                    self._llm_metadata = metadata_for_preflight
                 except Exception:
                     logger.user.warning(
                         "Could not load model metadata (network/cache); token budget checks will be skipped."
                     )
-                    self._llm_metadata = ModelMetadata.stub(self._nss_config)
+                    metadata_for_preflight = ModelMetadata.stub(self._nss_config)
             else:
-                self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                metadata_for_preflight = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                self._llm_metadata = metadata_for_preflight
 
-        self.preflight_report = run_preflight(self._train_df, self._nss_config, self._llm_metadata)
-        for issue in self.preflight_report.warnings:
+        preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
+        self.preflight_report = preflight
+        for issue in preflight.warnings:
             logger.user.warning(issue.message, extra={"preflight_code": issue.code, "preflight_check": issue.check})
-        if self.preflight_report.errors:
-            from ..errors import ParameterError
+        if preflight.errors:
+            summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
+            raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
-            summary = "\n".join(f"  {e.code}: {e.message}" for e in self.preflight_report.errors)
-            raise ParameterError(
-                f"Pre-flight check failed with {len(self.preflight_report.errors)} error(s):\n{summary}"
-            )
-
+        # If we're in check-only mode, we don't need to process the data further and we'll end the program.
+        # ``_data_processed`` is intentionally *not* set here: the validate →
+        # full-run pattern calls ``process_data(check_only=True)`` followed
+        # by ``process_data()`` on the same instance, and the second call
+        # must rebuild real metadata and apply PII replacement (see
+        # ``TestProcessDataMetadataLifecycle.test_check_only_stub_metadata_not_persisted_for_followup_run``).
+        # Callers who repeat ``process_data(check_only=True)`` pay the
+        # (cheap) preflight cost twice on purpose.
         if check_only:
             assert self._workdir is not None
             self._workdir.ensure_directories()

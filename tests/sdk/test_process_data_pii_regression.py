@@ -5,7 +5,7 @@
 
 Covers two invariants:
 
-1. ``training.csv`` and the evaluator reference must use the **original**
+1. ``training.csv`` and the evaluator reference must use the original
    (pre-PII) training data so that privacy metrics remain valid.
 2. ``train()`` and ``run()`` must raise after ``load_from_save_path()``.
 """

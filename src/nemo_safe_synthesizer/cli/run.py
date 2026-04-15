@@ -6,8 +6,9 @@
 from __future__ import annotations
 
 import os
-import warnings
+import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
@@ -17,7 +18,9 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
+from ..errors import UserError
 from ..observability import traced_user
+from ..tooling import PreflightRenderContext, render_preflight_report
 from .settings import CLISettings
 from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
@@ -26,9 +29,10 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from ..sdk.library_builder import SafeSynthesizer
+    import pandas as pd
 
-warnings.filterwarnings("ignore", message="stdout is a tty")
+    from ..sdk.library_builder import SafeSynthesizer
+    from .artifact_structure import Workdir
 
 
 def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
@@ -160,6 +164,128 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     return f
 
 
+def _format_dataset_runtime_info(data: pd.DataFrame) -> str:
+    """Format dataset size summary for validate runtime info."""
+    return f"{len(data):,} rows, {len(data.columns):,} columns"
+
+
+def _build_validate_run_info(
+    *,
+    version: str,
+    model_name: str,
+    data: pd.DataFrame,
+    training_records: int | None = None,
+) -> dict[str, str]:
+    """Build runtime info displayed in validate output.
+
+    ``training_records`` is the size of the training split that preflight
+    actually checked; it is shown alongside the input dataset size so the
+    scope of the report is obvious.
+    """
+    info: dict[str, str] = {
+        "nemo-safe-synthesizer": version,
+        "model": model_name,
+        "input data": _format_dataset_runtime_info(data),
+    }
+    if training_records is not None:
+        info["training split"] = f"{training_records:,} rows (pre-flight scope)"
+    info["log level"] = os.environ.get("NSS_LOG_LEVEL", "INFO")
+    return info
+
+
+def _run_validate_and_render(
+    nss: "SafeSynthesizer",
+    *,
+    settings: CLISettings,
+    workdir: "Workdir",
+    config: SafeSynthesizerParameters,
+    data: pd.DataFrame,
+) -> None:
+    """Run preflight in validate mode and render the resulting report.
+
+    Shared by the ``run`` (end-to-end) and ``run train`` command paths so
+    the ``--validate`` branch in each stays a single line.
+
+    Note: ``process_data(check_only=True)`` deliberately skips PII
+    replacement, so preflight runs against the pre-replacement training
+    split. This is why ``--validate`` is documented as a best-effort
+    fail-fast gate rather than a full-run guarantee.
+    """
+    click.echo("Running pre-flight validation...", nl=False)
+    # ``process_data(check_only=True)`` raises ``ParameterError`` when preflight
+    # surfaces errors, but it populates ``nss.preflight_report`` first. Catch
+    # the raise so the Rich report still renders before we propagate the
+    # failure -- otherwise the user gets only the bare traceback text.
+    error: UserError | None = None
+    try:
+        nss.process_data(check_only=True)
+    except UserError as exc:
+        error = exc
+    finally:
+        _clear_progress_line()
+
+    from ..package_info import __version__
+    from ..preflight import PREFLIGHT_REGISTRY
+
+    if nss.preflight_report is not None:
+        render_preflight_report(
+            nss.preflight_report,
+            registry=PREFLIGHT_REGISTRY,
+            context=_build_validate_render_context(
+                config_path=nss._preflight_config_path,
+                data_source=settings.data_source,
+                artifact_dir=workdir.run_dir,
+                log_file=workdir.log_file,
+                version=__version__,
+                model_name=config.training.pretrained_model,
+                data=data,
+                training_records=len(nss._training_df) if nss._training_df is not None else None,
+            ),
+        )
+
+    if error is not None:
+        raise error
+
+
+def _clear_progress_line() -> None:
+    r"""Clear the ``Running pre-flight validation...`` progress line.
+
+    Emits the ANSI clear sequence only when stdout is a TTY so CI logs and
+    other non-terminal sinks don't show raw ``\\r\\x1b[K`` control bytes.
+    On non-TTYs, just drop to a new line.
+    """
+    if sys.stdout.isatty():
+        click.echo("\r\033[K", nl=False)
+    else:
+        click.echo()
+
+
+def _build_validate_render_context(
+    *,
+    config_path: PathT | None,
+    data_source: str | None,
+    artifact_dir: PathT | None,
+    log_file: PathT | None,
+    version: str,
+    model_name: str,
+    data: pd.DataFrame,
+    training_records: int | None = None,
+) -> PreflightRenderContext:
+    """Build display context for validate-mode preflight rendering."""
+    return PreflightRenderContext(
+        config_path=Path(config_path) if config_path is not None else None,
+        data_source=data_source,
+        artifact_dir=Path(artifact_dir) if artifact_dir is not None else None,
+        log_file=Path(log_file) if log_file is not None else None,
+        run_info=_build_validate_run_info(
+            version=version,
+            model_name=model_name,
+            data=data,
+            training_records=training_records,
+        ),
+    )
+
+
 @click.group(invoke_without_command=True)
 @click.pass_context
 @common_run_options
@@ -238,25 +364,7 @@ def run(
             nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
 
             if validate:
-                click.echo("Running pre-flight validation...", nl=False)
-                nss.process_data(check_only=True)
-                click.echo("\r\033[K", nl=False)
-                from ..package_info import __version__
-                from ..preflight import format_preflight_report
-
-                format_preflight_report(
-                    nss.preflight_report,
-                    nss._preflight_config_path,
-                    data_source=settings.data_source,
-                    artifact_dir=workdir.run_dir,
-                    log_file=workdir.log_file,
-                    run_info={
-                        "nemo-safe-synthesizer": __version__,
-                        "model": config.training.pretrained_model,
-                        "data": f"{len(df)}r × {len(df.columns)}c",
-                        "log level": os.environ.get("NSS_LOG_LEVEL", "INFO"),
-                    },
-                )
+                _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
                 return
 
             try:
@@ -339,25 +447,7 @@ def run_train(
             nss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
 
             if validate:
-                click.echo("Running pre-flight validation...", nl=False)
-                nss.process_data(check_only=True)
-                click.echo("\r\033[K", nl=False)
-                from ..package_info import __version__
-                from ..preflight import format_preflight_report
-
-                format_preflight_report(
-                    nss.preflight_report,
-                    nss._preflight_config_path,
-                    data_source=settings.data_source,
-                    artifact_dir=workdir.run_dir,
-                    log_file=workdir.log_file,
-                    run_info={
-                        "nemo-safe-synthesizer": __version__,
-                        "model": config.training.pretrained_model,
-                        "data": f"{len(df)}r × {len(df.columns)}c",
-                        "log level": os.environ.get("NSS_LOG_LEVEL", "INFO"),
-                    },
-                )
+                _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
                 return
 
             nss.process_data().train()

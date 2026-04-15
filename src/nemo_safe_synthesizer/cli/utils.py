@@ -359,11 +359,14 @@ def _initialize_logging_for_cli_from_settings(
         log_color=settings.effective_log_color,
     )
 
-    # Initialize the logging system; suppress tty warnings in quiet mode
+    # Initialize the logging system; suppress tty warnings in quiet mode.
+    # Scoped here so normal CLI runs still see warnings like "stdout is a tty"
+    # that signal misconfigured redirections.
     structlog.reset_defaults()
     if quiet:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
+            warnings.filterwarnings("ignore", message="stdout is a tty")
             initialize_observability()
         for handler in logging.getLogger().handlers:
             if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):

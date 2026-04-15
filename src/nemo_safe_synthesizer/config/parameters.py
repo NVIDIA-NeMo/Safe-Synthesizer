@@ -16,6 +16,7 @@ from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
+from .preflight import PreflightParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
@@ -68,6 +69,11 @@ class SafeSynthesizerParameters(Parameters):
     replace_pii: PiiReplacerConfig | None = Field(
         description="PII replacement configuration. When ``None``, PII replacement is skipped.",
         default_factory=PiiReplacerConfig.get_default_config,
+    )
+
+    preflight: PreflightParameters = Field(
+        description="Preflight validation overrides, including checks to skip via ``disabled_checks``.",
+        default_factory=PreflightParameters,
     )
 
     @field_validator("privacy", mode="after", check_fields=False)

@@ -8,20 +8,10 @@ from click.testing import CliRunner
 
 
 @pytest.mark.unit
-def test_validate_help():
-    """--validate appears in help text."""
+@pytest.mark.parametrize("args", [["--help"], ["train", "--help"]], ids=["run", "run-train"])
+def test_validate_help(args):
+    """``--validate`` appears in both ``run --help`` and ``run train --help``."""
     from nemo_safe_synthesizer.cli.run import run
 
-    runner = CliRunner()
-    result = runner.invoke(run, ["--help"])
-    assert "--validate" in result.output
-
-
-@pytest.mark.unit
-def test_validate_train_help():
-    """--validate appears in run train help text."""
-    from nemo_safe_synthesizer.cli.run import run
-
-    runner = CliRunner()
-    result = runner.invoke(run, ["train", "--help"])
+    result = CliRunner().invoke(run, args)
     assert "--validate" in result.output

@@ -18,7 +18,7 @@ pytest.importorskip(
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
-from transformers import PretrainedConfig
+from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.defaults import (
@@ -293,7 +293,7 @@ ROPE_SCALING_SCENARIOS = [
 @pytest.fixture
 def mock_tokenizer():
     """Create a mock tokenizer for testing."""
-    tokenizer = MagicMock()
+    tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
     tokenizer.bos_token = "<s>"
     tokenizer.bos_token_id = 1
     tokenizer.eos_token = "</s>"

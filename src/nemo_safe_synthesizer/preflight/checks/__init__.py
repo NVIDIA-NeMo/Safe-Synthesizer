@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+"""Core pre-flight check implementations.
+
+The aggregated ``_CORE_CHECKS`` tuple is what ``registry.build_registry``
+uses to seed the default ``PREFLIGHT_REGISTRY``. Add a new core check by
+implementing it in the stage-matching submodule and appending it here in
+the order you want it to run within its stage block.
+"""
+
+from __future__ import annotations
+
+from ..base import PreflightCheck
+from .advisory import (
+    DatasetRowCountCheck,
+    DatasetSizeCheck,
+    OversamplingCheck,
+    TrainingStepsCheck,
+    UndersamplingCheck,
+)
+from .dataframe import (
+    ConstantColumnCheck,
+    GroupbyColumnCheck,
+    OrderbyColumnCheck,
+    PseudoColumnCheck,
+    TimestampColumnCheck,
+)
+from .environment import (
+    CUDAAvailabilityCheck,
+    HFTokenCheck,
+    InferenceKeyCheck,
+    VRAMHeadroomCheck,
+)
+from .metadata import TokenBudgetCheck
+
+__all__ = [
+    "CUDAAvailabilityCheck",
+    "ConstantColumnCheck",
+    "DatasetRowCountCheck",
+    "DatasetSizeCheck",
+    "GroupbyColumnCheck",
+    "HFTokenCheck",
+    "InferenceKeyCheck",
+    "OrderbyColumnCheck",
+    "OversamplingCheck",
+    "PseudoColumnCheck",
+    "TimestampColumnCheck",
+    "TokenBudgetCheck",
+    "TrainingStepsCheck",
+    "UndersamplingCheck",
+    "VRAMHeadroomCheck",
+    "_CORE_CHECKS",
+]
+
+
+# Tuple (not list) because the core check set is intentionally immutable:
+# plugin registration extends the built ``PreflightRegistry``, not this
+# constant. Mutating it in-process would silently desync the registry from
+# what ``registry.build_registry`` originally seeded.
+_CORE_CHECKS: tuple[PreflightCheck, ...] = (
+    # CONFIG
+    CUDAAvailabilityCheck(),
+    VRAMHeadroomCheck(),
+    InferenceKeyCheck(),
+    HFTokenCheck(),
+    # DATAFRAME
+    DatasetSizeCheck(),
+    GroupbyColumnCheck(),
+    OrderbyColumnCheck(),
+    PseudoColumnCheck(),
+    ConstantColumnCheck(),
+    TimestampColumnCheck(),
+    # METADATA
+    TokenBudgetCheck(),
+    # ADVISORY
+    DatasetRowCountCheck(),
+    OversamplingCheck(),
+    UndersamplingCheck(),
+    TrainingStepsCheck(),
+)

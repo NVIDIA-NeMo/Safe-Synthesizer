@@ -273,6 +273,48 @@ class TestProcessDataPiiSeparation:
 
 
 # ---------------------------------------------------------------------------
+# Tests: metadata lifecycle in validate mode
+# ---------------------------------------------------------------------------
+
+
+class TestProcessDataMetadataLifecycle:
+    """Validate-mode metadata fallback should not persist stub metadata."""
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_check_only_stub_metadata_not_persisted_for_followup_run(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_process_data_setup_without_pii,
+    ):
+        """A check-only stub does not block rebuilding metadata for later full runs."""
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
+        mock_resolver_cls.return_value.return_value = builder._nss_config
+
+        stub_metadata = MagicMock(name="stub_metadata")
+        rebuilt_metadata = MagicMock(name="rebuilt_metadata")
+        mock_metadata_cls.stub.return_value = stub_metadata
+        mock_metadata_cls.from_config.side_effect = [RuntimeError("offline"), rebuilt_metadata]
+
+        builder.process_data(check_only=True)
+
+        assert builder._llm_metadata is None
+        assert mock_preflight.call_args_list[0].args[2] is stub_metadata
+
+        builder.process_data(check_only=False)
+
+        assert builder._llm_metadata is rebuilt_metadata
+        assert mock_preflight.call_args_list[1].args[2] is rebuilt_metadata
+        assert mock_metadata_cls.from_config.call_count == 2
+
+
+# ---------------------------------------------------------------------------
 # Tests: evaluate uses correct reference
 # ---------------------------------------------------------------------------
 

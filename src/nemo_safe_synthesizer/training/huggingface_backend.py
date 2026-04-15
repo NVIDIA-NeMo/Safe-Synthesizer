@@ -43,7 +43,6 @@ from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
-from ..data_processing.validation import validate_groupby_column, validate_orderby_column
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -573,24 +572,6 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer = self._create_trainer(self.train_args, data_collator)
         self._configure_trainer_callbacks(self.trainer, training_args)
 
-    def _validate_orderby_column(self, df: pd.DataFrame) -> None:
-        """Validate the orderby column exists in the dataset.
-
-        Args:
-            df: The DataFrame to validate.
-
-        Raises:
-            ParameterError: If the orderby column doesn't exist.
-        """
-        orderby_col = self.params.data.order_training_examples_by
-
-        ## For timeseries, if groupby is set without timestamp column, we will skip for now
-        ## timestamp column will be added later and orderby column will be the added timestamp column
-        if self.params.time_series.is_timeseries and self.params.time_series.timestamp_column is None:
-            return
-
-        validate_orderby_column(df, orderby_col)
-
     def _apply_preprocessing(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply action_executor preprocessing if available.
 
@@ -687,9 +668,6 @@ class HuggingFaceBackend(TrainingBackend):
         if not isinstance(training_df, pd.DataFrame):
             raise DataError("Expected DataFrame from to_pandas(), got an iterator")
 
-        # Validate groupby/orderby parameters as a preprocessing step.
-        validate_groupby_column(training_df, self.params.data.group_training_examples_by)
-        self._validate_orderby_column(training_df)
         self.params = AutoConfigResolver(training_df, self.params).resolve()
 
         # Process time series data (sort by timestamp, infer intervals, etc.)

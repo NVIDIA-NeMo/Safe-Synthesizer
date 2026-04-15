@@ -12,6 +12,7 @@ from click.testing import CliRunner
 import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
+from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
 # =============================================================================
 # Fixtures
@@ -411,6 +412,61 @@ class TestRunTrainOptions:
         call_kwargs = mock_common_setup.call_args.kwargs
         settings: CLISettings = call_kwargs["settings"]
         assert settings.dataset_registry == "./registry.yaml"
+
+
+class TestValidateMode:
+    """Tests for `--validate` execution paths."""
+
+    @pytest.mark.parametrize(
+        "cli_args, skipped_attr",
+        [
+            pytest.param(["--validate"], "run", id="run"),
+            pytest.param(["train", "--validate"], "train", id="run-train"),
+        ],
+    )
+    def test_validate_renders_preflight_and_skips_execution(
+        self,
+        cli_args: list[str],
+        skipped_attr: str,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        mock_config: MagicMock,
+        mock_dataframe: MagicMock,
+        mock_workdir: MagicMock,
+        patched_run_dependencies: dict,
+    ):
+        """``--validate`` runs preflight through ``process_data(check_only=True)``,
+        renders the report against the run's artifact locations, and skips
+        ``run``/``train``.
+        """
+        mock_config.training.pretrained_model = "stub-model"
+        mock_dataframe.columns = ["col1", "col2"]
+        mock_dataframe.__len__.return_value = 2
+
+        mock_ss = patched_run_dependencies["safe_synthesizer"]
+        mock_ss.preflight_report = MagicMock()
+        mock_ss._preflight_config_path = mock_workdir.run_dir / "safe-synthesizer-config.yaml"
+
+        with patch("nemo_safe_synthesizer.cli.run.render_preflight_report") as mock_render:
+            result = cli_runner.invoke(
+                run,
+                [*cli_args, "--data-source", str(dummy_csv)],
+                catch_exceptions=False,
+            )
+
+        assert result.exit_code == 0
+        mock_ss.process_data.assert_called_once_with(check_only=True)
+        getattr(mock_ss, skipped_attr).assert_not_called()
+
+        mock_render.assert_called_once()
+        render_args = mock_render.call_args
+        assert render_args.args[0] is mock_ss.preflight_report
+
+        render_context = render_args.kwargs["context"]
+        assert isinstance(render_context, PreflightRenderContext)
+        assert render_context.config_path == mock_ss._preflight_config_path
+        assert render_context.data_source == str(dummy_csv)
+        assert render_context.artifact_dir == mock_workdir.run_dir
 
 
 class TestRunGenerateOptions:
