@@ -13,7 +13,7 @@ from nemo_safe_synthesizer.config.parameters import (
     EvaluationParameters,
     SafeSynthesizerParameters,
 )
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import EvaluationDataset
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import PrivacyGrade
 from nemo_safe_synthesizer.pii_replacer.transform_result import ColumnStatistics
 
@@ -58,32 +58,32 @@ def make_df(seed: int, n: int = 100):
 
 
 @pytest.fixture
-def train_df():
+def training_df():
     return make_df(370)
 
 
 @pytest.fixture
-def train_df_5k():
+def training_df_5k():
     return make_df(370, 5000)
 
 
 @pytest.fixture
-def train_df_10k():
+def training_df_10k():
     return make_df(370, 10000)
 
 
 @pytest.fixture
-def synth_df():
+def synthetic_df():
     return make_df(753)
 
 
 @pytest.fixture
-def synth_df_5k():
+def synthetic_df_5k():
     return make_df(753, 5000)
 
 
 @pytest.fixture
-def synth_df_10k():
+def synthetic_df_10k():
     return make_df(753, 10000)
 
 
@@ -93,8 +93,8 @@ def test_df():
 
 
 @pytest.fixture
-def evaluation_dataset_5k(train_df_5k, synth_df_5k, test_df):
-    return EvaluationDataset.from_dataframes(train_df_5k, synth_df_5k, test_df)
+def evaluation_datasets_5k(training_df_5k, synthetic_df_5k, test_df):
+    return EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
 
 
 @pytest.fixture
@@ -116,11 +116,11 @@ def dp_not_enabled_config():
 
 
 @pytest.fixture
-def column_statistics(train_df_5k):
+def column_statistics(training_df_5k):
     small_cat_values = {"foo", "bar"}
-    small_cat_count = len(train_df_5k["small_cat"].to_frame().query("`small_cat` in @small_cat_values"))
+    small_cat_count = len(training_df_5k["small_cat"].to_frame().query("`small_cat` in @small_cat_values"))
     other_cat_values = {"barf"}
-    other_cat_count = len(train_df_5k["small_cat"].to_frame().query("`small_cat` in @other_cat_values"))
+    other_cat_count = len(training_df_5k["small_cat"].to_frame().query("`small_cat` in @other_cat_values"))
     small_cat_col_stats = ColumnStatistics(
         assigned_type="text",
         assigned_entity="some_cats",
@@ -130,7 +130,7 @@ def column_statistics(train_df_5k):
         transform_functions={"fake", "munge"},
     )
 
-    other_values = set(train_df_5k["other"].head(250))
+    other_values = set(training_df_5k["other"].head(250))
     other_count = len(other_values)
     other_col_stats = ColumnStatistics(
         assigned_type="text",
@@ -250,13 +250,13 @@ def make_text_only_df(seed: int, n: int = 100):
 
 
 @pytest.fixture
-def train_df_text_only():
+def training_df_text_only():
     """Training DataFrame with only text columns (500 rows)."""
     return make_text_only_df(seed=444, n=500)
 
 
 @pytest.fixture
-def synth_df_text_only():
+def synthetic_df_text_only():
     """Synthetic DataFrame with only text columns (500 rows)."""
     return make_text_only_df(seed=555, n=500)
 
@@ -268,13 +268,13 @@ def test_df_text_only():
 
 
 @pytest.fixture
-def train_df_mixed_5k():
+def training_df_mixed_5k():
     """Training DataFrame with mixed text+tabular columns (5000 rows)."""
     return make_mixed_text_tabular_df(seed=111, n=5000)
 
 
 @pytest.fixture
-def synth_df_mixed_5k():
+def synthetic_df_mixed_5k():
     """Synthetic DataFrame with mixed text+tabular columns (5000 rows)."""
     return make_mixed_text_tabular_df(seed=222, n=5000)
 

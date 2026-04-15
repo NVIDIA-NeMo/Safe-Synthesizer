@@ -108,21 +108,21 @@ class TestProcessDataPreservesOriginalForEvaluation:
         saved = pd.read_csv(builder._workdir.dataset.training)
         pd.testing.assert_frame_equal(saved, original, check_dtype=False)
 
-    def test_original_train_df_is_preserved(self, builder_after_process_data):
-        """``_original_train_df`` should hold the pre-PII data that
+    def test_original_training_df_is_preserved(self, builder_after_process_data):
+        """``_original_training_df`` should hold the pre-PII data that
         ``evaluate()`` passes to the Evaluator.
         """
         builder, original, _replaced = builder_after_process_data
 
-        pd.testing.assert_frame_equal(builder._original_train_df, original)
+        pd.testing.assert_frame_equal(builder._original_training_df, original)
 
-    def test_train_df_is_pii_replaced(self, builder_after_process_data):
-        """``_train_df`` (used for training) should hold the PII-replaced
+    def test_training_df_is_pii_replaced(self, builder_after_process_data):
+        """``_training_df`` (used for training) should hold the PII-replaced
         version after process_data runs with PII enabled.
         """
         builder, _original, replaced = builder_after_process_data
 
-        pd.testing.assert_frame_equal(builder._train_df, replaced)
+        pd.testing.assert_frame_equal(builder._training_df, replaced)
 
 
 # ---------------------------------------------------------------------------

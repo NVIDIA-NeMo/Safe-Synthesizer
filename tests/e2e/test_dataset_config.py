@@ -3,7 +3,6 @@
 
 # ruff: noqa: E402
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -13,9 +12,6 @@ from nemo_safe_synthesizer.observability import get_logger
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 logger = get_logger(__name__)
-
-# Path to config files
-CONFIG_DIR = Path(__file__).parent / "required_configs"
 
 llm = pytest.importorskip(
     "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
@@ -74,10 +70,12 @@ def update_group_by_config(
         "tinyllama-unsloth",
     ],
 )
-def test_clinc_oos_dataset(fixture_clinc_oos_dataset, config_file, quality_threshold, privacy_threshold):
+def test_clinc_oos_dataset(
+    fixture_clinc_oos_dataset, e2e_config_dir, config_file, quality_threshold, privacy_threshold
+):
     """Test CLINC OOS, a free text dataset, with different models and DP settings."""
     df = fixture_clinc_oos_dataset
-    config = SafeSynthesizerParameters.from_yaml(CONFIG_DIR / config_file)
+    config = SafeSynthesizerParameters.from_yaml(e2e_config_dir / config_file)
     config = AutoConfigResolver(df, config)()
     logger.info(f"Running test with config: {config}")
 
@@ -140,10 +138,12 @@ def test_clinc_oos_dataset(fixture_clinc_oos_dataset, config_file, quality_thres
         "tinyllama-unsloth",
     ],
 )
-def test_dow_jones_index_dataset(fixture_dow_jones_index_dataset, config_file, quality_threshold, privacy_threshold):
+def test_dow_jones_index_dataset(
+    fixture_dow_jones_index_dataset, e2e_config_dir, config_file, quality_threshold, privacy_threshold
+):
     """Test Dow Jones Index dataset, a group-by-order-by dataset, with different models and DP settings."""
     df = fixture_dow_jones_index_dataset.to_pandas()
-    config = SafeSynthesizerParameters.from_yaml(CONFIG_DIR / config_file)
+    config = SafeSynthesizerParameters.from_yaml(e2e_config_dir / config_file)
     config = update_group_by_config(config, "stock", "date")
     config = AutoConfigResolver(df, config)()
     if config_file == "smollm3-dp.yaml":

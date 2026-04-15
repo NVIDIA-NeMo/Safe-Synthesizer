@@ -6,7 +6,6 @@ import pytest
 # Skip all tests in this module if torch is not available
 pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -15,9 +14,14 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.edit import TransformFnAccou
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import ColumnClassification, NemoPII, _build_column_statistics
 
 
+@pytest.fixture
+def fake_people_csv(pii_test_data_dir):
+    return pii_test_data_dir / "fake_people_dataset.csv"
+
+
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
-def test_nemo_pii_classify_df(_build_entity_extractor):
-    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+def test_nemo_pii_classify_df(_build_entity_extractor, fake_people_csv):
+    df = pd.read_csv(fake_people_csv)
 
     mock_column_classifier = MagicMock()
     mock_column_classifier.detect_types.return_value = {
@@ -66,8 +70,8 @@ def test_nemo_pii_classify_df(_build_entity_extractor):
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
-def test_classify_df_no_column_classifier(_build_entity_extractor):
-    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+def test_classify_df_no_column_classifier(_build_entity_extractor, fake_people_csv):
+    df = pd.read_csv(fake_people_csv)
 
     mock_column_classifier = MagicMock()
     mock_column_classifier.detect_types.side_effect = Exception("Classification failed")
@@ -92,9 +96,9 @@ def test_classify_df_no_column_classifier(_build_entity_extractor):
 
 
 @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.build_entity_extractor", return_value=MagicMock())
-def test_nemo_pii_classify_disabled(_build_entity_extractor):
+def test_nemo_pii_classify_disabled(_build_entity_extractor, fake_people_csv):
     """Test that when enable_classify is False, no external API calls are made."""
-    df = pd.read_csv(Path(__file__).parent / "fake_people_dataset.csv")
+    df = pd.read_csv(fake_people_csv)
 
     # Create a config with classify disabled
     from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig

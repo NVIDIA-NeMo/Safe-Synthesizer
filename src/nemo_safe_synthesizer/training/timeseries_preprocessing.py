@@ -193,7 +193,7 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
 
 
 def process_timeseries_data(
-    df_all: pd.DataFrame,
+    training_df: pd.DataFrame,
     config: SafeSynthesizerParameters,
 ) -> tuple[pd.DataFrame, SafeSynthesizerParameters]:
     """Process time series data and validate/infer timestamp parameters.
@@ -207,7 +207,7 @@ def process_timeseries_data(
     6. Sets start_timestamp and stop_timestamp
 
     Args:
-        df_all: The input DataFrame
+        training_df: The training DataFrame.
         config: The configuration object with time_series settings
 
     Returns:
@@ -220,13 +220,13 @@ def process_timeseries_data(
     ts_config = config.time_series
 
     # Step 1: Add pseudo-group if needed
-    df_all, group_by_col = _add_pseudo_group_if_needed(df_all, config)
+    training_df, group_by_col = _add_pseudo_group_if_needed(training_df, config)
 
     if group_by_col is None:
         raise RuntimeError("group_by_col should have been set by _add_pseudo_group_if_needed")
 
     # Step 2: Create elapsed time column if timestamp not provided
-    df_all, is_elapsed_time = _create_elapsed_time_column(df_all, ts_config, group_by_col)
+    training_df, is_elapsed_time = _create_elapsed_time_column(training_df, ts_config, group_by_col)
 
     # timestamp_column should be set by now
     if ts_config.timestamp_column is None:
@@ -234,18 +234,18 @@ def process_timeseries_data(
     config.data.order_training_examples_by = ts_config.timestamp_column
 
     # Step 3: Validate timestamp column
-    _validate_timestamp_column(df_all, ts_config.timestamp_column)
+    _validate_timestamp_column(training_df, ts_config.timestamp_column)
 
     # Step 4: Sort by group and timestamp
-    df_all = _sort_by_group_and_timestamp(df_all, group_by_col, ts_config.timestamp_column)
+    training_df = _sort_by_group_and_timestamp(training_df, group_by_col, ts_config.timestamp_column)
 
     # Step 5: Infer format and convert to datetime (if not elapsed time)
     # Skip datetime conversion for elapsed_seconds format (either created or user-provided)
     if not is_elapsed_time and ts_config.timestamp_format != "elapsed_seconds":
-        df_all = _infer_and_convert_timestamp_format(df_all, ts_config)
+        training_df = _infer_and_convert_timestamp_format(training_df, ts_config)
 
     # Step 6: Process groups and validate consistency
-    ts_config = _process_grouped_timestamps(df_all, ts_config, group_by_col, is_elapsed_time)
+    ts_config = _process_grouped_timestamps(training_df, ts_config, group_by_col, is_elapsed_time)
 
     # Step 7: Convert timestamp back to string format
     # Skip string conversion for elapsed_seconds format (values are already numeric)
@@ -254,9 +254,11 @@ def process_timeseries_data(
         and ts_config.timestamp_format is not None
         and ts_config.timestamp_format != "elapsed_seconds"
     ):
-        df_all[ts_config.timestamp_column] = df_all[ts_config.timestamp_column].dt.strftime(ts_config.timestamp_format)
+        training_df[ts_config.timestamp_column] = training_df[ts_config.timestamp_column].dt.strftime(
+            ts_config.timestamp_format
+        )
 
-    return df_all, config
+    return training_df, config
 
 
 @dataclass

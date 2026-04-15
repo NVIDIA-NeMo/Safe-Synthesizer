@@ -14,10 +14,10 @@ from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report impor
 
 
 @pytest.mark.slow
-def test_render(train_df_10k, synth_df_10k, test_df, skip_privacy_metrics_config, column_statistics):
+def test_render(training_df_10k, synthetic_df_10k, test_df, skip_privacy_metrics_config, column_statistics):
     report = MultimodalReport.from_dataframes(
-        reference=train_df_10k,
-        output=synth_df_10k,
+        training=training_df_10k,
+        synthetic=synthetic_df_10k,
         test=test_df,
         config=skip_privacy_metrics_config,
         column_statistics=column_statistics,
@@ -27,12 +27,22 @@ def test_render(train_df_10k, synth_df_10k, test_df, skip_privacy_metrics_config
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report.html")
     assert len(output) > 0
 
+    # Section headings rendered (catch wholesale template breakage)
+    assert "Dataset Statistics" in output
+    assert "Synthetic Quality Score" in output
+    assert "Training Data Columns" in output
+
+    # Dynamic values from Pydantic models made it into HTML (catch silent blanks
+    # from Jinja variable typos -- default Undefined renders as empty string)
+    assert "10000" in output
+    assert "Missing %" in output
+
 
 @pytest.mark.slow
-def test_render_dp_enabled(train_df_5k, synth_df_5k, test_df, dp_enabled_config, column_statistics):
+def test_render_dp_enabled(training_df_5k, synthetic_df_5k, test_df, dp_enabled_config, column_statistics):
     report = MultimodalReport.from_dataframes(
-        reference=train_df_5k,
-        output=synth_df_5k,
+        training=training_df_5k,
+        synthetic=synthetic_df_5k,
         test=test_df,
         config=dp_enabled_config,
         column_statistics=column_statistics,
@@ -42,12 +52,17 @@ def test_render_dp_enabled(train_df_5k, synth_df_5k, test_df, dp_enabled_config,
     assert output is not None
     assert len(output) > 0
 
+    assert "Dataset Statistics" in output
+    assert "Synthetic Quality Score" in output
+    assert "Data Privacy Score" in output
+    assert "5000" in output
+
 
 @pytest.mark.slow
-def test_render_dp_not_enabled(train_df_5k, synth_df_5k, test_df, dp_not_enabled_config, column_statistics):
+def test_render_dp_not_enabled(training_df_5k, synthetic_df_5k, test_df, dp_not_enabled_config, column_statistics):
     report = MultimodalReport.from_dataframes(
-        reference=train_df_5k,
-        output=synth_df_5k,
+        training=training_df_5k,
+        synthetic=synthetic_df_5k,
         test=test_df,
         config=dp_not_enabled_config,
         column_statistics=column_statistics,
@@ -56,3 +71,8 @@ def test_render_dp_not_enabled(train_df_5k, synth_df_5k, test_df, dp_not_enabled
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report_dp_not_enabled.html")
     assert output is not None
     assert len(output) > 0
+
+    assert "Dataset Statistics" in output
+    assert "Synthetic Quality Score" in output
+    assert "Data Privacy Score" in output
+    assert "5000" in output
