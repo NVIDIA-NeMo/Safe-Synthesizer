@@ -11,6 +11,9 @@ The pipeline splits your input data into two parts before any model training beg
 
 - Training data: the portion used for PII replacement, fine-tuning, and generation. This is the reference dataset for most evaluation metrics.
 - Test (holdout) data: a small portion (5% by default) withheld from training entirely. Used by Membership Inference Protection and Text Semantic Similarity to detect memorization.
+
+After generation, one new dataset is produced:
+
 - Synthetic data: the records produced by the fine-tuned model during the generation step.
 
 ```mermaid
