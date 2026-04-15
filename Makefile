@@ -4,6 +4,7 @@
 ### CONFIGURATION ###
 
 SHELL := /bin/bash
+export PATH := $(HOME)/.local/share/mise/shims:$(HOME)/.local/bin:$(PATH)
 UNAME_S := $(shell uname -s)
 ARCH := $(shell uname -m)
 PLATFORM := $(shell echo $(UNAME_S) | tr '[:upper:]' '[:lower:]')
@@ -30,6 +31,7 @@ PYTEST_CI_OPTS := --cov --cov-report json:coverage.json
 PYTEST_CMD := uv run --frozen pytest $(PYTEST_ADDOPTS)
 PYTEST_NO_XDIST_CMD := $(PYTEST_CMD) -n 0
 
+
 # Display platform info
 $(info local system architecture: $(PLATFORM)/$(ARCH))
 
@@ -45,19 +47,41 @@ help:
 
 ### BOOTSTRAP AND SETUP ###
 
-.PHONY: bootstrap-tools
-bootstrap-tools: ## Bootstrap tools
-	bash tools/binaries/bootstrap_tools.sh
-	@echo "tools bootstrapped successfully"
+MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
+MISE_VERSION := v2026.4.11
 
-.PHONY: bootstrap-tools-ci
-bootstrap-tools-ci: ## Bootstrap tools for CI
-	bash tools/binaries/bootstrap_tools.sh --bootstrap-only
+# install.sh.sig is a GPG clearsigned document (not a detached signature).
+# gpg --decrypt verifies the signature and extracts the script in one step.
+# See: https://mise.jdx.dev/installing-mise.html
+.PHONY: install-mise
+install-mise: ## Install mise (GPG-verified when gpg is available)
+	@command -v mise >/dev/null 2>&1 || { \
+		set -euo pipefail; \
+		echo "mise not found -- installing..."; \
+		if command -v gpg >/dev/null 2>&1; then \
+			echo "Verifying installer signature..."; \
+			gpg --batch --no-tty --keyserver hkps://keys.openpgp.org \
+				--recv-keys $(MISE_GPG_KEY); \
+			tmpscript=$$(mktemp) && \
+			curl -fsSL https://mise.jdx.dev/install.sh.sig \
+				| gpg --batch --no-tty --decrypt > "$$tmpscript" && \
+			sh "$$tmpscript" && \
+			rm -f "$$tmpscript"; \
+		else \
+			echo "WARNING: gpg not available -- installing without signature verification"; \
+			curl -fsSL https://mise.run | sh; \
+		fi; \
+		command -v mise >/dev/null 2>&1 || { echo "ERROR: mise not found after install"; exit 1; }; \
+	}
 
-.PHONY: install-uv
-install-uv: ## Install uv tool
-	bash tools/binaries/install_uv.sh
-	@echo "uv tool installed successfully"
+.PHONY: setup
+setup: install-mise ## Install dev tools via mise (installs mise itself if missing)
+	MISE_YES=1 mise trust
+	MISE_YES=1 mise install
+	@echo "tools installed successfully via mise"
+
+.PHONY: bootstrap-tools bootstrap-tools-ci
+bootstrap-tools bootstrap-tools-ci: setup ## (legacy alias) Bootstrap tools via mise
 
 .PHONY: clean-python
 clean-python: ## Remove python virtual environment
@@ -254,14 +278,37 @@ CONTAINER_TEST_IMAGE ?= nss-test:latest
 CONTAINER_TEST_FILE := containers/Dockerfile.test_ci
 CONTAINER_TEST_PLATFORM := linux/amd64
 
+CONTAINER_TEST_IMAGE_SETUP ?= nss-test-setup:latest
+
 CONTAINER_BUILD_ARGS ?= --platform $(CONTAINER_TEST_PLATFORM) \
-	--tag $(CONTAINER_TEST_IMAGE) \
 	--progress=plain \
 	-f $(CONTAINER_TEST_FILE)
 
 .PHONY: container-build-test
-container-build-test: ## Build the container image for running CI tests locally
-	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) .
+container-build-test: ## Build the full container image for running CI tests locally
+	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) --tag $(CONTAINER_TEST_IMAGE) .
+
+.PHONY: container-build-test-setup
+container-build-test-setup: ## Build only the setup stage (tools, no Python deps)
+	$(CONTAINER_CMD) build $(CONTAINER_BUILD_ARGS) --tag $(CONTAINER_TEST_IMAGE_SETUP) --target setup .
+
+.PHONY: test-tool-install
+test-tool-install: container-build-test-setup ## Verify mise-managed tools install correctly in a container
+	$(CONTAINER_CMD) run \
+		--rm \
+		--platform $(CONTAINER_TEST_PLATFORM) \
+		$(CONTAINER_TEST_IMAGE_SETUP) \
+		bash -c ' \
+			echo "=== Verifying installed tools ===" && \
+			mise --version && \
+			uv --version && \
+			ruff --version && \
+			ty --version && \
+			jq --version && \
+			yq --version && \
+			gh --version && \
+			osv-scanner --version && \
+			echo "=== All tools OK ==="'
 
 .PHONY: test-ci-container
 test-ci-container: container-build-test ## Run CI unit tests in a Linux container

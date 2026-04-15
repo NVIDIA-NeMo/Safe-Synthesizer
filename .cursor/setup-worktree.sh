@@ -21,7 +21,10 @@ uv sync --frozen
 echo "Venv ready: $(pwd)/.venv"
 echo "Note: for GPU extras run: uv sync --frozen --extra cu128 --extra engine --group dev"
 
-if [ -f "$ROOT_WORKTREE_PATH/.local.envrc" ]; then
-    cp "$ROOT_WORKTREE_PATH/.local.envrc" .local.envrc
-    echo "Copied .local.envrc from main worktree"
-fi
+for _envfile in .env .env.local mise.local.toml .local.envrc; do
+    if [ -f "$ROOT_WORKTREE_PATH/$_envfile" ]; then
+        cp "$ROOT_WORKTREE_PATH/$_envfile" "$_envfile"
+        echo "Copied $_envfile from main worktree"
+    fi
+done
+unset _envfile

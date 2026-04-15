@@ -16,8 +16,6 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=_lib.sh
 source "$REPO_ROOT/tools/codestyle/_lib.sh"
 
-require_tool ty
-
 if [[ $# -eq 0 ]]; then
     ty check
 else

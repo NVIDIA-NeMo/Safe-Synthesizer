@@ -15,16 +15,19 @@ set -eu
 # Ensure tools installed in ~/.local/bin (gh, glab, etc.) are on PATH.
 export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 
-if command -v mise >/dev/null 2>&1; then
+# Auto-trusting repo-local mise config is security-sensitive; only do it when
+# the caller opts in (or set MISE_TRUSTED_CONFIG_PATHS in your shell profile).
+if command -v mise >/dev/null 2>&1 && [ "${CURSOR_ALLOW_MISE_TRUST:-0}" = "1" ]; then
     mise trust --quiet 2>/dev/null || true
 fi
 
 # Source project-local env if present (API keys, secrets, etc.).
-for _envfile in .local.envrc .envrc.local .env.local; do
+# mise.local.toml, .env, and .env.local are loaded automatically by mise;
+# source them here as a fallback for hook contexts.
+for _envfile in .env .env.local .local.envrc; do
     if [ -f "$_envfile" ]; then
         # shellcheck disable=SC1090
         set -a && . "./$_envfile" && set +a
-        break
     fi
 done
 unset _envfile
