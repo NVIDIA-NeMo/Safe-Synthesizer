@@ -4043,14 +4043,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -8413,10 +8413,10 @@ to <code>MultimodalReport</code> and collecting timing information.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              Evaluator(config, generate_results, pii_replacer_time=None, column_statistics=None, train_df=None, test_df=None, workdir=None) (nemo_safe_synthesizer.evaluation.evaluator.Evaluator)" href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator">Evaluator</a></code></td>
+            <td><code><a class="autorefs autorefs-internal" title="              Evaluator(config, generate_results, pii_replacer_time=None, column_statistics=None, training_df=None, test_df=None, workdir=None) (nemo_safe_synthesizer.evaluation.evaluator.Evaluator)" href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator">Evaluator</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Orchestrates evaluation of synthetic data against reference data.</p>
+                <p>Orchestrates evaluation of synthetic data against training data.</p>
               </div>
             </td>
           </tr>
@@ -8444,7 +8444,7 @@ to <code>MultimodalReport</code> and collecting timing information.</p>
 
 
 <h3 id="nemo_safe_synthesizer.evaluation.evaluator.Evaluator" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">Evaluator</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">generate_results</span><span class="p">,</span> <span class="n">pii_replacer_time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">column_statistics</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">train_df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">test_df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">workdir</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">Evaluator</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">generate_results</span><span class="p">,</span> <span class="n">pii_replacer_time</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">column_statistics</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">training_df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">test_df</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">workdir</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#nemo_safe_synthesizer.evaluation.evaluator.Evaluator" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -8453,7 +8453,7 @@ to <code>MultimodalReport</code> and collecting timing information.</p>
 
 
 
-        <p>Orchestrates evaluation of synthetic data against reference data.</p>
+        <p>Orchestrates evaluation of synthetic data against training data.</p>
 <p>Computes quality and privacy metrics by delegating to
 <code>MultimodalReport</code>, which assembles individual evaluation
 components (distribution stability, correlation, PCA, text
@@ -8552,14 +8552,14 @@ or a raw <code>pd.DataFrame</code>.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>train_df</code>
+                <code>training_df</code>
             </td>
             <td>
                   <code><span title="pandas.DataFrame">DataFrame</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Reference (training) dataframe.</p>
+                <p>Training dataframe.</p>
               </div>
             </td>
             <td>
@@ -8662,7 +8662,7 @@ or a raw <code>pd.DataFrame</code>.</p>
 </span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a>    <span class="n">generate_results</span><span class="p">:</span> <span class="n">GenerateJobResults</span> <span class="o">|</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
 </span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a>    <span class="n">pii_replacer_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a>    <span class="n">column_statistics</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">ColumnStatistics</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>    <span class="n">train_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>    <span class="n">training_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a>    <span class="n">test_df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a>    <span class="n">workdir</span><span class="p">:</span> <span class="n">Workdir</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="p">):</span>
@@ -8670,7 +8670,7 @@ or a raw <code>pd.DataFrame</code>.</p>
 </span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span> <span class="o">=</span> <span class="n">generate_results</span>
 </span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">pii_replacer_time</span> <span class="o">=</span> <span class="n">pii_replacer_time</span>
 </span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_statistics</span> <span class="o">=</span> <span class="n">column_statistics</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">train_df</span> <span class="o">=</span> <span class="n">train_df</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">training_df</span> <span class="o">=</span> <span class="n">training_df</span>
 </span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">test_df</span> <span class="o">=</span> <span class="n">test_df</span>
 </span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">workdir</span> <span class="o">=</span> <span class="n">workdir</span>
 </span></code></pre></div></td></tr></table></div>
@@ -8736,8 +8736,8 @@ and <code>self.evaluation_time</code> with the elapsed wall-clock seconds.</p>
 </span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80"></a>    <span class="n">evaluation_start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
 </span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81"></a>    <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_results</span><span class="o">.</span><span class="n">df</span>
 </span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82"></a>    <span class="n">report</span> <span class="o">=</span> <span class="n">MultimodalReport</span><span class="o">.</span><span class="n">from_dataframes</span><span class="p">(</span>
-</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="n">reference</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">train_df</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
-</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>        <span class="n">output</span><span class="o">=</span><span class="n">output</span><span class="p">,</span>
+</span><span id="__span-0-83"><a id="__codelineno-0-83" name="__codelineno-0-83"></a>        <span class="n">training</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">training_df</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
+</span><span id="__span-0-84"><a id="__codelineno-0-84" name="__codelineno-0-84"></a>        <span class="n">synthetic</span><span class="o">=</span><span class="n">output</span><span class="p">,</span>
 </span><span id="__span-0-85"><a id="__codelineno-0-85" name="__codelineno-0-85"></a>        <span class="n">test</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test_df</span><span class="p">,</span>
 </span><span id="__span-0-86"><a id="__codelineno-0-86" name="__codelineno-0-86"></a>        <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">config</span><span class="p">,</span>
 </span><span id="__span-0-87"><a id="__codelineno-0-87" name="__codelineno-0-87"></a>        <span class="n">column_statistics</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">column_statistics</span><span class="p">,</span>

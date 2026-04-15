@@ -4577,14 +4577,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -9899,7 +9899,7 @@ utility.</p>
 <h2 id="generation">Generation<a class="headerlink" href="#generation" title="Permanent link">&para;</a></h2>
 <p>Produces synthetic records using the trained LoRA adapter via vLLM. The
 generation stage runs a sampling loop: the model generates batches of records,
-each record is validated against the original dataset schema (correct columns,
+each record is validated against the training dataset schema (correct columns,
 correct types, no malformed values), and valid records accumulate until
 <code>num_records</code> is reached. If too many consecutive batches produce mostly invalid
 records, the loop stops early.</p>

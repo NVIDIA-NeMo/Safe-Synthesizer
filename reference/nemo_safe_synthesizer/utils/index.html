@@ -4043,14 +4043,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../evaluation/data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -9578,7 +9578,7 @@ delegates to <code>holdout.grouped_train_test_split</code>.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Tuple of <code>(train_df, test_df)</code>, or <code>(train_df, None)</code> on</p>
+                <p>Tuple of <code>(training_df, test_df)</code>, or <code>(training_df, None)</code> on</p>
               </div>
             </td>
           </tr>
@@ -9643,7 +9643,7 @@ delegates to <code>holdout.grouped_train_test_split</code>.</p>
 </span><span id="__span-0-202"><a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">        seed: Random state for reproducibility.</span>
 </span><span id="__span-0-203"><a id="__codelineno-0-203" name="__codelineno-0-203"></a>
 </span><span id="__span-0-204"><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-205"><a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">        Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` on</span>
+</span><span id="__span-0-205"><a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">        Tuple of ``(training_df, test_df)``, or ``(training_df, None)`` on</span>
 </span><span id="__span-0-206"><a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">        failure.</span>
 </span><span id="__span-0-207"><a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">    &quot;&quot;&quot;</span>
 </span><span id="__span-0-208"><a id="__codelineno-0-208" name="__codelineno-0-208"></a>    <span class="c1"># Convert to pandas for group operations</span>
@@ -9652,7 +9652,7 @@ delegates to <code>holdout.grouped_train_test_split</code>.</p>
 </span><span id="__span-0-211"><a id="__codelineno-0-211" name="__codelineno-0-211"></a>    <span class="c1"># importing like this to avoid a dep for testing on the sdk side</span>
 </span><span id="__span-0-212"><a id="__codelineno-0-212" name="__codelineno-0-212"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">.holdout</span><span class="w"> </span><span class="kn">import</span> <span class="n">holdout</span> <span class="k">as</span> <span class="n">nss_holdout</span>
 </span><span id="__span-0-213"><a id="__codelineno-0-213" name="__codelineno-0-213"></a>
-</span><span id="__span-0-214"><a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="k">return</span> <span class="n">nss_holdout</span><span class="o">.</span><span class="n">grouped_train_test_split</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="n">test_size</span><span class="p">,</span> <span class="n">group_by</span><span class="o">=</span><span class="n">group_by</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
+</span><span id="__span-0-214"><a id="__codelineno-0-214" name="__codelineno-0-214"></a>    <span class="k">return</span> <span class="n">nss_holdout</span><span class="o">.</span><span class="n">grouped_train_test_split</span><span class="p">(</span><span class="n">input_df</span><span class="o">=</span><span class="n">df</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="n">test_size</span><span class="p">,</span> <span class="n">group_by</span><span class="o">=</span><span class="n">group_by</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>  <span class="c1"># ty: ignore[invalid-argument-type]</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

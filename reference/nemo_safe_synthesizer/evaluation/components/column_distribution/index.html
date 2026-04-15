@@ -3684,10 +3684,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_dataset" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_datasets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_dataset
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_datasets
       
     </span>
   </a>
@@ -4214,14 +4214,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -8352,10 +8352,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_dataset" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_datasets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_dataset
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_datasets
       
     </span>
   </a>
@@ -8801,10 +8801,10 @@
    (nemo_safe_synthesizer.evaluation.components.component.Component)" href="../component/#nemo_safe_synthesizer.evaluation.components.component.Component">Component</a></code></p>
 
         <p>Column Distribution Stability metric.</p>
-<p>Computes per-column Jensen-Shannon divergence between reference and
-output distributions, averages across all tabular columns, and maps
+<p>Computes per-column Jensen-Shannon divergence between training and
+synthetic distributions, averages across all tabular columns, and maps
 the result to a 0--10 score.  Also carries data for the per-column
-histogram figures and the Reference Columns table in the HTML report.</p>
+histogram figures and the Training Data Columns table in the HTML report.</p>
 
     
 
@@ -8939,14 +8939,14 @@ histogram figures and the Reference Columns table in the HTML report.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_dataset" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">from_evaluation_dataset</span><span class="p">(</span><span class="n">evaluation_dataset</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<h4 id="nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_datasets" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_dataset" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.evaluation.components.column_distribution.ColumnDistribution.from_evaluation_datasets" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -8977,25 +8977,25 @@ histogram figures and the Reference Columns table in the HTML report.</p>
 <span class="normal"><a href="#__codelineno-0-141">141</a></span>
 <span class="normal"><a href="#__codelineno-0-142">142</a></span>
 <span class="normal"><a href="#__codelineno-0-143">143</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_dataset</span><span class="p">(</span>
-</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>    <span class="n">evaluation_dataset</span><span class="p">:</span> <span class="n">EvaluationDataset</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_datasets</span><span class="p">(</span>
+</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>    <span class="n">evaluation_datasets</span><span class="p">:</span> <span class="n">EvaluationDatasets</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-0-126"><a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ColumnDistribution</span><span class="p">:</span>
 </span><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute column distribution stability from the evaluation dataset.&quot;&quot;&quot;</span>
-</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>    <span class="n">tabular_columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">get_tabular_columns</span><span class="p">())</span>
-</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a>    <span class="n">tabular_fields</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">evaluation_fields</span> <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">tabular_columns</span><span class="p">]</span>
+</span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>    <span class="n">tabular_columns</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">get_tabular_columns</span><span class="p">())</span>
+</span><span id="__span-0-129"><a id="__codelineno-0-129" name="__codelineno-0-129"></a>    <span class="n">tabular_fields</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">evaluation_fields</span> <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">tabular_columns</span><span class="p">]</span>
 </span><span id="__span-0-130"><a id="__codelineno-0-130" name="__codelineno-0-130"></a>    <span class="k">if</span> <span class="n">tabular_fields</span><span class="p">:</span>
 </span><span id="__span-0-131"><a id="__codelineno-0-131" name="__codelineno-0-131"></a>        <span class="n">average_divergence</span> <span class="o">=</span> <span class="n">EvaluationField</span><span class="o">.</span><span class="n">get_average_divergence</span><span class="p">(</span><span class="n">tabular_fields</span><span class="p">)</span>
 </span><span id="__span-0-132"><a id="__codelineno-0-132" name="__codelineno-0-132"></a>        <span class="n">score</span> <span class="o">=</span> <span class="n">EvaluationField</span><span class="o">.</span><span class="n">get_field_distribution_stability</span><span class="p">(</span><span class="n">average_divergence</span><span class="p">)</span>
 </span><span id="__span-0-133"><a id="__codelineno-0-133" name="__codelineno-0-133"></a>        <span class="k">return</span> <span class="n">ColumnDistribution</span><span class="p">(</span>
 </span><span id="__span-0-134"><a id="__codelineno-0-134" name="__codelineno-0-134"></a>            <span class="n">score</span><span class="o">=</span><span class="n">score</span><span class="p">,</span>
-</span><span id="__span-0-135"><a id="__codelineno-0-135" name="__codelineno-0-135"></a>            <span class="n">column_statistics</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">column_statistics</span><span class="p">,</span>
-</span><span id="__span-0-136"><a id="__codelineno-0-136" name="__codelineno-0-136"></a>            <span class="n">evaluation_fields</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">evaluation_fields</span><span class="p">,</span>
+</span><span id="__span-0-135"><a id="__codelineno-0-135" name="__codelineno-0-135"></a>            <span class="n">column_statistics</span><span class="o">=</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">column_statistics</span><span class="p">,</span>
+</span><span id="__span-0-136"><a id="__codelineno-0-136" name="__codelineno-0-136"></a>            <span class="n">evaluation_fields</span><span class="o">=</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">evaluation_fields</span><span class="p">,</span>
 </span><span id="__span-0-137"><a id="__codelineno-0-137" name="__codelineno-0-137"></a>        <span class="p">)</span>
 </span><span id="__span-0-138"><a id="__codelineno-0-138" name="__codelineno-0-138"></a>    <span class="k">else</span><span class="p">:</span>
 </span><span id="__span-0-139"><a id="__codelineno-0-139" name="__codelineno-0-139"></a>        <span class="k">return</span> <span class="n">ColumnDistribution</span><span class="p">(</span>
 </span><span id="__span-0-140"><a id="__codelineno-0-140" name="__codelineno-0-140"></a>            <span class="n">score</span><span class="o">=</span><span class="n">EvaluationScore</span><span class="p">(</span><span class="n">notes</span><span class="o">=</span><span class="s2">&quot;No tabular columns detected.&quot;</span><span class="p">),</span>
-</span><span id="__span-0-141"><a id="__codelineno-0-141" name="__codelineno-0-141"></a>            <span class="n">column_statistics</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">column_statistics</span><span class="p">,</span>
-</span><span id="__span-0-142"><a id="__codelineno-0-142" name="__codelineno-0-142"></a>            <span class="n">evaluation_fields</span><span class="o">=</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">evaluation_fields</span><span class="p">,</span>
+</span><span id="__span-0-141"><a id="__codelineno-0-141" name="__codelineno-0-141"></a>            <span class="n">column_statistics</span><span class="o">=</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">column_statistics</span><span class="p">,</span>
+</span><span id="__span-0-142"><a id="__codelineno-0-142" name="__codelineno-0-142"></a>            <span class="n">evaluation_fields</span><span class="o">=</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">evaluation_fields</span><span class="p">,</span>
 </span><span id="__span-0-143"><a id="__codelineno-0-143" name="__codelineno-0-143"></a>        <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>

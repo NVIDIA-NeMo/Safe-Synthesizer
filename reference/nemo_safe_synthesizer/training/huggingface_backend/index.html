@@ -4043,14 +4043,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -9199,7 +9199,7 @@ passed directly to <code>AutoModelForCausalLM.from_pretrained()</code>.</p>
 <p>Runs auto-config resolution, time-series processing, groupby /
 orderby validation, and assembles tokenized training examples.
 Populates <code>training_examples</code>, <code>dataset_schema</code>,
-<code>df_train</code>, and <code>data_fraction</code>.</p>
+<code>training_df</code>, and <code>data_fraction</code>.</p>
 
 
 <p><span class="doc-section-title">Raises:</span></p>
@@ -9295,7 +9295,7 @@ Populates <code>training_examples</code>, <code>dataset_schema</code>,
 </span><span id="__span-0-667"><a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">    Runs auto-config resolution, time-series processing, groupby /</span>
 </span><span id="__span-0-668"><a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">    orderby validation, and assembles tokenized training examples.</span>
 </span><span id="__span-0-669"><a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">    Populates ``training_examples``, ``dataset_schema``,</span>
-</span><span id="__span-0-670"><a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">    ``df_train``, and ``data_fraction``.</span>
+</span><span id="__span-0-670"><a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">    ``training_df``, and ``data_fraction``.</span>
 </span><span id="__span-0-671"><a id="__codelineno-0-671" name="__codelineno-0-671"></a>
 </span><span id="__span-0-672"><a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">    Raises:</span>
 </span><span id="__span-0-673"><a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">        DataError: If the training dataset is missing or malformed.</span>
@@ -9305,28 +9305,28 @@ Populates <code>training_examples</code>, <code>dataset_schema</code>,
 </span><span id="__span-0-677"><a id="__codelineno-0-677" name="__codelineno-0-677"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training_dataset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-678"><a id="__codelineno-0-678" name="__codelineno-0-678"></a>        <span class="k">raise</span> <span class="n">DataError</span><span class="p">(</span><span class="s2">&quot;training_dataset must be set before preparing training data&quot;</span><span class="p">)</span>
 </span><span id="__span-0-679"><a id="__codelineno-0-679" name="__codelineno-0-679"></a>
-</span><span id="__span-0-680"><a id="__codelineno-0-680" name="__codelineno-0-680"></a>    <span class="n">df_all</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">training_dataset</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
-</span><span id="__span-0-681"><a id="__codelineno-0-681" name="__codelineno-0-681"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">df_all</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
+</span><span id="__span-0-680"><a id="__codelineno-0-680" name="__codelineno-0-680"></a>    <span class="n">training_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">training_dataset</span><span class="o">.</span><span class="n">to_pandas</span><span class="p">()</span>
+</span><span id="__span-0-681"><a id="__codelineno-0-681" name="__codelineno-0-681"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">training_df</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
 </span><span id="__span-0-682"><a id="__codelineno-0-682" name="__codelineno-0-682"></a>        <span class="k">raise</span> <span class="n">DataError</span><span class="p">(</span><span class="s2">&quot;Expected DataFrame from to_pandas(), got an iterator&quot;</span><span class="p">)</span>
 </span><span id="__span-0-683"><a id="__codelineno-0-683" name="__codelineno-0-683"></a>
-</span><span id="__span-0-684"><a id="__codelineno-0-684" name="__codelineno-0-684"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">AutoConfigResolver</span><span class="p">(</span><span class="n">df_all</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+</span><span id="__span-0-684"><a id="__codelineno-0-684" name="__codelineno-0-684"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">AutoConfigResolver</span><span class="p">(</span><span class="n">training_df</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
 </span><span id="__span-0-685"><a id="__codelineno-0-685" name="__codelineno-0-685"></a>
 </span><span id="__span-0-686"><a id="__codelineno-0-686" name="__codelineno-0-686"></a>    <span class="c1"># Validate groupby/orderby parameters as a preprocessing step.</span>
-</span><span id="__span-0-687"><a id="__codelineno-0-687" name="__codelineno-0-687"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_validate_groupby_column</span><span class="p">(</span><span class="n">df_all</span><span class="p">)</span>
-</span><span id="__span-0-688"><a id="__codelineno-0-688" name="__codelineno-0-688"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_validate_orderby_column</span><span class="p">(</span><span class="n">df_all</span><span class="p">)</span>
+</span><span id="__span-0-687"><a id="__codelineno-0-687" name="__codelineno-0-687"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_validate_groupby_column</span><span class="p">(</span><span class="n">training_df</span><span class="p">)</span>
+</span><span id="__span-0-688"><a id="__codelineno-0-688" name="__codelineno-0-688"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_validate_orderby_column</span><span class="p">(</span><span class="n">training_df</span><span class="p">)</span>
 </span><span id="__span-0-689"><a id="__codelineno-0-689" name="__codelineno-0-689"></a>
 </span><span id="__span-0-690"><a id="__codelineno-0-690" name="__codelineno-0-690"></a>    <span class="c1"># Process time series data (sort by timestamp, infer intervals, etc.)</span>
-</span><span id="__span-0-691"><a id="__codelineno-0-691" name="__codelineno-0-691"></a>    <span class="n">df_all</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_timeseries</span><span class="p">(</span><span class="n">df_all</span><span class="p">)</span>
+</span><span id="__span-0-691"><a id="__codelineno-0-691" name="__codelineno-0-691"></a>    <span class="n">training_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process_timeseries</span><span class="p">(</span><span class="n">training_df</span><span class="p">)</span>
 </span><span id="__span-0-692"><a id="__codelineno-0-692" name="__codelineno-0-692"></a>
-</span><span id="__span-0-693"><a id="__codelineno-0-693" name="__codelineno-0-693"></a>    <span class="n">df_train</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_preprocessing</span><span class="p">(</span><span class="n">df_all</span><span class="p">)</span>
-</span><span id="__span-0-694"><a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="n">df_test</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-693"><a id="__codelineno-0-693" name="__codelineno-0-693"></a>    <span class="n">training_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_preprocessing</span><span class="p">(</span><span class="n">training_df</span><span class="p">)</span>
+</span><span id="__span-0-694"><a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="n">test_df</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-0-695"><a id="__codelineno-0-695" name="__codelineno-0-695"></a>
-</span><span id="__span-0-696"><a id="__codelineno-0-696" name="__codelineno-0-696"></a>    <span class="n">hf_dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">df_train</span><span class="p">,</span> <span class="n">preserve_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="__span-0-696"><a id="__codelineno-0-696" name="__codelineno-0-696"></a>    <span class="n">hf_dataset</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_pandas</span><span class="p">(</span><span class="n">training_df</span><span class="p">,</span> <span class="n">preserve_index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-0-697"><a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="c1"># Exclude PSEUDO_GROUP_COLUMN from schema (internal column for ungrouped time series)</span>
-</span><span id="__span-0-698"><a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="n">schema_df</span> <span class="o">=</span> <span class="n">df_train</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="n">PSEUDO_GROUP_COLUMN</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span>
+</span><span id="__span-0-698"><a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="n">schema_df</span> <span class="o">=</span> <span class="n">training_df</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="n">PSEUDO_GROUP_COLUMN</span><span class="p">],</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span>
 </span><span id="__span-0-699"><a id="__codelineno-0-699" name="__codelineno-0-699"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">dataset_schema</span> <span class="o">=</span> <span class="n">make_json_schema</span><span class="p">(</span><span class="n">schema_df</span><span class="p">)</span>
-</span><span id="__span-0-700"><a id="__codelineno-0-700" name="__codelineno-0-700"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">df_train</span> <span class="o">=</span> <span class="n">df_train</span>
-</span><span id="__span-0-701"><a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">df_test</span> <span class="o">=</span> <span class="n">df_test</span>
+</span><span id="__span-0-700"><a id="__codelineno-0-700" name="__codelineno-0-700"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">training_df</span> <span class="o">=</span> <span class="n">training_df</span>
+</span><span id="__span-0-701"><a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">test_df</span> <span class="o">=</span> <span class="n">test_df</span>
 </span><span id="__span-0-702"><a id="__codelineno-0-702" name="__codelineno-0-702"></a>
 </span><span id="__span-0-703"><a id="__codelineno-0-703" name="__codelineno-0-703"></a>    <span class="n">assembler</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_example_assembler</span><span class="p">(</span><span class="n">hf_dataset</span><span class="p">)</span>
 </span><span id="__span-0-704"><a id="__codelineno-0-704" name="__codelineno-0-704"></a>
@@ -9348,7 +9348,7 @@ Populates <code>training_examples</code>, <code>dataset_schema</code>,
 </span><span id="__span-0-720"><a id="__codelineno-0-720" name="__codelineno-0-720"></a>
 </span><span id="__span-0-721"><a id="__codelineno-0-721" name="__codelineno-0-721"></a>    <span class="c1"># This info is needed inside the trainer for DP</span>
 </span><span id="__span-0-722"><a id="__codelineno-0-722" name="__codelineno-0-722"></a>    <span class="c1"># Number of records, if group_training_examples_by is None, or else number of groups</span>
-</span><span id="__span-0-723"><a id="__codelineno-0-723" name="__codelineno-0-723"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">true_dataset_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">assembler</span><span class="o">.</span><span class="n">train_dataset</span><span class="p">)</span>
+</span><span id="__span-0-723"><a id="__codelineno-0-723" name="__codelineno-0-723"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">true_dataset_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">assembler</span><span class="o">.</span><span class="n">training_dataset</span><span class="p">)</span>
 </span><span id="__span-0-724"><a id="__codelineno-0-724" name="__codelineno-0-724"></a>
 </span><span id="__span-0-725"><a id="__codelineno-0-725" name="__codelineno-0-725"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">time_series</span><span class="o">.</span><span class="n">is_timeseries</span><span class="p">:</span>
 </span><span id="__span-0-726"><a id="__codelineno-0-726" name="__codelineno-0-726"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">model_metadata</span><span class="o">.</span><span class="n">initial_prefill</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">_get_initial_prefill</span><span class="p">()</span>  <span class="c1"># ty: ignore[unresolved-attribute]</span>
@@ -9423,8 +9423,8 @@ Populates <code>training_examples</code>, <code>dataset_schema</code>,
 </span><span id="__span-0-745"><a id="__codelineno-0-745" name="__codelineno-0-745"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">save_model</span><span class="p">()</span>
 </span><span id="__span-0-746"><a id="__codelineno-0-746" name="__codelineno-0-746"></a>
 </span><span id="__span-0-747"><a id="__codelineno-0-747" name="__codelineno-0-747"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">results</span> <span class="o">=</span> <span class="n">NSSTrainerResult</span><span class="p">(</span>
-</span><span id="__span-0-748"><a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="n">df_train</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">df_train</span><span class="p">,</span>
-</span><span id="__span-0-749"><a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="n">df_ml_utility_holdout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">df_test</span><span class="p">,</span>
+</span><span id="__span-0-748"><a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="n">training_df</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">training_df</span><span class="p">,</span>
+</span><span id="__span-0-749"><a id="__codelineno-0-749" name="__codelineno-0-749"></a>        <span class="n">df_ml_utility_holdout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">test_df</span><span class="p">,</span>
 </span><span id="__span-0-750"><a id="__codelineno-0-750" name="__codelineno-0-750"></a>        <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="p">,</span>
 </span><span id="__span-0-751"><a id="__codelineno-0-751" name="__codelineno-0-751"></a>        <span class="n">training_complete</span><span class="o">=</span><span class="n">is_complete</span><span class="p">,</span>
 </span><span id="__span-0-752"><a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="n">log_history</span><span class="o">=</span><span class="n">log_history</span><span class="p">,</span>

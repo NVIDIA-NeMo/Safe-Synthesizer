@@ -4125,10 +4125,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_dataset" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_datasets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_dataset
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_datasets
       
     </span>
   </a>
@@ -4291,14 +4291,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -8506,10 +8506,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_dataset" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_datasets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_dataset
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;from_evaluation_datasets
       
     </span>
   </a>
@@ -8978,7 +8978,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Number of text values appearing in both reference and synthetic series. Populated on the synthetic instance only; 0 on reference.</p>
+        <p>Number of text values appearing in both training and synthetic series. Populated on the synthetic instance only; 0 on training.</p>
 
     </div>
 
@@ -9132,7 +9132,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>JS-divergence-based similarity score comparing reference and synthetic structure. Populated on the synthetic instance only.</p>
+        <p>JS-divergence-based similarity score comparing training and synthetic structure. Populated on the synthetic instance only.</p>
 
     </div>
 
@@ -9175,7 +9175,7 @@
 
         <p>Text Structure Similarity metric.</p>
 <p>Compares per-record sentence count, words-per-sentence, and
-characters-per-word distributions between reference and output
+characters-per-word distributions between training and synthetic
 text columns using Jensen-Shannon divergence.</p>
 
     
@@ -9254,7 +9254,7 @@ text columns using Jensen-Shannon divergence.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Per-column text structure statistics for the reference data.</p>
+        <p>Per-column text structure statistics for the training data.</p>
 
     </div>
 
@@ -9311,14 +9311,14 @@ text columns using Jensen-Shannon divergence.</p>
 <div class="doc doc-object doc-function">
 
 
-<h4 id="nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_dataset" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">from_evaluation_dataset</span><span class="p">(</span><span class="n">evaluation_dataset</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<h4 id="nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_datasets" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">from_evaluation_datasets</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_dataset" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.evaluation.components.text_structure_similarity.TextStructureSimilarity.from_evaluation_datasets" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -9389,17 +9389,17 @@ text columns using Jensen-Shannon divergence.</p>
 <span class="normal"><a href="#__codelineno-0-153">153</a></span>
 <span class="normal"><a href="#__codelineno-0-154">154</a></span>
 <span class="normal"><a href="#__codelineno-0-155">155</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-95"><a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="nd">@staticmethod</span>
-</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_dataset</span><span class="p">(</span>
-</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="n">evaluation_dataset</span><span class="p">:</span> <span class="n">EvaluationDataset</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-96"><a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_evaluation_datasets</span><span class="p">(</span>
+</span><span id="__span-0-97"><a id="__codelineno-0-97" name="__codelineno-0-97"></a>    <span class="n">evaluation_datasets</span><span class="p">:</span> <span class="n">EvaluationDatasets</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">SafeSynthesizerParameters</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 </span><span id="__span-0-98"><a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TextStructureSimilarity</span><span class="p">:</span>
 </span><span id="__span-0-99"><a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute text structure similarity across all text columns.&quot;&quot;&quot;</span>
 </span><span id="__span-0-100"><a id="__codelineno-0-100" name="__codelineno-0-100"></a>    <span class="n">text_fields</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="n">f</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">evaluation_fields</span> <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">reference_field_features</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">FieldType</span><span class="o">.</span><span class="n">TEXT</span>
+</span><span id="__span-0-101"><a id="__codelineno-0-101" name="__codelineno-0-101"></a>        <span class="n">f</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">evaluation_fields</span> <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">training_field_features</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">FieldType</span><span class="o">.</span><span class="n">TEXT</span>
 </span><span id="__span-0-102"><a id="__codelineno-0-102" name="__codelineno-0-102"></a>    <span class="p">]</span>
 </span><span id="__span-0-103"><a id="__codelineno-0-103" name="__codelineno-0-103"></a>
-</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="n">training</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span>
-</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="n">synthetic</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span>
-</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">nrows</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span><span class="p">))</span>
+</span><span id="__span-0-104"><a id="__codelineno-0-104" name="__codelineno-0-104"></a>    <span class="n">training_df</span> <span class="o">=</span> <span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">training</span>
+</span><span id="__span-0-105"><a id="__codelineno-0-105" name="__codelineno-0-105"></a>    <span class="n">synthetic_df</span> <span class="o">=</span> <span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">synthetic</span>
+</span><span id="__span-0-106"><a id="__codelineno-0-106" name="__codelineno-0-106"></a>    <span class="n">nrows</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">training</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">synthetic</span><span class="p">))</span>
 </span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>
 </span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>    <span class="c1"># Initialize a stub instance before trying anything.</span>
 </span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="n">training_statistics_dict</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
@@ -9408,17 +9408,17 @@ text columns using Jensen-Shannon divergence.</p>
 </span><span id="__span-0-112"><a id="__codelineno-0-112" name="__codelineno-0-112"></a>    <span class="k">try</span><span class="p">:</span>
 </span><span id="__span-0-113"><a id="__codelineno-0-113" name="__codelineno-0-113"></a>        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">text_fields</span><span class="p">:</span>
 </span><span id="__span-0-114"><a id="__codelineno-0-114" name="__codelineno-0-114"></a>            <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>                <span class="n">training</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">reference</span><span class="p">[</span><span class="n">field</span><span class="p">]</span>
-</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>                <span class="n">synthetic</span> <span class="o">=</span> <span class="n">evaluation_dataset</span><span class="o">.</span><span class="n">output</span><span class="p">[</span><span class="n">field</span><span class="p">]</span>
+</span><span id="__span-0-115"><a id="__codelineno-0-115" name="__codelineno-0-115"></a>                <span class="n">training_df</span> <span class="o">=</span> <span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">training</span><span class="p">[</span><span class="n">field</span><span class="p">]</span>
+</span><span id="__span-0-116"><a id="__codelineno-0-116" name="__codelineno-0-116"></a>                <span class="n">synthetic_df</span> <span class="o">=</span> <span class="n">evaluation_datasets</span><span class="o">.</span><span class="n">synthetic</span><span class="p">[</span><span class="n">field</span><span class="p">]</span>
 </span><span id="__span-0-117"><a id="__codelineno-0-117" name="__codelineno-0-117"></a>
-</span><span id="__span-0-118"><a id="__codelineno-0-118" name="__codelineno-0-118"></a>                <span class="n">training</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_preprocess_text_data</span><span class="p">(</span><span class="n">training</span><span class="p">,</span> <span class="n">nrows</span><span class="p">)</span>
-</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a>                <span class="n">synthetic</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_preprocess_text_data</span><span class="p">(</span><span class="n">synthetic</span><span class="p">,</span> <span class="n">nrows</span><span class="p">)</span>
+</span><span id="__span-0-118"><a id="__codelineno-0-118" name="__codelineno-0-118"></a>                <span class="n">training_df</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_preprocess_text_data</span><span class="p">(</span><span class="n">training_df</span><span class="p">,</span> <span class="n">nrows</span><span class="p">)</span>
+</span><span id="__span-0-119"><a id="__codelineno-0-119" name="__codelineno-0-119"></a>                <span class="n">synthetic_df</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_preprocess_text_data</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">,</span> <span class="n">nrows</span><span class="p">)</span>
 </span><span id="__span-0-120"><a id="__codelineno-0-120" name="__codelineno-0-120"></a>
 </span><span id="__span-0-121"><a id="__codelineno-0-121" name="__codelineno-0-121"></a>                <span class="c1"># Text statistics.</span>
-</span><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a>                <span class="n">training_statistics</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_get_text_statistics</span><span class="p">(</span><span class="n">training</span><span class="p">)</span>
-</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>                <span class="n">synthetic_statistics</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_get_text_statistics</span><span class="p">(</span><span class="n">synthetic</span><span class="p">)</span>
+</span><span id="__span-0-122"><a id="__codelineno-0-122" name="__codelineno-0-122"></a>                <span class="n">training_statistics</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_get_text_statistics</span><span class="p">(</span><span class="n">training_df</span><span class="p">)</span>
+</span><span id="__span-0-123"><a id="__codelineno-0-123" name="__codelineno-0-123"></a>                <span class="n">synthetic_statistics</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_get_text_statistics</span><span class="p">(</span><span class="n">synthetic_df</span><span class="p">)</span>
 </span><span id="__span-0-124"><a id="__codelineno-0-124" name="__codelineno-0-124"></a>                <span class="n">synthetic_statistics</span><span class="o">.</span><span class="n">duplicate_lines</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_count_duplicate_lines</span><span class="p">(</span>
-</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>                    <span class="n">training</span><span class="p">,</span> <span class="n">synthetic</span>
+</span><span id="__span-0-125"><a id="__codelineno-0-125" name="__codelineno-0-125"></a>                    <span class="n">training_df</span><span class="p">,</span> <span class="n">synthetic_df</span>
 </span><span id="__span-0-126"><a id="__codelineno-0-126" name="__codelineno-0-126"></a>                <span class="p">)</span>
 </span><span id="__span-0-127"><a id="__codelineno-0-127" name="__codelineno-0-127"></a>
 </span><span id="__span-0-128"><a id="__codelineno-0-128" name="__codelineno-0-128"></a>                <span class="n">synthetic_statistics</span><span class="o">.</span><span class="n">text_statistic_score</span> <span class="o">=</span> <span class="n">TextStructureSimilarity</span><span class="o">.</span><span class="n">_get_text_statistics_score</span><span class="p">(</span>

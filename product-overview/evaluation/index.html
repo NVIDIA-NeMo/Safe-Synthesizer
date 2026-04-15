@@ -4292,14 +4292,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -8601,9 +8601,23 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
 <h1 id="evaluation">Evaluation<a class="headerlink" href="#evaluation" title="Permanent link">&para;</a></h1>
-<p>Evaluation is a critical component of Safe Synthesizer that helps you understand both the utility and privacy of your synthetic data. The evaluation step is enabled by default and provides comprehensive reports comparing your training and synthetic datasets across multiple dimensions.</p>
+<p>Evaluation is a critical component of Safe Synthesizer that helps you understand both the utility and privacy of your synthetic data. The evaluation step is enabled by default and provides comprehensive reports comparing your input and synthetic datasets across multiple dimensions.</p>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
-<p>The evaluation system compares your training and synthetic datasets using two main frameworks:</p>
+<p>The pipeline splits your input data into two parts before any model training begins:</p>
+<ul>
+<li>Training data: the portion used for PII replacement, fine-tuning, and generation. This is the reference dataset for most evaluation metrics.</li>
+<li>Test (holdout) data: a small portion (5% by default) withheld from training entirely. Used by Membership Inference Protection and Text Semantic Similarity to detect memorization.</li>
+<li>Synthetic data: the records produced by the fine-tuned model during the generation step.</li>
+</ul>
+<pre class="mermaid"><code>flowchart LR
+    data[("Input Data")]
+    data --&gt; split{"Train / Test\nSplit"}
+    split -- "Training\nSplit" --&gt; pipeline["PII Replacement\n→ Assemble\n→ Fine-tune\n→ Generate"]
+    split -. "Test (holdout)\nSplit" .-&gt; evaluate
+    pipeline --&gt; synthetic[("Synthetic\nData")]
+    synthetic --&gt; evaluate["Evaluate"]
+    split -- "Training Split" --&gt; evaluate</code></pre>
+<p>The evaluation system compares these datasets using two main frameworks:</p>
 <ol>
 <li>Synthetic Quality Score (SQS): measures how well the synthetic data preserves statistical properties and utility</li>
 <li>Data Privacy Score (DPS): assesses privacy protection and resistance to various attack vectors</li>
@@ -8614,8 +8628,8 @@
 <p>SQS comprises five metrics:</p>
 <ul>
 <li>Column Correlation Stability: analyzes correlations across every pair of columns</li>
-<li>Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the original and synthetic data</li>
-<li>Column Distribution Stability: compares the distribution for each column in the original data to its counterpart in the synthetic data</li>
+<li>Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the training and synthetic data</li>
+<li>Column Distribution Stability: compares the distribution for each column in the training data to its counterpart in the synthetic data</li>
 <li>Text Structure Similarity: compares sentence, word, and character counts across the two datasets</li>
 <li>Text Semantic Similarity: determines whether the semantic meaning of the text is preserved after synthesis</li>
 </ul>
@@ -8638,7 +8652,7 @@
 <ul>
 <li>Membership Inference Protection: tests whether attackers can determine if specific records were in the training data</li>
 <li>Attribute Inference Protection: assesses whether sensitive attributes can be inferred from synthetic data</li>
-<li>PII Replay: evaluates the frequency with which sensitive values from the original data appear in the synthetic version</li>
+<li>PII Replay: evaluates the frequency with which sensitive values from the training data appear in the synthetic version</li>
 </ul>
 <p>We average the first two to provide an overall DPS. We do not factor PII Replay into DPS; you should analyze it separately. Read more about these privacy metrics <a href="https://arxiv.org/abs/2501.03941">here</a>.</p>
 <h3 id="membership-inference-protection">Membership Inference Protection<a class="headerlink" href="#membership-inference-protection" title="Permanent link">&para;</a></h3>

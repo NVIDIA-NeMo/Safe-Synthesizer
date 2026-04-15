@@ -4043,14 +4043,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/evaluation_dataset/" class="md-nav__link">
+      <a href="../../evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    evaluation_dataset
+    evaluation_datasets
   
 
     
@@ -7807,10 +7807,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.df_train" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.training_df" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;df_train
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;training_df
       
     </span>
   </a>
@@ -7945,10 +7945,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_train" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.training_df" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;df_train
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;training_df
       
     </span>
   </a>
@@ -7956,10 +7956,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_test" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.test_df" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;df_test
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;test_df
       
     </span>
   </a>
@@ -8577,10 +8577,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.df_train" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.training_df" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;df_train
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;training_df
       
     </span>
   </a>
@@ -8715,10 +8715,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_train" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.training_df" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;df_train
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;training_df
       
     </span>
   </a>
@@ -8726,10 +8726,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_test" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.test_df" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;df_test
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;test_df
       
     </span>
   </a>
@@ -9100,7 +9100,7 @@ completed training run.</p>
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="              NSSTrainerResult(training_complete, config, log_history, adapter_path, df_train, df_ml_utility_holdout, elapsed_time)
+            <td><code><a class="autorefs autorefs-internal" title="              NSSTrainerResult(training_complete, config, log_history, adapter_path, training_df, df_ml_utility_holdout, elapsed_time)
 
   
       dataclass
@@ -9143,7 +9143,7 @@ completed training run.</p>
 
 
 <h3 id="nemo_safe_synthesizer.training.backend.NSSTrainerResult" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NSSTrainerResult</span><span class="p">(</span><span class="n">training_complete</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">log_history</span><span class="p">,</span> <span class="n">adapter_path</span><span class="p">,</span> <span class="n">df_train</span><span class="p">,</span> <span class="n">df_ml_utility_holdout</span><span class="p">,</span> <span class="n">elapsed_time</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NSSTrainerResult</span><span class="p">(</span><span class="n">training_complete</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">log_history</span><span class="p">,</span> <span class="n">adapter_path</span><span class="p">,</span> <span class="n">training_df</span><span class="p">,</span> <span class="n">df_ml_utility_holdout</span><span class="p">,</span> <span class="n">elapsed_time</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
@@ -9247,11 +9247,11 @@ completed training run.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            df_train
+            <td><code><a class="autorefs autorefs-internal" title="            training_df
 
   
       instance-attribute
-   (nemo_safe_synthesizer.training.backend.NSSTrainerResult.df_train)" href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.df_train">df_train</a></code></td>
+   (nemo_safe_synthesizer.training.backend.NSSTrainerResult.training_df)" href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.training_df">training_df</a></code></td>
             <td>
                   <code><span title="pandas.DataFrame">DataFrame</span></code>
             </td>
@@ -9397,14 +9397,14 @@ completed training run.</p>
 
 
 
-<h4 id="nemo_safe_synthesizer.training.backend.NSSTrainerResult.df_train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">df_train</span></code>
+<h4 id="nemo_safe_synthesizer.training.backend.NSSTrainerResult.training_df" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">training_df</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.df_train" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.training.backend.NSSTrainerResult.training_df" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -9960,7 +9960,7 @@ tokenization in <code>prepare_training_data</code>.</p>
       instance-attribute
    (nemo_safe_synthesizer.training.backend.TrainingBackend.results)" href="#nemo_safe_synthesizer.training.backend.TrainingBackend.results">results</a></code></td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="              NSSTrainerResult(training_complete, config, log_history, adapter_path, df_train, df_ml_utility_holdout, elapsed_time)
+                  <code><a class="autorefs autorefs-internal" title="              NSSTrainerResult(training_complete, config, log_history, adapter_path, training_df, df_ml_utility_holdout, elapsed_time)
 
   
       dataclass
@@ -9992,11 +9992,11 @@ tokenization in <code>prepare_training_data</code>.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            df_train
+            <td><code><a class="autorefs autorefs-internal" title="            training_df
 
   
       instance-attribute
-   (nemo_safe_synthesizer.training.backend.TrainingBackend.df_train)" href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_train">df_train</a></code></td>
+   (nemo_safe_synthesizer.training.backend.TrainingBackend.training_df)" href="#nemo_safe_synthesizer.training.backend.TrainingBackend.training_df">training_df</a></code></td>
             <td>
                   <code><span title="pandas.DataFrame">DataFrame</span></code>
             </td>
@@ -10007,11 +10007,11 @@ tokenization in <code>prepare_training_data</code>.</p>
             </td>
           </tr>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            df_test
+            <td><code><a class="autorefs autorefs-internal" title="            test_df
 
   
       instance-attribute
-   (nemo_safe_synthesizer.training.backend.TrainingBackend.df_test)" href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_test">df_test</a></code></td>
+   (nemo_safe_synthesizer.training.backend.TrainingBackend.test_df)" href="#nemo_safe_synthesizer.training.backend.TrainingBackend.test_df">test_df</a></code></td>
             <td>
                   <code><span title="pandas.DataFrame">DataFrame</span> | None</code>
             </td>
@@ -10389,14 +10389,14 @@ tokenization in <code>prepare_training_data</code>.</p>
 
 
 
-<h4 id="nemo_safe_synthesizer.training.backend.TrainingBackend.df_train" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">df_train</span></code>
+<h4 id="nemo_safe_synthesizer.training.backend.TrainingBackend.training_df" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">training_df</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_train" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.training_df" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -10411,14 +10411,14 @@ tokenization in <code>prepare_training_data</code>.</p>
 
 
 
-<h4 id="nemo_safe_synthesizer.training.backend.TrainingBackend.df_test" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">df_test</span></code>
+<h4 id="nemo_safe_synthesizer.training.backend.TrainingBackend.test_df" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">test_df</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.df_test" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.training.backend.TrainingBackend.test_df" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
@@ -10605,7 +10605,7 @@ tokenization in <code>prepare_training_data</code>.</p>
 <p>Runs auto-config resolution, validates groupby/orderby columns,
 applies time-series processing and <code>action_executor</code> preprocessing,
 then assembles tokenized training examples. Populates
-<code>training_examples</code>, <code>dataset_schema</code>, <code>df_train</code>, and
+<code>training_examples</code>, <code>dataset_schema</code>, <code>training_df</code>, and
 <code>data_fraction</code>.</p>
 
 
@@ -10628,7 +10628,7 @@ then assembles tokenized training examples. Populates
 </span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">    Runs auto-config resolution, validates groupby/orderby columns,</span>
 </span><span id="__span-0-224"><a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">    applies time-series processing and ``action_executor`` preprocessing,</span>
 </span><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">    then assembles tokenized training examples. Populates</span>
-</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">    ``training_examples``, ``dataset_schema``, ``df_train``, and</span>
+</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">    ``training_examples``, ``dataset_schema``, ``training_df``, and</span>
 </span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">    ``data_fraction``.</span>
 </span><span id="__span-0-228"><a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">    &quot;&quot;&quot;</span>
 </span><span id="__span-0-229"><a id="__codelineno-0-229" name="__codelineno-0-229"></a>    <span class="o">...</span>
