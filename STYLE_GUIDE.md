@@ -353,8 +353,6 @@ When multiple datasets appear together, order parameters as `training, synthetic
 
 The user-facing config parameter for the test split is `data.holdout` (the fraction to hold out). In user-facing text (docs, logs, error messages), "holdout" refers to the *action* of withholding data; "test" is the *resulting dataset*. Use "holdout test set" when both concepts need to appear together.
 
-Old names that should not appear in new code: `reference`, `real`, `original`, `train`, `df1`, `df_all` (for training); `output`, `synth`, `df2` (for synthetic).
-
 ### Imports
 
 - Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)
