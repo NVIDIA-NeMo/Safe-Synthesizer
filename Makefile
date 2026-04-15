@@ -71,12 +71,8 @@ clean-python: ## Remove python virtual environment
 clean-uv: ## Remove uv cache files
 	uv cache clear
 
-.PHONY: clean-unsloth
-clean-unsloth: ## Remove unsloth cache files
-	rm -rf unsloth_compiled_cache/
-
 .PHONY: clean-cache
-clean-cache: clean-unsloth clean-uv clean-python ## Remove cache files from unsloth, uv, and other tools
+clean-cache: clean-uv clean-python ## Remove cache files from uv and other tools
 
 .PHONY: verify-python-version
 verify-python-version: ## Verify Python version and install if necessary
@@ -217,20 +213,18 @@ test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
 # When adding a new GPU smoke test file:
 #   - Train-only (no vLLM): add pytest.mark.requires_gpu -> auto-discovered below
 #   - Uses vLLM: also add pytest.mark.vllm -> add the file to the vLLM list below
-#   - Uses Unsloth: also add pytest.mark.unsloth -> auto-discovered below
 #   - Downloads from Hub: also add pytest.mark.smollm2 (or similar) -> auto-discovered below
 #
 # 1) Train-only tests share a process (no vLLM, safe to batch).
-	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and not vllm and not smollm2 and not unsloth"
+	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and not vllm and not smollm2"
 # 2) Each vLLM test file gets its own process -- vLLM pre-allocates all GPU
 #    memory and never releases it within a process.
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_generation_gpu.py
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_resume_gpu.py
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_structured_gen_gpu.py
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_timeseries_gpu.py
-# 3) SmolLM2 (Hub download + vLLM) and Unsloth (patches transformers) are marker-isolated.
+# 3) SmolLM2 (Hub download + vLLM) is marker-isolated.
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and smollm2"
-	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and unsloth"
 
 
 E2E_TEST_FILE := $(NSS_ROOT_PATH)/tests/e2e/test_safe_synthesizer.py
@@ -463,13 +457,13 @@ endif
 # Config-Dataset Combination Tests (12 total)
 # ============================================================
 # Generated targets: test-nss-{CONFIG}-{DATASET}-ci
-#   CONFIGS : tinyllama_unsloth tinyllama_dp smollm3_unsloth smollm3_dp mistral_nodp mistral_dp
+#   CONFIGS : tinyllama_nodp tinyllama_dp smollm3_nodp smollm3_dp mistral_nodp mistral_dp
 #   DATASETS: clinc_oos dow_jones_index
 # Example usage:
-#   make test-nss-tinyllama_unsloth-clinc_oos-ci
-#   make test-nss-tinyllama_dp-dow_jones_index-ci
+#   make test-nss-tinyllama_nodp-clinc_oos-ci
+#   make test-nss-mistral_dp-dow_jones_index-ci
 
-NSS_CONFIGS  := tinyllama_unsloth tinyllama_dp smollm3_unsloth smollm3_dp mistral_nodp mistral_dp
+NSS_CONFIGS  := tinyllama_nodp tinyllama_dp smollm3_nodp smollm3_dp mistral_nodp mistral_dp
 NSS_DATASETS := clinc_oos dow_jones_index
 
 define nss_combo_test

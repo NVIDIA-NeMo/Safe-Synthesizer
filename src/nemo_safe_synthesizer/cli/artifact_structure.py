@@ -90,7 +90,7 @@ class RunName:
 
     Examples:
         - Auto-generated: "2026-01-15T12:00:00"
-        - Explicit: "unsloth_adult_0", "my-experiment-run"
+        - Explicit: "my-experiment-run", "adult-baseline"
     """
 
     _value: str = field(default="")
@@ -117,7 +117,7 @@ class RunName:
         the timestamp is also stored for potential use.
 
         Args:
-            name: Run name string (e.g., "2026-01-15T12:00:00" or "unsloth_adult_0").
+            name: Run name string (e.g., "2026-01-15T12:00:00" or "my-experiment-run").
 
         Returns:
             RunName with the provided name and optional parsed timestamp.

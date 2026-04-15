@@ -28,8 +28,8 @@ Differentially private (DP) training has strict requirements. Violating them pro
 
 ### Requirements
 
-For the full list of DP compatibility constraints (`use_unsloth`,
-`max_sequences_per_example`, gradient checkpointing), see
+For the full list of DP compatibility constraints
+(`max_sequences_per_example`, gradient checkpointing), see
 [Configuration -- Differential Privacy](configuration.md#differential-privacy).
 
 !!! note

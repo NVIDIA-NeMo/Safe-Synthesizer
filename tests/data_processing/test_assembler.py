@@ -35,9 +35,7 @@ STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])
 # to avoid HuggingFace Hub downloads during tests.
 @pytest.fixture(scope="session")
 def fixture_assembler_config(fixture_smollm3_tokenizer: str) -> SafeSynthesizerParameters:
-    config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False, rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer
-    )
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer)
     return config
 
 
@@ -257,7 +255,6 @@ def test_grouped_data_assembler(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -311,7 +308,6 @@ def test_grouped_data_assembler_training_examples_low_decimal(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -364,7 +360,6 @@ def test_grouped_data_assembler_training_examples_high_decimal(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -416,7 +411,6 @@ def test_grouped_data_assembler_shorter_context_with_test_split(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
         validation_ratio=0.2,
     )
@@ -479,7 +473,6 @@ def test_grouped_data_assembler_dp(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
         validation_ratio=0.2,
     )
@@ -526,7 +519,6 @@ def test_grouped_data_assembler_context_width_exception(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -606,7 +598,6 @@ def test_create_group_example_assembler(
         # Provide specific values for auto params as auto param resolution
         # only happens in the skynet or jarvis implementations.
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     llm_metadata = ModelMetadata(
@@ -940,7 +931,6 @@ def test_sequential_assembler_end_to_end(
         order_training_examples_by="Time",
         pretrained_model=fixture_tokenizer.name_or_path,
         num_input_records_to_sample=5000,
-        use_unsloth=True,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True

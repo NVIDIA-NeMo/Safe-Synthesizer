@@ -53,9 +53,7 @@ def fixture_metadata(
     fixture_save_path,
     fixture_smollm3_tokenizer,
 ) -> ModelMetadata:
-    config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False, rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer
-    )
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer)
     metadata = ModelMetadata.from_str_or_path(config.training.pretrained_model, save_path=fixture_save_path)
     return metadata
 
@@ -328,7 +326,7 @@ def test_grouped_data_processor_all_relaxations_with_fixes(
 # Asserts: TabularDataProcessor is returned
 def test_create_processor_tabular(fixture_metadata):
     stub_schema = {"this": "is_a_stub"}
-    config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1)
     assert isinstance(
         create_processor(schema=stub_schema, metadata=fixture_metadata, config=config),
         TabularDataProcessor,
@@ -341,9 +339,7 @@ def test_create_processor_tabular(fixture_metadata):
 def test_create_processor_grouped(fixture_metadata):
     stub_schema = {"this": "is_a_stub"}
 
-    config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False, rope_scaling_factor=1, group_training_examples_by="patient_id"
-    )
+    config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1, group_training_examples_by="patient_id")
     assert isinstance(
         create_processor(
             schema=stub_schema,
@@ -481,7 +477,6 @@ def test_assembler_to_processor_tabular(
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=max_sequences_per_example,
         pretrained_model=model_name,
@@ -504,7 +499,6 @@ def test_assembler_to_processor_tabular(
 def test_assembler_to_processor_grouped(fixture_over_tokenizers, fixture_session_cache_dir, max_sequences_per_example):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=max_sequences_per_example,
         group_training_examples_by="group_id",
@@ -528,7 +522,6 @@ def test_assembler_to_processor_doc_summaries(
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=1,
         pretrained_model=model_name,
@@ -543,7 +536,6 @@ def test_assembler_to_processor_non_english(
 ):
     model_name, tokenizer = fixture_over_tokenizers
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=True,
         rope_scaling_factor=1,
         max_sequences_per_example=1,
         pretrained_model=model_name,

@@ -287,8 +287,6 @@ class HuggingFaceBackend(TrainingBackend):
             peft_type=self.params.training.peft_implementation,
             lora_alpha=int(self.params.training.lora_alpha_over_r * self.params.training.lora_r),
             use_rslora=FIXED_RUNTIME_LORA_ARGS["use_rslora"],
-            bias="none",  # only none is unsloth optimized
-            lora_dropout=0,  # only 0 is unsloth optimized
         )
 
         if self.params.training.quantize_model:
@@ -315,7 +313,7 @@ class HuggingFaceBackend(TrainingBackend):
         if not isinstance(self.model, PreTrainedModel):
             raise TypeError(f"Expected PreTrainedModel, got {type(self.model)}")
         peft_model = get_peft_model_hf(self.model, peft_config=lora_config)
-        self.model = peft_model
+        self.model = peft_model  # ty: ignore[invalid-assignment] -- get_peft_model returns PeftModel|PeftMixedModel; PeftMixedModel is never produced here (single adapter)
         parameter_count = get_model_param_count(self.model, trainable_only=True) / 1e6
         logger.info(
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",

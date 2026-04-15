@@ -36,7 +36,6 @@ def test_full_pipeline_smollm2(iris_df, smoke_save_path):
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
         pretrained_model="HuggingFaceTB/SmolLM2-135M",
-        use_unsloth=False,
         num_input_records_to_sample=50,
         num_records=10,
         holdout=0,

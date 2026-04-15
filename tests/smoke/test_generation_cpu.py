@@ -41,7 +41,6 @@ def test_processor_parses_generated_text(tiny_model, stub_tokenizer):
 
     # Build minimal config and metadata mock for create_processor
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     mock_metadata = MagicMock()

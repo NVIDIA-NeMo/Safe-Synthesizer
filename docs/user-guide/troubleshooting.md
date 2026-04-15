@@ -20,9 +20,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
 | OOM in evaluation | Large dataset + PCA | [Reduce columns or disable eval](#out-of-memory-during-evaluation) |
-| "Cannot use unsloth without GPU" | No CUDA device | [Switch to HuggingFace backend](#no-gpu-detected) |
 | "max_sequences_per_example must be 1" | Incompatible DP config | [Configuration Reference -- Differential Privacy](configuration.md#differential-privacy) |
-| "Unsloth not compatible with DP" | Mutual exclusion | [Configuration Reference -- Differential Privacy](configuration.md#differential-privacy) |
 | "Unable to automatically determine a noise multiplier" | Epsilon too low | [Increase epsilon or add records](evaluating-data.md#common-dp-errors) |
 | "no valid records" in generation | Underfitting / schema mismatch | [See GenerationError](#generationerror) |
 | Generation appears to hang | Normal for large-context models | [See Slow Generation](#slow-generation-with-large-context-models) |
@@ -135,13 +133,8 @@ in the HuggingFace documentation.
 
 ### No GPU Detected
 
-If Safe Synthesizer fails to find a GPU, the Unsloth backend raises immediately:
-
-```text
-RuntimeError: Cannot use unsloth without GPU.
-```
-
-The HuggingFace backend will not error but will attempt to use CPU (extremely slow).
+If training fails to find a GPU, the HuggingFace backend will attempt to use
+CPU (extremely slow and not recommended for production training).
 
 To diagnose:
 
@@ -150,9 +143,6 @@ To diagnose:
 3. Ensure you installed the CUDA extras, not the CPU-only package.
    See [Installation](getting-started.md#install-the-package) for the
    full command with required index URLs.
-
-Switch to the HuggingFace backend for CPU-only environments (useful for
-development, not recommended for production training).
 
 ### Context Length and Record Fitting
 
@@ -248,8 +238,8 @@ with grouped data:
 - If reducing groups per example is not enough, increase
   `num_input_records_to_sample`. Set it to `N * dataset_size` for
   approximately N passes over the data.
-- Watch for `Total steps = 1` in the Unsloth/Trainer output -- this means
-  the model barely trained
+- Watch for `Total steps = 1` in the Trainer output -- this means the model
+  barely trained
 
 ---
 
@@ -390,20 +380,12 @@ See [Configuration Reference](configuration.md) for the full list.
   see [Context Length and Record Fitting](#context-length-and-record-fitting)
   for details and caveats
 - `training.num_input_records_to_sample` -- derived from `rope_scaling_factor * 25000`
-- `training.use_unsloth` -- resolves to `true` unless DP is enabled.
-  DP uses [Opacus](https://opacus.ai/) per-sample gradients (`GradSampleModule`), which require standard model layers and disable gradient checkpointing -- Unsloth's
-  custom layers and checkpointing are incompatible
 - `training.learning_rate` -- model-specific default from `ModelMetadata`:
   Mistral uses 0.0001, all other supported model families use 0.0005
 - `data.max_sequences_per_example` -- resolves to `1` when differential
   privacy is enabled (required to limit per-example gradient contribution),
   `10` otherwise for best performance
 - `privacy.delta` -- computed from record count
-
-!!! warning "Unsloth and Mistral compatibility"
-    If you encounter issues when using Unsloth with Mistral models, set
-    `training.use_unsloth: false` explicitly. There is no automatic
-    detection for this incompatibility.
 
 Use `safe-synthesizer config validate` to see how `"auto"` and default values resolve for
 your configuration. Note that some `"auto"` fields (such as
@@ -449,10 +431,9 @@ Unsupported file extensions:
 
 Incompatible DP settings:
 
-: If `privacy.dp_enabled` is `true` but `use_unsloth` is `true` or
-  `data.max_sequences_per_example` is not `1`, config validation will fail
-  with a clear error message. Set these to `"auto"` and they will resolve
-  correctly.
+: If `privacy.dp_enabled` is `true` but `data.max_sequences_per_example` is
+  not `1`, config validation will fail with a clear error message. Set it to
+  `"auto"` and it will resolve correctly.
 
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in

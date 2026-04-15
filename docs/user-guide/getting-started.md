@@ -237,12 +237,10 @@ entity types, LLM classification setup, and SDK customization.
 
 ### 3. Training
 
-Fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two backends are
-available: Unsloth (default, faster) and HuggingFace (required for
-differential privacy). Both perform LoRA fine-tuning; see
-[Running -- Training](running.md#training) for a comparison.
+Fine-tunes a base LLM using LoRA (Low-Rank Adaptation). One backend is available
+(HuggingFace) see [Running -- Training](running.md#training).
 
-The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the backend or model).
+The default model is `HuggingFaceTB/SmolLM3-3B`. Safe Synthesizer has tested support for `HuggingFaceTB/SmolLM3-3B`, `TinyLlama/TinyLlama-1.1B-Chat-v1.0`, and `mistralai/Mistral-7B-Instruct-v0.3` (see [Configuration -- Training](configuration.md#training) for details on how to change the model or hyperparameters).
 
 Training requires 1 NVIDIA GPU (A100 or larger) to run. Multi-GPU training is not supported.
 

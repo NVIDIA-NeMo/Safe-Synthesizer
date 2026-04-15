@@ -438,7 +438,7 @@ make test-smoke-gpu
 make test-e2e
 
 # Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
-make test-nss-tinyllama_unsloth-clinc_oos-ci
+make test-nss-tinyllama_nodp-clinc_oos-ci
 
 # Run CI tests locally in a Linux container (Docker/Podman)
 make test-ci-container
@@ -451,7 +451,7 @@ uv run pytest tests/cli/test_run.py
 
 GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
 
-- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2, Unsloth). Required for merge.
+- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2). Required for merge.
 - GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
 
 When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
