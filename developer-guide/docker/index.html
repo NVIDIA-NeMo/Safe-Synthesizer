@@ -8709,35 +8709,45 @@ to the CI test image.</p>
 <hr />
 <h2 id="dockerfile-layout">Dockerfile Layout<a class="headerlink" href="#dockerfile-layout" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/containers/Dockerfile.cuda"><code>containers/Dockerfile.cuda</code></a>
-uses a three-stage multistage build:</p>
+uses a four-stage multistage build:</p>
 <pre class="mermaid"><code>flowchart TD
-    uvImage["ghcr.io/astral-sh/uv:UV_VERSION"]
+    ubuntuBase["ubuntu:UBUNTU_VERSION\n(tools stage)"]
     cudaBuild["nvidia/cuda:CUDA_VERSION-CUDA_IMAGE_TYPE-ubuntu\n(deps stage -- may be runtime or devel)"]
     cudaRuntime["nvidia/cuda:CUDA_VERSION-runtime-ubuntu\n(runtime stage -- always runtime)"]
 
     subgraph stages [Build Stages]
+        tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
         deps["deps\nInstalls Python 3.11 via uv\nuv sync cu128+engine"]
         runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
-        dev["dev\nExtends runtime\nAdds git, make, pytest\nRoot user"]
+        dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
     end
 
-    uvImage --&gt;|"COPY /uv"| deps
+    ubuntuBase --&gt; tools
+    tools --&gt;|"COPY uv binary"| deps
     cudaBuild --&gt; deps
     deps --&gt;|"COPY venv + toolchain"| runtime
     cudaRuntime --&gt; runtime
-    runtime --&gt; dev</code></pre>
+    runtime --&gt; dev
+    tools --&gt;|"COPY mise + all tools"| dev</code></pre>
 <ul>
-<li>deps: installs uv, Python, and all cu128+engine dependencies. Uses
-  <code>--mount=type=cache</code> to avoid re-downloading ~10 GB of PyTorch/CUDA wheels.</li>
+<li>tools: installs mise and all dev tools (uv, ruff, ty, gh, etc.) on a
+  lightweight <code>ubuntu</code> base. Mise is the single source of truth for tool
+  versions via <code>.mise.toml</code> -- no separate version pins in the Dockerfile.
+  Uses the <a href="https://mise.jdx.dev/mise-cookbook/docker.html">mise Docker cookbook</a>
+  pattern with <code>MISE_DATA_DIR=/mise</code> for stable, copyable paths.</li>
+<li>deps: copies the uv binary from <code>tools</code>, then installs Python and all
+  cu128+engine dependencies. Uses <code>--mount=type=cache</code> to avoid
+  re-downloading ~10 GB of PyTorch/CUDA wheels.</li>
 <li>runtime: copies the venv and uv-managed Python into a fresh CUDA runtime
   base. Runs as non-root <code>appuser</code> (uid 1000). GPU access is declared via
   <code>NVIDIA_VISIBLE_DEVICES=all</code> and <code>NVIDIA_DRIVER_CAPABILITIES=compute,utility</code>
   environment variables baked into the image.
   Uses a wrapper entrypoint (<code>containers/entrypoint.sh</code>) that detects
   common misconfigurations before delegating to <code>safe-synthesizer</code>.</li>
-<li>dev: extends runtime with git, make, uv, and the full dev dependency group
-  (pytest, ruff, etc.). Runs as root for flexibility. Used for interactive
-  development and running tests inside the container.</li>
+<li>dev: extends runtime with the full mise toolchain (copied from <code>tools</code>)
+  and the dev dependency group (pytest, ruff, etc.). Runs as root for
+  flexibility. Used for interactive development and running tests inside
+  the container (also serves as the CI test target).</li>
 </ul>
 <hr />
 <h2 id="entrypoint-script">Entrypoint Script<a class="headerlink" href="#entrypoint-script" title="Permanent link">&para;</a></h2>
@@ -8795,11 +8805,6 @@ command).</p>
 <td><code>PYTHON_VERSION</code></td>
 <td><code>3.11.13</code></td>
 <td>Python version installed via <code>uv python install</code></td>
-</tr>
-<tr>
-<td><code>UV_VERSION</code></td>
-<td><code>0.9.14</code></td>
-<td>uv version (pinned to the lower bound of <code>pyproject.toml</code> <code>required-version</code>)</td>
 </tr>
 <tr>
 <td><code>TARGETARCH</code></td>
@@ -9064,8 +9069,8 @@ and CUDA libraries. This is expected for a full ML inference stack.</p>
 </tr>
 <tr>
 <td>Stages</td>
-<td><code>deps</code> / <code>runtime</code> / <code>dev</code></td>
-<td>Single stage</td>
+<td><code>tools</code> / <code>deps</code> / <code>runtime</code> / <code>dev</code></td>
+<td><code>setup</code> / <code>install-deps</code></td>
 </tr>
 <tr>
 <td>Use case</td>
@@ -9079,13 +9084,18 @@ and CUDA libraries. This is expected for a full ML inference stack.</p>
 </tr>
 </tbody>
 </table>
+<p>The <code>setup</code> stage installs system packages and mise-managed dev tools
+(ruff, ty, uv, etc.). The <code>install-deps</code> stage extends it with the Python
+environment (<code>make bootstrap-nss cpu</code>). <code>make container-build-test</code> builds
+the full image; <code>make container-build-test-setup</code> builds only the <code>setup</code>
+stage for fast tool-installation verification (<code>make test-tool-install</code>).</p>
 <p>Both follow the conventions in <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#dockerfiles">STYLE_GUIDE.md -- Dockerfiles</a>.</p>
 <hr />
 <h2 id="multi-architecture-support">Multi-Architecture Support<a class="headerlink" href="#multi-architecture-support" title="Permanent link">&para;</a></h2>
 <p>The CUDA Dockerfile supports <code>linux/amd64</code> and <code>linux/arm64</code>
-(Grace/Blackwell). The <code>nvidia/cuda</code> base images and <code>uv</code> binaries are
-already multi-platform, so the same Dockerfile works for both architectures
-without conditional logic.</p>
+(Grace/Blackwell). The <code>nvidia/cuda</code> base images, <code>ubuntu</code> base images,
+and mise binaries are already multi-platform, so the same Dockerfile works
+for both architectures without conditional logic.</p>
 <h3 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h3>
 <p>Docker BuildKit sets the <code>TARGETARCH</code> build argument automatically when
 you pass <code>--platform</code>:</p>
