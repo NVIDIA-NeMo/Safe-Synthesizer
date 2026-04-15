@@ -263,6 +263,15 @@ class TestRenderRichTable:
         assert "Rate" in result
         assert "95.00%" in result  # Formatted as percentage
 
+    def test_sec_suffix_not_formatted_as_percentage(self):
+        """Keys ending in _sec or _seconds are rendered as plain floats, not percentages."""
+        data = {"tokenization_overhead_sec": 0.35, "total_seconds": 0.72, "rate": 0.95}
+        result = _render_rich_table(data)
+
+        assert "0.35" in result
+        assert "0.72" in result
+        assert "95.00%" in result
+
     def test_renders_nested_dict(self):
         """Test rendering a nested statistics dictionary."""
         data = {
