@@ -148,7 +148,7 @@ class TestScatter:
 
         assert isinstance(trace, go.Scatter)
         assert trace.mode == "markers"
-        assert trace.name == "Reference"
+        assert trace.name == "Training"
 
     def test_scatter_custom_params(self):
         x = pd.Series([1, 2, 3])
@@ -168,15 +168,15 @@ class TestHistogram:
         trace = histogram(x)
 
         assert isinstance(trace, go.Histogram)
-        assert trace.name == "Reference"
+        assert trace.name == "Training"
         assert trace.showlegend is False
 
     def test_histogram_custom_params(self):
         x = pd.Series([1, 2, 3, 4, 5])
-        trace = histogram(x, color="#00FF00", name="Output", histnorm="percent")
+        trace = histogram(x, color="#00FF00", name="Synthetic", histnorm="percent")
 
         assert isinstance(trace, go.Histogram)
-        assert trace.name == "Output"
+        assert trace.name == "Synthetic"
 
 
 class TestGetAutoBins:
@@ -323,10 +323,10 @@ class TestStructureStabilityFigure:
     """Tests for structure_stability_figure function."""
 
     def test_structure_stability_figure_basic(self):
-        reference = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
-        output = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        training_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        synthetic_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
 
-        fig = structure_stability_figure(reference, output)
+        fig = structure_stability_figure(training_df, synthetic_df)
 
         assert isinstance(fig, go.Figure)
         assert fig.layout.height == 420
@@ -365,11 +365,11 @@ class TestBarChart:
         fig = bar_chart(ref_dist, out_dist)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Reference and Output bars
+        assert len(fig.data) == 2  # Training and Synthetic bars
         assert all(isinstance(trace, go.Bar) for trace in fig.data)
 
     def test_bar_chart_missing_keys(self):
-        # Output has key that reference doesn't have
+        # Synthetic distribution has a key that training doesn't have
         ref_dist = {"A": 0.5, "B": 0.5}
         out_dist = {"A": 0.4, "C": 0.6}
 
@@ -404,38 +404,37 @@ class TestHistogramFigure:
     """Tests for histogram_figure function."""
 
     def test_histogram_figure_basic(self):
-        reference = pd.Series(np.random.randn(1000))
-        output = pd.Series(np.random.randn(1000))
+        training = pd.Series(np.random.randn(1000))
+        synthetic = pd.Series(np.random.randn(1000))
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
-        assert len(fig.data) == 2  # Reference and Output histograms
+        assert len(fig.data) == 2  # Training and Synthetic histograms
 
     def test_histogram_figure_with_nans(self):
-        reference = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
-        output = pd.Series([1.5, np.nan, 2.5, 3.5, 4.0])
+        training = pd.Series([1.0, 2.0, np.nan, 3.0, np.nan])
+        synthetic = pd.Series([1.5, np.nan, 2.5, 3.5, 4.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
 
     def test_histogram_figure_empty_after_dropna(self):
-        reference = pd.Series([np.nan, np.nan])
-        output = pd.Series([1.0, 2.0])
+        training = pd.Series([np.nan, np.nan])
+        synthetic = pd.Series([1.0, 2.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         # Should return empty figure when one series is all NaN
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 0
 
     def test_histogram_figure_same_values(self):
-        # Edge case: all values are the same (no variance)
-        reference = pd.Series([5.0, 5.0, 5.0, 5.0])
-        output = pd.Series([5.0, 5.0, 5.0, 5.0])
+        training = pd.Series([5.0, 5.0, 5.0, 5.0])
+        synthetic = pd.Series([5.0, 5.0, 5.0, 5.0])
 
-        fig = histogram_figure(reference, output)
+        fig = histogram_figure(training, synthetic)
 
         assert isinstance(fig, go.Figure)
 

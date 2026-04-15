@@ -30,14 +30,14 @@ class EvaluationField(BaseModel):
     """Per-column evaluation metadata and distribution scores."""
 
     name: str = Field(description="Column name from the original dataframe.")
-    reference_field_features: FieldFeatures = Field(
-        description="Field type and descriptive statistics for the reference column."
+    training_field_features: FieldFeatures = Field(
+        description="Field type and descriptive statistics for the training column."
     )
-    output_field_features: FieldFeatures = Field(
-        description="Field type and descriptive statistics for the output column."
+    synthetic_field_features: FieldFeatures = Field(
+        description="Field type and descriptive statistics for the synthetic column."
     )
-    reference_distribution: dict | None = Field(description="Binned distribution dict for the reference column.")
-    output_distribution: dict | None = Field(description="Binned distribution dict for the output column.")
+    training_distribution: dict | None = Field(description="Binned distribution dict for the training column.")
+    synthetic_distribution: dict | None = Field(description="Binned distribution dict for the synthetic column.")
     distribution_distance: float | None = Field(description="Jensen-Shannon distance between the two distributions.")
     distribution_stability: EvaluationScore | None = Field(
         description="Graded score derived from the distribution distance."
@@ -49,72 +49,74 @@ class EvaluationField(BaseModel):
     @staticmethod
     def from_series(
         name: str,
-        reference: pd.Series,
-        output: pd.Series,
+        training: pd.Series,
+        synthetic: pd.Series,
         column_statistics: ColumnStatistics | None = None,
     ) -> EvaluationField:
-        """Build an ``EvaluationField`` from paired reference/output column.
+        """Build an ``EvaluationField`` from paired training/synthetic column.
 
-        Normally called internally by ``EvaluationDataset``; direct use is
+        Normally called internally by ``EvaluationDatasets``; direct use is
         rarely needed.
 
         Args:
             name: Column name.
-            reference: Reference column data.
-            output: Output (synthetic) column data.
+            training: Training column data.
+            synthetic: Synthetic column data.
             column_statistics: PII entity metadata to attach, if available.
 
         Returns:
             A fully populated ``EvaluationField`` with computed distributions
             and stability score.
         """
-        reference_field_features = describe_field(name, reference)
-        output_field_features = describe_field(name, output)
+        training_field_features = describe_field(name, training)
+        synthetic_field_features = describe_field(name, synthetic)
         # TODO This was a config setting to explicitly force fields to be categorical.
         # if is_categorical:
-        #     reference_field_features.type = FieldType.CATEGORICAL
-        #     output_field_features.type = FieldType.CATEGORICAL
+        #     training_field_features.type = FieldType.CATEGORICAL
+        #     synthetic_field_features.type = FieldType.CATEGORICAL
 
         # TODO Synthesizer only, but not making conditional until more new config/control is baked up.
-        if reference_field_features.type == FieldType.NUMERIC and output_field_features.type == FieldType.NUMERIC:
-            bins = stats.get_numeric_distribution_bins(reference, output)
-            reference_distribution = stats.get_numeric_field_distribution(reference, bins)
-            output_distribution = stats.get_numeric_field_distribution(output, bins)
-            distribution_distance = stats.compute_distribution_distance(reference_distribution, output_distribution)
+        if training_field_features.type == FieldType.NUMERIC and synthetic_field_features.type == FieldType.NUMERIC:
+            bins = stats.get_numeric_distribution_bins(training, synthetic)
+            training_distribution = stats.get_numeric_field_distribution(training, bins)
+            synthetic_distribution = stats.get_numeric_field_distribution(synthetic, bins)
+            distribution_distance = stats.compute_distribution_distance(training_distribution, synthetic_distribution)
             distribution_stability = EvaluationField.get_field_distribution_stability(distribution_distance)
         else:
-            if is_integer_dtype(reference) or is_integer_dtype(output):
+            if is_integer_dtype(training) or is_integer_dtype(synthetic):
                 try:
                     # If the other column contains float values or has None values with object dtype,
                     # first cast it to float, round the values, and then convert to pd.Int64Dtype.
                     # This allows missing values to be properly handled and enables meaningful comparisons.
-                    reference = reference.astype(float).round().astype(pd.Int64Dtype())
-                    output = output.astype(float).round().astype(pd.Int64Dtype())
+                    training = training.astype(float).round().astype(pd.Int64Dtype())
+                    synthetic = synthetic.astype(float).round().astype(pd.Int64Dtype())
                 except ValueError:
                     # The other column has something weird that is not a float, just keep going.
                     pass
             if (
-                reference_field_features.count == 0
-                or output_field_features.count == 0
-                or reference_field_features.type in HIGHLY_UNIQUE_TYPES
-                or output_field_features.type in HIGHLY_UNIQUE_TYPES
+                training_field_features.count == 0
+                or synthetic_field_features.count == 0
+                or training_field_features.type in HIGHLY_UNIQUE_TYPES
+                or synthetic_field_features.type in HIGHLY_UNIQUE_TYPES
             ):
-                reference_distribution = None
-                output_distribution = None
+                training_distribution = None
+                synthetic_distribution = None
                 distribution_distance = None
                 distribution_stability = None
             else:
-                reference_distribution = stats.get_categorical_field_distribution(reference)
-                output_distribution = stats.get_categorical_field_distribution(output)
-                distribution_distance = stats.compute_distribution_distance(reference_distribution, output_distribution)
+                training_distribution = stats.get_categorical_field_distribution(training)
+                synthetic_distribution = stats.get_categorical_field_distribution(synthetic)
+                distribution_distance = stats.compute_distribution_distance(
+                    training_distribution, synthetic_distribution
+                )
                 distribution_stability = EvaluationField.get_field_distribution_stability(distribution_distance)
 
         return EvaluationField(
             name=name,
-            reference_field_features=reference_field_features,
-            output_field_features=output_field_features,
-            reference_distribution=reference_distribution,
-            output_distribution=output_distribution,
+            training_field_features=training_field_features,
+            synthetic_field_features=synthetic_field_features,
+            training_distribution=training_distribution,
+            synthetic_distribution=synthetic_distribution,
             distribution_distance=distribution_distance,
             distribution_stability=distribution_stability,
             column_statistics=column_statistics,

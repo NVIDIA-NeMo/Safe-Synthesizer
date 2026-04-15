@@ -3,11 +3,28 @@
 
 # Evaluation
 
-Evaluation is a critical component of Safe Synthesizer that helps you understand both the utility and privacy of your synthetic data. The evaluation step is enabled by default and provides comprehensive reports comparing your training and synthetic datasets across multiple dimensions.
+Evaluation is a critical component of Safe Synthesizer that helps you understand both the utility and privacy of your synthetic data. The evaluation step is enabled by default and provides comprehensive reports comparing your input and synthetic datasets across multiple dimensions.
 
 ## How It Works
 
-The evaluation system compares your training and synthetic datasets using two main frameworks:
+The pipeline splits your input data into two parts before any model training begins:
+
+- Training data: the portion used for PII replacement, fine-tuning, and generation. This is the reference dataset for most evaluation metrics.
+- Test (holdout) data: a small portion (5% by default) withheld from training entirely. Used by Membership Inference Protection and Text Semantic Similarity to detect memorization.
+- Synthetic data: the records produced by the fine-tuned model during the generation step.
+
+```mermaid
+flowchart LR
+    data[("Input Data")]
+    data --> split{"Train / Test\nSplit"}
+    split -- "Training\nSplit" --> pipeline["PII Replacement\n→ Assemble\n→ Fine-tune\n→ Generate"]
+    split -. "Test (holdout)\nSplit" .-> evaluate
+    pipeline --> synthetic[("Synthetic\nData")]
+    synthetic --> evaluate["Evaluate"]
+    split -- "Training Split" --> evaluate
+```
+
+The evaluation system compares these datasets using two main frameworks:
 
 1. Synthetic Quality Score (SQS): measures how well the synthetic data preserves statistical properties and utility
 2. Data Privacy Score (DPS): assesses privacy protection and resistance to various attack vectors
@@ -21,8 +38,8 @@ SQS is a measure of how well the synthetic data matches the training data. It is
 SQS comprises five metrics:
 
 - Column Correlation Stability: analyzes correlations across every pair of columns
-- Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the original and synthetic data
-- Column Distribution Stability: compares the distribution for each column in the original data to its counterpart in the synthetic data
+- Deep Structure Stability: uses Principal Component Analysis (PCA) to reduce dimensionality when comparing the training and synthetic data
+- Column Distribution Stability: compares the distribution for each column in the training data to its counterpart in the synthetic data
 - Text Structure Similarity: compares sentence, word, and character counts across the two datasets
 - Text Semantic Similarity: determines whether the semantic meaning of the text is preserved after synthesis
 
@@ -60,7 +77,7 @@ DPS includes three metrics:
 
 - Membership Inference Protection: tests whether attackers can determine if specific records were in the training data
 - Attribute Inference Protection: assesses whether sensitive attributes can be inferred from synthetic data
-- PII Replay: evaluates the frequency with which sensitive values from the original data appear in the synthetic version
+- PII Replay: evaluates the frequency with which sensitive values from the training data appear in the synthetic version
 
 We average the first two to provide an overall DPS. We do not factor PII Replay into DPS; you should analyze it separately. Read more about these privacy metrics [here](https://arxiv.org/abs/2501.03941).
 
