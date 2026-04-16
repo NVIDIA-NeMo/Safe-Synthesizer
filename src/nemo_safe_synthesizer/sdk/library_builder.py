@@ -23,6 +23,7 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
+from ..data_processing.validation import validate_groupby_column, validate_orderby_column
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
@@ -247,9 +248,11 @@ class SafeSynthesizer(ConfigBuilder):
     def process_data(self) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
 
-        Splits the data via ``Holdout``, runs ``AutoConfigResolver`` to
-        resolve ``"auto"`` parameters, applies PII replacement to the
-        training set when enabled, and persists the splits to the workdir.
+        Validates configured grouping/ordering columns against the input
+        dataset, splits the data via ``Holdout``, runs
+        ``AutoConfigResolver`` to resolve ``"auto"`` parameters, applies
+        PII replacement to the training set when enabled, and persists the
+        splits to the workdir.
 
         Returns:
             Self for method chaining.
@@ -270,6 +273,9 @@ class SafeSynthesizer(ConfigBuilder):
         if TYPE_CHECKING:
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
+
+        validate_groupby_column(self._data_source, self._nss_config.data.group_training_examples_by)
+        validate_orderby_column(self._data_source, self._nss_config.data.order_training_examples_by)
 
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)

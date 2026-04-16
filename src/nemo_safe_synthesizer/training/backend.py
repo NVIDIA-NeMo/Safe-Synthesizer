@@ -220,11 +220,11 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     def prepare_training_data(self) -> None:
         """Load, validate, and tokenize the training dataset.
 
-        Runs auto-config resolution, validates groupby/orderby columns,
-        applies time-series processing and ``action_executor`` preprocessing,
-        then assembles tokenized training examples. Populates
-        ``training_examples``, ``dataset_schema``, ``training_df``, and
-        ``data_fraction``.
+        Validates grouping/ordering columns (where applicable), resolves
+        auto-config values, applies time-series processing and
+        ``action_executor`` preprocessing, then assembles tokenized training
+        examples. Populates ``training_examples``, ``dataset_schema``,
+        ``training_df``, and ``data_fraction``.
         """
         ...
 

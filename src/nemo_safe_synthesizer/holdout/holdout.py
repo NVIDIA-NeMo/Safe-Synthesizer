@@ -15,6 +15,7 @@ from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
 from ..config.data import DEFAULT_HOLDOUT, MIN_HOLDOUT
 from ..config.parameters import SafeSynthesizerParameters
+from ..data_processing.validation import validate_groupby_column
 from ..observability import get_logger
 
 MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS = 200
@@ -79,11 +80,10 @@ def grouped_train_test_split(
         grouped split could be produced.
 
     Raises:
-        ValueError: If the ``group_by`` column contains missing values.
+        ParameterError: If the ``group_by`` column is not present in ``df``.
+        DataError: If the ``group_by`` column contains missing values.
     """
-    if input_df[group_by].isna().any():
-        msg = f"Group by column '{group_by}' has missing values. Please remove/replace them."
-        raise ValueError(msg)
+    validate_groupby_column(input_df, group_by)
 
     if test_size > input_df.groupby(group_by).ngroups or test_size == 1 or test_size == 0:
         logger.info(
@@ -150,9 +150,11 @@ class Holdout:
 
         Raises:
             ValueError: If the input dataframe has fewer than
-                ``MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS`` rows, if the
-                computed holdout is smaller than ``MIN_HOLDOUT``, or if
-                the ``group_by`` column contains missing values.
+                ``MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS`` rows or if the
+                computed holdout is smaller than ``MIN_HOLDOUT``.
+            ParameterError: If the configured ``group_by`` column is missing.
+            DataError: If the configured ``group_by`` column contains missing
+                values.
         """
         if not self.holdout or not self.max_holdout:
             return input_df, None
@@ -187,14 +189,7 @@ class Holdout:
                 HOLDOUT_TOO_SMALL_ERROR,
             )
 
-        if self.group_by is not None and self.group_by not in input_df.columns:
-            msg = f"Group by column {self.group_by!r} not found in input dataset columns. Doing a normal split."
-            if "," in self.group_by:
-                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
-            logger.warning(msg)
-            self.group_by = None
-        if self.group_by is not None and input_df[self.group_by].isna().any():
-            raise ValueError(f"Group by column '{self.group_by}' has missing values. Please remove/replace them.")
+        validate_groupby_column(input_df, self.group_by)
 
         if self.group_by:
             training_df, test_df = grouped_train_test_split(

@@ -661,7 +661,7 @@ def test_sequential_assembler_raises_for_missing_group_column(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler raises for missing group column."""
-    with pytest.raises(ParameterError, match="Group by column.*not found in dataset"):
+    with pytest.raises(ParameterError, match="Group by column.*not found"):
         SequentialExampleAssembler(
             dataset=fixture_iris_dataset,
             tokenizer=fixture_tokenizer,
@@ -680,7 +680,7 @@ def test_sequential_assembler_raises_for_missing_order_column(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler raises for missing order column."""
-    with pytest.raises(ParameterError, match="Order by column.*not found in dataset"):
+    with pytest.raises(ParameterError, match="Order by column.*not found"):
         SequentialExampleAssembler(
             dataset=fixture_iris_dataset,
             tokenizer=fixture_tokenizer,
