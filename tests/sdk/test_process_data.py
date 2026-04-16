@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 # ---------------------------------------------------------------------------
@@ -591,7 +592,9 @@ class TestProcessDataConfigValidation:
     methods after construction are not visible to the Pydantic validator
     until ``_resolve_nss_config()`` is called.  ``process_data`` must
     call it at the top of the method so invalid configs are caught
-    immediately -- before holdout split, PII replacement, or any disk I/O.
+    immediately. It also validates configured group/order columns against
+    the input dataset before holdout split, autoconfig resolution, PII
+    replacement, or any disk I/O.
     """
 
     def test_dp_and_explicit_unsloth_raises_at_process_data(self, fixture_workdir: Workdir) -> None:
@@ -606,3 +609,52 @@ class TestProcessDataConfigValidation:
         )
         with pytest.raises(ValidationError, match="not compatible with DP"):
             ss.process_data()
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_invalid_groupby_raises_before_holdout(
+        self,
+        mock_holdout_cls,
+        fixture_workdir: Workdir,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+    ) -> None:
+        """Missing group-by column raises immediately during ``process_data``.
+
+        This catches invalid ``group_training_examples_by`` before holdout split
+        or autoconfig runs, ensuring a clear ``ParameterError`` instead of a
+        downstream ``KeyError``.
+        """
+        ss = SafeSynthesizer(
+            config=SafeSynthesizerParameters.from_params(group_training_examples_by="non_existent_group"),
+            workdir=fixture_workdir,
+        ).with_data_source(fixture_sample_patient_dataframe)
+
+        with pytest.raises(ParameterError, match="Group by column 'non_existent_group' not found"):
+            ss.process_data()
+
+        mock_holdout_cls.assert_not_called()
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_invalid_orderby_raises_before_holdout(
+        self,
+        mock_holdout_cls,
+        fixture_workdir: Workdir,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+    ) -> None:
+        """Missing order-by column raises immediately during ``process_data``.
+
+        This catches invalid ``order_training_examples_by`` before holdout split
+        or autoconfig runs, ensuring a clear ``ParameterError`` instead of a
+        downstream pandas error.
+        """
+        ss = SafeSynthesizer(
+            config=SafeSynthesizerParameters.from_params(
+                group_training_examples_by="patient_name",
+                order_training_examples_by="non_existent_order",
+            ),
+            workdir=fixture_workdir,
+        ).with_data_source(fixture_sample_patient_dataframe)
+
+        with pytest.raises(ParameterError, match="Order by column 'non_existent_order' not found"):
+            ss.process_data()
+
+        mock_holdout_cls.assert_not_called()

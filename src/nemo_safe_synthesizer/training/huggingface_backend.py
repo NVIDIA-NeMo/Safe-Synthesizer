@@ -42,6 +42,7 @@ from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
+from ..data_processing.validation import validate_groupby_column, validate_orderby_column
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -538,32 +539,6 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer = self._create_trainer(self.train_args, data_collator)
         self._configure_trainer_callbacks(self.trainer, training_args)
 
-    def _validate_groupby_column(self, df: pd.DataFrame) -> None:
-        """Validate the groupby column exists and has no missing values.
-
-        Args:
-            df: The DataFrame to validate.
-
-        Raises:
-            ParameterError: If the groupby column doesn't exist.
-            DataError: If the groupby column has missing values.
-        """
-        col = self.params.data.group_training_examples_by
-        if col is None:
-            return
-
-        if col not in df.columns:
-            msg = f"Group by column {col!r} not found in the input data."
-            if "," in col:
-                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
-            logger.error(msg)
-            raise ParameterError(msg)
-
-        if df[col].isnull().any():
-            msg = f"Group by column '{col}' has missing values. Please remove/replace them."
-            logger.error(msg)
-            raise DataError(msg)
-
     def _validate_orderby_column(self, df: pd.DataFrame) -> None:
         """Validate the orderby column exists in the dataset.
 
@@ -580,10 +555,7 @@ class HuggingFaceBackend(TrainingBackend):
         if self.params.time_series.is_timeseries and self.params.time_series.timestamp_column is None:
             return
 
-        if orderby_col and orderby_col not in df.columns:
-            msg = f"Order by column '{orderby_col}' not found in the input data."
-            logger.error(msg)
-            raise ParameterError(msg)
+        validate_orderby_column(df, orderby_col)
 
     def _apply_preprocessing(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply action_executor preprocessing if available.
@@ -664,8 +636,8 @@ class HuggingFaceBackend(TrainingBackend):
     def prepare_training_data(self) -> None:
         """Validate, preprocess, and tokenize the training dataset.
 
-        Runs auto-config resolution, time-series processing, groupby /
-        orderby validation, and assembles tokenized training examples.
+        Validates groupby/orderby columns, resolves auto-config values,
+        runs time-series preprocessing, and assembles tokenized training examples.
         Populates ``training_examples``, ``dataset_schema``,
         ``training_df``, and ``data_fraction``.
 
@@ -681,11 +653,10 @@ class HuggingFaceBackend(TrainingBackend):
         if not isinstance(training_df, pd.DataFrame):
             raise DataError("Expected DataFrame from to_pandas(), got an iterator")
 
-        self.params = AutoConfigResolver(training_df, self.params).resolve()
-
         # Validate groupby/orderby parameters as a preprocessing step.
-        self._validate_groupby_column(training_df)
+        validate_groupby_column(training_df, self.params.data.group_training_examples_by)
         self._validate_orderby_column(training_df)
+        self.params = AutoConfigResolver(training_df, self.params).resolve()
 
         # Process time series data (sort by timestamp, infer intervals, etc.)
         training_df = self._process_timeseries(training_df)
