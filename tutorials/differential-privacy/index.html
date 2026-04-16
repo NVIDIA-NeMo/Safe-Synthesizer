@@ -9100,7 +9100,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="nemo-safe-synthesizer-tutorial-differential-privacy">🔐 NeMo Safe Synthesizer Tutorial: Differential Privacy<a class="anchor-link" href="#nemo-safe-synthesizer-tutorial-differential-privacy">¶</a></h1><p>Learn how to apply differential privacy to achieve strong privacy with mathematical guarantees. This tutorial demonstrates how to configure differential privacy parameters for optimal results. The runtime of this notebook is about 1 hour on an A100.</p>
-<p>If you have not yet completed the <a href="safe-synthesizer-101.ipynb">Safe Synthesizer 101</a> tutorial, consider starting there first.</p>
+<p>If you have not yet completed the <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/">Safe Synthesizer 101</a> tutorial, consider starting there first.</p>
 <h3 id="prerequisites">🖥️ Prerequisites<a class="anchor-link" href="#prerequisites">¶</a></h3><p>This notebook requires a Linux machine with an NVIDIA GPU (H100 recommended, A100 minimum) and CUDA 12.8+. It will not run on macOS, Windows, or Apple Silicon.</p>
 </div>
 </div>
@@ -9225,7 +9225,7 @@ else:
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h3 id="load-and-preview-sample-dataset">📥 Load and preview sample dataset<a class="anchor-link" href="#load-and-preview-sample-dataset">¶</a></h3><p>Load a tabular dataset—in this example, the <a href="https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents">US Accidents dataset</a> from Kaggle—and preview the first few rows. NeMo Safe Synthesizer will use a subset to keep runtime manageable.</p>
 <p>This dataset includes text, categorical, and numeric fields, all of which are supported by Safe Synthesizer.</p>
-<p>The code below also computes a recommended <code>delta</code> for differential privacy. Delta should reflect the full dataset size, not the subset, because it bounds the probability of a privacy breach across the entire population. See <a href="../user-guide/configuration.md#differential-privacy">Differential Privacy</a> for parameter guidance.</p>
+<p>The code below also computes a recommended <code>delta</code> for differential privacy. Delta should reflect the full dataset size, not the subset, because it bounds the probability of a privacy breach across the entire population. See <a href="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/configuration/#differential-privacy">Differential Privacy</a> for parameter guidance.</p>
 <blockquote>
 <p>Dataset citations:</p>
 <ul>
