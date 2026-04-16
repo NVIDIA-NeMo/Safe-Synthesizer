@@ -2737,6 +2737,8 @@
       
         
       
+        
+      
     
     
     
@@ -3251,6 +3253,34 @@
     
   
     stats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data_processing/validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    validation
   
 
     
@@ -10602,11 +10632,11 @@ tokenization in <code>prepare_training_data</code>.</p>
     <div class="doc doc-contents ">
 
         <p>Load, validate, and tokenize the training dataset.</p>
-<p>Runs auto-config resolution, validates groupby/orderby columns,
-applies time-series processing and <code>action_executor</code> preprocessing,
-then assembles tokenized training examples. Populates
-<code>training_examples</code>, <code>dataset_schema</code>, <code>training_df</code>, and
-<code>data_fraction</code>.</p>
+<p>Validates grouping/ordering columns (where applicable), resolves
+auto-config values, applies time-series processing and
+<code>action_executor</code> preprocessing, then assembles tokenized training
+examples. Populates <code>training_examples</code>, <code>dataset_schema</code>,
+<code>training_df</code>, and <code>data_fraction</code>.</p>
 
 
             <details class="mkdocstrings-source">
@@ -10625,11 +10655,11 @@ then assembles tokenized training examples. Populates
 </span><span id="__span-0-220"><a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="k">def</span><span class="w"> </span><span class="nf">prepare_training_data</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 </span><span id="__span-0-221"><a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load, validate, and tokenize the training dataset.</span>
 </span><span id="__span-0-222"><a id="__codelineno-0-222" name="__codelineno-0-222"></a>
-</span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">    Runs auto-config resolution, validates groupby/orderby columns,</span>
-</span><span id="__span-0-224"><a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">    applies time-series processing and ``action_executor`` preprocessing,</span>
-</span><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">    then assembles tokenized training examples. Populates</span>
-</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">    ``training_examples``, ``dataset_schema``, ``training_df``, and</span>
-</span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">    ``data_fraction``.</span>
+</span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">    Validates grouping/ordering columns (where applicable), resolves</span>
+</span><span id="__span-0-224"><a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">    auto-config values, applies time-series processing and</span>
+</span><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">    ``action_executor`` preprocessing, then assembles tokenized training</span>
+</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">    examples. Populates ``training_examples``, ``dataset_schema``,</span>
+</span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">    ``training_df``, and ``data_fraction``.</span>
 </span><span id="__span-0-228"><a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">    &quot;&quot;&quot;</span>
 </span><span id="__span-0-229"><a id="__codelineno-0-229" name="__codelineno-0-229"></a>    <span class="o">...</span>
 </span></code></pre></div></td></tr></table></div>

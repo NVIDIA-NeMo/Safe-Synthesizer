@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/evaluation/components/privacy_metric_utils/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/reference/nemo_safe_synthesizer/data_processing/validation/">
       
       
-        <link rel="prev" href="../pii_replay/">
+        <link rel="prev" href="../stats/">
       
       
-        <link rel="next" href="../sqs_score/">
+        <link rel="next" href="../../defaults/">
       
       
         
       
       
-      <link rel="icon" href="../../../../../assets/images/favicon.png">
+      <link rel="icon" href="../../../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
-        <title>privacy_metric_utils - NeMo Safe Synthesizer</title>
+        <title>validation - NeMo Safe Synthesizer</title>
       
     
     
-      <link rel="stylesheet" href="../../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,13 +53,13 @@
       
     
     
-      <link rel="stylesheet" href="../../../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../../../../css/style.css">
+      <link rel="stylesheet" href="../../../../css/style.css">
     
-      <link rel="stylesheet" href="../../../../../css/mkdocstrings.css">
+      <link rel="stylesheet" href="../../../../css/mkdocstrings.css">
     
-    <script>__md_scope=new URL("../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils" class="md-skip">
+        <a href="#nemo_safe_synthesizer.data_processing.validation" class="md-skip">
           Skip to content
         </a>
       
@@ -98,7 +98,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../../.." title="NeMo Safe Synthesizer" class="md-header__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
+    <a href="../../../.." title="NeMo Safe Synthesizer" class="md-header__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -118,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              privacy_metric_utils
+              validation
             
           </span>
         </div>
@@ -231,7 +231,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../../.." class="md-tabs__link">
+      <a href="../../../.." class="md-tabs__link">
         
   
   
@@ -252,7 +252,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../product-overview/pipeline/" class="md-tabs__link">
+        <a href="../../../../product-overview/pipeline/" class="md-tabs__link">
           
   
   
@@ -274,7 +274,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../tutorials/" class="md-tabs__link">
+        <a href="../../../../tutorials/" class="md-tabs__link">
           
   
   
@@ -296,7 +296,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../user-guide/getting-started/" class="md-tabs__link">
+        <a href="../../../../user-guide/getting-started/" class="md-tabs__link">
           
   
   
@@ -320,7 +320,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../../../../developer-guide/architecture/" class="md-tabs__link">
+        <a href="../../../../developer-guide/architecture/" class="md-tabs__link">
           
   
   
@@ -342,7 +342,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../../blog/" class="md-tabs__link">
+        <a href="../../../../blog/" class="md-tabs__link">
           
   
   
@@ -378,7 +378,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../../.." title="NeMo Safe Synthesizer" class="md-nav__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
+    <a href="../../../.." title="NeMo Safe Synthesizer" class="md-nav__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -408,7 +408,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../.." class="md-nav__link">
+      <a href="../../../.." class="md-nav__link">
         
   
   
@@ -499,7 +499,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../product-overview/pipeline/" class="md-nav__link">
+      <a href="../../../../product-overview/pipeline/" class="md-nav__link">
         
   
   
@@ -527,7 +527,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../product-overview/data_synthesis/" class="md-nav__link">
+      <a href="../../../../product-overview/data_synthesis/" class="md-nav__link">
         
   
   
@@ -555,7 +555,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../product-overview/pii_replacement/" class="md-nav__link">
+      <a href="../../../../product-overview/pii_replacement/" class="md-nav__link">
         
   
   
@@ -583,7 +583,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../product-overview/evaluation/" class="md-nav__link">
+      <a href="../../../../product-overview/evaluation/" class="md-nav__link">
         
   
   
@@ -647,7 +647,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../../tutorials/" class="md-nav__link ">
+            <a href="../../../../tutorials/" class="md-nav__link ">
               
   
   
@@ -691,7 +691,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/safe-synthesizer-101/" class="md-nav__link">
+      <a href="../../../../tutorials/safe-synthesizer-101/" class="md-nav__link">
         
   
   
@@ -719,7 +719,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/differential-privacy/" class="md-nav__link">
+      <a href="../../../../tutorials/differential-privacy/" class="md-nav__link">
         
   
   
@@ -820,7 +820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/getting-started/" class="md-nav__link">
+      <a href="../../../../user-guide/getting-started/" class="md-nav__link">
         
   
   
@@ -848,7 +848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/running/" class="md-nav__link">
+      <a href="../../../../user-guide/running/" class="md-nav__link">
         
   
   
@@ -876,7 +876,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/docker/" class="md-nav__link">
+      <a href="../../../../user-guide/docker/" class="md-nav__link">
         
   
   
@@ -964,7 +964,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/evaluating-data/" class="md-nav__link">
+      <a href="../../../../user-guide/evaluating-data/" class="md-nav__link">
         
   
   
@@ -992,7 +992,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/troubleshooting/" class="md-nav__link">
+      <a href="../../../../user-guide/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1088,7 +1088,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/configuration/" class="md-nav__link">
+      <a href="../../../../user-guide/configuration/" class="md-nav__link">
         
   
   
@@ -1116,7 +1116,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../user-guide/environment/" class="md-nav__link">
+      <a href="../../../../user-guide/environment/" class="md-nav__link">
         
   
   
@@ -1226,7 +1226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../developer-guide/architecture/" class="md-nav__link">
+      <a href="../../../../developer-guide/architecture/" class="md-nav__link">
         
   
   
@@ -1254,7 +1254,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../developer-guide/example-generation/" class="md-nav__link">
+      <a href="../../../../developer-guide/example-generation/" class="md-nav__link">
         
   
   
@@ -1282,7 +1282,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../developer-guide/docker/" class="md-nav__link">
+      <a href="../../../../developer-guide/docker/" class="md-nav__link">
         
   
   
@@ -1583,7 +1583,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../artifacts/analyzers/field_features/" class="md-nav__link">
+      <a href="../../artifacts/analyzers/field_features/" class="md-nav__link">
         
   
   
@@ -1677,7 +1677,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../artifacts/base/fields/" class="md-nav__link">
+      <a href="../../artifacts/base/fields/" class="md-nav__link">
         
   
   
@@ -1795,7 +1795,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/artifact_structure/" class="md-nav__link">
+      <a href="../../cli/artifact_structure/" class="md-nav__link">
         
   
   
@@ -1823,7 +1823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/artifacts/" class="md-nav__link">
+      <a href="../../cli/artifacts/" class="md-nav__link">
         
   
   
@@ -1851,7 +1851,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/cli/" class="md-nav__link">
+      <a href="../../cli/cli/" class="md-nav__link">
         
   
   
@@ -1879,7 +1879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/config/" class="md-nav__link">
+      <a href="../../cli/config/" class="md-nav__link">
         
   
   
@@ -1907,7 +1907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/datasets/" class="md-nav__link">
+      <a href="../../cli/datasets/" class="md-nav__link">
         
   
   
@@ -1935,7 +1935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/run/" class="md-nav__link">
+      <a href="../../cli/run/" class="md-nav__link">
         
   
   
@@ -1963,7 +1963,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/settings/" class="md-nav__link">
+      <a href="../../cli/settings/" class="md-nav__link">
         
   
   
@@ -1991,7 +1991,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/utils/" class="md-nav__link">
+      <a href="../../cli/utils/" class="md-nav__link">
         
   
   
@@ -2019,7 +2019,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../cli/wandb_setup/" class="md-nav__link">
+      <a href="../../cli/wandb_setup/" class="md-nav__link">
         
   
   
@@ -2139,7 +2139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/autoconfig/" class="md-nav__link">
+      <a href="../../config/autoconfig/" class="md-nav__link">
         
   
   
@@ -2167,7 +2167,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/base/" class="md-nav__link">
+      <a href="../../config/base/" class="md-nav__link">
         
   
   
@@ -2195,7 +2195,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/data/" class="md-nav__link">
+      <a href="../../config/data/" class="md-nav__link">
         
   
   
@@ -2223,7 +2223,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/differential_privacy/" class="md-nav__link">
+      <a href="../../config/differential_privacy/" class="md-nav__link">
         
   
   
@@ -2251,7 +2251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/evaluate/" class="md-nav__link">
+      <a href="../../config/evaluate/" class="md-nav__link">
         
   
   
@@ -2279,7 +2279,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/external_results/" class="md-nav__link">
+      <a href="../../config/external_results/" class="md-nav__link">
         
   
   
@@ -2307,7 +2307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/generate/" class="md-nav__link">
+      <a href="../../config/generate/" class="md-nav__link">
         
   
   
@@ -2335,7 +2335,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/internal_results/" class="md-nav__link">
+      <a href="../../config/internal_results/" class="md-nav__link">
         
   
   
@@ -2363,7 +2363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/job/" class="md-nav__link">
+      <a href="../../config/job/" class="md-nav__link">
         
   
   
@@ -2391,7 +2391,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/parameters/" class="md-nav__link">
+      <a href="../../config/parameters/" class="md-nav__link">
         
   
   
@@ -2419,7 +2419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/replace_pii/" class="md-nav__link">
+      <a href="../../config/replace_pii/" class="md-nav__link">
         
   
   
@@ -2447,7 +2447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/time_series/" class="md-nav__link">
+      <a href="../../config/time_series/" class="md-nav__link">
         
   
   
@@ -2475,7 +2475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/training/" class="md-nav__link">
+      <a href="../../config/training/" class="md-nav__link">
         
   
   
@@ -2503,7 +2503,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../config/types/" class="md-nav__link">
+      <a href="../../config/types/" class="md-nav__link">
         
   
   
@@ -2603,7 +2603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../configurator/parameter/" class="md-nav__link">
+      <a href="../../configurator/parameter/" class="md-nav__link">
         
   
   
@@ -2631,7 +2631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../configurator/parameters/" class="md-nav__link">
+      <a href="../../configurator/parameters/" class="md-nav__link">
         
   
   
@@ -2659,7 +2659,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../configurator/pydantic_click_options/" class="md-nav__link">
+      <a href="../../configurator/pydantic_click_options/" class="md-nav__link">
         
   
   
@@ -2687,7 +2687,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../configurator/validators/" class="md-nav__link">
+      <a href="../../configurator/validators/" class="md-nav__link">
         
   
   
@@ -2720,8 +2720,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2748,13 +2750,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_4_1_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4_1_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5_4_1_5" id="__nav_5_4_1_5_label" tabindex="0">
@@ -2775,7 +2775,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_4_1_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_4_1_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5_4_1_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2857,7 +2857,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/actions/data_actions/" class="md-nav__link">
+      <a href="../actions/data_actions/" class="md-nav__link">
         
   
   
@@ -2885,7 +2885,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/actions/dates/" class="md-nav__link">
+      <a href="../actions/dates/" class="md-nav__link">
         
   
   
@@ -2913,7 +2913,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/actions/distributions/" class="md-nav__link">
+      <a href="../actions/distributions/" class="md-nav__link">
         
   
   
@@ -2941,7 +2941,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/actions/utils/" class="md-nav__link">
+      <a href="../actions/utils/" class="md-nav__link">
         
   
   
@@ -2977,7 +2977,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/assembler/" class="md-nav__link">
+      <a href="../assembler/" class="md-nav__link">
         
   
   
@@ -3005,7 +3005,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/dataset/" class="md-nav__link">
+      <a href="../dataset/" class="md-nav__link">
         
   
   
@@ -3033,7 +3033,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/record_utils/" class="md-nav__link">
+      <a href="../record_utils/" class="md-nav__link">
         
   
   
@@ -3125,7 +3125,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/records/base/" class="md-nav__link">
+      <a href="../records/base/" class="md-nav__link">
         
   
   
@@ -3153,7 +3153,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/records/fragment/" class="md-nav__link">
+      <a href="../records/fragment/" class="md-nav__link">
         
   
   
@@ -3181,7 +3181,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/records/json_record/" class="md-nav__link">
+      <a href="../records/json_record/" class="md-nav__link">
         
   
   
@@ -3209,7 +3209,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/records/value_path/" class="md-nav__link">
+      <a href="../records/value_path/" class="md-nav__link">
         
   
   
@@ -3245,7 +3245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../data_processing/stats/" class="md-nav__link">
+      <a href="../stats/" class="md-nav__link">
         
   
   
@@ -3253,564 +3253,6 @@
     
   
     stats
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../data_processing/validation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    validation
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../defaults/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    defaults
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../errors/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    errors
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4_1_8" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5_4_1_8" id="__nav_5_4_1_8_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    evaluation
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_4_1_8_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5_4_1_8">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    evaluation
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4_1_8_1" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5_4_1_8_1" id="__nav_5_4_1_8_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    components
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_4_1_8_1_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5_4_1_8_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    components
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../attribute_inference_protection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    attribute_inference_protection
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../column_distribution/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    column_distribution
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../component/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    component
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../composite_score/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    composite_score
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../correlation/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    correlation
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../data_privacy_score/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    data_privacy_score
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../dataset_statistics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    dataset_statistics
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../deep_structure/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    deep_structure
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../membership_inference_protection/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    membership_inference_protection
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../multi_modal_figures/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    multi_modal_figures
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../pii_replay/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    pii_replay
   
 
     
@@ -3845,7 +3287,7 @@
   <span class="md-ellipsis">
     
   
-    privacy_metric_utils
+    validation
   
 
     
@@ -3863,7 +3305,7 @@
   <span class="md-ellipsis">
     
   
-    privacy_metric_utils
+    validation
   
 
     
@@ -3887,22 +3329,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;privacy_metric_utils
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;validation
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" privacy_metric_utils">
+    <nav class="md-nav" aria-label=" validation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.find_text_fields" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.validation.validate_groupby_column" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;find_text_fields
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;validate_groupby_column
       
     </span>
   </a>
@@ -3910,21 +3352,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.divide_tabular_text" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.validation.validate_orderby_column" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;divide_tabular_text
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.embed_text" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;embed_text
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;validate_orderby_column
       
     </span>
   </a>
@@ -3945,6 +3376,14 @@
 
               
             
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
               
                 
   
@@ -3952,7 +3391,557 @@
   
   
     <li class="md-nav__item">
-      <a href="../sqs_score/" class="md-nav__link">
+      <a href="../../defaults/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    defaults
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    errors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_4_1_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4_1_8" id="__nav_5_4_1_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    evaluation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_4_1_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4_1_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    evaluation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_4_1_8_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4_1_8_1" id="__nav_5_4_1_8_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    components
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_4_1_8_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4_1_8_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    components
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/attribute_inference_protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    attribute_inference_protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/column_distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    column_distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/component/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    component
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/composite_score/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    composite_score
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/correlation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    correlation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/data_privacy_score/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    data_privacy_score
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/dataset_statistics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dataset_statistics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/deep_structure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    deep_structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/membership_inference_protection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    membership_inference_protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/multi_modal_figures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    multi_modal_figures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/pii_replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    pii_replay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/privacy_metric_utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    privacy_metric_utils
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../evaluation/components/sqs_score/" class="md-nav__link">
         
   
   
@@ -3980,7 +3969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../text_semantic_similarity/" class="md-nav__link">
+      <a href="../../evaluation/components/text_semantic_similarity/" class="md-nav__link">
         
   
   
@@ -4008,7 +3997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../text_structure_similarity/" class="md-nav__link">
+      <a href="../../evaluation/components/text_structure_similarity/" class="md-nav__link">
         
   
   
@@ -4044,7 +4033,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../constants/" class="md-nav__link">
+      <a href="../../evaluation/constants/" class="md-nav__link">
         
   
   
@@ -4138,7 +4127,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/entity_metadata/" class="md-nav__link">
+      <a href="../../evaluation/data_model/entity_metadata/" class="md-nav__link">
         
   
   
@@ -4166,7 +4155,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/evaluation_datasets/" class="md-nav__link">
+      <a href="../../evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
@@ -4194,7 +4183,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/evaluation_field/" class="md-nav__link">
+      <a href="../../evaluation/data_model/evaluation_field/" class="md-nav__link">
         
   
   
@@ -4222,7 +4211,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/evaluation_report/" class="md-nav__link">
+      <a href="../../evaluation/data_model/evaluation_report/" class="md-nav__link">
         
   
   
@@ -4250,7 +4239,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_model/evaluation_score/" class="md-nav__link">
+      <a href="../../evaluation/data_model/evaluation_score/" class="md-nav__link">
         
   
   
@@ -4286,7 +4275,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluator/" class="md-nav__link">
+      <a href="../../evaluation/evaluator/" class="md-nav__link">
         
   
   
@@ -4314,7 +4303,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../nearest_neighbors/" class="md-nav__link">
+      <a href="../../evaluation/nearest_neighbors/" class="md-nav__link">
         
   
   
@@ -4342,7 +4331,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../render/" class="md-nav__link">
+      <a href="../../evaluation/render/" class="md-nav__link">
         
   
   
@@ -4486,7 +4475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reports/multimodal/multimodal_report/" class="md-nav__link">
+      <a href="../../evaluation/reports/multimodal/multimodal_report/" class="md-nav__link">
         
   
   
@@ -4588,7 +4577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../statistics/stats/" class="md-nav__link">
+      <a href="../../evaluation/statistics/stats/" class="md-nav__link">
         
   
   
@@ -4706,7 +4695,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/backend/" class="md-nav__link">
+      <a href="../../generation/backend/" class="md-nav__link">
         
   
   
@@ -4734,7 +4723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/batch/" class="md-nav__link">
+      <a href="../../generation/batch/" class="md-nav__link">
         
   
   
@@ -4762,7 +4751,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/processors/" class="md-nav__link">
+      <a href="../../generation/processors/" class="md-nav__link">
         
   
   
@@ -4790,7 +4779,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/regex_manager/" class="md-nav__link">
+      <a href="../../generation/regex_manager/" class="md-nav__link">
         
   
   
@@ -4818,7 +4807,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/results/" class="md-nav__link">
+      <a href="../../generation/results/" class="md-nav__link">
         
   
   
@@ -4846,7 +4835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/stopping/" class="md-nav__link">
+      <a href="../../generation/stopping/" class="md-nav__link">
         
   
   
@@ -4874,7 +4863,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/timeseries_backend/" class="md-nav__link">
+      <a href="../../generation/timeseries_backend/" class="md-nav__link">
         
   
   
@@ -4902,7 +4891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/utils/" class="md-nav__link">
+      <a href="../../generation/utils/" class="md-nav__link">
         
   
   
@@ -4930,7 +4919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../generation/vllm_backend/" class="md-nav__link">
+      <a href="../../generation/vllm_backend/" class="md-nav__link">
         
   
   
@@ -5024,7 +5013,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../holdout/holdout/" class="md-nav__link">
+      <a href="../../holdout/holdout/" class="md-nav__link">
         
   
   
@@ -5120,7 +5109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../llm/metadata/" class="md-nav__link">
+      <a href="../../llm/metadata/" class="md-nav__link">
         
   
   
@@ -5148,7 +5137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../llm/utils/" class="md-nav__link">
+      <a href="../../llm/utils/" class="md-nav__link">
         
   
   
@@ -5184,7 +5173,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../observability/" class="md-nav__link">
+      <a href="../../observability/" class="md-nav__link">
         
   
   
@@ -5212,7 +5201,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../package_info/" class="md-nav__link">
+      <a href="../../package_info/" class="md-nav__link">
         
   
   
@@ -5368,7 +5357,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/data_editor/detect/" class="md-nav__link">
+      <a href="../../pii_replacer/data_editor/detect/" class="md-nav__link">
         
   
   
@@ -5396,7 +5385,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/data_editor/edit/" class="md-nav__link">
+      <a href="../../pii_replacer/data_editor/edit/" class="md-nav__link">
         
   
   
@@ -5424,7 +5413,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/data_editor/environment/" class="md-nav__link">
+      <a href="../../pii_replacer/data_editor/environment/" class="md-nav__link">
         
   
   
@@ -5452,7 +5441,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/data_editor/filters/" class="md-nav__link">
+      <a href="../../pii_replacer/data_editor/filters/" class="md-nav__link">
         
   
   
@@ -5488,7 +5477,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/nemo_pii/" class="md-nav__link">
+      <a href="../../pii_replacer/nemo_pii/" class="md-nav__link">
         
   
   
@@ -5614,7 +5603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/const/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/const/" class="md-nav__link">
         
   
   
@@ -5642,7 +5631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/custom/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/custom/" class="md-nav__link">
         
   
   
@@ -5670,7 +5659,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/datetime/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/datetime/" class="md-nav__link">
         
   
   
@@ -5698,7 +5687,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/entity/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/entity/" class="md-nav__link">
         
   
   
@@ -5726,7 +5715,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/factory/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/factory/" class="md-nav__link">
         
   
   
@@ -5754,7 +5743,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/fasttext/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/fasttext/" class="md-nav__link">
         
   
   
@@ -5782,7 +5771,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/helpers/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/helpers/" class="md-nav__link">
         
   
   
@@ -5810,7 +5799,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/labels/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/labels/" class="md-nav__link">
         
   
   
@@ -5838,7 +5827,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/metadata/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/metadata/" class="md-nav__link">
         
   
   
@@ -5866,7 +5855,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/model/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/model/" class="md-nav__link">
         
   
   
@@ -5894,7 +5883,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/models/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/models/" class="md-nav__link">
         
   
   
@@ -5922,7 +5911,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/ner/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/ner/" class="md-nav__link">
         
   
   
@@ -5950,7 +5939,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/ner_mp/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/ner_mp/" class="md-nav__link">
         
   
   
@@ -5978,7 +5967,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/nlp/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/nlp/" class="md-nav__link">
         
   
   
@@ -6006,7 +5995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/person_name/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/person_name/" class="md-nav__link">
         
   
   
@@ -6034,7 +6023,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/pipeline/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/pipeline/" class="md-nav__link">
         
   
   
@@ -6062,7 +6051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/predictor/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/predictor/" class="md-nav__link">
         
   
   
@@ -6090,7 +6079,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regex/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regex/" class="md-nav__link">
         
   
   
@@ -6236,7 +6225,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/aba_routing_number/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/aba_routing_number/" class="md-nav__link">
         
   
   
@@ -6264,7 +6253,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/age/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/age/" class="md-nav__link">
         
   
   
@@ -6292,7 +6281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/credit_card/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/credit_card/" class="md-nav__link">
         
   
   
@@ -6320,7 +6309,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/domain_name/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/domain_name/" class="md-nav__link">
         
   
   
@@ -6348,7 +6337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/email/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/email/" class="md-nav__link">
         
   
   
@@ -6376,7 +6365,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/facebook/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/facebook/" class="md-nav__link">
         
   
   
@@ -6404,7 +6393,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/generic_key/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/generic_key/" class="md-nav__link">
         
   
   
@@ -6432,7 +6421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/github/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/github/" class="md-nav__link">
         
   
   
@@ -6460,7 +6449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/google/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/google/" class="md-nav__link">
         
   
   
@@ -6488,7 +6477,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/google_olc/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/google_olc/" class="md-nav__link">
         
   
   
@@ -6516,7 +6505,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/iban/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/iban/" class="md-nav__link">
         
   
   
@@ -6544,7 +6533,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/imei/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/imei/" class="md-nav__link">
         
   
   
@@ -6572,7 +6561,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/ip_address/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/ip_address/" class="md-nav__link">
         
   
   
@@ -6600,7 +6589,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/jwt/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/jwt/" class="md-nav__link">
         
   
   
@@ -6628,7 +6617,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/lat_lon/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/lat_lon/" class="md-nav__link">
         
   
   
@@ -6656,7 +6645,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/md5/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/md5/" class="md-nav__link">
         
   
   
@@ -6684,7 +6673,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/race_ethnicity/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/race_ethnicity/" class="md-nav__link">
         
   
   
@@ -6712,7 +6701,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/sendgrid/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/sendgrid/" class="md-nav__link">
         
   
   
@@ -6740,7 +6729,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/sex_gender/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/sex_gender/" class="md-nav__link">
         
   
   
@@ -6768,7 +6757,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/sha256/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/sha256/" class="md-nav__link">
         
   
   
@@ -6796,7 +6785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/sha512/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/sha512/" class="md-nav__link">
         
   
   
@@ -6824,7 +6813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/slack/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/slack/" class="md-nav__link">
         
   
   
@@ -6852,7 +6841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/square/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/square/" class="md-nav__link">
         
   
   
@@ -6880,7 +6869,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/stripe/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/stripe/" class="md-nav__link">
         
   
   
@@ -6908,7 +6897,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/swift/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/swift/" class="md-nav__link">
         
   
   
@@ -6936,7 +6925,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/twilio/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/twilio/" class="md-nav__link">
         
   
   
@@ -6964,7 +6953,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/url/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/url/" class="md-nav__link">
         
   
   
@@ -6992,7 +6981,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/us_phone/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/us_phone/" class="md-nav__link">
         
   
   
@@ -7020,7 +7009,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/us_ssn/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/us_ssn/" class="md-nav__link">
         
   
   
@@ -7048,7 +7037,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/us_zipcode/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/us_zipcode/" class="md-nav__link">
         
   
   
@@ -7076,7 +7065,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/regexes/uuid/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/regexes/uuid/" class="md-nav__link">
         
   
   
@@ -7174,7 +7163,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/report/base/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/report/base/" class="md-nav__link">
         
   
   
@@ -7202,7 +7191,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/report/metadata/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/report/metadata/" class="md-nav__link">
         
   
   
@@ -7230,7 +7219,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/report/results/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/report/results/" class="md-nav__link">
         
   
   
@@ -7266,7 +7255,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/ner/utils/" class="md-nav__link">
+      <a href="../../pii_replacer/ner/utils/" class="md-nav__link">
         
   
   
@@ -7302,7 +7291,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pii_replacer/transform_result/" class="md-nav__link">
+      <a href="../../pii_replacer/transform_result/" class="md-nav__link">
         
   
   
@@ -7460,7 +7449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../privacy/dp_transformers/dp_utils/" class="md-nav__link">
+      <a href="../../privacy/dp_transformers/dp_utils/" class="md-nav__link">
         
   
   
@@ -7488,7 +7477,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../privacy/dp_transformers/linear/" class="md-nav__link">
+      <a href="../../privacy/dp_transformers/linear/" class="md-nav__link">
         
   
   
@@ -7516,7 +7505,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../privacy/dp_transformers/privacy_args/" class="md-nav__link">
+      <a href="../../privacy/dp_transformers/privacy_args/" class="md-nav__link">
         
   
   
@@ -7544,7 +7533,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../privacy/dp_transformers/sampler/" class="md-nav__link">
+      <a href="../../privacy/dp_transformers/sampler/" class="md-nav__link">
         
   
   
@@ -7588,7 +7577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../results/" class="md-nav__link">
+      <a href="../../results/" class="md-nav__link">
         
   
   
@@ -7676,7 +7665,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sdk/config_builder/" class="md-nav__link">
+      <a href="../../sdk/config_builder/" class="md-nav__link">
         
   
   
@@ -7704,7 +7693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../sdk/library_builder/" class="md-nav__link">
+      <a href="../../sdk/library_builder/" class="md-nav__link">
         
   
   
@@ -7806,7 +7795,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../training/backend/" class="md-nav__link">
+      <a href="../../training/backend/" class="md-nav__link">
         
   
   
@@ -7834,7 +7823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../training/callbacks/" class="md-nav__link">
+      <a href="../../training/callbacks/" class="md-nav__link">
         
   
   
@@ -7862,7 +7851,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../training/huggingface_backend/" class="md-nav__link">
+      <a href="../../training/huggingface_backend/" class="md-nav__link">
         
   
   
@@ -7890,7 +7879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../training/timeseries_preprocessing/" class="md-nav__link">
+      <a href="../../training/timeseries_preprocessing/" class="md-nav__link">
         
   
   
@@ -7918,7 +7907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../training/unsloth_backend/" class="md-nav__link">
+      <a href="../../training/unsloth_backend/" class="md-nav__link">
         
   
   
@@ -7954,7 +7943,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../utils/" class="md-nav__link">
+      <a href="../../utils/" class="md-nav__link">
         
   
   
@@ -8032,7 +8021,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../../blog/" class="md-nav__link ">
+            <a href="../../../../blog/" class="md-nav__link ">
               
   
   
@@ -8136,7 +8125,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../blog/archive/2026/" class="md-nav__link">
+      <a href="../../../../blog/archive/2026/" class="md-nav__link">
         
   
   
@@ -8197,22 +8186,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;privacy_metric_utils
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;validation
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" privacy_metric_utils">
+    <nav class="md-nav" aria-label=" validation">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.find_text_fields" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.validation.validate_groupby_column" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;find_text_fields
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;validate_groupby_column
       
     </span>
   </a>
@@ -8220,21 +8209,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.divide_tabular_text" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.data_processing.validation.validate_orderby_column" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;divide_tabular_text
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.embed_text" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;embed_text
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;validate_orderby_column
       
     </span>
   </a>
@@ -8271,7 +8249,7 @@
   
   
     <li class="md-path__item">
-      <a href="../../../../.." class="md-path__link">
+      <a href="../../../.." class="md-path__link">
         
   <span class="md-ellipsis">
     Home
@@ -8289,7 +8267,7 @@
     
     
       <li class="md-path__item">
-        <a href="../../../../../developer-guide/architecture/" class="md-path__link">
+        <a href="../../../../developer-guide/architecture/" class="md-path__link">
           
   <span class="md-ellipsis">
     Developer Guide
@@ -8322,7 +8300,7 @@
     
     
       <li class="md-path__item">
-        <a href="../../../artifacts/analyzers/field_features/" class="md-path__link">
+        <a href="../../artifacts/analyzers/field_features/" class="md-path__link">
           
   <span class="md-ellipsis">
     API Reference
@@ -8359,7 +8337,7 @@
     
     
       <li class="md-path__item">
-        <a href="../../../artifacts/analyzers/field_features/" class="md-path__link">
+        <a href="../../artifacts/analyzers/field_features/" class="md-path__link">
           
   <span class="md-ellipsis">
     nemo_safe_synthesizer
@@ -8388,10 +8366,10 @@
     
     
       <li class="md-path__item">
-        <a href="../attribute_inference_protection/" class="md-path__link">
+        <a href="../actions/data_actions/" class="md-path__link">
           
   <span class="md-ellipsis">
-    evaluation
+    data_processing
   </span>
 
         </a>
@@ -8399,24 +8377,6 @@
     
   
 
-    
-  
-
-      
-        
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../attribute_inference_protection/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    components
-  </span>
-
-        </a>
-      </li>
     
   
 
@@ -8434,19 +8394,21 @@
   
 
 
-  <h1>privacy_metric_utils</h1>
+  <h1>validation</h1>
 
 <div class="doc doc-object doc-module">
 
 
 
-<h2 id="nemo_safe_synthesizer.evaluation.components.privacy_metric_utils" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>privacy_metric_utils</code>
+<h2 id="nemo_safe_synthesizer.data_processing.validation" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>validation</code>
 
 
-<a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nemo_safe_synthesizer.data_processing.validation" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
+
+        <p>Data validation helpers shared across pipeline stages.</p>
 
 
 
@@ -8469,26 +8431,18 @@
       </thead>
       <tbody>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            find_text_fields(df) (nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.find_text_fields)" href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.find_text_fields">find_text_fields</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="            validate_groupby_column(data, group_by) (nemo_safe_synthesizer.data_processing.validation.validate_groupby_column)" href="#nemo_safe_synthesizer.data_processing.validation.validate_groupby_column">validate_groupby_column</a></code></td>
               <td>
                 <div class="doc-md-description">
-                  <p>Identify columns in <code>df</code> whose content is free-form text.</p>
+                  <p>Validate that the configured group-by column exists and has no missing values.</p>
                 </div>
               </td>
             </tr>
             <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            divide_tabular_text(df, text_fields) (nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.divide_tabular_text)" href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.divide_tabular_text">divide_tabular_text</a></code></td>
+              <td><code><a class="autorefs autorefs-internal" title="            validate_orderby_column(data, order_by) (nemo_safe_synthesizer.data_processing.validation.validate_orderby_column)" href="#nemo_safe_synthesizer.data_processing.validation.validate_orderby_column">validate_orderby_column</a></code></td>
               <td>
                 <div class="doc-md-description">
-                  <p>Split <code>df</code> into a tabular-only and a text-only DataFrame.</p>
-                </div>
-              </td>
-            </tr>
-            <tr class="doc-section-item">
-              <td><code><a class="autorefs autorefs-internal" title="            embed_text(df, embedder) (nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.embed_text)" href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.embed_text">embed_text</a></code></td>
-              <td>
-                <div class="doc-md-description">
-                  <p>Embed every text column in <code>df</code> and return a single averaged embedding per row.</p>
+                  <p>Validate that the configured order-by column exists.</p>
                 </div>
               </td>
             </tr>
@@ -8513,17 +8467,15 @@
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.find_text_fields" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">find_text_fields</span><span class="p">(</span><span class="n">df</span><span class="p">)</span></code>
+<h3 id="nemo_safe_synthesizer.data_processing.validation.validate_groupby_column" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">validate_groupby_column</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">group_by</span><span class="p">)</span></code>
 
-<a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.find_text_fields" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nemo_safe_synthesizer.data_processing.validation.validate_groupby_column" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Identify columns in <code>df</code> whose content is free-form text.</p>
-<p>Each column is passed through <code>describe_field</code>; those classified
-as <code>"text"</code> are returned.</p>
+        <p>Validate that the configured group-by column exists and has no missing values.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8539,14 +8491,30 @@ as <code>"text"</code> are returned.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>df</code>
+                <code>data</code>
             </td>
             <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | <span title="collections.abc.Collection">Collection</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>DataFrame whose columns are inspected.</p>
+                <p>A DataFrame or collection of column names to validate against.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>group_by</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Name of the configured grouping column.</p>
               </div>
             </td>
             <td>
@@ -8557,7 +8525,7 @@ as <code>"text"</code> are returned.</p>
     </table>
 
 
-    <p><span class="doc-section-title">Returns:</span></p>
+<p><span class="doc-section-title">Raises:</span></p>
     <table>
       <thead>
         <tr>
@@ -8568,11 +8536,21 @@ as <code>"text"</code> are returned.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
+                  <code><a class="autorefs autorefs-internal" title="            ParameterError (nemo_safe_synthesizer.errors.ParameterError)" href="../../errors/#nemo_safe_synthesizer.errors.ParameterError">ParameterError</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Column names classified as free-form text.</p>
+                <p>If <code>group_by</code> is configured but not present in <code>data</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            DataError (nemo_safe_synthesizer.errors.DataError)" href="../../errors/#nemo_safe_synthesizer.errors.DataError">DataError</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If <code>data</code> is a DataFrame and <code>group_by</code> contains missing values.</p>
               </div>
             </td>
           </tr>
@@ -8581,16 +8559,8 @@ as <code>"text"</code> are returned.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/components/privacy_metric_utils.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-17">17</a></span>
-<span class="normal"><a href="#__codelineno-0-18">18</a></span>
-<span class="normal"><a href="#__codelineno-0-19">19</a></span>
-<span class="normal"><a href="#__codelineno-0-20">20</a></span>
-<span class="normal"><a href="#__codelineno-0-21">21</a></span>
-<span class="normal"><a href="#__codelineno-0-22">22</a></span>
-<span class="normal"><a href="#__codelineno-0-23">23</a></span>
-<span class="normal"><a href="#__codelineno-0-24">24</a></span>
-<span class="normal"><a href="#__codelineno-0-25">25</a></span>
+              <summary>Source code in <code>src/nemo_safe_synthesizer/data_processing/validation.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-25">25</a></span>
 <span class="normal"><a href="#__codelineno-0-26">26</a></span>
 <span class="normal"><a href="#__codelineno-0-27">27</a></span>
 <span class="normal"><a href="#__codelineno-0-28">28</a></span>
@@ -8599,129 +8569,10 @@ as <code>"text"</code> are returned.</p>
 <span class="normal"><a href="#__codelineno-0-31">31</a></span>
 <span class="normal"><a href="#__codelineno-0-32">32</a></span>
 <span class="normal"><a href="#__codelineno-0-33">33</a></span>
-<span class="normal"><a href="#__codelineno-0-34">34</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_text_fields</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Identify columns in ``df`` whose content is free-form text.</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19"></a>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20"></a><span class="sd">    Each column is passed through ``describe_field``; those classified</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21"></a><span class="sd">    as ``&quot;text&quot;`` are returned.</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22"></a>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="sd">        df: DataFrame whose columns are inspected.</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a><span class="sd">        Column names classified as free-form text.</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a>    <span class="n">text_fields</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a>    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>        <span class="n">field_info</span> <span class="o">=</span> <span class="n">describe_field</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">])</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a>        <span class="k">if</span> <span class="n">field_info</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">value</span> <span class="o">==</span> <span class="s2">&quot;text&quot;</span><span class="p">:</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a>            <span class="n">text_fields</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34"></a>    <span class="k">return</span> <span class="n">text_fields</span>
-</span></code></pre></div></td></tr></table></div>
-            </details>
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.divide_tabular_text" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">divide_tabular_text</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">text_fields</span><span class="p">)</span></code>
-
-<a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.divide_tabular_text" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Split <code>df</code> into a tabular-only and a text-only DataFrame.</p>
-<p>Columns present in <code>text_fields</code> go into the text DataFrame; the
-remaining columns go into the tabular DataFrame.</p>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>df</code>
-            </td>
-            <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Source DataFrame to split.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>text_fields</code>
-            </td>
-            <td>
-                  <code><span title="list">list</span>[<span title="str">str</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Column names to treat as text.</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-    <p><span class="doc-section-title">Returns:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>A <code>(tabular_df, text_df)</code> tuple where <code>tabular_df</code> contains only</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>the non-text columns and <code>text_df</code> contains only the text columns.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-            <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/components/privacy_metric_utils.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-37">37</a></span>
+<span class="normal"><a href="#__codelineno-0-34">34</a></span>
+<span class="normal"><a href="#__codelineno-0-35">35</a></span>
+<span class="normal"><a href="#__codelineno-0-36">36</a></span>
+<span class="normal"><a href="#__codelineno-0-37">37</a></span>
 <span class="normal"><a href="#__codelineno-0-38">38</a></span>
 <span class="normal"><a href="#__codelineno-0-39">39</a></span>
 <span class="normal"><a href="#__codelineno-0-40">40</a></span>
@@ -8736,22 +8587,34 @@ remaining columns go into the tabular DataFrame.</p>
 <span class="normal"><a href="#__codelineno-0-49">49</a></span>
 <span class="normal"><a href="#__codelineno-0-50">50</a></span>
 <span class="normal"><a href="#__codelineno-0-51">51</a></span>
-<span class="normal"><a href="#__codelineno-0-52">52</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="k">def</span><span class="w"> </span><span class="nf">divide_tabular_text</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">text_fields</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Split ``df`` into a tabular-only and a text-only DataFrame.</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a><span class="sd">    Columns present in ``text_fields`` go into the text DataFrame; the</span>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="sd">    remaining columns go into the tabular DataFrame.</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="sd">        df: Source DataFrame to split.</span>
-</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="sd">        text_fields: Column names to treat as text.</span>
-</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>
-</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">        A ``(tabular_df, text_df)`` tuple where ``tabular_df`` contains only</span>
-</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">        the non-text columns and ``text_df`` contains only the text columns.</span>
-</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="n">tabular_fields</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">text_fields</span><span class="p">]</span>
-</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a>    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">tabular_fields</span><span class="p">),</span> <span class="n">df</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">text_fields</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">validate_groupby_column</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">group_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate that the configured group-by column exists and has no missing values.</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27"></a>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="sd">        data: A DataFrame or collection of column names to validate against.</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="sd">        group_by: Name of the configured grouping column.</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31"></a>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">    Raises:</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">        ParameterError: If ``group_by`` is configured but not present in ``data``.</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        DataError: If ``data`` is a DataFrame and ``group_by`` contains missing values.</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36"></a>    <span class="k">if</span> <span class="n">group_by</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37"></a>        <span class="k">return</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38"></a>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39"></a>    <span class="n">columns</span> <span class="o">=</span> <span class="n">_get_column_names</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40"></a>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a>    <span class="k">if</span> <span class="n">group_by</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>        <span class="n">message</span> <span class="o">=</span> <span class="n">MISSING_GROUP_BY_COLUMN_ERROR</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">group_by</span><span class="o">=</span><span class="n">group_by</span><span class="p">)</span>
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>        <span class="k">if</span> <span class="s2">&quot;,&quot;</span> <span class="ow">in</span> <span class="n">group_by</span><span class="p">:</span>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a>            <span class="n">message</span> <span class="o">+=</span> <span class="p">(</span>
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a>                <span class="s2">&quot; The column name contains a comma -- multi-column grouping is not supported. Use a single column name.&quot;</span>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>            <span class="p">)</span>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a>            <span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot; Please set `data.group_training_examples_by` to an existing column or to `null`/`None` to disable grouping.&quot;</span>
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a>        <span class="k">raise</span> <span class="n">ParameterError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="ow">and</span> <span class="n">data</span><span class="p">[</span><span class="n">group_by</span><span class="p">]</span><span class="o">.</span><span class="n">isna</span><span class="p">()</span><span class="o">.</span><span class="n">any</span><span class="p">():</span>
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a>        <span class="k">raise</span> <span class="n">DataError</span><span class="p">(</span><span class="n">MISSING_GROUP_BY_VALUES_ERROR</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">group_by</span><span class="o">=</span><span class="n">group_by</span><span class="p">))</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8761,18 +8624,15 @@ remaining columns go into the tabular DataFrame.</p>
 <div class="doc doc-object doc-function">
 
 
-<h3 id="nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.embed_text" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">embed_text</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">embedder</span><span class="p">)</span></code>
+<h3 id="nemo_safe_synthesizer.data_processing.validation.validate_orderby_column" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">validate_orderby_column</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">order_by</span><span class="p">)</span></code>
 
-<a href="#nemo_safe_synthesizer.evaluation.components.privacy_metric_utils.embed_text" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nemo_safe_synthesizer.data_processing.validation.validate_orderby_column" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
 
-        <p>Embed every text column in <code>df</code> and return a single averaged embedding per row.</p>
-<p>For each column the <code>embedder</code> produces a <code>(n_rows, embed_dim)</code> matrix.
-The per-column matrices are stacked and averaged across columns so that
-every column contributes equally to the final embedding.</p>
+        <p>Validate that the configured order-by column exists.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8788,14 +8648,14 @@ every column contributes equally to the final embedding.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                <code>df</code>
+                <code>data</code>
             </td>
             <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+                  <code><span title="pandas.DataFrame">DataFrame</span> | <span title="collections.abc.Collection">Collection</span>[<span title="str">str</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>DataFrame whose columns are all text to be embedded.</p>
+                <p>A DataFrame or collection of column names to validate against.</p>
               </div>
             </td>
             <td>
@@ -8804,14 +8664,14 @@ every column contributes equally to the final embedding.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>embedder</code>
+                <code>order_by</code>
             </td>
             <td>
-                  <code><span title="sentence_transformers.SentenceTransformer">SentenceTransformer</span></code>
+                  <code><span title="str">str</span> | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Sentence-transformer model used to produce embeddings.</p>
+                <p>Name of the configured ordering column.</p>
               </div>
             </td>
             <td>
@@ -8822,7 +8682,7 @@ every column contributes equally to the final embedding.</p>
     </table>
 
 
-    <p><span class="doc-section-title">Returns:</span></p>
+<p><span class="doc-section-title">Raises:</span></p>
     <table>
       <thead>
         <tr>
@@ -8833,21 +8693,11 @@ every column contributes equally to the final embedding.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
+                  <code><a class="autorefs autorefs-internal" title="            ParameterError (nemo_safe_synthesizer.errors.ParameterError)" href="../../errors/#nemo_safe_synthesizer.errors.ParameterError">ParameterError</a></code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Single-column DataFrame with column <code>"embedding"</code> whose values are</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="pandas.DataFrame">DataFrame</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>1-D tensors of shape <code>(embed_dim,)</code>.</p>
+                <p>If <code>order_by</code> is configured but not present in <code>data</code>.</p>
               </div>
             </td>
           </tr>
@@ -8856,7 +8706,7 @@ every column contributes equally to the final embedding.</p>
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/nemo_safe_synthesizer/evaluation/components/privacy_metric_utils.py</code></summary>
+              <summary>Source code in <code>src/nemo_safe_synthesizer/data_processing/validation.py</code></summary>
               <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-55">55</a></span>
 <span class="normal"><a href="#__codelineno-0-56">56</a></span>
 <span class="normal"><a href="#__codelineno-0-57">57</a></span>
@@ -8873,37 +8723,23 @@ every column contributes equally to the final embedding.</p>
 <span class="normal"><a href="#__codelineno-0-68">68</a></span>
 <span class="normal"><a href="#__codelineno-0-69">69</a></span>
 <span class="normal"><a href="#__codelineno-0-70">70</a></span>
-<span class="normal"><a href="#__codelineno-0-71">71</a></span>
-<span class="normal"><a href="#__codelineno-0-72">72</a></span>
-<span class="normal"><a href="#__codelineno-0-73">73</a></span>
-<span class="normal"><a href="#__codelineno-0-74">74</a></span>
-<span class="normal"><a href="#__codelineno-0-75">75</a></span>
-<span class="normal"><a href="#__codelineno-0-76">76</a></span>
-<span class="normal"><a href="#__codelineno-0-77">77</a></span>
-<span class="normal"><a href="#__codelineno-0-78">78</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="k">def</span><span class="w"> </span><span class="nf">embed_text</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">embedder</span><span class="p">:</span> <span class="n">SentenceTransformer</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
-</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Embed every text column in ``df`` and return a single averaged embedding per row.</span>
+<span class="normal"><a href="#__codelineno-0-71">71</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="k">def</span><span class="w"> </span><span class="nf">validate_orderby_column</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="n">Collection</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">order_by</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate that the configured order-by column exists.</span>
 </span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a>
-</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    For each column the ``embedder`` produces a ``(n_rows, embed_dim)`` matrix.</span>
-</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">    The per-column matrices are stacked and averaged across columns so that</span>
-</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">    every column contributes equally to the final embedding.</span>
+</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">        data: A DataFrame or collection of column names to validate against.</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">        order_by: Name of the configured ordering column.</span>
 </span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a>
-</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        df: DataFrame whose columns are all text to be embedded.</span>
-</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">        embedder: Sentence-transformer model used to produce embeddings.</span>
-</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>
-</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a><span class="sd">        Single-column DataFrame with column ``&quot;embedding&quot;`` whose values are</span>
-</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a><span class="sd">        1-D tensors of shape ``(embed_dim,)``.</span>
-</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="n">embeddings</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
-</span><span id="__span-0-72"><a id="__codelineno-0-72" name="__codelineno-0-72"></a>        <span class="n">data</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">to_list</span><span class="p">()]</span>
-</span><span id="__span-0-73"><a id="__codelineno-0-73" name="__codelineno-0-73"></a>        <span class="n">embeddings</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">as_tensor</span><span class="p">(</span><span class="n">embedder</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">show_progress_bar</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">convert_to_tensor</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
-</span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74"></a>
-</span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">stacked</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">embeddings</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">],</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># shape: (n_cols, n_rows, embed_dim)</span>
-</span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="n">avg_embeddings</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">stacked</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># shape: (n_rows, embed_dim)</span>
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77"></a>
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78"></a>    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;embedding&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">avg_embeddings</span><span class="p">)})</span>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    Raises:</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">        ParameterError: If ``order_by`` is configured but not present in ``data``.</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="k">if</span> <span class="n">order_by</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>        <span class="k">return</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>    <span class="n">columns</span> <span class="o">=</span> <span class="n">_get_column_names</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>
+</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>    <span class="k">if</span> <span class="n">order_by</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>        <span class="k">raise</span> <span class="n">ParameterError</span><span class="p">(</span><span class="n">MISSING_ORDER_BY_COLUMN_ERROR</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">order_by</span><span class="o">=</span><span class="n">order_by</span><span class="p">))</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8954,7 +8790,7 @@ every column contributes equally to the final embedding.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../pii_replay/" class="md-footer__link md-footer__link--prev" aria-label="Previous: pii_replay">
+          <a href="../stats/" class="md-footer__link md-footer__link--prev" aria-label="Previous: stats">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -8964,20 +8800,20 @@ every column contributes equally to the final embedding.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                pii_replay
+                stats
               </div>
             </div>
           </a>
         
         
           
-          <a href="../sqs_score/" class="md-footer__link md-footer__link--next" aria-label="Next: sqs_score">
+          <a href="../../defaults/" class="md-footer__link md-footer__link--next" aria-label="Next: defaults">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                sqs_score
+                defaults
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -9018,16 +8854,16 @@ every column contributes equally to the final embedding.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../../..", "features": ["content.code.copy", "content.code.select", "content.code.annotate", "content.tabs.link", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "toc.follow"], "search": "../../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["content.code.copy", "content.code.select", "content.code.annotate", "content.tabs.link", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "toc.follow"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../../../../js/mathjax.js"></script>
+        <script src="../../../../js/mathjax.js"></script>
       
         <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
-        <script src="../../../../../js/toc-toggle.js"></script>
+        <script src="../../../../js/toc-toggle.js"></script>
       
     
   </body>
