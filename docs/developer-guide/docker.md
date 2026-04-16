@@ -14,38 +14,48 @@ For running Safe Synthesizer in a container, see
 ## Dockerfile Layout
 
 [`containers/Dockerfile.cuda`](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/containers/Dockerfile.cuda)
-uses a three-stage multistage build:
+uses a four-stage multistage build:
 
 ```mermaid
 flowchart TD
-    uvImage["ghcr.io/astral-sh/uv:UV_VERSION"]
+    ubuntuBase["ubuntu:UBUNTU_VERSION\n(tools stage)"]
     cudaBuild["nvidia/cuda:CUDA_VERSION-CUDA_IMAGE_TYPE-ubuntu\n(deps stage -- may be runtime or devel)"]
     cudaRuntime["nvidia/cuda:CUDA_VERSION-runtime-ubuntu\n(runtime stage -- always runtime)"]
 
     subgraph stages [Build Stages]
+        tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
         deps["deps\nInstalls Python 3.11 via uv\nuv sync cu128+engine"]
         runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
-        dev["dev\nExtends runtime\nAdds git, make, pytest\nRoot user"]
+        dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
     end
 
-    uvImage -->|"COPY /uv"| deps
+    ubuntuBase --> tools
+    tools -->|"COPY uv binary"| deps
     cudaBuild --> deps
     deps -->|"COPY venv + toolchain"| runtime
     cudaRuntime --> runtime
     runtime --> dev
+    tools -->|"COPY mise + all tools"| dev
 ```
 
-- deps: installs uv, Python, and all cu128+engine dependencies. Uses
-  `--mount=type=cache` to avoid re-downloading ~10 GB of PyTorch/CUDA wheels.
+- tools: installs mise and all dev tools (uv, ruff, ty, gh, etc.) on a
+  lightweight `ubuntu` base. Mise is the single source of truth for tool
+  versions via `.mise.toml` -- no separate version pins in the Dockerfile.
+  Uses the [mise Docker cookbook](https://mise.jdx.dev/mise-cookbook/docker.html)
+  pattern with `MISE_DATA_DIR=/mise` for stable, copyable paths.
+- deps: copies the uv binary from `tools`, then installs Python and all
+  cu128+engine dependencies. Uses `--mount=type=cache` to avoid
+  re-downloading ~10 GB of PyTorch/CUDA wheels.
 - runtime: copies the venv and uv-managed Python into a fresh CUDA runtime
   base. Runs as non-root `appuser` (uid 1000). GPU access is declared via
   `NVIDIA_VISIBLE_DEVICES=all` and `NVIDIA_DRIVER_CAPABILITIES=compute,utility`
   environment variables baked into the image.
   Uses a wrapper entrypoint (`containers/entrypoint.sh`) that detects
   common misconfigurations before delegating to `safe-synthesizer`.
-- dev: extends runtime with git, make, uv, and the full dev dependency group
-  (pytest, ruff, etc.). Runs as root for flexibility. Used for interactive
-  development and running tests inside the container.
+- dev: extends runtime with the full mise toolchain (copied from `tools`)
+  and the dev dependency group (pytest, ruff, etc.). Runs as root for
+  flexibility. Used for interactive development and running tests inside
+  the container (also serves as the CI test target).
 
 ---
 
@@ -92,7 +102,6 @@ command).
 | `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
 | `CUDA_IMAGE_TYPE` | `runtime` | Base image variant for the deps stage. Change to `devel` if a dependency requires CUDA headers for compilation |
 | `PYTHON_VERSION` | `3.11.13` | Python version installed via `uv python install` |
-| `UV_VERSION` | `0.9.14` | uv version (pinned to the lower bound of `pyproject.toml` `required-version`) |
 | `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`). Automatically populated by `docker buildx build --platform` |
 | `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc`. Override for arm64: `90;90a;120;120a` |
 
@@ -256,9 +265,15 @@ To reduce size:
 | Base | `nvidia/cuda:12.8.1-runtime-ubuntu22.04` | `python:3.11-slim` |
 | Extras | `cu128` + `engine` | `cpu` + `engine` |
 | GPU | Required | Not needed |
-| Stages | `deps` / `runtime` / `dev` | Single stage |
+| Stages | `tools` / `deps` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |
 | Build target | `make container-build-gpu` | `make container-build-test` |
+
+The `setup` stage installs system packages and mise-managed dev tools
+(ruff, ty, uv, etc.). The `install-deps` stage extends it with the Python
+environment (`make bootstrap-nss cpu`). `make container-build-test` builds
+the full image; `make container-build-test-setup` builds only the `setup`
+stage for fast tool-installation verification (`make test-tool-install`).
 
 Both follow the conventions in [STYLE_GUIDE.md -- Dockerfiles](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#dockerfiles).
 
@@ -267,9 +282,9 @@ Both follow the conventions in [STYLE_GUIDE.md -- Dockerfiles](https://github.co
 ## Multi-Architecture Support
 
 The CUDA Dockerfile supports `linux/amd64` and `linux/arm64`
-(Grace/Blackwell). The `nvidia/cuda` base images and `uv` binaries are
-already multi-platform, so the same Dockerfile works for both architectures
-without conditional logic.
+(Grace/Blackwell). The `nvidia/cuda` base images, `ubuntu` base images,
+and mise binaries are already multi-platform, so the same Dockerfile works
+for both architectures without conditional logic.
 
 ### How it works
 

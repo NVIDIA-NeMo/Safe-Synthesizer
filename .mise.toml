@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Tool versions managed by mise (https://mise.jdx.dev/).
+# Run `mise install` to install all tools, or `mise use <tool>` to add a new one.
+#
+# Tools NOT managed here:
+#   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
+
+
+# will warn when below this version
+min_version = { soft = '2026.4.0' }
+
+[tools]
+# Tools for working with JSON, Git, and other system utilities.
+jq = "1.8.1"
+yq = "4.44.1"
+github-cli = "latest"
+"ubi:google/osv-scanner" = "latest"
+ripgrep = "latest"
+
+# Tools for managing Python environments and packages.
+dprint = "latest"
+uv = "0.9.30"
+ruff = "0.15.0"
+ty = "0.0.27"
+
+"aqua:j178/prek" = "latest"
+
+
+[env]
+# Activate the project virtualenv (equivalent to the old .envrc "layout python3").
+VIRTUAL_ENV = "{{config_root}}/.venv"
+_.path = [".venv/bin"]
+_.file = [".env", ".env.local"]
+
+[settings]
+lockfile = true

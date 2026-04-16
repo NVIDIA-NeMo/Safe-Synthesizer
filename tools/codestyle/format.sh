@@ -21,8 +21,6 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=_lib.sh
 source "$REPO_ROOT/tools/codestyle/_lib.sh"
 
-require_tool ruff
-
 collect_py_files "$@"
 [[ ${#PY_FILES[@]} -eq 0 ]] && exit 0
 
