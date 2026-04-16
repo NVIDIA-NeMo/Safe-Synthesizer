@@ -240,12 +240,13 @@ def process_timeseries_data(
     if not is_elapsed_time and ts_config.timestamp_column is not None:
         if ts_config.timestamp_format == "elapsed_seconds":
             is_elapsed_time = True
-        elif ts_config.timestamp_format is None and pd.api.types.is_numeric_dtype(df_all[ts_config.timestamp_column]):
+        elif ts_config.timestamp_format is None and pd.api.types.is_numeric_dtype(
+            training_df[ts_config.timestamp_column]
+        ):
             ts_config.timestamp_format = "elapsed_seconds"
             is_elapsed_time = True
             logger.info(
-                f"Timestamp column '{ts_config.timestamp_column}' is numeric; "
-                f"treating as elapsed seconds",
+                f"Timestamp column '{ts_config.timestamp_column}' is numeric; treating as elapsed seconds",
             )
 
     # timestamp_column should be set by now
