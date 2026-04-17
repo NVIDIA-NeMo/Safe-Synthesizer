@@ -84,7 +84,7 @@ Key flags:
 | `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
 | `CUDA_IMAGE_TYPE` | `runtime` | Base image variant (`runtime` or `devel`) |
 | `PYTHON_VERSION` | `3.11.13` | Python version installed via `uv python install` to `/opt/python` |
-| `UV_VERSION` | `0.9.14` | uv version (matches `pyproject.toml` lower bound) |
+| `UV_VERSION` | `0.9.30` | uv version for the deps stage (matches `.mise.toml` pin) |
 | `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`) |
 | `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc` (override for arm64: `90;90a;120;120a`) |
 
@@ -154,18 +154,25 @@ docker build -f containers/Dockerfile.cuda \
 ## CPU Test Image
 
 `Dockerfile.test_ci` provides a CPU-only image for running unit tests locally
-or in CI without a GPU.
+or in CI without a GPU. It uses a two-stage build: `setup` (system packages +
+mise-managed tools) and `install-deps` (Python environment via
+`make bootstrap-nss cpu`).
 
 ### Quick Start
 
 ```bash
 # Run CI unit tests in a container
 make test-ci-container
+
+# Verify mise-managed tools install correctly (fast -- setup stage only)
+make test-tool-install
 ```
 
 ### Makefile Targets
 
 | Target | Description |
 |--------|-------------|
-| `container-build-test` | Build the CPU test image |
+| `container-build-test` | Build the full CPU test image (both stages) |
+| `container-build-test-setup` | Build only the setup stage (tools, no Python deps) |
 | `test-ci-container` | Build and run CI unit tests |
+| `test-tool-install` | Verify mise-managed tools install correctly (setup stage only) |

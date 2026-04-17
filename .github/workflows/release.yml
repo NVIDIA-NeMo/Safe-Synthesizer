@@ -61,7 +61,7 @@ jobs:
           fetch-tags: true
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -121,7 +121,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: nemo-safe-synthesizer-${{ needs.publish-wheel.outputs.version }}
           path: dist/

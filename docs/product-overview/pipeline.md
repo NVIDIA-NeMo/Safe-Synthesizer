@@ -21,7 +21,7 @@ flowchart LR
     data --> pii("PII Replacement\non by default")
     pii --> assemble("Assemble Examples")
     assemble --> train("Fine-tune LLM")
-    train --> generate["Generate Samples"]
+    train --> generate["Generate Synthetic Data"]
     generate --> evaluate["Evaluate"]
 ```
 
@@ -29,10 +29,9 @@ flowchart LR
 
 The pipeline begins by loading your input data (CSV or DataFrame) and preparing it for training:
 
+- Train/test split. The training split is fed into the rest of the pipeline while the test split is held out for the evaluation stage (see [Evaluation](evaluation.md) for details)
 - Data validation and preprocessing
 - Column type inference
-- Grouping and ordering (if configured)
-- Train/test split for holdout evaluation
 
 ### 2. PII Replacement
 
@@ -42,7 +41,7 @@ See [PII Replacement](pii_replacement.md) for detailed PII Replacement documenta
 
 ### 3. Example Assembly
 
-Records are converted to a JSON format and tokenized for model training. The assembler handles truncation, padding, and proper formatting for the target LLM.
+Records are converted to a JSON format and tokenized for model training. The assembler handles truncation, padding, and proper formatting for the target LLM. Grouping and ordering is taken into consideration if configured.
 
 ### 4. Training
 

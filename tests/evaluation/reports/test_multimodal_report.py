@@ -10,16 +10,16 @@ pytest.importorskip(
     reason="sentence_transformers is required for these tests (install with: uv sync --extra cpu)",
 )
 
-from nemo_safe_synthesizer.evaluation.data_model.evaluation_dataset import EvaluationDataset
+from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Grade
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 
 
 def _minimal_multimodal_report() -> MultimodalReport:
-    reference = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
-    output = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
-    dataset = EvaluationDataset(reference=reference, output=output)
-    return MultimodalReport(evaluation_dataset=dataset, components=[])
+    training_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    synthetic_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    datasets = EvaluationDatasets(training=training_df, synthetic=synthetic_df)
+    return MultimodalReport(evaluation_datasets=datasets, components=[])
 
 
 def test_jinja_context_job_id_none_when_nemo_job_id_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,9 +37,9 @@ def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.M
 
 
 @pytest.mark.skip(reason="Times out")
-def test_multimodal_report(train_df_5k, synth_df_5k, test_df, skip_privacy_metrics_config):
+def test_multimodal_report(training_df_5k, synthetic_df_5k, test_df, skip_privacy_metrics_config):
     report = MultimodalReport.from_dataframes(
-        reference=train_df_5k, output=synth_df_5k, test=test_df, config=skip_privacy_metrics_config
+        training=training_df_5k, synthetic=synthetic_df_5k, test=test_df, config=skip_privacy_metrics_config
     )
 
     assert len(report.components) == 11

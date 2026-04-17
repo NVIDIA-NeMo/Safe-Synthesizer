@@ -15,6 +15,7 @@ from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
 from ..config.data import DEFAULT_HOLDOUT, MIN_HOLDOUT
 from ..config.parameters import SafeSynthesizerParameters
+from ..data_processing.validation import validate_groupby_column
 from ..observability import get_logger
 
 MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS = 200
@@ -32,36 +33,36 @@ DataFrameOptionalTuple = tuple[pd.DataFrame, pd.DataFrame | None]
 
 
 def naive_train_test_split(
-    df: pd.DataFrame, test_size: float | int, random_state: int | None = None
+    input_df: pd.DataFrame, test_size: float | int, random_state: int | None = None
 ) -> DataFrameOptionalTuple:
-    """Split a dataframe into train and test sets with a random shuffle.
+    """Split the input dataframe into training and test sets with a random shuffle.
 
     Thin wrapper around ``sklearn.model_selection.train_test_split`` that
     resets the index on both resulting dataframes.
 
     Args:
-        df: Input dataframe to split.
+        input_df: Input dataframe to split.
         test_size: Number of rows (int) or fraction (float) to hold out.
         random_state: Seed for reproducibility.
 
     Returns:
-        Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` if the
+        Tuple of ``(training_df, test_df)``, or ``(training_df, None)`` if the
         split produces no test set.
     """
     if test_size == 0:
-        return df.reset_index(drop=True), None
+        return input_df.reset_index(drop=True), None
 
-    train, test = train_test_split(df, test_size=test_size, random_state=random_state)
-    if test is None:
-        return train, None
+    training_df, test_df = train_test_split(input_df, test_size=test_size, random_state=random_state)
+    if test_df is None:
+        return training_df, None
     else:
-        return train.reset_index(drop=True), test.reset_index(drop=True)
+        return training_df.reset_index(drop=True), test_df.reset_index(drop=True)
 
 
 def grouped_train_test_split(
-    df: pd.DataFrame, test_size: int | float, group_by: str, random_state: int | None = None
+    input_df: pd.DataFrame, test_size: int | float, group_by: str, random_state: int | None = None
 ) -> DataFrameOptionalTuple:
-    """Split a dataframe so that all rows sharing a group stay in the same fold.
+    """Split the input dataframe so that all rows sharing a group stay in the same fold.
 
     Uses ``GroupShuffleSplit`` with 20 candidate splits and picks the one
     whose test-set size is closest to the requested ``test_size``.  If
@@ -69,46 +70,44 @@ def grouped_train_test_split(
     falls back to ``DEFAULT_HOLDOUT``.
 
     Args:
-        df: Input dataframe to split.
+        input_df: Input dataframe to split.
         test_size: Desired number of test rows (int) or fraction (float).
         group_by: Column name whose values define the groups.
         random_state: Seed for reproducibility.
 
     Returns:
-        Tuple of ``(train_df, test_df)``, or ``(df, None)`` if no valid
+        Tuple of ``(training_df, test_df)``, or ``(input_df, None)`` if no valid
         grouped split could be produced.
 
     Raises:
-        ValueError: If the ``group_by`` column contains missing values.
+        ParameterError: If the ``group_by`` column is not present in ``df``.
+        DataError: If the ``group_by`` column contains missing values.
     """
-    # Do not continue the split process if the groupby column has missing values.
-    if df[group_by].isna().any():
-        msg = f"Group by column '{group_by}' has missing values. Please remove/replace them."
-        raise ValueError(msg)
+    validate_groupby_column(input_df, group_by)
 
-    if test_size > df.groupby(group_by).ngroups or test_size == 1 or test_size == 0:
+    if test_size > input_df.groupby(group_by).ngroups or test_size == 1 or test_size == 0:
         logger.info(
-            f"test_size ({test_size}) is greater than number of groups ({df.groupby(group_by).ngroups}) or equals to 0 or 1. Proceeding with default test_size ({DEFAULT_HOLDOUT})."
+            f"test_size ({test_size}) is greater than number of groups ({input_df.groupby(group_by).ngroups}) or equals to 0 or 1. Proceeding with default test_size ({DEFAULT_HOLDOUT})."
         )
         test_size = DEFAULT_HOLDOUT
     splitter = GroupShuffleSplit(test_size=test_size, n_splits=20, random_state=random_state)
-    split = splitter.split(df, groups=df[group_by])
-    df_train, df_test = pd.DataFrame(), pd.DataFrame()
+    split = splitter.split(input_df, groups=input_df[group_by])
+    training_df, test_df = pd.DataFrame(), pd.DataFrame()
     if test_size > 1:
         aim_num_records = test_size
     else:
-        aim_num_records = round(len(df) * test_size)
+        aim_num_records = round(len(input_df) * test_size)
     for train_idx, test_idx in split:
-        if len(df_train) == 0:
-            df_train = df.iloc[train_idx]
-            df_test = df.iloc[test_idx]
-        elif abs(len(df_test) - aim_num_records) > abs(len(df.iloc[test_idx]) - aim_num_records):
-            df_train = df.iloc[train_idx]
-            df_test = df.iloc[test_idx]
-    if len(df_test) == 0:
+        if len(training_df) == 0:
+            training_df = input_df.iloc[train_idx]
+            test_df = input_df.iloc[test_idx]
+        elif abs(len(test_df) - aim_num_records) > abs(len(input_df.iloc[test_idx]) - aim_num_records):
+            training_df = input_df.iloc[train_idx]
+            test_df = input_df.iloc[test_idx]
+    if len(test_df) == 0:
         logger.info("Failed to do grouped train/test split. Proceeding with original dataframe.")
-        return df, None
-    return df_train.reset_index(drop=True), df_test.reset_index(drop=True)
+        return input_df, None
+    return training_df.reset_index(drop=True), test_df.reset_index(drop=True)
 
 
 class Holdout:
@@ -146,14 +145,16 @@ class Holdout:
             input_df: The full input dataframe to split.
 
         Returns:
-            Tuple of ``(train_df, test_df)``, or ``(train_df, None)`` when
+            Tuple of ``(training_df, test_df)``, or ``(training_df, None)`` when
             holdout is disabled or the grouped split fails.
 
         Raises:
             ValueError: If the input dataframe has fewer than
-                ``MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS`` rows, if the
-                computed holdout is smaller than ``MIN_HOLDOUT``, or if
-                the ``group_by`` column contains missing values.
+                ``MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS`` rows or if the
+                computed holdout is smaller than ``MIN_HOLDOUT``.
+            ParameterError: If the configured ``group_by`` column is missing.
+            DataError: If the configured ``group_by`` column contains missing
+                values.
         """
         if not self.holdout or not self.max_holdout:
             return input_df, None
@@ -188,27 +189,20 @@ class Holdout:
                 HOLDOUT_TOO_SMALL_ERROR,
             )
 
-        if self.group_by is not None and self.group_by not in input_df.columns:
-            msg = f"Group by column {self.group_by!r} not found in input dataset columns. Doing a normal split."
-            if "," in self.group_by:
-                msg += " The column name contains a comma -- multi-column grouping is not supported. Use a single column name."
-            logger.warning(msg)
-            self.group_by = None
-        if self.group_by is not None and input_df[self.group_by].isna().any():
-            raise ValueError(f"Group by column '{self.group_by}' has missing values. Please remove/replace them.")
+        validate_groupby_column(input_df, self.group_by)
 
         if self.group_by:
-            df, test_df = grouped_train_test_split(
-                df=input_df,
+            training_df, test_df = grouped_train_test_split(
+                input_df=input_df,
                 test_size=final_holdout,
                 group_by=self.group_by,
                 random_state=self.random_state,
             )
         else:
-            df, test_df = naive_train_test_split(
-                df=input_df,
+            training_df, test_df = naive_train_test_split(
+                input_df=input_df,
                 test_size=final_holdout,
                 random_state=self.random_state,
             )
 
-        return (df, test_df)
+        return (training_df, test_df)

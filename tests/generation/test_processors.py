@@ -27,8 +27,6 @@ logger = get_logger(__name__)
 BOS = "<s>"
 EOS = "</s>"
 
-TOKENIZERS_DIR = Path(__file__).parent.parent / "test_data" / "tokenizers"
-
 
 @pytest.fixture(scope="session")
 def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
@@ -36,30 +34,26 @@ def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
 
 
 @pytest.fixture(
-    params=[
-        str(TOKENIZERS_DIR / "tinyllama"),
-        str(TOKENIZERS_DIR / "smollm3b"),
-        str(TOKENIZERS_DIR / "mistral7b"),
-    ],
+    params=["tinyllama", "smollm3b", "mistral7b"],
     ids=["tinyllama", "smollm3", "mistral"],
 )
-def fixture_over_tokenizers(request) -> tuple[str, PreTrainedTokenizer]:
+def fixture_over_tokenizers(request, tokenizers_dir) -> tuple[str, PreTrainedTokenizer]:
     # Purpose: Parameterized over local tokenizer directories (tinyllama, smollm3, mistral).
     # Data: Each directory under tests/test_data/tokenizers/ contains tokenizer files and config.json
     # so that both AutoTokenizer and AutoConfig can load without network access.
-    local_path = request.param
+    local_path = str(tokenizers_dir / request.param)
     tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
     return local_path, tokenizer
 
 
-# Purpose: Builds training metadata for tests, using the stub tokenizer and explicit params.
+# Purpose: Builds training metadata for tests, using the local SmolLM3 tokenizer directory.
 @pytest.fixture
 def fixture_metadata(
     fixture_save_path,
+    fixture_smollm3_tokenizer,
 ) -> ModelMetadata:
-    local_model_path = str(TOKENIZERS_DIR / "smollm3b")
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False, rope_scaling_factor=1, pretrained_model=local_model_path
+        use_unsloth=False, rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer
     )
     metadata = ModelMetadata.from_str_or_path(config.training.pretrained_model, save_path=fixture_save_path)
     return metadata

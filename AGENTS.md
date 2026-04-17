@@ -74,7 +74,7 @@ Hook scripts live in `.cursor/hooks/` and are loaded by both Cursor (`.cursor/ho
 | `session_context.sh` | `sessionStart` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
 | `enforce-signoff.sh` | `beforeShellExecution` / `PreToolUse(Bash)` | Blocks `git commit` without `--signoff` / `-s`; blocks missing `--gpg-sign` / `-S` |
 
-Cursor parallel-agent worktrees are configured via `.cursor/worktrees.json`, which runs `.cursor/setup-worktree.sh` at worktree creation. The setup script runs `uv sync --frozen` and copies `.local.envrc` from the main worktree if present.
+Cursor parallel-agent worktrees are configured via `.cursor/worktrees.json`, which runs `.cursor/setup-worktree.sh` at worktree creation. The setup script runs `uv sync --frozen` and copies `.env`, `.env.local`, and `mise.local.toml` from the main worktree if present.
 
 For manual worktrees (agent-created via `git worktree add`), run the full sync command after creation (not bare `uv sync --frozen` -- that omits extras). See the `git-worktrees` skill for the full workflow.
 

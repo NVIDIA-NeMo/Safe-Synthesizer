@@ -665,7 +665,7 @@ def test_sequential_assembler_raises_for_missing_group_column(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler raises for missing group column."""
-    with pytest.raises(ParameterError, match="Group by column.*not found in dataset"):
+    with pytest.raises(ParameterError, match="Group by column.*not found"):
         SequentialExampleAssembler(
             dataset=fixture_iris_dataset,
             tokenizer=fixture_tokenizer,
@@ -684,7 +684,7 @@ def test_sequential_assembler_raises_for_missing_order_column(
     fixture_sequential_metadata: ModelMetadata,
 ):
     """Test that SequentialExampleAssembler raises for missing order column."""
-    with pytest.raises(ParameterError, match="Order by column.*not found in dataset"):
+    with pytest.raises(ParameterError, match="Order by column.*not found"):
         SequentialExampleAssembler(
             dataset=fixture_iris_dataset,
             tokenizer=fixture_tokenizer,
@@ -755,9 +755,9 @@ def test_sequential_assembler_sorts_records_by_group_and_order(
         seed=42,
     )
 
-    assert assembler.train_dataset is not None
-    train_df = cast(pd.DataFrame, assembler.train_dataset.to_pandas())
-    for chick_id, group_df in train_df.groupby("Chick"):
+    assert assembler.training_dataset is not None
+    training_df = cast(pd.DataFrame, assembler.training_dataset.to_pandas())
+    for chick_id, group_df in training_df.groupby("Chick"):
         time_values = group_df["Time"].tolist()
         assert time_values == sorted(time_values), f"Time values not sorted for Chick {chick_id}"
 

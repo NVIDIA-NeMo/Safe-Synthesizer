@@ -6,6 +6,7 @@ NVIDIA NeMo Safe Synthesizer creates private, safe versions of sensitive tabular
 
 Read detailed usage below, or jump to the documentation with [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) or the [Safe Synthesizer 101](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) notebook.
 
+
 ### Prerequisites
 
 - Python 3.11–3.13 (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because ray, a transitive dependency of vLLM, does not yet publish `cp314` wheels)
@@ -27,9 +28,11 @@ Or install from source:
 ```bash
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
-make bootstrap-tools
+make setup # installs mise (if missing) + pinned tool versions from mise.lock
 make bootstrap-nss cuda
 ```
+
+Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
 
 ### Running
 
@@ -240,7 +243,15 @@ using the default) so column classification can run.
 
 ### Local Endpoint
 
-To point to a locally hosted LLM:
+To point to a locally hosted LLM, add the variables to `.env.local` (git-ignored, auto-loaded by mise):
+
+```bash
+# .env.local
+NSS_INFERENCE_ENDPOINT=https://your-local-nim-endpoint
+NSS_INFERENCE_KEY=your-api-key  # pragma: allowlist secret
+```
+
+Or export them in your shell:
 
 ```bash
 export NSS_INFERENCE_ENDPOINT="https://your-local-nim-endpoint"

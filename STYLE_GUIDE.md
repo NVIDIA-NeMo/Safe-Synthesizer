@@ -338,6 +338,21 @@ raise DataError(f"The {column} column could not be processed.")
 - Type variables: PascalCase with `T` suffix (`DataT`, `ParameterT`)
 - Private methods: `_determine_*` for internal resolution, `_resolve_*` for config handling
 
+#### Dataset naming
+
+The pipeline works with four canonical datasets. Use these names consistently in code, docs, configs, logs, and tests.
+
+| Dataset | Definition | Pydantic fields | DataFrame variables |
+|---------|-----------|-----------------|---------------------|
+| **Input** | The full user-supplied data before any splitting | `input` | `input_df` |
+| **Training** | The split used for fine-tuning and as the reference for evaluation | `training` | `training_df` |
+| **Test** | The holdout split withheld from training, used by privacy and text-similarity metrics | `test` | `test_df` |
+| **Synthetic** | The records produced by the fine-tuned model | `synthetic` | `synthetic_df` |
+
+When multiple datasets appear together, order parameters as `training, synthetic, test`.
+
+The user-facing config parameter for the test split is `data.holdout` (the fraction to hold out). In user-facing text (docs, logs, error messages), "holdout" refers to the *action* of withholding data; "test" is the *resulting dataset*. Use "holdout test set" when both concepts need to appear together.
+
 ### Imports
 
 - Order of imports: 1) stdlib, 2) third-party, 3) local (enforced by ruff I001/I002)
@@ -718,7 +733,7 @@ The before/after examples above demonstrate most rules. These additional points 
 Testing conventions are substantial enough to warrant their own section. For the full test matrix, markers, and fixture catalog, see [tests/TESTING.md](tests/TESTING.md). This section covers style conventions for writing tests.
 
 - File naming: `test_*.py`; class naming: `Test*`; function naming: `test_<module>_<expected_behavior>`
-- Fixtures: `fixture_` prefix convention for grep-ability and to separate fixtures from test functions. Add `# Purpose:` comments describing usage and data.
+- Fixtures: `fixture_` prefix convention for grep-ability and to separate fixtures from test functions. Add a one-line docstring describing the fixture's purpose and data.
 - Fixture scope: function-scoped by default. Session scope only when empirically justified by test runtime -- not based on assumptions about cost.
 - Assertions: bare `assert` is the primary style; `pytest.raises()` with `match=` for exceptions; `pytest.approx()` for floating-point comparisons
 - Docstrings: optional for simple tests, recommended for complex/e2e tests explaining purpose
@@ -774,7 +789,6 @@ Current state is inconsistent; these are the target conventions for new scripts.
 - Naming: `snake_case` for functions, `_` prefix for internal helpers
 - Variables: always quote (`"$VAR"`, `"${VAR}"`), defaults via `${VAR:-default}`. Use `readonly` for variables that should not change after assignment.
 - Repo root detection: `REPO_ROOT=${REPO_ROOT:-$(git rev-parse --show-toplevel)}`
-- Source shared utilities from `tools/binaries/defs.sh` and `tools/binaries/common_functions.sh` where applicable
 - Use `shellcheck` to lint shell scripts. When disabling a check, add `# shellcheck disable=SCXXXX` with a brief reason.
 
 ```bash
@@ -782,7 +796,6 @@ Current state is inconsistent; these are the target conventions for new scripts.
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
-source "${REPO_ROOT}/tools/binaries/defs.sh"
 
 readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 ```

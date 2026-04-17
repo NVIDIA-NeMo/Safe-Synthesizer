@@ -668,7 +668,7 @@ See [Configuration Reference -- Differential Privacy](configuration.md#different
 
 Produces synthetic records using the trained LoRA adapter via vLLM. The
 generation stage runs a sampling loop: the model generates batches of records,
-each record is validated against the original dataset schema (correct columns,
+each record is validated against the training dataset schema (correct columns,
 correct types, no malformed values), and valid records accumulate until
 `num_records` is reached. If too many consecutive batches produce mostly invalid
 records, the loop stops early.

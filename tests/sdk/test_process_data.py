@@ -4,8 +4,8 @@
 """Tests for the original-vs-PII-replaced training data split in process_data.
 
 When PII replacement is enabled, ``process_data`` must preserve the original
-training split in ``_original_train_df`` (used by evaluation) while storing
-the PII-replaced version in ``_train_df`` (used by model training).  These
+training split in ``_original_training_df`` (used by evaluation) while storing
+the PII-replaced version in ``_training_df`` (used by model training).  These
 tests verify the separation, persistence, and round-trip through
 ``load_from_save_path``.
 """
@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 # ---------------------------------------------------------------------------
@@ -153,14 +154,14 @@ class TestProcessDataPiiSeparation:
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
-    def test_process_data_without_pii_replacement_sets_original_train_df(
+    def test_process_data_without_pii_replacement_sets_original_training_df(
         self,
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
         fixture_process_data_setup_without_pii,
     ):
-        """Without PII replacement, ``_original_train_df`` matches the training split."""
+        """Without PII replacement, ``_original_training_df`` matches the training split."""
         builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
         _wire_process_data_mocks(
             mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
@@ -168,9 +169,9 @@ class TestProcessDataPiiSeparation:
 
         builder.process_data()
 
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
-        assert builder._train_df is not None
-        pd.testing.assert_frame_equal(builder._train_df, train_split)
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
+        assert builder._training_df is not None
+        pd.testing.assert_frame_equal(builder._training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -184,7 +185,7 @@ class TestProcessDataPiiSeparation:
         mock_pii_cls,
         fixture_process_data_setup_with_pii,
     ):
-        """With PII replacement, ``_original_train_df`` preserves the pre-PII data."""
+        """With PII replacement, ``_original_training_df`` preserves the pre-PII data."""
         builder, train_split, test_split, pii_replaced_df, mock_replacer = fixture_process_data_setup_with_pii
         _wire_process_data_mocks(
             mock_holdout_cls, mock_resolver_cls, mock_metadata_cls, builder, train_split, test_split
@@ -194,8 +195,8 @@ class TestProcessDataPiiSeparation:
         builder.process_data()
 
         # Training uses the PII-replaced data; evaluation uses the original
-        pd.testing.assert_frame_equal(builder._train_df, pii_replaced_df)
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        pd.testing.assert_frame_equal(builder._training_df, pii_replaced_df)
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
@@ -266,7 +267,7 @@ class TestProcessDataPiiSeparation:
 # ---------------------------------------------------------------------------
 
 
-class TestEvaluateUsesOriginalTrainDf:
+class TestEvaluateUsesOriginalTrainingDf:
     """``evaluate()`` must always pass the original (pre-PII) data to ``Evaluator``."""
 
     @pytest.mark.parametrize(
@@ -279,19 +280,19 @@ class TestEvaluateUsesOriginalTrainDf:
     )
     @patch("nemo_safe_synthesizer.sdk.library_builder.make_nss_results")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Evaluator")
-    def test_evaluate_uses_original_train_df(
+    def test_evaluate_uses_original_training_df(
         self,
         mock_evaluator_cls,
         mock_make_results,
         fixture_name,
         request: pytest.FixtureRequest,
     ):
-        """Evaluate always passes ``_original_train_df`` as ``train_df``."""
+        """Evaluate always passes ``_original_training_df`` as ``training_df``."""
         setup = request.getfixturevalue(fixture_name)
         builder, train_split, test_split, pii_replaced_df, _ = setup
         has_pii = fixture_name == "fixture_process_data_setup_with_pii"
-        builder._train_df = pii_replaced_df if has_pii else train_split
-        builder._original_train_df = train_split
+        builder._training_df = pii_replaced_df if has_pii else train_split
+        builder._original_training_df = train_split
         builder._test_df = test_split
         builder._total_start = 0.0
 
@@ -306,7 +307,7 @@ class TestEvaluateUsesOriginalTrainDf:
 
         # Evaluation metrics must reflect real data, not PII-replaced tokens
         call_kwargs = mock_evaluator_cls.call_args[1]
-        pd.testing.assert_frame_equal(call_kwargs["train_df"], train_split)
+        pd.testing.assert_frame_equal(call_kwargs["training_df"], train_split)
 
 
 # ---------------------------------------------------------------------------
@@ -361,7 +362,7 @@ class TestLoadFromSavePath:
         fixture_sample_patient_dataframe,
         fixture_sample_patient_redacted_dataframe,
     ):
-        """``training.csv`` is loaded into ``_original_train_df`` in the resume flow."""
+        """``training.csv`` is loaded into ``_original_training_df`` in the resume flow."""
         workdir, train_split, _ = self._prepare_workdir(
             tmp_path,
             fixture_sample_patient_dataframe,
@@ -372,9 +373,9 @@ class TestLoadFromSavePath:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
-        assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
-        assert builder._original_train_df is not None
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        assert builder._training_df is None  # generation-evaluation resume path doesn't need the transformed df
+        assert builder._original_training_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_process_data_skips_when_cached_splits_loaded(
@@ -396,9 +397,9 @@ class TestLoadFromSavePath:
         builder.load_from_save_path()
         builder.process_data()
 
-        assert builder._train_df is None  # generation-evaluation resume path doesn't need the transformed df
-        assert builder._original_train_df is not None
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        assert builder._training_df is None  # generation-evaluation resume path doesn't need the transformed df
+        assert builder._original_training_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_train_after_load_from_save_path_raises(
@@ -542,8 +543,8 @@ class TestLoadFromSavePathHoldoutZero:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
-        assert builder._original_train_df is not None
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        assert builder._original_training_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
 
@@ -573,8 +574,8 @@ class TestLoadFromSavePathHoldoutZero:
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
         builder.load_from_save_path()
 
-        assert builder._original_train_df is not None
-        pd.testing.assert_frame_equal(builder._original_train_df, train_split)
+        assert builder._original_training_df is not None
+        pd.testing.assert_frame_equal(builder._original_training_df, train_split)
         assert builder._test_df is None
         assert builder._loaded_from_save_path is True
 
@@ -591,7 +592,9 @@ class TestProcessDataConfigValidation:
     methods after construction are not visible to the Pydantic validator
     until ``_resolve_nss_config()`` is called.  ``process_data`` must
     call it at the top of the method so invalid configs are caught
-    immediately -- before holdout split, PII replacement, or any disk I/O.
+    immediately. It also validates configured group/order columns against
+    the input dataset before holdout split, autoconfig resolution, PII
+    replacement, or any disk I/O.
     """
 
     def test_dp_and_explicit_unsloth_raises_at_process_data(self, fixture_workdir: Workdir) -> None:
@@ -606,3 +609,52 @@ class TestProcessDataConfigValidation:
         )
         with pytest.raises(ValidationError, match="not compatible with DP"):
             ss.process_data()
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_invalid_groupby_raises_before_holdout(
+        self,
+        mock_holdout_cls,
+        fixture_workdir: Workdir,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+    ) -> None:
+        """Missing group-by column raises immediately during ``process_data``.
+
+        This catches invalid ``group_training_examples_by`` before holdout split
+        or autoconfig runs, ensuring a clear ``ParameterError`` instead of a
+        downstream ``KeyError``.
+        """
+        ss = SafeSynthesizer(
+            config=SafeSynthesizerParameters.from_params(group_training_examples_by="non_existent_group"),
+            workdir=fixture_workdir,
+        ).with_data_source(fixture_sample_patient_dataframe)
+
+        with pytest.raises(ParameterError, match="Group by column 'non_existent_group' not found"):
+            ss.process_data()
+
+        mock_holdout_cls.assert_not_called()
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_invalid_orderby_raises_before_holdout(
+        self,
+        mock_holdout_cls,
+        fixture_workdir: Workdir,
+        fixture_sample_patient_dataframe: pd.DataFrame,
+    ) -> None:
+        """Missing order-by column raises immediately during ``process_data``.
+
+        This catches invalid ``order_training_examples_by`` before holdout split
+        or autoconfig runs, ensuring a clear ``ParameterError`` instead of a
+        downstream pandas error.
+        """
+        ss = SafeSynthesizer(
+            config=SafeSynthesizerParameters.from_params(
+                group_training_examples_by="patient_name",
+                order_training_examples_by="non_existent_order",
+            ),
+            workdir=fixture_workdir,
+        ).with_data_source(fixture_sample_patient_dataframe)
+
+        with pytest.raises(ParameterError, match="Order by column 'non_existent_order' not found"):
+            ss.process_data()
+
+        mock_holdout_cls.assert_not_called()
