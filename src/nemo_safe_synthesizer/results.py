@@ -69,7 +69,7 @@ def make_nss_summary(
     num_invalid_record_tokens = None
     num_non_record_tokens = None
     valid_record_token_fraction = None
-    tokens_per_completion = None
+    tokens_per_prompt = None
     tokens_per_second = None
     valid_tokens_per_second = None
     tokenization_overhead_sec = None
@@ -83,7 +83,7 @@ def make_nss_summary(
         num_valid_record_tokens = results.num_valid_record_tokens
         num_invalid_record_tokens = results.num_invalid_record_tokens
         num_non_record_tokens = results.num_non_record_tokens
-        tokens_per_completion = results.tokens_per_completion
+        tokens_per_prompt = results.tokens_per_prompt
         tokens_per_second = results.tokens_per_second
         valid_tokens_per_second = results.valid_tokens_per_second
         tokenization_overhead_sec = results.tokenization_overhead_sec
@@ -101,7 +101,7 @@ def make_nss_summary(
         num_invalid_record_tokens=num_invalid_record_tokens,
         num_non_record_tokens=num_non_record_tokens,
         valid_record_token_fraction=valid_record_token_fraction,
-        tokens_per_completion=tokens_per_completion,
+        tokens_per_prompt=tokens_per_prompt,
         tokens_per_second=tokens_per_second,
         valid_tokens_per_second=valid_tokens_per_second,
         tokenization_overhead_sec=tokenization_overhead_sec,

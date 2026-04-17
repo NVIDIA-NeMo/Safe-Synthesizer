@@ -9,9 +9,10 @@ import logging
 import os
 import time
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 import torch
+from transformers import PreTrainedTokenizerBase
 from vllm import LLM as vLLM
 from vllm import RequestOutput
 from vllm.config import StructuredOutputsConfig
@@ -23,6 +24,7 @@ from .. import utils
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
+from ..errors import InternalError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
@@ -145,7 +147,11 @@ class VllmBackend(GeneratorBackend):
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
         self.gen_method: partial | None = None
         self._gen_method: partial | None = None
-        self.processor: Processor | None = None
+        # Initial processor without a tokenizer; replaced in ``initialize()`` with a
+        # tokenizer-aware processor once the vLLM engine (and its tokenizer) exists.
+        # This lets callers introspect the processor type before ``initialize()``,
+        # at the cost of token counts being zero until the tokenizer is attached.
+        self.processor: Processor = create_processor(self.schema, self.model_metadata, self.config)
         adapter_path = self.workdir.adapter_path if self.workdir.adapter_path else self.model_metadata.adapter_path
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
         self._torn_down = False
@@ -210,9 +216,14 @@ class VllmBackend(GeneratorBackend):
                 attention_config=attention_config,
             )
 
-        tokenizer = self.llm.get_tokenizer()
+        # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;
+        # in practice it's always a HF tokenizer subclass, so cast for the processor.
+        tokenizer = cast(PreTrainedTokenizerBase, self.llm.get_tokenizer())
         self.processor = create_processor(
-            self.schema, self.model_metadata, self.config, tokenizer=tokenizer,
+            self.schema,
+            self.model_metadata,
+            self.config,
+            tokenizer=tokenizer,
         )
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
@@ -347,8 +358,10 @@ class VllmBackend(GeneratorBackend):
 
         # Create a partially parametrized version of the underlying vllm.LLM.generate
         # method that is immediately callable downstream.
-        if TYPE_CHECKING:
-            assert self.llm is not None
+        if self.llm is None:
+            raise InternalError(
+                "VllmBackend._configure_sampling_params() called before initialize() -- self.llm is None."
+            )
         self._gen_method = partial(
             self.llm.generate,
             sampling_params=real_params,

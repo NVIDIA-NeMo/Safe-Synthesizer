@@ -3,6 +3,7 @@
 
 import copy
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -570,8 +571,6 @@ def test_assembler_to_processor_non_english(
 # Token-counting tests for processors
 # ---------------------------------------------------------------------------
 
-from unittest.mock import MagicMock
-
 
 def _make_mock_tokenizer(chars_per_token: int = 1) -> MagicMock:
     """Create a mock tokenizer whose encode returns one token per `chars_per_token` chars."""
@@ -592,24 +591,29 @@ class TestTabularProcessorTokenCounts:
         proc = TabularDataProcessor(schema=jsonl_schema, config=fixture_validation_config, tokenizer=tokenizer)
         response = proc(1, jsonl_str)
 
-        assert len(response.valid_record_token_counts) == len(response.valid_records)
-        assert all(tc > 0 for tc in response.valid_record_token_counts)
+        assert all(r.is_valid and r.token_count > 0 for r in response.records)
         assert response.tokenization_time_sec >= 0
 
-    def test_no_tokenizer_gives_zero_counts(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+    def test_no_tokenizer_gives_zero_counts(
+        self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config
+    ):
         jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
         proc = TabularDataProcessor(schema=jsonl_schema, config=fixture_validation_config, tokenizer=None)
         response = proc(1, jsonl_str)
 
-        assert len(response.valid_record_token_counts) == len(response.valid_records)
-        assert all(tc == 0 for tc in response.valid_record_token_counts)
+        assert all(r.is_valid for r in response.records)
+        assert all(r.token_count == 0 for r in response.records)
         assert response.tokenization_time_sec == 0.0
 
 
 class TestGroupedProcessorTokenShift:
-    """Token counts shift from valid to invalid when group-level checks fail."""
+    """Token counts stay attached to each record through reclassification."""
 
-    def test_non_unique_group_shifts_tokens(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
+    def test_non_unique_group_preserves_text_and_tokens(
+        self,
+        fixture_valid_iris_dataset_jsonl_and_schema,
+        fixture_validation_config,
+    ):
         jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
 
         jsonl_schema_copy = copy.deepcopy(jsonl_schema)
@@ -622,30 +626,35 @@ class TestGroupedProcessorTokenShift:
         )
         tokenizer = _make_mock_tokenizer()
         proc = GroupedDataProcessor(
-            schema=jsonl_schema_copy, config=fixture_validation_config,
-            group_by="variety", bos_token=BOS, eos_token=EOS,
+            schema=jsonl_schema_copy,
+            config=fixture_validation_config,
+            group_by="variety",
+            bos_token=BOS,
+            eos_token=EOS,
             tokenizer=tokenizer,
         )
         response = proc(1, groups_jsonl_str)
 
-        assert len(response.valid_records) == 0
-        assert len(response.invalid_records) == 6
-        assert len(response.invalid_record_token_counts) == 6
-        assert all(tc > 0 for tc in response.invalid_record_token_counts)
-        assert response.valid_record_token_counts == []
+        assert len(response.records) == 6
+        assert all(not r.is_valid for r in response.records)
+        assert all(r.token_count > 0 for r in response.records)
+        # After reclassification ``text`` is the original JSON string, not
+        # str(dict), so users can recover the original completion slice.
+        assert all(r.text.startswith("{") and r.text.endswith("}") for r in response.records)
 
     def test_valid_group_keeps_tokens(self, fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config):
         jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
         groups_jsonl_str = BOS + jsonl_str + EOS
         tokenizer = _make_mock_tokenizer()
         proc = GroupedDataProcessor(
-            schema=jsonl_schema, config=fixture_validation_config,
-            group_by="variety", bos_token=BOS, eos_token=EOS,
+            schema=jsonl_schema,
+            config=fixture_validation_config,
+            group_by="variety",
+            bos_token=BOS,
+            eos_token=EOS,
             tokenizer=tokenizer,
         )
         response = proc(1, groups_jsonl_str)
 
-        assert len(response.valid_records) == 5
-        assert len(response.valid_record_token_counts) == 5
-        assert all(tc > 0 for tc in response.valid_record_token_counts)
-        assert response.invalid_record_token_counts == []
+        assert len(response.records) == 5
+        assert all(r.is_valid and r.token_count > 0 for r in response.records)

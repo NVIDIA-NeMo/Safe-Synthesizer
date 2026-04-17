@@ -134,12 +134,12 @@ class Batch:
     @property
     def total_valid_record_tokens(self) -> int:
         """Sum of token counts for all valid records in this batch."""
-        return sum(sum(r.valid_record_token_counts) for r in self._responses)
+        return sum(record.token_count for resp in self._responses for record in resp.records if record.is_valid)
 
     @property
     def total_invalid_record_tokens(self) -> int:
         """Sum of token counts for all invalid records in this batch."""
-        return sum(sum(r.invalid_record_token_counts) for r in self._responses)
+        return sum(record.token_count for resp in self._responses for record in resp.records if not record.is_valid)
 
     @property
     def total_non_record_tokens(self) -> int:
@@ -150,8 +150,16 @@ class Batch:
         value = self._total_completion_tokens - self.total_valid_record_tokens - self.total_invalid_record_tokens
         if value < 0:
             logger.warning(
-                f"Non-record token count is negative ({value}); clamping to 0. "
-                "This can happen due to tokenizer boundary effects between individual records and full completions."
+                "Non-record token count is negative; clamping to 0. "
+                "This can happen due to tokenizer boundary effects between individual records and full completions.",
+                extra={
+                    "ctx": {
+                        "delta": value,
+                        "completion_tokens": self._total_completion_tokens,
+                        "valid_record_tokens": self.total_valid_record_tokens,
+                        "invalid_record_tokens": self.total_invalid_record_tokens,
+                    }
+                },
             )
             return 0
         return value

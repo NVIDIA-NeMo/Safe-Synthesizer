@@ -30,30 +30,74 @@ RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
 logger = get_logger()
 
 
-@dataclass(frozen=True)
-class ExtractionResult:
-    """Result of extracting and validating records from a JSONL string.
+@dataclass
+class ParsedRecord:
+    """A single record extracted from an LLM completion.
 
-    Token count lists are parallel to ``valid_records`` and ``invalid_records``
-    so that counts can follow records through reclassification (e.g. group-level
-    rejection or data-fidelity checks).  When no ``encode`` callable is provided
-    to the extraction function, token count lists are empty.
-
-    Attributes:
-        valid_records: Records that passed schema validation (as dicts).
-        invalid_records: Raw text of records that failed validation.
-        errors: ``(detailed_msg, validator)`` tuples for each invalid record.
-        valid_record_token_counts: Token count per valid record (parallel to ``valid_records``).
-        invalid_record_token_counts: Token count per invalid record (parallel to ``invalid_records``).
-        tokenization_time_sec: Wall-clock seconds spent in ``encode()`` calls.
+    ``text`` and ``token_count`` are captured at extraction time and
+    remain invariant even if the record is reclassified later (e.g. by
+    group-level checks or data-fidelity filters) via :meth:`invalidate`.
     """
 
-    valid_records: list[dict] = field(default_factory=list)
-    invalid_records: list[str] = field(default_factory=list)
-    errors: list[tuple[str, str]] = field(default_factory=list)
-    valid_record_token_counts: list[int] = field(default_factory=list)
-    invalid_record_token_counts: list[int] = field(default_factory=list)
+    text: str
+    """Original regex-matched JSON string (invariant under reclassification)."""
+
+    parsed: dict | None = None
+    """Parsed dict when validation succeeded, ``None`` when invalid."""
+
+    error: tuple[str, str] | None = None
+    """``(detailed_msg, validator)`` when invalid, ``None`` when valid."""
+
+    token_count: int = 0
+    """Number of tokens in ``text``; 0 when no tokenizer was provided."""
+
+    @property
+    def is_valid(self) -> bool:
+        """True when this record passed validation."""
+        return self.error is None
+
+    def invalidate(self, error: tuple[str, str]) -> None:
+        """Reclassify this record as invalid while keeping ``text`` and
+        ``token_count`` intact.  ``parsed`` is cleared so downstream
+        consumers don't accidentally use a stale dict.
+        """
+        self.error = error
+        self.parsed = None
+
+
+@dataclass
+class ParsedResponse:
+    """Parsed result of a single LLM prompt response.
+
+    Holds a flat list of :class:`ParsedRecord` objects plus aggregated
+    tokenization timing.  The ``valid_records`` / ``invalid_records`` /
+    ``errors`` views are derived for backward compatibility with
+    callers that want the old parallel-list shape.
+    """
+
+    records: list[ParsedRecord] = field(default_factory=list)
+    """Per-record extraction + validation outcomes, in input order."""
+
     tokenization_time_sec: float = 0.0
+    """Wall-clock seconds spent tokenizing records in this response."""
+
+    prompt_number: int | None = None
+    """Index of the prompt within the batch (set by the processor call)."""
+
+    @property
+    def valid_records(self) -> list[dict]:
+        """Parsed dicts for records that passed validation."""
+        return [r.parsed for r in self.records if r.is_valid and r.parsed is not None]
+
+    @property
+    def invalid_records(self) -> list[str]:
+        """Original text for records that failed validation."""
+        return [r.text for r in self.records if not r.is_valid]
+
+    @property
+    def errors(self) -> list[tuple[str, str]]:
+        """``(detailed_msg, validator)`` tuples for each invalid record."""
+        return [r.error for r in self.records if r.error is not None]
 
 
 def is_safe_for_float_conversion(value: str | int | float | None | list | dict) -> bool:
@@ -140,7 +184,7 @@ def extract_groups_from_jsonl_string(jsonl_string: str, bos: str, eos: str) -> l
     return re.findall(rf"{bos_re}\s?(?:{RECORD_REGEX_PATTERN}\s?)+\s?{eos_re}", jsonl_string)
 
 
-def _timed_encode(
+def timed_encode(
     encode: Callable[[str], list[int]] | None,
 ) -> Callable[[str], tuple[int, float]]:
     """Wrap an encode callable with timing, or return a no-op.
@@ -149,72 +193,56 @@ def _timed_encode(
     elapsed_seconds)``.  When *encode* is ``None`` the returned
     function always returns ``(0, 0.0)``.
     """
-    if encode is not None:
-        def _timed(text: str) -> tuple[int, float]:
-            t0 = time.monotonic()
-            n = len(encode(text))
-            return n, time.monotonic() - t0
+    if encode is None:
 
-        return _timed
+        def _noop(_text: str) -> tuple[int, float]:
+            return 0, 0.0
 
-    def _noop(_text: str) -> tuple[int, float]:
-        return 0, 0.0
+        return _noop
 
-    return _noop
+    def _timed(text: str) -> tuple[int, float]:
+        t0 = time.monotonic()
+        n = len(encode(text))
+        return n, time.monotonic() - t0
+
+    return _timed
 
 
 def extract_and_validate_records(
     jsonl_string: str,
     schema: dict,
     encode: Callable[[str], list[int]] | None = None,
-) -> ExtractionResult:
+) -> ParsedResponse:
     """Extract and validate records from the given JSONL string.
 
-    Each regex-matched JSON string is tokenized (when *encode* is provided)
-    before validation so that exact token counts are available for both valid
-    and invalid records.
+    Each regex-matched JSON string is tokenized (when *encode* is
+    provided) before validation so that exact token counts are
+    available for every record regardless of later reclassification.
 
     Args:
         jsonl_string: Single JSONL string containing tabular records.
         schema: JSON schema as a dictionary.
-        encode: Optional tokenizer encode callable.  When provided, each
-            matched record string is tokenized and its token count stored
-            in the result.
+        encode: Optional tokenizer encode callable.  When provided,
+            each matched record string is tokenized and its token count
+            is stored on the corresponding :class:`ParsedRecord`.
 
     Returns:
-        An ``ExtractionResult`` with valid/invalid records, errors, and
-        per-record token counts.
+        A :class:`ParsedResponse` whose ``records`` list is in input
+        order, with ``parsed`` set for valid records and ``error`` set
+        for invalid ones.
     """
-    valid_records: list[dict] = []
-    invalid_records: list[str] = []
-    invalid_record_errors: list[tuple[str, str]] = []
-    valid_token_counts: list[int] = []
-    invalid_token_counts: list[int] = []
+    records: list[ParsedRecord] = []
     tokenization_time = 0.0
-
-    _timed = _timed_encode(encode)
+    timed = timed_encode(encode)
 
     for matched_json in extract_records_from_jsonl_string(jsonl_string):
-        n_tokens, dt = _timed(matched_json)
+        n_tokens, dt = timed(matched_json)
         tokenization_time += dt
 
-        matched_dict, error = _parse_and_validate_json(matched_json, schema)
-        if error:
-            invalid_records.append(matched_json)
-            invalid_record_errors.append(error)
-            invalid_token_counts.append(n_tokens)
-        else:
-            valid_records.append(matched_dict)
-            valid_token_counts.append(n_tokens)
+        parsed, error = _parse_and_validate_json(matched_json, schema)
+        records.append(ParsedRecord(text=matched_json, parsed=parsed, error=error, token_count=n_tokens))
 
-    return ExtractionResult(
-        valid_records=valid_records,
-        invalid_records=invalid_records,
-        errors=invalid_record_errors,
-        valid_record_token_counts=valid_token_counts,
-        invalid_record_token_counts=invalid_token_counts,
-        tokenization_time_sec=tokenization_time,
-    )
+    return ParsedResponse(records=records, tokenization_time_sec=tokenization_time)
 
 
 def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
@@ -371,36 +399,33 @@ def extract_and_validate_timeseries_records(
     interval_seconds: int | None,
     time_format: str,
     encode: Callable[[str], list[int]] | None = None,
-) -> ExtractionResult:
-    """Extract and validate sequential records with enforced time interval constraints.
+) -> ParsedResponse:
+    """Extract and validate sequential records with time-interval constraints.
 
-    Each regex-matched JSON string is tokenized (when *encode* is provided)
-    before validation so that exact token counts are available for both valid
-    and invalid records, including cascade-invalidated records.
+    Each regex-matched JSON string is tokenized (when *encode* is
+    provided) before validation so that exact token counts are captured
+    for both validated and cascade-invalidated records.
 
     Args:
         jsonl_string: JSONL string containing series data.
         schema: JSON schema describing the records.
-        time_column: Column containing the timestamp used for interval validation.
-        interval_seconds: (Optional) Expected interval in seconds between consecutive
-            timestamps. If not provided, no time interval validation is performed.
-        time_format: Format of the timestamp column (required, should be set from config).
-        encode: Optional tokenizer encode callable.  When provided, each
-            matched record string is tokenized and its token count stored
-            in the result.
+        time_column: Column containing the timestamp used for interval
+            validation.
+        interval_seconds: Expected interval in seconds between
+            consecutive timestamps.  When ``None``, no interval check
+            is performed.
+        time_format: Format of the timestamp column (required).
+        encode: Optional tokenizer encode callable.  When provided,
+            each matched record string is tokenized and its token count
+            is stored on the corresponding :class:`ParsedRecord`.
 
     Returns:
-        An ``ExtractionResult`` with valid/invalid records, errors, and
-        per-record token counts.
+        A :class:`ParsedResponse` in input order.  Once a record fails,
+        every subsequent record is marked invalid with a cascade error.
     """
-    valid_records: list[dict] = []
-    invalid_records: list[str] = []
-    invalid_record_errors: list[tuple[str, str]] = []
-    valid_token_counts: list[int] = []
-    invalid_token_counts: list[int] = []
+    records: list[ParsedRecord] = []
     tokenization_time = 0.0
-
-    _timed = _timed_encode(encode)
+    timed = timed_encode(encode)
 
     last_absolute_seconds: int | None = None
     day_offset = 0
@@ -415,30 +440,27 @@ def extract_and_validate_timeseries_records(
         allow_rollover = not has_date
 
     all_json_records = list(extract_records_from_jsonl_string(jsonl_string))
+    cascade_error = ("Invalid due to previous record error", "TimeSeries")
 
     for idx, matched_json in enumerate(all_json_records):
-        n_tokens, dt = _timed(matched_json)
+        n_tokens, dt = timed(matched_json)
         tokenization_time += dt
 
-        # Step 1: Parse and validate JSON/schema
-        matched_dict, error = _parse_and_validate_json(matched_json, schema)
-        if error or matched_dict is None:
-            invalid_records.append(matched_json)
-            if error:
-                invalid_record_errors.append(error)
-            invalid_token_counts.append(n_tokens)
+        # Step 1: Parse and validate JSON/schema.
+        parsed, error = _parse_and_validate_json(matched_json, schema)
+        if error or parsed is None:
+            records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+            # Parse/schema errors stop validation without cascading to later records.
             break
 
-        # Step 2: Extract and parse timestamp
-        timestamp_seconds, error = _extract_timestamp_seconds(matched_dict, time_column, time_format)
+        # Step 2: Extract and parse timestamp.
+        timestamp_seconds, error = _extract_timestamp_seconds(parsed, time_column, time_format)
         if error or timestamp_seconds is None:
-            invalid_records.append(matched_json)
-            if error:
-                invalid_record_errors.append(error)
-            invalid_token_counts.append(n_tokens)
+            records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+            # Missing timestamp stops validation without cascading to later records.
             break
 
-        # Step 3: Validate time interval (if interval_seconds is specified)
+        # Step 3: Validate time interval (if interval_seconds is specified).
         if interval_seconds is not None:
             absolute_seconds, day_offset, error = _validate_time_interval(
                 timestamp_seconds,
@@ -449,32 +471,19 @@ def extract_and_validate_timeseries_records(
                 allow_rollover,
             )
             if error:
-                invalid_records.append(matched_json)
-                invalid_record_errors.append(error)
-                invalid_token_counts.append(n_tokens)
-                # Cascade: remaining records after this one are also invalid
-                remaining_records = all_json_records[idx + 1 :]
-                cascade_error = ("Invalid due to previous record error", "TimeSeries")
-                invalid_records.extend(remaining_records)
-                invalid_record_errors.extend([cascade_error] * len(remaining_records))
-                for remaining_json in remaining_records:
-                    n_remaining, dt = _timed(remaining_json)
-                    invalid_token_counts.append(n_remaining)
-                    tokenization_time += dt
+                records.append(ParsedRecord(text=matched_json, error=error, token_count=n_tokens))
+                # Interval errors cascade: mark all remaining records invalid so the
+                # caller can report how many were affected.
+                for remaining in all_json_records[idx + 1 :]:
+                    rem_tokens, rem_dt = timed(remaining)
+                    tokenization_time += rem_dt
+                    records.append(ParsedRecord(text=remaining, error=cascade_error, token_count=rem_tokens))
                 break
             last_absolute_seconds = absolute_seconds
 
-        valid_records.append(matched_dict)
-        valid_token_counts.append(n_tokens)
+        records.append(ParsedRecord(text=matched_json, parsed=parsed, token_count=n_tokens))
 
-    return ExtractionResult(
-        valid_records=valid_records,
-        invalid_records=invalid_records,
-        errors=invalid_record_errors,
-        valid_record_token_counts=valid_token_counts,
-        invalid_record_token_counts=invalid_token_counts,
-        tokenization_time_sec=tokenization_time,
-    )
+    return ParsedResponse(records=records, tokenization_time_sec=tokenization_time)
 
 
 def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:

@@ -5,16 +5,14 @@
 
 from __future__ import annotations
 
-import functools
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from ..config import SafeSynthesizerParameters
 from ..config.generate import ValidationParameters
 from ..data_processing.record_utils import (
-    ExtractionResult,
+    ParsedRecord,
+    ParsedResponse,
     check_if_records_are_ordered,
     extract_and_validate_records,
     extract_and_validate_timeseries_records,
@@ -28,36 +26,17 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-
-@dataclass
-class ParsedResponse:
-    """Parsed result of a single LLM prompt response.
-
-    Token count lists are parallel to ``valid_records`` and ``invalid_records``
-    so that counts follow records through reclassification (group-level rejection,
-    data-fidelity checks).  Empty when no tokenizer is provided.
-
-    Attributes:
-        valid_records: Records that passed schema validation (as dicts).
-        invalid_records: Raw text of records that failed validation.
-        errors: ``(detailed_msg, summary_msg)`` tuples for each invalid
-            record.
-        prompt_number: Index of the prompt in the batch.
-        valid_record_token_counts: Token count per valid record (parallel
-            to ``valid_records``).
-        invalid_record_token_counts: Token count per invalid record
-            (parallel to ``invalid_records``).
-        tokenization_time_sec: Wall-clock seconds spent tokenizing
-            records in this response.
-    """
-
-    valid_records: list[dict]
-    invalid_records: list[str]
-    errors: list[tuple[str, str]]
-    prompt_number: int | None = None
-    valid_record_token_counts: list[int] = field(default_factory=list)
-    invalid_record_token_counts: list[int] = field(default_factory=list)
-    tokenization_time_sec: float = 0.0
+# Re-export the parsed-record types so existing imports of
+# ``ParsedResponse`` / ``ParsedRecord`` from this module keep working.
+__all__ = [
+    "GroupedDataProcessor",
+    "ParsedRecord",
+    "ParsedResponse",
+    "Processor",
+    "TabularDataProcessor",
+    "TimeSeriesDataProcessor",
+    "create_processor",
+]
 
 
 class Processor(ABC):
@@ -66,8 +45,10 @@ class Processor(ABC):
     Args:
         schema: JSON schema as a dictionary.
         config: Validation parameters.
-        tokenizer: Optional tokenizer for exact token counting during
-            record parsing.  When ``None``, token counts are not tracked.
+        tokenizer: Optional tokenizer for exact per-record token
+            counting.  ``None`` is supported for tests and the training
+            eval callback path when the tokenizer isn't readily
+            available; in that case ``ParsedRecord.token_count`` is 0.
     """
 
     def __init__(
@@ -79,14 +60,9 @@ class Processor(ABC):
         self.schema = schema
         self.config = config
         self._tokenizer = tokenizer
-        logger.debug(f"Initialized processor with schema={schema} and config={config}")
-
-    @property
-    def _encode(self) -> Callable[[str], list[int]] | None:
-        """Tokenizer encode callable with ``add_special_tokens=False``, or ``None``."""
-        if self._tokenizer is None:
-            return None
-        return functools.partial(self._tokenizer.encode, add_special_tokens=False)
+        logger.debug(
+            f"Initialized processor with schema={schema}, config={config}, tokenizer_present={tokenizer is not None}"
+        )
 
     @property
     def name(self) -> str:
@@ -125,14 +101,26 @@ class Processor(ABC):
             Parsed response containing valid records, invalid records,
             and error tuples.
         """
-        # Make sure the string composed of valid utf-8 characters.
         text = text.encode("utf-8", "ignore").decode("utf-8")
 
-        # Call the processor-specific method to process the text.
         response = self._process_text_generation(text)
         response.prompt_number = prompt_number
 
         return response
+
+    @property
+    def _encode(self):
+        """Encode callable for the extraction helpers, or ``None``.
+
+        Returns a ``Callable[[str], list[int]]`` that calls the
+        tokenizer with ``add_special_tokens=False``, or ``None`` when no
+        tokenizer was provided so the extractors can skip tokenization
+        entirely.
+        """
+        if self._tokenizer is None:
+            return None
+        tokenizer = self._tokenizer
+        return lambda text: tokenizer.encode(text, add_special_tokens=False)
 
 
 class TabularDataProcessor(Processor):
@@ -147,8 +135,7 @@ class TabularDataProcessor(Processor):
         Returns:
             Parsed response with validated records and error details.
         """
-        result = extract_and_validate_records(text, self.schema, encode=self._encode)
-        return _extraction_result_to_parsed_response(result)
+        return extract_and_validate_records(text, self.schema, encode=self._encode)
 
 
 class TimeSeriesDataProcessor(Processor):
@@ -165,6 +152,8 @@ class TimeSeriesDataProcessor(Processor):
             timestamps, or ``None`` if intervals vary.
         time_format: Timestamp format string (``strptime``), or
             ``"elapsed_seconds"`` for numeric elapsed time.
+        tokenizer: Optional tokenizer for exact per-record token
+            counting.
 
     Raises:
         ValueError: If ``time_column`` or ``time_format`` is ``None``.
@@ -205,11 +194,14 @@ class TimeSeriesDataProcessor(Processor):
         Returns:
             Parsed response with validated records and error details.
         """
-        result = extract_and_validate_timeseries_records(
-            text, self.schema, self.time_column, self.interval_seconds, self.time_format,
+        return extract_and_validate_timeseries_records(
+            text,
+            self.schema,
+            self.time_column,
+            self.interval_seconds,
+            self.time_format,
             encode=self._encode,
         )
-        return _extraction_result_to_parsed_response(result)
 
 
 class GroupedDataProcessor(Processor):
@@ -228,6 +220,8 @@ class GroupedDataProcessor(Processor):
         group_by: Column name that defines groups.
         order_by: Column name to enforce ordering within a group, or
             ``None`` if ordering is not required.
+        tokenizer: Optional tokenizer for exact per-record token
+            counting.
     """
 
     def __init__(
@@ -258,9 +252,10 @@ class GroupedDataProcessor(Processor):
         These requirements may be relaxed and automatically fixed depending on
         the settings in self.config.
 
-        When a tokenizer is available, per-record token counts are tracked
-        through group-level reclassification so that ``valid_record_token_counts``
-        always corresponds to the final ``valid_records``.
+        Per-record token counts (captured at extraction time) ride along
+        with each :class:`ParsedRecord` through group-level
+        reclassification, so aggregate token metrics stay consistent
+        with the final valid/invalid partition.
 
         Args:
             text: Text generated by the fine-tuned model.
@@ -276,116 +271,94 @@ class GroupedDataProcessor(Processor):
 
         if len(groups) == 0:
             return ParsedResponse(
-                valid_records=[],
-                invalid_records=[text],
-                errors=[("Group BOS and/or EOS tokens missing", groupby_validator)],
+                records=[
+                    ParsedRecord(
+                        text=text,
+                        error=("Group BOS and/or EOS tokens missing", groupby_validator),
+                    )
+                ]
             )
 
-        all_valid_records: list[dict] = []
-        all_invalid_records: list[str] = []
-        all_errors: list[tuple[str, str]] = []
-        all_valid_token_counts: list[int] = []
-        all_invalid_token_counts: list[int] = []
+        all_records: list[ParsedRecord] = []
         total_tokenization_time = 0.0
 
         for group in groups:
-            result = extract_and_validate_records(group, self.schema, encode=self._encode)
-            total_tokenization_time += result.tokenization_time_sec
+            response = extract_and_validate_records(group, self.schema, encode=self._encode)
+            total_tokenization_time += response.tokenization_time_sec
+            group_records = response.records
 
-            valid_records = list(result.valid_records)
-            invalid_records = list(result.invalid_records)
-            errors = list(result.errors)
-            valid_token_counts = list(result.valid_record_token_counts)
-            invalid_token_counts = list(result.invalid_record_token_counts)
+            has_valid = any(r.is_valid for r in group_records)
+            has_invalid = any(not r.is_valid for r in group_records)
 
             # Handle invalid records in the group (optionally ignore and proceed).
-            if valid_records and invalid_records:
+            if has_valid and has_invalid:
                 if self.config.group_by_ignore_invalid_records:
-                    invalid_records = []
-                    errors = []
-                    invalid_token_counts = []
+                    group_records = [r for r in group_records if r.is_valid]
                 else:
                     _reject_group_records(
-                        valid_records, invalid_records, errors,
-                        valid_token_counts, invalid_token_counts,
+                        group_records,
                         ("Invalid JSON in other groupby records", groupby_validator),
                     )
 
             # Handle non-unique group_by values (optionally fix by using first record's values).
-            if valid_records and len(set(tuple(record[gb] for gb in self.group_by) for record in valid_records)) != 1:
+            valid_parsed = [r.parsed for r in group_records if r.is_valid and r.parsed is not None]
+            if valid_parsed and len({tuple(record[gb] for gb in self.group_by) for record in valid_parsed}) != 1:
                 if self.config.group_by_fix_non_unique_value:
                     for group_by in self.group_by:
-                        for record in valid_records[1:]:
-                            record[group_by] = valid_records[0][group_by]
+                        for record in valid_parsed[1:]:
+                            record[group_by] = valid_parsed[0][group_by]
                 else:
                     _reject_group_records(
-                        valid_records, invalid_records, errors,
-                        valid_token_counts, invalid_token_counts,
+                        group_records,
                         ("Groupby value is not unique", groupby_validator),
                     )
 
             # Handle unordered records when order_by is set (optionally fix by sorting).
-            if valid_records and self.order_by is not None and not check_if_records_are_ordered(valid_records, self.order_by):
+            valid_parsed = [r.parsed for r in group_records if r.is_valid and r.parsed is not None]
+            if (
+                valid_parsed
+                and self.order_by is not None
+                and not check_if_records_are_ordered(valid_parsed, self.order_by)
+            ):
                 if self.config.group_by_fix_unordered_records:
-                    valid_records.sort(key=lambda x: x[self.order_by])
+                    # ``valid_parsed`` aliases the underlying ParsedRecord.parsed dicts,
+                    # so sorting a fresh list doesn't reorder the ParsedRecord objects.
+                    # Instead, sort the valid subset of group_records in-place by order_by.
+                    valid_indices = [i for i, r in enumerate(group_records) if r.is_valid]
+                    valid_sorted = sorted(
+                        (group_records[i] for i in valid_indices),
+                        key=lambda r: r.parsed[self.order_by],  # type: ignore[index]
+                    )
+                    for i, record in zip(valid_indices, valid_sorted, strict=True):
+                        group_records[i] = record
                 else:
                     _reject_group_records(
-                        valid_records, invalid_records, errors,
-                        valid_token_counts, invalid_token_counts,
+                        group_records,
                         ("Group not ordered", groupby_validator),
                     )
 
-            all_valid_records.extend(valid_records)
-            all_invalid_records.extend(invalid_records)
-            all_errors.extend(errors)
-            all_valid_token_counts.extend(valid_token_counts)
-            all_invalid_token_counts.extend(invalid_token_counts)
+            all_records.extend(group_records)
 
         return ParsedResponse(
-            valid_records=all_valid_records,
-            invalid_records=all_invalid_records,
-            errors=all_errors,
-            valid_record_token_counts=all_valid_token_counts,
-            invalid_record_token_counts=all_invalid_token_counts,
+            records=all_records,
             tokenization_time_sec=total_tokenization_time,
         )
 
 
-def _reject_group_records(
-    valid_records: list[dict],
-    invalid_records: list[str],
-    errors: list[tuple[str, str]],
-    valid_token_counts: list[int],
-    invalid_token_counts: list[int],
-    error: tuple[str, str],
-) -> None:
-    """Reclassify all valid records as invalid (in-place).
+def _reject_group_records(records: list[ParsedRecord], error: tuple[str, str]) -> None:
+    """Reclassify every record in *records* as invalid with the given group-level error.
 
-    Moves every valid record into the invalid list (as its string
-    representation), appends *error* once per moved record, shifts
-    the corresponding token counts, and clears the valid lists.
-    After this call ``valid_records`` is empty, which causes
-    downstream ``if valid_records:`` guards to short-circuit.
+    The group-level error overrides any per-record error that a record
+    may already carry, matching the legacy behavior where a failing
+    group invalidates all its records with a single groupby reason.
+    ``ParsedRecord.text`` and ``ParsedRecord.token_count`` are
+    preserved, so the original regex-matched JSON string stays
+    associated with the record (no ``str(dict)`` stringification) and
+    per-record token counts remain correct after reclassification.
     """
-    n_valid = len(valid_records)
-    valid_as_strings = [str(r) for r in valid_records]
-    invalid_records[:] = valid_as_strings + invalid_records
-    errors[:] = errors + [error] * n_valid
-    invalid_token_counts[:] = valid_token_counts + invalid_token_counts
-    valid_records.clear()
-    valid_token_counts.clear()
-
-
-def _extraction_result_to_parsed_response(result: ExtractionResult) -> ParsedResponse:
-    """Convert an ``ExtractionResult`` into a ``ParsedResponse``."""
-    return ParsedResponse(
-        valid_records=result.valid_records,
-        invalid_records=result.invalid_records,
-        errors=result.errors,
-        valid_record_token_counts=result.valid_record_token_counts,
-        invalid_record_token_counts=result.invalid_record_token_counts,
-        tokenization_time_sec=result.tokenization_time_sec,
-    )
+    for record in records:
+        record.parsed = None
+        record.error = error
 
 
 def create_processor(

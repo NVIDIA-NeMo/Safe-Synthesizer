@@ -150,10 +150,24 @@ class InferenceEvalCallback(TrainerCallback):
                     skip_special_tokens=self.is_tabular_processor,
                 )
 
+                # Per-row completion token counts feed Batch's token
+                # statistics alongside vLLM-backed generation.  When the
+                # tokenizer has a pad_token_id, trailing pads are
+                # excluded; otherwise we fall back to the full
+                # completion width (slight over-count when generation
+                # ends early, acceptable for an eval metric).
+                prompt_len = input_ids.shape[1]
+                completion_ids = outputs[:, prompt_len:]
+                pad_id = tokenizer.pad_token_id
+                if pad_id is not None:
+                    completion_tokens_per_row = (completion_ids != pad_id).sum(dim=1).tolist()
+                else:
+                    completion_tokens_per_row = [completion_ids.shape[1]] * outputs.shape[0]
+
                 start_time = time.perf_counter()
                 batch = Batch(processor=self.processor)
-                for idx, text in enumerate(decoded):
-                    batch.process(idx, text)
+                for idx, (text, n_tokens) in enumerate(zip(decoded, completion_tokens_per_row, strict=True)):
+                    batch.process(idx, text, completion_tokens=n_tokens)
                 duration = time.perf_counter() - start_time
                 self.generation.add_batch(batch)
 

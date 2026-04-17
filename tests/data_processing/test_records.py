@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 
 from nemo_safe_synthesizer.data_processing.record_utils import (
-    ExtractionResult,
     _extract_timestamp_seconds,
     _validate_time_interval,
     check_record_for_large_numbers,
@@ -181,7 +180,10 @@ def test_extract_and_validate_records_with_non_english_characters(fixture_lmsys_
     assert result.valid_records[0]["conversation"][0]["content"] == "ПРИВЕТ"
     assert result.valid_records[1]["conversation"][0]["content"] == "一家4000人的化工企业需要配备几名安全员"
     assert result.valid_records[2]["conversation"][0]["content"][:10] == "경찰 관계자는 “범"
-    assert result.valid_records[3]["conversation"][0]["content"] == "نعم انا خبير في ادارة تطبيقات وحسابات التواصل الاجتماعي بحترافيه"
+    assert (
+        result.valid_records[3]["conversation"][0]["content"]
+        == "نعم انا خبير في ادارة تطبيقات وحسابات التواصل الاجتماعي بحترافيه"
+    )
     assert result.valid_records[4]["conversation"][0]["content"][41:74] == "\"Ім'я і національність\n@Ukrostap\n"
 
 
@@ -518,15 +520,6 @@ def _mock_encode(text: str) -> list[int]:
     return list(range(len(text)))
 
 
-class TestExtractionResultFrozen:
-    def test_frozen(self):
-        result = ExtractionResult()
-        import pytest as _pt
-
-        with _pt.raises(AttributeError):
-            result.valid_records = []  # type: ignore[misc]
-
-
 class TestTokenCountingTabular:
     """Token counting via encode in extract_and_validate_records."""
 
@@ -540,37 +533,37 @@ class TestTokenCountingTabular:
         jsonl = '{"a": 1, "b": 2}\n{"a": 3, "b": 4}\n'
         result = extract_and_validate_records(jsonl, self.SCHEMA, encode=_mock_encode)
 
-        assert len(result.valid_records) == 2
-        assert len(result.valid_record_token_counts) == 2
-        assert all(tc > 0 for tc in result.valid_record_token_counts)
-        assert len(result.invalid_record_token_counts) == 0
+        assert len(result.records) == 2
+        assert all(r.is_valid for r in result.records)
+        assert all(r.token_count > 0 for r in result.records)
         assert result.tokenization_time_sec >= 0
 
     def test_invalid_records_get_token_counts(self):
         jsonl = '{"a": 1, "b": 2}\n{"x": 99}\n'
         result = extract_and_validate_records(jsonl, self.SCHEMA, encode=_mock_encode)
 
-        assert len(result.valid_records) == 1
-        assert len(result.valid_record_token_counts) == 1
-        assert len(result.invalid_records) == 1
-        assert len(result.invalid_record_token_counts) == 1
-        assert result.invalid_record_token_counts[0] > 0
+        assert len(result.records) == 2
+        assert result.records[0].is_valid
+        assert not result.records[1].is_valid
+        assert result.records[0].token_count > 0
+        assert result.records[1].token_count > 0
+        assert result.records[1].text == '{"x": 99}'
 
     def test_no_encode_gives_zero_counts(self):
         jsonl = '{"a": 1, "b": 2}\n'
         result = extract_and_validate_records(jsonl, self.SCHEMA, encode=None)
 
-        assert len(result.valid_records) == 1
-        assert result.valid_record_token_counts == [0]
-        assert result.invalid_record_token_counts == []
+        assert len(result.records) == 1
+        assert result.records[0].is_valid
+        assert result.records[0].token_count == 0
         assert result.tokenization_time_sec == 0.0
 
-    def test_token_counts_parallel_to_records(self):
+    def test_token_counts_per_record(self):
         jsonl = '{"a": 1, "b": 2}\n{"x": 1}\n{"a": 3, "b": 4}\n'
         result = extract_and_validate_records(jsonl, self.SCHEMA, encode=_mock_encode)
 
-        assert len(result.valid_record_token_counts) == len(result.valid_records)
-        assert len(result.invalid_record_token_counts) == len(result.invalid_records)
+        assert len(result.records) == 3
+        assert all(r.token_count > 0 for r in result.records)
 
 
 class TestTokenCountingTimeseries:
@@ -583,17 +576,17 @@ class TestTokenCountingTimeseries:
     }
 
     def test_valid_records_tokenized(self):
-        jsonl = (
-            '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
-            '{"timestamp": "2024-01-01 01:00:00", "value": 2}\n'
-        )
+        jsonl = '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n{"timestamp": "2024-01-01 01:00:00", "value": 2}\n'
         result = extract_and_validate_timeseries_records(
-            jsonl, self.SCHEMA, time_column="timestamp",
-            interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S",
+            jsonl,
+            self.SCHEMA,
+            time_column="timestamp",
+            interval_seconds=3600,
+            time_format="%Y-%m-%d %H:%M:%S",
             encode=_mock_encode,
         )
-        assert len(result.valid_record_token_counts) == 2
-        assert all(tc > 0 for tc in result.valid_record_token_counts)
+        assert len(result.records) == 2
+        assert all(r.is_valid and r.token_count > 0 for r in result.records)
 
     def test_cascade_invalidated_records_tokenized(self):
         jsonl = (
@@ -602,22 +595,30 @@ class TestTokenCountingTimeseries:
             '{"timestamp": "2024-01-01 03:00:00", "value": 3}\n'
         )
         result = extract_and_validate_timeseries_records(
-            jsonl, self.SCHEMA, time_column="timestamp",
-            interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S",
+            jsonl,
+            self.SCHEMA,
+            time_column="timestamp",
+            interval_seconds=3600,
+            time_format="%Y-%m-%d %H:%M:%S",
             encode=_mock_encode,
         )
-        assert len(result.valid_records) == 1
-        assert len(result.valid_record_token_counts) == 1
-        assert len(result.invalid_records) == 2
-        assert len(result.invalid_record_token_counts) == 2
-        assert all(tc > 0 for tc in result.invalid_record_token_counts)
+        assert len(result.records) == 3
+        assert result.records[0].is_valid
+        assert not result.records[1].is_valid
+        assert not result.records[2].is_valid
+        assert all(r.token_count > 0 for r in result.records)
+        # Original text invariant preserved on cascade-invalidated records.
+        assert result.records[2].text.startswith('{"timestamp":')
 
     def test_no_encode_gives_zero_counts(self):
         jsonl = '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
         result = extract_and_validate_timeseries_records(
-            jsonl, self.SCHEMA, time_column="timestamp",
-            interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S",
+            jsonl,
+            self.SCHEMA,
+            time_column="timestamp",
+            interval_seconds=3600,
+            time_format="%Y-%m-%d %H:%M:%S",
             encode=None,
         )
-        assert result.valid_record_token_counts == [0]
-        assert result.invalid_record_token_counts == []
+        assert len(result.records) == 1
+        assert result.records[0].token_count == 0

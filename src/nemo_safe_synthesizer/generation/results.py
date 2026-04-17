@@ -79,8 +79,8 @@ class GenerateJobResults:
     num_non_record_tokens: int | None = None
     """Tokens not part of any recognized record."""
 
-    tokens_per_completion: float | None = None
-    """Average tokens per LLM completion."""
+    tokens_per_prompt: float | None = None
+    """Average completion tokens per prompt (``num_completion_tokens / num_prompts``)."""
 
     tokens_per_second: float | None = None
     """Total completion tokens divided by generation wall-clock time."""
@@ -133,7 +133,7 @@ class GenerateJobResults:
             num_valid_record_tokens=batches.total_valid_record_tokens if has_token_data else None,
             num_invalid_record_tokens=batches.total_invalid_record_tokens if has_token_data else None,
             num_non_record_tokens=batches.total_non_record_tokens if has_token_data else None,
-            tokens_per_completion=(
+            tokens_per_prompt=(
                 batches.total_completion_tokens / num_prompts if has_token_data and num_prompts > 0 else None
             ),
             tokens_per_second=(
@@ -203,13 +203,15 @@ class GenerationBatches:
     def _apply_data_actions_fn(self, batch: Batch) -> None:
         """Post-process and validate a batch via ``data_actions_fn``.
 
-        Converts the batch's record lists into a DataFrame, runs the
-        configured post-processing (reversing training-time preprocessing)
-        and user-specified validation rules, then maps the results back
-        onto the batch's ``valid_records`` and ``invalid_records``.
-
-        Each record is tagged with a temporary ID so that validated rows
-        can be mapped back to their originating response.
+        Converts the batch's valid records into a DataFrame, runs the
+        configured post-processing (reversing training-time
+        preprocessing) and user-specified validation rules, then maps
+        the results back onto the batch's :class:`ParsedRecord` objects
+        in place: each valid record either has its ``parsed`` dict
+        replaced with the transformed row, or is invalidated via
+        :meth:`ParsedRecord.invalidate` with a data-config error.
+        Because each ``ParsedRecord`` owns its own ``token_count``,
+        there is no separate bookkeeping to keep in sync.
 
         Args:
             batch: The batch whose records will be post-processed and
@@ -218,16 +220,15 @@ class GenerationBatches:
         if self.data_actions_fn is None:
             return
 
-        # Add a special key to each record, giving it a unique
-        # identifier. This will make it easier to map original records
-        # to the validated records, and ensure that we only allow through
-        # the records that passed validation.
+        # Tag every valid record with a temporary ID so transformed rows
+        # can be mapped back to their originating :class:`ParsedRecord`.
         record_id_key = MetadataColumns.INDEX.value
         record_id = 0
         for response in batch._responses:
-            for record in response.valid_records:
-                record[record_id_key] = record_id
-                record_id += 1
+            for record in response.records:
+                if record.is_valid and record.parsed is not None:
+                    record.parsed[record_id_key] = record_id
+                    record_id += 1
 
         batch_df = batch.to_dataframe()
         if batch_df is None:
@@ -242,38 +243,21 @@ class GenerationBatches:
         # Incrementally add onto the `_batches_df` with each batch of valid records.
         self._batches_df = pd.concat([self._batches_df, valid_df])
 
-        # map the records to their transformed records
         id_to_valid_records = dict(zip(valid_df[record_id_key], valid_df.to_dict("records")))
         id_to_rejected_records = dict(zip(rejected_df[record_id_key], rejected_df.to_dict("records")))
         for response in batch._responses:
-            new_valid_records: list[dict] = []
-            new_rejected_records: list[dict] = []
-            new_valid_tc: list[int] = []
-            new_rejected_tc: list[int] = []
-            has_token_counts = len(response.valid_record_token_counts) == len(response.valid_records)
-            for idx, record in enumerate(response.valid_records):
-                tc = response.valid_record_token_counts[idx] if has_token_counts else 0
-                if new_record := id_to_valid_records.get(record[record_id_key]):
+            for record in response.records:
+                if not record.is_valid or record.parsed is None:
+                    continue
+                rid = record.parsed[record_id_key]
+                if new_record := id_to_valid_records.get(rid):
                     del new_record[record_id_key]
-                    new_valid_records.append(new_record)
-                    if has_token_counts:
-                        new_valid_tc.append(tc)
-                elif new_record := id_to_rejected_records.get(record[record_id_key]):
+                    record.parsed = new_record
+                elif new_record := id_to_rejected_records.get(rid):
                     del new_record[record_id_key]
-                    new_rejected_records.append(new_record)
-                    if has_token_counts:
-                        new_rejected_tc.append(tc)
+                    record.invalidate(rejected_record_to_error(new_record))
                 else:
                     raise AssertionError("Every record in response should map to either a valid or rejected row.")
-
-            response.valid_records = new_valid_records
-            response.valid_record_token_counts = new_valid_tc
-            for rejected_record, tc in zip(new_rejected_records, new_rejected_tc or [0] * len(new_rejected_records)):
-                error = rejected_record_to_error(rejected_record)
-                response.invalid_records.append(str(rejected_record))
-                response.errors.append(error)
-                if has_token_counts:
-                    response.invalid_record_token_counts.append(tc)
 
     @property
     def num_batches(self) -> int:

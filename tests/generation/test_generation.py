@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -14,8 +15,13 @@ from nemo_safe_synthesizer.data_processing.actions.data_actions import (
 )
 from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.batch import Batch
-from nemo_safe_synthesizer.generation.processors import ParsedResponse
-from nemo_safe_synthesizer.generation.results import NUM_PROMPT_BUFFER, GenerationBatches, GenerationStatus
+from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
+from nemo_safe_synthesizer.generation.results import (
+    NUM_PROMPT_BUFFER,
+    GenerateJobResults,
+    GenerationBatches,
+    GenerationStatus,
+)
 
 
 # Purpose: Builds reusable good/bad Batch sets for generation tests.
@@ -224,15 +230,11 @@ def test_apply_data_actions(fixture_mock_processor, caplog):
     batch = Batch(fixture_mock_processor)
     batch._responses = [
         ParsedResponse(
-            valid_records=data.iloc[:3].to_dict("records"),
-            invalid_records=[],
-            errors=[],
+            records=[ParsedRecord(text=str(r), parsed=r) for r in data.iloc[:3].to_dict("records")],
             prompt_number=1,
         ),
         ParsedResponse(
-            valid_records=data.iloc[3:].to_dict("records"),
-            invalid_records=[],
-            errors=[],
+            records=[ParsedRecord(text=str(r), parsed=r) for r in data.iloc[3:].to_dict("records")],
             prompt_number=2,
         ),
     ]
@@ -295,10 +297,6 @@ def test_log_status_raises_generation_error_on_no_records(fixture_stub_batches):
 # Token-aggregation tests
 # ---------------------------------------------------------------------------
 
-from unittest.mock import MagicMock
-
-from nemo_safe_synthesizer.generation.results import GenerateJobResults
-
 
 def _make_batch_with_tokens(
     valid_counts: list[int],
@@ -307,15 +305,12 @@ def _make_batch_with_tokens(
     tok_time: float = 0.01,
 ) -> Batch:
     """Build a Batch with a mock processor that returns specific token counts."""
-    n_valid = len(valid_counts)
-    n_invalid = len(invalid_counts)
+    records = [
+        ParsedRecord(text=f'{{"a": {i}}}', parsed={"a": i}, token_count=tc) for i, tc in enumerate(valid_counts)
+    ] + [ParsedRecord(text=f"bad{i}", error=("err", "err"), token_count=tc) for i, tc in enumerate(invalid_counts)]
     mock_proc = MagicMock()
     mock_proc.return_value = ParsedResponse(
-        valid_records=[{"a": i} for i in range(n_valid)],
-        invalid_records=[f"bad{i}" for i in range(n_invalid)],
-        errors=[("err", "err")] * n_invalid,
-        valid_record_token_counts=valid_counts,
-        invalid_record_token_counts=invalid_counts,
+        records=records,
         tokenization_time_sec=tok_time,
     )
     batch = Batch(processor=mock_proc)
@@ -368,7 +363,7 @@ class TestGenerateJobResultsFromBatches:
         assert results.num_valid_record_tokens == 30
         assert results.num_invalid_record_tokens == 5
         assert results.num_non_record_tokens == 65
-        assert results.tokens_per_completion == pytest.approx(100.0)  # 100/1 prompt
+        assert results.tokens_per_prompt == pytest.approx(100.0)  # 100/1 prompt
         assert results.tokens_per_second == pytest.approx(50.0)  # 100/2.0
         assert results.valid_tokens_per_second == pytest.approx(15.0)  # 30/2.0
         assert results.tokenization_overhead_sec == pytest.approx(0.05)
