@@ -559,6 +559,7 @@ class Granite(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
+                tokenizer=tokenizer,
                 template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 add_bos_token_to_prompt=False,
                 add_eos_token_to_prompt=True,
@@ -598,6 +599,7 @@ class Llama32(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
+                tokenizer=tokenizer,
                 template="user\n {instruction} {schema} \n assistant\n{prefill}",
                 bos_token="<|im_start|>",
                 bos_token_id=151644,
@@ -646,6 +648,7 @@ class Mistral(ModelMetadata):
             instruction=DEFAULT_INSTRUCTION,
             prompt_config=LLMPromptConfig.from_tokenizer(
                 name=model_name_or_path,
+                tokenizer=tokenizer,
                 template=template,
                 add_bos_token_to_prompt=True,
                 add_eos_token_to_prompt=True,
