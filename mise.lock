@@ -131,22 +131,22 @@ checksum = "sha256:093d355ac33c6b8e91e80b8497d5581c61b028c0405e265cf38fd88f9a291
 url = "https://github.com/astral-sh/ruff/releases/download/0.15.0/ruff-aarch64-apple-darwin.tar.gz"
 
 [[tools.ty]]
-version = "0.0.27"
+version = "0.0.31"
 backend = "aqua:astral-sh/ty"
 
 [tools.ty."platforms.linux-arm64"]
-checksum = "sha256:b46465dacab53a28222a96b8da7bd4fc8bbab1c2699dec1e49063571ebed743b"
-url = "https://github.com/astral-sh/ty/releases/download/0.0.27/ty-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:c4bf27cd45b7da0500e8edfac19103ac5ffb2c170369e7e9701b7b6150bbe08c"
+url = "https://github.com/astral-sh/ty/releases/download/0.0.31/ty-aarch64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.ty."platforms.linux-x64"]
-checksum = "sha256:7e95adf1e3df1ffceb7545969a8c9731311e4cf8dccfcc0045de6d35a575608a"
-url = "https://github.com/astral-sh/ty/releases/download/0.0.27/ty-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:ee7bcc8746e1ca424b107ad288a00b7033fdc962d79932095c25bc4c4b2c3bdd"
+url = "https://github.com/astral-sh/ty/releases/download/0.0.31/ty-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.ty."platforms.macos-arm64"]
-checksum = "sha256:fb5dd6fac54bd9b39c3e1e3d06b5286f21bcdb75160fde25774306ab1932960b"
-url = "https://github.com/astral-sh/ty/releases/download/0.0.27/ty-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:26352f9559d09e59d11bf4584b886fc5cc466fcfde9b5d5cd3af417b4427a28c"
+url = "https://github.com/astral-sh/ty/releases/download/0.0.31/ty-aarch64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [[tools.uv]]

@@ -1,5 +1,8 @@
 {
     "terminal.integrated.env.linux": {
         "PATH": "${env:HOME}/.local/bin:${env:PATH}"
-    }
+    },
+    "ruff.path": [
+        "/root/.local/share/mise/shims/ruff"
+    ]
 }
