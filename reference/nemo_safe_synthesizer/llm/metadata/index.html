@@ -12208,7 +12208,8 @@ model artifacts.</p>
 <span class="normal"><a href="#__codelineno-0-567">567</a></span>
 <span class="normal"><a href="#__codelineno-0-568">568</a></span>
 <span class="normal"><a href="#__codelineno-0-569">569</a></span>
-<span class="normal"><a href="#__codelineno-0-570">570</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-547"><a id="__codelineno-0-547" name="__codelineno-0-547"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-570">570</a></span>
+<span class="normal"><a href="#__codelineno-0-571">571</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-547"><a id="__codelineno-0-547" name="__codelineno-0-547"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
 </span><span id="__span-0-548"><a id="__codelineno-0-548" name="__codelineno-0-548"></a>    <span class="bp">self</span><span class="p">,</span>
 </span><span id="__span-0-549"><a id="__codelineno-0-549" name="__codelineno-0-549"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-550"><a id="__codelineno-0-550" name="__codelineno-0-550"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -12223,15 +12224,16 @@ model artifacts.</p>
 </span><span id="__span-0-559"><a id="__codelineno-0-559" name="__codelineno-0-559"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
 </span><span id="__span-0-560"><a id="__codelineno-0-560" name="__codelineno-0-560"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
 </span><span id="__span-0-561"><a id="__codelineno-0-561" name="__codelineno-0-561"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-562"><a id="__codelineno-0-562" name="__codelineno-0-562"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-563"><a id="__codelineno-0-563" name="__codelineno-0-563"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-564"><a id="__codelineno-0-564" name="__codelineno-0-564"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-565"><a id="__codelineno-0-565" name="__codelineno-0-565"></a>        <span class="p">),</span>
-</span><span id="__span-0-566"><a id="__codelineno-0-566" name="__codelineno-0-566"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
-</span><span id="__span-0-568"><a id="__codelineno-0-568" name="__codelineno-0-568"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-569"><a id="__codelineno-0-569" name="__codelineno-0-569"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-570"><a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="p">)</span>
+</span><span id="__span-0-562"><a id="__codelineno-0-562" name="__codelineno-0-562"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-563"><a id="__codelineno-0-563" name="__codelineno-0-563"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-564"><a id="__codelineno-0-564" name="__codelineno-0-564"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-565"><a id="__codelineno-0-565" name="__codelineno-0-565"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-566"><a id="__codelineno-0-566" name="__codelineno-0-566"></a>        <span class="p">),</span>
+</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-568"><a id="__codelineno-0-568" name="__codelineno-0-568"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
+</span><span id="__span-0-569"><a id="__codelineno-0-569" name="__codelineno-0-569"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-570"><a id="__codelineno-0-570" name="__codelineno-0-570"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-571"><a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -12485,8 +12487,7 @@ automatic BOS/EOS injection in prompts.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-586">586</a></span>
-<span class="normal"><a href="#__codelineno-0-587">587</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-587">587</a></span>
 <span class="normal"><a href="#__codelineno-0-588">588</a></span>
 <span class="normal"><a href="#__codelineno-0-589">589</a></span>
 <span class="normal"><a href="#__codelineno-0-590">590</a></span>
@@ -12510,32 +12511,35 @@ automatic BOS/EOS injection in prompts.</p>
 <span class="normal"><a href="#__codelineno-0-608">608</a></span>
 <span class="normal"><a href="#__codelineno-0-609">609</a></span>
 <span class="normal"><a href="#__codelineno-0-610">610</a></span>
-<span class="normal"><a href="#__codelineno-0-611">611</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-586"><a id="__codelineno-0-586" name="__codelineno-0-586"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-587"><a id="__codelineno-0-587" name="__codelineno-0-587"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-588"><a id="__codelineno-0-588" name="__codelineno-0-588"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-589"><a id="__codelineno-0-589" name="__codelineno-0-589"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-590"><a id="__codelineno-0-590" name="__codelineno-0-590"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-591"><a id="__codelineno-0-591" name="__codelineno-0-591"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-592"><a id="__codelineno-0-592" name="__codelineno-0-592"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-593"><a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">PretrainedConfig</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-594"><a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
-</span><span id="__span-0-595"><a id="__codelineno-0-595" name="__codelineno-0-595"></a>
-</span><span id="__span-0-596"><a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-597"><a id="__codelineno-0-597" name="__codelineno-0-597"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-598"><a id="__codelineno-0-598" name="__codelineno-0-598"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-601"><a id="__codelineno-0-601" name="__codelineno-0-601"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="s2">&quot;&lt;|im_start|&gt;&quot;</span><span class="p">,</span>
-</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a>            <span class="n">bos_token_id</span><span class="o">=</span><span class="mi">151644</span><span class="p">,</span>
-</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a>        <span class="p">),</span>
-</span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
-</span><span id="__span-0-609"><a id="__codelineno-0-609" name="__codelineno-0-609"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-610"><a id="__codelineno-0-610" name="__codelineno-0-610"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-611"><a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-611">611</a></span>
+<span class="normal"><a href="#__codelineno-0-612">612</a></span>
+<span class="normal"><a href="#__codelineno-0-613">613</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-587"><a id="__codelineno-0-587" name="__codelineno-0-587"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-588"><a id="__codelineno-0-588" name="__codelineno-0-588"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-589"><a id="__codelineno-0-589" name="__codelineno-0-589"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-590"><a id="__codelineno-0-590" name="__codelineno-0-590"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-591"><a id="__codelineno-0-591" name="__codelineno-0-591"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-592"><a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-593"><a id="__codelineno-0-593" name="__codelineno-0-593"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-594"><a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">PretrainedConfig</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-595"><a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
+</span><span id="__span-0-596"><a id="__codelineno-0-596" name="__codelineno-0-596"></a>
+</span><span id="__span-0-597"><a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-598"><a id="__codelineno-0-598" name="__codelineno-0-598"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-601"><a id="__codelineno-0-601" name="__codelineno-0-601"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="s2">&quot;&lt;|im_start|&gt;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>            <span class="n">bos_token_id</span><span class="o">=</span><span class="mi">151644</span><span class="p">,</span>
+</span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-608"><a id="__codelineno-0-608" name="__codelineno-0-608"></a>        <span class="p">),</span>
+</span><span id="__span-0-609"><a id="__codelineno-0-609" name="__codelineno-0-609"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-610"><a id="__codelineno-0-610" name="__codelineno-0-610"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
+</span><span id="__span-0-611"><a id="__codelineno-0-611" name="__codelineno-0-611"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-612"><a id="__codelineno-0-612" name="__codelineno-0-612"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-613"><a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -12790,9 +12794,7 @@ automatic BOS/EOS injection in prompts.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-629">629</a></span>
-<span class="normal"><a href="#__codelineno-0-630">630</a></span>
-<span class="normal"><a href="#__codelineno-0-631">631</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-631">631</a></span>
 <span class="normal"><a href="#__codelineno-0-632">632</a></span>
 <span class="normal"><a href="#__codelineno-0-633">633</a></span>
 <span class="normal"><a href="#__codelineno-0-634">634</a></span>
@@ -12818,35 +12820,39 @@ automatic BOS/EOS injection in prompts.</p>
 <span class="normal"><a href="#__codelineno-0-654">654</a></span>
 <span class="normal"><a href="#__codelineno-0-655">655</a></span>
 <span class="normal"><a href="#__codelineno-0-656">656</a></span>
-<span class="normal"><a href="#__codelineno-0-657">657</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-629"><a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-630"><a id="__codelineno-0-630" name="__codelineno-0-630"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-631"><a id="__codelineno-0-631" name="__codelineno-0-631"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-632"><a id="__codelineno-0-632" name="__codelineno-0-632"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-633"><a id="__codelineno-0-633" name="__codelineno-0-633"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-634"><a id="__codelineno-0-634" name="__codelineno-0-634"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-635"><a id="__codelineno-0-635" name="__codelineno-0-635"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-636"><a id="__codelineno-0-636" name="__codelineno-0-636"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
-</span><span id="__span-0-637"><a id="__codelineno-0-637" name="__codelineno-0-637"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">PretrainedConfig</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-638"><a id="__codelineno-0-638" name="__codelineno-0-638"></a>    <span class="k">if</span> <span class="n">rope_scaling_factor</span><span class="p">:</span>
-</span><span id="__span-0-639"><a id="__codelineno-0-639" name="__codelineno-0-639"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-</span><span id="__span-0-640"><a id="__codelineno-0-640" name="__codelineno-0-640"></a>            <span class="sa">f</span><span class="s2">&quot;Rope scaling factor </span><span class="si">{</span><span class="n">rope_scaling_factor</span><span class="si">}</span><span class="s2"> is not supported for Mistral due to longer default context lengths. Ignoring.&quot;</span>
-</span><span id="__span-0-641"><a id="__codelineno-0-641" name="__codelineno-0-641"></a>        <span class="p">)</span>
-</span><span id="__span-0-642"><a id="__codelineno-0-642" name="__codelineno-0-642"></a>
-</span><span id="__span-0-643"><a id="__codelineno-0-643" name="__codelineno-0-643"></a>    <span class="n">template</span> <span class="o">=</span> <span class="s2">&quot;[INST] </span><span class="si">{instruction}</span><span class="s2"> </span><span class="se">\n\n</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> [/INST]</span><span class="si">{prefill}</span><span class="s2">&quot;</span>
-</span><span id="__span-0-644"><a id="__codelineno-0-644" name="__codelineno-0-644"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-645"><a id="__codelineno-0-645" name="__codelineno-0-645"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-646"><a id="__codelineno-0-646" name="__codelineno-0-646"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-647"><a id="__codelineno-0-647" name="__codelineno-0-647"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-648"><a id="__codelineno-0-648" name="__codelineno-0-648"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-649"><a id="__codelineno-0-649" name="__codelineno-0-649"></a>            <span class="n">template</span><span class="o">=</span><span class="n">template</span><span class="p">,</span>
-</span><span id="__span-0-650"><a id="__codelineno-0-650" name="__codelineno-0-650"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-651"><a id="__codelineno-0-651" name="__codelineno-0-651"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-652"><a id="__codelineno-0-652" name="__codelineno-0-652"></a>        <span class="p">),</span>
-</span><span id="__span-0-653"><a id="__codelineno-0-653" name="__codelineno-0-653"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-654"><a id="__codelineno-0-654" name="__codelineno-0-654"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-655"><a id="__codelineno-0-655" name="__codelineno-0-655"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-656"><a id="__codelineno-0-656" name="__codelineno-0-656"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-657"><a id="__codelineno-0-657" name="__codelineno-0-657"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-657">657</a></span>
+<span class="normal"><a href="#__codelineno-0-658">658</a></span>
+<span class="normal"><a href="#__codelineno-0-659">659</a></span>
+<span class="normal"><a href="#__codelineno-0-660">660</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-631"><a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-632"><a id="__codelineno-0-632" name="__codelineno-0-632"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-633"><a id="__codelineno-0-633" name="__codelineno-0-633"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-634"><a id="__codelineno-0-634" name="__codelineno-0-634"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-635"><a id="__codelineno-0-635" name="__codelineno-0-635"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-636"><a id="__codelineno-0-636" name="__codelineno-0-636"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-637"><a id="__codelineno-0-637" name="__codelineno-0-637"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-638"><a id="__codelineno-0-638" name="__codelineno-0-638"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
+</span><span id="__span-0-639"><a id="__codelineno-0-639" name="__codelineno-0-639"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">PretrainedConfig</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-640"><a id="__codelineno-0-640" name="__codelineno-0-640"></a>    <span class="k">if</span> <span class="n">rope_scaling_factor</span><span class="p">:</span>
+</span><span id="__span-0-641"><a id="__codelineno-0-641" name="__codelineno-0-641"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+</span><span id="__span-0-642"><a id="__codelineno-0-642" name="__codelineno-0-642"></a>            <span class="sa">f</span><span class="s2">&quot;Rope scaling factor </span><span class="si">{</span><span class="n">rope_scaling_factor</span><span class="si">}</span><span class="s2"> is not supported for Mistral due to longer default context lengths. Ignoring.&quot;</span>
+</span><span id="__span-0-643"><a id="__codelineno-0-643" name="__codelineno-0-643"></a>        <span class="p">)</span>
+</span><span id="__span-0-644"><a id="__codelineno-0-644" name="__codelineno-0-644"></a>
+</span><span id="__span-0-645"><a id="__codelineno-0-645" name="__codelineno-0-645"></a>    <span class="n">template</span> <span class="o">=</span> <span class="s2">&quot;[INST] </span><span class="si">{instruction}</span><span class="s2"> </span><span class="se">\n\n</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> [/INST]</span><span class="si">{prefill}</span><span class="s2">&quot;</span>
+</span><span id="__span-0-646"><a id="__codelineno-0-646" name="__codelineno-0-646"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-647"><a id="__codelineno-0-647" name="__codelineno-0-647"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-648"><a id="__codelineno-0-648" name="__codelineno-0-648"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-649"><a id="__codelineno-0-649" name="__codelineno-0-649"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-650"><a id="__codelineno-0-650" name="__codelineno-0-650"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-651"><a id="__codelineno-0-651" name="__codelineno-0-651"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-652"><a id="__codelineno-0-652" name="__codelineno-0-652"></a>            <span class="n">template</span><span class="o">=</span><span class="n">template</span><span class="p">,</span>
+</span><span id="__span-0-653"><a id="__codelineno-0-653" name="__codelineno-0-653"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-654"><a id="__codelineno-0-654" name="__codelineno-0-654"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-655"><a id="__codelineno-0-655" name="__codelineno-0-655"></a>        <span class="p">),</span>
+</span><span id="__span-0-656"><a id="__codelineno-0-656" name="__codelineno-0-656"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-657"><a id="__codelineno-0-657" name="__codelineno-0-657"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-658"><a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-659"><a id="__codelineno-0-659" name="__codelineno-0-659"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-660"><a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -13098,10 +13104,7 @@ automatic BOS/EOS injection in prompts.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-670">670</a></span>
-<span class="normal"><a href="#__codelineno-0-671">671</a></span>
-<span class="normal"><a href="#__codelineno-0-672">672</a></span>
-<span class="normal"><a href="#__codelineno-0-673">673</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-673">673</a></span>
 <span class="normal"><a href="#__codelineno-0-674">674</a></span>
 <span class="normal"><a href="#__codelineno-0-675">675</a></span>
 <span class="normal"><a href="#__codelineno-0-676">676</a></span>
@@ -13122,31 +13125,34 @@ automatic BOS/EOS injection in prompts.</p>
 <span class="normal"><a href="#__codelineno-0-691">691</a></span>
 <span class="normal"><a href="#__codelineno-0-692">692</a></span>
 <span class="normal"><a href="#__codelineno-0-693">693</a></span>
-<span class="normal"><a href="#__codelineno-0-694">694</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-670"><a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-671"><a id="__codelineno-0-671" name="__codelineno-0-671"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-672"><a id="__codelineno-0-672" name="__codelineno-0-672"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-673"><a id="__codelineno-0-673" name="__codelineno-0-673"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-674"><a id="__codelineno-0-674" name="__codelineno-0-674"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-675"><a id="__codelineno-0-675" name="__codelineno-0-675"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-676"><a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-677"><a id="__codelineno-0-677" name="__codelineno-0-677"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
-</span><span id="__span-0-678"><a id="__codelineno-0-678" name="__codelineno-0-678"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">PretrainedConfig</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-679"><a id="__codelineno-0-679" name="__codelineno-0-679"></a>
-</span><span id="__span-0-680"><a id="__codelineno-0-680" name="__codelineno-0-680"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-681"><a id="__codelineno-0-681" name="__codelineno-0-681"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-682"><a id="__codelineno-0-682" name="__codelineno-0-682"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-683"><a id="__codelineno-0-683" name="__codelineno-0-683"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-684"><a id="__codelineno-0-684" name="__codelineno-0-684"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;[INST] </span><span class="si">{instruction}</span><span class="s2"> </span><span class="se">\n\n</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> [/INST]</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-685"><a id="__codelineno-0-685" name="__codelineno-0-685"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-686"><a id="__codelineno-0-686" name="__codelineno-0-686"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-687"><a id="__codelineno-0-687" name="__codelineno-0-687"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-</span><span id="__span-0-688"><a id="__codelineno-0-688" name="__codelineno-0-688"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-689"><a id="__codelineno-0-689" name="__codelineno-0-689"></a>        <span class="p">),</span>
-</span><span id="__span-0-690"><a id="__codelineno-0-690" name="__codelineno-0-690"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-691"><a id="__codelineno-0-691" name="__codelineno-0-691"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
-</span><span id="__span-0-692"><a id="__codelineno-0-692" name="__codelineno-0-692"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-693"><a id="__codelineno-0-693" name="__codelineno-0-693"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-694"><a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-694">694</a></span>
+<span class="normal"><a href="#__codelineno-0-695">695</a></span>
+<span class="normal"><a href="#__codelineno-0-696">696</a></span>
+<span class="normal"><a href="#__codelineno-0-697">697</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-673"><a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-674"><a id="__codelineno-0-674" name="__codelineno-0-674"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-675"><a id="__codelineno-0-675" name="__codelineno-0-675"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-676"><a id="__codelineno-0-676" name="__codelineno-0-676"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-677"><a id="__codelineno-0-677" name="__codelineno-0-677"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-678"><a id="__codelineno-0-678" name="__codelineno-0-678"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-679"><a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-680"><a id="__codelineno-0-680" name="__codelineno-0-680"></a>    <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
+</span><span id="__span-0-681"><a id="__codelineno-0-681" name="__codelineno-0-681"></a>    <span class="n">config</span><span class="p">:</span> <span class="n">PretrainedConfig</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-682"><a id="__codelineno-0-682" name="__codelineno-0-682"></a>
+</span><span id="__span-0-683"><a id="__codelineno-0-683" name="__codelineno-0-683"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-684"><a id="__codelineno-0-684" name="__codelineno-0-684"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-685"><a id="__codelineno-0-685" name="__codelineno-0-685"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-686"><a id="__codelineno-0-686" name="__codelineno-0-686"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-687"><a id="__codelineno-0-687" name="__codelineno-0-687"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;[INST] </span><span class="si">{instruction}</span><span class="s2"> </span><span class="se">\n\n</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> [/INST]</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-688"><a id="__codelineno-0-688" name="__codelineno-0-688"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-689"><a id="__codelineno-0-689" name="__codelineno-0-689"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-690"><a id="__codelineno-0-690" name="__codelineno-0-690"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-691"><a id="__codelineno-0-691" name="__codelineno-0-691"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-692"><a id="__codelineno-0-692" name="__codelineno-0-692"></a>        <span class="p">),</span>
+</span><span id="__span-0-693"><a id="__codelineno-0-693" name="__codelineno-0-693"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-694"><a id="__codelineno-0-694" name="__codelineno-0-694"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
+</span><span id="__span-0-695"><a id="__codelineno-0-695" name="__codelineno-0-695"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-696"><a id="__codelineno-0-696" name="__codelineno-0-696"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-697"><a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -13398,10 +13404,7 @@ automatic BOS/EOS injection in prompts.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-707">707</a></span>
-<span class="normal"><a href="#__codelineno-0-708">708</a></span>
-<span class="normal"><a href="#__codelineno-0-709">709</a></span>
-<span class="normal"><a href="#__codelineno-0-710">710</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-710">710</a></span>
 <span class="normal"><a href="#__codelineno-0-711">711</a></span>
 <span class="normal"><a href="#__codelineno-0-712">712</a></span>
 <span class="normal"><a href="#__codelineno-0-713">713</a></span>
@@ -13423,32 +13426,35 @@ automatic BOS/EOS injection in prompts.</p>
 <span class="normal"><a href="#__codelineno-0-729">729</a></span>
 <span class="normal"><a href="#__codelineno-0-730">730</a></span>
 <span class="normal"><a href="#__codelineno-0-731">731</a></span>
-<span class="normal"><a href="#__codelineno-0-732">732</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-707"><a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-708"><a id="__codelineno-0-708" name="__codelineno-0-708"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-709"><a id="__codelineno-0-709" name="__codelineno-0-709"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-710"><a id="__codelineno-0-710" name="__codelineno-0-710"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-711"><a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-712"><a id="__codelineno-0-712" name="__codelineno-0-712"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-713"><a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-714"><a id="__codelineno-0-714" name="__codelineno-0-714"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
-</span><span id="__span-0-715"><a id="__codelineno-0-715" name="__codelineno-0-715"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-716"><a id="__codelineno-0-716" name="__codelineno-0-716"></a>
-</span><span id="__span-0-717"><a id="__codelineno-0-717" name="__codelineno-0-717"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-718"><a id="__codelineno-0-718" name="__codelineno-0-718"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-719"><a id="__codelineno-0-719" name="__codelineno-0-719"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-720"><a id="__codelineno-0-720" name="__codelineno-0-720"></a>        <span class="c1"># Matched with vllm prompt 2024-12-18</span>
-</span><span id="__span-0-721"><a id="__codelineno-0-721" name="__codelineno-0-721"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-722"><a id="__codelineno-0-722" name="__codelineno-0-722"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-723"><a id="__codelineno-0-723" name="__codelineno-0-723"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-724"><a id="__codelineno-0-724" name="__codelineno-0-724"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-725"><a id="__codelineno-0-725" name="__codelineno-0-725"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-</span><span id="__span-0-726"><a id="__codelineno-0-726" name="__codelineno-0-726"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-727"><a id="__codelineno-0-727" name="__codelineno-0-727"></a>        <span class="p">),</span>
-</span><span id="__span-0-728"><a id="__codelineno-0-728" name="__codelineno-0-728"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-729"><a id="__codelineno-0-729" name="__codelineno-0-729"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
-</span><span id="__span-0-730"><a id="__codelineno-0-730" name="__codelineno-0-730"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-731"><a id="__codelineno-0-731" name="__codelineno-0-731"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-732"><a id="__codelineno-0-732" name="__codelineno-0-732"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-732">732</a></span>
+<span class="normal"><a href="#__codelineno-0-733">733</a></span>
+<span class="normal"><a href="#__codelineno-0-734">734</a></span>
+<span class="normal"><a href="#__codelineno-0-735">735</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-710"><a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-711"><a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-712"><a id="__codelineno-0-712" name="__codelineno-0-712"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-713"><a id="__codelineno-0-713" name="__codelineno-0-713"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-714"><a id="__codelineno-0-714" name="__codelineno-0-714"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-715"><a id="__codelineno-0-715" name="__codelineno-0-715"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-716"><a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-717"><a id="__codelineno-0-717" name="__codelineno-0-717"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
+</span><span id="__span-0-718"><a id="__codelineno-0-718" name="__codelineno-0-718"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-719"><a id="__codelineno-0-719" name="__codelineno-0-719"></a>
+</span><span id="__span-0-720"><a id="__codelineno-0-720" name="__codelineno-0-720"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-721"><a id="__codelineno-0-721" name="__codelineno-0-721"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-722"><a id="__codelineno-0-722" name="__codelineno-0-722"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-723"><a id="__codelineno-0-723" name="__codelineno-0-723"></a>        <span class="c1"># Matched with vllm prompt 2024-12-18</span>
+</span><span id="__span-0-724"><a id="__codelineno-0-724" name="__codelineno-0-724"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-725"><a id="__codelineno-0-725" name="__codelineno-0-725"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-726"><a id="__codelineno-0-726" name="__codelineno-0-726"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-727"><a id="__codelineno-0-727" name="__codelineno-0-727"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-728"><a id="__codelineno-0-728" name="__codelineno-0-728"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-729"><a id="__codelineno-0-729" name="__codelineno-0-729"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-730"><a id="__codelineno-0-730" name="__codelineno-0-730"></a>        <span class="p">),</span>
+</span><span id="__span-0-731"><a id="__codelineno-0-731" name="__codelineno-0-731"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-732"><a id="__codelineno-0-732" name="__codelineno-0-732"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
+</span><span id="__span-0-733"><a id="__codelineno-0-733" name="__codelineno-0-733"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-734"><a id="__codelineno-0-734" name="__codelineno-0-734"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-735"><a id="__codelineno-0-735" name="__codelineno-0-735"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -13702,10 +13708,7 @@ will be ignored with a warning.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-748">748</a></span>
-<span class="normal"><a href="#__codelineno-0-749">749</a></span>
-<span class="normal"><a href="#__codelineno-0-750">750</a></span>
-<span class="normal"><a href="#__codelineno-0-751">751</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-751">751</a></span>
 <span class="normal"><a href="#__codelineno-0-752">752</a></span>
 <span class="normal"><a href="#__codelineno-0-753">753</a></span>
 <span class="normal"><a href="#__codelineno-0-754">754</a></span>
@@ -13733,38 +13736,41 @@ will be ignored with a warning.</p>
 <span class="normal"><a href="#__codelineno-0-776">776</a></span>
 <span class="normal"><a href="#__codelineno-0-777">777</a></span>
 <span class="normal"><a href="#__codelineno-0-778">778</a></span>
-<span class="normal"><a href="#__codelineno-0-779">779</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-748"><a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-749"><a id="__codelineno-0-749" name="__codelineno-0-749"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-750"><a id="__codelineno-0-750" name="__codelineno-0-750"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-751"><a id="__codelineno-0-751" name="__codelineno-0-751"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-752"><a id="__codelineno-0-752" name="__codelineno-0-752"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-753"><a id="__codelineno-0-753" name="__codelineno-0-753"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-754"><a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-755"><a id="__codelineno-0-755" name="__codelineno-0-755"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
-</span><span id="__span-0-756"><a id="__codelineno-0-756" name="__codelineno-0-756"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-757"><a id="__codelineno-0-757" name="__codelineno-0-757"></a>    <span class="k">if</span> <span class="n">rope_scaling_factor</span><span class="p">:</span>
-</span><span id="__span-0-758"><a id="__codelineno-0-758" name="__codelineno-0-758"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-</span><span id="__span-0-759"><a id="__codelineno-0-759" name="__codelineno-0-759"></a>            <span class="sa">f</span><span class="s2">&quot;Rope scaling factor </span><span class="si">{</span><span class="n">rope_scaling_factor</span><span class="si">}</span><span class="s2"> is not supported for SmolLM2 due to longer default context lengths. Ignoring.&quot;</span>
-</span><span id="__span-0-760"><a id="__codelineno-0-760" name="__codelineno-0-760"></a>        <span class="p">)</span>
-</span><span id="__span-0-761"><a id="__codelineno-0-761" name="__codelineno-0-761"></a>
-</span><span id="__span-0-762"><a id="__codelineno-0-762" name="__codelineno-0-762"></a>    <span class="n">im_start_id</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">convert_tokens_to_ids</span><span class="p">(</span><span class="s2">&quot;&lt;|im_start|&gt;&quot;</span><span class="p">)</span>
-</span><span id="__span-0-763"><a id="__codelineno-0-763" name="__codelineno-0-763"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-764"><a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-765"><a id="__codelineno-0-765" name="__codelineno-0-765"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-766"><a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-767"><a id="__codelineno-0-767" name="__codelineno-0-767"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-768"><a id="__codelineno-0-768" name="__codelineno-0-768"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-769"><a id="__codelineno-0-769" name="__codelineno-0-769"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-770"><a id="__codelineno-0-770" name="__codelineno-0-770"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-</span><span id="__span-0-771"><a id="__codelineno-0-771" name="__codelineno-0-771"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="s2">&quot;&lt;|im_start|&gt;&quot;</span><span class="p">,</span>
-</span><span id="__span-0-772"><a id="__codelineno-0-772" name="__codelineno-0-772"></a>            <span class="n">bos_token_id</span><span class="o">=</span><span class="n">im_start_id</span><span class="p">,</span>
-</span><span id="__span-0-773"><a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-774"><a id="__codelineno-0-774" name="__codelineno-0-774"></a>        <span class="p">),</span>
-</span><span id="__span-0-775"><a id="__codelineno-0-775" name="__codelineno-0-775"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-776"><a id="__codelineno-0-776" name="__codelineno-0-776"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-777"><a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-778"><a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-779"><a id="__codelineno-0-779" name="__codelineno-0-779"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-779">779</a></span>
+<span class="normal"><a href="#__codelineno-0-780">780</a></span>
+<span class="normal"><a href="#__codelineno-0-781">781</a></span>
+<span class="normal"><a href="#__codelineno-0-782">782</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-751"><a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-752"><a id="__codelineno-0-752" name="__codelineno-0-752"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-753"><a id="__codelineno-0-753" name="__codelineno-0-753"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-754"><a id="__codelineno-0-754" name="__codelineno-0-754"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-755"><a id="__codelineno-0-755" name="__codelineno-0-755"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-756"><a id="__codelineno-0-756" name="__codelineno-0-756"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-757"><a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-758"><a id="__codelineno-0-758" name="__codelineno-0-758"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
+</span><span id="__span-0-759"><a id="__codelineno-0-759" name="__codelineno-0-759"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-760"><a id="__codelineno-0-760" name="__codelineno-0-760"></a>    <span class="k">if</span> <span class="n">rope_scaling_factor</span><span class="p">:</span>
+</span><span id="__span-0-761"><a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+</span><span id="__span-0-762"><a id="__codelineno-0-762" name="__codelineno-0-762"></a>            <span class="sa">f</span><span class="s2">&quot;Rope scaling factor </span><span class="si">{</span><span class="n">rope_scaling_factor</span><span class="si">}</span><span class="s2"> is not supported for SmolLM2 due to longer default context lengths. Ignoring.&quot;</span>
+</span><span id="__span-0-763"><a id="__codelineno-0-763" name="__codelineno-0-763"></a>        <span class="p">)</span>
+</span><span id="__span-0-764"><a id="__codelineno-0-764" name="__codelineno-0-764"></a>
+</span><span id="__span-0-765"><a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="n">im_start_id</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">convert_tokens_to_ids</span><span class="p">(</span><span class="s2">&quot;&lt;|im_start|&gt;&quot;</span><span class="p">)</span>
+</span><span id="__span-0-766"><a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-767"><a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-768"><a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-769"><a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-770"><a id="__codelineno-0-770" name="__codelineno-0-770"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-771"><a id="__codelineno-0-771" name="__codelineno-0-771"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-772"><a id="__codelineno-0-772" name="__codelineno-0-772"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-773"><a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-774"><a id="__codelineno-0-774" name="__codelineno-0-774"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="s2">&quot;&lt;|im_start|&gt;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-775"><a id="__codelineno-0-775" name="__codelineno-0-775"></a>            <span class="n">bos_token_id</span><span class="o">=</span><span class="n">im_start_id</span><span class="p">,</span>
+</span><span id="__span-0-776"><a id="__codelineno-0-776" name="__codelineno-0-776"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-777"><a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="p">),</span>
+</span><span id="__span-0-778"><a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-779"><a id="__codelineno-0-779" name="__codelineno-0-779"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-780"><a id="__codelineno-0-780" name="__codelineno-0-780"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-781"><a id="__codelineno-0-781" name="__codelineno-0-781"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-782"><a id="__codelineno-0-782" name="__codelineno-0-782"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -14019,10 +14025,7 @@ ignored with a warning.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-796">796</a></span>
-<span class="normal"><a href="#__codelineno-0-797">797</a></span>
-<span class="normal"><a href="#__codelineno-0-798">798</a></span>
-<span class="normal"><a href="#__codelineno-0-799">799</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-799">799</a></span>
 <span class="normal"><a href="#__codelineno-0-800">800</a></span>
 <span class="normal"><a href="#__codelineno-0-801">801</a></span>
 <span class="normal"><a href="#__codelineno-0-802">802</a></span>
@@ -14056,44 +14059,47 @@ ignored with a warning.</p>
 <span class="normal"><a href="#__codelineno-0-830">830</a></span>
 <span class="normal"><a href="#__codelineno-0-831">831</a></span>
 <span class="normal"><a href="#__codelineno-0-832">832</a></span>
-<span class="normal"><a href="#__codelineno-0-833">833</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-796"><a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-797"><a id="__codelineno-0-797" name="__codelineno-0-797"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-798"><a id="__codelineno-0-798" name="__codelineno-0-798"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-799"><a id="__codelineno-0-799" name="__codelineno-0-799"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-800"><a id="__codelineno-0-800" name="__codelineno-0-800"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-801"><a id="__codelineno-0-801" name="__codelineno-0-801"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-802"><a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-803"><a id="__codelineno-0-803" name="__codelineno-0-803"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
-</span><span id="__span-0-804"><a id="__codelineno-0-804" name="__codelineno-0-804"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-805"><a id="__codelineno-0-805" name="__codelineno-0-805"></a>
-</span><span id="__span-0-806"><a id="__codelineno-0-806" name="__codelineno-0-806"></a>    <span class="c1"># we use the bos token here explicitly for support during group-by SFT.</span>
-</span><span id="__span-0-807"><a id="__codelineno-0-807" name="__codelineno-0-807"></a>    <span class="c1"># the groupby assumes there is a bos token at the start of the prompt.</span>
-</span><span id="__span-0-808"><a id="__codelineno-0-808" name="__codelineno-0-808"></a>    <span class="n">bos_token</span> <span class="o">=</span> <span class="s2">&quot;&lt;|im_start|&gt;&quot;</span>
-</span><span id="__span-0-809"><a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="n">bos_token_id</span> <span class="o">=</span> <span class="mi">128011</span>
-</span><span id="__span-0-810"><a id="__codelineno-0-810" name="__codelineno-0-810"></a>
-</span><span id="__span-0-811"><a id="__codelineno-0-811" name="__codelineno-0-811"></a>    <span class="c1"># SmolLM3 uses high theta values (1.5M-5M) so it&#39;s important to read from config</span>
-</span><span id="__span-0-812"><a id="__codelineno-0-812" name="__codelineno-0-812"></a>    <span class="k">if</span> <span class="n">rope_scaling_factor</span><span class="p">:</span>
-</span><span id="__span-0-813"><a id="__codelineno-0-813" name="__codelineno-0-813"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-</span><span id="__span-0-814"><a id="__codelineno-0-814" name="__codelineno-0-814"></a>            <span class="sa">f</span><span class="s2">&quot;Rope scaling factor </span><span class="si">{</span><span class="n">rope_scaling_factor</span><span class="si">}</span><span class="s2"> is not supported for SmolLM3 due to longer default context lengths. Ignoring.&quot;</span>
-</span><span id="__span-0-815"><a id="__codelineno-0-815" name="__codelineno-0-815"></a>        <span class="p">)</span>
-</span><span id="__span-0-816"><a id="__codelineno-0-816" name="__codelineno-0-816"></a>
-</span><span id="__span-0-817"><a id="__codelineno-0-817" name="__codelineno-0-817"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-818"><a id="__codelineno-0-818" name="__codelineno-0-818"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-819"><a id="__codelineno-0-819" name="__codelineno-0-819"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-820"><a id="__codelineno-0-820" name="__codelineno-0-820"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-821"><a id="__codelineno-0-821" name="__codelineno-0-821"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> &lt;|im_end|&gt; </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-822"><a id="__codelineno-0-822" name="__codelineno-0-822"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-823"><a id="__codelineno-0-823" name="__codelineno-0-823"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-824"><a id="__codelineno-0-824" name="__codelineno-0-824"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-</span><span id="__span-0-825"><a id="__codelineno-0-825" name="__codelineno-0-825"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-826"><a id="__codelineno-0-826" name="__codelineno-0-826"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="n">bos_token</span><span class="p">,</span>
-</span><span id="__span-0-827"><a id="__codelineno-0-827" name="__codelineno-0-827"></a>            <span class="n">bos_token_id</span><span class="o">=</span><span class="n">bos_token_id</span><span class="p">,</span>
-</span><span id="__span-0-828"><a id="__codelineno-0-828" name="__codelineno-0-828"></a>        <span class="p">),</span>
-</span><span id="__span-0-829"><a id="__codelineno-0-829" name="__codelineno-0-829"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-830"><a id="__codelineno-0-830" name="__codelineno-0-830"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-831"><a id="__codelineno-0-831" name="__codelineno-0-831"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-832"><a id="__codelineno-0-832" name="__codelineno-0-832"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-833">833</a></span>
+<span class="normal"><a href="#__codelineno-0-834">834</a></span>
+<span class="normal"><a href="#__codelineno-0-835">835</a></span>
+<span class="normal"><a href="#__codelineno-0-836">836</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-799"><a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-800"><a id="__codelineno-0-800" name="__codelineno-0-800"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-801"><a id="__codelineno-0-801" name="__codelineno-0-801"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-802"><a id="__codelineno-0-802" name="__codelineno-0-802"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-803"><a id="__codelineno-0-803" name="__codelineno-0-803"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-804"><a id="__codelineno-0-804" name="__codelineno-0-804"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-805"><a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-806"><a id="__codelineno-0-806" name="__codelineno-0-806"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer</span>
+</span><span id="__span-0-807"><a id="__codelineno-0-807" name="__codelineno-0-807"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-808"><a id="__codelineno-0-808" name="__codelineno-0-808"></a>
+</span><span id="__span-0-809"><a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="c1"># we use the bos token here explicitly for support during group-by SFT.</span>
+</span><span id="__span-0-810"><a id="__codelineno-0-810" name="__codelineno-0-810"></a>    <span class="c1"># the groupby assumes there is a bos token at the start of the prompt.</span>
+</span><span id="__span-0-811"><a id="__codelineno-0-811" name="__codelineno-0-811"></a>    <span class="n">bos_token</span> <span class="o">=</span> <span class="s2">&quot;&lt;|im_start|&gt;&quot;</span>
+</span><span id="__span-0-812"><a id="__codelineno-0-812" name="__codelineno-0-812"></a>    <span class="n">bos_token_id</span> <span class="o">=</span> <span class="mi">128011</span>
+</span><span id="__span-0-813"><a id="__codelineno-0-813" name="__codelineno-0-813"></a>
+</span><span id="__span-0-814"><a id="__codelineno-0-814" name="__codelineno-0-814"></a>    <span class="c1"># SmolLM3 uses high theta values (1.5M-5M) so it&#39;s important to read from config</span>
+</span><span id="__span-0-815"><a id="__codelineno-0-815" name="__codelineno-0-815"></a>    <span class="k">if</span> <span class="n">rope_scaling_factor</span><span class="p">:</span>
+</span><span id="__span-0-816"><a id="__codelineno-0-816" name="__codelineno-0-816"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+</span><span id="__span-0-817"><a id="__codelineno-0-817" name="__codelineno-0-817"></a>            <span class="sa">f</span><span class="s2">&quot;Rope scaling factor </span><span class="si">{</span><span class="n">rope_scaling_factor</span><span class="si">}</span><span class="s2"> is not supported for SmolLM3 due to longer default context lengths. Ignoring.&quot;</span>
+</span><span id="__span-0-818"><a id="__codelineno-0-818" name="__codelineno-0-818"></a>        <span class="p">)</span>
+</span><span id="__span-0-819"><a id="__codelineno-0-819" name="__codelineno-0-819"></a>
+</span><span id="__span-0-820"><a id="__codelineno-0-820" name="__codelineno-0-820"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-821"><a id="__codelineno-0-821" name="__codelineno-0-821"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-822"><a id="__codelineno-0-822" name="__codelineno-0-822"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-823"><a id="__codelineno-0-823" name="__codelineno-0-823"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-824"><a id="__codelineno-0-824" name="__codelineno-0-824"></a>            <span class="n">template</span><span class="o">=</span><span class="s2">&quot;user</span><span class="se">\n</span><span class="s2"> </span><span class="si">{instruction}</span><span class="s2"> </span><span class="si">{schema}</span><span class="s2"> &lt;|im_end|&gt; </span><span class="se">\n</span><span class="s2"> assistant</span><span class="se">\n</span><span class="si">{prefill}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-825"><a id="__codelineno-0-825" name="__codelineno-0-825"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-826"><a id="__codelineno-0-826" name="__codelineno-0-826"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-827"><a id="__codelineno-0-827" name="__codelineno-0-827"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-828"><a id="__codelineno-0-828" name="__codelineno-0-828"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-829"><a id="__codelineno-0-829" name="__codelineno-0-829"></a>            <span class="n">bos_token</span><span class="o">=</span><span class="n">bos_token</span><span class="p">,</span>
+</span><span id="__span-0-830"><a id="__codelineno-0-830" name="__codelineno-0-830"></a>            <span class="n">bos_token_id</span><span class="o">=</span><span class="n">bos_token_id</span><span class="p">,</span>
+</span><span id="__span-0-831"><a id="__codelineno-0-831" name="__codelineno-0-831"></a>        <span class="p">),</span>
+</span><span id="__span-0-832"><a id="__codelineno-0-832" name="__codelineno-0-832"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-834"><a id="__codelineno-0-834" name="__codelineno-0-834"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-835"><a id="__codelineno-0-835" name="__codelineno-0-835"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-836"><a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -14345,10 +14351,7 @@ ignored with a warning.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/llm/metadata.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-846">846</a></span>
-<span class="normal"><a href="#__codelineno-0-847">847</a></span>
-<span class="normal"><a href="#__codelineno-0-848">848</a></span>
-<span class="normal"><a href="#__codelineno-0-849">849</a></span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-849">849</a></span>
 <span class="normal"><a href="#__codelineno-0-850">850</a></span>
 <span class="normal"><a href="#__codelineno-0-851">851</a></span>
 <span class="normal"><a href="#__codelineno-0-852">852</a></span>
@@ -14369,31 +14372,34 @@ ignored with a warning.</p>
 <span class="normal"><a href="#__codelineno-0-867">867</a></span>
 <span class="normal"><a href="#__codelineno-0-868">868</a></span>
 <span class="normal"><a href="#__codelineno-0-869">869</a></span>
-<span class="normal"><a href="#__codelineno-0-870">870</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-846"><a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-847"><a id="__codelineno-0-847" name="__codelineno-0-847"></a>    <span class="bp">self</span><span class="p">,</span>
-</span><span id="__span-0-848"><a id="__codelineno-0-848" name="__codelineno-0-848"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="__span-0-849"><a id="__codelineno-0-849" name="__codelineno-0-849"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-850"><a id="__codelineno-0-850" name="__codelineno-0-850"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-851"><a id="__codelineno-0-851" name="__codelineno-0-851"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-852"><a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-853"><a id="__codelineno-0-853" name="__codelineno-0-853"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">tokenizer</span> <span class="ow">or</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-854"><a id="__codelineno-0-854" name="__codelineno-0-854"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
-</span><span id="__span-0-855"><a id="__codelineno-0-855" name="__codelineno-0-855"></a>
-</span><span id="__span-0-856"><a id="__codelineno-0-856" name="__codelineno-0-856"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-</span><span id="__span-0-857"><a id="__codelineno-0-857" name="__codelineno-0-857"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
-</span><span id="__span-0-858"><a id="__codelineno-0-858" name="__codelineno-0-858"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
-</span><span id="__span-0-859"><a id="__codelineno-0-859" name="__codelineno-0-859"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
-</span><span id="__span-0-860"><a id="__codelineno-0-860" name="__codelineno-0-860"></a>            <span class="n">template</span><span class="o">=</span><span class="n">PROMPT_TEMPLATE</span><span class="p">,</span>
-</span><span id="__span-0-861"><a id="__codelineno-0-861" name="__codelineno-0-861"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-862"><a id="__codelineno-0-862" name="__codelineno-0-862"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-863"><a id="__codelineno-0-863" name="__codelineno-0-863"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-</span><span id="__span-0-864"><a id="__codelineno-0-864" name="__codelineno-0-864"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-865"><a id="__codelineno-0-865" name="__codelineno-0-865"></a>        <span class="p">),</span>
-</span><span id="__span-0-866"><a id="__codelineno-0-866" name="__codelineno-0-866"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
-</span><span id="__span-0-867"><a id="__codelineno-0-867" name="__codelineno-0-867"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
-</span><span id="__span-0-868"><a id="__codelineno-0-868" name="__codelineno-0-868"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
-</span><span id="__span-0-869"><a id="__codelineno-0-869" name="__codelineno-0-869"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-</span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-870">870</a></span>
+<span class="normal"><a href="#__codelineno-0-871">871</a></span>
+<span class="normal"><a href="#__codelineno-0-872">872</a></span>
+<span class="normal"><a href="#__codelineno-0-873">873</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-849"><a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-850"><a id="__codelineno-0-850" name="__codelineno-0-850"></a>    <span class="bp">self</span><span class="p">,</span>
+</span><span id="__span-0-851"><a id="__codelineno-0-851" name="__codelineno-0-851"></a>    <span class="n">model_name_or_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-852"><a id="__codelineno-0-852" name="__codelineno-0-852"></a>    <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-853"><a id="__codelineno-0-853" name="__codelineno-0-853"></a>    <span class="n">rope_scaling_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-854"><a id="__codelineno-0-854" name="__codelineno-0-854"></a>    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-855"><a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-856"><a id="__codelineno-0-856" name="__codelineno-0-856"></a>    <span class="n">tokenizer</span> <span class="o">=</span> <span class="n">tokenizer</span> <span class="ow">or</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-857"><a id="__codelineno-0-857" name="__codelineno-0-857"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_name_or_path</span><span class="p">)</span>
+</span><span id="__span-0-858"><a id="__codelineno-0-858" name="__codelineno-0-858"></a>
+</span><span id="__span-0-859"><a id="__codelineno-0-859" name="__codelineno-0-859"></a>    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+</span><span id="__span-0-860"><a id="__codelineno-0-860" name="__codelineno-0-860"></a>        <span class="n">autoconfig</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+</span><span id="__span-0-861"><a id="__codelineno-0-861" name="__codelineno-0-861"></a>        <span class="n">instruction</span><span class="o">=</span><span class="n">DEFAULT_INSTRUCTION</span><span class="p">,</span>
+</span><span id="__span-0-862"><a id="__codelineno-0-862" name="__codelineno-0-862"></a>        <span class="n">prompt_config</span><span class="o">=</span><span class="n">LLMPromptConfig</span><span class="o">.</span><span class="n">from_tokenizer</span><span class="p">(</span>
+</span><span id="__span-0-863"><a id="__codelineno-0-863" name="__codelineno-0-863"></a>            <span class="n">template</span><span class="o">=</span><span class="n">PROMPT_TEMPLATE</span><span class="p">,</span>
+</span><span id="__span-0-864"><a id="__codelineno-0-864" name="__codelineno-0-864"></a>            <span class="n">add_bos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-865"><a id="__codelineno-0-865" name="__codelineno-0-865"></a>            <span class="n">add_eos_token_to_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-866"><a id="__codelineno-0-866" name="__codelineno-0-866"></a>            <span class="n">tokenizer</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-0-867"><a id="__codelineno-0-867" name="__codelineno-0-867"></a>            <span class="n">name</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-868"><a id="__codelineno-0-868" name="__codelineno-0-868"></a>        <span class="p">),</span>
+</span><span id="__span-0-869"><a id="__codelineno-0-869" name="__codelineno-0-869"></a>        <span class="n">model_name_or_path</span><span class="o">=</span><span class="n">model_name_or_path</span><span class="p">,</span>
+</span><span id="__span-0-870"><a id="__codelineno-0-870" name="__codelineno-0-870"></a>        <span class="n">rope_scaling</span><span class="o">=</span><span class="n">rope_scaling_factor</span><span class="p">,</span>  <span class="c1"># ty: ignore[invalid-argument-type] -- third-party stub</span>
+</span><span id="__span-0-871"><a id="__codelineno-0-871" name="__codelineno-0-871"></a>        <span class="n">rope_parameters_location</span><span class="o">=</span><span class="s2">&quot;autoconfig&quot;</span><span class="p">,</span>
+</span><span id="__span-0-872"><a id="__codelineno-0-872" name="__codelineno-0-872"></a>        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+</span><span id="__span-0-873"><a id="__codelineno-0-873" name="__codelineno-0-873"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
