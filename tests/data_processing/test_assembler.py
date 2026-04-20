@@ -31,9 +31,13 @@ STUB_PROMPT = "Test prompt"
 STUB_SEQUENCE = dict(input_ids=[66, 67], attention_mask=[1, 1])
 
 
+# Purpose: Session-scoped assembler config pointing at a local SmolLM3 tokenizer directory
+# to avoid HuggingFace Hub downloads during tests.
 @pytest.fixture(scope="session")
-def fixture_assembler_config() -> SafeSynthesizerParameters:
-    config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+def fixture_assembler_config(fixture_smollm3_tokenizer: str) -> SafeSynthesizerParameters:
+    config = SafeSynthesizerParameters.from_params(
+        use_unsloth=False, rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer
+    )
     return config
 
 

@@ -64,6 +64,9 @@ watch:
 
 strict: !ENV [MKDOCS_STRICT, false]
 
+hooks:
+  - docs/hooks.py
+
 plugins:
   - search
   - blog:
