@@ -372,7 +372,7 @@ class ModelMetadata(BaseModel):
         """
         if self.workdir is None:
             raise ValueError("Cannot get adapter_path: workdir is not set")
-        return self.workdir.train.adapter.path.resolve()  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        return self.workdir.train.adapter.path.resolve()
 
     @property
     def metadata_path(self) -> Path:
@@ -414,7 +414,7 @@ class ModelMetadata(BaseModel):
             raise ValueError("Cannot save metadata: workdir is not set")
         write_json(
             self.model_dump(mode="json"),
-            path=self.workdir.train.adapter.metadata,  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            path=self.workdir.train.adapter.metadata,
             indent=4,
         )
 

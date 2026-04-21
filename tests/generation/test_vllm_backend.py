@@ -53,7 +53,7 @@ def mock_workdir(fixture_session_cache_dir):
     assert workdir.run_dir.exists(), f"Run dir not created: {workdir.run_dir}"
     assert workdir.train.path.exists(), f"Train dir not created: {workdir.train.path}"
     assert workdir.generate.path.exists(), f"Generate dir not created: {workdir.generate.path}"
-    assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+    assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"
 
     return workdir
 

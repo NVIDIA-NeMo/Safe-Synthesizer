@@ -25,7 +25,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Generic, Self, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Generic, Self, TypeVar, overload
 
 from ..observability import get_logger
 from ..utils import write_json
@@ -501,7 +501,7 @@ class Workdir:
         """Log file path for the current phase."""
         phase = self._current_phase or "unknown"
         if phase == "generate":
-            return cast(Path, self.generate.logs)
+            return self.generate.logs
         return self.run_dir / "logs" / f"{phase}.jsonl"
 
     @property
@@ -512,8 +512,8 @@ class Workdir:
         returns the parent's adapter path since that's where the trained adapter lives.
         """
         if self._parent_workdir is not None:
-            return self._parent_workdir.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-        return self.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            return self._parent_workdir.train.adapter.path
+        return self.train.adapter.path
 
     @property
     def metadata_file(self) -> Path:
@@ -522,8 +522,8 @@ class Workdir:
         Uses parent workdir's path when available.
         """
         if self._parent_workdir is not None:
-            return cast(Path, self._parent_workdir.train.adapter.metadata)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-        return cast(Path, self.train.adapter.metadata)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            return self._parent_workdir.train.adapter.metadata
+        return self.train.adapter.metadata
 
     @property
     def schema_file(self) -> Path:
@@ -532,8 +532,8 @@ class Workdir:
         Uses parent workdir's path when available.
         """
         if self._parent_workdir is not None:
-            return cast(Path, self._parent_workdir.train.adapter.schema)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-        return cast(Path, self.train.adapter.schema)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            return self._parent_workdir.train.adapter.schema
+        return self.train.adapter.schema
 
     @property
     def dataset_schema_file(self) -> Path:
@@ -543,17 +543,17 @@ class Workdir:
     @property
     def output_file(self) -> Path:
         """Shortcut to generate.output."""
-        return cast(Path, self.generate.output)
+        return self.generate.output
 
     @property
     def evaluation_report(self) -> Path:
         """Shortcut to generate.report."""
-        return cast(Path, self.generate.report)
+        return self.generate.report
 
     @property
     def evaluation_metrics(self) -> Path:
         """Shortcut to generate.evaluation_metrics."""
-        return cast(Path, self.generate.evaluation_metrics)
+        return self.generate.evaluation_metrics
 
     # =========================================================================
     # Source paths (for generation runs that have a parent training run)
@@ -582,7 +582,7 @@ class Workdir:
             return root_config
 
         # Fallback to train directory config (older training runs)
-        train_config = cast(Path, source_workdir.train.config)
+        train_config = source_workdir.train.config
         if train_config.exists():
             return train_config
 
@@ -632,8 +632,8 @@ class Workdir:
             self._write_generation_info()
         else:
             # Training run or end-to-end - create all directories
-            self.train.cache.path.mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-            self.train.adapter.path.mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            self.train.cache.path.mkdir(parents=True, exist_ok=True)
+            self.train.adapter.path.mkdir(parents=True, exist_ok=True)
             self.generate.path.mkdir(parents=True, exist_ok=True)
             self.dataset.path.mkdir(parents=True, exist_ok=True)
 
