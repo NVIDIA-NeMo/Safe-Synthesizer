@@ -3,11 +3,14 @@
 
 """Tests for the artifact_structure module."""
 
+import ast
+import inspect
 import os
 from pathlib import Path
 
 import pytest
 
+import nemo_safe_synthesizer.cli.artifact_structure as artifact_structure_module
 from nemo_safe_synthesizer.cli.artifact_structure import (
     PROJECT_NAME_DELIMITER,
     BoundDir,
@@ -672,3 +675,117 @@ class TestParseProjectName:
         config, dataset = _parse_project_name(workdir.project_name)
         assert config == "test-config"
         assert dataset == "test-dataset"
+
+
+# =============================================================================
+# Phantom Subclass Drift Guard
+# =============================================================================
+#
+# The `Workdir` class declares its directory tree using `DirNode[_PhantomDir](...)`.
+# `_PhantomDir` is a `BoundDir` subclass whose body lives under `if TYPE_CHECKING:`
+# and exists only to declare the typed children of that subtree so `ty` (and
+# editors) can resolve attribute access through `BoundDir.__getattr__`.
+#
+# If someone adds or renames a child in a `DirNode(...)` tree but forgets to
+# update the matching phantom subclass (or vice versa), type checking will
+# silently weaken: the code still runs (thanks to `__getattr__`) but static
+# analysis loses precision and ``ty: ignore`` comments start creeping back.
+#
+# This test reads `artifact_structure.py` with `ast` (phantom annotations are
+# gated by `TYPE_CHECKING` and therefore absent at runtime) and asserts that
+# every `DirNode[_Foo](...)` call's keyword-argument names exactly match the
+# attribute names declared on `_Foo`'s `if TYPE_CHECKING:` block.
+
+
+def _phantom_type_checking_annotations(cls_node: ast.ClassDef) -> set[str]:
+    """Extract attribute names from a phantom class's ``if TYPE_CHECKING:`` body."""
+    names: set[str] = set()
+    for stmt in cls_node.body:
+        if isinstance(stmt, ast.If) and isinstance(stmt.test, ast.Name) and stmt.test.id == "TYPE_CHECKING":
+            for inner in stmt.body:
+                if isinstance(inner, ast.AnnAssign) and isinstance(inner.target, ast.Name):
+                    names.add(inner.target.id)
+    return names
+
+
+def _dir_node_phantom_and_children(call: ast.Call) -> tuple[str, set[str]] | None:
+    """Return ``(phantom_name, child_kwarg_names)`` for ``DirNode[_Foo](name, **kwargs)``.
+
+    Returns ``None`` for bare ``DirNode(...)`` calls (no phantom type parameter).
+    """
+    match call.func:
+        case ast.Subscript(value=ast.Name(id="DirNode"), slice=ast.Name(id=phantom_name)):
+            kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
+            return phantom_name, kwargs
+        case _:
+            return None
+
+
+def _collect_dir_node_calls(node: ast.AST) -> list[ast.Call]:
+    """Walk an AST subtree and return every ``ast.Call`` node."""
+    return [child for child in ast.walk(node) if isinstance(child, ast.Call)]
+
+
+class TestPhantomSubclassDrift:
+    """Guards that `DirNode[_Foo](...)` keys match `_Foo`'s typed attributes.
+
+    Failures here mean somebody added/renamed a child on one side of the
+    ``DirNode[_PhantomDir]`` ↔ phantom-subclass pair without updating the
+    other. The cli/AGENTS.md ``artifact_structure.py`` section covers the
+    convention.
+    """
+
+    @pytest.fixture(scope="class")
+    def module_ast(self) -> ast.Module:
+        source = inspect.getsource(artifact_structure_module)
+        return ast.parse(source)
+
+    @pytest.fixture(scope="class")
+    def phantom_annotations(self, module_ast: ast.Module) -> dict[str, set[str]]:
+        """Map phantom class name → attribute names declared under ``TYPE_CHECKING``."""
+        return {
+            node.name: _phantom_type_checking_annotations(node)
+            for node in module_ast.body
+            if isinstance(node, ast.ClassDef) and node.name.startswith("_") and node.name.endswith("Dir")
+        }
+
+    @pytest.fixture(scope="class")
+    def dir_node_usages(self, module_ast: ast.Module) -> list[tuple[str, set[str]]]:
+        """List of every ``DirNode[_Foo](...)`` call's (phantom name, child kwarg names)."""
+        usages: list[tuple[str, set[str]]] = []
+        for call in _collect_dir_node_calls(module_ast):
+            result = _dir_node_phantom_and_children(call)
+            if result is not None:
+                usages.append(result)
+        return usages
+
+    def test_phantom_classes_discovered(self, phantom_annotations: dict[str, set[str]]):
+        """Sanity check: ensure we actually found the phantom subclasses."""
+        assert {"_AdapterDir", "_TrainDir", "_GenerateDir", "_DatasetDir"} <= set(phantom_annotations)
+
+    def test_dir_node_usages_discovered(self, dir_node_usages: list[tuple[str, set[str]]]):
+        """Sanity check: ensure we actually found at least the top-level typed DirNodes."""
+        phantoms_used = {phantom for phantom, _ in dir_node_usages}
+        assert {"_TrainDir", "_AdapterDir", "_GenerateDir", "_DatasetDir"} <= phantoms_used
+
+    def test_dir_node_keys_match_phantom_annotations(
+        self,
+        phantom_annotations: dict[str, set[str]],
+        dir_node_usages: list[tuple[str, set[str]]],
+    ):
+        """Every ``DirNode[_Foo](...)`` kwargs must equal ``_Foo``'s TYPE_CHECKING attrs."""
+        mismatches: list[str] = []
+        for phantom_name, child_kwargs in dir_node_usages:
+            annotated = phantom_annotations.get(phantom_name)
+            if annotated is None:
+                mismatches.append(f"DirNode[{phantom_name}] references unknown phantom class")
+                continue
+            if annotated != child_kwargs:
+                only_in_phantom = sorted(annotated - child_kwargs)
+                only_in_dir_node = sorted(child_kwargs - annotated)
+                mismatches.append(
+                    f"DirNode[{phantom_name}]: "
+                    f"only in {phantom_name} annotations = {only_in_phantom}; "
+                    f"only in DirNode kwargs = {only_in_dir_node}"
+                )
+        assert not mismatches, "Phantom/DirNode drift:\n  " + "\n  ".join(mismatches)
