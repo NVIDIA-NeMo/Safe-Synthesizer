@@ -52,13 +52,18 @@ MISE_VERSION := v2026.4.11
 
 # install.sh.sig is a GPG clearsigned document (not a detached signature).
 # gpg --decrypt verifies the signature and extracts the script in one step.
+# gpg's keyserver fetch requires dirmngr, which isn't installed on every CI
+# image (notably the GPU runners), so both binaries must be present before we
+# take the signed path. The fallback (curl | sh) is still safe: install.sh
+# itself pins the mise version and verifies the downloaded binary against
+# embedded SHA256 checksums.
 # See: https://mise.jdx.dev/installing-mise.html
 .PHONY: install-mise
-install-mise: ## Install mise (GPG-verified when gpg is available)
+install-mise: ## Install mise (GPG-verified when gpg + dirmngr are available)
 	@command -v mise >/dev/null 2>&1 || { \
 		set -euo pipefail; \
 		echo "mise not found -- installing..."; \
-		if command -v gpg >/dev/null 2>&1; then \
+		if command -v gpg >/dev/null 2>&1 && command -v dirmngr >/dev/null 2>&1; then \
 			echo "Verifying installer signature..."; \
 			gpg --batch --no-tty --keyserver hkps://keys.openpgp.org \
 				--recv-keys $(MISE_GPG_KEY); \
@@ -68,7 +73,7 @@ install-mise: ## Install mise (GPG-verified when gpg is available)
 			sh "$$tmpscript" && \
 			rm -f "$$tmpscript"; \
 		else \
-			echo "WARNING: gpg not available -- installing without signature verification"; \
+			echo "WARNING: gpg+dirmngr not available -- installing via mise.run (SHA256-pinned)"; \
 			curl -fsSL https://mise.run | sh; \
 		fi; \
 		command -v mise >/dev/null 2>&1 || { echo "ERROR: mise not found after install"; exit 1; }; \
