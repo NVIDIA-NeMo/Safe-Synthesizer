@@ -25,7 +25,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Self, cast, overload
+from typing import TYPE_CHECKING, Generic, Self, TypeVar, cast, overload
 
 from ..observability import get_logger
 from ..utils import write_json
@@ -172,12 +172,26 @@ class FileNode:
                 raise TypeError(f"FileNode can only be used with BoundDir or Workdir, got {type(obj)}")
 
 
-class DirNode:
+# Covariant type parameter of ``DirNode``.
+#
+# At runtime every ``DirNode`` resolves to a plain ``BoundDir``. The parameter
+# exists purely so that type checkers can specialise each usage with a
+# ``BoundDir`` subclass (e.g. ``_TrainDir``) that declares the typed children
+# of that subtree -- mirroring SQLAlchemy's ``Mapped[T]`` pattern.
+T_co = TypeVar("T_co", bound="BoundDir", covariant=True)
+
+
+class DirNode(Generic[T_co]):
     """Descriptor for directory paths within a directory structure.
 
     Supports nested children (both FileNode and DirNode).
     When accessed on a class, returns the descriptor itself.
     When accessed on an instance, returns a BoundDir with the resolved path.
+
+    The generic parameter ``T_co`` lets callers specialise instance-access with
+    a :class:`BoundDir` subclass that declares typed children (see
+    :class:`_TrainDir` et al.). Runtime always returns a plain ``BoundDir``;
+    the subscripted type is a typing-only fiction.
 
     Args:
         name: The directory name (e.g., "train").
@@ -193,10 +207,10 @@ class DirNode:
         self._attr_name = name
 
     @overload
-    def __get__(self, obj: None, objtype: type | None = None) -> DirNode: ...
+    def __get__(self, obj: None, objtype: type | None = None) -> Self: ...
 
     @overload
-    def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> BoundDir: ...
+    def __get__(self, obj: BoundDir | Workdir, objtype: type | None = None) -> T_co: ...
 
     def __get__(self, obj: object | None, objtype: type | None = None) -> DirNode | BoundDir:
         """Resolve to the descriptor itself (class access) or a ``BoundDir`` (instance access)."""
@@ -269,6 +283,59 @@ class BoundDir(os.PathLike[str]):
                 return BoundDir(self._path / dirname, children)
             case other:
                 raise TypeError(f"Unknown child type: {type(other)}")
+
+
+# ---------------------------------------------------------------------------
+# Phantom ``BoundDir`` subclasses declaring the typed shape of each subtree.
+#
+# These exist solely so type checkers can see the children of each directory
+# through ``BoundDir.__getattr__``. At runtime they are empty subclasses; the
+# actual instance returned by ``DirNode.__get__`` is always a plain
+# ``BoundDir``. The ``DirNode[T]`` generic parameter links each subtree to its
+# typed view (e.g. ``train = DirNode[_TrainDir]("train", ...)``).
+#
+# When adding or renaming a child in a ``DirNode(...)`` tree below, update the
+# corresponding subclass here to match.
+# ---------------------------------------------------------------------------
+
+
+class _AdapterDir(BoundDir):
+    """Typed view of the ``train/adapter`` subtree."""
+
+    if TYPE_CHECKING:
+        adapter_config: Path
+        metadata: Path
+        schema: Path
+
+
+class _TrainDir(BoundDir):
+    """Typed view of the ``train`` subtree."""
+
+    if TYPE_CHECKING:
+        config: Path
+        cache: BoundDir
+        adapter: _AdapterDir
+
+
+class _GenerateDir(BoundDir):
+    """Typed view of the ``generate`` subtree."""
+
+    if TYPE_CHECKING:
+        logs: Path
+        output: Path
+        report: Path
+        evaluation_metrics: Path
+        info: Path
+
+
+class _DatasetDir(BoundDir):
+    """Typed view of the ``dataset`` subtree."""
+
+    if TYPE_CHECKING:
+        training: Path
+        test: Path
+        validation: Path
+        transformed_training: Path
 
 
 @dataclass
@@ -344,13 +411,11 @@ class Workdir:
     """Location for WandB run ID file."""
 
     # Train directory structure
-    train = DirNode(
+    train = DirNode[_TrainDir](
         "train",
         config=FileNode("safe-synthesizer-config.json"),
-        cache=DirNode(
-            "cache",
-        ),
-        adapter=DirNode(
+        cache=DirNode("cache"),
+        adapter=DirNode[_AdapterDir](
             "adapter",
             adapter_config=FileNode("adapter_config.json"),
             metadata=FileNode("metadata_v2.json"),
@@ -360,7 +425,7 @@ class Workdir:
     """Location and contents of train directory structure."""
 
     # Generate directory structure
-    generate = DirNode(
+    generate = DirNode[_GenerateDir](
         "generate",
         logs=FileNode("logs.jsonl"),
         output=FileNode("synthetic_data.csv"),
@@ -371,7 +436,7 @@ class Workdir:
     """Location and contents of generate directory structure."""
 
     # Dataset directory structure
-    dataset = DirNode(
+    dataset = DirNode[_DatasetDir](
         "dataset",
         training=FileNode("training.csv"),
         test=FileNode("test.csv"),
