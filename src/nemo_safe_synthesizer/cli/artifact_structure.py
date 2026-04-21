@@ -447,8 +447,8 @@ class Workdir:
         returns the parent's adapter path since that's where the trained adapter lives.
         """
         if self._parent_workdir is not None:
-            return cast(Path, self._parent_workdir.train.adapter.path)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-        return cast(Path, self.train.adapter.path)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            return self._parent_workdir.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+        return self.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
 
     @property
     def metadata_file(self) -> Path:
@@ -563,14 +563,14 @@ class Workdir:
         if self._current_phase == "generate" and self._parent_workdir is not None:
             # Generation-only run - only create generate directory
             # Train and dataset are in the parent workdir
-            cast(Path, self.generate.path).mkdir(parents=True, exist_ok=True)
+            self.generate.path.mkdir(parents=True, exist_ok=True)
             self._write_generation_info()
         else:
             # Training run or end-to-end - create all directories
-            cast(Path, self.train.cache.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-            cast(Path, self.train.adapter.path).mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
-            cast(Path, self.generate.path).mkdir(parents=True, exist_ok=True)
-            cast(Path, self.dataset.path).mkdir(parents=True, exist_ok=True)
+            self.train.cache.path.mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            self.train.adapter.path.mkdir(parents=True, exist_ok=True)  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+            self.generate.path.mkdir(parents=True, exist_ok=True)
+            self.dataset.path.mkdir(parents=True, exist_ok=True)
 
         return self
 

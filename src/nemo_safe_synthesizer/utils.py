@@ -211,7 +211,7 @@ def grouped_train_test_split(
     # importing like this to avoid a dep for testing on the sdk side
     from .holdout import holdout as nss_holdout
 
-    return nss_holdout.grouped_train_test_split(input_df=df, test_size=test_size, group_by=group_by, random_state=seed)  # ty: ignore[invalid-argument-type]
+    return nss_holdout.grouped_train_test_split(input_df=df, test_size=test_size, group_by=group_by, random_state=seed)
 
 
 class DataActionsFn(Protocol):
