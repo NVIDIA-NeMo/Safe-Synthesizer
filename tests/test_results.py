@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from nemo_safe_synthesizer.config import SafeSynthesizerSummary, SafeSynthesizerTiming
+from nemo_safe_synthesizer.config import SafeSynthesizerTiming
 from nemo_safe_synthesizer.generation.results import GenerateJobResults
 from nemo_safe_synthesizer.generation.utils import GenerationStatus
 from nemo_safe_synthesizer.results import make_nss_summary
