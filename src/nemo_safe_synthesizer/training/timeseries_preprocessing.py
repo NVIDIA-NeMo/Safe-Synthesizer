@@ -136,6 +136,54 @@ def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str | None, tim
         return df.sort_values(timestamp_col).reset_index(drop=True)
 
 
+def _detect_elapsed_seconds_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> bool:
+    """Detect whether the timestamp column should be treated as elapsed seconds.
+
+    Two cases are recognized:
+
+    - The user explicitly set ``timestamp_format="elapsed_seconds"``. The column
+      must be numeric; otherwise we fail fast with a ``ParameterError`` rather
+      than a non-obvious ``TypeError`` later in interval inference.
+    - ``timestamp_format`` is unset and the column is integer-typed. Auto-detection
+      is intentionally restricted to integer dtypes because downstream
+      interval/start/stop handling assumes integer-second resolution (see
+      ``_collect_group_timestamp_stats``); accepting floats would silently
+      truncate sub-second values. Users with fractional-second data must set
+      ``timestamp_format`` explicitly.
+
+    Side effect: when auto-detection succeeds, ``ts_config.timestamp_format`` is
+    set to ``"elapsed_seconds"``.
+
+    Args:
+        df: DataFrame containing the already-validated timestamp column.
+        ts_config: Time series configuration (may be mutated).
+
+    Returns:
+        ``True`` if the column should be treated as elapsed seconds, ``False`` otherwise.
+
+    Raises:
+        ParameterError: If ``timestamp_format="elapsed_seconds"`` is set on a non-numeric column.
+    """
+    column = df[ts_config.timestamp_column]
+
+    if ts_config.timestamp_format == "elapsed_seconds":
+        if not pd.api.types.is_numeric_dtype(column):
+            raise ParameterError(
+                f"timestamp_format='elapsed_seconds' requires timestamp column "
+                f"'{ts_config.timestamp_column}' to be numeric, but got dtype '{column.dtype}'."
+            )
+        return True
+
+    if ts_config.timestamp_format is None and pd.api.types.is_integer_dtype(column):
+        ts_config.timestamp_format = "elapsed_seconds"
+        logger.info(
+            f"Timestamp column '{ts_config.timestamp_column}' is integer-typed; treating as elapsed seconds",
+        )
+        return True
+
+    return False
+
+
 def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> pd.DataFrame:
     """Infer timestamp format and convert column to datetime.
 
@@ -219,8 +267,9 @@ def process_timeseries_data(
         Tuple of (processed DataFrame, updated config)
 
     Raises:
-        ParameterError: If timestamp column is not found
-        DataError: If timestamp column has missing values or intervals are inconsistent
+        ParameterError: If the timestamp column is missing, if ``timestamp_format="elapsed_seconds"``
+            is set on a non-numeric column, or if an explicit format fails to parse the data.
+        DataError: If the timestamp column has missing values or intervals are inconsistent.
     """
     ts_config = config.time_series
 
@@ -233,29 +282,17 @@ def process_timeseries_data(
     # Step 2: Create elapsed time column if timestamp not provided
     training_df, is_elapsed_time = _create_elapsed_time_column(training_df, ts_config, group_by_col)
 
-    # Detect numeric timestamp columns that represent elapsed time.
-    # This covers two cases: (a) the user explicitly set timestamp_format="elapsed_seconds",
-    # or (b) the column is numeric and no format was provided -- infer "elapsed_seconds"
-    # rather than letting _infer_and_convert_timestamp_format silently fail.
-    if not is_elapsed_time and ts_config.timestamp_column is not None:
-        if ts_config.timestamp_format == "elapsed_seconds":
-            is_elapsed_time = True
-        elif ts_config.timestamp_format is None and pd.api.types.is_numeric_dtype(
-            training_df[ts_config.timestamp_column]
-        ):
-            ts_config.timestamp_format = "elapsed_seconds"
-            is_elapsed_time = True
-            logger.info(
-                f"Timestamp column '{ts_config.timestamp_column}' is numeric; treating as elapsed seconds",
-            )
-
     # timestamp_column should be set by now
     if ts_config.timestamp_column is None:
         raise RuntimeError("timestamp_column should have been set by _create_elapsed_time_column")
     config.data.order_training_examples_by = ts_config.timestamp_column
 
-    # Step 3: Validate timestamp column
+    # Step 3: Validate timestamp column -- run before any dtype checks so a missing
+    # column raises ParameterError with actionable guidance rather than KeyError.
     _validate_timestamp_column(training_df, ts_config.timestamp_column)
+
+    if not is_elapsed_time:
+        is_elapsed_time = _detect_elapsed_seconds_format(training_df, ts_config)
 
     # Step 4: Sort by group and timestamp
     training_df = _sort_by_group_and_timestamp(training_df, group_by_col, ts_config.timestamp_column)
