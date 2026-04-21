@@ -413,7 +413,12 @@ def test_extract_and_validate_timeseries_records_valid():
     )
 
     result = extract_and_validate_timeseries_records(
-        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S", encode=_mock_encode
+        jsonl,
+        schema,
+        time_column="timestamp",
+        interval_seconds=3600,
+        time_format="%Y-%m-%d %H:%M:%S",
+        encode=_mock_encode,
     )
 
     assert len(result.valid_records) == 3
@@ -460,7 +465,12 @@ def test_extract_and_validate_timeseries_records_invalid_interval():
     )
 
     result = extract_and_validate_timeseries_records(
-        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S", encode=_mock_encode
+        jsonl,
+        schema,
+        time_column="timestamp",
+        interval_seconds=3600,
+        time_format="%Y-%m-%d %H:%M:%S",
+        encode=_mock_encode,
     )
 
     assert len(result.valid_records) == 1  # Only first record is valid
