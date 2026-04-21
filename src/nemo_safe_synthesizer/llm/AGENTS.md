@@ -44,7 +44,7 @@ Each model sets its own template and BOS/EOS via `LLMPromptConfig.from_tokenizer
 ## Gotchas
 
 - `rope_scaling` defaults to `None`; `populate_derived_fields` resolves any input (float, int, dict, RopeScaling, None) to `RopeScaling | None`
-- trust_remote_code — `trust_remote_code_for_model()` in `utils.py` returns True only for `nvidia/` prefixes; used by `metadata.py` and `HuggingFaceBackend`
+- trust_remote_code — `trust_remote_code_for_model()` in `utils.py` returns True only for `nvidia/` prefixes; used by `metadata.py`, `HuggingFaceBackend`, and `VllmBackend`
 - initial_prefill — can be `dict[str, str]` (grouped) or `str` (single column)
 - rope_parameters_location — `"autoconfig"` vs `"automodel"`; all current subclasses use `"autoconfig"`
 - from_str_or_path — raises on unknown model; no base `ModelMetadata` fallback

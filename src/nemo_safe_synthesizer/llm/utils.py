@@ -28,7 +28,17 @@ logger = get_logger(__name__)
 
 
 def trust_remote_code_for_model(model_name: str) -> bool:
-    """Return ``True`` for models that require ``trust_remote_code=True``."""
+    """Determine whether to trust remote code when loading a model.
+
+    Returns ``True`` only for models whose name starts with
+    ``"nvidia/"``.
+
+    Args:
+        model_name: HuggingFace model identifier or local path.
+
+    Returns:
+        Whether to set ``trust_remote_code=True`` when loading the model.
+    """
     return model_name.startswith("nvidia/")
 
 

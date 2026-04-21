@@ -49,7 +49,7 @@ from ..defaults import (
 )
 from ..observability import get_logger
 from ..utils import load_json, write_json
-from .utils import trust_remote_code_for_model as _trust_remote_code
+from .utils import trust_remote_code_for_model
 
 logger = get_logger(__name__)
 
@@ -117,7 +117,9 @@ class LLMPromptConfig(BaseModel):
         Returns:
             A new ``LLMPromptConfig`` populated from the tokenizer.
         """
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(name, trust_remote_code=_trust_remote_code(name))
+        tokenizer = tokenizer or AutoTokenizer.from_pretrained(
+            name, trust_remote_code=trust_remote_code_for_model(name)
+        )
         bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
         bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
         eos_token = kwargs.get("eos_token", getattr(tokenizer, "eos_token", None))
@@ -358,7 +360,7 @@ class ModelMetadata(BaseModel):
         """
         if data.get("autoconfig") is None:
             data["autoconfig"] = AutoConfig.from_pretrained(
-                data["model_name_or_path"], trust_remote_code=_trust_remote_code(data["model_name_or_path"])
+                data["model_name_or_path"], trust_remote_code=trust_remote_code_for_model(data["model_name_or_path"])
             )
 
         if data.get("base_max_seq_length") is None:
@@ -601,12 +603,14 @@ class Granite(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
         config: PretrainedConfig = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
 
         super().__init__(
@@ -647,10 +651,12 @@ class Llama32(ModelMetadata):
         **kwargs,
     ) -> None:
         config: PretrainedConfig = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
         tokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
@@ -697,12 +703,14 @@ class Mistral(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer: AutoTokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
         config: PretrainedConfig = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
         if rope_scaling_factor:
             logger.warning(
@@ -745,12 +753,14 @@ class Nemotron(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer: AutoTokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
         config: PretrainedConfig = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
 
         super().__init__(
@@ -788,12 +798,14 @@ class Qwen(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
         config = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
 
         super().__init__(
@@ -835,12 +847,14 @@ class SmolLM2(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
         config = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
         if rope_scaling_factor:
             logger.warning(
@@ -889,12 +903,14 @@ class SmolLM3(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer = (
-            AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path))
+            AutoTokenizer.from_pretrained(
+                model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
+            )
             if tokenizer is None
             else tokenizer
         )
         config = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
 
         # we use the bos token here explicitly for support during group-by SFT.
@@ -945,10 +961,10 @@ class TinyLlama(ModelMetadata):
         **kwargs,
     ) -> None:
         tokenizer = tokenizer or AutoTokenizer.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
         config = AutoConfig.from_pretrained(
-            model_name_or_path, trust_remote_code=_trust_remote_code(model_name_or_path)
+            model_name_or_path, trust_remote_code=trust_remote_code_for_model(model_name_or_path)
         )
 
         super().__init__(
