@@ -9157,19 +9157,29 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="o">%%</span><span class="n">capture</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="o">%%</span><span class="n">bash</span>
 <span class="c1"># SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.</span>
 <span class="c1"># SPDX-License-Identifier: Apache-2.0</span>
 
-<span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu128]"</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span>
-<span class="err">!</span><span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span>
+<span class="k">if</span> <span class="n">command</span> <span class="o">-</span><span class="n">v</span> <span class="n">uv</span> <span class="o">&gt;</span> <span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">null</span> <span class="mi">2</span><span class="o">&gt;&amp;</span><span class="mi">1</span><span class="p">;</span> <span class="n">then</span>
+    <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu128]"</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">index</span><span class="o">-</span><span class="n">strategy</span> <span class="n">unsafe</span><span class="o">-</span><span class="n">best</span><span class="o">-</span><span class="n">match</span>
+    <span class="n">uv</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span>
+<span class="k">else</span>
+    <span class="n">pip</span> <span class="n">install</span> <span class="s2">"nemo-safe-synthesizer[engine,cu128]"</span> <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">flashinfer</span><span class="o">.</span><span class="n">ai</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span> <span class="o">--</span><span class="n">extra</span><span class="o">-</span><span class="n">index</span><span class="o">-</span><span class="n">url</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">download</span><span class="o">.</span><span class="n">pytorch</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">whl</span><span class="o">/</span><span class="n">cu128</span>
+    <span class="n">pip</span> <span class="n">install</span> <span class="n">datasets</span>
+<span class="n">fi</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-1">%%capture
+<div class="clipboard-copy-txt" id="cell-1">%%bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION &amp; AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-!uv pip install "nemo-safe-synthesizer[engine,cu128]" --index https://flashinfer.ai/whl/cu128 --index https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
-!uv pip install datasets
+if command -v uv &gt; /dev/null 2&gt;&amp;1; then
+    uv pip install "nemo-safe-synthesizer[engine,cu128]" --index https://flashinfer.ai/whl/cu128 --index https://download.pytorch.org/whl/cu128 --index-strategy unsafe-best-match
+    uv pip install datasets
+else
+    pip install "nemo-safe-synthesizer[engine,cu128]" --extra-index-url https://flashinfer.ai/whl/cu128 --extra-index-url https://download.pytorch.org/whl/cu128
+    pip install datasets
+fi
 </div>
 </div>
 </div>
