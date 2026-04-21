@@ -162,7 +162,12 @@ def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesP
             ts_config.timestamp_format = inferred_format
             logger.info(f"Inferred timestamp format: {inferred_format}")
         else:
-            logger.warning("Could not infer timestamp format from data")
+            raise ParameterError(
+                f"Could not infer timestamp format from column '{ts_config.timestamp_column}' "
+                f"(first value: '{first_timestamp}'). "
+                f"If the column contains numeric elapsed time values, set timestamp_format='elapsed_seconds'. "
+                f"Otherwise, provide an explicit timestamp_format (e.g. '%Y-%m-%d %H:%M:%S')."
+            )
     else:
         # Validate user-provided format matches the data
         try:
@@ -227,6 +232,22 @@ def process_timeseries_data(
 
     # Step 2: Create elapsed time column if timestamp not provided
     training_df, is_elapsed_time = _create_elapsed_time_column(training_df, ts_config, group_by_col)
+
+    # Detect numeric timestamp columns that represent elapsed time.
+    # This covers two cases: (a) the user explicitly set timestamp_format="elapsed_seconds",
+    # or (b) the column is numeric and no format was provided -- infer "elapsed_seconds"
+    # rather than letting _infer_and_convert_timestamp_format silently fail.
+    if not is_elapsed_time and ts_config.timestamp_column is not None:
+        if ts_config.timestamp_format == "elapsed_seconds":
+            is_elapsed_time = True
+        elif ts_config.timestamp_format is None and pd.api.types.is_numeric_dtype(
+            training_df[ts_config.timestamp_column]
+        ):
+            ts_config.timestamp_format = "elapsed_seconds"
+            is_elapsed_time = True
+            logger.info(
+                f"Timestamp column '{ts_config.timestamp_column}' is numeric; treating as elapsed seconds",
+            )
 
     # timestamp_column should be set by now
     if ts_config.timestamp_column is None:
