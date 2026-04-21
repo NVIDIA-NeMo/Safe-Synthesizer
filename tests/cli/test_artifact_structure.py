@@ -713,12 +713,17 @@ def _dir_node_phantom_and_children(call: ast.Call) -> tuple[str, set[str]] | Non
 
     Returns ``None`` for bare ``DirNode(...)`` calls (no phantom type parameter).
     """
-    match call.func:
-        case ast.Subscript(value=ast.Name(id="DirNode"), slice=ast.Name(id=phantom_name)):
-            kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
-            return phantom_name, kwargs
-        case _:
-            return None
+    func = call.func
+    if (
+        isinstance(func, ast.Subscript)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "DirNode"
+        and isinstance(func.slice, ast.Name)
+    ):
+        phantom_name = func.slice.id
+        kwargs = {kw.arg for kw in call.keywords if kw.arg is not None}
+        return phantom_name, kwargs
+    return None
 
 
 def _collect_dir_node_calls(node: ast.AST) -> list[ast.Call]:
