@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-import nemo_safe_synthesizer.cli.artifact_structure as artifact_structure_module
 from nemo_safe_synthesizer.cli.artifact_structure import (
     PROJECT_NAME_DELIMITER,
     BoundDir,
@@ -742,8 +741,9 @@ class TestPhantomSubclassDrift:
 
     @pytest.fixture(scope="class")
     def module_ast(self) -> ast.Module:
-        source = inspect.getsource(artifact_structure_module)
-        return ast.parse(source)
+        module = inspect.getmodule(Workdir)
+        assert module is not None, "Workdir must be importable from a real source file"
+        return ast.parse(inspect.getsource(module))
 
     @pytest.fixture(scope="class")
     def phantom_annotations(self, module_ast: ast.Module) -> dict[str, set[str]]:
