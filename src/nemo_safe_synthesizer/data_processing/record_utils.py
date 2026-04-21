@@ -34,9 +34,17 @@ logger = get_logger()
 class ParsedRecord:
     """A single record extracted from an LLM completion.
 
+    Validity is tracked by the invariant that exactly one of ``parsed``
+    and ``error`` is non-``None``: a valid record has ``parsed`` set and
+    ``error`` as ``None``, an invalid record has ``error`` set and
+    ``parsed`` as ``None``.
+    [`is_valid`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord.is_valid]
+    is the canonical accessor.
+
     ``text`` and ``token_count`` are captured at extraction time and
     remain invariant even if the record is reclassified later (e.g. by
-    group-level checks or data-fidelity filters) via :meth:`invalidate`.
+    group-level checks or data-fidelity filters) via
+    [`invalidate`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord.invalidate].
     """
 
     text: str
@@ -53,13 +61,19 @@ class ParsedRecord:
 
     @property
     def is_valid(self) -> bool:
-        """True when this record passed validation."""
+        """Return ``True`` when this record passed validation."""
         return self.error is None
 
     def invalidate(self, error: tuple[str, str]) -> None:
-        """Reclassify this record as invalid while keeping ``text`` and
-        ``token_count`` intact.  ``parsed`` is cleared so downstream
-        consumers don't accidentally use a stale dict.
+        """Reclassify this record as invalid.
+
+        ``text`` and ``token_count`` are kept intact; ``parsed`` is
+        cleared so downstream consumers don't accidentally use a stale
+        dict.
+
+        Args:
+            error: ``(detailed_msg, validator)`` tuple describing the
+                reason for invalidation.
         """
         self.error = error
         self.parsed = None
@@ -69,10 +83,11 @@ class ParsedRecord:
 class ParsedResponse:
     """Parsed result of a single LLM prompt response.
 
-    Holds a flat list of :class:`ParsedRecord` objects plus aggregated
-    tokenization timing.  The ``valid_records`` / ``invalid_records`` /
-    ``errors`` views are derived for backward compatibility with
-    callers that want the old parallel-list shape.
+    Holds a flat list of
+    [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord]
+    objects plus aggregated tokenization timing. The ``valid_records``
+    / ``invalid_records`` / ``errors`` views are derived for backward
+    compatibility with callers that want the old parallel-list shape.
     """
 
     records: list[ParsedRecord] = field(default_factory=list)
@@ -224,12 +239,14 @@ def extract_and_validate_records(
         schema: JSON schema as a dictionary.
         encode: Optional tokenizer encode callable.  When provided,
             each matched record string is tokenized and its token count
-            is stored on the corresponding :class:`ParsedRecord`.
+            is stored on the corresponding
+            [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord].
 
     Returns:
-        A :class:`ParsedResponse` whose ``records`` list is in input
-        order, with ``parsed`` set for valid records and ``error`` set
-        for invalid ones.
+        A
+        [`ParsedResponse`][nemo_safe_synthesizer.data_processing.record_utils.ParsedResponse]
+        whose ``records`` list is in input order, with ``parsed`` set
+        for valid records and ``error`` set for invalid ones.
     """
     records: list[ParsedRecord] = []
     tokenization_time = 0.0
@@ -417,11 +434,14 @@ def extract_and_validate_timeseries_records(
         time_format: Format of the timestamp column (required).
         encode: Optional tokenizer encode callable.  When provided,
             each matched record string is tokenized and its token count
-            is stored on the corresponding :class:`ParsedRecord`.
+            is stored on the corresponding
+            [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord].
 
     Returns:
-        A :class:`ParsedResponse` in input order.  Once a record fails,
-        every subsequent record is marked invalid with a cascade error.
+        A
+        [`ParsedResponse`][nemo_safe_synthesizer.data_processing.record_utils.ParsedResponse]
+        in input order. Once a record fails, every subsequent record is
+        marked invalid with a cascade error.
     """
     records: list[ParsedRecord] = []
     tokenization_time = 0.0

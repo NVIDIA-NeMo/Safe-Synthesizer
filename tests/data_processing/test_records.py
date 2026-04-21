@@ -20,6 +20,11 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
 )
 
 
+def _mock_encode(text: str) -> list[int]:
+    """Deterministic mock tokenizer: one token per character."""
+    return list(range(len(text)))
+
+
 def test_is_safe_for_float_conversion():
     # Test with safe values
     assert is_safe_for_float_conversion(100) is True
@@ -117,6 +122,16 @@ def test_extract_and_validate_records(fixture_valid_iris_dataset_jsonl_and_schem
     assert len(result.invalid_records) == 0
     assert len(result.errors) == 0
 
+    # Without a tokenizer, per-record counts default to 0 and no tokenization time is spent.
+    assert all(r.token_count == 0 for r in result.records)
+    assert result.tokenization_time_sec == 0.0
+
+    # With a tokenizer, each record gets a positive count and tokenization time is recorded.
+    result_with_tokens = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema, encode=_mock_encode)
+    assert len(result_with_tokens.records) == 5
+    assert all(r.is_valid and r.token_count > 0 for r in result_with_tokens.records)
+    assert result_with_tokens.tokenization_time_sec >= 0
+
 
 def test_extract_and_validate_records_with_invalid_records(
     fixture_valid_iris_dataset_jsonl_and_schema,
@@ -140,14 +155,19 @@ def test_extract_and_validate_records_with_invalid_schema(
     valid_jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
 
     # tack on a new json obj with a different schema than in the spec
-    valid_jsonl_str = valid_jsonl_str + f"{json.dumps(dict(a=1, b=2))}"
-    result = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
+    invalid_text = json.dumps(dict(a=1, b=2))
+    result = extract_and_validate_records(valid_jsonl_str + invalid_text, schema=jsonl_schema, encode=_mock_encode)
     assert len(result.valid_records) == 5
     assert len(result.invalid_records) == 1
     assert len(result.errors) == 1
     assert len(result.errors[0]) == 2
     assert result.errors[0][0] == "'sepal.length' is a required property"
     assert result.errors[0][1] == "required"
+
+    # Invalid records keep their original regex-matched text and still get a token count.
+    assert not result.records[-1].is_valid
+    assert result.records[-1].text == invalid_text
+    assert result.records[-1].token_count > 0
 
 
 def test_extract_and_validate_records_with_invalid_utf_characters_embedded(
@@ -393,12 +413,13 @@ def test_extract_and_validate_timeseries_records_valid():
     )
 
     result = extract_and_validate_timeseries_records(
-        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S", encode=_mock_encode
     )
 
     assert len(result.valid_records) == 3
     assert len(result.invalid_records) == 0
     assert len(result.errors) == 0
+    assert all(r.is_valid and r.token_count > 0 for r in result.records)
 
 
 def test_extract_and_validate_timeseries_records_no_interval_validation():
@@ -439,12 +460,16 @@ def test_extract_and_validate_timeseries_records_invalid_interval():
     )
 
     result = extract_and_validate_timeseries_records(
-        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S", encode=_mock_encode
     )
 
     assert len(result.valid_records) == 1  # Only first record is valid
     assert len(result.invalid_records) == 2  # Second and third are invalid
     assert len(result.errors) == 2
+
+    # Cascade-invalidated records still keep their original text and token count.
+    assert all(r.token_count > 0 for r in result.records)
+    assert result.records[2].text.startswith('{"timestamp":')
 
 
 def test_extract_and_validate_timeseries_records_invalid_json():
@@ -508,117 +533,3 @@ def test_extract_and_validate_timeseries_records_missing_timestamp():
     assert len(result.invalid_records) == 1
     assert len(result.errors) == 1
     assert "Missing 'timestamp'" in result.errors[0][0]
-
-
-# ---------------------------------------------------------------------------
-# Token-counting tests
-# ---------------------------------------------------------------------------
-
-
-def _mock_encode(text: str) -> list[int]:
-    """Deterministic mock: one token per character."""
-    return list(range(len(text)))
-
-
-class TestTokenCountingTabular:
-    """Token counting via encode in extract_and_validate_records."""
-
-    SCHEMA = {
-        "type": "object",
-        "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
-        "required": ["a", "b"],
-    }
-
-    def test_encode_populates_per_record_counts(self):
-        jsonl = '{"a": 1, "b": 2}\n{"a": 3, "b": 4}\n'
-        result = extract_and_validate_records(jsonl, self.SCHEMA, encode=_mock_encode)
-
-        assert len(result.records) == 2
-        assert all(r.is_valid for r in result.records)
-        assert all(r.token_count > 0 for r in result.records)
-        assert result.tokenization_time_sec >= 0
-
-    def test_invalid_records_get_token_counts(self):
-        jsonl = '{"a": 1, "b": 2}\n{"x": 99}\n'
-        result = extract_and_validate_records(jsonl, self.SCHEMA, encode=_mock_encode)
-
-        assert len(result.records) == 2
-        assert result.records[0].is_valid
-        assert not result.records[1].is_valid
-        assert result.records[0].token_count > 0
-        assert result.records[1].token_count > 0
-        assert result.records[1].text == '{"x": 99}'
-
-    def test_no_encode_gives_zero_counts(self):
-        jsonl = '{"a": 1, "b": 2}\n'
-        result = extract_and_validate_records(jsonl, self.SCHEMA, encode=None)
-
-        assert len(result.records) == 1
-        assert result.records[0].is_valid
-        assert result.records[0].token_count == 0
-        assert result.tokenization_time_sec == 0.0
-
-    def test_token_counts_per_record(self):
-        jsonl = '{"a": 1, "b": 2}\n{"x": 1}\n{"a": 3, "b": 4}\n'
-        result = extract_and_validate_records(jsonl, self.SCHEMA, encode=_mock_encode)
-
-        assert len(result.records) == 3
-        assert all(r.token_count > 0 for r in result.records)
-
-
-class TestTokenCountingTimeseries:
-    """Token counting in extract_and_validate_timeseries_records."""
-
-    SCHEMA = {
-        "type": "object",
-        "properties": {"timestamp": {"type": "string"}, "value": {"type": "integer"}},
-        "required": ["timestamp", "value"],
-    }
-
-    def test_valid_records_tokenized(self):
-        jsonl = '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n{"timestamp": "2024-01-01 01:00:00", "value": 2}\n'
-        result = extract_and_validate_timeseries_records(
-            jsonl,
-            self.SCHEMA,
-            time_column="timestamp",
-            interval_seconds=3600,
-            time_format="%Y-%m-%d %H:%M:%S",
-            encode=_mock_encode,
-        )
-        assert len(result.records) == 2
-        assert all(r.is_valid and r.token_count > 0 for r in result.records)
-
-    def test_cascade_invalidated_records_tokenized(self):
-        jsonl = (
-            '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
-            '{"timestamp": "2024-01-01 02:00:00", "value": 2}\n'
-            '{"timestamp": "2024-01-01 03:00:00", "value": 3}\n'
-        )
-        result = extract_and_validate_timeseries_records(
-            jsonl,
-            self.SCHEMA,
-            time_column="timestamp",
-            interval_seconds=3600,
-            time_format="%Y-%m-%d %H:%M:%S",
-            encode=_mock_encode,
-        )
-        assert len(result.records) == 3
-        assert result.records[0].is_valid
-        assert not result.records[1].is_valid
-        assert not result.records[2].is_valid
-        assert all(r.token_count > 0 for r in result.records)
-        # Original text invariant preserved on cascade-invalidated records.
-        assert result.records[2].text.startswith('{"timestamp":')
-
-    def test_no_encode_gives_zero_counts(self):
-        jsonl = '{"timestamp": "2024-01-01 00:00:00", "value": 1}\n'
-        result = extract_and_validate_timeseries_records(
-            jsonl,
-            self.SCHEMA,
-            time_column="timestamp",
-            interval_seconds=3600,
-            time_format="%Y-%m-%d %H:%M:%S",
-            encode=None,
-        )
-        assert len(result.records) == 1
-        assert result.records[0].token_count == 0
