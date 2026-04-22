@@ -32,6 +32,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
+> Note on mise itself: the mise version is pinned in `Makefile` (`MISE_VERSION`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when both `gpg` and `dirmngr` are available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update --version <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
+
 ### Setup
 
 1. Get the code:
