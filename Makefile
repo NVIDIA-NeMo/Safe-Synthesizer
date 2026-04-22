@@ -51,7 +51,7 @@ MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
 MISE_VERSION := v2026.4.11
 
 .PHONY: install-mise
-install-mise: ## Install mise $(MISE_VERSION) (GPG-verified when gpg + dirmngr are available)
+install-mise: ## Install mise $(MISE_VERSION) (GPG-verified when gpg + gpg-agent + dirmngr are all available)
 	@MISE_VERSION=$(MISE_VERSION) MISE_GPG_KEY=$(MISE_GPG_KEY) bash tools/install-mise.sh
 
 .PHONY: setup

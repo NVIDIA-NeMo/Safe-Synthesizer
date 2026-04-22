@@ -14,8 +14,9 @@
 #   - If mise is already on PATH at the pinned version, exit early.
 #   - If mise is already on PATH at a different version, abort with an
 #     actionable message (we don't silently clobber the user's install).
-#   - If both gpg and dirmngr are available, fetch install.sh.sig, verify
-#     its GPG signature, and run the embedded install script.
+#   - If the full gpg toolchain (gpg + gpg-agent + dirmngr) is available,
+#     fetch install.sh.sig, verify its GPG signature, and run the embedded
+#     install script.
 #   - Otherwise fall back to https://mise.run (no signature verification;
 #     warn clearly).
 #   - In either install path, pass MISE_VERSION through to the installer
@@ -59,7 +60,19 @@ fi
 
 echo "mise not found -- installing ${MISE_VERSION}..."
 
-if command -v gpg >/dev/null 2>&1 && command -v dirmngr >/dev/null 2>&1; then
+# gpg's keyserver + decrypt flow needs all three of gpg, gpg-agent, and
+# dirmngr. Slim container images (e.g. debian:*-slim with
+# --no-install-recommends) commonly ship only a subset, so require the full
+# set before taking the signed path instead of tripping over a partial
+# toolchain mid-run.
+have_gpg_toolchain=false
+if command -v gpg >/dev/null 2>&1 \
+    && command -v gpg-agent >/dev/null 2>&1 \
+    && command -v dirmngr >/dev/null 2>&1; then
+    have_gpg_toolchain=true
+fi
+
+if [[ "$have_gpg_toolchain" == true ]]; then
     echo "Verifying installer signature..."
     gpg --batch --no-tty --keyserver "$KEYSERVER" --recv-keys "$MISE_GPG_KEY"
 
@@ -69,7 +82,7 @@ if command -v gpg >/dev/null 2>&1 && command -v dirmngr >/dev/null 2>&1; then
     curl -fsSL "$MISE_SIG_URL" | gpg --batch --no-tty --decrypt >"$tmpscript"
     MISE_VERSION="$MISE_VERSION" sh "$tmpscript"
 else
-    echo "WARNING: gpg+dirmngr not available -- installing mise ${MISE_VERSION} via ${MISE_RUN_URL} without signature verification"
+    echo "WARNING: full gpg toolchain (gpg + gpg-agent + dirmngr) not available -- installing mise ${MISE_VERSION} via ${MISE_RUN_URL} without signature verification"
     curl -fsSL "$MISE_RUN_URL" | MISE_VERSION="$MISE_VERSION" sh
 fi
 
