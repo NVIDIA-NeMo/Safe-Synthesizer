@@ -152,11 +152,31 @@ typecheck: ## Run ty type checks
 	bash tools/codestyle/typecheck.sh
 
 .PHONY: lock-check
-lock-check: ## Check that uv.lock and mise.lock are up to date
+lock-check: ## Check that uv.lock is up to date
 	uv lock
 	git diff --exit-code uv.lock
-	mise lock
-	git diff --exit-code mise.lock
+# NOTE: mise.lock drift check is intentionally disabled because of `yq`.
+#
+# The aqua-registry entry for `mikefarah/yq`
+# (https://github.com/aquaproj/aqua-registry/blob/main/pkgs/mikefarah/yq/registry.yaml)
+# ships no `checksum:` block and no `github_artifact_attestations:` block,
+# unlike every other tool we pin (jq, uv, ty, ruff, gh, prek, dprint,
+# ripgrep all have pre-validated sha256 + provenance in mise.lock). With
+# nothing to record from the registry, `mise lock` falls back to its own
+# provenance path: download the native-platform artifact and record a
+# `blake3:...` checksum. That fallback is skipped if the binary is already
+# in ~/.local/share/mise/installs, so a contributor with a warm mise cache
+# and a fresh CI runner generate subtly different `mise.lock` files (extra
+# native-platform `checksum = "blake3:..."` lines under `[tools.yq...]`).
+#
+# Upstream yq *does* publish a `checksums` release asset, so the real fix
+# is a one-line PR to aqua-registry adding the `checksum:` and
+# `github_artifact_attestations:` stanzas to `mikefarah/yq/registry.yaml`.
+# Once that lands (and the registry release is consumed by our pinned
+# mise), re-enable the drift check:
+#
+#	mise lock
+#	git diff --exit-code mise.lock
 
 .PHONY: check
 check: format-check typecheck ## Run all read-only CI checks locally

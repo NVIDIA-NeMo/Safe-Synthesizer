@@ -17,7 +17,7 @@ min_version = '2026.4.11'
 jq = "1.8.1"
 yq = "4.44.1"
 github-cli = "latest"
-"ubi:google/osv-scanner" = "latest"
+"aqua:google/osv-scanner" = "latest"
 ripgrep = "latest"
 
 # Tools for managing Python environments and packages.
