@@ -152,9 +152,11 @@ typecheck: ## Run ty type checks
 	bash tools/codestyle/typecheck.sh
 
 .PHONY: lock-check
-lock-check: ## Check that uv.lock is up to date
+lock-check: ## Check that uv.lock and mise.lock are up to date
 	uv lock
 	git diff --exit-code uv.lock
+	mise install
+	git diff --exit-code mise.lock
 
 .PHONY: check
 check: format-check typecheck ## Run all read-only CI checks locally
