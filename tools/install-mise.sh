@@ -114,8 +114,16 @@ expected="${MISE_VERSION#v}"
 
 # mise --version prints "<semver> <target> (<date>)" to stdout plus "available
 # update" nags to stderr, so take only the first field on stdout.
+#
+# Under `set -euo pipefail`, a non-zero `mise --version` (corrupted binary,
+# missing shared lib, etc.) would abort the script before the empty-string
+# diagnostic below can run. Swallow the exit status so callers always see
+# either a version string or "", and route the real error through the
+# explicit "produced no output" branch.
 current_mise_version() {
-    mise --version 2>/dev/null | awk '{print $1; exit}'
+    local out
+    out="$(mise --version 2>/dev/null || true)"
+    printf '%s\n' "$out" | awk '{print $1; exit}'
 }
 
 if command -v mise >/dev/null 2>&1; then
