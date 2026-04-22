@@ -13,7 +13,7 @@ import nemo_safe_synthesizer.generation
 import nemo_safe_synthesizer.generation.batch
 from nemo_safe_synthesizer.data_processing.actions.utils import MetadataColumns
 from nemo_safe_synthesizer.generation.batch import Batch
-from nemo_safe_synthesizer.generation.processors import ParsedResponse
+from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
 from nemo_safe_synthesizer.generation.results import rejected_record_to_error
 
 
@@ -26,37 +26,39 @@ def fixture_mock_processor_errors():
         dict(some="value0", other=1),
         dict(some="value1", other=2),
     ]
+    errors_list = [
+        ("err2", "const"),
+        ("err3", "Invalid JSON"),
+        ("err4", "groupby"),
+        ("err4", "groupby"),
+        ("err4", "groupby"),
+        ("err4", "groupby"),
+        ("err4", "groupby"),
+        ("'col1' is a required property", "required"),
+        ("'col2' is a required property", "required"),
+        ("'col3' is a required property", "required"),
+        (
+            "0 is not one of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 33, 34, 35, 36, 37, 38, 39, 40]",
+            "enum",
+        ),
+        (
+            "0 is not one of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 33, 34, 35, 36, 37, 38, 39, 40]",
+            "enum",
+        ),
+        ("0 is not one of [4, 5, 6]", "enum"),
+        ("1 is not one of [4, 5, 6]", "enum"),
+        ("2 is not one of [4, 5, 6]", "enum"),
+        ("3 is not one of [4, 5, 6]", "enum"),
+        ("7 is not one of [4, 5, 6]", "enum"),
+        ("8 is not one of [4, 5, 6]", "enum"),
+        ("9 is not one of [4, 5, 6]", "enum"),
+        ("10 is not one of [4, 5, 6]", "enum"),
+    ]
     mock_processor = MagicMock()
     mock_processor.return_value = ParsedResponse(
-        valid_records=stub_valid_records,
-        invalid_records=["invalidjson"] * 20,
-        errors=[
-            ("err2", "const"),
-            ("err3", "Invalid JSON"),
-            ("err4", "groupby"),
-            ("err4", "groupby"),
-            ("err4", "groupby"),
-            ("err4", "groupby"),
-            ("err4", "groupby"),
-            ("'col1' is a required property", "required"),
-            ("'col2' is a required property", "required"),
-            ("'col3' is a required property", "required"),
-            (
-                "0 is not one of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 33, 34, 35, 36, 37, 38, 39, 40]",
-                "enum",
-            ),
-            (
-                "0 is not one of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 33, 34, 35, 36, 37, 38, 39, 40]",
-                "enum",
-            ),
-            ("0 is not one of [4, 5, 6]", "enum"),
-            ("1 is not one of [4, 5, 6]", "enum"),
-            ("2 is not one of [4, 5, 6]", "enum"),
-            ("3 is not one of [4, 5, 6]", "enum"),
-            ("7 is not one of [4, 5, 6]", "enum"),
-            ("8 is not one of [4, 5, 6]", "enum"),
-            ("9 is not one of [4, 5, 6]", "enum"),
-            ("10 is not one of [4, 5, 6]", "enum"),
+        records=[
+            *(ParsedRecord(text=str(r), parsed=r) for r in stub_valid_records),
+            *(ParsedRecord(text="invalidjson", error=err) for err in errors_list),
         ],
         prompt_number=1,
     )
@@ -75,11 +77,9 @@ def fixture_mock_processor_rejected_records(fixture_mock_processor_errors: Magic
         {"a": "a4", reject_reason: "reason2"},
         {"a": "a5", reject_reason: "reason2"},
     ]
-    errors = [rejected_record_to_error(r) for r in rejected_records]
-    invalid_records = [str(r) for r in rejected_records]
-
-    fixture_mock_processor_errors.return_value.invalid_records.extend(invalid_records)
-    fixture_mock_processor_errors.return_value.errors.extend(errors)
+    fixture_mock_processor_errors.return_value.records.extend(
+        ParsedRecord(text=str(r), error=rejected_record_to_error(r)) for r in rejected_records
+    )
     return fixture_mock_processor_errors
 
 
@@ -220,3 +220,76 @@ def test_log_summary_data_config(caplog, fixture_mock_processor_rejected_records
     assert error_ctx is not None
     error_data = error_ctx["tabular_data"]
     assert any("Failed data_config validation due to [reason1]" in key for key in error_data)
+
+
+# ---------------------------------------------------------------------------
+# Token-counting tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def fixture_mock_processor_with_tokens():
+    """Mock processor returning a ``ParsedResponse`` with per-record token counts."""
+    mock_processor = MagicMock()
+    mock_processor.return_value = ParsedResponse(
+        records=[
+            ParsedRecord(text='{"a": 1}', parsed={"a": 1}, token_count=10),
+            ParsedRecord(text='{"a": 2}', parsed={"a": 2}, token_count=20),
+            ParsedRecord(text='{"a": 3}', parsed={"a": 3}, token_count=30),
+            ParsedRecord(text="bad1", error=("err", "err"), token_count=15),
+        ],
+        prompt_number=1,
+        tokenization_time_sec=0.01,
+    )
+    return mock_processor
+
+
+def test_batch_completion_tokens(fixture_mock_processor_with_tokens):
+    batch = Batch(processor=fixture_mock_processor_with_tokens)
+    batch.process(prompt_number=1, text="stub", completion_tokens=100)
+    batch.process(prompt_number=2, text="stub", completion_tokens=150)
+    assert batch.total_completion_tokens == 250
+
+
+def test_batch_aggregate_token_properties(fixture_mock_processor_with_tokens):
+    batch = Batch(processor=fixture_mock_processor_with_tokens)
+    batch.process(prompt_number=1, text="stub", completion_tokens=200)
+
+    assert batch.total_valid_record_tokens == 60  # 10+20+30
+    assert batch.total_invalid_record_tokens == 15
+    assert batch.total_non_record_tokens == 200 - 60 - 15  # 125
+    assert batch.total_tokenization_time_sec == pytest.approx(0.01)
+
+
+def test_batch_non_record_tokens_clamped_to_zero():
+    """If completion_tokens < valid + invalid, clamp to 0."""
+    mock_processor = MagicMock()
+    mock_processor.return_value = ParsedResponse(
+        records=[ParsedRecord(text='{"a": 1}', parsed={"a": 1}, token_count=100)],
+        tokenization_time_sec=0.0,
+    )
+    batch = Batch(processor=mock_processor)
+    batch.process(prompt_number=1, text="stub", completion_tokens=50)
+    assert batch.total_non_record_tokens == 0
+
+
+def test_batch_no_completion_tokens_defaults_zero(fixture_mock_processor):
+    """Default completion_tokens=0 when not provided."""
+    batch = Batch(processor=fixture_mock_processor)
+    batch.process(prompt_number=1, text="stub")
+    assert batch.total_completion_tokens == 0
+
+
+def test_batch_log_summary_includes_token_data(caplog, fixture_mock_processor_with_tokens):
+    caplog.set_level(INFO)
+    batch = Batch(processor=fixture_mock_processor_with_tokens)
+    batch.process(prompt_number=1, text="stub", completion_tokens=200)
+    batch.log_summary()
+
+    ctx_data = [getattr(record, "ctx", None) for record in caplog.records if hasattr(record, "ctx")]
+    summary_ctx = ctx_data[0]
+    assert summary_ctx is not None
+    assert summary_ctx["tabular_data"]["completion_tokens"] == 200
+    assert summary_ctx["tabular_data"]["valid_record_tokens"] == 60
+    assert summary_ctx["tabular_data"]["invalid_record_tokens"] == 15
+    assert summary_ctx["tabular_data"]["non_record_tokens"] == 125

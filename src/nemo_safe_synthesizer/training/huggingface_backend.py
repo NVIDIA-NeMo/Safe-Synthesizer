@@ -509,6 +509,7 @@ class HuggingFaceBackend(TrainingBackend):
                     config=self.params,
                     schema=self.dataset_schema,
                     metadata=self.model_metadata,
+                    tokenizer=self.tokenizer,
                 ),
                 num_prompts_per_batch=DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
                 **training_args["inference_eval_kwargs"],

@@ -220,14 +220,11 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
         table.add_column("Value")
         for key, value in data.items():
             display_key = key.replace("_", " ").title()
-            # TODO: Refactor this formatting logic to be more generic and maintainable.
-            # Currently requires updating this file whenever new metrics are added that
-            # need special formatting (e.g., the "loss", "eval_loss" exclusion list).
             if isinstance(value, float):
-                if key not in ("loss", "eval_loss") and value < 1 and value > 0:
-                    display_value = f"{value:.2%}"
-                else:
-                    display_value = f"{value:.2f}"
+                is_fraction = (
+                    0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+                )
+                display_value = f"{value:.2%}" if is_fraction else f"{value:.2f}"
             else:
                 display_value = str(value)
             table.add_row(display_key, display_value)
