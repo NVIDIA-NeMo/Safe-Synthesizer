@@ -92,7 +92,7 @@ def fixture_local_tinyllama_dir(tmp_path_factory, fixture_tiny_llama_config, fix
 
 
 @pytest.fixture(scope="session")
-def fixture_iris_df() -> pd.DataFrame:
+def fixture_iris_df(stub_datasets_dir) -> pd.DataFrame:
     """Load iris.csv from stub_datasets."""
     return pd.read_csv(stub_datasets_dir / "iris.csv")
 
