@@ -193,21 +193,21 @@ class TrainingBackend(metaclass=abc.ABCMeta):
 
     @classmethod
     def __subclasshook__(cls, subclass):
-        return (
-            hasattr(subclass, "prepare_training_data")
-            and callable(subclass.prepare_training_data)
-            and hasattr(subclass, "load_model")
-            and callable(subclass.load_model)
-            and hasattr(subclass, "prepare_training_args")
-            and callable(subclass.prepare_params)
-            and hasattr(subclass, "maybe_quantize")
-            and callable(subclass.maybe_quantize)
-            and hasattr(subclass, "train")
-            and callable(subclass.train)
-            and hasattr(subclass, "save_model")
-            and callable(subclass.save_model)
-            or NotImplemented
+        if cls is not TrainingBackend:
+            return NotImplemented
+        required = (
+            "prepare_training_data",
+            "prepare_config",
+            "prepare_params",
+            "maybe_quantize",
+            "load_model",
+            "train",
+            "save_model",
+            "teardown",
         )
+        if all(callable(getattr(subclass, name, None)) for name in required):
+            return True
+        return NotImplemented
 
     @abc.abstractmethod
     def prepare_training_data(self) -> None:
@@ -282,6 +282,21 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         model from GPU memory after saving.
         """
         ...
+
+    @abc.abstractmethod
+    def teardown(self) -> None:
+        """Release all resources held by this backend.
+
+        Frees GPU memory, destroys distributed process groups, and
+        cleans up trainer/model state. Must be idempotent -- safe to
+        call multiple times. Implementations should use the
+        ``_torn_down`` guard flag and isolate each cleanup step so one
+        failure doesn't prevent subsequent cleanup.
+
+        Callers should wrap ``train()`` in ``try/finally`` to guarantee
+        this runs even when training raises.
+        """
+        pass
 
     def _trust_remote_code_for_model(self) -> bool:
         """Determine whether the model should be loaded with ``trust_remote_code=True``.
