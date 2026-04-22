@@ -35,38 +35,27 @@ def fixture_save_path(fixture_session_cache_dir: Path) -> Path:
 
 
 @pytest.fixture(
-    params=["TinyLlama/TinyLlama-1.1B-Chat-v1.0", "HuggingFaceTB/SmolLM3-3B", "mistralai/Mistral-7B-Instruct-v0.3"],
+    params=["tinyllama", "smollm3b", "mistral7b"],
     ids=["tinyllama", "smollm3", "mistral"],
 )
 def fixture_over_tokenizers(request, tokenizers_dir) -> tuple[str, PreTrainedTokenizer]:
-    """Fixture parameterized over multiple tokenizers of interest."""
-    model_name = request.param
-
-    repo_name = model_name
-    local_files_only = False
-    if model_name == "TinyLlama/TinyLlama-1.1B-Chat-v1.0":
-        repo_name = str(tokenizers_dir / "tinyllama")
-        local_files_only = True
-    elif model_name == "HuggingFaceTB/SmolLM3-3B":
-        repo_name = str(tokenizers_dir / "smollm3b")
-        local_files_only = True
-    elif model_name == "mistralai/Mistral-7B-Instruct-v0.3":
-        repo_name = str(tokenizers_dir / "mistral7b")
-        local_files_only = True
-    else:
-        logger.warning(f"Tokenizer for {model_name} not stored in repo, loading from HF Hub")
-
-    tokenizer = AutoTokenizer.from_pretrained(repo_name, local_files_only=local_files_only)
-
-    return model_name, tokenizer
+    # Purpose: Parameterized over local tokenizer directories (tinyllama, smollm3, mistral).
+    # Data: Each directory under tests/test_data/tokenizers/ contains tokenizer files and config.json
+    # so that both AutoTokenizer and AutoConfig can load without network access.
+    local_path = str(tokenizers_dir / request.param)
+    tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
+    return local_path, tokenizer
 
 
-# Purpose: Builds training metadata for tests, using the stub tokenizer and explicit params.
+# Purpose: Builds training metadata for tests, using the local SmolLM3 tokenizer directory.
 @pytest.fixture
 def fixture_metadata(
     fixture_save_path,
+    fixture_smollm3_tokenizer,
 ) -> ModelMetadata:
-    config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+    config = SafeSynthesizerParameters.from_params(
+        use_unsloth=False, rope_scaling_factor=1, pretrained_model=fixture_smollm3_tokenizer
+    )
     metadata = ModelMetadata.from_str_or_path(config.training.pretrained_model, save_path=fixture_save_path)
     return metadata
 

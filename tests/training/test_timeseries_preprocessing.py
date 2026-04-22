@@ -8,13 +8,15 @@ import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-from nemo_safe_synthesizer.errors import DataError
+from nemo_safe_synthesizer.errors import DataError, ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import (
     _add_pseudo_group_if_needed,
     _create_elapsed_time_column,
     _GroupTimestampStats,
+    _infer_and_convert_timestamp_format,
     _sort_by_group_and_timestamp,
     _validate_start_stop_consistency,
+    process_timeseries_data,
 )
 
 
@@ -173,3 +175,161 @@ def test_validate_start_stop_consistency_different_stops_raises():
 
     with pytest.raises(DataError, match="Stop timestamps differ across groups"):
         _validate_start_stop_consistency(stats)
+
+
+class TestInferAndConvertTimestampFormat:
+    """Tests for _infer_and_convert_timestamp_format."""
+
+    def test_raises_parameter_error_when_format_cannot_be_inferred(self):
+        """ParameterError is raised when timestamp format inference fails on non-datetime values."""
+        df = pd.DataFrame({"ts": ["not_a_date", "also_not"]})
+        config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+        config.time_series.timestamp_column = "ts"
+        config.time_series.timestamp_format = None
+
+        with pytest.raises(ParameterError, match="Could not infer timestamp format"):
+            _infer_and_convert_timestamp_format(df, config.time_series)
+
+    def test_error_message_includes_column_name_and_first_value(self):
+        """ParameterError message contains the column name and first value for debugging."""
+        df = pd.DataFrame({"my_col": [42, 99]})
+        config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+        config.time_series.timestamp_column = "my_col"
+        config.time_series.timestamp_format = None
+
+        with pytest.raises(ParameterError, match=r"column 'my_col'.*first value: '42'"):
+            _infer_and_convert_timestamp_format(df, config.time_series)
+
+    def test_error_message_suggests_elapsed_seconds(self):
+        """ParameterError message suggests elapsed_seconds for numeric-looking data."""
+        df = pd.DataFrame({"ts": [100, 200]})
+        config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+        config.time_series.timestamp_column = "ts"
+        config.time_series.timestamp_format = None
+
+        with pytest.raises(ParameterError, match="elapsed_seconds"):
+            _infer_and_convert_timestamp_format(df, config.time_series)
+
+
+class TestProcessTimeseriesElapsedSecondsDetection:
+    """Tests for numeric elapsed-seconds detection in process_timeseries_data."""
+
+    @staticmethod
+    def _make_config(**overrides):
+        defaults = dict(
+            is_timeseries=True,
+            use_unsloth=False,
+            rope_scaling_factor=1,
+        )
+        defaults.update(overrides)
+        return SafeSynthesizerParameters.from_params(**defaults)
+
+    def test_explicit_elapsed_seconds_format(self):
+        """User-supplied timestamp_format='elapsed_seconds' marks column as elapsed time."""
+        df = pd.DataFrame(
+            {
+                "group": ["A", "A", "A"],
+                "ts": [0, 60, 120],
+                "value": [1, 2, 3],
+            }
+        )
+        config = self._make_config(
+            timestamp_column="ts",
+            timestamp_format="elapsed_seconds",
+            group_training_examples_by="group",
+        )
+
+        result_df, result_config = process_timeseries_data(df.copy(), config)
+
+        assert result_config.time_series.timestamp_format == "elapsed_seconds"
+        assert list(result_df["ts"]) == [0, 60, 120]
+
+    def test_numeric_column_auto_detected_as_elapsed_seconds(self):
+        """Numeric timestamp column with no format is auto-detected as elapsed seconds."""
+        df = pd.DataFrame(
+            {
+                "group": ["A", "A", "A"],
+                "ts": [0, 30, 60],
+                "value": [10, 20, 30],
+            }
+        )
+        config = self._make_config(
+            timestamp_column="ts",
+            group_training_examples_by="group",
+        )
+        assert config.time_series.timestamp_format is None
+
+        result_df, result_config = process_timeseries_data(df.copy(), config)
+
+        assert result_config.time_series.timestamp_format == "elapsed_seconds"
+        assert list(result_df["ts"]) == [0, 30, 60]
+
+    def test_numeric_column_auto_detected_without_group(self):
+        """Numeric elapsed seconds detection works when no group_by column is provided."""
+        df = pd.DataFrame(
+            {
+                "ts": [0, 10, 20],
+                "value": [1, 2, 3],
+            }
+        )
+        config = self._make_config(timestamp_column="ts")
+        assert config.time_series.timestamp_format is None
+
+        result_df, result_config = process_timeseries_data(df.copy(), config)
+
+        assert result_config.time_series.timestamp_format == "elapsed_seconds"
+
+    def test_string_datetime_column_not_treated_as_elapsed(self):
+        """String datetime columns are not auto-detected as elapsed seconds."""
+        df = pd.DataFrame(
+            {
+                "group": ["A", "A", "A"],
+                "ts": ["2024-01-01 00:00:00", "2024-01-01 01:00:00", "2024-01-01 02:00:00"],
+                "value": [1, 2, 3],
+            }
+        )
+        config = self._make_config(
+            timestamp_column="ts",
+            group_training_examples_by="group",
+        )
+
+        result_df, result_config = process_timeseries_data(df.copy(), config)
+
+        assert result_config.time_series.timestamp_format != "elapsed_seconds"
+
+    def test_float_column_auto_detected_as_elapsed_seconds(self):
+        """Float numeric timestamp columns are also detected as elapsed seconds."""
+        df = pd.DataFrame(
+            {
+                "group": ["A", "A", "A"],
+                "ts": [0.0, 0.5, 1.0],
+                "value": [1, 2, 3],
+            }
+        )
+        config = self._make_config(
+            timestamp_column="ts",
+            group_training_examples_by="group",
+        )
+
+        result_df, result_config = process_timeseries_data(df.copy(), config)
+
+        assert result_config.time_series.timestamp_format == "elapsed_seconds"
+
+    def test_explicit_elapsed_seconds_infers_interval(self):
+        """Elapsed seconds with consistent intervals correctly infers timestamp_interval_seconds."""
+        df = pd.DataFrame(
+            {
+                "group": ["A", "A", "A"],
+                "ts": [0, 60, 120],
+                "value": [1, 2, 3],
+            }
+        )
+        config = self._make_config(
+            timestamp_column="ts",
+            timestamp_format="elapsed_seconds",
+            group_training_examples_by="group",
+        )
+
+        _, result_config = process_timeseries_data(df.copy(), config)
+
+        assert result_config.time_series.timestamp_interval_seconds == 60

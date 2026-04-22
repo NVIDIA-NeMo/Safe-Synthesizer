@@ -15,7 +15,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [gpu-tests.yml](gpu-tests.yml)                     | Nightly , manual                         | GPU smoke tests (required) and E2E tests              |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
-| [release.yml](release.yml)                         | Manual dispatch                          | Builds and publishes package to Test PyPI or PyPI (production)     |
+| [release.yml](release.yml)                         | Push tags to `v*`                        | Builds and publishes package to Test PyPI or PyPI (production)     |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                                      | Scans for accidentally committed secrets              |
 
 ## Pull Request Testing (copy-pr-bot)
@@ -93,15 +93,13 @@ flowchart LR
     push --> ci & gpu
     cpb --> gpu
     pr --> ci & conventional & secrets
-    manual --> release
-    tag[Tag push v[0-9]*] --> internalRelease
+    tag[Tag push v[0-9]*] --> release
 
     buildWheel --> publishPyPI --> ghRelease --> slackNotify
     buildWheelInt --> publishArtifactory
 
     conventional -.->|reuses| FW-CI-templates
     secrets -.->|reuses| FW-CI-templates
-    release -.->|reuses| FW-CI-templates
 ```
 
 ## CI Checks Workflow
@@ -197,123 +195,23 @@ Or comment on the PR: `I have read the DCO Document and I hereby sign the DCO`
 
 Scans PRs for accidentally committed secrets. False positives can be added to `.github/workflows/config/.secrets.baseline`.
 
-## Internal Release Workflow
-
-The `internal-release.yml` workflow builds a wheel and publishes it to NVIDIA Artifactory or PyPI.
-
-### Triggers
-
-**Tag push (automatic):** Pushing a `v[0-9]*` tag (e.g. `git tag v0.2.0 && git push --tags`) automatically builds and publishes to Artifactory. This is the primary release mechanism.
-
-**Manual dispatch:** Go to Actions > Internal Release and run with:
-
-- `release-ref`: Branch, tag, or commit SHA to build (defaults to `main`)
-- `publish-target`: `artifactory` (default) or `pypi`
-
-### How to Publish Internally
-
-Tag-based (recommended):
-
-```bash
-git tag v0.2.0
-git push --tags
-```
-
-This triggers the workflow automatically and publishes to Artifactory.
-
-Via GitHub Actions (manual):
-
-1. Go to Actions > Internal Release
-2. Click Run workflow
-3. Enter the branch, tag, or commit SHA to build
-4. Select publish target (`artifactory` or `pypi`)
-
-Requires `ARTIFACTORY_USERNAME`, `ARTIFACTORY_TOKEN`, and `ARTIFACTORY_INTERNAL_URL` secrets for Artifactory; `TWINE_USERNAME` and `TWINE_PASSWORD` for PyPI.
-
-Locally (via Makefile):
-
-Add the required env vars to your `.env.local` (git-ignored, auto-loaded by mise):
-
-```bash
-TWINE_REPOSITORY_URL=<artifactory-repo-url>
-TWINE_USERNAME=<your-username>
-TWINE_PASSWORD=<your-api-key>
-```
-
-Then run:
-
-```bash
-# Build wheel only
-make build-wheel
-
-# Build and publish to Artifactory
-make publish-internal
-```
-
 ## Release Workflow (Production)
 
-The production release workflow uses the [FW-CI-templates `_release_library.yml`](https://github.com/NVIDIA-NeMo/FW-CI-templates) reusable workflow to publish to PyPI.
+The production release workflow publishes to test PyPI and regular PyPI. It also creates release notes
 
 ### How to Release
 
-this is placeholder information until we do a real release. will update then.
-
-1. Go to Actions > Release NeMo Safe Synthesizer
-2. Click Run workflow
-3. Fill in the required inputs:
-
-- `release-ref`: Full SHA or tag of the commit to release
-- `dry-run`: Set to `false` for production release (publishes to PyPI)
-- `create-gh-release`: Whether to create a GitHub release
-- `version-bump-branch`: Branch to push the version bump PR (usually `main`)
+1. Push a tag to the repository (start with a release candidate like `v0.0.5rc0` for big changes)
+2. Monitor the release pipeline to see it makes its way to Test PyPI/PyPI.
 
 ### Release Process
 
 The workflow performs the following steps:
 
-1. Dry-run build - Validates the wheel can be built
-2. Version bump - Creates a PR to bump the version in `package_info.py`
-3. Build wheel - Builds the production wheel
-4. Publish to PyPI - Uploads to PyPI (or test PyPI for dry runs)
-5. Create GitHub release - Creates a tagged release with changelog
-6. Notify - Sends Slack notification
-
-### Version Management
-
-Version is managed in `[src/nemo_safe_synthesizer/package_info.py](../../src/nemo_safe_synthesizer/package_info.py)`:
-
-```python
-MAJOR = 0
-MINOR = 1
-PATCH = 0
-PRE_RELEASE = ""
-BUILD = 1
-DEV_RELEASE = False
-```
-
-The release workflow automatically bumps the PATCH version (or PRE_RELEASE for release candidates).
-
-## Required Secrets
-
-The following secrets must be configured in GitHub repository settings:
-
-| Secret                      | Purpose                      |
-| --------------------------- | ---------------------------- |
-| `TWINE_USERNAME`            | PyPI username                |
-| `TWINE_PASSWORD`            | PyPI API token               |
-| `SLACK_WEBHOOK_ADMIN`       | Slack admin notifications    |
-| `SLACK_RELEASE_ENDPOINT`    | Slack release notifications  |
-| `PAT`                       | GitHub Personal Access Token |
-| `SSH_KEY`                   | GPG signing key              |
-| `SSH_PWD`                   | GPG key passphrase           |
-| `BOT_KEY`                   | GitHub App private key       |
-| `ARTIFACTORY_USERNAME`      | NVIDIA Artifactory username  |
-| `ARTIFACTORY_TOKEN`         | NVIDIA Artifactory API key   |
-| `ARTIFACTORY_INTERNAL_URL`  | NVIDIA Artifactory repo URL  |
-
-| Variable | Purpose       |
-| -------- | ------------- |
-| `BOT_ID` | GitHub App ID |
+1. Build wheel - Builds the production wheel
+2. Push to test PyPI
+3. Publish to PyPI - Uploads to PyPI
+4. Create GitHub release
 
 ## Reusable Workflows
 

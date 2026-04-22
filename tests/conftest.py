@@ -201,7 +201,7 @@ def load_test_dataframe(filename: str, datasets_dir: Path) -> pd.DataFrame:
             raise ValueError(f"Unknown dataset format: {dataset_path.suffix}")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def fixture_smollm3_tokenizer(tokenizers_dir) -> str:
     """Return the path to the SmolLM3 tokenizer directory."""
     return str(tokenizers_dir / "smollm3b")
