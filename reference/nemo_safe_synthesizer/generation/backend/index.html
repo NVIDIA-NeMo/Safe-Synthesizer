@@ -8812,7 +8812,7 @@ pattern is recommended for teardown implementations.</p>
       instance-attribute
    (nemo_safe_synthesizer.generation.backend.GeneratorBackend.gen_results)" href="#nemo_safe_synthesizer.generation.backend.GeneratorBackend.gen_results">gen_results</a></code></td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None)
+                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None, num_completion_tokens=None, num_valid_record_tokens=None, num_invalid_record_tokens=None, num_non_record_tokens=None, tokens_per_prompt=None, tokens_per_second=None, valid_tokens_per_second=None, tokenization_overhead_sec=None)
 
   
       dataclass
@@ -9258,7 +9258,7 @@ and backend-specific options.</p>
         <p>Run the batch generation loop and return aggregated results.</p>
 <p>Repeatedly prompts the model, processes each batch through the
 configured
-<a class="autorefs autorefs-internal" title="              Processor(schema, config)" href="../processors/#nemo_safe_synthesizer.generation.processors.Processor"><code>Processor</code></a>,
+<a class="autorefs autorefs-internal" title="              Processor(schema, config, tokenizer=None)" href="../processors/#nemo_safe_synthesizer.generation.processors.Processor"><code>Processor</code></a>,
 and accumulates valid records until the target count is reached
 or a stopping condition fires (e.g. too many consecutive invalid
 batches).  Progress and error statistics are logged after each
@@ -9310,7 +9310,7 @@ enforces user-specified data constraints.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None)
+                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None, num_completion_tokens=None, num_valid_record_tokens=None, num_invalid_record_tokens=None, num_non_record_tokens=None, tokens_per_prompt=None, tokens_per_second=None, valid_tokens_per_second=None, tokenization_overhead_sec=None)
 
   
       dataclass
@@ -9324,7 +9324,7 @@ enforces user-specified data constraints.</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None)
+                  <code><a class="autorefs autorefs-internal" title="              GenerateJobResults(df, status, num_valid_records, num_invalid_records, num_prompts, valid_record_fraction, batch_valid_record_fractions, elapsed_time=None, num_completion_tokens=None, num_valid_record_tokens=None, num_invalid_record_tokens=None, num_non_record_tokens=None, tokens_per_prompt=None, tokens_per_second=None, valid_tokens_per_second=None, tokenization_overhead_sec=None)
 
   
       dataclass
