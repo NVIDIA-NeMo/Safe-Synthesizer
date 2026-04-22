@@ -155,7 +155,7 @@ typecheck: ## Run ty type checks
 lock-check: ## Check that uv.lock and mise.lock are up to date
 	uv lock
 	git diff --exit-code uv.lock
-	mise install
+	mise lock
 	git diff --exit-code mise.lock
 
 .PHONY: check
