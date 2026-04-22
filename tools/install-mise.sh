@@ -81,8 +81,13 @@ if [[ "$have_gpg_toolchain" == true ]]; then
     # updates, spawning a persistent gpg-agent, etc.). The trap cleans up
     # the tmp script and the keyring directory (including the agent socket)
     # on any exit path.
-    gnupg_home="$(mktemp -d)"
-    tmpscript="$(mktemp)"
+    # `mktemp` isn't in POSIX and the no-arg form is a GNU/modern-BSD
+    # extension. Passing an explicit template as a positional argument is the
+    # form every implementation agrees on, and the named prefix keeps any
+    # leaked temp paths self-identifying.
+    tmp_prefix="${TMPDIR:-/tmp}/mise-install"
+    gnupg_home="$(mktemp -d "${tmp_prefix}.gnupg.XXXXXXXX")"
+    tmpscript="$(mktemp "${tmp_prefix}.sh.XXXXXXXX")"
     trap 'gpgconf --homedir "$gnupg_home" --kill all >/dev/null 2>&1 || true; rm -rf "$gnupg_home" "$tmpscript"' EXIT
     chmod 700 "$gnupg_home"
     export GNUPGHOME="$gnupg_home"
