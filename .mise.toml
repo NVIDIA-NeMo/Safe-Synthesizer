@@ -38,3 +38,4 @@ _.file = [".env", ".env.local"]
 lockfile = true
 install_before = "7d"  # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
 lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
+idiomatic_version_file_enable_tools = []

@@ -73,25 +73,6 @@ checksum = "sha256:a9fe3ea2f86dfc72f6728417521ec9067b343277152b114f4e98d8cb0e263
 url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-macos-arm64"
 provenance = "github-attestations"
 
-[[tools.python]]
-version = "3.11.15"
-backend = "core:python"
-
-[tools.python."platforms.linux-arm64"]
-checksum = "sha256:e244df64d3f281d2cf33f492499a33a1cf5d872936ffc402ece48b833819c2a7"
-url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"
-provenance = "github-attestations"
-
-[tools.python."platforms.linux-x64"]
-checksum = "sha256:b702a19b26cbd007abf9ccbaa45dfdff99e9dbd646d89c9f3c9bb7b501aea44f"
-url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
-provenance = "github-attestations"
-
-[tools.python."platforms.macos-arm64"]
-checksum = "sha256:7089d127a9933d860b3e4ae704234c664d2713825f27c0c6b89dd399adabbdf6"
-url = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-aarch64-apple-darwin-install_only_stripped.tar.gz"
-provenance = "github-attestations"
-
 [[tools.ripgrep]]
 version = "15.1.0"
 backend = "aqua:BurntSushi/ripgrep"
