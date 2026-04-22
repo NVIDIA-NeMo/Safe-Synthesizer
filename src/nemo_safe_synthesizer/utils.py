@@ -178,7 +178,8 @@ def time_function(func: Callable[..., Any]) -> Callable[..., Any]:
         result = func(*args, **kwargs)
         time_elapsed = time.perf_counter() - start
         time_elapsed = f"{time_elapsed:.2f} sec" if time_elapsed <= 120 else f"{time_elapsed / 60:.2f} min"
-        logger.info(f"⏱️  Function: {func.__name__}, Time: {time_elapsed}\n")  # ty: ignore[unresolved-attribute]
+        func_name = getattr(func, "__name__", None) or repr(func)
+        logger.info(f"⏱️  Function: {func_name}, Time: {time_elapsed}\n")
         return result
 
     return time_closure

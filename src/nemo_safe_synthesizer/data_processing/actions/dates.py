@@ -17,7 +17,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from random import randint
-from typing import Optional, cast
+from typing import Optional
 
 import pandas as pd
 
@@ -141,11 +141,17 @@ def date_component_permutations() -> list[tuple[str, str, str, str, str]]:
     Each tuple is indexed by (year, month, day, hms, tz) and can be
     passed into a formatter from ``date_component_orders``.
     """
-    # itertools.product returns variable-length tuples; the five fixed keys in
-    # ``component_formats`` guarantee 5-tuples at runtime.
-    return cast(
-        "list[tuple[str, str, str, str, str]]",
-        list(itertools.product(*component_formats.values())),
+    # Passing the five iterables positionally (rather than ``*dict.values()``)
+    # lets the type checker resolve ``itertools.product``'s 5-iterable overload
+    # and infer ``tuple[str, str, str, str, str]`` directly.
+    return list(
+        itertools.product(
+            component_formats["y"],
+            component_formats["m"],
+            component_formats["d"],
+            component_formats["hms"],
+            component_formats["tz"],
+        )
     )
 
 
