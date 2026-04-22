@@ -16,9 +16,9 @@ from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report impor
 
 
 def _minimal_multimodal_report() -> MultimodalReport:
-    fixture_training_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
-    fixture_synthetic_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
-    datasets = EvaluationDatasets(training=fixture_training_df, synthetic=fixture_synthetic_df)
+    training_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    synthetic_df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    datasets = EvaluationDatasets(training=training_df, synthetic=synthetic_df)
     return MultimodalReport(evaluation_datasets=datasets, components=[])
 
 

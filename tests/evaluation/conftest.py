@@ -134,6 +134,7 @@ def fixture_dp_not_enabled_config() -> SafeSynthesizerParameters:
 
 @pytest.fixture
 def fixture_column_statistics(fixture_training_df_5k) -> dict[str, ColumnStatistics]:
+    """ColumnStatistics for `small_cat` and `other` columns derived from the 5k training DataFrame."""
     small_cat_values = {"foo", "bar"}
     small_cat_count = len(fixture_training_df_5k["small_cat"].to_frame().query("`small_cat` in @small_cat_values"))
     other_cat_values = {"barf"}

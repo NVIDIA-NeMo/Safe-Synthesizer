@@ -20,7 +20,7 @@ pytestmark = [
 
 
 @pytest.fixture(scope="class")
-def trained_nss(_patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, tmp_path_factory):
+def fixture_trained_nss(_patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, tmp_path_factory):
     """Train once per class; both SDK chain and manual VllmBackend tests consume this."""
     save_path = tmp_path_factory.mktemp("gen-smoke")
     nss = SafeSynthesizer(config=fixture_base_smoke_config, save_path=save_path)
@@ -29,26 +29,26 @@ def trained_nss(_patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, t
 
 
 class TestNSSGenerationGPU:
-    """GPU generation tests sharing a single training run via the trained_nss fixture."""
+    """GPU generation tests sharing a single training run via the fixture_trained_nss fixture."""
 
-    def test_nss_full_chain_train_and_generate(self, trained_nss):
+    def test_nss_full_chain_train_and_generate(self, fixture_trained_nss):
         """Train and generate through the full SDK chain.
 
         The tiny random model produces garbage output, so GenerationError
         (no valid records) is acceptable -- we just exercise the code path.
         """
         try:
-            trained_nss.generate()
+            fixture_trained_nss.generate()
         except GenerationError as exc:
             assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
 
-    def test_manual_vllm_backend_with_local_model(self, trained_nss, fixture_local_tinyllama_dir):
+    def test_manual_vllm_backend_with_local_model(self, fixture_trained_nss, fixture_local_tinyllama_dir):
         """Manually construct VllmBackend and generate with the saved adapter."""
         from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend
         from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
-        workdir = trained_nss._workdir
-        config = trained_nss._nss_config
+        workdir = fixture_trained_nss._workdir
+        config = fixture_trained_nss._nss_config
         metadata = ModelMetadata.from_metadata_json(workdir.metadata_file, workdir=workdir)
         backend = VllmBackend(config=config, model_metadata=metadata, workdir=workdir)
         backend.initialize()
