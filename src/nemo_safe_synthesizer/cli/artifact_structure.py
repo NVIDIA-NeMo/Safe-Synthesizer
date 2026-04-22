@@ -286,16 +286,48 @@ class BoundDir(os.PathLike[str]):
 
 
 # ---------------------------------------------------------------------------
-# Phantom ``BoundDir`` subclasses declaring the typed shape of each subtree.
+# Typed-view ``BoundDir`` subclasses
+# ---------------------------------------------------------------------------
 #
-# These exist solely so type checkers can see the children of each directory
-# through ``BoundDir.__getattr__``. At runtime they are empty subclasses; the
-# actual instance returned by ``DirNode.__get__`` is always a plain
-# ``BoundDir``. The ``DirNode[T]`` generic parameter links each subtree to its
-# typed view (e.g. ``train = DirNode[_TrainDir]("train", ...)``).
+# Each ``_*Dir`` subclass below declares the typed shape of one subtree.
+# Their bodies live entirely inside ``if TYPE_CHECKING:`` and contain only
+# attribute annotations — they have no runtime behaviour.  The actual object
+# returned by ``DirNode.__get__`` at runtime is always a plain ``BoundDir``;
+# the subclass exists solely as the type parameter to the generic descriptor
+# ``DirNode[T_co]``, so that ``ty`` can resolve nested attribute access like
+# ``workdir.train.adapter.metadata`` to the correct ``Path`` / ``BoundDir``
+# type without ``# ty: ignore[unresolved-attribute]`` at every call site.
 #
-# When adding or renaming a child in a ``DirNode(...)`` tree below, update the
-# corresponding subclass here to match.
+# Prior art
+# ---------
+# This is a composition of two well-established typing patterns:
+#
+# 1. Generic descriptor with overloaded ``__get__`` -- the same idiom
+#    SQLAlchemy 2.0 uses for ``Mapped[T]`` / ``InstrumentedAttribute[T]``
+#    (class access returns the descriptor; instance access returns ``T``).
+#    See https://docs.sqlalchemy.org/en/stable/orm/mapped_attributes.html
+#    Similar shapes appear in attrs ``Field[T]``, Django model fields,
+#    and Pydantic ``FieldInfo``.
+#
+# 2. ``if TYPE_CHECKING:`` runtime-invisible declarations, specified in
+#    PEP 484 (section "Runtime or type checking?"). ``TYPE_CHECKING`` is a
+#    compile-time-true, runtime-false flag used to hide declarations from
+#    the interpreter while keeping them visible to type checkers.
+#
+# Naming note
+# -----------
+# We call these "typed views" internally.  They are *not* "phantom types" in
+# the sense used by the ``phantom-types`` library (refinement types with
+# runtime predicates, per the Haskell/ML tradition); the name collision is
+# unhelpful, so we avoid it.
+#
+# Maintenance contract
+# --------------------
+# When adding or renaming a child in one of the ``DirNode(...)`` trees on
+# ``Workdir``, add/rename the matching attribute annotation on the typed-view
+# subclass below.  The ``TestTypedViewDrift`` class in
+# ``tests/cli/test_artifact_structure.py`` parses this module's AST and
+# fails CI if the two sides drift.
 # ---------------------------------------------------------------------------
 
 
@@ -381,10 +413,10 @@ class Workdir:
     dataset_name: str
     """Stem of the dataset file name, used in the project directory name."""
 
-    run_name: str | None = None
+    run_name: str = ""
     """Run name (auto-generated timestamp or explicit name from CLI).
 
-    When ``None``, a timestamp-based name is generated in ``__post_init__``.
+    When empty, a timestamp-based name is generated in ``__post_init__``.
     """
 
     _run_name_obj: RunName = field(default_factory=RunName, repr=False)
@@ -482,7 +514,7 @@ class Workdir:
         """
         if self._explicit_run_path is not None:
             return self._explicit_run_path
-        return self.project_dir / self.run_name  # ty: ignore[unsupported-operator]
+        return self.project_dir / self.run_name
 
     def phase_dir(self, phase: str | None = None) -> Path:
         """Get the phase directory path.

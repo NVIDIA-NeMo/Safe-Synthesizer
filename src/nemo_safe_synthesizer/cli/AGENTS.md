@@ -61,12 +61,12 @@ New common option: Add to `common_run_options` list, pass through to handler, in
 
 Declarative artifact tree rooted at `Workdir`. `DirNode` and `FileNode` are descriptors; child lookups on a `BoundDir` go through `__getattr__` so the runtime tree is driven entirely by the class-level `DirNode(...)` / `FileNode(...)` declarations.
 
-`DirNode` is generic: `DirNode[T_co]` where `T_co` is the `BoundDir` subtype returned by `__get__`. The subtype is a **phantom subclass** (`_TrainDir`, `_AdapterDir`, `_GenerateDir`, `_DatasetDir`) whose body lives inside an `if TYPE_CHECKING:` block and only declares attribute types that mirror the tree — it has no runtime behavior. This gives `ty` enough information to resolve `workdir.train.config`, `workdir.train.adapter.adapter_config`, `workdir.generate.logs`, etc. without `# ty: ignore[unresolved-attribute]` sprinkled at every call site.
+`DirNode` is generic: `DirNode[T_co]` where `T_co` is the `BoundDir` subtype returned by `__get__`. The subtype is a **typed-view subclass** (`_TrainDir`, `_AdapterDir`, `_GenerateDir`, `_DatasetDir`) whose body lives inside an `if TYPE_CHECKING:` block and only declares attribute types that mirror the tree — it has no runtime behaviour. This gives `ty` enough information to resolve `workdir.train.config`, `workdir.train.adapter.adapter_config`, `workdir.generate.logs`, etc. without `# ty: ignore[unresolved-attribute]` sprinkled at every call site. The idiom composes SQLAlchemy's `Mapped[T]`-style generic descriptor with PEP 484's `TYPE_CHECKING` guard; see the section comment in `artifact_structure.py` for external references. (Note: these are *not* "phantom types" in the `phantom-types` library sense — that term means refinement types with runtime predicates.)
 
 When you touch this file:
 
-- Adding a child (`foo = FileNode("foo.json")` or `foo = DirNode(...)`) under an existing `DirNode(...)` tree requires adding the matching annotation to the corresponding phantom subclass. If you don't, `ty` will re-flag `workdir.<parent>.foo` at every call site.
-- Adding a new top-level `DirNode` on `Workdir` needs a new phantom `_FooDir(BoundDir)` subclass, and the `Workdir` attribute should be typed `DirNode[_FooDir]`.
+- Adding a child (`foo = FileNode("foo.json")` or `foo = DirNode(...)`) under an existing `DirNode(...)` tree requires adding the matching annotation to the corresponding typed-view subclass. If you don't, `ty` will re-flag `workdir.<parent>.foo` at every call site.
+- Adding a new top-level `DirNode` on `Workdir` needs a new typed-view `_FooDir(BoundDir)` subclass, and the `Workdir` attribute should be typed `DirNode[_FooDir]`.
 - Don't reintroduce `cast(Path, ...)` on `Workdir` shortcut properties — the generic `DirNode[_T]` already narrows the return type.
 
 ## Read first
@@ -75,5 +75,5 @@ When you touch this file:
 - `run.py` — run commands, `common_run_options`, `common_setup` flow
 - `settings.py` — `CLISettings`, `from_cli_kwargs`, precedence
 - `utils.py` — `common_setup`, `merge_overrides`, `CLI_NESTED_FIELD_SEPARATOR`
-- `artifact_structure.py` — `Workdir`, `DirNode`/`FileNode` descriptors, phantom `_TrainDir` / `_AdapterDir` / `_GenerateDir` / `_DatasetDir` typing subclasses
+- `artifact_structure.py` — `Workdir`, `DirNode`/`FileNode` descriptors, typed-view `_TrainDir` / `_AdapterDir` / `_GenerateDir` / `_DatasetDir` subclasses
 - `configurator/pydantic_click_options.py` — `pydantic_options`, `parse_overrides`
