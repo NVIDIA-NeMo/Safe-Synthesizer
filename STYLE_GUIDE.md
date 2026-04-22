@@ -830,6 +830,10 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 
 ## General conventions
 
+### Package structure
+
+Every directory under `src/` and `tests/` that contains Python files must include an `__init__.py` file, even if empty. This ensures the directory is recognized as a Python package by the import machinery and by tooling (`pytest`, `ruff`, `ty`).
+
 ### Copyright headers
 
 Every source file requires an SPDX copyright header and `make format` handles this automatically. See [tools/codestyle/copyright_fixer.py](tools/codestyle/copyright_fixer.py).
