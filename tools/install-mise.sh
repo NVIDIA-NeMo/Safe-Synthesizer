@@ -15,8 +15,9 @@
 #   - If mise is already on PATH at a different version, abort with an
 #     actionable message (we don't silently clobber the user's install).
 #   - If the full gpg toolchain (gpg + gpg-agent + dirmngr) is available,
-#     fetch install.sh.sig, verify its GPG signature, and run the embedded
-#     install script.
+#     fetch install.sh.sig, verify its GPG signature against a temporary
+#     GNUPGHOME (so we don't mutate the user's keyring), and run the
+#     embedded install script.
 #   - Otherwise fall back to https://mise.run (no signature verification;
 #     warn clearly).
 #   - In either install path, pass MISE_VERSION through to the installer
@@ -74,10 +75,19 @@ fi
 
 if [[ "$have_gpg_toolchain" == true ]]; then
     echo "Verifying installer signature..."
-    gpg --batch --no-tty --keyserver "$KEYSERVER" --recv-keys "$MISE_GPG_KEY"
 
+    # Isolate verification in an ephemeral GNUPGHOME so we don't mutate the
+    # user's long-lived keyring (importing the mise release key, trust db
+    # updates, spawning a persistent gpg-agent, etc.). The trap cleans up
+    # the tmp script and the keyring directory (including the agent socket)
+    # on any exit path.
+    gnupg_home="$(mktemp -d)"
     tmpscript="$(mktemp)"
-    trap 'rm -f "$tmpscript"' EXIT
+    trap 'gpgconf --homedir "$gnupg_home" --kill all >/dev/null 2>&1 || true; rm -rf "$gnupg_home" "$tmpscript"' EXIT
+    chmod 700 "$gnupg_home"
+    export GNUPGHOME="$gnupg_home"
+
+    gpg --batch --no-tty --keyserver "$KEYSERVER" --recv-keys "$MISE_GPG_KEY"
 
     curl -fsSL "$MISE_SIG_URL" | gpg --batch --no-tty --decrypt >"$tmpscript"
     MISE_VERSION="$MISE_VERSION" sh "$tmpscript"
