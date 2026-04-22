@@ -269,13 +269,17 @@ def fixture_mock_processor():
     ]
     from unittest.mock import MagicMock
 
-    from nemo_safe_synthesizer.generation.processors import ParsedResponse
+    from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
 
     mock_processor = MagicMock()
     mock_processor.return_value = ParsedResponse(
-        valid_records=stub_valid_records,
-        invalid_records=["invalidjson"],
-        errors=[("some error msg", "some error msg")],
+        records=[
+            *(ParsedRecord(text=str(r), parsed=r) for r in stub_valid_records),
+            ParsedRecord(
+                text="invalidjson",
+                error=("some error msg", "some error msg"),
+            ),
+        ],
         prompt_number=1,
     )
     return mock_processor
@@ -286,13 +290,13 @@ def fixture_mock_processor_without_valid_records():
     """Mock processor returning a ``ParsedResponse`` with zero valid records."""
     from unittest.mock import MagicMock
 
-    from nemo_safe_synthesizer.generation.processors import ParsedResponse
+    from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
 
     mock_processor = MagicMock()
     mock_processor.return_value = ParsedResponse(
-        valid_records=[],
-        invalid_records=["invalidjson"],
-        errors=[("some error msg", "some error msg")],
+        records=[
+            ParsedRecord(text="invalidjson", error=("some error msg", "some error msg")),
+        ],
         prompt_number=1,
     )
     return mock_processor

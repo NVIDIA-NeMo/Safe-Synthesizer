@@ -64,11 +64,31 @@ def make_nss_summary(
     num_invalid_records = None
     num_prompts = None
     valid_record_fraction = None
+    num_completion_tokens = None
+    num_valid_record_tokens = None
+    num_invalid_record_tokens = None
+    num_non_record_tokens = None
+    valid_record_token_fraction = None
+    tokens_per_prompt = None
+    tokens_per_second = None
+    valid_tokens_per_second = None
+    tokenization_overhead_sec = None
+
     if isinstance(results, GenerateJobResults):
         num_valid_records = results.num_valid_records
         num_invalid_records = results.num_invalid_records
         num_prompts = results.num_prompts
         valid_record_fraction = results.valid_record_fraction
+        num_completion_tokens = results.num_completion_tokens
+        num_valid_record_tokens = results.num_valid_record_tokens
+        num_invalid_record_tokens = results.num_invalid_record_tokens
+        num_non_record_tokens = results.num_non_record_tokens
+        tokens_per_prompt = results.tokens_per_prompt
+        tokens_per_second = results.tokens_per_second
+        valid_tokens_per_second = results.valid_tokens_per_second
+        tokenization_overhead_sec = results.tokenization_overhead_sec
+        if num_completion_tokens is not None and num_completion_tokens > 0 and num_valid_record_tokens is not None:
+            valid_record_token_fraction = num_valid_record_tokens / num_completion_tokens
 
     return SafeSynthesizerSummary(
         timing=timing,
@@ -76,6 +96,15 @@ def make_nss_summary(
         num_invalid_records=num_invalid_records,
         num_prompts=num_prompts,
         valid_record_fraction=valid_record_fraction,
+        num_completion_tokens=num_completion_tokens,
+        num_valid_record_tokens=num_valid_record_tokens,
+        num_invalid_record_tokens=num_invalid_record_tokens,
+        num_non_record_tokens=num_non_record_tokens,
+        valid_record_token_fraction=valid_record_token_fraction,
+        tokens_per_prompt=tokens_per_prompt,
+        tokens_per_second=tokens_per_second,
+        valid_tokens_per_second=valid_tokens_per_second,
+        tokenization_overhead_sec=tokenization_overhead_sec,
         synthetic_data_quality_score=synthetic_data_quality_score,
         column_correlation_stability_score=column_correlation_stability_score,
         deep_structure_stability_score=deep_structure_stability_score,

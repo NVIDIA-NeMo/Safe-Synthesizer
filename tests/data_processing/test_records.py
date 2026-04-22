@@ -20,6 +20,11 @@ from nemo_safe_synthesizer.data_processing.record_utils import (
 )
 
 
+def _mock_encode(text: str) -> list[int]:
+    """Deterministic mock tokenizer: one token per character."""
+    return list(range(len(text)))
+
+
 def test_is_safe_for_float_conversion():
     # Test with safe values
     assert is_safe_for_float_conversion(100) is True
@@ -101,21 +106,31 @@ def test_extract_and_validate_records_with_invalid_records_with_large_numbers(
     jsonl_schema["properties"]["sepal.length"]["maximum"] = 10**309
     corrupt_record_str = json.dumps(corrupt_record)
     valid_jsonl_str += f"""{corrupt_record_str}"""
-    valid, invalid, errors = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
-    assert len(valid) == 5
-    assert len(invalid) == 1
-    assert len(errors) == 1
-    assert len(errors[0]) == 2
-    assert "is too large to convert to float64" in errors[0][0]
-    assert errors[0][1] == "Float Conversion"
+    result = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
+    assert len(result.valid_records) == 5
+    assert len(result.invalid_records) == 1
+    assert len(result.errors) == 1
+    assert len(result.errors[0]) == 2
+    assert "is too large to convert to float64" in result.errors[0][0]
+    assert result.errors[0][1] == "Float Conversion"
 
 
 def test_extract_and_validate_records(fixture_valid_iris_dataset_jsonl_and_schema):
     valid_jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
-    valid, invalid, errors = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
-    assert len(valid) == 5
-    assert len(invalid) == 0
-    assert len(errors) == 0
+    result = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
+    assert len(result.valid_records) == 5
+    assert len(result.invalid_records) == 0
+    assert len(result.errors) == 0
+
+    # Without a tokenizer, per-record counts default to 0 and no tokenization time is spent.
+    assert all(r.token_count == 0 for r in result.records)
+    assert result.tokenization_time_sec == 0.0
+
+    # With a tokenizer, each record gets a positive count and tokenization time is recorded.
+    result_with_tokens = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema, encode=_mock_encode)
+    assert len(result_with_tokens.records) == 5
+    assert all(r.is_valid and r.token_count > 0 for r in result_with_tokens.records)
+    assert result_with_tokens.tokenization_time_sec >= 0
 
 
 def test_extract_and_validate_records_with_invalid_records(
@@ -125,13 +140,13 @@ def test_extract_and_validate_records_with_invalid_records(
 
     # intentionally corrupt the last record with invalid text that would lead to a json decode error
     valid_jsonl_str = valid_jsonl_str[:-2] + "invalid entry }"
-    valid, invalid, errors = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
-    assert len(valid) == 4
-    assert len(invalid) == 1
-    assert len(errors) == 1
-    assert len(errors[0]) == 2
-    assert errors[0][0] == "Invalid JSON: Expecting ',' delimiter"
-    assert errors[0][1] == "Invalid JSON"
+    result = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
+    assert len(result.valid_records) == 4
+    assert len(result.invalid_records) == 1
+    assert len(result.errors) == 1
+    assert len(result.errors[0]) == 2
+    assert result.errors[0][0] == "Invalid JSON: Expecting ',' delimiter"
+    assert result.errors[0][1] == "Invalid JSON"
 
 
 def test_extract_and_validate_records_with_invalid_schema(
@@ -140,14 +155,19 @@ def test_extract_and_validate_records_with_invalid_schema(
     valid_jsonl_str, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
 
     # tack on a new json obj with a different schema than in the spec
-    valid_jsonl_str = valid_jsonl_str + f"{json.dumps(dict(a=1, b=2))}"
-    valid, invalid, errors = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
-    assert len(valid) == 5
-    assert len(invalid) == 1
-    assert len(errors) == 1
-    assert len(errors[0]) == 2
-    assert errors[0][0] == "'sepal.length' is a required property"
-    assert errors[0][1] == "required"
+    invalid_text = json.dumps(dict(a=1, b=2))
+    result = extract_and_validate_records(valid_jsonl_str + invalid_text, schema=jsonl_schema, encode=_mock_encode)
+    assert len(result.valid_records) == 5
+    assert len(result.invalid_records) == 1
+    assert len(result.errors) == 1
+    assert len(result.errors[0]) == 2
+    assert result.errors[0][0] == "'sepal.length' is a required property"
+    assert result.errors[0][1] == "required"
+
+    # Invalid records keep their original regex-matched text and still get a token count.
+    assert not result.records[-1].is_valid
+    assert result.records[-1].text == invalid_text
+    assert result.records[-1].token_count > 0
 
 
 def test_extract_and_validate_records_with_invalid_utf_characters_embedded(
@@ -163,25 +183,28 @@ def test_extract_and_validate_records_with_invalid_utf_characters_embedded(
     valid_jsonl_str = valid_jsonl_str.replace(existing_petal_variety, new_petal_variety_with_invalid_utf8)
     jsonl_schema["properties"]["variety"]["enum"].append(new_petal_variety_with_invalid_utf8)
 
-    valid, invalid, errors = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
-    assert len(valid) == 5
-    assert len(invalid) == 0
-    assert len(errors) == 0
+    result = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
+    assert len(result.valid_records) == 5
+    assert len(result.invalid_records) == 0
+    assert len(result.errors) == 0
 
 
 def test_extract_and_validate_records_with_non_english_characters(fixture_lmsys_dataset_jsonl_and_schema):
     valid_jsonl_str, jsonl_schema = fixture_lmsys_dataset_jsonl_and_schema
-    valid, invalid, errors = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
-    assert len(valid) == 5
-    assert len(invalid) == 0
-    assert len(errors) == 0
+    result = extract_and_validate_records(valid_jsonl_str, schema=jsonl_schema)
+    assert len(result.valid_records) == 5
+    assert len(result.invalid_records) == 0
+    assert len(result.errors) == 0
 
     # Check that the non-English content is preserved correctly
-    assert valid[0]["conversation"][0]["content"] == "ПРИВЕТ"
-    assert valid[1]["conversation"][0]["content"] == "一家4000人的化工企业需要配备几名安全员"
-    assert valid[2]["conversation"][0]["content"][:10] == "경찰 관계자는 “범"
-    assert valid[3]["conversation"][0]["content"] == "نعم انا خبير في ادارة تطبيقات وحسابات التواصل الاجتماعي بحترافيه"
-    assert valid[4]["conversation"][0]["content"][41:74] == "\"Ім'я і національність\n@Ukrostap\n"
+    assert result.valid_records[0]["conversation"][0]["content"] == "ПРИВЕТ"
+    assert result.valid_records[1]["conversation"][0]["content"] == "一家4000人的化工企业需要配备几名安全员"
+    assert result.valid_records[2]["conversation"][0]["content"][:10] == "경찰 관계자는 “범"
+    assert (
+        result.valid_records[3]["conversation"][0]["content"]
+        == "نعم انا خبير في ادارة تطبيقات وحسابات التواصل الاجتماعي بحترافيه"
+    )
+    assert result.valid_records[4]["conversation"][0]["content"][41:74] == "\"Ім'я і національність\n@Ukrostap\n"
 
 
 def _run_csv_writer(df: pd.DataFrame):
@@ -389,13 +412,19 @@ def test_extract_and_validate_timeseries_records_valid():
         '{"timestamp": "2024-01-01 02:00:00", "value": 3}\n'
     )
 
-    valid, invalid, errors = extract_and_validate_timeseries_records(
-        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+    result = extract_and_validate_timeseries_records(
+        jsonl,
+        schema,
+        time_column="timestamp",
+        interval_seconds=3600,
+        time_format="%Y-%m-%d %H:%M:%S",
+        encode=_mock_encode,
     )
 
-    assert len(valid) == 3
-    assert len(invalid) == 0
-    assert len(errors) == 0
+    assert len(result.valid_records) == 3
+    assert len(result.invalid_records) == 0
+    assert len(result.errors) == 0
+    assert all(r.is_valid and r.token_count > 0 for r in result.records)
 
 
 def test_extract_and_validate_timeseries_records_no_interval_validation():
@@ -412,13 +441,13 @@ def test_extract_and_validate_timeseries_records_no_interval_validation():
         '{"timestamp": "2024-01-01 05:00:00", "value": 3}\n'
     )
 
-    valid, invalid, errors = extract_and_validate_timeseries_records(
+    result = extract_and_validate_timeseries_records(
         jsonl, schema, time_column="timestamp", interval_seconds=None, time_format="%Y-%m-%d %H:%M:%S"
     )
 
-    assert len(valid) == 3
-    assert len(invalid) == 0
-    assert len(errors) == 0
+    assert len(result.valid_records) == 3
+    assert len(result.invalid_records) == 0
+    assert len(result.errors) == 0
 
 
 def test_extract_and_validate_timeseries_records_invalid_interval():
@@ -435,13 +464,22 @@ def test_extract_and_validate_timeseries_records_invalid_interval():
         '{"timestamp": "2024-01-01 03:00:00", "value": 3}\n'
     )
 
-    valid, invalid, errors = extract_and_validate_timeseries_records(
-        jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
+    result = extract_and_validate_timeseries_records(
+        jsonl,
+        schema,
+        time_column="timestamp",
+        interval_seconds=3600,
+        time_format="%Y-%m-%d %H:%M:%S",
+        encode=_mock_encode,
     )
 
-    assert len(valid) == 1  # Only first record is valid
-    assert len(invalid) == 2  # Second and third are invalid
-    assert len(errors) == 2
+    assert len(result.valid_records) == 1  # Only first record is valid
+    assert len(result.invalid_records) == 2  # Second and third are invalid
+    assert len(result.errors) == 2
+
+    # Cascade-invalidated records still keep their original text and token count.
+    assert all(r.token_count > 0 for r in result.records)
+    assert result.records[2].text.startswith('{"timestamp":')
 
 
 def test_extract_and_validate_timeseries_records_invalid_json():
@@ -456,14 +494,14 @@ def test_extract_and_validate_timeseries_records_invalid_json():
         '{"timestamp": "2024-01-01 02:00:00", "value": 3}\n'
     )
 
-    valid, invalid, errors = extract_and_validate_timeseries_records(
+    result = extract_and_validate_timeseries_records(
         jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
     )
 
-    assert len(valid) == 1
-    assert len(invalid) == 1
-    assert len(errors) == 1
-    assert "Invalid JSON" in errors[0][0]
+    assert len(result.valid_records) == 1
+    assert len(result.invalid_records) == 1
+    assert len(result.errors) == 1
+    assert "Invalid JSON" in result.errors[0][0]
 
 
 def test_extract_and_validate_timeseries_records_elapsed_time():
@@ -479,13 +517,13 @@ def test_extract_and_validate_timeseries_records_elapsed_time():
         '{"elapsed_seconds": 7200, "value": 3}\n'
     )
 
-    valid, invalid, errors = extract_and_validate_timeseries_records(
+    result = extract_and_validate_timeseries_records(
         jsonl, schema, time_column="elapsed_seconds", interval_seconds=3600, time_format="elapsed_seconds"
     )
 
-    assert len(valid) == 3
-    assert len(invalid) == 0
-    assert len(errors) == 0
+    assert len(result.valid_records) == 3
+    assert len(result.invalid_records) == 0
+    assert len(result.errors) == 0
 
 
 def test_extract_and_validate_timeseries_records_missing_timestamp():
@@ -497,11 +535,11 @@ def test_extract_and_validate_timeseries_records_missing_timestamp():
     }
     jsonl = '{"value": 1}\n{"value": 2}\n'
 
-    valid, invalid, errors = extract_and_validate_timeseries_records(
+    result = extract_and_validate_timeseries_records(
         jsonl, schema, time_column="timestamp", interval_seconds=3600, time_format="%Y-%m-%d %H:%M:%S"
     )
 
-    assert len(valid) == 0
-    assert len(invalid) == 1
-    assert len(errors) == 1
-    assert "Missing 'timestamp'" in errors[0][0]
+    assert len(result.valid_records) == 0
+    assert len(result.invalid_records) == 1
+    assert len(result.errors) == 1
+    assert "Missing 'timestamp'" in result.errors[0][0]

@@ -17,7 +17,11 @@ from vllm.sampling_params import SamplingParams
 
 from .. import utils
 from ..config import SafeSynthesizerParameters
-from ..data_processing.record_utils import _parse_timestamp_to_seconds, extract_records_from_jsonl_string
+from ..data_processing.record_utils import (
+    ParsedRecord,
+    _parse_timestamp_to_seconds,
+    extract_records_from_jsonl_string,
+)
 from ..defaults import FIXED_RUNTIME_GENERATE_ARGS, LOG_DASHES, PSEUDO_GROUP_COLUMN
 from ..generation.batch import Batch
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
@@ -477,14 +481,15 @@ class TimeseriesBackend(VllmBackend):
             group_state: Current state of the group (provides the last
                 known timestamp).
         """
+        error = ("Out-of-order time step", "TimeSeries")
         for response in batch._responses:
             if not response.valid_records:
                 continue
             if self._is_chronological_for_group(response.valid_records, group_state):
                 continue
-            response.invalid_records.extend([json.dumps(record) for record in response.valid_records])
-            response.errors.extend([("Out-of-order time step", "TimeSeries")] * len(response.valid_records))
-            response.valid_records = []
+            for record in response.records:
+                if record.is_valid:
+                    record.invalidate(error)
 
     def _update_group_state(self, group_state: GroupState, records: list[dict]) -> None:
         """Update a group's state with new records.
@@ -767,7 +772,7 @@ class TimeseriesBackend(VllmBackend):
                 group_state = active_states[prompt_idx]
                 batch = group_batches[group_state.group_id]
                 for completion_idx, completion in enumerate(output.outputs):
-                    batch.process(completion_idx, completion.text)
+                    batch.process(completion_idx, completion.text, completion_tokens=len(completion.token_ids))
 
             duration = time.perf_counter() - start_time
 
@@ -839,9 +844,9 @@ class TimeseriesBackend(VllmBackend):
         Returns:
             List of valid records from the retained response.
         """
-        final_records = []
+        final_records: list[dict] = []
 
-        # Find the index of the response with the most valid records
+        # Find the index of the response with the most valid records.
         max_valid_idx = None
         max_valid_count = -1
         for idx, response in enumerate(batch._responses):
@@ -849,11 +854,14 @@ class TimeseriesBackend(VllmBackend):
             if count > max_valid_count:
                 max_valid_count = count
                 max_valid_idx = idx
+
+        trim_error = ("Extra response trimmed for sliding window", "TimeSeries")
         for idx, response in enumerate(batch._responses):
             if idx != max_valid_idx:
-                response.invalid_records = []
-                response.errors.extend([("Extra response trimmed for sliding window", "TimeSeries")])
-                response.valid_records = []
+                # Drop all records from the trimmed response; replace with a
+                # single synthetic marker record so the trim is visible in
+                # error statistics without carrying stale text/token counts.
+                response.records = [ParsedRecord(text="", error=trim_error)]
             else:
                 final_records.extend(response.valid_records)
 
