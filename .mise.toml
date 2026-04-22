@@ -8,8 +8,9 @@
 #   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
 
 
-# will warn when below this version
-min_version = { soft = '2026.4.0' }
+# mise itself is pinned by the Makefile (MISE_VERSION); this enforces the
+# same floor from mise's side so an older mise on PATH fails fast.
+min_version = '2026.4.11'
 
 [tools]
 # Tools for working with JSON, Git, and other system utilities.
