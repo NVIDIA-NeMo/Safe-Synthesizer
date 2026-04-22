@@ -50,29 +50,9 @@ help:
 MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
 MISE_VERSION := v2026.4.11
 
-# install.sh.sig is a GPG clearsigned document (not a detached signature).
-# gpg --decrypt verifies the signature and extracts the script in one step.
-# See: https://mise.jdx.dev/installing-mise.html
 .PHONY: install-mise
-install-mise: ## Install mise (GPG-verified when gpg is available)
-	@command -v mise >/dev/null 2>&1 || { \
-		set -euo pipefail; \
-		echo "mise not found -- installing..."; \
-		if command -v gpg >/dev/null 2>&1; then \
-			echo "Verifying installer signature..."; \
-			gpg --batch --no-tty --keyserver hkps://keys.openpgp.org \
-				--recv-keys $(MISE_GPG_KEY); \
-			tmpscript=$$(mktemp) && \
-			curl -fsSL https://mise.jdx.dev/install.sh.sig \
-				| gpg --batch --no-tty --decrypt > "$$tmpscript" && \
-			sh "$$tmpscript" && \
-			rm -f "$$tmpscript"; \
-		else \
-			echo "WARNING: gpg not available -- installing without signature verification"; \
-			curl -fsSL https://mise.run | sh; \
-		fi; \
-		command -v mise >/dev/null 2>&1 || { echo "ERROR: mise not found after install"; exit 1; }; \
-	}
+install-mise: ## Install mise $(MISE_VERSION) (GPG-verified when gpg + gpg-agent + dirmngr are all available)
+	@MISE_VERSION=$(MISE_VERSION) MISE_GPG_KEY=$(MISE_GPG_KEY) bash tools/install-mise.sh
 
 .PHONY: setup
 setup: install-mise ## Install dev tools via mise (installs mise itself if missing)
@@ -175,6 +155,28 @@ typecheck: ## Run ty type checks
 lock-check: ## Check that uv.lock is up to date
 	uv lock
 	git diff --exit-code uv.lock
+# NOTE: mise.lock drift check is intentionally disabled because of `yq`.
+#
+# The aqua-registry entry for `mikefarah/yq`
+# (https://github.com/aquaproj/aqua-registry/blob/main/pkgs/mikefarah/yq/registry.yaml)
+# ships no `checksum:` block and no `github_artifact_attestations:` block,
+# unlike every other tool we pin (jq, uv, ty, ruff, gh, prek, dprint,
+# ripgrep all have pre-validated sha256 + provenance in mise.lock). With
+# nothing to record from the registry, `mise lock` falls back to its own
+# provenance path: download the native-platform artifact and record a
+# `blake3:...` checksum. That fallback is skipped if the binary is already
+# in ~/.local/share/mise/installs, so a contributor with a warm mise cache
+# and a fresh CI runner generate subtly different `mise.lock` files (extra
+# native-platform `checksum = "blake3:..."` lines under `[tools.yq...]`).
+#
+# Upstream yq *does* publish a `checksums` release asset, so the real fix
+# is a one-line PR to aqua-registry adding the `checksum:` and
+# `github_artifact_attestations:` stanzas to `mikefarah/yq/registry.yaml`.
+# Once that lands (and the registry release is consumed by our pinned
+# mise), re-enable the drift check:
+#
+#	mise lock
+#	git diff --exit-code mise.lock
 
 .PHONY: check
 check: format-check typecheck ## Run all read-only CI checks locally

@@ -34,7 +34,7 @@ Or install from source:
 ```bash
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
-make setup # installs mise (if missing) + pinned tool versions from mise.lock
+make setup # installs the pinned mise version (if missing) + pinned tool versions from mise.lock
 make bootstrap-nss cuda
 ```
 

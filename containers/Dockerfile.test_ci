@@ -2,7 +2,7 @@ FROM python:3.11-slim AS setup
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        git curl build-essential make && \
+        git curl build-essential make gpg dirmngr gpg-agent && \
     rm -rf /var/lib/apt/lists/*
 
 # Keep venv outside /workspace so bind mounts don't shadow it
@@ -14,6 +14,8 @@ WORKDIR /workspace
 COPY .mise.toml .
 COPY mise.lock .
 COPY Makefile .
+RUN mkdir -p /workspace/tools
+COPY tools/install-mise.sh ./tools/install-mise.sh
 RUN make setup
 
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
