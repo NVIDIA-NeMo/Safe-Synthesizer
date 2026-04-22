@@ -15,9 +15,11 @@ from pydantic import ValidationError
 
 from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DEFAULT_ENTITIES,
+    UNKNOWN_ENTITY,
     ClassifyConfig,
     ColumnClassifierLLM,
     EntityExtractorGliner,
+    _format_prompt,
     merge_subsume,
     redact_from_entities,
     sample_columns,
@@ -191,6 +193,56 @@ def test_column_empty_after_filtered():
     assert cols.keys() == expected.keys()
     for name, expected_col in expected.items():
         assert_index_equal(expected_col, pd.Index(cols[name]), check_names=False)
+
+
+def test_format_prompt_renders_template_and_samples():
+    """Guards str.format + {{ }} example block: regression would break these invariants."""
+    df = pd.DataFrame(
+        {
+            "name_col": ["Alice"],
+            "count_col": [7],
+        }
+    )
+    prompt = _format_prompt(df, DEFAULT_ENTITIES, num_samples=2)
+    assert prompt is not None
+    assert "Valid types are: [" in prompt
+    assert "Additional instructions:" in prompt
+    # TEMPLATE uses {{ }} so the user message contains a single-brace JSON example
+    assert '{"prenom": "first_name"' in prompt
+    assert '"ciudad": "city"' in prompt
+    # Sampled columns (stable for one row per column)
+    assert "name_col: Alice" in prompt
+    assert "count_col: 7" in prompt
+    assert "Input:" in prompt and "Output:" in prompt
+    # Built-in type list + unknown
+    assert "first_name," in prompt
+    assert f"{UNKNOWN_ENTITY}," in prompt
+
+
+def test_format_prompt_includes_custom_entity_types():
+    """User-defined entity names are appended to the valid-types list before 'none'."""
+    custom = "custom_entity_acme"
+    df = pd.DataFrame({"x": [1]})
+    prompt = _format_prompt(df, DEFAULT_ENTITIES | {custom}, num_samples=1)
+    assert prompt is not None
+    assert f"{custom}," in prompt
+    none_idx = prompt.index(f"{UNKNOWN_ENTITY},")
+    custom_idx = prompt.index(f"{custom},")
+    assert custom_idx < none_idx, "custom types should appear before the unknown sentinel in the list"
+
+
+def test_format_prompt_returns_none_without_sampleable_columns():
+    long_str = (
+        "This is a very long string, and in fact it is so long that it needs to be filtered "
+        "from the column before samples are taken for column classification."
+    )
+    df = pd.DataFrame(
+        {
+            "ColA": [long_str, long_str, long_str],
+            "ColC": [np.nan, np.nan, np.nan],
+        }
+    )
+    assert _format_prompt(df, DEFAULT_ENTITIES, num_samples=3) is None
 
 
 def test_no_columns_after_filter():
