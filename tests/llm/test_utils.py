@@ -3,6 +3,8 @@
 
 """Unit tests for llm.utils helpers."""
 
+from pathlib import Path
+
 import pytest
 
 from nemo_safe_synthesizer.llm.utils import trust_remote_code_for_model
@@ -22,3 +24,7 @@ from nemo_safe_synthesizer.llm.utils import trust_remote_code_for_model
 )
 def test_trust_remote_code_for_model(model_name: str, expected: bool) -> None:
     assert trust_remote_code_for_model(model_name) is expected
+
+
+def test_trust_remote_code_for_model_path() -> None:
+    assert trust_remote_code_for_model(Path("/home/user/models/nvidia/Nemotron-Mini-4B-Instruct")) is False

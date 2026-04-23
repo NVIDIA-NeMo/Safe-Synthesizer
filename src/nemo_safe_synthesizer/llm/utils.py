@@ -27,7 +27,7 @@ from ..observability import get_logger
 logger = get_logger(__name__)
 
 
-def trust_remote_code_for_model(model_name: str) -> bool:
+def trust_remote_code_for_model(model_name: str | Path) -> bool:
     """Determine whether to trust remote code when loading a model.
 
     Returns ``True`` only for models whose name starts with
@@ -39,7 +39,7 @@ def trust_remote_code_for_model(model_name: str) -> bool:
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
-    return model_name.startswith("nvidia/")
+    return str(model_name).startswith("nvidia/")
 
 
 def cleanup_memory() -> None:
