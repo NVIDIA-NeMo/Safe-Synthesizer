@@ -13,7 +13,7 @@ Jobs are submitted via `submit_slurm_jobs.sh`, which launches a containerized `s
 - `submit_slurm_jobs.sh`: Submits Slurm array jobs for each config and dataset. Supports two-stage TRAIN→GEN pipeline.
 - `slurm_nss_matrix.sh`: Picks dataset and config and launches the python entrypoint inside the container. Honors `NSS_PHASE=train|generate|end_to_end`.
 - `slurm_srun.sh`: Wraps `srun` with container image and mounts, mostly just a pass through, primary logic is in `submit_slurm_jobs.sh` and `slurm_nss_matrix.sh`.
-- `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-unsloth`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
+- `configs/*.yaml`: Major configs we support. Use the config basenames from this directory in commands (for example, `smollm3-nodp`, `smollm3-dp`, etc.). The current set is the cross product of 3 pre-trained models and 2 DP settings (on or off).
 
 Pipeline entrypoints (invoked by Slurm scripts) via uv:
 - `uv run safe-synthesizer run --run-path <path>` (full end-to-end pipeline)
@@ -146,7 +146,7 @@ bash submit_slurm_jobs.sh --exp-name short_two_stage --dataset-group short --run
 # Example: Adult data (defined in NVIDIA internal dataset_registry.yaml), two configs, 5 runs each on polar4, use different wandb project from the exp name
 bash submit_slurm_jobs.sh \
   --dataset-urls adult \
-  --configs smollm3-unsloth,smollm3-dp \
+  --configs smollm3-nodp,smollm3-dp \
   --runs 5 \
   --partition polar4 \
   --exp-name regex_adult \
@@ -156,7 +156,7 @@ bash submit_slurm_jobs.sh \
 # Example: arbitrary path/url (not a named dataset from the dataset_registry.yaml), 1 config, 10 runs, with max 3 jobs running at a time
 bash submit_slurm_jobs.sh \
   --dataset-urls "https://raw.githubusercontent.com/gretelai/gretel-blueprints/refs/heads/main/sample_data/financial_transactions.csv" \
-  --configs tinyllama-unsloth \
+  --configs tinyllama-nodp \
   --runs 10 \
   --partition polar,polar3,polar4 \
   --exp-name financial_repeats \

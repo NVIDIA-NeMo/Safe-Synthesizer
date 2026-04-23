@@ -45,10 +45,10 @@ Records are converted to a JSON format and tokenized for model training. The ass
 
 ### 4. Training
 
-The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two
-backends are available -- Unsloth (default, faster) and HuggingFace (required
-for differential privacy). Both perform LoRA fine-tuning; see
-[Running -- Training](../user-guide/running.md#training) for details.
+The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation) via
+the HuggingFace backend with PEFT. Differential privacy (DP-SGD via Opacus) is
+optionally available. See [Running -- Training](../user-guide/running.md#training)
+for details.
 
 Three models have been extensively tested:
 

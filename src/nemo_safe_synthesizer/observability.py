@@ -105,7 +105,6 @@ PACKAGES_TO_SET_TO_WARN = [
     "torch.distributed",
     "torchao",
     "transformers",
-    "unsloth",
     "vllm",
     "wandb",
 ]

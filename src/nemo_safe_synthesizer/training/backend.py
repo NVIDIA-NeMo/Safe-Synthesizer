@@ -14,7 +14,6 @@ import abc
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pandas as pd
 from datasets import Dataset
@@ -36,9 +35,6 @@ from ..observability import get_logger
 from ..privacy.dp_transformers.dp_utils import (
     OpacusDPTrainer,
 )
-
-if TYPE_CHECKING:
-    from unsloth import FastLanguageModel
 
 logger = get_logger()
 
@@ -72,13 +68,10 @@ class NSSTrainerResult:
 class TrainingBackend(metaclass=abc.ABCMeta):
     """Abstract base class for LLM fine-tuning backends.
 
-    Subclasses must implement every abstract method. Two concrete
-    implementations are provided:
+    Subclasses must implement every abstract method. The primary concrete
+    implementation is
     [`HuggingFaceBackend`][nemo_safe_synthesizer.training.huggingface_backend.HuggingFaceBackend]
-    (standard HuggingFace Trainer with full DP-SGD support) and
-    [`UnslothTrainer`][nemo_safe_synthesizer.training.unsloth_backend.UnslothTrainer]
-    (Unsloth-optimized training with lower memory usage and faster
-    throughput, but no DP support).
+    (standard HuggingFace Trainer with full DP-SGD support).
 
     Args:
         params: NSS pipeline configuration.
@@ -127,8 +120,8 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     load_params: dict
     """Raw parameters used when calling ``from_pretrained``."""
 
-    trainer_type: type[OpacusDPTrainer | Trainer | FastLanguageModel]
-    """Trainer class to instantiate -- standard ``Trainer``, ``OpacusDPTrainer`` for DP, or ``FastLanguageModel`` for Unsloth."""
+    trainer_type: type[OpacusDPTrainer | Trainer]
+    """Trainer class to instantiate -- standard ``Trainer`` or ``OpacusDPTrainer`` for DP."""
 
     trainer: OpacusDPTrainer | Trainer
     """Instantiated trainer, created during ``prepare_params``."""

@@ -80,7 +80,7 @@ class TestRunName:
 
     def test_from_string_with_arbitrary_name(self):
         """from_string() accepts arbitrary non-timestamp strings."""
-        arbitrary_name = "unsloth_adult_0"
+        arbitrary_name = "my-experiment-run"
         run_name = RunName.from_string(arbitrary_name)
 
         assert run_name.to_string() == arbitrary_name
@@ -269,11 +269,11 @@ class TestWorkdir:
             base_path=fixture_session_cache_dir,
             config_name="test",
             dataset_name="data",
-            run_name="unsloth_adult_0",  # Job-style name
+            run_name="my-experiment-run",  # Job-style name
         )
 
-        assert workdir.run_name == "unsloth_adult_0"
-        assert workdir.run_dir == workdir.project_dir / "unsloth_adult_0"
+        assert workdir.run_name == "my-experiment-run"
+        assert workdir.run_dir == workdir.project_dir / "my-experiment-run"
         # Should have a RunName object that's not timestamp-based
         assert not workdir._run_name_obj.is_timestamp_based
 

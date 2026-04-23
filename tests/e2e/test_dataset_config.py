@@ -20,10 +20,8 @@ llm = pytest.importorskip(
 try:
     from vllm import LLM  # noqa: F401
 except ImportError:
-    pytest.skip(
-        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
-        allow_module_level=True,
-    )
+    skip_reason = "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
+    pytest.skip(skip_reason, allow_module_level=True)  # ty: ignore[invalid-argument-type,too-many-positional-arguments]
 
 
 def update_group_by_config(
@@ -43,10 +41,8 @@ def update_group_by_config(
 #   - enth: numeric/categorical and group-by dataset
 # Using pytest.mark.parametrize to DRY out repetitive tests.
 #
-# NOTE: SmolLM3 parametrizations (smollm3-dp, smollm3-unsloth) are not covered
+# NOTE: SmolLM3 parametrizations (smollm3-dp, smollm3-nodp) are not covered
 # by any GitHub Actions workflow -- they require manual GPU validation.
-# `make test-e2e` runs only test_safe_synthesizer.py, and the dedicated
-# `make test-nss-smollm3_dp-dow_jones_index-ci` target is not in any workflow.
 
 
 @pytest.mark.timeout(7200)
@@ -57,17 +53,17 @@ def update_group_by_config(
         ("mistral-dp.yaml", 4.5, 8.0),
         ("mistral-nodp.yaml", 5.0, 8.5),
         ("smollm3-dp.yaml", 7.0, 8.5),
-        ("smollm3-unsloth.yaml", 4.5, 8.5),
+        ("smollm3-nodp.yaml", 4.5, 8.5),
         ("tinyllama-dp.yaml", 7.0, 8.0),
-        ("tinyllama-unsloth.yaml", 8.0, 9.5),
+        ("tinyllama-nodp.yaml", 8.0, 9.5),
     ],
     ids=[
         "mistral-dp",
         "mistral-nodp",
         "smollm3-dp",
-        "smollm3-unsloth",
+        "smollm3-nodp",
         "tinyllama-dp",
-        "tinyllama-unsloth",
+        "tinyllama-nodp",
     ],
 )
 def test_clinc_oos_dataset(
@@ -121,21 +117,21 @@ def test_clinc_oos_dataset(
             marks=pytest.mark.xfail(reason="SmolLM3 DP sometimes fails with no or low valid records or timeout"),
         ),
         pytest.param(
-            "smollm3-unsloth.yaml",
+            "smollm3-nodp.yaml",
             6.0,
             6.0,
-            marks=pytest.mark.xfail(reason="SmolLM3 Unsloth sometimes fails with no or low valid records or timeout"),
+            marks=pytest.mark.xfail(reason="SmolLM3 no-DP sometimes fails with no or low valid records or timeout"),
         ),
         ("tinyllama-dp.yaml", 5.5, 6.0),
-        ("tinyllama-unsloth.yaml", 7.5, 7.0),
+        ("tinyllama-nodp.yaml", 7.5, 7.0),
     ],
     ids=[
         "mistral-dp",
         "mistral-nodp",
         "smollm3-dp",
-        "smollm3-unsloth",
+        "smollm3-nodp",
         "tinyllama-dp",
-        "tinyllama-unsloth",
+        "tinyllama-nodp",
     ],
 )
 def test_dow_jones_index_dataset(

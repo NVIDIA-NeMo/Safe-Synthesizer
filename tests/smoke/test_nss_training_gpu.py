@@ -37,7 +37,6 @@ def test_nss_train_dp_one_batch(local_tinyllama_dir, iris_df, tmp_path):
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
         pretrained_model=str(local_tinyllama_dir),
-        use_unsloth=False,
         num_input_records_to_sample=100,
         num_records=5,
         lora_r=8,

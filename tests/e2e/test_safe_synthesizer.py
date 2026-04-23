@@ -4,16 +4,6 @@
 """
 Basic e2e tests for NeMo Safe Synthesizer package.
 
-EXTREME WARNING: Due to unsloth's invasive patching of other libraries,
-this style of e2e test depends on the order pytest executes the tests.
-Running the default test first (which uses unsloth) will cause the DP
-test to subsequently fail because unsloth has patched transformers'
-modules in a way that's incompatible with DP.
-
-Recommended to run each test individually, as its own pytest invocation:
-uv run --frozen --extra cu128 pytest -s packages/nemo_safe_synthesizer/tests/e2e/ -k default
-uv run --frozen --extra cu128 pytest -s packages/nemo_safe_synthesizer/tests/e2e/ -k dp
-
 WARNING: Tests are not currently hermetic and require internet access for:
 - fetching the financial transactions dataset from github
 - loading model weights from huggingface hub
@@ -38,10 +28,8 @@ vllm = pytest.importorskip(
 try:
     from vllm import LLM  # noqa: F401
 except ImportError:
-    pytest.skip(
-        "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)",
-        allow_module_level=True,
-    )
+    skip_reason = "vllm with GPU support is required for these tests (install with: uv sync --extra cu128)"
+    pytest.skip(skip_reason, allow_module_level=True)  # ty: ignore[invalid-argument-type,too-many-positional-arguments]
 
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters

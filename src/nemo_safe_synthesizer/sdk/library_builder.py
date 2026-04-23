@@ -42,47 +42,6 @@ if TYPE_CHECKING:
     from ..training.backend import TrainingBackend
 
 
-def _get_unsloth_backend_class() -> type[TrainingBackend]:
-    """Lazily import and return the Unsloth training backend class.
-
-    The import is deferred so that the ``unsloth`` extra is only
-    required when Unsloth is actually selected as the backend.
-
-    Returns:
-        The ``UnslothTrainer`` class.
-    """
-    from ..training.unsloth_backend import UnslothTrainer
-
-    return UnslothTrainer
-
-
-def get_training_backend_class(config: SafeSynthesizerParameters) -> type[TrainingBackend]:
-    """Select the training backend class based on configuration.
-
-    Returns ``HuggingFaceBackend`` by default, or ``UnslothTrainer``
-    when ``config.training.use_unsloth`` is ``True``.
-
-    Args:
-        config: Resolved pipeline parameters.
-
-    Returns:
-        The training backend class to instantiate.
-
-    Raises:
-        ValueError: If the backend identifier is unrecognized.
-    """
-    class_map = {
-        "huggingface": HuggingFaceBackend,
-        "unsloth": _get_unsloth_backend_class(),
-    }
-    logger.user.info(f"Unsloth enabled: {config.training.use_unsloth}")
-    cls = "unsloth" if config.training.use_unsloth is True else "huggingface"
-    cls = class_map.get(cls)
-    if cls is None:
-        raise ValueError(f"Unsupported training backend: {config.training.use_unsloth}")
-    return cls
-
-
 class SafeSynthesizer(ConfigBuilder):
     """Fluent builder and runner for Safe Synthesizer workflows.
 
@@ -323,9 +282,9 @@ class SafeSynthesizer(ConfigBuilder):
     def train(self) -> SafeSynthesizer:
         """Fine-tune the base model on the processed training data.
 
-        Creates the training backend (HuggingFace or Unsloth), loads
-        the base model, and runs fine-tuning.  Requires
-        ``process_data()`` to have been called first.
+        Creates the HuggingFace training backend, loads the base model,
+        and runs fine-tuning.  Requires ``process_data()`` to have been
+        called first.
 
         Returns:
             Self for method chaining.
@@ -352,7 +311,7 @@ class SafeSynthesizer(ConfigBuilder):
         if not os.environ.get("NSS_PHASE"):
             os.environ["NSS_PHASE"] = "train"
 
-        self.trainer = get_training_backend_class(self._nss_config)(
+        self.trainer = HuggingFaceBackend(
             params=self._nss_config,
             model_metadata=self._llm_metadata,
             training_dataset=Dataset.from_pandas(self._training_df),
@@ -391,7 +350,7 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Clean up trainer model if it exists (only present when train->generate in same session)
         if hasattr(self, "trainer") and self.trainer is not None:
-            self.trainer.delete_trainable_model()  # ty: ignore[unresolved-attribute] -- delete_trainable_model is defined on HuggingFaceBackend/UnslothTrainer but not the abstract TrainingBackend base
+            self.trainer.delete_trainable_model()  # ty: ignore[unresolved-attribute] -- delete_trainable_model is defined on HuggingFaceBackend but not the abstract TrainingBackend base
 
         assert self._workdir is not None
         # Select backend based on time_series configuration

@@ -30,7 +30,7 @@ are cached, and which network endpoints are used.
 | `NSS_INFERENCE_ENDPOINT` | -- | LLM endpoint for PII column classification (default: `https://integrate.api.nvidia.com/v1`) |
 | `NSS_INFERENCE_KEY` | -- | API key for the `NSS_INFERENCE_ENDPOINT` is required for column classification in both CLI and SDK. |
 | `NIM_MODEL_ID` | -- | Column classification model ID |
-| `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (Unsloth, GLiNER) |
+| `LOCAL_FILES_ONLY` | -- | Set to `true` for offline mode (GLiNER) |
 | `SAFE_SYNTHESIZER_CPU_COUNT` | -- | NER CPU processes |
 
 ---
@@ -116,8 +116,8 @@ see the warning under `LOCAL_FILES_ONLY` below.
 
 ### `LOCAL_FILES_ONLY`
 
-Skips network downloads for the Unsloth backend and GLiNER. Not respected by
-the HuggingFace training backend or vLLM.
+Skips network downloads for GLiNER. Not respected by the HuggingFace training
+backend or vLLM.
 
 ```bash
 export LOCAL_FILES_ONLY=true

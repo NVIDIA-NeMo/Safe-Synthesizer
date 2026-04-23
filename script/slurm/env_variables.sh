@@ -12,11 +12,11 @@ export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_
 
 ## change the followings if you want them to be different
 CONFIGS=(
-    smollm3-unsloth
+    smollm3-nodp
     smollm3-dp
-    tinyllama-unsloth
+    tinyllama-nodp
     tinyllama-dp
-    mistral-unsloth
+    mistral-nodp
     mistral-dp
 ) # the jobs will run all datasets with these configs
 export NSS_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer" # where the nss repo is located

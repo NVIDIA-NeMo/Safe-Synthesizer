@@ -6,10 +6,8 @@
 from __future__ import annotations
 
 import gc
-from collections.abc import Generator
-from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import torch
 from accelerate import infer_auto_device_map, init_empty_weights
@@ -23,9 +21,6 @@ from transformers import (
     BitsAndBytesConfig,
     PreTrainedTokenizer,
 )
-
-if TYPE_CHECKING:
-    from unsloth import FastLanguageModel
 
 from ..observability import get_logger
 
@@ -241,33 +236,6 @@ def count_trainable_params(model: PeftModel) -> tuple[int, int]:
         if param.requires_grad:
             trainable_params += param.numel()
     return trainable_params, all_params
-
-
-@contextmanager
-def optimize_for_inference(
-    model: "FastLanguageModel" | "AutoModelForCausalLM",
-) -> Generator[None, Any, Any]:
-    """Context manager that applies Unsloth inference-time optimizations.
-
-    On enter, switches the model to inference mode via
-    ``FastLanguageModel.for_inference``.  On exit, reverts to training
-    mode.  If CUDA is unavailable or the model is not a
-    ``FastLanguageModel``, yields immediately without modification.
-
-    Args:
-        model: The language model to optimize.  Must be an Unsloth
-            ``FastLanguageModel`` for optimizations to take effect.
-
-    Yields:
-        None
-    """
-    if torch.cuda.is_available() and type(model).__name__ == "FastLanguageModel":
-        from unsloth import FastLanguageModel  # noqa: F401
-
-        FastLanguageModel.for_inference(model)
-        yield
-        FastLanguageModel.for_training(model)
-    yield
 
 
 def get_quantization_config(quantization_bits: Literal[4, 8]) -> BitsAndBytesConfig:

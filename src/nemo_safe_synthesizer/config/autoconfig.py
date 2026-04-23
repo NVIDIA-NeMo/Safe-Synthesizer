@@ -147,8 +147,8 @@ class AutoConfigResolver:
     """Resolve all ``"auto"`` sentinel values in ``SafeSynthesizerParameters``.
 
     Inspects the training dataset to compute concrete values for parameters
-    left as ``"auto"`` (rope scaling, number of input records, unsloth,
-    delta, max sequences per example). Resolution order matters:
+    left as ``"auto"`` (rope scaling, number of input records, learning
+    rate, delta, max sequences per example). Resolution order matters:
     ``rope_scaling_factor`` is resolved first because
     ``num_input_records_to_sample`` depends on it.
 
@@ -201,23 +201,6 @@ class AutoConfigResolver:
 
         num_records = choose_num_input_records_to_sample(rope_scaling_factor=self._rope_scaling_factor or 1)
         return {"num_input_records_to_sample": num_records}
-
-    def _determine_use_unsloth(self) -> dict[str, bool]:
-        """Determine whether to use unsloth if set to auto.
-
-        Returns:
-            Dict with use_unsloth if auto-determined, empty dict otherwise.
-        """
-        if self._config.training.use_unsloth != AUTO_STR:
-            logger.info(f"unsloth was set to {self._config.training.use_unsloth}, using that value")
-            return {}
-
-        if self._dp_enabled:
-            logger.info("unsloth was set to 'auto', disabling because DP is enabled")
-            return {"use_unsloth": False}
-        else:
-            logger.info("unsloth was set to 'auto', enabling")
-            return {"use_unsloth": True}
 
     def _determine_learning_rate(self) -> dict[str, float]:
         """
@@ -337,7 +320,6 @@ class AutoConfigResolver:
         training_params: dict[str, Any] = {}
         training_params.update(self._determine_rope_scaling_factor())
         training_params.update(self._determine_num_input_records_to_sample())
-        training_params.update(self._determine_use_unsloth())
         training_params.update(self._determine_learning_rate())
 
         # Determine data params
