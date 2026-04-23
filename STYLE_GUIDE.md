@@ -708,7 +708,7 @@ The before/after examples above demonstrate most rules. These additional points 
   ```
 
   Do not use the Sphinx `:meth:` / `:class:` / `:func:` syntax -- it renders as literal text in MkDocs
-- __init__.py files do not need docstrings.
+- `__init__.py` files belong only in `src/` package directories -- never in `tests/`. They do not need docstrings.
 - Docstrings on Python Click command methods are used for the --help details on the CLI, so may not fully conform to the general method docstring guidance.
   They should be written for the CLI user, and not for a developer working on the code.
   For example, should not include `Args:`, the args are already documented for CLI usage through the `click.options` decorators.
@@ -829,6 +829,12 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 ---
 
 ## General conventions
+
+### Package structure
+
+Every directory under `src/` that contains Python files must include an `__init__.py` file, even if empty. This ensures the directory is recognized as a Python package by the import machinery and by tooling (`pytest`, `ruff`, `ty`).
+
+`__init__.py` files must never be added under `tests/`. Test directories are discovered by `pytest` via its `rootdir` and `testpaths`, not through Python package imports. Adding `__init__.py` files there creates unnecessary coupling, can shadow production package names, and may interfere with `pytest`'s `import-mode=importlib`.
 
 ### Copyright headers
 
