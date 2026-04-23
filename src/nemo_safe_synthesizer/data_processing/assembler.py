@@ -24,8 +24,11 @@ from transformers import PreTrainedTokenizer
 from .. import utils
 from ..config.parameters import SafeSynthesizerParameters
 from ..data_processing.record_utils import (
+    POSITIONAL_EOR,
+    POSITIONAL_SEP,
     extract_records_from_jsonl_string,
     records_to_jsonl,
+    records_to_positional_sequence,
 )
 from ..data_processing.stats import (
     RunningStatistics,
@@ -270,6 +273,7 @@ class TrainingExampleAssembler(ABC):
         test_size: int | None = None,
         cache_file_path: str | Path | None = None,
         seed: int | None = None,  # TODO: probably should include with metadata!
+        serialization_format: str = "json",
         *args,
         **kwargs,
     ):
@@ -284,6 +288,7 @@ class TrainingExampleAssembler(ABC):
 
         self.metadata = metadata
         self.tokenizer = tokenizer
+        self.serialization_format = serialization_format
         self.stats = defaultdict(RunningStatistics)
         self.stats_val = defaultdict(RunningStatistics)
         # adding this extra instead of "" due to hf datasets being weird about the cache path parent dirs -
@@ -399,6 +404,7 @@ class TrainingExampleAssembler(ABC):
                 seed=seed,
                 cache_file_path=cache_file_path,
                 keep_columns=keep_columns,
+                serialization_format=config.data.serialization_format,
                 **kwargs,
             )
 
@@ -413,6 +419,7 @@ class TrainingExampleAssembler(ABC):
                 seed=seed,
                 cache_file_path=cache_file_path,
                 keep_columns=keep_columns,
+                serialization_format=config.data.serialization_format,
                 **kwargs,
             )
         else:
@@ -423,6 +430,7 @@ class TrainingExampleAssembler(ABC):
                 test_size=config.training.validation_ratio,
                 seed=seed,
                 cache_file_path=cache_file_path,
+                serialization_format=config.data.serialization_format,
                 keep_columns=keep_columns,
                 **kwargs,
             )
@@ -447,6 +455,53 @@ class TrainingExampleAssembler(ABC):
             records = {k: v for k, v in records.items() if k not in exclude_columns}
         jsonl = records_to_jsonl(records)
         return {"text": [f"{r}\n" for r in extract_records_from_jsonl_string(jsonl)]}
+
+    @staticmethod
+    def _convert_records_to_positional(
+        records: dict[str, list],
+        exclude_columns: list[str] | None = None,
+        sep: str = POSITIONAL_SEP,
+        eor: str = POSITIONAL_EOR,
+    ) -> dict[str, list[str]]:
+        """Convert columnar records to positional value-only sequences.
+
+        Each record becomes ``v1<sep>v2<sep>...<sep>vN<eor>\\n`` with column
+        identity carried by position (schema is imposed after generation,
+        not here).
+
+        Args:
+            records: Dictionary of column names to list of values.
+            exclude_columns: Column names to exclude (e.g., pseudo-group).
+            sep: Inter-field separator token.
+            eor: End-of-record token.
+
+        Returns:
+            Dictionary with a single ``text`` key mapping to a list of
+            newline-terminated positional strings, one per record.
+        """
+        if exclude_columns:
+            records = {k: v for k, v in records.items() if k not in exclude_columns}
+        column_order = list(records.keys())
+        per_record: list[str] = []
+        # records[col] is a parallel list; iterate row-wise.
+        if column_order:
+            n_rows = len(records[column_order[0]])
+            for i in range(n_rows):
+                row = {c: records[c][i] for c in column_order}
+                per_record.append(
+                    records_to_positional_sequence([row], column_order, sep=sep, eor=eor).rstrip("\n") + "\n"
+                )
+        return {"text": per_record}
+
+    def _convert_records_to_text(
+        self,
+        records: dict[str, list],
+        exclude_columns: list[str] | None = None,
+    ) -> dict[str, list[str]]:
+        """Dispatch record serialization based on ``self.serialization_format``."""
+        if self.serialization_format == "positional":
+            return self._convert_records_to_positional(records, exclude_columns=exclude_columns)
+        return self._convert_records_to_jsonl(records, exclude_columns=exclude_columns)
 
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Split the dataset into training and test sets."""
@@ -478,12 +533,12 @@ class TrainingExampleAssembler(ABC):
                 f"{max_tokens_action}"
             )
             raise GenerationError(msg)
-        # Exclude pseudo-group column from JSONL so the model never sees it
-        record_jsonl = self._convert_records_to_jsonl(
+        # Exclude pseudo-group column from serialized text so the model never sees it
+        record_text = self._convert_records_to_text(
             dict(records),
             exclude_columns=[PSEUDO_GROUP_COLUMN],
         )
-        tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
+        tokenized = self.tokenizer(record_text["text"], add_special_tokens=False)
         max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
         # Both the prompt and the records are enclosed by special tokens.
         # TODO: This is no longer always accurate, sometimes only a bos token is
@@ -499,7 +554,7 @@ class TrainingExampleAssembler(ABC):
                 )
                 raise GenerationError(msg)
             self.stats["tokens_per_record"].update(len(ids))
-        tokenized.update({"text": record_jsonl["text"]})
+        tokenized.update({"text": record_text["text"]})
         return tokenized
 
     def _tokenize_dataset(self, dataset: Dataset, keep_columns: list[str] | None = None) -> Dataset:

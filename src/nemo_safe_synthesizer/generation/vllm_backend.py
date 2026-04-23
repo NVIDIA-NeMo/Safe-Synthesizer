@@ -28,6 +28,7 @@ from ..errors import InternalError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
+from ..data_processing.record_utils import POSITIONAL_EOR
 from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
@@ -231,7 +232,21 @@ class VllmBackend(GeneratorBackend):
 
         Returns:
             StructuredOutputsParams if structured generation is enabled, None otherwise.
+
+        Note:
+            Positional serialization (``config.data.serialization_format == "positional"``)
+            intentionally bypasses structured-output FSM constraints: the model emits
+            value-only tokens terminated by ``<|eor|>`` and the detected schema is
+            imposed per-column post-hoc by :class:`ValuePostProcessor`. Applying the
+            JSON-derived regex here would misconstrain the decoder.
         """
+        if self.config.data.serialization_format == "positional":
+            logger.info(
+                "Positional serialization active; skipping structured-output FSM. "
+                "Schema is imposed per-column after generation."
+            )
+            return None
+
         if not self.config.generation.use_structured_generation:
             return None
 
@@ -352,6 +367,16 @@ class VllmBackend(GeneratorBackend):
         resolved_temperature = self._resolve_temperature(kwargs)
         api_mapping = self._get_api_param_mapping(resolved_temperature)
         sampling_params = self._transform_kwargs_to_sampling_params(kwargs, api_mapping)
+
+        # Positional serialization has no regex FSM; stop cleanly when the
+        # model emits the end-of-record sentinel. vLLM's ``stop`` handles
+        # multi-token string sentinels regardless of tokenizer vocabulary.
+        if self.config.data.serialization_format == "positional":
+            existing_stop = sampling_params.get("stop") or []
+            if isinstance(existing_stop, str):
+                existing_stop = [existing_stop]
+            if POSITIONAL_EOR not in existing_stop:
+                sampling_params["stop"] = [*existing_stop, POSITIONAL_EOR]
 
         real_params = SamplingParams(**sampling_params)
         logger.debug(f"SamplingParams: {real_params!r}")
@@ -524,6 +549,9 @@ class VllmBackend(GeneratorBackend):
         generation_start = time.monotonic()
 
         need_special_token_outputs = not isinstance(self.processor, TabularDataProcessor)
+        # Positional parsing needs the <|eor|> sentinel in the output so
+        # ``extract_records_from_positional_string`` can split on it.
+        is_positional = self.config.data.serialization_format == "positional"
         sampling_kwargs = dict(
             temperature=self.config.generation.temperature,
             repetition_penalty=self.config.generation.repetition_penalty,
@@ -532,7 +560,7 @@ class VllmBackend(GeneratorBackend):
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
             max_tokens=self.model_metadata.max_seq_length,
             skip_special_tokens=not need_special_token_outputs,
-            include_stop_str_in_output=need_special_token_outputs,
+            include_stop_str_in_output=need_special_token_outputs or is_positional,
             ignore_eos=False,
         )
 

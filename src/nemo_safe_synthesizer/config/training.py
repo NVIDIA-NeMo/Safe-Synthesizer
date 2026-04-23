@@ -8,8 +8,11 @@ from typing import (
     Literal,
 )
 
+import platform
+
 from pydantic import (
     Field,
+    model_validator,
 )
 
 from ..configurator.parameters import (
@@ -269,3 +272,60 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = "kernels-community/vllm-flash-attn3"
+
+    @model_validator(mode="after")
+    def _auto_fallback_attn_for_unsupported_gpus(self) -> "TrainingHyperparams":
+        """Silently fall back to ``sdpa`` on hardware without a matching kernel.
+
+        The default attention backend ``kernels-community/vllm-flash-attn3`` (and
+        the bundled xformers flash-attn2 that Unsloth pulls in) ship prebuilt
+        kernels for a limited set of GPU architectures. Running on an arch with
+        no matching kernel throws a CUDA "no kernel image is available for
+        execution on the device" error at the first forward pass, which is
+        opaque to end users.
+
+        This validator overrides the default to ``sdpa`` (PyTorch's built-in,
+        arch-agnostic attention) when the runtime is known-incompatible:
+
+        * ``aarch64`` CPUs — the kernels-hub wheels target x86_64.
+        * Blackwell datacenter GPUs (compute capability 10.0 — B200, B100) —
+          current flash-attn kernels predate sm_100 support.
+
+        A user-supplied non-default value is never overridden, so opting into a
+        specific backend is respected. The fallback is logged at INFO so it
+        shows up in run logs.
+        """
+        if self.attn_implementation != "kernels-community/vllm-flash-attn3":
+            return self
+
+        reason: str | None = None
+
+        if platform.machine() == "aarch64":
+            reason = "aarch64 CPU (no matching prebuilt kernel)"
+        else:
+            try:
+                import torch
+
+                if not torch.cuda.is_available():
+                    reason = "no CUDA device available (flash-attn requires CUDA)"
+                else:
+                    major, _minor = torch.cuda.get_device_capability(0)
+                    if major >= 10:
+                        reason = (
+                            f"GPU compute capability sm_{major}0 "
+                            f"(no sm_{major}0 flash-attn kernel available)"
+                        )
+            except Exception:
+                # Avoid blocking config construction on torch init / CUDA probe.
+                pass
+
+        if reason is not None:
+            import logging
+
+            logging.getLogger(__name__).info(
+                "Auto-overriding training.attn_implementation "
+                "'kernels-community/vllm-flash-attn3' -> 'sdpa' (%s).",
+                reason,
+            )
+            self.attn_implementation = "sdpa"
+        return self

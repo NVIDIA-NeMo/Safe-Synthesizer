@@ -60,3 +60,41 @@ def test_full_pipeline_smollm2(iris_df, smoke_save_path):
     )
     print(result.df.to_string(max_rows=20))
     print("--- end results ---\n")
+
+
+@pytest.mark.usefixtures("_patch_attn_eager")
+def test_full_pipeline_smollm2_positional(iris_df, smoke_save_path):
+    """Same as ``test_full_pipeline_smollm2`` but with ``serialization_format='positional'``.
+
+    Exercises the Phase-1 schema-external path end to end: positional
+    row format during training, vLLM regex FSM bypassed at generation,
+    and per-column coercion via ``ValuePostProcessor``.
+    """
+    config = SafeSynthesizerParameters.from_params(
+        replace_pii=None,
+        pretrained_model="HuggingFaceTB/SmolLM2-135M",
+        use_unsloth=False,
+        num_input_records_to_sample=50,
+        num_records=10,
+        holdout=0,
+        max_holdout=0,
+        serialization_format="positional",
+    )
+    nss = SafeSynthesizer(config=config, save_path=smoke_save_path)
+    nss.with_data_source(iris_df).process_data().train()
+
+    try:
+        nss.generate()
+    except GenerationError as exc:
+        assert "generation stopped prematurely" in str(exc).lower(), f"Unexpected GenerationError: {exc}"
+        return
+
+    result = nss.generator.gen_results
+    assert result is not None
+    print("\n--- SmolLM2-135M (positional) generation results ---")
+    print(
+        f"valid: {result.num_valid_records}  invalid: {result.num_invalid_records}  "
+        f"fraction valid: {result.valid_record_fraction:.2%}"
+    )
+    print(result.df.to_string(max_rows=20))
+    print("--- end results ---\n")

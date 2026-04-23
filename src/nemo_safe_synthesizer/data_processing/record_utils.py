@@ -18,14 +18,21 @@ from csv import QUOTE_NONNUMERIC
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import StringIO
+from typing import TYPE_CHECKING
 
 import jsonschema
 import pandas as pd
 
 from ..observability import get_logger
 
+if TYPE_CHECKING:
+    from .value_post_processor import ValuePostProcessor
+
 RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
 RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
+
+POSITIONAL_SEP = "<|sep|>"
+POSITIONAL_EOR = "<|eor|>"
 
 logger = get_logger()
 
@@ -554,3 +561,130 @@ def records_to_jsonl(records: pd.DataFrame | list[dict] | dict) -> str:
         return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
     else:
         raise ValueError(f"Unsupported type: {type(records)}")
+
+
+def records_to_positional_sequence(
+    records: pd.DataFrame | list[dict] | dict,
+    column_order: list[str],
+    sep: str = POSITIONAL_SEP,
+    eor: str = POSITIONAL_EOR,
+) -> str:
+    """Serialize records as positional value-only sequences.
+
+    Rows become ``v1<sep>v2<sep>...<sep>vN<eor>\\n`` strings with no JSON
+    keys or braces; column identity is carried by position. The schema is
+    imposed after generation, not during serialization.
+
+    Args:
+        records: DataFrame, list-of-dicts, or column-of-lists mapping.
+        column_order: Column names in canonical order; every row is
+            emitted with exactly this many values in this order. Missing
+            values are rendered as ``""``.
+        sep: Inter-field separator token.
+        eor: End-of-record token.
+
+    Returns:
+        Newline-joined multi-row string with a trailing newline.
+    """
+    if isinstance(records, pd.DataFrame):
+        df = records
+    elif isinstance(records, (list, dict)):
+        df = pd.DataFrame(records)
+    else:
+        raise ValueError(f"Unsupported type: {type(records)}")
+
+    missing = [c for c in column_order if c not in df.columns]
+    if missing:
+        raise ValueError(f"records missing columns from column_order: {missing}")
+
+    def _render(v: object) -> str:
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return ""
+        return str(v)
+
+    lines: list[str] = []
+    for row in df[column_order].itertuples(index=False, name=None):
+        rendered = [_render(v) for v in row]
+        lines.append(sep.join(rendered) + eor)
+
+    return "\n".join(lines) + "\n" if lines else ""
+
+
+def extract_records_from_positional_string(
+    text: str,
+    eor: str = POSITIONAL_EOR,
+) -> list[str]:
+    """Extract per-row payloads delimited by ``eor``.
+
+    Each returned string is the pre-eor content of one row, stripped of
+    leading/trailing whitespace. Rows without a terminating ``eor`` are
+    discarded (partial/truncated generations).
+    """
+    parts = text.split(eor)
+    # Only parts[:-1] are followed by an ``eor``; parts[-1] is either empty
+    # (well-terminated input) or a truncated tail we discard.
+    rows: list[str] = []
+    for chunk in parts[:-1]:
+        stripped = chunk.strip("\n").strip()
+        if stripped:
+            rows.append(stripped)
+    return rows
+
+
+def extract_and_validate_positional_records(
+    text: str,
+    processor: ValuePostProcessor,
+    column_order: list[str],
+    sep: str = POSITIONAL_SEP,
+    eor: str = POSITIONAL_EOR,
+    encode: Callable[[str], list[int]] | None = None,
+) -> ParsedResponse:
+    """Extract and schema-validate positional rows from a raw generation.
+
+    Mirrors the contract of
+    :func:`extract_and_validate_records` for the JSON path: returns a
+    :class:`ParsedResponse` with per-row ``parsed`` dicts on success
+    and ``error`` tuples on failure. Per-column coercion/clamping is
+    delegated to ``processor``.
+
+    Args:
+        text: Raw generated text, possibly containing many rows.
+        processor: Configured :class:`ValuePostProcessor` that imposes
+            the detected schema.
+        column_order: Column names in the same order the serializer used.
+        sep: Inter-field separator token.
+        eor: End-of-record token.
+        encode: Optional tokenizer encode callable for per-row token counts.
+    """
+    records: list[ParsedRecord] = []
+    tokenization_time = 0.0
+    timed = timed_encode(encode)
+
+    for row_text in extract_records_from_positional_string(text, eor=eor):
+        n_tokens, dt = timed(row_text)
+        tokenization_time += dt
+
+        raw_values = row_text.split(sep)
+        if len(raw_values) != len(column_order):
+            error = (
+                f"expected {len(column_order)} values, got {len(raw_values)}",
+                "Positional",
+            )
+            records.append(ParsedRecord(text=row_text, error=error, token_count=n_tokens))
+            continue
+
+        parsed: dict = {}
+        error: tuple[str, str] | None = None
+        for col_name, raw in zip(column_order, raw_values, strict=True):
+            try:
+                parsed[col_name] = processor.process(col_name, raw)
+            except Exception as exc:
+                error = (f"{col_name}: {exc}", "Positional")
+                break
+
+        if error is not None:
+            records.append(ParsedRecord(text=row_text, error=error, token_count=n_tokens))
+        else:
+            records.append(ParsedRecord(text=row_text, parsed=parsed, token_count=n_tokens))
+
+    return ParsedResponse(records=records, tokenization_time_sec=tokenization_time)

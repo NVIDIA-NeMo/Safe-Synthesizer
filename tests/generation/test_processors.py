@@ -84,6 +84,30 @@ def test_tabular_data_processor(
     assert response.prompt_number == 1
 
 
+# Purpose: TabularDataProcessor with serialization_format="positional" parses <|sep|>/<|eor|> rows.
+# Data: Two rows in positional format over the Iris schema.
+# Asserts: both rows valid; values parsed per column; no schema validation errors.
+def test_tabular_data_processor_positional(
+    fixture_valid_iris_dataset_jsonl_and_schema, fixture_validation_config: ValidationParameters
+):
+    _, jsonl_schema = fixture_valid_iris_dataset_jsonl_and_schema
+    cols = list(jsonl_schema["properties"].keys())
+    positional_text = (
+        "<|sep|>".join(["5.1", "3.5", "1.4", "0.2", "Setosa"][: len(cols)])
+        + "<|eor|>\n"
+        + "<|sep|>".join(["4.9", "3.0", "1.4", "0.2", "Setosa"][: len(cols)])
+        + "<|eor|>\n"
+    )
+    response = TabularDataProcessor(
+        schema=jsonl_schema,
+        config=fixture_validation_config,
+        serialization_format="positional",
+    )(1, positional_text)
+    assert len(response.valid_records) == 2
+    assert len(response.invalid_records) == 0
+    assert response.prompt_number == 1
+
+
 # Purpose: GroupedDataProcessor should reject input not wrapped in BOS/EOS group blocks.
 # Data: Raw JSONL without BOS/EOS.
 # Asserts: 0 valid; entire input counted as 1 invalid; one error emitted.

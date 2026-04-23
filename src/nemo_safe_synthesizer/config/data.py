@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import (
     Annotated,
+    Literal,
 )
 
 from pydantic import (
@@ -101,6 +102,22 @@ class DataParameters(Parameters):
             description="Random state for holdout split to ensure reproducibility.",
         ),
     ] = None
+
+    serialization_format: Annotated[
+        Literal["json", "positional"],
+        Field(
+            description=(
+                "Row serialization format used for training and generation. "
+                "``'json'`` (default) serializes each row as a JSON object (``{\"col\": val, ...}``) "
+                "and validates generated output with ``jsonschema``. "
+                "``'positional'`` serializes each row as value-only tokens "
+                "(``val<|sep|>val<|sep|>...<|eor|>``) with column identity carried by position; "
+                "the detected schema is imposed per-column after generation via "
+                "``ValuePostProcessor``. Positional format eliminates schema-validation "
+                "errors by construction and frees the model from learning JSON syntax."
+            ),
+        ),
+    ] = "json"
 
     @field_validator("random_state", mode="after", check_fields=False)
     def set_random_state_if_none(cls, v: int | int | None) -> int | None:
