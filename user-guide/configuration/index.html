@@ -7884,8 +7884,6 @@
       
         
       
-        
-      
     
     
     
@@ -8032,34 +8030,6 @@
     
   
     timeseries_preprocessing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    unsloth_backend
   
 
     
@@ -8702,12 +8672,6 @@ for the full field list.</p>
 <td>See supported families below; <code>TinyLlama/TinyLlama-1.1B-Chat-v1.0</code> for fast CPU/low-VRAM iteration</td>
 </tr>
 <tr>
-<td><code>training.use_unsloth</code></td>
-<td><code>"auto"</code></td>
-<td>Use the Unsloth backend. Set to <code>false</code> or leave at <code>"auto"</code> when using DP (<code>"auto"</code> resolves to <code>false</code> when DP is enabled)</td>
-<td>Leave at <code>"auto"</code></td>
-</tr>
-<tr>
 <td><code>training.quantize_model</code></td>
 <td><code>false</code></td>
 <td>Enable quantization to reduce VRAM usage</td>
@@ -9014,7 +8978,6 @@ learn about any individual record. Safe Synthesizer implements DP-SGD
 </table>
 <p>Compatibility constraints:</p>
 <ul>
-<li>Set <code>training.use_unsloth</code> to <code>false</code> or leave it at <code>"auto"</code> -- <code>"auto"</code> resolves to <code>false</code> when DP is enabled (Unsloth is incompatible with Opacus's per-sample gradient hooks)</li>
 <li><code>data.max_sequences_per_example</code> must be <code>1</code> (or <code>"auto"</code>, which resolves to <code>1</code> when DP is enabled) -- must be 1 to limit each example's contribution to the gradient, which DP requires</li>
 <li>Safe Synthesizer disables gradient checkpointing automatically when DP is enabled -- no user action required (gradient checkpointing is incompatible with Opacus)</li>
 </ul>

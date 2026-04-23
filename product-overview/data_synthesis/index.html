@@ -7845,8 +7845,6 @@
       
         
       
-        
-      
     
     
     
@@ -7993,34 +7991,6 @@
     
   
     timeseries_preprocessing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    unsloth_backend
   
 
     
@@ -8527,9 +8497,7 @@
 <li>Generates new records that maintain statistical properties with no one-to-one mapping to original records</li>
 <li>Supports various model sizes and architectures</li>
 </ul>
-<p>Two backends are available: Unsloth (default, faster) and HuggingFace
-(required for differential privacy). Both perform LoRA fine-tuning; see
-<a href="../../user-guide/running/#training">Running -- Training</a> for a comparison.</p>
+<p>Fine tuning uses the HuggingFace Trainer, with customizations supporting differentially private fine tuning (DP-SGD).</p>
 <p>Three models have been extensively tested:</p>
 <table>
 <thead>

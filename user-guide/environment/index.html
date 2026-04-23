@@ -7912,8 +7912,6 @@
       
         
       
-        
-      
     
     
     
@@ -8060,34 +8058,6 @@
     
   
     timeseries_preprocessing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    unsloth_backend
   
 
     
@@ -8736,7 +8706,7 @@ are cached, and which network endpoints are used.</p>
 <tr>
 <td><code>LOCAL_FILES_ONLY</code></td>
 <td>--</td>
-<td>Set to <code>true</code> for offline mode (Unsloth, GLiNER)</td>
+<td>Set to <code>true</code> for offline mode (GLiNER)</td>
 </tr>
 <tr>
 <td><code>SAFE_SYNTHESIZER_CPU_COUNT</code></td>
@@ -8844,8 +8814,8 @@ access a model that is not already cached raises an error immediately.</p>
 <p>Prefer this over <code>LOCAL_FILES_ONLY</code> for the most reliable offline experience --
 see the warning under <code>LOCAL_FILES_ONLY</code> below.</p>
 <h3 id="local_files_only"><code>LOCAL_FILES_ONLY</code><a class="headerlink" href="#local_files_only" title="Permanent link">&para;</a></h3>
-<p>Skips network downloads for the Unsloth backend and GLiNER. Not respected by
-the HuggingFace training backend or vLLM.</p>
+<p>Skips network downloads for GLiNER. Not respected by the HuggingFace training
+backend or vLLM.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LOCAL_FILES_ONLY</span><span class="o">=</span><span class="nb">true</span>
 </span></code></pre></div>
 <div class="admonition warning">

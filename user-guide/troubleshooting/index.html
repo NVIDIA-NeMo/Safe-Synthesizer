@@ -8158,8 +8158,6 @@
       
         
       
-        
-      
     
     
     
@@ -8306,34 +8304,6 @@
     
   
     timeseries_preprocessing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    unsloth_backend
   
 
     
@@ -9193,18 +9163,8 @@ configuration, and NER parallelism, see <a href="../environment/">Environment Va
 <td><a href="#out-of-memory-during-evaluation">Reduce columns or disable eval</a></td>
 </tr>
 <tr>
-<td>"Cannot use unsloth without GPU"</td>
-<td>No CUDA device</td>
-<td><a href="#no-gpu-detected">Switch to HuggingFace backend</a></td>
-</tr>
-<tr>
 <td>"max_sequences_per_example must be 1"</td>
 <td>Incompatible DP config</td>
-<td><a href="../configuration/#differential-privacy">Configuration Reference -- Differential Privacy</a></td>
-</tr>
-<tr>
-<td>"Unsloth not compatible with DP"</td>
-<td>Mutual exclusion</td>
 <td><a href="../configuration/#differential-privacy">Configuration Reference -- Differential Privacy</a></td>
 </tr>
 <tr>
@@ -9341,10 +9301,8 @@ stack traces. If you see <code>torch.cuda.OutOfMemoryError</code>:</p>
 <a href="https://huggingface.co/docs/transformers/en/perf_train_gpu_one">Methods and tools for efficient training on a single GPU</a>
 in the HuggingFace documentation.</p>
 <h3 id="no-gpu-detected">No GPU Detected<a class="headerlink" href="#no-gpu-detected" title="Permanent link">&para;</a></h3>
-<p>If Safe Synthesizer fails to find a GPU, the Unsloth backend raises immediately:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>RuntimeError: Cannot use unsloth without GPU.
-</span></code></pre></div>
-<p>The HuggingFace backend will not error but will attempt to use CPU (extremely slow).</p>
+<p>If training fails to find a GPU, the HuggingFace backend will attempt to use
+CPU (extremely slow and not recommended for production training).</p>
 <p>To diagnose:</p>
 <ol>
 <li>Verify NVIDIA drivers: <code>nvidia-smi</code></li>
@@ -9353,8 +9311,6 @@ in the HuggingFace documentation.</p>
    See <a href="../getting-started/#install-the-package">Installation</a> for the
    full command with required index URLs.</li>
 </ol>
-<p>Switch to the HuggingFace backend for CPU-only environments (useful for
-development, not recommended for production training).</p>
 <h3 id="context-length-and-record-fitting">Context Length and Record Fitting<a class="headerlink" href="#context-length-and-record-fitting" title="Permanent link">&para;</a></h3>
 <p>The effective context window (<code>max_seq_length</code>) is a computed property on
 <a class="autorefs autorefs-internal" title="            ModelMetadata
@@ -9368,11 +9324,11 @@ fit within this window. If it doesn't, data assembly fails with a
 <code>GenerationError</code> before training even starts.</p>
 <h4 id="when-records-dont-fit">When Records Don't Fit<a class="headerlink" href="#when-records-dont-fit" title="Permanent link">&para;</a></h4>
 <p>Two error messages indicate context-length problems during data assembly:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>The number of tokens in an example exceeds the available context length
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>The number of tokens in an example exceeds the available context length
 </span></code></pre></div>
 <p>A single training example (schema prompt + records) exceeds
 <code>max_seq_length</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The dataset schema requires more tokens than the max length of the model
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>The dataset schema requires more tokens than the max length of the model
 </span></code></pre></div>
 <p>The schema prompt alone is wider than <code>max_seq_length</code> -- typically
 because the table has too many columns for the model's context window.</p>
@@ -9424,7 +9380,7 @@ a 200-record dataset with 12 groups can compress into as few as 2 training
 examples. Combined with <code>gradient_accumulation_steps=8</code> (default), this
 yields only 1 gradient step -- effectively no training.</p>
 <p>The training log confirms this pattern:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Num examples = 2 | Num Epochs = 1 | Total steps = 1
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Num examples = 2 | Num Epochs = 1 | Total steps = 1
 </span></code></pre></div>
 <p>Training duration is controlled by <code>training.num_input_records_to_sample</code>,
 not epochs. The internal <code>data_fraction</code> is computed as
@@ -9442,8 +9398,8 @@ with grouped data:</p>
 <li>If reducing groups per example is not enough, increase
   <code>num_input_records_to_sample</code>. Set it to <code>N * dataset_size</code> for
   approximately N passes over the data.</li>
-<li>Watch for <code>Total steps = 1</code> in the Unsloth/Trainer output -- this means
-  the model barely trained</li>
+<li>Watch for <code>Total steps = 1</code> in the Trainer output -- this means the model
+  barely trained</li>
 </ul>
 <hr />
 <h2 id="generation">Generation<a class="headerlink" href="#generation" title="Permanent link">&para;</a></h2>
@@ -9501,7 +9457,7 @@ token -- this typically indicates insufficient training (see
 <h3 id="generationerror">GenerationError<a class="headerlink" href="#generationerror" title="Permanent link">&para;</a></h3>
 <p>Generation failures during synthetic data production. The two most common:</p>
 <dl>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Generation stopped prematurely due to no valid records
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Generation stopped prematurely due to no valid records
 </span></code></pre></div></dt>
 <dd>
 <p>The first batch produced zero valid records. The model may be underfitting
@@ -9509,7 +9465,7 @@ token -- this typically indicates insufficient training (see
   <code>training.num_input_records_to_sample</code> to give the model more context,
   and check training logs for quality issues.</p>
 </dd>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
 </span></code></pre></div></dt>
 <dd>
 <p>Too many invalid records across <code>generation.patience</code> consecutive batches.
@@ -9589,9 +9545,6 @@ See <a href="../configuration/">Configuration Reference</a> for the full list.</
   see <a href="#context-length-and-record-fitting">Context Length and Record Fitting</a>
   for details and caveats</li>
 <li><code>training.num_input_records_to_sample</code> -- derived from <code>rope_scaling_factor * 25000</code></li>
-<li><code>training.use_unsloth</code> -- resolves to <code>true</code> unless DP is enabled.
-  DP uses <a href="https://opacus.ai/">Opacus</a> per-sample gradients (<code>GradSampleModule</code>), which require standard model layers and disable gradient checkpointing -- Unsloth's
-  custom layers and checkpointing are incompatible</li>
 <li><code>training.learning_rate</code> -- model-specific default from <code>ModelMetadata</code>:
   Mistral uses 0.0001, all other supported model families use 0.0005</li>
 <li><code>data.max_sequences_per_example</code> -- resolves to <code>1</code> when differential
@@ -9599,18 +9552,12 @@ See <a href="../configuration/">Configuration Reference</a> for the full list.</
   <code>10</code> otherwise for best performance</li>
 <li><code>privacy.delta</code> -- computed from record count</li>
 </ul>
-<div class="admonition warning">
-<p class="admonition-title">Unsloth and Mistral compatibility</p>
-<p>If you encounter issues when using Unsloth with Mistral models, set
-<code>training.use_unsloth: false</code> explicitly. There is no automatic
-detection for this incompatibility.</p>
-</div>
 <p>Use <code>safe-synthesizer config validate</code> to see how <code>"auto"</code> and default values resolve for
 your configuration. Note that some <code>"auto"</code> fields (such as
 <code>training.rope_scaling_factor</code> and <code>training.num_input_records_to_sample</code>)
 require a dataset to resolve -- they will remain <code>"auto"</code> in the validate
 output and only resolve during an actual run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
 </span></code></pre></div>
 <h3 id="common-validation-errors">Common Validation Errors<a class="headerlink" href="#common-validation-errors" title="Permanent link">&para;</a></h3>
 <dl>
@@ -9626,9 +9573,9 @@ output and only resolve during an actual run:</p>
   single string <code>"col1,col2"</code>, not as two separate columns. The pipeline will
   fail with a <code>ParameterError</code> when it tries to find a column literally named
   <code>"col1,col2"</code> in your data:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ParameterError: Group by column &#39;patient_id,event_id&#39; not found in the input data.
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>The column name contains a comma -- multi-column grouping is not supported.
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Use a single column name.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ParameterError: Group by column &#39;patient_id,event_id&#39; not found in the input data.
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>The column name contains a comma -- multi-column grouping is not supported.
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>Use a single column name.
 </span></code></pre></div>
 </dd>
 </dl>
@@ -9645,10 +9592,9 @@ output and only resolve during an actual run:</p>
 </dd>
 <dt>Incompatible DP settings:</dt>
 <dd>
-<p>If <code>privacy.dp_enabled</code> is <code>true</code> but <code>use_unsloth</code> is <code>true</code> or
-  <code>data.max_sequences_per_example</code> is not <code>1</code>, config validation will fail
-  with a clear error message. Set these to <code>"auto"</code> and they will resolve
-  correctly.</p>
+<p>If <code>privacy.dp_enabled</code> is <code>true</code> but <code>data.max_sequences_per_example</code> is
+  not <code>1</code>, config validation will fail with a clear error message. Set it to
+  <code>"auto"</code> and it will resolve correctly.</p>
 </dd>
 </dl>
 <div class="admonition tip">
@@ -9676,13 +9622,13 @@ optionally reduce CPU parallelism so each worker has more resources.</p>
 <h3 id="authentication-failures">Authentication Failures<a class="headerlink" href="#authentication-failures" title="Permanent link">&para;</a></h3>
 <p>WandB requires an API key when running in <code>online</code> mode. If the key is missing
 or invalid, training will fail when the WandB run is initialized.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>wandb: ERROR api_key not configured (no-auth)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>wandb: ERROR api_key not configured (no-auth)
 </span></code></pre></div>
 <p>Set the API key before running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
 </span></code></pre></div>
 <p>Or switch to offline mode to avoid network access entirely:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>See <a href="../running/#wandb-integration">Running Safe Synthesizer -- WandB Integration</a> for the full WandB setup.</p>
 <h3 id="resume-errors">Resume Errors<a class="headerlink" href="#resume-errors" title="Permanent link">&para;</a></h3>
@@ -9704,8 +9650,8 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 <dd>
 <p>Any <code>NaN</code> or <code>null</code> values in the timestamp column raise a <code>DataError</code>.
   Clean your data before running the pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
 </span></code></pre></div>
 </dd>
 <dt>Interval mismatch:</dt>
@@ -9739,12 +9685,12 @@ groups.</p>
 <p>Safe Synthesizer uses a structured error hierarchy. Understanding which error
 class you received helps narrow down the cause and write targeted <code>except</code> clauses.</p>
 <p>Inheritance:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>SafeSynthesizerError
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>├── InternalError (also RuntimeError)
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>└── UserError
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    ├── DataError (also ValueError)
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    ├── ParameterError (also ValueError)
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    └── GenerationError (also RuntimeError)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>SafeSynthesizerError
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>├── InternalError (also RuntimeError)
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>└── UserError
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    ├── DataError (also ValueError)
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    ├── ParameterError (also ValueError)
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    └── GenerationError (also RuntimeError)
 </span></code></pre></div>
 <p>SDK callers can catch <a class="autorefs autorefs-internal" title="            UserError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.UserError"><code>UserError</code></a> to handle all user-facing errors, or
 <a class="autorefs autorefs-internal" title="            SafeSynthesizerError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.SafeSynthesizerError"><code>SafeSynthesizerError</code></a> to also catch internal errors. Catching the built-in

@@ -7884,8 +7884,6 @@
       
         
       
-        
-      
     
     
     
@@ -8032,34 +8030,6 @@
     
   
     timeseries_preprocessing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    unsloth_backend
   
 
     
@@ -8616,10 +8586,10 @@
 <h3 id="3-example-assembly">3. Example Assembly<a class="headerlink" href="#3-example-assembly" title="Permanent link">&para;</a></h3>
 <p>Records are converted to a JSON format and tokenized for model training. The assembler handles truncation, padding, and proper formatting for the target LLM. Grouping and ordering is taken into consideration if configured.</p>
 <h3 id="4-training">4. Training<a class="headerlink" href="#4-training" title="Permanent link">&para;</a></h3>
-<p>The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation). Two
-backends are available -- Unsloth (default, faster) and HuggingFace (required
-for differential privacy). Both perform LoRA fine-tuning; see
-<a href="../../user-guide/running/#training">Running -- Training</a> for details.</p>
+<p>The training stage fine-tunes a base LLM using LoRA (Low-Rank Adaptation) via
+the HuggingFace backend with PEFT. Differential privacy (DP-SGD via Opacus) is
+optionally available. See <a href="../../user-guide/running/#training">Running -- Training</a>
+for details.</p>
 <p>Three models have been extensively tested:</p>
 <table>
 <thead>

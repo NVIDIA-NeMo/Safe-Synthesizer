@@ -7925,8 +7925,6 @@
       
         
       
-        
-      
     
     
     
@@ -8073,34 +8071,6 @@
     
   
     timeseries_preprocessing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/nemo_safe_synthesizer/training/unsloth_backend/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    unsloth_backend
   
 
     
@@ -8703,7 +8673,6 @@
     subgraph trainingBackend [Training Backend]
         TrainingBackendBase["TrainingBackend - Abstract"]
         HFBackend["HuggingFaceBackend"]
-        UnslothBackend["UnslothBackend"]
 
         subgraph trainingComponents [Training Components]
             ModelLoader["Model Loader"]
@@ -8764,7 +8733,6 @@
     Assembler --&gt; TrainingBackendBase
 
     TrainingBackendBase --&gt; HFBackend
-    TrainingBackendBase --&gt; UnslothBackend
     HFBackend --&gt; ModelLoader
     HFBackend --&gt; QuantizationComp
     HFBackend --&gt; LoRA
@@ -8960,10 +8928,6 @@ use <code>None</code> as the sole disabled signal. The <code>@pydantic_options</
 <td><strong>HuggingFaceBackend</strong></td>
 <td>Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via <a href="https://opacus.ai/">Opacus</a></td>
 </tr>
-<tr>
-<td><strong>UnslothBackend</strong></td>
-<td>Optimized training with Unsloth library</td>
-</tr>
 </tbody>
 </table>
 <h3 id="4-generation-backend">4. Generation Backend<a class="headerlink" href="#4-generation-backend" title="Permanent link">&para;</a></h3>
@@ -9000,7 +8964,7 @@ use <code>None</code> as the sole disabled signal. The <code>@pydantic_options</
 <h3 id="backend-abstraction">Backend Abstraction<a class="headerlink" href="#backend-abstraction" title="Permanent link">&para;</a></h3>
 <p>Training and generation backends use abstract base classes to allow multiple implementations:</p>
 <ul>
-<li>Training: HuggingFace, Unsloth</li>
+<li>Training: HuggingFace</li>
 <li>Generation: VLLM (extensible to others)</li>
 </ul>
 <h3 id="component-based-evaluation">Component-Based Evaluation<a class="headerlink" href="#component-based-evaluation" title="Permanent link">&para;</a></h3>
