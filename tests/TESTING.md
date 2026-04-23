@@ -166,3 +166,4 @@ See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotch
 - Tests mirror source structure: `tests/training/`, `tests/generation/`, etc.
 - Naming: fixture names use `fixture_` prefix consistently (e.g., `fixture_iris_dataset`).
 - `print()` is allowed in tests (ruff `T201` is suppressed for `tests/`). Use it freely for debug output in test functions.
+- Importing from another file under `tests/`, such as `tests/cli/helpers.py` does not work due to how pytest operates. A relative import from `conftest.py` is possible when a method (not a pytest fixture which is automatically available without importing) is shared across multiple test files. E.g., `from .conftest import train_with_sdk`.
