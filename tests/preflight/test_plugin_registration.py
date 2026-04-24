@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
+import nemo_safe_synthesizer.preflight as pf_mod
+
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.preflight import PreflightParameters
 from nemo_safe_synthesizer.preflight import (
@@ -53,8 +55,6 @@ def test_register_preflight_check_appends_to_registry():
 
         def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
             collector.warning("myplugin_fired", "hello")
-
-    import nemo_safe_synthesizer.preflight as pf_mod
 
     instance = MyCheck()
     register_preflight_check(instance)
@@ -120,7 +120,6 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
     which would not be the case if the failed second entry had been
     appended to the internal list.
     """
-    import nemo_safe_synthesizer.preflight as pf_mod
 
     class First(ConfigCheck):
         name = "myplugin.first"

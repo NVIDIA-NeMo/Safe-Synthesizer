@@ -261,6 +261,23 @@ class TestAutoConfigResolver:
         else:
             assert result == {}
 
+    @pytest.mark.parametrize(
+        "max_seq_input, expected_max_seq",
+        [
+            pytest.param("auto", [1, 10], id="auto_max_seq"),
+            pytest.param(5, [1, 5], id="explicit_max_seq"),
+            pytest.param(None, [1, None], id="none_max_seq"),
+        ],
+    )
+    def test_determine_max_sequences_per_example(self, sample_data, config, max_seq_input, expected_max_seq):
+        """max_sequences_per_example should be 1 for DP; for non-DP, auto→10, explicit→explicit, None→None."""
+        config_copy = config.model_copy(deep=True)
+        config_copy.data.max_sequences_per_example = max_seq_input
+        resolver = AutoConfigResolver(sample_data, config_copy)
+        result = resolver._determine_max_sequences_per_example()
+        expected_index = 0 if config_copy.privacy.dp_enabled else 1
+        assert result == {"max_sequences_per_example": expected_max_seq[expected_index]}
+
     def test_resolve(self, sample_data, config, expected):
         """Full resolution should produce valid SafeSynthesizerParameters.
 
