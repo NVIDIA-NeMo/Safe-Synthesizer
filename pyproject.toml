@@ -88,7 +88,6 @@ engine = [
     "faker",
     "datasets",
     "huggingface-hub>=0.34.4,<1",
-    "langchain-core",
     "json-repair",
     "matplotlib",
     "outlines>=1.0.0",

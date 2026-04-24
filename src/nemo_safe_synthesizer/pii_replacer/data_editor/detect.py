@@ -17,7 +17,6 @@ import json_repair
 import pandas as pd
 import torch
 from gliner import GLiNER
-from langchain_core.prompts import PromptTemplate
 from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
@@ -82,7 +81,7 @@ TEMPLATE = """Valid types are: [
 
 Return the column type for each of the column names and example values in the question.
 
- Additional instructions:
+Additional instructions:
 * You only return the list of columns and types (e.g. column_name: column_type) in json format and no written explanations.
 * The type should exactly match one of the valid types.
 * You don't write other helpful information outside of the column names and types.
@@ -95,7 +94,7 @@ Return the column type for each of the column names and example values in the qu
 * Only use the column type "name" if the example values are referring to the name of a person. Names of non-persons get the column type "none".
 * Use the column type "age" if the example values are referring to the age of a person.
 * Use the column type "sexuality" if the example values are referring to sexual orientation. For example "heterosexual" or "gay"
-* Use the column type "gender" if the example values are referring to the sex of a person.  For example "male" or "female"
+* Use the column type "gender" if the example values are referring to the sex of a person. For example "male" or "female"
 * Use the column type "date_of_birth" if the example values are referring to birth dates.
 * The type "vehicle_identifier" refers to an alphanumeric string that is exactly 17 characters long with no dashes.
 * The type "license_plate" refers to an alphanumeric string, sometimes with dashes, that is not longer than 15 characters
@@ -112,9 +111,9 @@ Output:
 {{"prenom": "first_name",
 "ciudad": "city"}}
 
- Input: {prompt_columns}
+Input: {prompt_columns}
 
- Output:
+Output:
 """
 
 
@@ -213,17 +212,13 @@ def _format_prompt(
     # Not actually valid json with notes, but it's what AS team has found to work.
     valid_types_str = "\n".join(f"{t}{notes.get(t, '')}," for t in types)
 
-    prompt = PromptTemplate.from_template(TEMPLATE)
     column_samples = sample_columns(df, num_samples)
     if not column_samples:
         return None
     prompt_columns = "\n".join([f"{name}: {', '.join(values)}" for name, values in column_samples.items()])
-
-    return prompt.format(
+    return TEMPLATE.format(
         prompt_columns=prompt_columns,
         valid_types_str=valid_types_str,
-        entities=", ".join(entities),
-        unknown_entity_type=UNKNOWN_ENTITY,
     )
 
 
