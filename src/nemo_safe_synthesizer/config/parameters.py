@@ -116,8 +116,6 @@ class SafeSynthesizerParameters(Parameters):
             case "auto" | None:
                 logger.info("Setting max_sequences_per_example to 1 because DP is enabled.")
                 data.max_sequences_per_example = 1
-            case None:
-                data.max_sequences_per_example = 1
             case v if v not in [AUTO_STR, 1]:
                 raise ParameterError(
                     f"When enabling DP, max_sequences_per_example must be set to 1 or 'auto'. Received: {v}"
@@ -176,4 +174,6 @@ class SafeSynthesizerParameters(Parameters):
         }
         if "replace_pii" in kwargs:
             extra["replace_pii"] = kwargs["replace_pii"]
+        if "preflight" in kwargs:
+            extra["preflight"] = kwargs["preflight"]
         return cls(**extra)

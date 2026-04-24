@@ -212,10 +212,11 @@ def _run_validate_and_render(
     fail-fast gate rather than a full-run guarantee.
     """
     click.echo("Running pre-flight validation...", nl=False)
-    # ``process_data(check_only=True)`` raises ``ParameterError`` when preflight
-    # surfaces errors, but it populates ``nss.preflight_report`` first. Catch
-    # the raise so the Rich report still renders before we propagate the
-    # failure -- otherwise the user gets only the bare traceback text.
+    # ``process_data(check_only=True)`` raises ``UserError`` (specifically
+    # ``ParameterError``) when preflight surfaces errors, but it populates
+    # ``nss.preflight_report`` first. Catch the raise so the Rich report still
+    # renders before we propagate the failure -- otherwise the user gets only
+    # the bare traceback text.
     error: UserError | None = None
     try:
         nss.process_data(check_only=True)
@@ -300,7 +301,7 @@ def _build_validate_render_context(
 def run(
     ctx: click.Context,
     config_path: PathT | None,
-    data_source: str,
+    data_source: str | None,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -390,7 +391,7 @@ def run(
 )
 def run_train(
     config_path: PathT,
-    data_source: str,
+    data_source: str | None,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -475,7 +476,7 @@ def run_train(
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_generate(
     config_path: PathT,
-    data_source: str,
+    data_source: str | None,
     run_path: PathT | None,
     artifact_path: PathT | None,
     output_file: PathT | None,

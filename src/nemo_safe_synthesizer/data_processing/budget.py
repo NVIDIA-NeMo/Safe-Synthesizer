@@ -66,7 +66,7 @@ def tokenize_record(row: pd.Series, tokenizer: Any) -> list[int]:
     """
     jsonl = records_to_jsonl(pd.DataFrame([row.to_dict()]))
     record_text = extract_records_from_jsonl_string(jsonl)[0]
-    return tokenizer.encode(record_text, add_special_tokens=False)
+    return tokenizer.encode(record_text + "\n", add_special_tokens=False)
 
 
 def tokenize_records(df: pd.DataFrame, tokenizer: Any) -> list[list[int]]:
@@ -86,7 +86,7 @@ def tokenize_records(df: pd.DataFrame, tokenizer: Any) -> list[list[int]]:
         return []
 
     jsonl = records_to_jsonl(df.to_dict(orient="list"))
-    record_texts = extract_records_from_jsonl_string(jsonl)
+    record_texts = [t + "\n" for t in extract_records_from_jsonl_string(jsonl)]
 
     if callable(tokenizer):
         tokenized = tokenizer(record_texts, add_special_tokens=False)
