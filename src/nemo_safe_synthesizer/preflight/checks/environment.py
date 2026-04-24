@@ -151,11 +151,13 @@ def estimate_params_from_shape(autoconfig: PretrainedConfig) -> int | None:
     head_dim = getattr(autoconfig, "head_dim", None) or max(1, H // max(n_heads, 1))
     tied = bool(getattr(autoconfig, "tie_word_embeddings", False))
 
+    # Q proj (H×H) + O proj (H×H) = 2H²; K proj + V proj shrunk by GQA: 2·H·kv_heads·d
     attn = 2 * H * H + 2 * H * kv_heads * head_dim
+    # gate proj (H×I) + up proj (H×I) + down proj (I×H) = 3HI  (SwiGLU / GeGLU gated MLP)
     mlp = 3 * H * inter
     per_layer = attn + mlp
-    embed = V * H
-    lm_head = 0 if tied else V * H
+    embed = V * H  # token embedding table
+    lm_head = 0 if tied else V * H  # unembedding; zero when tied to embed
     return embed + L * per_layer + lm_head
 
 
@@ -291,7 +293,11 @@ class VRAMHeadroomCheck(ConfigCheck):
             )
 
         bytes_per_param = bytes_per_base_weight(config.training)
+        # VRAM_est = N·b + C  (EleutherAI, "Transformer Math 101" https://blog.eleuther.ai/transformer-math/)
+        # N·b: base-weight bytes; C: fixed overhead for kernels + checkpointed activations
         estimated_gib = (n_params * bytes_per_param) / (1024**3) + _VRAM_FIXED_OVERHEAD_GIB
+        # frac is the usable fraction of device memory (gpu_memory_utilization);
+        # take the best single-device headroom — multi-GPU tensor-parallel splits are not modelled here
         max_free_gib = max(
             frac * torch.cuda.get_device_properties(dev).total_memory / (1024**3) for dev, frac in vram_map.items()
         )

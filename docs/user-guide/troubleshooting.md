@@ -461,8 +461,8 @@ check of its own.
 | `inference_key_missing` | warning | `env.inference_key` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
 | `hf_token_missing` | warning | `env.hf_token` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set; gated model downloads may fail |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
-| `column_not_found` | error | `columns.groupby` / `columns.orderby` / `timeseries.timestamp` | Required column missing from dataset |
-| `column_nulls` | error | `columns.groupby` / `timeseries.timestamp` | Required column contains null values |
+| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset |
+| `column_nulls` | error | `columns.groupby` | Required column contains null values |
 | `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
 | `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing |

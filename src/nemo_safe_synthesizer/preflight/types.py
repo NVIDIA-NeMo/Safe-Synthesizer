@@ -69,7 +69,7 @@ class PreflightIssue:
             full table lives in ``docs/user-guide/troubleshooting.md``.
         severity: ``"error"`` blocks the run, ``"warning"`` is advisory.
         check: Fully-qualified name of the emitting check (e.g.
-            ``"environment.vram"`` or ``"my_plugin.my_check"``). Matches
+            ``"gpu.vram"`` or ``"my_plugin.my_check"``). Matches
             ``PreflightCheckResult.name`` and ``PreflightCheck.name``.
         message: Human-readable description rendered in the CLI report.
     """

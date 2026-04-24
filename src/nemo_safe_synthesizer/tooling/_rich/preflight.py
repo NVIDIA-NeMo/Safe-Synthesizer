@@ -42,7 +42,9 @@ def render_rich(
     n_errors = len(report.errors)
     n_warns = len(report.warnings)
     has_run_info = bool(context.run_info)
-    has_output_locations = context.artifact_dir is not None or context.config_path is not None
+    has_output_locations = (
+        context.artifact_dir is not None or context.config_path is not None or context.log_file is not None
+    )
     has_followup = not n_errors and context.config_path is not None and context.data_source is not None
     header = _build_header(n_errors, n_warns)
 
@@ -208,6 +210,15 @@ def _print_output_locations(
     if config_path is not None:
         tree = Tree(Text("resolved config", style="bold"), guide_style="dim")
         tree.add(Text(str(config_path), overflow="fold"))
+        if log_file is not None:
+            tree.add(_location_label("log file", log_file))
+        console.print(tree, soft_wrap=True, crop=False, overflow="fold", width=output_width)
+        console.print()
+        return
+
+    if log_file is not None:
+        tree = Tree(Text("log file", style="bold"), guide_style="dim")
+        tree.add(Text(str(log_file), overflow="fold"))
         console.print(tree, soft_wrap=True, crop=False, overflow="fold", width=output_width)
         console.print()
 
