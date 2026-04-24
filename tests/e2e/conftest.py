@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import gc
-import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
@@ -33,9 +32,9 @@ def cleanup_gpu_memory() -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def fixture_save_path() -> Path:
-    """Temp directory for e2e test artifacts."""
-    return Path(tempfile.mkdtemp(prefix="nemo_safe_synthesizer_tmp"))
+def fixture_save_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Temp directory for e2e test artifacts; cleanup managed by pytest's tmp_path policy."""
+    return tmp_path_factory.mktemp("nemo_safe_synthesizer_tmp")
 
 
 @pytest.fixture

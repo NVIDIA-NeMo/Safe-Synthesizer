@@ -305,9 +305,7 @@ def fixture_test_df_mixed() -> pd.DataFrame:
 
 @pytest.fixture
 def fixture_mia_aia_df_with_nan_protection() -> pd.DataFrame:
-    """I'm not sure how often we get nans like this
-    but we've seen errors like this in the wild:
-    """
+    """MIA/AIA DataFrame with NaN values in the Protection and Attack Percentage columns (regression data)."""
     fake = faker.Faker("en_US")
     fake.seed_instance(546)
     random.seed(302)

@@ -110,7 +110,7 @@ Load helpers in root `conftest.py`:
 
 ## Fixture Discovery
 
-9 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/` (currently empty), `tests/smoke/`.
+9 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/`, `tests/smoke/`.
 
 Dataset/tokenizer fixtures use the `fixture_` prefix; CLI helpers use descriptive names (`mock_workdir`).
 

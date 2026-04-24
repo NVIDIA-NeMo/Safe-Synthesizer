@@ -246,10 +246,6 @@ class TestGenerateAiaFigure:
         fig = generate_aia_figure(df)
 
         assert isinstance(fig, go.Figure)
-        df = fixture_mia_aia_df
-        fig = generate_aia_figure(df)
-
-        assert isinstance(fig, go.Figure)
 
 
 class TestCorrelationHeatmap:
@@ -323,10 +319,10 @@ class TestStructureStabilityFigure:
     """Tests for structure_stability_figure function."""
 
     def test_structure_stability_figure_basic(self):
-        fixture_training_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
-        fixture_synthetic_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        training_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
+        synthetic_df = pd.DataFrame({"pc1": np.random.randn(100), "pc2": np.random.randn(100)})
 
-        fig = structure_stability_figure(fixture_training_df, fixture_synthetic_df)
+        fig = structure_stability_figure(training_df, synthetic_df)
 
         assert isinstance(fig, go.Figure)
         assert fig.layout.height == 420
