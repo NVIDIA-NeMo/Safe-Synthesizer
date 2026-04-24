@@ -410,6 +410,10 @@ class TestTokenBudgetCheck:
 
     def test_happy_path(self, sample_df, default_config):
         metadata = MagicMock(spec=ModelMetadata)
+        # Pydantic v2 Field attributes are absent from the class __dict__ so
+        # MagicMock's spec blocks auto-attribute chains on ``tokenizer``;
+        # attach the nested mock explicitly before configuring it.
+        metadata.tokenizer = MagicMock()
         metadata.tokenizer.encode.return_value = list(range(50))
         metadata.max_seq_length = 2048
         issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
@@ -437,6 +441,7 @@ class TestTokenBudgetCheck:
         df = pd.DataFrame({"a": [1]})
         metadata = MagicMock(spec=ModelMetadata)
         metadata.max_seq_length = 60
+        metadata.tokenizer = MagicMock()
         metadata.tokenizer.encode.return_value = list(range(20))
         metadata.tokenizer.return_value = {"input_ids": [list(range(100))]}
 
@@ -509,6 +514,7 @@ class TestRunPreflight:
             }
         )
         metadata = MagicMock(spec=ModelMetadata)
+        metadata.tokenizer = MagicMock()
         metadata.tokenizer.encode.return_value = list(range(50))
         metadata.max_seq_length = 2048
         with patch("torch.cuda.is_available", return_value=True):
