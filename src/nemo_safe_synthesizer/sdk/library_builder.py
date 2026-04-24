@@ -304,6 +304,17 @@ class SafeSynthesizer(ConfigBuilder):
                 metadata_for_preflight = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
                 self._llm_metadata = metadata_for_preflight
 
+        # Persist the resolved config before running preflight so that on
+        # preflight failure the CLI error report can still point at the
+        # config YAML.  ``_preflight_config_path`` is set here (not after
+        # ``run_preflight``) so the error path has a valid location.
+        if check_only:
+            assert self._workdir is not None
+            self._workdir.ensure_directories()
+            config_path = self._workdir.run_dir / "safe-synthesizer-config.yaml"
+            self._nss_config.to_yaml(config_path, exclude_unset=False)
+            self._preflight_config_path = config_path
+
         preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
         self.preflight_report = preflight
         for issue in preflight.warnings:
@@ -321,11 +332,6 @@ class SafeSynthesizer(ConfigBuilder):
         # Callers who repeat ``process_data(check_only=True)`` pay the
         # (cheap) preflight cost twice on purpose.
         if check_only:
-            assert self._workdir is not None
-            self._workdir.ensure_directories()
-            config_path = self._workdir.run_dir / "safe-synthesizer-config.yaml"
-            self._nss_config.to_yaml(config_path, exclude_unset=False)
-            self._preflight_config_path = config_path
             return self
 
         self._data_processed = True

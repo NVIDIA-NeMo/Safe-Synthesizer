@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import PreflightContext
 
 
@@ -18,11 +19,17 @@ def make_ctx(
     data: pd.DataFrame | None = None,
     metadata: object | None = None,
 ) -> PreflightContext:
-    """Build a ``PreflightContext`` with sensible defaults for tests."""
+    """Build a ``PreflightContext`` with sensible defaults for tests.
+
+    The default metadata mock is ``spec=ModelMetadata`` so that typoed
+    attribute access (e.g. ``ctx.metadata.autoconfigg``) raises
+    ``AttributeError`` at test time rather than silently returning a
+    fresh auto-mock and masking production bugs.
+    """
     return PreflightContext(
         data=pd.DataFrame() if data is None else data,
         config=SafeSynthesizerParameters() if config is None else config,
-        metadata=MagicMock() if metadata is None else metadata,  # ty: ignore[invalid-argument-type] -- MagicMock stands in for ModelMetadata in tests
+        metadata=MagicMock(spec=ModelMetadata) if metadata is None else metadata,  # ty: ignore[invalid-argument-type] -- MagicMock stands in for ModelMetadata in tests
     )
 
 

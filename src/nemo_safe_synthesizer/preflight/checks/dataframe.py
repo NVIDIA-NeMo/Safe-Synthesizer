@@ -11,10 +11,9 @@ from ...data_processing.validation import (
     check_no_pseudo_column_collision,
 )
 from ...errors import DataError, ParameterError
-from ..base import DataFrameCheck
+from ..base import DataFrameCheck, IssueCollector
 from ..helpers import emit_on_raise
-from ..base import IssueCollector
-from ..types import PreflightContext, DataFrameView
+from ..types import DataFrameView, PreflightContext
 
 __all__ = [
     "ConstantColumnCheck",

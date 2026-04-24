@@ -5,8 +5,7 @@
 
 from __future__ import annotations
 
-from ..base import AdvisoryCheck, DataFrameCheck
-from ..base import IssueCollector
+from ..base import AdvisoryCheck, DataFrameCheck, IssueCollector
 from ..types import DataFrameView
 from ._helpers import resolved_record_count
 

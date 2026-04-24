@@ -6,8 +6,7 @@
 from __future__ import annotations
 
 from ...defaults import PSEUDO_GROUP_COLUMN
-from ..base import MetadataCheck
-from ..base import IssueCollector
+from ..base import IssueCollector, MetadataCheck
 from ..types import MetadataView
 from ._helpers import check_group_budget, check_sampled_record_budget, check_schema_prompt_budget
 

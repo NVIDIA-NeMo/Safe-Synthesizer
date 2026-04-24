@@ -15,6 +15,7 @@ from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
     ConfigCheck,
@@ -109,27 +110,37 @@ class TestVRAMHeadroomCheck:
 
     def test_low_vram_warns(self, default_config):
         """Llama-3-8B-shaped config on a 1 GiB GPU must warn."""
-        setattr(default_config, "_metadata_autoconfig", self._autoconfig())
+        metadata = MagicMock(spec=ModelMetadata, autoconfig=self._autoconfig())
         fake_props = MagicMock(total_memory=1 * 1024**3)
         with (
             patch("torch.cuda.is_available", return_value=True),
             patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
             patch("torch.cuda.get_device_properties", return_value=fake_props),
         ):
-            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config))
+            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         assert any(i.code == "low_vram" and i.severity == "warning" for i in issues)
 
     def test_ample_vram_is_silent(self, default_config):
         """Same config on an 80 GiB GPU must not warn (QLoRA ~5 GiB base + overhead)."""
-        setattr(default_config, "_metadata_autoconfig", self._autoconfig())
+        metadata = MagicMock(spec=ModelMetadata, autoconfig=self._autoconfig())
         fake_props = MagicMock(total_memory=80 * 1024**3)
         with (
             patch("torch.cuda.is_available", return_value=True),
             patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
             patch("torch.cuda.get_device_properties", return_value=fake_props),
         ):
-            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config))
+            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         assert not any(i.code == "low_vram" for i in issues)
+
+    def test_stub_metadata_skips_silently(self, default_config):
+        """Stubbed metadata (autoconfig=None) must skip without raising."""
+        metadata = MagicMock(spec=ModelMetadata, autoconfig=None)
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+        ):
+            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+        assert issues == []
 
     def test_lora_uses_more_bytes_per_param_than_qlora(self, default_config):
         """LoRA (bf16 base) must estimate > QLoRA (4-bit base) on the same shape."""
@@ -221,10 +232,10 @@ class TestVRAMHeadroomCheck:
 
 @pytest.mark.unit
 class TestInferenceKeyCheck:
-    def test_empty_env_emits_error(self, default_config):
+    def test_empty_env_emits_warning(self, default_config):
         with patch.dict("os.environ", {}, clear=True):
             issues = InferenceKeyCheck().run(make_ctx(config=default_config))
-        assert any(i.code == "inference_key_missing" for i in issues)
+        assert any(i.code == "inference_key_missing" and i.severity == "warning" for i in issues)
 
     def test_inference_key_present_is_silent(self, default_config):
         with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key", "HF_TOKEN": "hf_xxx"}):
@@ -240,10 +251,10 @@ class TestInferenceKeyCheck:
 
 @pytest.mark.unit
 class TestHFTokenCheck:
-    def test_missing_token_emits_error(self, default_config):
+    def test_missing_token_emits_warning(self, default_config):
         with patch.dict("os.environ", {}, clear=True):
             issues = HFTokenCheck().run(make_ctx(config=default_config))
-        assert any(i.code == "hf_token_missing" for i in issues)
+        assert any(i.code == "hf_token_missing" and i.severity == "warning" for i in issues)
 
     @pytest.mark.parametrize("env_var", ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"])
     def test_either_recognized_env_var_satisfies_check(self, default_config, env_var):
@@ -392,13 +403,13 @@ class TestPseudoColumnCheck:
 @pytest.mark.unit
 class TestTokenBudgetCheck:
     def test_tokenizer_unavailable(self, sample_df, default_config):
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = None
         issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
         assert any(i.code == "tokenizer_unavailable" for i in issues)
 
     def test_happy_path(self, sample_df, default_config):
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer.encode.return_value = list(range(50))
         metadata.max_seq_length = 2048
         issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
@@ -424,7 +435,7 @@ class TestTokenBudgetCheck:
         both that the batch path was used and that the budget math is correct.
         """
         df = pd.DataFrame({"a": [1]})
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         metadata.max_seq_length = 60
         metadata.tokenizer.encode.return_value = list(range(20))
         metadata.tokenizer.return_value = {"input_ids": [list(range(100))]}
@@ -497,7 +508,7 @@ class TestRunPreflight:
                 "training": default_config.training.model_copy(update={"num_input_records_to_sample": len(sample_df)})
             }
         )
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer.encode.return_value = list(range(50))
         metadata.max_seq_length = 2048
         with patch("torch.cuda.is_available", return_value=True):
@@ -516,7 +527,7 @@ class TestRunPreflight:
         # is marked skipped. Exercises ``failed``, ``skipped``, and ``passed``
         # in one registry run.
         df = pd.DataFrame({"val": list(range(50))})
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         with patch("torch.cuda.is_available", return_value=True):
             report = run_preflight(df, default_config, metadata)
         by_name = {c.name: c for c in report.checks}
@@ -536,7 +547,7 @@ class TestRunPreflight:
         # branches always run.
         df = pd.DataFrame({"val": [1, 2, 3]})
         config = SafeSynthesizerParameters(data=DataParameters(group_training_examples_by="missing_col"))
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = None  # forces the tokenizer_unavailable branch
         with patch("torch.cuda.is_available", return_value=True):
             report = run_preflight(df, config, metadata)
@@ -557,7 +568,7 @@ class TestRunPreflight:
         """
         df = pd.DataFrame({"val": list(range(50))})  # well below the 200-row floor
         config = SafeSynthesizerParameters()
-        metadata = MagicMock()
+        metadata = MagicMock(spec=ModelMetadata)
         with patch("torch.cuda.is_available", return_value=True):
             report = run_preflight(df, config, metadata)
         by_name = {c.name: c for c in report.checks}

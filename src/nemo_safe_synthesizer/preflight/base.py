@@ -228,7 +228,7 @@ class PreflightCheck(ABC, Generic[C]):
         Implemented by each stage ABC (``ConfigCheck``, ``DataFrameCheck``,
         etc.); plugin authors never override this method.
         """
-        ...
+        raise NotImplementedError
 
     @abstractmethod
     def check(self, ctx: C, collector: IssueCollector) -> None:
@@ -241,7 +241,7 @@ class PreflightCheck(ABC, Generic[C]):
           (``ctx.config`` + ``ctx.data``)
         - ``MetadataCheck`` → ``MetadataView`` (all three fields)
         """
-        ...
+        raise NotImplementedError
 
     def enabled(self, ctx: PreflightContext) -> bool:
         """Whether this check should execute for ``ctx``.

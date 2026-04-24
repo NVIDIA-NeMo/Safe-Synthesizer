@@ -11,15 +11,16 @@ import pandas as pd
 import pytest
 
 import nemo_safe_synthesizer.preflight as pf_mod
-
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.preflight import PreflightParameters
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import (
     CRASH_CODE,
     ConfigCheck,
+    ConfigView,
     DataFrameCheck,
+    DataFrameView,
     IssueCollector,
-    PreflightContext,
     PreflightIssue,
     PreflightStage,
     build_registry,
@@ -53,7 +54,7 @@ def test_register_preflight_check_appends_to_registry():
         name = "myplugin.registered"
         label = "Registered plugin"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("myplugin_fired", "hello")
 
     instance = MyCheck()
@@ -71,12 +72,12 @@ def test_plugin_check_fires_via_run_preflight():
         name = "myplugin.fires"
         label = "Plugin fires"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("plugin_signal", "plugin ran")
 
     register_preflight_check(MyCheck())
     config = SafeSynthesizerParameters()
-    metadata = MagicMock()
+    metadata = MagicMock(spec=ModelMetadata)
     metadata.tokenizer = None
 
     with patch("torch.cuda.is_available", return_value=True):
@@ -98,7 +99,7 @@ def test_plugin_rejects_reserved_core_namespace():
         name = "gpu.rogue"
         label = "Rogue plugin"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     with pytest.raises(ValueError, match="reserved core namespace"):
@@ -125,21 +126,21 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
         name = "myplugin.first"
         label = "First"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     class Duplicate(ConfigCheck):
         name = "myplugin.first"
         label = "Also first"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     class Third(ConfigCheck):
         name = "myplugin.third"
         label = "Third"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     register_preflight_check(First())
@@ -158,7 +159,7 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
 
 @pytest.mark.unit
 def test_plugin_rejects_mismatched_api_version():
-    def _noop_check(self: ConfigCheck, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def _noop_check(self: ConfigCheck, ctx: ConfigView, collector: IssueCollector) -> None:
         return
 
     with pytest.raises(TypeError, match="preflight API"):
@@ -183,7 +184,7 @@ def test_plugin_rejects_mismatched_api_version():
 
 @pytest.mark.unit
 def test_plugin_must_define_required_attrs():
-    def _noop_check(self: ConfigCheck, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def _noop_check(self: ConfigCheck, ctx: ConfigView, collector: IssueCollector) -> None:
         return
 
     with pytest.raises(TypeError, match="must define"):
@@ -214,7 +215,7 @@ def test_build_registry_rejects_plugin_colliding_with_core():
         name = "myplugin.collides"
         label = "Collides"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     a = CoreCollision()
@@ -231,7 +232,7 @@ def test_build_registry_rejects_plugin_colliding_with_core():
 @pytest.mark.unit
 def test_disabled_checks_skips_named_check(sample_df):
     config = SafeSynthesizerParameters(preflight=PreflightParameters(disabled_checks=["gpu.cuda"]))
-    metadata = MagicMock()
+    metadata = MagicMock(spec=ModelMetadata)
     metadata.tokenizer = None
 
     with patch("torch.cuda.is_available", return_value=True):
@@ -256,7 +257,7 @@ def test_disabled_dep_gates_dependents():
         name = "myplugin.prereq"
         label = "Prereq"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("prereq_ran", "should not fire when disabled")
 
     class DependentPlugin(ConfigCheck):
@@ -264,14 +265,14 @@ def test_disabled_dep_gates_dependents():
         label = "Dependent"
         requires = ("myplugin.prereq",)
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("dependent_ran", "should not fire when prereq disabled")
 
     register_preflight_check(PrereqPlugin())
     register_preflight_check(DependentPlugin())
 
     config = SafeSynthesizerParameters(preflight=PreflightParameters(disabled_checks=["myplugin.prereq"]))
-    metadata = MagicMock()
+    metadata = MagicMock(spec=ModelMetadata)
     metadata.tokenizer = None
 
     with patch("torch.cuda.is_available", return_value=True):
@@ -291,7 +292,7 @@ def test_disabled_dep_gates_dependents():
 @pytest.mark.unit
 def test_unknown_disabled_checks_name_warns():
     config = SafeSynthesizerParameters(preflight=PreflightParameters(disabled_checks=["myplugin.does_not_exist"]))
-    metadata = MagicMock()
+    metadata = MagicMock(spec=ModelMetadata)
     metadata.tokenizer = None
 
     with patch("nemo_safe_synthesizer.preflight.orchestrator.logger.user.warning") as mock_warn:
@@ -313,10 +314,10 @@ def test_run_preflight_accepts_custom_registry():
         name = "myplugin.solo"
         label = "Solo"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("solo_ran", "solo")
 
-    metadata = MagicMock()
+    metadata = MagicMock(spec=ModelMetadata)
     metadata.tokenizer = None
 
     from nemo_safe_synthesizer.preflight import build_registry
@@ -343,14 +344,14 @@ def test_check_crash_is_reported_and_does_not_halt_registry():
         name = "myplugin.crasher"
         label = "Crasher"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             raise RuntimeError("boom")
 
     class Follower(ConfigCheck):
         name = "myplugin.follower"
         label = "Follower"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("followed", "ran after crash")
 
     from nemo_safe_synthesizer.preflight import build_registry
@@ -385,14 +386,14 @@ def test_stage_markers_are_preserved_on_plugin_subclasses():
         name = "myplugin.stage_cfg"
         label = "Plugin cfg"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     class P2(DataFrameCheck):
         name = "myplugin.stage_df"
         label = "Plugin df"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
             return
 
     assert P1.stage is PreflightStage.CONFIG

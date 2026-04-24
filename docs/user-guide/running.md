@@ -275,7 +275,7 @@ within a stage, checks run in the order listed.
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `gpu.vram` | config | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
+| `gpu.vram` | metadata | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
 | `env.inference_key` | config | `NSS_INFERENCE_KEY` is set when PII classification is enabled (warning only) |
 | `env.hf_token` | config | `HF_TOKEN` or `HUGGING_FACE_HUB_TOKEN` is set; warns unconditionally when neither is present so gated-repo downloads don't fail later (warning only) |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |

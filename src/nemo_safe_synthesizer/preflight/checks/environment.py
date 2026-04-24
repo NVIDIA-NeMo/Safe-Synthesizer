@@ -10,10 +10,9 @@ from typing import TYPE_CHECKING, Literal
 
 from ...config.replace_pii import has_inference_key
 from ...observability import get_logger
-from ..base import ConfigCheck
+from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
-from ..base import IssueCollector
-from ..types import ConfigView
+from ..types import ConfigView, MetadataView
 
 logger = get_logger(__name__)
 
@@ -228,7 +227,7 @@ References:
 """
 
 
-class VRAMHeadroomCheck(ConfigCheck):
+class VRAMHeadroomCheck(MetadataCheck):
     r"""Estimate whether GPU VRAM is sufficient for training.
 
     The estimate is intentionally a *lower bound*:
@@ -262,14 +261,18 @@ class VRAMHeadroomCheck(ConfigCheck):
     category = "environment"
     requires = ("gpu.cuda",)
 
-    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
+    def check(self, ctx: MetadataView, collector: IssueCollector) -> None:
         import torch
 
         from ...llm.utils import get_max_vram
 
         config = ctx.config
         vram_map = get_max_vram()
-        autoconfig = getattr(config, "_metadata_autoconfig", None) or getattr(config, "autoconfig", None)
+        # ModelMetadata.autoconfig is populated by ``from_config`` but set to
+        # ``None`` by ``ModelMetadata.stub`` (used on ``--validate`` when the
+        # model is not cached / no network). Skip in that case: without the
+        # model shape we cannot estimate parameter count.
+        autoconfig = getattr(ctx.metadata, "autoconfig", None)
         if not vram_map or autoconfig is None:
             return
 

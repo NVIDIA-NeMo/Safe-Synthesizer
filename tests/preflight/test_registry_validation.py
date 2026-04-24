@@ -10,10 +10,12 @@ import pytest
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
     ConfigCheck,
+    ConfigView,
     DataFrameCheck,
+    DataFrameView,
     IssueCollector,
     MetadataCheck,
-    PreflightContext,
+    MetadataView,
     build_registry,
 )
 from nemo_safe_synthesizer.preflight.registry import _validate_registry
@@ -23,7 +25,7 @@ class _NoopConfig(ConfigCheck):
     name = "plugintest.noop_cfg"
     label = "Noop config"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         return
 
 
@@ -31,7 +33,7 @@ class _NoopConfigB(ConfigCheck):
     name = "plugintest.noop_cfg_b"
     label = "Noop config B"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         return
 
 
@@ -39,7 +41,7 @@ class _NoopDataFrame(DataFrameCheck):
     name = "plugintest.noop_df"
     label = "Noop df"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         return
 
 
@@ -47,7 +49,7 @@ class _NoopMetadata(MetadataCheck):
     name = "plugintest.noop_meta"
     label = "Noop meta"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: MetadataView, collector: IssueCollector) -> None:
         return
 
 
@@ -55,7 +57,7 @@ class _NoopAdvisory(AdvisoryCheck):
     name = "plugintest.noop_adv"
     label = "Noop advisory"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         return
 
 
@@ -82,7 +84,7 @@ def test_build_registry_rejects_unknown_requires():
         label = "Needs missing"
         requires = ("plugintest.does_not_exist",)
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     with pytest.raises(RuntimeError, match="unknown or not declared earlier"):
@@ -95,7 +97,7 @@ def test_build_registry_rejects_out_of_order_requires():
         name = "plugintest.leader"
         label = "Leader"
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     class NeedsLeader(ConfigCheck):
@@ -103,7 +105,7 @@ def test_build_registry_rejects_out_of_order_requires():
         label = "Needs leader"
         requires = ("plugintest.leader",)
 
-        def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+        def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
     with pytest.raises(RuntimeError, match="unknown or not declared earlier"):
