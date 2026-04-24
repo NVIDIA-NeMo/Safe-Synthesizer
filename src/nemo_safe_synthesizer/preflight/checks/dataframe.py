@@ -99,7 +99,10 @@ class ConstantColumnCheck(DataFrameCheck):
         data = ctx.data
         for col in data.columns:
             if data[col].dropna().nunique() == 1:
-                collector.warning("constant_column", f"Column '{col}' has only 1 unique value.")
+                collector.warning(
+                    "constant_column",
+                    f"Column '{col}' has only 1 unique value — consider dropping it or verifying the data.",
+                )
 
 
 class TimestampColumnCheck(DataFrameCheck):

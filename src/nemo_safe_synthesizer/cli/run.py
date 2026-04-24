@@ -352,8 +352,6 @@ def run(
         run_name="validate" if validate else None,
     )
 
-    from ..errors import UserError
-
     try:
         run_logger.warning("Nemo Safe Synthesizer starting")
         run_logger.debug("running with: ", extra={"config": config.model_dump()})
@@ -439,7 +437,6 @@ def run_train(
         quiet=validate,
         run_name="validate" if validate else None,
     )
-    from ..errors import UserError
     from ..sdk.library_builder import SafeSynthesizer
 
     try:

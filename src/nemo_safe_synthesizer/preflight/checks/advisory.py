@@ -79,7 +79,7 @@ class OversamplingCheck(AdvisoryCheck):
         if data_fraction > self.oversampling_ratio:
             collector.warning(
                 "extreme_oversampling",
-                f"num_input_records_to_sample is {data_fraction:.0f}x the training split size; risk of overfitting.",
+                f"num_input_records_to_sample is {data_fraction:.1f}x the training split size; risk of overfitting.",
             )
 
 

@@ -49,6 +49,7 @@ from .types import (
     PreflightRegistry,
     PreflightReport,
     PreflightStage,
+    PreflightStatus,
 )
 
 
@@ -85,6 +86,7 @@ __all__ = [
     "PreflightParameters",
     "PreflightRegistry",
     "PreflightReport",
+    "PreflightStatus",
     "PreflightStage",
     "PseudoColumnCheck",
     "TimestampColumnCheck",

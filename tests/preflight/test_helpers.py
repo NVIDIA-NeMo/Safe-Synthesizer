@@ -15,6 +15,7 @@ def _collector() -> IssueCollector:
     return IssueCollector(check_name="test.helper")
 
 
+@pytest.mark.unit
 class TestEmitOnRaise:
     def test_returns_true_when_action_succeeds(self):
         collector = _collector()
@@ -105,6 +106,7 @@ class TestEmitOnRaise:
         assert collector.issues == []
 
 
+@pytest.mark.unit
 class TestRequireImport:
     def test_returns_module_when_import_succeeds(self):
         collector = _collector()

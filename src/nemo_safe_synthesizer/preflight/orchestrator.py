@@ -106,6 +106,7 @@ def _run_registry(
     for check in registry:
         if any(dep in errored_checks or dep in disabled_checks for dep in check.requires):
             results.append(PreflightCheckResult(name=check.name, status="skipped"))
+            errored_checks.add(check.name)  # propagate: skipped checks block their own dependents
             continue
 
         issues = _execute_check(check, ctx)
@@ -167,11 +168,21 @@ def run_preflight(
         A structured ``PreflightReport``.
     """
     effective_registry = _registry.PREFLIGHT_REGISTRY if registry is None else registry
-    if registry is None:
-        _warn_unknown_disabled_checks(config, effective_registry)
+    _warn_unknown_disabled_checks(config, effective_registry)
 
     ctx = PreflightContext(data=data, config=config, metadata=metadata)
     report = PreflightReport(checks=_run_registry(ctx, effective_registry))
+    n_checks = len(report.checks)
+    n_skipped = sum(1 for c in report.checks if c.status == "skipped")
+    n_errors = len(report.errors)
+    n_warns = len(report.warnings)
+    logger.user.info(
+        "Preflight: %d check(s) ran, %d skipped — %d error(s), %d warning(s)",
+        n_checks - n_skipped,
+        n_skipped,
+        n_errors,
+        n_warns,
+    )
     logger.runtime.debug(
         "Preflight complete",
         extra={

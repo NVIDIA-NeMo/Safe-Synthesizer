@@ -112,7 +112,7 @@ class PreflightCheck(ABC):
     @abstractmethod
     def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
         """Perform the check, appending any findings to ``collector``."""
-        raise NotImplementedError
+        ...
 
     def enabled(self, ctx: PreflightContext) -> bool:
         """Whether this check should execute for ``ctx``.
@@ -121,7 +121,7 @@ class PreflightCheck(ABC):
         ``ctx.config.preflight.disabled_checks``. Override to add
         declarative skip logic based on config state.
         """
-        return self.name not in set(ctx.config.preflight.disabled_checks)
+        return self.name not in ctx.config.preflight.disabled_checks
 
 
 class ConfigCheck(PreflightCheck):

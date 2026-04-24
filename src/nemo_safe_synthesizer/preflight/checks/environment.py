@@ -92,7 +92,13 @@ def param_count_from_empty_model(autoconfig: PretrainedConfig) -> int | None:
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(autoconfig)
         return sum(p.numel() for p in model.parameters())
-    except Exception:
+    except Exception as exc:
+        logger.runtime.debug(
+            "param_count_from_empty_model failed for %r: %s: %s",
+            getattr(autoconfig, "_name_or_path", None) or getattr(autoconfig, "model_type", "unknown"),
+            type(exc).__name__,
+            exc,
+        )
         return None
 
 

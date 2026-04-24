@@ -504,9 +504,9 @@ class TestRunPreflight:
             with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
                 report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0
-        assert len(report.checks) >= 14
+        # timeseries.timestamp is excluded via enabled() when is_timeseries is False
+        assert len(report.checks) == len(PREFLIGHT_REGISTRY) - 1
         by_name = {c.name: c for c in report.checks}
-        # timeseries.timestamp is skipped via enabled() when is_timeseries is False
         assert "timeseries.timestamp" not in by_name
 
     def test_result_status_reflects_outcome(self, sample_df, default_config):
