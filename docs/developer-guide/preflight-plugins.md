@@ -325,7 +325,7 @@ def _clean_preflight_plugins():
 - `PreflightIssue.namespace` returns the prefix before the first `.`
   in the check name, or `None` if the check name has no dotted prefix.
 - `reset_preflight_plugins()` clears every registered plugin and
-  rebuilds the global `PREFLIGHT_REGISTRY` from core checks only.
+  rebuilds the registry returned by `get_registry()` from core checks only.
   Useful for a clean slate between test cases or notebook re-runs:
 
   ```python
@@ -385,5 +385,5 @@ plugins to degrade gracefully (e.g. guard with `getattr` or a
 `try/except AttributeError`) if a field moves.
 
 See the package docstring of
-[`src/nemo_safe_synthesizer/preflight/__init__.py`](../../src/nemo_safe_synthesizer/preflight/__init__.py)
+[`preflight/__init__.py`](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/src/nemo_safe_synthesizer/preflight/__init__.py)
 for the authoritative reference.

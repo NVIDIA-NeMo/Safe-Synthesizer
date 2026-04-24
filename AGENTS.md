@@ -56,13 +56,13 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `pii_replacer/` | NER-based PII detection and replacement |
 | `privacy/` | DP transformers (Opacus integration) |
 | `sdk/` | SafeSynthesizer builder, library_builder |
-| `training/` | TrainingBackend, HuggingFace backend, shared column validators, timeseries_preprocessing (`validators.py`) |
+| `training/` | TrainingBackend, HuggingFace backend, timeseries_preprocessing (`timeseries_preprocessing.py`) |
 | `artifacts/` | Data quality checks, field analysis, metadata |
 | `observability.py` | CategoryLogger, TracedContext, structured logging |
 | `errors.py` | Error hierarchy: `SafeSynthesizerError` → `UserError` (`DataError`/`ParameterError` are also `ValueError`; `GenerationError` is also `RuntimeError`) and `InternalError` (also `RuntimeError`). See `diagnose-failures` skill |
 | `defaults.py` | Default settings, constants (`DEFAULT_ARTIFACTS_PATH`, `PSEUDO_GROUP_COLUMN`) |
 | `package_info.py` | Package version (uv-dynamic-versioning) |
-| `preflight/` | Pre-flight validation (runs against the training split produced by `Holdout`, not the full input). Package layout: `types` (dataclasses), `base` (`PreflightCheck` ABC hierarchy — `ConfigCheck`/`DataFrameCheck`/`MetadataCheck`/`AdvisoryCheck`), `registry` (`PREFLIGHT_REGISTRY: PreflightRegistry`, plugin registration), `orchestrator` (`run_preflight`, `_run_registry` with dependency gating), `checks/` (15 granular core checks grouped by stage: `environment.py` for CONFIG, `dataframe.py` for DATAFRAME, `metadata.py` for METADATA, `advisory.py` for ADVISORY, plus `_helpers.py` shared helpers and public `preflight.helpers` for plugin authors). Rendering-free by design. |
+| `preflight/` | Pre-flight validation (runs against the training split produced by `Holdout`, not the full input). Package layout: `types` (dataclasses), `base` (`PreflightCheck` ABC hierarchy — `ConfigCheck`/`DataFrameCheck`/`MetadataCheck`/`AdvisoryCheck`), `registry` (`get_registry() -> PreflightRegistry`, plugin registration), `orchestrator` (`run_preflight`, `_run_registry` with dependency gating), `checks/` (15 granular core checks grouped by stage: `environment.py` for CONFIG, `dataframe.py` for DATAFRAME, `metadata.py` for METADATA, `advisory.py` for ADVISORY, plus `_helpers.py` shared helpers and public `preflight.helpers` for plugin authors). Rendering-free by design. |
 | `tooling/` | Internal rendering layer. Hosts `render_preflight_report` (Rich today; agentic/plain/JSON modes planned via `RenderMode`), `PreflightRenderContext`. Intended to absorb the evaluation report renderer and alternative output modes over time. |
 | `results.py` | Result compilation (`make_nss_results`, `make_nss_summary`) |
 | `utils.py` | Schema prompt creation, pattern matching helpers |

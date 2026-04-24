@@ -167,7 +167,7 @@ def run_preflight(
     Returns:
         A structured ``PreflightReport``.
     """
-    effective_registry = _registry.PREFLIGHT_REGISTRY if registry is None else registry
+    effective_registry = _registry.get_registry() if registry is None else registry
     _warn_unknown_disabled_checks(config, effective_registry)
 
     ctx = PreflightContext(data=data, config=config, metadata=metadata)

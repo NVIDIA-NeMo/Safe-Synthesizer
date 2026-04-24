@@ -20,12 +20,12 @@ from nemo_safe_synthesizer.preflight import (
     PreflightContext,
     PreflightIssue,
     PreflightStage,
-    _run_registry,
     build_registry,
     register_preflight_check,
     reset_preflight_plugins,
     run_preflight,
 )
+from nemo_safe_synthesizer.preflight.orchestrator import _run_registry
 
 from .conftest import make_ctx
 
@@ -58,10 +58,10 @@ def test_register_preflight_check_appends_to_registry():
 
     instance = MyCheck()
     register_preflight_check(instance)
-    assert pf_mod.PREFLIGHT_REGISTRY[instance.name] is instance
+    assert pf_mod.get_registry()[instance.name] is instance
     # Plugin slots into its stage block (CONFIG here), so it is the last
     # entry of that stage block rather than the end of the registry.
-    config_stage_checks = [c for c in pf_mod.PREFLIGHT_REGISTRY if c.stage is PreflightStage.CONFIG]
+    config_stage_checks = [c for c in pf_mod.get_registry() if c.stage is PreflightStage.CONFIG]
     assert config_stage_checks[-1] is instance
 
 
@@ -148,8 +148,8 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
         register_preflight_check(Duplicate())
     register_preflight_check(Third())
 
-    assert "myplugin.first" in pf_mod.PREFLIGHT_REGISTRY.checks
-    assert "myplugin.third" in pf_mod.PREFLIGHT_REGISTRY.checks
+    assert "myplugin.first" in pf_mod.get_registry().checks
+    assert "myplugin.third" in pf_mod.get_registry().checks
 
 
 # ---------------------------------------------------------------------------

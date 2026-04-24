@@ -14,9 +14,9 @@ from nemo_safe_synthesizer.preflight import (
     IssueCollector,
     MetadataCheck,
     PreflightContext,
-    _validate_registry,
     build_registry,
 )
+from nemo_safe_synthesizer.preflight.registry import _validate_registry
 
 
 class _NoopConfig(ConfigCheck):

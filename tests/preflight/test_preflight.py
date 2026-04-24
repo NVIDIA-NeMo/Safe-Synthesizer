@@ -16,7 +16,6 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.preflight import (
-    PREFLIGHT_REGISTRY,
     AdvisoryCheck,
     ConfigCheck,
     ConstantColumnCheck,
@@ -39,6 +38,7 @@ from nemo_safe_synthesizer.preflight import (
     TrainingStepsCheck,
     UndersamplingCheck,
     VRAMHeadroomCheck,
+    get_registry,
     run_preflight,
 )
 from nemo_safe_synthesizer.tooling import PreflightRenderContext, render_preflight_report
@@ -505,7 +505,7 @@ class TestRunPreflight:
                 report = run_preflight(sample_df, resolved_config, metadata)
         assert len(report.errors) == 0
         # timeseries.timestamp is excluded via enabled() when is_timeseries is False
-        assert len(report.checks) == len(PREFLIGHT_REGISTRY) - 1
+        assert len(report.checks) == len(get_registry()) - 1
         by_name = {c.name: c for c in report.checks}
         assert "timeseries.timestamp" not in by_name
 
@@ -736,28 +736,29 @@ class TestRegistryShape:
 
         This is the contract plugin authors rely on: a plugin subclassing
         ``DataFrameCheck`` slots after all ``ConfigCheck`` entries, etc.
-        Checked on the real ``PREFLIGHT_REGISTRY`` so core registrations
+        Checked on the real registry so core registrations
         can't accidentally break the invariant.
         """
+        registry = get_registry()
         stage_order = list(PreflightStage)
-        indices = [stage_order.index(c.stage) for c in PREFLIGHT_REGISTRY]
+        indices = [stage_order.index(c.stage) for c in registry]
         assert indices == sorted(indices), (
-            f"Registry is not stage-monotonic: {[(c.name, c.stage.value) for c in PREFLIGHT_REGISTRY]}"
+            f"Registry is not stage-monotonic: {[(c.name, c.stage.value) for c in registry]}"
         )
 
     def test_names_are_unique(self):
-        names = [c.name for c in PREFLIGHT_REGISTRY]
+        names = [c.name for c in get_registry()]
         assert len(names) == len(set(names))
 
     def test_requires_reference_earlier_names(self):
         seen: set[str] = set()
-        for check in PREFLIGHT_REGISTRY:
+        for check in get_registry():
             for dep in check.requires:
                 assert dep in seen, f"{check.name} requires '{dep}' but it appears later or doesn't exist"
             seen.add(check.name)
 
     def test_all_stages_represented(self):
-        stages_used = {c.stage for c in PREFLIGHT_REGISTRY}
+        stages_used = {c.stage for c in get_registry()}
         for stage in PreflightStage:
             assert stage in stages_used, f"Stage {stage} has no registered checks"
 
@@ -787,7 +788,8 @@ class TestDependencyGating:
         """
         from types import MappingProxyType
 
-        from nemo_safe_synthesizer.preflight import PreflightRegistry, _run_registry
+        from nemo_safe_synthesizer.preflight import PreflightRegistry
+        from nemo_safe_synthesizer.preflight.orchestrator import _run_registry
 
         ctx = PreflightContext(data=pd.DataFrame(), config=MagicMock(), metadata=MagicMock())
         preg = PreflightRegistry(checks=MappingProxyType({c.name: c for c in registry}))

@@ -14,8 +14,8 @@ from .checks import _CORE_CHECKS
 from .types import PreflightRegistry, PreflightStage
 
 __all__ = [
-    "PREFLIGHT_REGISTRY",
     "build_registry",
+    "get_registry",
     "register_preflight_check",
     "reset_preflight_plugins",
 ]
@@ -65,8 +65,8 @@ def register_preflight_check(check: PreflightCheck) -> PreflightCheck:
     candidate_plugins = tuple(_PLUGIN_CHECKS) + (check,)
     new_registry = build_registry(_CORE_CHECKS, candidate_plugins)
     _PLUGIN_CHECKS.append(check)
-    global PREFLIGHT_REGISTRY
-    PREFLIGHT_REGISTRY = new_registry
+    global _REGISTRY
+    _REGISTRY = new_registry
     return check
 
 
@@ -76,9 +76,9 @@ def reset_preflight_plugins() -> None:
     Intended for use in tests and notebooks where a clean registry is
     required between runs. Not thread-safe; see ``register_preflight_check``.
     """
-    global PREFLIGHT_REGISTRY
+    global _REGISTRY
     _PLUGIN_CHECKS.clear()
-    PREFLIGHT_REGISTRY = build_registry(_CORE_CHECKS)
+    _REGISTRY = build_registry(_CORE_CHECKS)
 
 
 def _validate_registry(ordered: Sequence[PreflightCheck]) -> None:
@@ -126,4 +126,15 @@ def build_registry(*sources: Sequence[PreflightCheck]) -> PreflightRegistry:
     return PreflightRegistry(checks=MappingProxyType({c.name: c for c in merged}))
 
 
-PREFLIGHT_REGISTRY: PreflightRegistry = build_registry(_CORE_CHECKS)
+_REGISTRY: PreflightRegistry = build_registry(_CORE_CHECKS)
+
+
+def get_registry() -> PreflightRegistry:
+    """Return the current preflight registry.
+
+    The registry is rebuilt each time a plugin is registered via
+    ``register_preflight_check`` or cleared via ``reset_preflight_plugins``.
+    Always call this function rather than caching the result across
+    registration boundaries.
+    """
+    return _REGISTRY

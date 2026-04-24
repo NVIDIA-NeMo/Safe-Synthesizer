@@ -48,7 +48,7 @@ class PreflightCheck(ABC):
     """Base class for pre-flight validation checks.
 
     Lifecycle: subclass -> set class attrs (name, label, requires) ->
-    instantiate -> register in PREFLIGHT_REGISTRY -> ``_run_registry``
+    instantiate -> register via ``register_preflight_check`` -> ``_run_registry``
     calls ``run(ctx)`` which delegates to the stage-specific ``check()``
     method.
 

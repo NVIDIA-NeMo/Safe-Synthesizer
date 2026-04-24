@@ -4,7 +4,7 @@
 """Core pre-flight check implementations.
 
 The aggregated ``_CORE_CHECKS`` tuple is what ``registry.build_registry``
-uses to seed the default ``PREFLIGHT_REGISTRY``. Add a new core check by
+uses to seed the registry returned by ``get_registry()``. Add a new core check by
 implementing it in the stage-matching submodule and appending it here in
 the order you want it to run within its stage block.
 """

@@ -227,12 +227,12 @@ def _run_validate_and_render(
 
     # intentionally deferred import to avoid delay in user startup
     from ..package_info import __version__
-    from ..preflight import PREFLIGHT_REGISTRY
+    from ..preflight import get_registry
 
     if nss.preflight_report is not None:
         render_preflight_report(
             nss.preflight_report,
-            registry=PREFLIGHT_REGISTRY,
+            registry=get_registry(),
             context=_build_validate_render_context(
                 config_path=nss._preflight_config_path,
                 data_source=settings.data_source,
