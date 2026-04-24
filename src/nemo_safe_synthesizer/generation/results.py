@@ -29,6 +29,15 @@ from ..observability import get_logger
 from ..utils import DataActionsFn
 
 NUM_PROMPT_BUFFER = 10
+# Small first-batch prompt count used to measure records-per-prompt before
+# the adaptive batch sizing kicks in. Prior behavior was to send
+# ``max_num_prompts_per_batch`` (100) on the first batch assuming one
+# record per prompt — this overshoots severely when the model packs many
+# records per prompt (JSON always; positional once multi-record-per-prompt
+# generation is enabled). A small probe limits the first-batch overshoot
+# to ``INITIAL_PROBE_PROMPTS * observed_records_per_prompt`` records at
+# worst, after which the adaptive path corrects.
+INITIAL_PROBE_PROMPTS = 10
 
 logger = get_logger(__name__)
 
@@ -176,7 +185,7 @@ class GenerationBatches:
         self,
         target_num_records: int | None = None,
         batches: list[Batch] | None = None,
-        max_num_prompts_per_batch: int = MAX_NUM_PROMPTS_PER_BATCH,
+        max_num_prompts_per_batch: int | None = None,
         invalid_fraction_threshold: float | None = None,
         patience: int | None = None,
         data_actions_fn: DataActionsFn | None = None,
@@ -184,6 +193,17 @@ class GenerationBatches:
         self._batches = batches or []
         self._start_time = time.perf_counter()
         self.target_num_records = target_num_records
+        # Auto-scale the per-batch prompt cap with target size so large
+        # targets don't pay 10-100× synchronous-batch overhead. Floor at
+        # MAX_NUM_PROMPTS_PER_BATCH for small targets, grow with target, cap
+        # at 2000 to stay within reasonable vLLM queue sizes.
+        if max_num_prompts_per_batch is None:
+            if target_num_records is None:
+                max_num_prompts_per_batch = MAX_NUM_PROMPTS_PER_BATCH
+            else:
+                max_num_prompts_per_batch = min(
+                    2000, max(MAX_NUM_PROMPTS_PER_BATCH, target_num_records // 20)
+                )
         self.max_num_prompts_per_batch = max_num_prompts_per_batch
         self.status = GenerationStatus.IN_PROGRESS
         self.running_stopping_metric = RunningStatistics()
@@ -347,11 +367,18 @@ class GenerationBatches:
             valid_records_per_prompt = self.num_valid_records / self.num_prompts
             num_prompts_needed = round(num_records_remaining / (valid_records_per_prompt + EPS))
             num_prompts = min(num_prompts, num_prompts_needed + NUM_PROMPT_BUFFER)
+        elif self.num_prompts == 0:
+            # Truly first batch: no records-per-prompt history yet. Send a
+            # small probe batch to learn the ratio cheaply; the adaptive
+            # branch above correctly sizes subsequent batches once
+            # num_valid_records > 0.
+            num_prompts = min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
         else:
-            # First batch: no records-per-prompt history yet.  Assume at
-            # least 1 record per prompt (the actual ratio is typically much
-            # higher) to avoid sending max_num_prompts_per_batch prompts
-            # when the target is small.
+            # Prompts already sent but still no valid records. Don't keep
+            # probing — escalate to full batches to give the model more
+            # attempts per cycle. NSS's patience mechanism
+            # (``STOP_NO_RECORDS``) is the ultimate backstop for pathological
+            # datasets.
             num_prompts = min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)
 
         return num_prompts
