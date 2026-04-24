@@ -38,7 +38,7 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import Literal
 
-from .types import IssueCollector
+from .base import IssueCollector
 
 __all__ = [
     "Severity",

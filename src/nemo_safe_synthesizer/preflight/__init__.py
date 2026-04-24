@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from ..config.preflight import PreflightParameters
 from . import helpers
-from .base import AdvisoryCheck, ConfigCheck, DataFrameCheck, MetadataCheck, PreflightCheck
+from .base import AdvisoryCheck, ConfigCheck, DataFrameCheck, IssueCollector, MetadataCheck, PreflightCheck
 from .checks import (
     ConstantColumnCheck,
     CUDAAvailabilityCheck,
@@ -32,17 +32,19 @@ from .checks import (
 )
 from .orchestrator import CRASH_CODE, run_preflight
 from .registry import (
+    PreflightRegistry,
     build_registry,
     get_registry,
     register_preflight_check,
     reset_preflight_plugins,
 )
 from .types import (
-    IssueCollector,
+    ConfigView,
+    DataFrameView,
+    MetadataView,
     PreflightCheckResult,
     PreflightContext,
     PreflightIssue,
-    PreflightRegistry,
     PreflightReport,
     PreflightStage,
     PreflightStatus,
@@ -53,6 +55,8 @@ __all__ = [
     "CRASH_CODE",
     "CUDAAvailabilityCheck",
     "ConfigCheck",
+    "ConfigView",
+    "DataFrameView",
     "ConstantColumnCheck",
     "DataFrameCheck",
     "DatasetRowCountCheck",
@@ -62,6 +66,7 @@ __all__ = [
     "InferenceKeyCheck",
     "IssueCollector",
     "MetadataCheck",
+    "MetadataView",
     "OrderbyColumnCheck",
     "OversamplingCheck",
     "PreflightCheck",

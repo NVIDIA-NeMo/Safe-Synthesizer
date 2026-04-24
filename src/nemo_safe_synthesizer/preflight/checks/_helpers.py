@@ -5,18 +5,25 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import pandas as pd
 
 from ...data_processing.budget import compute_max_new_tokens, compute_schema_prompt_ids, tokenize_records
-from ..types import IssueCollector, PreflightContext
+from ..base import IssueCollector
 
 if TYPE_CHECKING:
+    from ...config.parameters import SafeSynthesizerParameters
     from ...llm.metadata import ModelMetadata
 
 
-def resolved_record_count(ctx: PreflightContext) -> int | None:
+class _CtxWithConfig(Protocol):
+    """Minimal structural protocol satisfied by all stage views and ``PreflightContext``."""
+
+    config: SafeSynthesizerParameters
+
+
+def resolved_record_count(ctx: _CtxWithConfig) -> int | None:
     """Return ``num_input_records_to_sample`` once resolved to a concrete int.
 
     ``num_input_records_to_sample`` may still carry a sentinel like ``"auto"``

@@ -34,8 +34,8 @@ import os
 
 from nemo_safe_synthesizer.preflight import (
     ConfigCheck,
+    ConfigView,
     IssueCollector,
-    PreflightContext,
     register_preflight_check,
 )
 
@@ -45,7 +45,7 @@ class LicenseCheck(ConfigCheck):
     label = "License key"
     category = "environment"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         if not os.environ.get("ACME_LICENSE"):
             collector.error("acme_missing_license", "ACME_LICENSE is required.")
 
@@ -55,12 +55,17 @@ register_preflight_check(LicenseCheck())
 
 Subclass the stage ABC that matches what your check needs:
 
-| ABC | Use when |
-| --- | --- |
-| `ConfigCheck` | only the resolved config is required |
-| `DataFrameCheck` | the training DataFrame is required |
-| `MetadataCheck` | model metadata (tokenizer, context length) is required |
-| `AdvisoryCheck` | data-quality advisories that never gate downstream checks |
+| ABC | Context view | Fields available |
+| --- | --- | --- |
+| `ConfigCheck` | `ConfigView` | `ctx.config` |
+| `DataFrameCheck` | `DataFrameView` | `ctx.config`, `ctx.data` |
+| `MetadataCheck` | `MetadataView` | `ctx.config`, `ctx.data`, `ctx.metadata` |
+| `AdvisoryCheck` | `DataFrameView` | `ctx.config`, `ctx.data` |
+
+The check's `check()` method receives the narrowed view, not the full
+`PreflightContext`. A type-checker will flag any access to a field that
+is not part of the view (e.g. `ctx.metadata` inside a `ConfigCheck`).
+The `enabled()` method always receives the full `PreflightContext`.
 
 Picking the right stage matters beyond ergonomics. `ConfigCheck` /
 `DataFrameCheck` / `MetadataCheck` errors are hard gates: any downstream
@@ -84,8 +89,8 @@ from __future__ import annotations
 
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
+    DataFrameView,
     IssueCollector,
-    PreflightContext,
     register_preflight_check,
 )
 
@@ -98,7 +103,7 @@ class DuplicateRowsCheck(AdvisoryCheck):
     warn_ratio: float = 0.01        # tunable via subclass override
     loud_ratio: float = 0.25
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         data = ctx.data
         if len(data) == 0:          # runtime-state skip lives in `check`
             return
@@ -144,6 +149,7 @@ from __future__ import annotations
 
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
+    DataFrameView,
     IssueCollector,
     PreflightContext,
     register_preflight_check,
@@ -159,12 +165,12 @@ class TinyGroupsCheck(AdvisoryCheck):
     min_group_size: int = 3
 
     def enabled(self, ctx: PreflightContext) -> bool:
-        # Declarative skip on config state -- `enabled` is the right home.
+        # enabled() always receives the full PreflightContext.
         if not super().enabled(ctx):
             return False
         return ctx.config.data.group_training_examples_by is not None
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         data = ctx.data
         group_col = ctx.config.data.group_training_examples_by
         if group_col not in data.columns:
@@ -201,8 +207,8 @@ the issue code, the helper owns the try/except convention.
 ```python
 from nemo_safe_synthesizer.preflight import (
     DataFrameCheck,
+    DataFrameView,
     IssueCollector,
-    PreflightContext,
     helpers,
 )
 from nemo_safe_synthesizer.data_processing.validation import check_column_present
@@ -213,7 +219,7 @@ class MyColumnCheck(DataFrameCheck):
     name = "acme.my_column"
     label = "My column"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         helpers.emit_on_raise(
             collector,
             lambda: check_column_present(ctx.data, "amount", role="Amount"),
@@ -236,23 +242,55 @@ Available helpers:
   normalized to a concrete `int`; returns `None` if it still carries a
   sentinel like `"auto"`.
 
+### Calling shared validation helpers
+
+Core `DataFrameCheck` implementations (e.g. `GroupbyColumnCheck`,
+`OrderbyColumnCheck`) delegate to helpers in
+`nemo_safe_synthesizer.data_processing.validation` — functions that
+**raise** `ParameterError` or `DataError` on failure rather than
+returning a result. The `emit_on_raise` adapter is the bridge:
+
+```
+validation helper raises ParameterError
+    → emit_on_raise catches it
+        → collector.error(code, message)
+```
+
+Plugin authors can use the same pattern with any raising helper:
+
+```python
+from nemo_safe_synthesizer.data_processing.validation import check_column_present
+from nemo_safe_synthesizer.errors import ParameterError
+
+helpers.emit_on_raise(
+    collector,
+    lambda: check_column_present(ctx.data, "amount", role="Amount"),
+    expect=ParameterError,
+    code="acme_amount_missing",
+)
+```
+
+Alternatively, call `collector.error` / `collector.warning` directly
+when your logic does not rely on a raising helper — both styles are
+valid within the same check.
+
 ## Testing a check
 
 Unit-test the check logic in isolation -- no need to touch the global
-registry. Instantiate the check, build a minimal `PreflightContext`,
-and invoke `check()` with your own `IssueCollector`:
+registry. Instantiate the check, build a minimal context view for the
+check's stage, and invoke `check()` with your own `IssueCollector`:
 
 ```python title="tests/test_duplicate_rows.py"
 import pandas as pd
-from unittest.mock import MagicMock
 
 from acme_nss_plugins.duplicates import DuplicateRowsCheck
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
-from nemo_safe_synthesizer.preflight import IssueCollector, PreflightContext
+from nemo_safe_synthesizer.preflight import DataFrameView, IssueCollector
 
 
-def _ctx(df: pd.DataFrame) -> PreflightContext:
-    return PreflightContext(data=df, config=SafeSynthesizerParameters(), metadata=MagicMock())
+def _ctx(df: pd.DataFrame) -> DataFrameView:
+    # AdvisoryCheck uses DataFrameView -- no metadata needed.
+    return DataFrameView(data=df, config=SafeSynthesizerParameters())
 
 
 def test_many_duplicates_warns_loudly():

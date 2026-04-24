@@ -5,20 +5,59 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, KeysView, Mapping, Sequence
+from dataclasses import dataclass
 from itertools import chain
 from types import MappingProxyType
 
 from .base import _CORE_NAMESPACES, PreflightCheck
 from .checks import _CORE_CHECKS
-from .types import PreflightRegistry, PreflightStage
+from .types import PreflightStage
 
 __all__ = [
+    "PreflightRegistry",
     "build_registry",
     "get_registry",
     "register_preflight_check",
     "reset_preflight_plugins",
 ]
+
+
+@dataclass(frozen=True)
+class PreflightRegistry:
+    """Ordered, name-keyed view of the checks the orchestrator will run.
+
+    Constructed by :func:`build_registry` and treated as immutable.
+    Iteration yields the ``PreflightCheck`` instances themselves (not
+    their names), so ``for check in registry`` reads naturally;
+    name-based access uses ``registry[name]`` / ``name in registry``.
+    Extend by calling ``register_preflight_check`` or rebuilding via
+    ``build_registry``; never mutate in place.
+
+    Attributes:
+        checks: Insertion-ordered mapping from ``PreflightCheck.name`` to
+            the check instance. Backed by ``types.MappingProxyType`` so
+            the underlying dict is hidden from callers.
+    """
+
+    checks: Mapping[str, PreflightCheck]
+
+    def __iter__(self) -> Iterator[PreflightCheck]:
+        return iter(self.checks.values())
+
+    def __contains__(self, name: object) -> bool:
+        return name in self.checks
+
+    def __getitem__(self, name: str) -> PreflightCheck:
+        return self.checks[name]
+
+    def __len__(self) -> int:
+        return len(self.checks)
+
+    @property
+    def names(self) -> KeysView[str]:
+        """The check names, in registry order."""
+        return self.checks.keys()
 
 
 _STAGE_ORDER: dict[PreflightStage, int] = {

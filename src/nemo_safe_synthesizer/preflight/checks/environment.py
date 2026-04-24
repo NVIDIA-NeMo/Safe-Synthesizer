@@ -12,7 +12,8 @@ from ...config.replace_pii import has_inference_key
 from ...observability import get_logger
 from ..base import ConfigCheck
 from ..helpers import require_import
-from ..types import IssueCollector, PreflightContext
+from ..base import IssueCollector
+from ..types import ConfigView
 
 logger = get_logger(__name__)
 
@@ -40,7 +41,7 @@ class CUDAAvailabilityCheck(ConfigCheck):
     label = "CUDA availability"
     category = "environment"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         torch = require_import(
             collector,
             "torch",
@@ -261,7 +262,7 @@ class VRAMHeadroomCheck(ConfigCheck):
     category = "environment"
     requires = ("gpu.cuda",)
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         import torch
 
         from ...llm.utils import get_max_vram
@@ -321,7 +322,7 @@ class InferenceKeyCheck(ConfigCheck):
     label = "Inference key"
     category = "environment"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         config = ctx.config
         if config.replace_pii is not None and config.replace_pii.globals.classify.enable_classify is not False:
             if not has_inference_key():
@@ -338,7 +339,7 @@ class HFTokenCheck(ConfigCheck):
     label = "HF token"
     category = "environment"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
         if not hf_token:
             collector.warning(

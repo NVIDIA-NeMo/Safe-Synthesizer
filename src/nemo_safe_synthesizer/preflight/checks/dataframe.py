@@ -13,7 +13,8 @@ from ...data_processing.validation import (
 from ...errors import DataError, ParameterError
 from ..base import DataFrameCheck
 from ..helpers import emit_on_raise
-from ..types import IssueCollector, PreflightContext
+from ..base import IssueCollector
+from ..types import PreflightContext, DataFrameView
 
 __all__ = [
     "ConstantColumnCheck",
@@ -30,7 +31,7 @@ class GroupbyColumnCheck(DataFrameCheck):
     name = "columns.groupby"
     label = "Group-by column"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         column = ctx.config.data.group_training_examples_by
         if column is None:
             return
@@ -56,7 +57,7 @@ class OrderbyColumnCheck(DataFrameCheck):
     name = "columns.orderby"
     label = "Order-by column"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         config = ctx.config
         column = config.data.order_training_examples_by
         if column is None:
@@ -80,7 +81,7 @@ class PseudoColumnCheck(DataFrameCheck):
     name = "columns.pseudo"
     label = "Pseudo column"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         emit_on_raise(
             collector,
             lambda: check_no_pseudo_column_collision(ctx.data),
@@ -95,7 +96,7 @@ class ConstantColumnCheck(DataFrameCheck):
     name = "columns.constant"
     label = "Constant columns"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         data = ctx.data
         for col in data.columns:
             if data[col].dropna().nunique() == 1:
@@ -116,7 +117,7 @@ class TimestampColumnCheck(DataFrameCheck):
             return False
         return bool(ctx.config.time_series.is_timeseries)
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         timestamp_column = ctx.config.time_series.timestamp_column
         if timestamp_column is None:
             return

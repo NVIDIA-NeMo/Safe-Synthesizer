@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from ...defaults import PSEUDO_GROUP_COLUMN
 from ..base import MetadataCheck
-from ..types import IssueCollector, PreflightContext
+from ..base import IssueCollector
+from ..types import MetadataView
 from ._helpers import check_group_budget, check_sampled_record_budget, check_schema_prompt_budget
 
 __all__ = ["TokenBudgetCheck"]
@@ -44,7 +45,7 @@ class TokenBudgetCheck(MetadataCheck):
     token_sample_size: int = 5000
     top_groups_to_check: int = 100
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: MetadataView, collector: IssueCollector) -> None:
         data = ctx.data
         config = ctx.config
         metadata = ctx.metadata

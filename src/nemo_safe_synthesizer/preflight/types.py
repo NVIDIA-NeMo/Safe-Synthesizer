@@ -1,26 +1,57 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Data types surfaced by the preflight layer.
+"""Immutable value objects surfaced by the preflight layer.
 
-This module is intentionally rendering-free: it defines the structured
-value objects (``PreflightIssue``, ``PreflightCheckResult``,
-``PreflightReport``) and the execution context (``PreflightContext``,
-``IssueCollector``, ``PreflightStage``) produced and consumed by
-``run_preflight``. All console / Rich formatting lives in
-``nemo_safe_synthesizer.tooling.preflight``; use
-``render_preflight_report(report, registry=..., ...)`` to display a
-report.
+This module is intentionally rendering-free.  It contains two groups of
+types, described below.
+
+Value objects (produced by the orchestrator, consumed by the renderer)
+----------------------------------------------------------------------
+``PreflightIssue``, ``PreflightCheckResult``, ``PreflightReport`` carry
+the outcome of a ``run_preflight`` call.  All are frozen dataclasses.
+``PreflightStatus`` is a ``Literal`` alias used in ``PreflightCheckResult``.
+
+``PreflightContext`` is the *full* input bundle threaded through the
+orchestrator: the training DataFrame, the resolved config, and the model
+metadata.  The orchestrator constructs exactly one per ``run_preflight``
+call and passes it to each ``PreflightCheck.run()``.
 
 Rendering requires the registry (not just the report) because
 ``PreflightCheckResult`` intentionally does not carry display metadata
-(``label``, ``category``, ordering). Those live on the ``PreflightCheck``
-classes; the renderer looks them up by check name at render time.
+(``label``, ``category``, ordering).  Those live on ``PreflightCheck``
+and are looked up by name at render time; see
+``nemo_safe_synthesizer.tooling.preflight.render_preflight_report``.
+
+Stage-specific context views (consumed by check implementations)
+----------------------------------------------------------------
+``ConfigView``, ``DataFrameView``, and ``MetadataView`` are frozen
+dataclasses that each expose only the subset of ``PreflightContext``
+that a given stage is conceptually allowed to access:
+
+    PreflightContext              all three fields (orchestrator-internal)
+    ├── ConfigView                config only
+    ├── DataFrameView             config + data      (DataFrameCheck, AdvisoryCheck)
+    └── MetadataView              config + data + metadata
+
+These views exist to give check implementations a precise type
+annotation and to let the type-checker enforce stage boundaries.  If a
+``ConfigCheck`` author writes ``ctx.data``, the type-checker flags it
+because ``ConfigView`` has no ``data`` attribute.
+
+The views are *not* subtypes of ``PreflightContext`` -- they are
+independent frozen dataclasses produced by the stage ABCs' ``_narrow()``
+methods.  At runtime ``_narrow()`` simply copies the relevant fields
+from the full ``PreflightContext``.  There is no inheritance relationship
+and no Protocol matching; the narrowing is explicit and auditable.
+
+``IssueCollector`` (the mutable accumulator used inside ``check()``)
+lives in ``base.py`` alongside the ``PreflightCheck`` ABC so plugin
+authors need only one import for the full check-authoring surface.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator, KeysView, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Literal
@@ -30,14 +61,14 @@ import pandas as pd
 if TYPE_CHECKING:
     from ..config.parameters import SafeSynthesizerParameters
     from ..llm.metadata import ModelMetadata
-    from .base import PreflightCheck
 
 __all__ = [
-    "IssueCollector",
+    "ConfigView",
+    "DataFrameView",
+    "MetadataView",
     "PreflightCheckResult",
     "PreflightContext",
     "PreflightIssue",
-    "PreflightRegistry",
     "PreflightReport",
     "PreflightStage",
     "PreflightStatus",
@@ -138,49 +169,18 @@ class PreflightReport:
 
 
 @dataclass(frozen=True)
-class PreflightRegistry:
-    """Ordered, name-keyed view of the checks the orchestrator will run.
-
-    Constructed by [`build_registry`][nemo_safe_synthesizer.preflight.registry.build_registry]
-    and treated as immutable. Iteration yields the ``PreflightCheck``
-    instances themselves (not their names), so ``for check in registry``
-    reads naturally; name-based access uses ``registry[name]`` /
-    ``name in registry``. Extend by calling ``register_preflight_check``
-    or rebuilding via ``build_registry``; never mutate in place.
-
-    Attributes:
-        checks: Insertion-ordered mapping from ``PreflightCheck.name`` to
-            the check instance. Typically backed by
-            ``types.MappingProxyType`` so the underlying dict is hidden.
-    """
-
-    checks: Mapping[str, PreflightCheck]
-
-    def __iter__(self) -> Iterator[PreflightCheck]:
-        return iter(self.checks.values())
-
-    def __contains__(self, name: object) -> bool:
-        return name in self.checks
-
-    def __getitem__(self, name: str) -> PreflightCheck:
-        return self.checks[name]
-
-    def __len__(self) -> int:
-        return len(self.checks)
-
-    @property
-    def names(self) -> KeysView[str]:
-        """The check names, in registry order."""
-        return self.checks.keys()
-
-
-@dataclass(frozen=True)
 class PreflightContext:
     """Inputs threaded to every check.
 
     ``data`` is the training split produced by ``Holdout.train_test_split``
     -- not the full input dataset. On a full run it is also post-PII
     replacement; on ``--validate`` PII replacement is skipped.
+
+    The orchestrator builds one ``PreflightContext`` per ``run_preflight``
+    call and passes it to ``PreflightCheck.run()``, which narrows it to a
+    stage-specific view (``ConfigView``, ``DataFrameView``, etc.) before
+    invoking ``check()``. Check implementations should type their ``ctx``
+    parameter as the appropriate view, not as ``PreflightContext``.
     """
 
     data: pd.DataFrame
@@ -188,31 +188,41 @@ class PreflightContext:
     metadata: ModelMetadata
 
 
-@dataclass
-class IssueCollector:
-    check_name: str
-    _issues: list[PreflightIssue] = field(default_factory=list)
+@dataclass(frozen=True)
+class ConfigView:
+    """Narrowed context passed to :class:`~nemo_safe_synthesizer.preflight.base.ConfigCheck` implementations.
 
-    def error(self, code: str, message: str) -> None:
-        self._issues.append(
-            PreflightIssue(
-                code=code,
-                severity="error",
-                check=self.check_name,
-                message=message,
-            )
-        )
+    Contains only the resolved config. Accessing ``data`` or ``metadata``
+    inside a ``ConfigCheck.check()`` is a type error -- use
+    :class:`DataFrameView` or :class:`MetadataView` if you need those fields.
+    """
 
-    def warning(self, code: str, message: str) -> None:
-        self._issues.append(
-            PreflightIssue(
-                code=code,
-                severity="warning",
-                check=self.check_name,
-                message=message,
-            )
-        )
+    config: SafeSynthesizerParameters
 
-    @property
-    def issues(self) -> list[PreflightIssue]:
-        return self._issues
+
+@dataclass(frozen=True)
+class DataFrameView:
+    """Narrowed context passed to :class:`~nemo_safe_synthesizer.preflight.base.DataFrameCheck` and
+    :class:`~nemo_safe_synthesizer.preflight.base.AdvisoryCheck` implementations.
+
+    Contains the resolved config and the training DataFrame. Accessing
+    ``metadata`` is a type error -- use :class:`MetadataView` if you
+    need model metadata.
+    """
+
+    config: SafeSynthesizerParameters
+    data: pd.DataFrame
+
+
+@dataclass(frozen=True)
+class MetadataView:
+    """Narrowed context passed to :class:`~nemo_safe_synthesizer.preflight.base.MetadataCheck` implementations.
+
+    Contains all three fields: resolved config, training DataFrame, and
+    model metadata. This is the widest view; prefer a narrower view
+    (``ConfigView`` / ``DataFrameView``) if you do not need all three.
+    """
+
+    config: SafeSynthesizerParameters
+    data: pd.DataFrame
+    metadata: ModelMetadata

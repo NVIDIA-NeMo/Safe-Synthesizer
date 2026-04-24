@@ -16,11 +16,11 @@ import pandas as pd
 from ..observability import LogCategory, get_logger, traced
 from . import registry as _registry
 from .base import PreflightCheck
+from .registry import PreflightRegistry
 from .types import (
     PreflightCheckResult,
     PreflightContext,
     PreflightIssue,
-    PreflightRegistry,
     PreflightReport,
     PreflightStage,
 )
@@ -98,6 +98,15 @@ def _run_registry(
     ran and errored have ``status="failed"``; checks that ran clean
     have ``status="passed"``; checks gated out by a failed/disabled
     dependency have ``status="skipped"`` with no issues emitted.
+
+    .. note::
+        Although private, this function is part of the **test-accessible**
+        surface.  Tests that need fine-grained control over the registry or
+        context (without going through the full CLI/SDK path) should call
+        ``_run_registry`` directly rather than monkey-patching
+        ``run_preflight``.  The leading underscore signals "internal to this
+        module" rather than "unstable API" -- the signature is stable and
+        intentionally exercised by unit tests.
     """
     results: list[PreflightCheckResult] = []
     errored_checks: set[str] = set()

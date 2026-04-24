@@ -6,7 +6,8 @@
 from __future__ import annotations
 
 from ..base import AdvisoryCheck, DataFrameCheck
-from ..types import IssueCollector, PreflightContext
+from ..base import IssueCollector
+from ..types import DataFrameView
 from ._helpers import resolved_record_count
 
 __all__ = [
@@ -32,7 +33,7 @@ class DatasetSizeCheck(DataFrameCheck):
     category = "data quality"
     min_rows: int = 200
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_rows = len(ctx.data)
         if n_rows < self.min_rows:
             collector.error(
@@ -54,7 +55,7 @@ class DatasetRowCountCheck(AdvisoryCheck):
     min_rows_warning: int = 1000
     requires = ("dataset.size",)
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_rows = len(ctx.data)
         if n_rows < self.min_rows_warning:
             collector.warning(
@@ -70,7 +71,7 @@ class OversamplingCheck(AdvisoryCheck):
     label = "Oversampling"
     oversampling_ratio: float = 5.0
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_records = resolved_record_count(ctx)
         if n_records is None:
             return
@@ -112,7 +113,7 @@ class TrainingStepsCheck(AdvisoryCheck):
     requires = ("columns.groupby",)
     min_training_steps: int = 10
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_records = resolved_record_count(ctx)
         if n_records is None:
             return
@@ -157,7 +158,7 @@ class UndersamplingCheck(AdvisoryCheck):
     name = "training.undersampling"
     label = "Undersampling"
 
-    def check(self, ctx: PreflightContext, collector: IssueCollector) -> None:
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_records = resolved_record_count(ctx)
         if n_records is None:
             return

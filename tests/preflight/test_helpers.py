@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from nemo_safe_synthesizer.preflight import helpers
-from nemo_safe_synthesizer.preflight.types import IssueCollector
+from nemo_safe_synthesizer.preflight import IssueCollector
 
 
 def _collector() -> IssueCollector:
