@@ -224,6 +224,7 @@ def _run_validate_and_render(
     finally:
         _clear_progress_line()
 
+    # intentionally deferred import to avoid delay in user startup
     from ..package_info import __version__
     from ..preflight import PREFLIGHT_REGISTRY
 
