@@ -359,14 +359,17 @@ def _initialize_logging_for_cli_from_settings(
         log_color=settings.effective_log_color,
     )
 
-    # Initialize the logging system; suppress tty warnings in quiet mode.
-    # Scoped here so normal CLI runs still see warnings like "stdout is a tty"
-    # that signal misconfigured redirections.
+    # Initialize the logging system; suppress NSSObservabilitySettings tty
+    # warnings in quiet mode. Scoped narrowly to the two known messages so
+    # other UserWarnings raised during init still surface.
     structlog.reset_defaults()
     if quiet:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            warnings.filterwarnings("ignore", message="stdout is a tty")
+            warnings.filterwarnings(
+                "ignore",
+                message=r"stdout is (not )?a tty",
+                category=UserWarning,
+            )
             initialize_observability()
         for handler in logging.getLogger().handlers:
             if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
