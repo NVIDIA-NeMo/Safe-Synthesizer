@@ -1,0 +1,48 @@
+# Codecov configuration for NVIDIA-NeMo/Safe-Synthesizer.
+#
+# Coverage is meant to measure production code, but our coverage upload
+# only runs from the CPU `unit-test` job (.github/workflows/ci-checks.yml)
+# under `make test-ci`, which deselects markers `e2e`, `requires_gpu`,
+# `slow`, and `smoke` (Makefile:195). The whole `tests/smoke/` directory
+# is auto-marked `smoke` (tests/conftest.py:30-33), so its bodies never
+# execute under the coverage upload and look uncovered to codecov.
+#
+# Splitting status checks by path (per Codecov's "Excluding tests" pattern,
+# https://docs.codecov.com/docs/commit-status#excluding-tests-example)
+# scopes the blocking `project` and `patch` checks to production code,
+# while keeping a non-blocking `tests` status for visibility.
+#
+# A 1% `threshold` gives a small buffer so unrelated PRs don't fail on
+# rounding (e.g. 75.01% -> 74.99%).
+
+coverage:
+  status:
+    project:
+      default: false
+      app:
+        target: auto
+        threshold: 1%
+        paths:
+          - "!tests/"
+      tests:
+        informational: true
+        paths:
+          - "tests/"
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+        paths:
+          - "!tests/"
+
+# Suppress the codecov bot comment when coverage didn't change. Without this,
+# every PR -- including test-only refactors with an empty patch -- gets a
+# coverage comment that adds noise to PR review.
+comment:
+  require_changes: true
+
+# Disable inline uncovered-line annotations on the PR diff. The status check
+# already conveys whether patch coverage passed; the annotations add visual
+# clutter on top of GitHub's own diff UI.
+github_checks:
+  annotations: false
