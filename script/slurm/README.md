@@ -22,7 +22,7 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 
 ### Prerequisites
 
-- Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
+- Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cw-pdx-cs-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
 - An LLM inference endpoint and the API Key: You will need a `NSS_INFERENCE_KEY` to run column classification, if using the default `NSS_INFERENCE_ENDPOINT`. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com).
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
@@ -71,7 +71,7 @@ export USER_NAME=<your slurm user name>
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
 
 # (May be added automatically by uv)
-. "/lustre/fsw/portfolios/llmservice/users/kendrickb/.uv/bin/env"
+. "${LUSTRE_DIR}/.uv/bin/env"
 
 export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
 export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
@@ -101,8 +101,8 @@ chmod 600 /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USE
 - Review the [Compute Planning spreadsheet](https://docs.google.com/spreadsheets/d/1F6bpK-Z5W5nXKkjKVyEMD9QPw3fJKUcgu0GdXZjZBwQ/edit?gid=757556149#gid=757556149) to confirm available resources and planned usage.
 - Monitor current GPU usage in the [AI Hub Dashboard](https://aihub.nvidia.com/) (~3hr delay):
     - Navigate to Observability > GPU Occupancy Trends.
-    - Select the cluster: `cs-oci-ord` (primary cluster for NSS experiments), `cw-dfw-cs-001`
-    - Filter by account using the regex: `sdg`.
+    - Select the cluster: `cw-pdx-cs` (primary cluster for NSS experiments).
+    - Filter by account using the regex: `nemotron`.
     - Set the interval to 1 hour for a detailed view.
 - Use `sshare -U $USER_NAME -l` to check your instantaneous [Fair Share](https://confluence.nvidia.com/display/HWINFCSSUP/Fairshare+Deep+dive) (FS) on a cluster
 
@@ -264,7 +264,7 @@ Solution: Only submit slurm jobs from the login or vscode nodes. (May be ways to
 ### NSS Shared Directory
 
 To reduce duplicated files and make getting started a bit easier, we have a shared directory for common files that do not change across experiments and the people running them.
-At this time, the best recommendation is to place this in someone's user directory, so Kendrick created `/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer` on the `cw-dfw-cs` and `cs-oci-ord` clusters.
+At this time, the best recommendation is to place this in someone's user directory, so Kendrick created `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer` on the `cw-pdx-cs` cluster.
 We will want to duplicate this to other clusters that we use.
 
 The `env_variables.sh` script sets the `NSS_SHARED_DIR` variable to provide access to this location. The structure is:
@@ -286,10 +286,10 @@ These resources are used by the slurm scripts in the following ways:
 
 #### Duplicate shared directory to a new cluster
 
-From a file copier node on the new cluster, run the following to copy Kendrick's shared directory from dfw. Took ~30 minutes when run in Jan 2026 to copy 16 GB.
+From a file copier node on the new cluster, run the following to copy Kendrick's shared directory from `cw-pdx-cs`. Took ~30 minutes when run in Jan 2026 to copy 16 GB.
 
 ```
-rsync -avzP cw-dfw-cs-001-dc-02.cw-dfw-cs-001.hpc.nvidia.com:/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer/ /lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer/
+rsync -avzP cw-pdx-cs-001-dc-02.cw-pdx-cs-001.hpc.nvidia.com:/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/ /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/
 ```
 
 Also good to check on ownership and permissions after copying to ensure 775 permissions (for directories) or 664 (for files).

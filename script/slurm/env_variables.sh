@@ -6,11 +6,9 @@
 export USER_NAME="${USER_NAME:-}"
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}" ## do not change this
 
-# NOTE: This directory is only setup on cs-oci-ord and cw-dfw-cs right now,
+# NOTE: This directory is only setup on cw-pdx-cs right now,
 # will need to create the same structure on other clusters as we need them.
-# Intentionally kept on the llmservice PPP after the nemotron_data_dev migration:
-# the path is still readable cross-PPP and avoids duplicating ~16 GB of benchmark data.
-export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer"
+export NSS_SHARED_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer"
 
 ## change the followings if you want them to be different
 CONFIGS=(

@@ -412,7 +412,7 @@ Components added:
 Use the `safe-synthesizer run` command with a config file and data URL:
 
 ```bash
-EXPORT SHARED_DIR=/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer/configs
+EXPORT SHARED_DIR=/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/configs
 uv run safe-synthesizer run --config $SHARED_DIR/smollm_grouped-utility.yaml --data-source $SHARED_DIR/synthetic_kpi_qoe_policy_dataset.csv
 ```
 
