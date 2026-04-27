@@ -214,12 +214,13 @@ class TestGenerateMiaFigure:
 
     def test_generate_mia_figure_with_zero_percentages(self, mia_aia_df):
         df = mia_aia_df
-        df.loc[df["Attack Percentage"] == 0, "Attack Percentage"] = np.nan
+        df.loc[df.index[0], "Attack Percentage"] = 0
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
         assert isinstance(fig.data[0], go.Pie)
+        assert pd.isna(fig.data[0].values).any()
 
     def test_generate_mia_figure_with_nan_percentages(self, mia_aia_df_with_nan_protection):
         df = mia_aia_df_with_nan_protection
