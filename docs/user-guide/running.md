@@ -287,7 +287,6 @@ within a stage, checks run in the order listed.
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
 | `training.oversampling` | advisory | Sampling fraction is not extreme (warning only) |
-| `training.undersampling` | advisory | Sampling fraction is not below 1.0 (warning only) |
 | `training.steps` | advisory | Effective optimizer steps meet a minimum (warning only) |
 
 If a non-advisory check produces an error, later checks that declare it
@@ -299,7 +298,7 @@ per-group budget branch is skipped automatically when the column is
 absent.
 
 Pre-flight runs against the training split produced by `Holdout`, not
-the full input dataset. Row-count, oversampling/undersampling, and
+the full input dataset. Row-count, oversampling, and
 token-budget messages all report on the training partition the model
 will actually see. The runtime-info block at the top of the report shows
 both the input dataset size and the training-split size so the scope of

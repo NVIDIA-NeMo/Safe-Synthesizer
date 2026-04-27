@@ -24,7 +24,6 @@ from nemo_safe_synthesizer.preflight import (
     ConfigCheck,
     ConstantColumnCheck,
     CUDAAvailabilityCheck,
-    DatasetRowCountCheck,
     DatasetSizeCheck,
     GroupbyColumnCheck,
     HFTokenCheck,
@@ -37,6 +36,7 @@ from nemo_safe_synthesizer.preflight import (
     PreflightReport,
     PreflightStage,
     PseudoColumnCheck,
+    SmallDatasetCheck,
     TimestampColumnCheck,
     TokenBudgetCheck,
     TrainingStepsCheck,
@@ -507,12 +507,12 @@ class TestDatasetSizeCheck:
 class TestDatasetRowCountCheck:
     def test_happy_path(self, default_config):
         df = pd.DataFrame({"val": range(2000)})
-        issues = DatasetRowCountCheck().run(make_ctx(config=default_config, data=df))
+        issues = SmallDatasetCheck().run(make_ctx(config=default_config, data=df))
         assert not any(i.code == "dataset_small" for i in issues)
 
     def test_warns_between_error_floor_and_comfort_threshold(self, default_config):
         df = pd.DataFrame({"val": range(500)})
-        issues = DatasetRowCountCheck().run(make_ctx(config=default_config, data=df))
+        issues = SmallDatasetCheck().run(make_ctx(config=default_config, data=df))
         assert any(i.code == "dataset_small" and i.severity == "warning" for i in issues)
 
 

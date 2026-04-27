@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from ..base import PreflightCheck
 from .advisory import (
-    DatasetRowCountCheck,
     OversamplingCheck,
+    SmallDatasetCheck,
     TrainingStepsCheck,
 )
 from .dataframe import (
@@ -36,7 +36,7 @@ from .metadata import TokenBudgetCheck
 __all__ = [
     "CUDAAvailabilityCheck",
     "ConstantColumnCheck",
-    "DatasetRowCountCheck",
+    "SmallDatasetCheck",
     "DatasetSizeCheck",
     "GroupbyColumnCheck",
     "HFTokenCheck",
@@ -72,7 +72,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # METADATA
     TokenBudgetCheck(),
     # ADVISORY
-    DatasetRowCountCheck(),
+    SmallDatasetCheck(),
     OversamplingCheck(),
     TrainingStepsCheck(),
 )

@@ -10,13 +10,13 @@ from ..types import DataFrameView
 from ._helpers import resolved_record_count
 
 __all__ = [
-    "DatasetRowCountCheck",
+    "SmallDatasetCheck",
     "OversamplingCheck",
     "TrainingStepsCheck",
 ]
 
 
-class DatasetRowCountCheck(AdvisoryCheck):
+class SmallDatasetCheck(AdvisoryCheck):
     """Advise when the dataset is small but above the hard minimum.
 
     The hard floor lives in ``DatasetSizeCheck`` (DataFrame stage);

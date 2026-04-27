@@ -474,7 +474,6 @@ check of its own.
 | `dataset_too_small` | error | `dataset.size` | Dataset has fewer than minimum required rows |
 | `dataset_small` | warning | `dataset.row_count` | Training set below 1000 records |
 | `extreme_oversampling` | warning | `training.oversampling` | Data fraction exceeds 5x |
-| `undersampling` | warning | `training.undersampling` | Data fraction below 1.0 |
 | `few_training_steps` | warning | `training.steps` | Fewer than 10 effective training steps (covers batch > data case) |
 
 ---
