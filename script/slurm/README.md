@@ -29,7 +29,7 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 - Clone Safe-Synthesizer
 ```bash
 export USER_NAME="$USER" # Or hardcode username in slurm
-export LUSTRE_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}"
+export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
 cd $LUSTRE_DIR
 git clone git@github.com:NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
@@ -43,7 +43,7 @@ cd Safe-Synthesizer
   - Thus we put uv and python in your user directory in /lustre and not in /home/$USER
 ```bash
 export USER_NAME="$USER" # Or hardcode username in slurm
-export LUSTRE_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}"
+export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
 # Install `uv` to your lustre directory
 curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="$LUSTRE_DIR/.uv/bin" sh
 # Set environment variables so `uv` uses $LUSTRE_DIR subdirectories for storage
@@ -68,7 +68,7 @@ make bootstrap-nss cu128
   - Recommended snippet to have in `~/.bashrc` so uv and python work on login node and slurm jobs:
 ```bash
 export USER_NAME=<your slurm user name>
-export LUSTRE_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}"
+export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}"
 
 # (May be added automatically by uv)
 . "/lustre/fsw/portfolios/llmservice/users/kendrickb/.uv/bin/env"
@@ -89,12 +89,12 @@ export USER_NAME=your_lustre_username
 
 2) Create your API token file and restrict permissions. `NSS_INFERENCE_KEY` and `WANDB_API_KEY` are required by default. `HF_TOKEN` is recommended to avoid throttling by HF Hub:
 ```bash
-cat > /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh << 'TOKENS'
+cat > /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}/.api_tokens.sh << 'TOKENS'
 export NSS_INFERENCE_KEY="<your_inference_api_key>"
 export WANDB_API_KEY="<your_wandb_api_key>"
 export HF_TOKEN="<your_hf_token>"
 TOKENS
-chmod 600 /lustre/fsw/portfolios/llmservice/users/${USER_NAME}/.api_tokens.sh
+chmod 600 /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}/.api_tokens.sh
 ```
 
 3) Check allocation:
@@ -188,7 +188,7 @@ The `--max-concurrent-slurm-jobs N` param can be used to further restrict concur
 This only restricts within an array, so with end_to_end mode, this will restrict to precisely N simultaneously running jobs.
 In two_stage mode, up to 2*N jobs might run, N each from TRAIN arrays and GENERATE arrays.
 Using `--max-concurrent-slurm-jobs` is recommended for large experiments to reduce bursting and be friendlier to other users.
-Consider using a max of 2-3x the current allocation for llmservice_sdg_research PPP in the cluster to avoid bursting and rapidly dropping our Fair Share for everyone.
+Consider using a max of 2-3x the current allocation for nemotron_data_dev PPP in the cluster to avoid bursting and rapidly dropping our Fair Share for everyone.
 
 ### Logs and outputs
 - Slurm logs: `${BASE_LOG_DIR}/${EXP_NAME}/slurm_%A_%a.{out,err}`
@@ -235,7 +235,7 @@ Log directory resolution order (first match wins):
 1. `--log-dir` flag
 2. `$BASE_LOG_DIR` environment variable
 3. `$LUSTRE_DIR/nss_results` (constructed from `$LUSTRE_DIR`)
-4. `/lustre/fsw/portfolios/llmservice/users/<user>/nss_results` (default)
+4. `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/<user>/nss_results` (default)
 
 ### Collect results
 

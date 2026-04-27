@@ -305,11 +305,11 @@ def _infer_log_dir(user: str) -> Path | None:
     Resolution order:
     1. $BASE_LOG_DIR
     2. $LUSTRE_DIR/nss_results
-    3. /lustre/fsw/portfolios/llmservice/users/<user>/nss_results  (default LUSTRE_DIR)
+    3. /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/<user>/nss_results  (default LUSTRE_DIR)
     """
     if base := os.environ.get("BASE_LOG_DIR"):
         return Path(base)
-    lustre_dir = os.environ.get("LUSTRE_DIR") or f"/lustre/fsw/portfolios/llmservice/users/{user}"
+    lustre_dir = os.environ.get("LUSTRE_DIR") or f"/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/{user}"
     candidate = Path(lustre_dir) / "nss_results"
     return candidate if candidate.exists() else None
 
