@@ -302,13 +302,13 @@ Examples:
 
 ### Semantic Versioning for Tags
 
-Release tags must follow [Semantic Versioning](https://semver.org/) with a `v` prefix for github tag:
+Release tags must follow [Semantic Versioning](https://semver.org/) and must be prefixed with `v` on GitHub:
 
 ```text
 vMAJOR.MINOR.PATCH[-prerelease][+build]
 ```
 
-The release workflow will remove the `v` prefix for publishing to pypi and github releases.
+The release workflow triggers on `v*` tags, derives the package version from the built wheel filename for publishing, and creates the GitHub release as `v${VERSION}`.
 
 Examples:
 
