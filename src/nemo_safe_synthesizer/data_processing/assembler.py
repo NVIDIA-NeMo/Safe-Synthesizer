@@ -8,7 +8,7 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
@@ -34,7 +34,7 @@ from ..data_processing.stats import (
 from ..data_processing.validation import check_groupby_column, check_orderby_column
 from ..defaults import (
     DEFAULT_CACHE_PREFIX,
-    PSEUDO_GROUP_COLUMN,
+    DEFAULT_EXCLUDE_COLUMNS,
     TRAIN_SET_SIZE_BUFFER,
 )
 from ..errors import (
@@ -431,7 +431,7 @@ class TrainingExampleAssembler(ABC):
     @staticmethod
     def _convert_records_to_jsonl(
         records: dict[str, list],
-        exclude_columns: list[str] | None = None,
+        exclude_columns: Sequence[str] | None = None,
     ) -> dict[str, list[str]]:
         """Convert columnar records to JSONL and return newline-terminated strings.
 
@@ -482,7 +482,7 @@ class TrainingExampleAssembler(ABC):
         # Exclude pseudo-group column from JSONL so the model never sees it
         record_jsonl = self._convert_records_to_jsonl(
             dict(records),
-            exclude_columns=[PSEUDO_GROUP_COLUMN],
+            exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
         )
         tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
 
@@ -918,7 +918,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             dataset.column_names,
             instruction=metadata.instruction,
             prompt_template=metadata.prompt_config.template,
-            exclude_columns=[PSEUDO_GROUP_COLUMN],
+            exclude_columns=list(DEFAULT_EXCLUDE_COLUMNS),
         )
         self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
 

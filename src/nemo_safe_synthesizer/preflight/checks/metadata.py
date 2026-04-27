@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from ...defaults import PSEUDO_GROUP_COLUMN
 from ..base import IssueCollector, MetadataCheck
 from ..types import MetadataView
 from ._helpers import check_group_budget, check_sampled_record_budget, check_schema_prompt_budget
@@ -55,8 +54,7 @@ class TokenBudgetCheck(MetadataCheck):
             )
             return
 
-        columns = [column for column in data.columns if column != PSEUDO_GROUP_COLUMN]
-        max_new_tokens = check_schema_prompt_budget(collector, columns, metadata)
+        max_new_tokens = check_schema_prompt_budget(collector, list(data.columns), metadata)
         if max_new_tokens is None:
             return
 

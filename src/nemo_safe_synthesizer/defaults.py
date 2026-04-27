@@ -69,6 +69,7 @@ NUM_EVAL_BATCHES_GROUPED = 1
 # allowing unified processing of grouped and ungrouped time series.
 # It is excluded from JSONL conversion so the model never sees it.
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
+DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
 # default LLM inference endpoint for PII column classification.
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"

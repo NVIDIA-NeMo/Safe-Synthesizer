@@ -5,9 +5,36 @@
 
 from __future__ import annotations
 
-import pytest
+from types import SimpleNamespace
+from typing import cast
 
-from nemo_safe_synthesizer.data_processing.budget import compute_max_new_tokens
+import pandas as pd
+import pytest
+from transformers import PreTrainedTokenizerBase
+
+from nemo_safe_synthesizer.data_processing.budget import (
+    compute_max_new_tokens,
+    compute_schema_prompt_ids,
+    tokenize_records,
+)
+from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+
+
+class _RecordingTokenizer(PreTrainedTokenizerBase):
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+        self.encoded_text = ""
+
+    def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
+        assert add_special_tokens is False
+        self.texts = texts
+        return {"input_ids": [[ord(char) for char in text] for text in texts]}
+
+    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
+        assert add_special_tokens is False
+        self.encoded_text = text
+        return [ord(char) for char in text]
 
 
 @pytest.mark.unit
@@ -23,3 +50,47 @@ def test_compute_max_new_tokens_subtracts_schema_and_special_tokens():
 def test_compute_max_new_tokens_negative_when_schema_exceeds_context():
     """A schema larger than the context window produces a negative budget."""
     assert compute_max_new_tokens(list(range(2050)), 2048) < 0
+
+
+@pytest.mark.unit
+def test_tokenize_records_excludes_columns():
+    """Excluded columns should serialize exactly like a frame without those columns."""
+    df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["group-1"], "value": ["visible"]})
+    expected_df = pd.DataFrame({"value": ["visible"]})
+    tokenizer = _RecordingTokenizer()
+    expected_tokenizer = _RecordingTokenizer()
+
+    token_ids = tokenize_records(df, tokenizer, exclude_columns=(PSEUDO_GROUP_COLUMN,))
+    expected_token_ids = tokenize_records(expected_df, expected_tokenizer)
+
+    assert token_ids == expected_token_ids
+    assert PSEUDO_GROUP_COLUMN not in tokenizer.texts[0]
+
+
+@pytest.mark.unit
+def test_tokenize_records_no_exclude_default_keeps_all_columns():
+    """The shared helper stays policy-free unless callers pass exclude_columns."""
+    df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["group-1"], "value": ["visible"]})
+    tokenizer = _RecordingTokenizer()
+
+    tokenize_records(df, tokenizer)
+
+    assert PSEUDO_GROUP_COLUMN in tokenizer.texts[0]
+
+
+@pytest.mark.unit
+def test_compute_schema_prompt_ids_excludes_columns():
+    tokenizer = _RecordingTokenizer()
+    metadata = cast(
+        ModelMetadata,
+        SimpleNamespace(
+            tokenizer=tokenizer,
+            instruction="Generate: ",
+            prompt_config=SimpleNamespace(template="{instruction}{schema}{prefill}"),
+        ),
+    )
+
+    compute_schema_prompt_ids(["value", PSEUDO_GROUP_COLUMN], metadata, exclude_columns=(PSEUDO_GROUP_COLUMN,))
+
+    assert '"value":<unk>' in tokenizer.encoded_text
+    assert PSEUDO_GROUP_COLUMN not in tokenizer.encoded_text

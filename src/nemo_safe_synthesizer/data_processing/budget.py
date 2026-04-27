@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -12,6 +13,8 @@ import pandas as pd
 from .record_utils import extract_records_from_jsonl_string, records_to_jsonl
 
 if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
+
     from ..llm.metadata import ModelMetadata
 
 NUM_SPECIAL_TOKENS = 2
@@ -20,12 +23,15 @@ NUM_SPECIAL_TOKENS = 2
 def compute_schema_prompt_ids(
     columns: list[str],
     metadata: ModelMetadata,
+    *,
+    exclude_columns: Sequence[str] = (),
 ) -> list[int]:
     """Tokenize the full schema prompt using the same path as the assembler.
 
     Args:
-        columns: Column names (excluding internal pseudo-columns).
+        columns: Column names.
         metadata: Model metadata with tokenizer, instruction, and prompt config.
+        exclude_columns: Column names to omit from the schema prompt.
 
     Returns:
         Token IDs for the schema prompt (no special tokens).
@@ -38,6 +44,7 @@ def compute_schema_prompt_ids(
         columns,
         instruction=metadata.instruction,
         prompt_template=metadata.prompt_config.template,
+        exclude_columns=list(exclude_columns),
     )
     return metadata.tokenizer.encode(schema_prompt, add_special_tokens=False)
 
@@ -69,7 +76,12 @@ def tokenize_record(row: pd.Series, tokenizer: Any) -> list[int]:
     return tokenizer.encode(record_text + "\n", add_special_tokens=False)
 
 
-def tokenize_records(df: pd.DataFrame, tokenizer: Any) -> list[list[int]]:
+def tokenize_records(
+    df: pd.DataFrame,
+    tokenizer: PreTrainedTokenizerBase,
+    *,
+    exclude_columns: Sequence[str] = (),
+) -> list[list[int]]:
     """Tokenize multiple records using shared JSONL serialization.
 
     Uses batch tokenization when available, and falls back to per-record
@@ -78,12 +90,17 @@ def tokenize_records(df: pd.DataFrame, tokenizer: Any) -> list[list[int]]:
     Args:
         df: DataFrame whose rows represent records to tokenize.
         tokenizer: HuggingFace tokenizer instance.
+        exclude_columns: Column names to omit from serialized records.
 
     Returns:
         List of token-id lists, one per input row.
     """
     if df.empty:
         return []
+
+    columns_to_exclude = [column for column in exclude_columns if column in df.columns]
+    if columns_to_exclude:
+        df = df.drop(columns=columns_to_exclude)
 
     jsonl = records_to_jsonl(df.to_dict(orient="list"))
     record_texts = [t + "\n" for t in extract_records_from_jsonl_string(jsonl)]

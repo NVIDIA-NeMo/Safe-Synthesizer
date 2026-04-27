@@ -5,16 +5,19 @@ from __future__ import annotations
 
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 from rich.console import Console
+from transformers import PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
+from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
@@ -45,6 +48,19 @@ from nemo_safe_synthesizer.preflight import (
 from nemo_safe_synthesizer.tooling import PreflightRenderContext, render_preflight_report
 
 from .conftest import make_ctx
+
+
+class _PseudoColumnSensitiveTokenizer(PreTrainedTokenizerBase):
+    """Tokenizer that makes pseudo-column leakage visible in budget tests."""
+
+    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
+        assert add_special_tokens is False
+        return []
+
+    def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
+        assert add_special_tokens is False
+        return {"input_ids": [[0] * (100 if PSEUDO_GROUP_COLUMN in text else 1) for text in texts]}
+
 
 # ---------------------------------------------------------------------------
 # Per-check tests
@@ -393,8 +409,6 @@ class TestConstantColumnCheck:
 @pytest.mark.unit
 class TestPseudoColumnCheck:
     def test_dataset_using_reserved_pseudo_column_is_flagged(self):
-        from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-
         df = pd.DataFrame({PSEUDO_GROUP_COLUMN: [1, 2, 3], "val": [10, 20, 30]})
         issues = PseudoColumnCheck().run(make_ctx(config=SafeSynthesizerParameters(), data=df))
         assert any(i.code == "pseudo_column_collision" for i in issues)
@@ -402,6 +416,15 @@ class TestPseudoColumnCheck:
 
 @pytest.mark.unit
 class TestTokenBudgetCheck:
+    @staticmethod
+    def _metadata(tokenizer, *, max_seq_length: int) -> MagicMock:
+        metadata = MagicMock(spec=ModelMetadata)
+        metadata.tokenizer = tokenizer
+        metadata.max_seq_length = max_seq_length
+        metadata.instruction = "Generate: "
+        metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
+        return metadata
+
     def test_tokenizer_unavailable(self, sample_df, default_config):
         metadata = MagicMock(spec=ModelMetadata)
         metadata.tokenizer = None
@@ -409,13 +432,12 @@ class TestTokenBudgetCheck:
         assert any(i.code == "tokenizer_unavailable" for i in issues)
 
     def test_happy_path(self, sample_df, default_config):
-        metadata = MagicMock(spec=ModelMetadata)
         # Pydantic v2 Field attributes are absent from the class __dict__ so
         # MagicMock's spec blocks auto-attribute chains on ``tokenizer``;
         # attach the nested mock explicitly before configuring it.
-        metadata.tokenizer = MagicMock()
-        metadata.tokenizer.encode.return_value = list(range(50))
-        metadata.max_seq_length = 2048
+        tokenizer = MagicMock()
+        tokenizer.encode.return_value = list(range(50))
+        metadata = self._metadata(tokenizer, max_seq_length=2048)
         issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=sample_df, metadata=metadata))
         assert not any(i.severity == "error" for i in issues)
 
@@ -439,15 +461,34 @@ class TestTokenBudgetCheck:
         both that the batch path was used and that the budget math is correct.
         """
         df = pd.DataFrame({"a": [1]})
-        metadata = MagicMock(spec=ModelMetadata)
-        metadata.max_seq_length = 60
-        metadata.tokenizer = MagicMock()
-        metadata.tokenizer.encode.return_value = list(range(20))
-        metadata.tokenizer.return_value = {"input_ids": [list(range(100))]}
+        tokenizer = MagicMock()
+        tokenizer.encode.return_value = list(range(20))
+        tokenizer.return_value = {"input_ids": [list(range(100))]}
+        metadata = self._metadata(tokenizer, max_seq_length=60)
 
         issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=df, metadata=metadata))
 
         assert any(i.code == "record_exceeds_context" and i.severity == "error" for i in issues)
+
+    def test_sampled_record_budget_excludes_pseudo_group_column(self, default_config):
+        df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["synthetic-group"], "value": ["visible"]})
+        metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
+
+        issues = TokenBudgetCheck().run(make_ctx(config=default_config, data=df, metadata=metadata))
+
+        assert not any(i.code == "record_exceeds_context" for i in issues)
+
+    def test_group_budget_excludes_pseudo_group_column_when_grouping_by_it(self):
+        config = SafeSynthesizerParameters(data=DataParameters(group_training_examples_by=PSEUDO_GROUP_COLUMN))
+        df = pd.DataFrame({PSEUDO_GROUP_COLUMN: ["group-1", "group-1"], "value": ["visible", "also-visible"]})
+        metadata = self._metadata(_PseudoColumnSensitiveTokenizer(), max_seq_length=10)
+        check = TokenBudgetCheck()
+        check.token_sample_size = 0
+        check.top_groups_to_check = 1
+
+        issues = check.run(make_ctx(config=config, data=df, metadata=metadata))
+
+        assert not any(i.code == "group_exceeds_context" for i in issues)
 
 
 @pytest.mark.unit
@@ -517,6 +558,8 @@ class TestRunPreflight:
         metadata.tokenizer = MagicMock()
         metadata.tokenizer.encode.return_value = list(range(50))
         metadata.max_seq_length = 2048
+        metadata.instruction = "Generate: "
+        metadata.prompt_config = SimpleNamespace(template="{instruction}{schema}{prefill}")
         with patch("torch.cuda.is_available", return_value=True):
             with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test", "HF_TOKEN": "hf_xxx"}):
                 report = run_preflight(sample_df, resolved_config, metadata)
