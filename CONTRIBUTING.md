@@ -302,24 +302,26 @@ Examples:
 
 ### Semantic Versioning for Tags
 
-Release tags must follow [Semantic Versioning](https://semver.org/):
+Release tags must follow [Semantic Versioning](https://semver.org/) with a `v` prefix for github tag:
 
 ```text
-MAJOR.MINOR.PATCH[-prerelease][+build]
+vMAJOR.MINOR.PATCH[-prerelease][+build]
 ```
+
+The release workflow will remove the `v` prefix for publishing to pypi and github releases.
 
 Examples:
 
 
 | Tag                    | Valid           |
 | ---------------------- | --------------- |
-| `1.0.0`                | ✅               |
-| `2.1.3`                | ✅               |
-| `1.0.0-alpha`          | ✅               |
-| `1.0.0-beta.1`         | ✅               |
-| `1.0.0-rc.1+build.123` | ✅               |
-| `v1.0.0`               | ❌ No `v` prefix |
-| `release-1.0`          | ❌ Wrong format  |
+| `v1.0.0`                | ✅               |
+| `v2.1.3`                | ✅               |
+| `v1.0.0-alpha`          | ✅               |
+| `v1.0.0-beta.1`         | ✅               |
+| `v1.0.0-rc.1+build.123` | ✅               |
+| `1.0.0`                 | ❌ No `v` prefix |
+| `release-1.0`           | ❌ Wrong format  |
 
 
 ### Branch Protection
@@ -605,10 +607,10 @@ Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For relea
 
 ```bash
 # Stable release
-git tag 0.1.0 <commit-sha>
+git tag v0.1.0 <commit-sha>
 
 # Release candidate
-git tag 0.1.0rc1 <commit-sha>
+git tag v0.1.0rc1 <commit-sha>
 
 git push origin <tag>
 ```
