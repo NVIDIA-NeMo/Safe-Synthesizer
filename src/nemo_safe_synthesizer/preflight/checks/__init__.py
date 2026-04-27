@@ -59,7 +59,6 @@ __all__ = [
 _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # CONFIG
     CUDAAvailabilityCheck(),
-    VRAMHeadroomCheck(),
     InferenceKeyCheck(),
     HFTokenCheck(),
     # DATAFRAME
@@ -70,6 +69,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     ConstantColumnCheck(),
     TimestampColumnCheck(),
     # METADATA
+    VRAMHeadroomCheck(),
     TokenBudgetCheck(),
     # ADVISORY
     SmallDatasetCheck(),

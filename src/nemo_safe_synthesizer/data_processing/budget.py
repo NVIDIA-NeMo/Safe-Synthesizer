@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -107,7 +107,11 @@ def tokenize_records(
 
     if callable(tokenizer):
         tokenized = tokenizer(record_texts, add_special_tokens=False)
-        if isinstance(tokenized, dict):
+        # ``Mapping`` -- not ``dict`` -- because HuggingFace tokenizers return
+        # ``BatchEncoding``, which subclasses ``UserDict`` (not ``dict``). An
+        # ``isinstance(tokenized, dict)`` guard would silently fall through to
+        # the per-record ``encode()`` path below for every real tokenizer.
+        if isinstance(tokenized, Mapping):
             input_ids = tokenized.get("input_ids")
             if (
                 isinstance(input_ids, list)

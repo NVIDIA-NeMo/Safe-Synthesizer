@@ -275,7 +275,6 @@ within a stage, checks run in the order listed.
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `gpu.vram` | metadata | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
 | `env.inference_key` | config | `NSS_INFERENCE_KEY` is set when PII classification is enabled (warning only) |
 | `env.hf_token` | config | `HF_TOKEN` or `HUGGING_FACE_HUB_TOKEN` is set; warns unconditionally when neither is present so gated-repo downloads don't fail later (warning only) |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
@@ -284,6 +283,7 @@ within a stage, checks run in the order listed.
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
+| `gpu.vram` | metadata | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
 | `training.oversampling` | advisory | Sampling fraction is not extreme (warning only) |

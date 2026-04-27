@@ -10,7 +10,7 @@ from typing import cast
 
 import pandas as pd
 import pytest
-from transformers import PreTrainedTokenizerBase
+from transformers import BatchEncoding, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.data_processing.budget import (
     compute_max_new_tokens,
@@ -65,6 +65,46 @@ def test_tokenize_records_excludes_columns():
 
     assert token_ids == expected_token_ids
     assert PSEUDO_GROUP_COLUMN not in tokenizer.texts[0]
+
+
+class _BatchEncodingTokenizer(PreTrainedTokenizerBase):
+    """Stub that mimics a real HF tokenizer: ``__call__`` returns ``BatchEncoding``.
+
+    ``BatchEncoding`` subclasses ``UserDict``, not ``dict``, which is the exact
+    case ``tokenize_records`` must accept for the batch fast path. This stub
+    also tracks per-record ``encode()`` invocations so the test can assert the
+    fast path was actually taken (zero ``encode`` calls).
+    """
+
+    def __init__(self) -> None:
+        self.encode_calls = 0
+
+    def __call__(self, texts: list[str], *, add_special_tokens: bool) -> BatchEncoding:
+        assert add_special_tokens is False
+        return BatchEncoding({"input_ids": [[ord(char) for char in text] for text in texts]})
+
+    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
+        assert add_special_tokens is False
+        self.encode_calls += 1
+        return [ord(char) for char in text]
+
+
+@pytest.mark.unit
+def test_tokenize_records_takes_batch_fast_path_for_batchencoding():
+    """Real HF tokenizers return ``BatchEncoding`` (a ``UserDict`` subclass).
+
+    Regression: an earlier ``isinstance(tokenized, dict)`` guard skipped the
+    batch path for every real tokenizer because ``BatchEncoding`` does not
+    subclass ``dict``, silently degrading to per-record ``encode()`` calls.
+    """
+    df = pd.DataFrame({"value": ["a", "b", "c"]})
+    tokenizer = _BatchEncodingTokenizer()
+
+    token_ids = tokenize_records(df, tokenizer)
+
+    assert len(token_ids) == 3
+    assert all(isinstance(ids, list) for ids in token_ids)
+    assert tokenizer.encode_calls == 0, "batch path was bypassed; fell through to per-record encode()"
 
 
 @pytest.mark.unit

@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 import os
 import sys
-import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -359,23 +358,16 @@ def _initialize_logging_for_cli_from_settings(
         log_color=settings.effective_log_color,
     )
 
-    # Initialize the logging system; suppress NSSObservabilitySettings tty
-    # warnings in quiet mode. Scoped narrowly to the two known messages so
-    # other UserWarnings raised during init still surface.
+    # Initialize the logging system, then mute the console handler in quiet
+    # mode. File handlers are excluded so the run log keeps its full output
+    # -- the file log is the only diagnostic surface left when --validate
+    # suppresses console output.
     structlog.reset_defaults()
+    initialize_observability()
     if quiet:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=r"stdout is (not )?a tty",
-                category=UserWarning,
-            )
-            initialize_observability()
         for handler in logging.getLogger().handlers:
             if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
                 handler.setLevel(logging.CRITICAL)
-    else:
-        initialize_observability()
 
     run_logger = get_logger("nemo_safe_synthesizer")
 
