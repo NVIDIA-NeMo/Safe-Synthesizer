@@ -40,7 +40,6 @@ from nemo_safe_synthesizer.preflight import (
     TimestampColumnCheck,
     TokenBudgetCheck,
     TrainingStepsCheck,
-    UndersamplingCheck,
     VRAMHeadroomCheck,
     get_registry,
     run_preflight,
@@ -523,22 +522,6 @@ class TestOversamplingCheck:
         config = SafeSynthesizerParameters(training=TrainingHyperparams(num_input_records_to_sample=50000))
         issues = OversamplingCheck().run(make_ctx(config=config, data=sample_df))
         assert any(i.code == "extreme_oversampling" for i in issues)
-
-
-@pytest.mark.unit
-class TestUndersamplingCheck:
-    def test_warns_when_records_below_rows(self):
-        """``num_input_records_to_sample < len(data)`` warns that records will be unseen."""
-        df = pd.DataFrame({"val": range(100)})
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(num_input_records_to_sample=50))
-        issues = UndersamplingCheck().run(make_ctx(config=config, data=df))
-        assert any(i.code == "undersampling" and i.severity == "warning" for i in issues)
-
-    def test_silent_when_records_cover_all_rows(self, sample_df):
-        """At ``num_input_records_to_sample == len(data)``, no undersampling warning fires."""
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(num_input_records_to_sample=len(sample_df)))
-        issues = UndersamplingCheck().run(make_ctx(config=config, data=sample_df))
-        assert not any(i.code == "undersampling" for i in issues)
 
 
 # ---------------------------------------------------------------------------

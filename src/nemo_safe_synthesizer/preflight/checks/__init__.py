@@ -14,13 +14,12 @@ from __future__ import annotations
 from ..base import PreflightCheck
 from .advisory import (
     DatasetRowCountCheck,
-    DatasetSizeCheck,
     OversamplingCheck,
     TrainingStepsCheck,
-    UndersamplingCheck,
 )
 from .dataframe import (
     ConstantColumnCheck,
+    DatasetSizeCheck,
     GroupbyColumnCheck,
     OrderbyColumnCheck,
     PseudoColumnCheck,
@@ -48,7 +47,6 @@ __all__ = [
     "TimestampColumnCheck",
     "TokenBudgetCheck",
     "TrainingStepsCheck",
-    "UndersamplingCheck",
     "VRAMHeadroomCheck",
     "_CORE_CHECKS",
 ]
@@ -76,6 +74,5 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # ADVISORY
     DatasetRowCountCheck(),
     OversamplingCheck(),
-    UndersamplingCheck(),
     TrainingStepsCheck(),
 )

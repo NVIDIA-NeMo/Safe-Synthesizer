@@ -5,40 +5,15 @@
 
 from __future__ import annotations
 
-from ..base import AdvisoryCheck, DataFrameCheck, IssueCollector
+from ..base import AdvisoryCheck, IssueCollector
 from ..types import DataFrameView
 from ._helpers import resolved_record_count
 
 __all__ = [
     "DatasetRowCountCheck",
-    "DatasetSizeCheck",
     "OversamplingCheck",
     "TrainingStepsCheck",
-    "UndersamplingCheck",
 ]
-
-
-class DatasetSizeCheck(DataFrameCheck):
-    """Block training when the training split is unusably small.
-
-    Lives in the DataFrame stage (not advisory) because an empty / near-empty
-    split will produce cascading failures in downstream token-budget and
-    metadata checks; emitting the error here lets the orchestrator gate
-    them cleanly via ``requires``.
-    """
-
-    name = "dataset.size"
-    label = "Dataset size"
-    category = "data quality"
-    min_rows: int = 200
-
-    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
-        n_rows = len(ctx.data)
-        if n_rows < self.min_rows:
-            collector.error(
-                "dataset_too_small",
-                f"Training split has {n_rows} rows; at least {self.min_rows} are needed for meaningful training.",
-            )
 
 
 class DatasetRowCountCheck(AdvisoryCheck):
@@ -149,25 +124,3 @@ class TrainingStepsCheck(AdvisoryCheck):
                 "batch_size / gradient_accumulation_steps."
             ),
         )
-
-
-class UndersamplingCheck(AdvisoryCheck):
-    """Flag when the model will not see all available records."""
-
-    name = "training.undersampling"
-    label = "Undersampling"
-
-    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
-        n_records = resolved_record_count(ctx)
-        if n_records is None:
-            return
-        n_rows = len(ctx.data)
-        data_fraction = n_records / n_rows if n_rows > 0 else 0
-        if data_fraction < 1.0 and n_records < n_rows:
-            collector.warning(
-                "undersampling",
-                (
-                    f"num_input_records_to_sample ({n_records}) is less than "
-                    f"training split size ({n_rows}); the model will not see all training records."
-                ),
-            )

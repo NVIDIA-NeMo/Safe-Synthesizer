@@ -157,12 +157,8 @@ class NSSObservabilitySettings(BaseSettings):
         match value:
             case str():
                 return value.lower() == "true"
-            case _ if sys.stdout.isatty():
-                warnings.warn("stdout is a tty, setting nss_log_color to True", UserWarning)
-                return True
             case _:
-                warnings.warn("stdout is not a tty, setting nss_log_color to False", UserWarning)
-                return False
+                return sys.stdout.isatty()
 
 
 with warnings.catch_warnings():

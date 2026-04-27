@@ -17,11 +17,34 @@ from ..types import DataFrameView, PreflightContext
 
 __all__ = [
     "ConstantColumnCheck",
+    "DatasetSizeCheck",
     "GroupbyColumnCheck",
     "OrderbyColumnCheck",
     "PseudoColumnCheck",
     "TimestampColumnCheck",
 ]
+
+
+class DatasetSizeCheck(DataFrameCheck):
+    """Block training when the training split is unusably small.
+
+    An empty / near-empty split would produce cascading failures in
+    downstream token-budget and metadata checks; emitting the error here
+    lets the orchestrator gate them cleanly via ``requires``.
+    """
+
+    name = "dataset.size"
+    label = "Dataset size"
+    category = "data quality"
+    min_rows: int = 200
+
+    def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
+        n_rows = len(ctx.data)
+        if n_rows < self.min_rows:
+            collector.error(
+                "dataset_too_small",
+                f"Training split has {n_rows} rows; at least {self.min_rows} are needed for meaningful training.",
+            )
 
 
 class GroupbyColumnCheck(DataFrameCheck):

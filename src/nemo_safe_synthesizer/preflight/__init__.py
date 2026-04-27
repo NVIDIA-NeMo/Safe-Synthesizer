@@ -27,7 +27,6 @@ from .checks import (
     TimestampColumnCheck,
     TokenBudgetCheck,
     TrainingStepsCheck,
-    UndersamplingCheck,
     VRAMHeadroomCheck,
 )
 from .orchestrator import CRASH_CODE, run_preflight
@@ -82,7 +81,6 @@ __all__ = [
     "TimestampColumnCheck",
     "TokenBudgetCheck",
     "TrainingStepsCheck",
-    "UndersamplingCheck",
     "VRAMHeadroomCheck",
     "build_registry",
     "get_registry",
