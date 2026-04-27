@@ -309,7 +309,9 @@ def _infer_log_dir(user: str) -> Path | None:
     """
     if base := os.environ.get("BASE_LOG_DIR"):
         return Path(base)
-    lustre_dir = os.environ.get("LUSTRE_DIR") or f"/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/{user}"
+    lustre_dir = (
+        os.environ.get("LUSTRE_DIR") or f"/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/{user}"
+    )
     candidate = Path(lustre_dir) / "nss_results"
     return candidate if candidate.exists() else None
 
