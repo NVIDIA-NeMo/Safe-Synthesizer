@@ -48,6 +48,7 @@ REPOSITORY_NAME = os.environ.get("REPOSITORY_NAME") or "NVIDIA-NeMo/Safe-Synthes
 # PEP 508 / specifier helpers
 # ---------------------------------------------------------------------------
 
+
 def _format_requirement(name: str, spec: SpecifierSet, marker) -> str:
     s = str(spec).strip()
     out = f"{name}{s}" if s else str(name)
@@ -91,6 +92,7 @@ def _safe_req_name(line: str) -> str | None:
 # ---------------------------------------------------------------------------
 # In-place direct-dep bumping
 # ---------------------------------------------------------------------------
+
 
 def _bump_array_item(arr: tomlkit.items.Array, cname: str, floor: str, display_name: str) -> bool:
     """Find the item matching *cname* in a tomlkit Array and bump its floor. Returns True if changed."""
@@ -147,19 +149,19 @@ def _collect_direct_dep_names(doc: tomlkit.TOMLDocument) -> frozenset[str]:
     names: set[str] = set()
     proj = doc.get("project")
     if _is_table(proj):
-        for line in (proj.get("dependencies") or []):  # type: ignore[union-attr]
+        for line in proj.get("dependencies") or []:  # type: ignore[union-attr]
             n = _safe_req_name(str(line)) if isinstance(line, str) else None
             if n:
                 names.add(n)
         for lines in (proj.get("optional-dependencies") or {}).values():  # type: ignore[union-attr]
-            for line in (lines or []):
+            for line in lines or []:
                 n = _safe_req_name(str(line)) if isinstance(line, str) else None
                 if n:
                     names.add(n)
     dep_groups = doc.get("dependency-groups")
     if _is_table(dep_groups):
         for items in dep_groups.values():  # type: ignore[union-attr]
-            for item in (items or []):
+            for item in items or []:
                 n = _safe_req_name(str(item)) if isinstance(item, str) else None
                 if n:
                     names.add(n)
@@ -169,6 +171,7 @@ def _collect_direct_dep_names(doc: tomlkit.TOMLDocument) -> frozenset[str]:
 # ---------------------------------------------------------------------------
 # constraint-dependencies helpers (for transitive deps)
 # ---------------------------------------------------------------------------
+
 
 def _index_constraints_by_name(lines: list[str]) -> dict[str, int]:
     by_name: dict[str, int] = {}
@@ -191,6 +194,16 @@ def _apply_to_constraints(current: list[str], package_name: str, floor: str) -> 
     return out
 
 
+def _write_constraints_txt(path: Path, constraint_lines: list[str]) -> None:
+    """Write a pip/uv -c compatible constraints file from constraint-dependencies."""
+    header = (
+        "# Security floor constraints -- generated from [tool.uv] constraint-dependencies in pyproject.toml\n"
+        "# Pass to pip/uv with:  pip install <pkg> -c constraints.txt\n"
+        "#                        uv pip install <pkg> -c constraints.txt\n"
+    )
+    path.write_text(header + "\n".join(sorted(constraint_lines)) + "\n", encoding="utf-8")
+
+
 def _replace_constraint_dependencies_array(doc: tomlkit.TOMLDocument, lines: list[str]) -> None:
     if "tool" not in doc or not _is_table(doc["tool"]):
         raise SystemExit("pyproject.toml: missing or invalid [tool] table")
@@ -207,6 +220,7 @@ def _replace_constraint_dependencies_array(doc: tomlkit.TOMLDocument, lines: lis
 # ---------------------------------------------------------------------------
 # Advisory collection
 # ---------------------------------------------------------------------------
+
 
 def _collect_max_floors(deps: list[dict], too_hard: frozenset[str]) -> dict[str, str]:
     """Map canonical name -> highest advisory floor version across all alerts."""
@@ -242,6 +256,7 @@ def _advisory_spelling_by_canonical(deps: list[dict], cnames: frozenset[str]) ->
 # Utilities
 # ---------------------------------------------------------------------------
 
+
 def _is_table(x: object) -> bool:
     return isinstance(x, (tomlkit.items.Table, OutOfOrderTableProxy))
 
@@ -249,6 +264,7 @@ def _is_table(x: object) -> bool:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     pyproject_path = Path("pyproject.toml")
@@ -258,7 +274,10 @@ def main() -> None:
     dependabot_file = "dependabot.json"
     if not os.path.exists(dependabot_file):
         url = f"https://api.github.com/repos/{REPOSITORY_NAME}/dependabot/alerts"
-        headers = {"Authorization": f"Bearer {os.getenv('GITHUB_TOKEN')}"}
+        github_token = os.getenv("GITHUB_TOKEN")
+        if not github_token:
+            raise SystemExit("GITHUB_TOKEN is not set, required to fetch dependabot alerts")
+        headers = {"Authorization": f"Bearer {github_token}"}
         all_deps: list[dict] = []
         next_url: str | None = url
         params: dict | None = {"per_page": 100}
@@ -325,6 +344,14 @@ def main() -> None:
         changed = True
 
     # ------------------------------------------------------------------
+    # Write constraints.txt from the final constraint-dependencies list
+    # (source of truth is pyproject.toml, not just the current advisory run)
+    # ------------------------------------------------------------------
+    constraints_path = pyproject_path.parent / "constraints.txt"
+    _write_constraints_txt(constraints_path, updated)
+    print(f"Wrote {constraints_path}")
+
+    # ------------------------------------------------------------------
     # Single write + uv lock
     # ------------------------------------------------------------------
     if changed:
@@ -332,7 +359,7 @@ def main() -> None:
         print("Running uv lock …")
         subprocess.check_call(["uv", "lock"])
     else:
-        print("Nothing to update.")
+        print("Nothing to update in pyproject.toml.")
 
 
 if __name__ == "__main__":
