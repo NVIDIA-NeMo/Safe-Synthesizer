@@ -144,7 +144,7 @@ def assert_adapter_saved(workdir: Workdir) -> None:
 
     Reusable assertion helper for any test that trains via the SDK.
     """
-    adapter_dir = workdir.train.adapter.path  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+    adapter_dir = workdir.train.adapter.path
     assert (adapter_dir / "adapter_config.json").exists(), "adapter_config.json missing"
     assert any(adapter_dir.glob("*.safetensors")), "No safetensors files found"
 
