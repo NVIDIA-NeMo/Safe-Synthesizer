@@ -496,14 +496,9 @@ model. Only the adapter is updated during training, which keeps VRAM
 requirements low and produces a compact artifact that can be reused for
 generation without re-training.
 
-Two backends are available:
-
-| Backend | Description | When to use |
-|---------|-------------|-------------|
-| Unsloth | LoRA fine-tuning with optimized kernels for faster training and lower VRAM usage. Uses Unsloth's `FastLanguageModel` for model loading and PEFT wrapping | Default -- use unless you need DP or a custom quantization setup |
-| HuggingFace | LoRA fine-tuning via PEFT with 4-bit/8-bit quantization support and optional differential privacy (DP-SGD) via [Opacus](https://opacus.ai/) | Required for differential privacy; also the fallback when Unsloth is unavailable |
-
-If you enable differential privacy, the pipeline automatically switches to the HuggingFace backend.
+Training uses the HuggingFace backend -- LoRA fine-tuning via PEFT with
+4-bit/8-bit quantization support and optional differential privacy (DP-SGD)
+via [Opacus](https://opacus.ai/).
 
 Three models have been extensively tested:
 
@@ -649,7 +644,6 @@ learn about any individual record. Safe Synthesizer implements Differentially Pr
 
 Compatibility constraints when DP is enabled:
 
-- Set `training.use_unsloth` to `false` or leave it at `"auto"` -- `"auto"` resolves to `false` when DP is enabled
 - `data.max_sequences_per_example` must be `1` (or `"auto"`, which resolves to `1` when DP is enabled)
 - Gradient checkpointing is disabled (incompatible with Opacus)
 

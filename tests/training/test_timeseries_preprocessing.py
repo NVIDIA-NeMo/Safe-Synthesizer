@@ -27,7 +27,6 @@ def test_add_pseudo_group_when_no_group_column():
         group_training_examples_by=None,
         is_timeseries=True,
         timestamp_interval_seconds=60,
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
 
@@ -46,7 +45,6 @@ def test_add_pseudo_group_preserves_existing_group():
         group_training_examples_by="group_id",
         is_timeseries=True,
         timestamp_interval_seconds=60,
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
 
@@ -60,7 +58,6 @@ def test_create_elapsed_time_column_with_groups():
     """Test elapsed time resets at start of each group."""
     df = pd.DataFrame({"group_id": ["A", "A", "B", "B"], "value": [1, 2, 3, 4]})
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True
@@ -80,7 +77,6 @@ def test_create_elapsed_time_column_no_groups():
     """Test elapsed time uses global index when no groups."""
     df = pd.DataFrame({"value": [1, 2, 3]})
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True
@@ -98,7 +94,6 @@ def test_create_elapsed_time_column_skips_when_timestamp_exists():
     """Test no elapsed time created when timestamp_column is already set."""
     df = pd.DataFrame({"timestamp": ["2024-01-01", "2024-01-02"], "value": [1, 2]})
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True
@@ -180,34 +175,24 @@ def test_validate_start_stop_consistency_different_stops_raises():
 class TestInferAndConvertTimestampFormat:
     """Tests for _infer_and_convert_timestamp_format."""
 
-    def test_raises_parameter_error_when_format_cannot_be_inferred(self):
-        """ParameterError is raised when timestamp format inference fails on non-datetime values."""
-        df = pd.DataFrame({"ts": ["not_a_date", "also_not"]})
+    @pytest.mark.parametrize(
+        "column_name,values,expected_match",
+        [
+            pytest.param(
+                "ts", ["not_a_date", "also_not"], "Could not infer timestamp format", id="non_datetime_strings"
+            ),
+            pytest.param("my_col", [42, 99], r"column 'my_col'.*first value: '42'", id="names_column_and_first_value"),
+            pytest.param("ts", [100, 200], "elapsed_seconds", id="suggests_elapsed_seconds_for_numeric"),
+        ],
+    )
+    def test_raises_parameter_error_with_informative_message(self, column_name, values, expected_match):
+        """ParameterError is raised when format cannot be inferred, with an actionable message."""
+        df = pd.DataFrame({column_name: values})
         config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
-        config.time_series.timestamp_column = "ts"
+        config.time_series.timestamp_column = column_name
         config.time_series.timestamp_format = None
 
-        with pytest.raises(ParameterError, match="Could not infer timestamp format"):
-            _infer_and_convert_timestamp_format(df, config.time_series)
-
-    def test_error_message_includes_column_name_and_first_value(self):
-        """ParameterError message contains the column name and first value for debugging."""
-        df = pd.DataFrame({"my_col": [42, 99]})
-        config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
-        config.time_series.timestamp_column = "my_col"
-        config.time_series.timestamp_format = None
-
-        with pytest.raises(ParameterError, match=r"column 'my_col'.*first value: '42'"):
-            _infer_and_convert_timestamp_format(df, config.time_series)
-
-    def test_error_message_suggests_elapsed_seconds(self):
-        """ParameterError message suggests elapsed_seconds for numeric-looking data."""
-        df = pd.DataFrame({"ts": [100, 200]})
-        config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
-        config.time_series.timestamp_column = "ts"
-        config.time_series.timestamp_format = None
-
-        with pytest.raises(ParameterError, match="elapsed_seconds"):
+        with pytest.raises(ParameterError, match=expected_match):
             _infer_and_convert_timestamp_format(df, config.time_series)
 
 
@@ -224,15 +209,20 @@ class TestProcessTimeseriesElapsedSecondsDetection:
         defaults.update(overrides)
         return SafeSynthesizerParameters.from_params(**defaults)
 
-    def test_explicit_elapsed_seconds_format(self):
-        """User-supplied timestamp_format='elapsed_seconds' marks column as elapsed time."""
-        df = pd.DataFrame(
-            {
-                "group": ["A", "A", "A"],
-                "ts": [0, 60, 120],
-                "value": [1, 2, 3],
-            }
-        )
+    @pytest.mark.parametrize(
+        "ts_values,expected_values",
+        [
+            pytest.param([0, 60, 120], [0, 60, 120], id="int"),
+            pytest.param([0.0, 60.0, 120.0], [0.0, 60.0, 120.0], id="float"),
+        ],
+    )
+    def test_explicit_elapsed_seconds_accepts_numeric_dtype(self, ts_values, expected_values):
+        """timestamp_format='elapsed_seconds' is accepted for any numeric dtype.
+
+        Float is allowed when the user opts in explicitly, even though downstream
+        interval handling currently operates at integer-second resolution.
+        """
+        df = pd.DataFrame({"group": ["A", "A", "A"], "ts": ts_values, "value": [1, 2, 3]})
         config = self._make_config(
             timestamp_column="ts",
             timestamp_format="elapsed_seconds",
@@ -242,78 +232,93 @@ class TestProcessTimeseriesElapsedSecondsDetection:
         result_df, result_config = process_timeseries_data(df.copy(), config)
 
         assert result_config.time_series.timestamp_format == "elapsed_seconds"
-        assert list(result_df["ts"]) == [0, 60, 120]
+        assert list(result_df["ts"]) == expected_values
 
-    def test_numeric_column_auto_detected_as_elapsed_seconds(self):
-        """Numeric timestamp column with no format is auto-detected as elapsed seconds."""
-        df = pd.DataFrame(
-            {
-                "group": ["A", "A", "A"],
-                "ts": [0, 30, 60],
-                "value": [10, 20, 30],
-            }
-        )
+    @pytest.mark.parametrize(
+        "ts_values,timestamp_format,expected_match",
+        [
+            pytest.param(
+                ["0", "60", "120"],
+                "elapsed_seconds",
+                "requires timestamp column .* to be numeric",
+                id="explicit_elapsed_seconds_rejects_string",
+            ),
+            pytest.param(
+                [0.0, 0.5, 1.0],
+                None,
+                "Could not infer timestamp format",
+                id="auto_detection_rejects_float",
+            ),
+        ],
+    )
+    def test_elapsed_seconds_detection_rejects_unsupported_dtypes(self, ts_values, timestamp_format, expected_match):
+        """Non-supported dtypes raise ParameterError with an actionable message.
+
+        Explicit ``elapsed_seconds`` on non-numeric data fails fast instead of surfacing
+        a cryptic TypeError later. Auto-detection is intentionally restricted to integer
+        dtypes (see ``_detect_elapsed_seconds_format``); floats must opt in explicitly.
+        """
+        df = pd.DataFrame({"group": ["A", "A", "A"], "ts": ts_values, "value": [1, 2, 3]})
         config = self._make_config(
             timestamp_column="ts",
+            timestamp_format=timestamp_format,
             group_training_examples_by="group",
         )
+
+        with pytest.raises(ParameterError, match=expected_match):
+            process_timeseries_data(df.copy(), config)
+
+    @pytest.mark.parametrize(
+        "ts_values,expected_format_is_elapsed",
+        [
+            pytest.param([0, 30, 60], True, id="int_auto_detected"),
+            pytest.param(
+                ["2024-01-01 00:00:00", "2024-01-01 01:00:00", "2024-01-01 02:00:00"],
+                False,
+                id="datetime_string_falls_through",
+            ),
+        ],
+    )
+    def test_auto_detection_when_format_not_provided(self, ts_values, expected_format_is_elapsed):
+        """Auto-detection: integer columns are marked elapsed; datetime strings fall through."""
+        df = pd.DataFrame({"group": ["A", "A", "A"], "ts": ts_values, "value": [1, 2, 3]})
+        config = self._make_config(timestamp_column="ts", group_training_examples_by="group")
         assert config.time_series.timestamp_format is None
 
-        result_df, result_config = process_timeseries_data(df.copy(), config)
+        _, result_config = process_timeseries_data(df.copy(), config)
 
-        assert result_config.time_series.timestamp_format == "elapsed_seconds"
-        assert list(result_df["ts"]) == [0, 30, 60]
+        is_elapsed = result_config.time_series.timestamp_format == "elapsed_seconds"
+        assert is_elapsed is expected_format_is_elapsed
 
     def test_numeric_column_auto_detected_without_group(self):
-        """Numeric elapsed seconds detection works when no group_by column is provided."""
-        df = pd.DataFrame(
-            {
-                "ts": [0, 10, 20],
-                "value": [1, 2, 3],
-            }
-        )
+        """Auto-detection works when no group_by column is provided (pseudo-group path)."""
+        df = pd.DataFrame({"ts": [0, 10, 20], "value": [1, 2, 3]})
         config = self._make_config(timestamp_column="ts")
         assert config.time_series.timestamp_format is None
 
-        result_df, result_config = process_timeseries_data(df.copy(), config)
+        _, result_config = process_timeseries_data(df.copy(), config)
 
         assert result_config.time_series.timestamp_format == "elapsed_seconds"
 
-    def test_string_datetime_column_not_treated_as_elapsed(self):
-        """String datetime columns are not auto-detected as elapsed seconds."""
+    def test_missing_timestamp_column_raises_parameter_error(self):
+        """A timestamp_column that doesn't exist in the DataFrame raises ParameterError.
+
+        Previously, accessing the missing column during numeric dtype detection would
+        surface a pandas KeyError before the friendlier validation error could run.
+        """
         df = pd.DataFrame(
             {
                 "group": ["A", "A", "A"],
-                "ts": ["2024-01-01 00:00:00", "2024-01-01 01:00:00", "2024-01-01 02:00:00"],
                 "value": [1, 2, 3],
             }
         )
         config = self._make_config(
-            timestamp_column="ts",
+            timestamp_column="not_present",
             group_training_examples_by="group",
         )
 
-        result_df, result_config = process_timeseries_data(df.copy(), config)
-
-        assert result_config.time_series.timestamp_format != "elapsed_seconds"
-
-    def test_float_column_auto_detected_as_elapsed_seconds(self):
-        """Float numeric timestamp columns are also detected as elapsed seconds."""
-        df = pd.DataFrame(
-            {
-                "group": ["A", "A", "A"],
-                "ts": [0.0, 0.5, 1.0],
-                "value": [1, 2, 3],
-            }
-        )
-        config = self._make_config(
-            timestamp_column="ts",
-            group_training_examples_by="group",
-        )
-
-        result_df, result_config = process_timeseries_data(df.copy(), config)
-
-        assert result_config.time_series.timestamp_format == "elapsed_seconds"
+        with pytest.raises(ParameterError, match="Timestamp column 'not_present' not found"):
+            process_timeseries_data(df.copy(), config)
 
     def test_explicit_elapsed_seconds_infers_interval(self):
         """Elapsed seconds with consistent intervals correctly infers timestamp_interval_seconds."""

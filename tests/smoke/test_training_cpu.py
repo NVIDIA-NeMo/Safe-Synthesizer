@@ -131,7 +131,6 @@ def test_training_example_assembler(iris_df, stub_tokenizer, tmp_path):
 
     config = SafeSynthesizerParameters.from_params(
         num_input_records_to_sample=10,
-        use_unsloth=False,
     )
     hf_dataset = Dataset.from_pandas(iris_df, preserve_index=False)
 

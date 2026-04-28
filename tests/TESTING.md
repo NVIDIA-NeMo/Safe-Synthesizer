@@ -22,7 +22,7 @@ make test-unit-slow        # Unit tests including slow (excludes e2e and smoke)
 make test-smoke            # CPU smoke tests (~few min, no GPU required)
 make test-smoke-gpu        # GPU smoke tests (requires CUDA)
 make test-e2e              # All e2e (requires CUDA) -- runs default + dp
-make test-e2e-default      # e2e default (unsloth) tests only
+make test-e2e-default      # e2e default (no-DP) tests only
 make test-e2e-dp           # e2e DP tests only
 make test-ci               # CI unit tests with coverage (excludes slow, e2e, gpu, smoke)
 make test-ci-slow          # CI slow tests with coverage
@@ -45,14 +45,14 @@ Two test functions (`test_clinc_oos_dataset`, `test_dow_jones_index_dataset`) ea
 make test-nss-{CONFIG}-{DATASET}-ci
 ```
 
-Configs: `tinyllama_unsloth`, `tinyllama_dp`, `smollm3_unsloth`, `smollm3_dp`, `mistral_nodp`, `mistral_dp`
+Configs: `tinyllama_nodp`, `tinyllama_dp`, `smollm3_nodp`, `smollm3_dp`, `mistral_nodp`, `mistral_dp`
 
 Datasets: `clinc_oos`, `dow_jones_index`
 
 Example:
 
 ```bash
-make test-nss-tinyllama_unsloth-clinc_oos-ci
+make test-nss-tinyllama_nodp-clinc_oos-ci
 make test-nss-mistral_dp-dow_jones_index-ci
 ```
 
@@ -76,11 +76,10 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 | `requires_gpu` | Test needs CUDA hardware (modifier, stacks on any category: `unit`/`smoke`/`e2e`)                |
 | `vllm`         | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
 | `smollm2`      | SmolLM2 Hub download tests (Makefile uses for process isolation)                                 |
-| `unsloth`      | Unsloth backend tests (process-isolated from DP tests)                                           |
 | `noautouse`    | Skip autouse fixtures for specific tests                                                         |
 
 Every test should have exactly one of the category markers: `unit, smoke, e2e`.
-The other markers modify the 3 categories, indicating when they should be run (`slow, requires_gpu`), or when separate pytest invocations are required (`vllm, unsloth`).
+The other markers modify the 3 categories, indicating when they should be run (`slow, requires_gpu`), or when separate pytest invocations are required (`vllm`).
 
 ## Auto-marking
 
@@ -101,7 +100,7 @@ Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`
 | `tests/stub_tokenizer/`                      | Minimal tokenizer config                                                                                                                                                                                                                                            |
 | `tests/test_data/tokenizers/`                | Full tokenizers: `tinyllama/`, `mistral7b/`, `smollm3b/`                                                                                                                                                                                                            |
 | `tests/pii_replacer/fake_people_dataset.csv` | PII test data for NER/replacement                                                                                                                                                                                                                                   |
-| `tests/e2e/required_configs/`                | 6 YAML configs: `tinyllama-unsloth`, `tinyllama-dp`, `smollm3-unsloth`, `smollm3-dp`, `mistral-nodp`, `mistral-dp`                                                                                                                                                  |
+| `tests/e2e/required_configs/`                | 6 YAML configs: `tinyllama-nodp`, `tinyllama-dp`, `smollm3-nodp`, `smollm3-dp`, `mistral-nodp`, `mistral-dp`                                                                                                                                                        |
 
 
 Load helpers in root `conftest.py`:
@@ -151,9 +150,9 @@ GPU smoke tests use markers to express isolation requirements:
 
 - `requires_gpu`: all GPU tests
 - `vllm`: tests using vLLM generation (each file gets its own process)
-- `smollm2`, `unsloth`: marker-isolated groups (auto-discovered)
+- `smollm2`: marker-isolated group (auto-discovered)
 
-`make test-smoke-gpu` uses marker algebra for train-only tests (auto-discovering via `requires_gpu and not vllm and not smollm2 and not unsloth`), explicit file paths for vLLM tests (per-file isolation), and marker selection for SmolLM2/Unsloth. When adding a new vLLM test file, add `pytest.mark.vllm` and also add the file to the Makefile's explicit list.
+`make test-smoke-gpu` uses marker algebra for train-only tests (auto-discovering via `requires_gpu and not vllm and not smollm2`), explicit file paths for vLLM tests (per-file isolation), and marker selection for SmolLM2. When adding a new vLLM test file, add `pytest.mark.vllm` and also add the file to the Makefile's explicit list.
 
 `make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
 
@@ -166,3 +165,4 @@ See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotch
 - Tests mirror source structure: `tests/training/`, `tests/generation/`, etc.
 - Naming: fixture names use `fixture_` prefix consistently (e.g., `fixture_iris_dataset`).
 - `print()` is allowed in tests (ruff `T201` is suppressed for `tests/`). Use it freely for debug output in test functions.
+- Importing from another file under `tests/`, such as `tests/cli/helpers.py` does not work due to how pytest operates. A relative import from `conftest.py` is possible when a method (not a pytest fixture which is automatically available without importing) is shared across multiple test files. E.g., `from .conftest import train_with_sdk`.

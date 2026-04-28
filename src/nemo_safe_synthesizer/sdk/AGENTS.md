@@ -19,9 +19,7 @@ Important: `with_replace_pii(enable=False)` sets `_replace_pii_config = None`; P
 
 ## Dynamic backend selection
 
-Training: `get_training_backend_class(config)` chooses between `HuggingFaceBackend` and `UnslothTrainer`. The factory uses `config.training.use_unsloth`; `"unsloth"` → `_get_unsloth_backend_class()`.
-
-Lazy import for Unsloth: `_get_unsloth_backend_class()` does `from ..training.unsloth_backend import UnslothTrainer` *inside* the function. This keeps Unsloth optional so the package loads without it; import happens only when Unsloth is selected.
+Training always uses `HuggingFaceBackend`.
 
 Generation: VLLM vs Timeseries is chosen in `generate()`: `time_series.is_timeseries` → `TimeseriesBackend`, else `VllmBackend`.
 
@@ -49,11 +47,10 @@ Precedence: `kwargs` override `values`; `values` override model defaults. Each `
 
 ## Gotchas
 
-- Unsloth lazy import: Do not import `UnslothTrainer` at module level; use `_get_unsloth_backend_class()` so the package works without the Unsloth extra.
 - Self type hints: All fluent methods return `Self`; subclass overrides must match so chaining preserves the concrete type.
 - Internal config state: `_nss_config` is assembled by `_resolve_nss_config()`. When `config` is passed to `__init__`, it seeds the per-section `_*_config`; later `with_*` calls overwrite those sections.
 - NSS_PHASE env: Set during each stage (`process_data`, `train`, `generate`, `evaluate`) for artifact layout; check `Workdir` / `artifact_structure` if paths change.
-- evaluate() dependencies: Expects `generator`, `_original_train_df`, `_test_df`, `_column_statistics`, `_pii_replacer_time`, `_total_start` to exist. Call `process_data().train().generate()` before `evaluate()`.
+- evaluate() dependencies: Expects `generator`, `_original_training_df`, `_test_df`, `_column_statistics`, `_pii_replacer_time`, `_total_start` to exist. Call `process_data().train().generate()` before `evaluate()`.
 
 ## Extension points
 
@@ -66,6 +63,6 @@ New pipeline stage: Add a method on `SafeSynthesizer` that returns `self`, updat
 ## Read first
 
 - `config_builder.py` — `ConfigBuilder`, `_resolve_config`, `_resolve_nss_config`, `_nss_inputs`
-- `library_builder.py` — `SafeSynthesizer`, `get_training_backend_class`, `_get_unsloth_backend_class`, stepwise methods, `run()`
+- `library_builder.py` — `SafeSynthesizer`, stepwise methods, `run()`
 - `cli/artifact_structure.py` — `Workdir`, paths used by SDK
 - `config/` — `SafeSynthesizerParameters` and section models

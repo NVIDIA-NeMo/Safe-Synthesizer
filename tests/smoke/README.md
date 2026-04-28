@@ -24,9 +24,9 @@ a real tokenizer/model).
 
 GPU smoke tests use three marker-based isolation groups:
 
-1. Train-only (`requires_gpu` without `vllm`/`smollm2`/`unsloth`): share a single process, auto-discovered via marker algebra.
+1. Train-only (`requires_gpu` without `vllm`/`smollm2`): share a single process, auto-discovered via marker algebra.
 2. vLLM generation (`vllm` marker): each file gets its own process because vLLM pre-allocates all GPU memory and never releases it.
-3. SmolLM2 / Unsloth (`smollm2`, `unsloth` markers): each gets its own process, auto-discovered via markers.
+3. SmolLM2 (`smollm2` marker): gets its own process, auto-discovered via markers.
 
 When adding a new GPU smoke test, add the appropriate markers to `pytestmark`:
 
@@ -47,7 +47,6 @@ If the new file uses vLLM, also add it to the explicit file list in the `test-sm
 - Iris only has 151 rows, but holdout needs >=200. Set `holdout=0, max_holdout=0` to skip it.
 - Attention implementation: HuggingFaceBackend defaults to `flashinfer`, which HF doesn't recognize. The `_patch_attn_eager` fixture overrides it to `"sdpa"`.
 - Stub tokenizer vocab is 32000. If you change the tiny model config, keep `vocab_size=32000` or you'll get shape mismatches.
-- Always set `use_unsloth=False` unless you're specifically testing Unsloth. The `auto` default can pull it in and it monkey-patches transformers globally.
 - CPU tests need `optim="adamw_torch"`. The production default (`paged_adamw_32bit`) requires bitsandbytes CUDA kernels.
 
 ## What's in `conftest.py`?

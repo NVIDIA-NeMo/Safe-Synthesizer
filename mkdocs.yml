@@ -18,6 +18,10 @@ theme:
   font:
     text: Roboto
     code: Fira Code
+  icon:
+    logo: fontawesome/solid/shield
+    repo: fontawesome/brands/github
+  favicon: assets/shield-favicon.svg
   palette:
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
@@ -46,8 +50,6 @@ theme:
     - search.suggest
     - search.highlight
     - toc.follow
-  icon:
-    repo: fontawesome/brands/github
 
 extra_css:
   - css/style.css

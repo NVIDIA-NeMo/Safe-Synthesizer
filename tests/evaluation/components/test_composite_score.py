@@ -25,16 +25,12 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Evaluat
 
 @pytest.fixture
 def column_correlation_stability():
-    return Correlation(
-        score=EvaluationScore(name="Column Correlation Stability", raw_score=5.0, score=5.0, grade=Grade.UNAVAILABLE)  # ty: ignore[unknown-argument] -- pydantic kwarg
-    )
+    return Correlation(score=EvaluationScore(raw_score=5.0, score=5.0, grade=Grade.UNAVAILABLE))
 
 
 @pytest.fixture
 def deep_structure_stability():
-    return DeepStructure(
-        score=EvaluationScore(name="Deep Structure Stability", raw_score=2.0, score=2.0, grade=Grade.UNAVAILABLE)  # ty: ignore[unknown-argument] -- pydantic kwarg
-    )
+    return DeepStructure(score=EvaluationScore(raw_score=2.0, score=2.0, grade=Grade.UNAVAILABLE))
 
 
 @pytest.fixture
@@ -44,16 +40,12 @@ def column_distribution_stability(evaluation_datasets_5k):
 
 @pytest.fixture
 def text_semantic_stability():
-    return TextSemanticSimilarity(
-        score=EvaluationScore(name="Text Semantic Similarity", raw_score=7.0, score=7.0, grade=Grade.UNAVAILABLE)  # ty: ignore[unknown-argument] -- pydantic kwarg
-    )
+    return TextSemanticSimilarity(score=EvaluationScore(raw_score=7.0, score=7.0, grade=Grade.UNAVAILABLE))
 
 
 @pytest.fixture
 def text_structure_stability():
-    return TextStructureSimilarity(
-        score=EvaluationScore(name="Text Structure Similarity", raw_score=3.0, score=3.0, grade=Grade.UNAVAILABLE)  # ty: ignore[unknown-argument] -- pydantic kwarg
-    )
+    return TextStructureSimilarity(score=EvaluationScore(raw_score=3.0, score=3.0, grade=Grade.UNAVAILABLE))
 
 
 # @pytest.fixture
