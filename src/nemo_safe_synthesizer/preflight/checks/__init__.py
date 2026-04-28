@@ -15,7 +15,6 @@ from ..base import PreflightCheck
 from .advisory import (
     OversamplingCheck,
     SmallDatasetCheck,
-    TrainingStepsCheck,
 )
 from .dataframe import (
     ConstantColumnCheck,
@@ -46,7 +45,6 @@ __all__ = [
     "PseudoColumnCheck",
     "TimestampColumnCheck",
     "TokenBudgetCheck",
-    "TrainingStepsCheck",
     "VRAMHeadroomCheck",
     "_CORE_CHECKS",
 ]
@@ -74,5 +72,4 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # ADVISORY
     SmallDatasetCheck(),
     OversamplingCheck(),
-    TrainingStepsCheck(),
 )

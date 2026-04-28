@@ -456,7 +456,7 @@ check of its own.
 | Code | Severity | Check | Description |
 |------|----------|-------|-------------|
 | `torch_missing` | error | `gpu.cuda` | PyTorch not installed; cannot verify GPU availability |
-| `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required by both peft and unsloth) |
+| `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `inference_key_missing` | warning | `env.inference_key` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
 | `hf_token_missing` | warning | `env.hf_token` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set; gated model downloads may fail |
@@ -474,7 +474,6 @@ check of its own.
 | `dataset_too_small` | error | `dataset.size` | Dataset has fewer than minimum required rows |
 | `dataset_small` | warning | `dataset.row_count` | Training set below 1000 records |
 | `extreme_oversampling` | warning | `training.oversampling` | Data fraction exceeds 5x |
-| `few_training_steps` | warning | `training.steps` | Fewer than 10 effective training steps (covers batch > data case) |
 
 ---
 

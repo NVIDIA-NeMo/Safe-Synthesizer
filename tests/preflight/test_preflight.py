@@ -39,7 +39,6 @@ from nemo_safe_synthesizer.preflight import (
     SmallDatasetCheck,
     TimestampColumnCheck,
     TokenBudgetCheck,
-    TrainingStepsCheck,
     VRAMHeadroomCheck,
     get_registry,
     run_preflight,
@@ -81,14 +80,6 @@ class TestCUDAAvailabilityCheck:
         with patch("torch.cuda.is_available", return_value=True):
             issues = CUDAAvailabilityCheck().run(make_ctx(config=default_config))
         assert not any(i.code == "no_gpu" for i in issues)
-
-    def test_unsloth_without_gpu_emits_no_gpu(self):
-        # Both unsloth and peft require a CUDA GPU, so missing CUDA emits the
-        # same ``no_gpu`` code regardless of ``use_unsloth``.
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(use_unsloth=True))
-        with patch("torch.cuda.is_available", return_value=False):
-            issues = CUDAAvailabilityCheck().run(make_ctx(config=config))
-        assert any(i.code == "no_gpu" and i.severity == "error" for i in issues)
 
     def test_missing_torch_emits_torch_missing_not_no_gpu(self, default_config):
         # A system without PyTorch is a different failure mode from one
@@ -276,62 +267,6 @@ class TestHFTokenCheck:
         with patch.dict("os.environ", {env_var: "hf_xxx"}, clear=True):
             issues = HFTokenCheck().run(make_ctx(config=default_config))
         assert not any(i.code == "hf_token_missing" for i in issues)
-
-
-@pytest.mark.unit
-class TestTrainingStepsCheck:
-    def test_warns_on_few_steps(self):
-        """n_examples / effective_batch_size below the 10-step minimum triggers a warning."""
-        config = SafeSynthesizerParameters(
-            training=TrainingHyperparams(
-                num_input_records_to_sample=10,
-                batch_size=8,
-                gradient_accumulation_steps=4,
-            )
-        )
-        data = pd.DataFrame({"x": range(10)})
-        issues = TrainingStepsCheck().run(make_ctx(config=config, data=data))
-        assert any(i.code == "few_training_steps" and i.severity == "warning" for i in issues)
-
-    def test_silent_when_records_unresolved(self):
-        """``num_input_records_to_sample="auto"`` short-circuits the check."""
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(num_input_records_to_sample="auto"))
-        issues = TrainingStepsCheck().run(make_ctx(config=config))
-        assert not any(i.code == "few_training_steps" for i in issues)
-
-    def test_uses_group_count_when_grouping_active(self):
-        """With grouping, the step estimate is based on # of groups, not raw records.
-
-        1000 raw records but only 20 groups -> with batch size 8 that's ~2
-        steps, below the 10-step floor; n_records alone would give 125
-        steps and miss the warning.
-        """
-        config = SafeSynthesizerParameters(
-            data=DataParameters(group_training_examples_by="grp"),
-            training=TrainingHyperparams(
-                num_input_records_to_sample=1000,
-                batch_size=8,
-                gradient_accumulation_steps=1,
-            ),
-        )
-        data = pd.DataFrame({"grp": [i % 20 for i in range(1000)], "x": range(1000)})
-        issues = TrainingStepsCheck().run(make_ctx(config=config, data=data))
-        assert any(i.code == "few_training_steps" and "20 groups" in i.message for i in issues)
-
-    def test_ungrouped_uses_min_of_records_and_rows(self):
-        """Without grouping, the estimate caps at actual row count (sampling can't exceed it)."""
-        config = SafeSynthesizerParameters(
-            training=TrainingHyperparams(
-                num_input_records_to_sample=10_000,
-                batch_size=8,
-                gradient_accumulation_steps=1,
-            )
-        )
-        data = pd.DataFrame({"x": range(50)})
-        issues = TrainingStepsCheck().run(make_ctx(config=config, data=data))
-        warning = next((i for i in issues if i.code == "few_training_steps"), None)
-        assert warning is not None
-        assert "50 training examples" in warning.message
 
 
 @pytest.mark.unit

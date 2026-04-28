@@ -53,7 +53,6 @@ class CUDAAvailabilityCheck(ConfigCheck):
         if torch.cuda.is_available():
             return
 
-        # both unsloth and peft require a CUDA GPU; we don't care about unsloth specific errors
         collector.error("no_gpu", "No CUDA GPU detected. Safe Synthesizer requires a CUDA-capable GPU.")
 
 

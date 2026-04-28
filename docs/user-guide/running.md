@@ -269,8 +269,7 @@ safe-synthesizer run --data-source data.csv --validate
 ```
 
 Pre-flight runs the following core checks, grouped by stage. Stages
-execute in order (`config` → `dataframe` → `metadata` → `advisory`);
-within a stage, checks run in the order listed.
+execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
@@ -287,7 +286,6 @@ within a stage, checks run in the order listed.
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
 | `training.oversampling` | advisory | Sampling fraction is not extreme (warning only) |
-| `training.steps` | advisory | Effective optimizer steps meet a minimum (warning only) |
 
 If a non-advisory check produces an error, later checks that declare it
 as a `requires` dependency are marked `skipped`. Advisory-stage errors
