@@ -301,7 +301,7 @@ class GroupedDataProcessor(Processor):
                     )
 
             # Handle non-unique group_by values (optionally fix by using first record's values).
-            valid_parsed = [r.parsed for r in group_records if r.is_valid and r.parsed is not None]
+            valid_parsed = _valid_parsed(group_records)
             if valid_parsed and len({tuple(record[gb] for gb in self.group_by) for record in valid_parsed}) != 1:
                 if self.config.group_by_fix_non_unique_value:
                     for group_by in self.group_by:
@@ -314,7 +314,7 @@ class GroupedDataProcessor(Processor):
                     )
 
             # Handle unordered records when order_by is set (optionally fix by sorting).
-            valid_parsed = [r.parsed for r in group_records if r.is_valid and r.parsed is not None]
+            valid_parsed = _valid_parsed(group_records)
             if (
                 valid_parsed
                 and self.order_by is not None
@@ -343,6 +343,17 @@ class GroupedDataProcessor(Processor):
             records=all_records,
             tokenization_time_sec=total_tokenization_time,
         )
+
+
+def _valid_parsed(group_records: list[ParsedRecord]) -> list[dict[str, Any]]:
+    """Return the parsed dicts for each valid record in *group_records*.
+
+    Valid records always have ``parsed`` set to a non-``None`` dict
+    (invariant from [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord]),
+    but the explicit ``is not None`` filter narrows the type for static
+    analysis.
+    """
+    return [r.parsed for r in group_records if r.is_valid and r.parsed is not None]
 
 
 def _reject_group_records(records: list[ParsedRecord], error: tuple[str, str]) -> None:

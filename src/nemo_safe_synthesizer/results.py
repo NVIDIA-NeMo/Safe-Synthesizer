@@ -10,12 +10,47 @@ consumed by the SDK and CLI.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
 from .config import SafeSynthesizerResults, SafeSynthesizerSummary, SafeSynthesizerTiming
 from .evaluation.render import render_report
 from .evaluation.reports.multimodal.multimodal_report import MultimodalReport
 from .generation.results import GenerateJobResults
+
+# Fields passed through unchanged from ``GenerateJobResults`` to
+# ``SafeSynthesizerSummary``.  Both models use identical names for these,
+# so a single tuple drives both the extraction and the forwarding step.
+_GENERATE_RESULT_FIELDS: tuple[str, ...] = (
+    "num_valid_records",
+    "num_invalid_records",
+    "num_prompts",
+    "valid_record_fraction",
+    "num_completion_tokens",
+    "num_valid_record_tokens",
+    "num_invalid_record_tokens",
+    "num_non_record_tokens",
+    "tokens_per_prompt",
+    "tokens_per_second",
+    "valid_tokens_per_second",
+    "tokenization_overhead_sec",
+)
+
+# Score fields extracted from a ``MultimodalReport`` when available.  The
+# dict maps the ``SafeSynthesizerSummary`` field name to the report score
+# name that ``MultimodalReport.get_score_by_name`` understands.
+_REPORT_SCORE_FIELDS: dict[str, str] = {
+    "synthetic_data_quality_score": "Synthetic Quality Score",
+    "column_correlation_stability_score": "Column Correlation Stability",
+    "deep_structure_stability_score": "Deep Structure Stability",
+    "column_distribution_stability_score": "Column Distribution Stability",
+    "text_semantic_similarity_score": "Text Semantic Similarity",
+    "text_structure_similarity_score": "Text Structure Similarity",
+    "data_privacy_score": "Data Privacy Score",
+    "membership_inference_protection_score": "Membership Inference Protection",
+    "attribute_inference_protection_score": "Attribute Inference Protection",
+}
 
 
 def make_nss_summary(
@@ -37,84 +72,21 @@ def make_nss_summary(
     Returns:
         A populated ``SafeSynthesizerSummary``.
     """
-    # Extract scores from report if available, otherwise use None for all scores
-    # (e.g., when running PII-only mode without evaluation)
-    if report is not None:
-        synthetic_data_quality_score = report.get_score_by_name("Synthetic Quality Score")
-        column_correlation_stability_score = report.get_score_by_name("Column Correlation Stability")
-        deep_structure_stability_score = report.get_score_by_name("Deep Structure Stability")
-        column_distribution_stability_score = report.get_score_by_name("Column Distribution Stability")
-        text_semantic_similarity_score = report.get_score_by_name("Text Semantic Similarity")
-        text_structure_similarity_score = report.get_score_by_name("Text Structure Similarity")
-        data_privacy_score = report.get_score_by_name("Data Privacy Score")
-        membership_inference_protection_score = report.get_score_by_name("Membership Inference Protection")
-        attribute_inference_protection_score = report.get_score_by_name("Attribute Inference Protection")
-    else:
-        synthetic_data_quality_score = None
-        column_correlation_stability_score = None
-        deep_structure_stability_score = None
-        column_distribution_stability_score = None
-        text_semantic_similarity_score = None
-        text_structure_similarity_score = None
-        data_privacy_score = None
-        membership_inference_protection_score = None
-        attribute_inference_protection_score = None
-
-    num_valid_records = None
-    num_invalid_records = None
-    num_prompts = None
-    valid_record_fraction = None
-    num_completion_tokens = None
-    num_valid_record_tokens = None
-    num_invalid_record_tokens = None
-    num_non_record_tokens = None
-    valid_record_token_fraction = None
-    tokens_per_prompt = None
-    tokens_per_second = None
-    valid_tokens_per_second = None
-    tokenization_overhead_sec = None
-
+    gen_fields: dict[str, Any] = {}
     if isinstance(results, GenerateJobResults):
-        num_valid_records = results.num_valid_records
-        num_invalid_records = results.num_invalid_records
-        num_prompts = results.num_prompts
-        valid_record_fraction = results.valid_record_fraction
-        num_completion_tokens = results.num_completion_tokens
-        num_valid_record_tokens = results.num_valid_record_tokens
-        num_invalid_record_tokens = results.num_invalid_record_tokens
-        num_non_record_tokens = results.num_non_record_tokens
-        tokens_per_prompt = results.tokens_per_prompt
-        tokens_per_second = results.tokens_per_second
-        valid_tokens_per_second = results.valid_tokens_per_second
-        tokenization_overhead_sec = results.tokenization_overhead_sec
-        if num_completion_tokens is not None and num_completion_tokens > 0 and num_valid_record_tokens is not None:
-            valid_record_token_fraction = num_valid_record_tokens / num_completion_tokens
+        gen_fields = {field: getattr(results, field) for field in _GENERATE_RESULT_FIELDS}
+        completion_tokens = gen_fields["num_completion_tokens"]
+        valid_record_tokens = gen_fields["num_valid_record_tokens"]
+        if completion_tokens and valid_record_tokens is not None:
+            gen_fields["valid_record_token_fraction"] = valid_record_tokens / completion_tokens
 
-    return SafeSynthesizerSummary(
-        timing=timing,
-        num_valid_records=num_valid_records,
-        num_invalid_records=num_invalid_records,
-        num_prompts=num_prompts,
-        valid_record_fraction=valid_record_fraction,
-        num_completion_tokens=num_completion_tokens,
-        num_valid_record_tokens=num_valid_record_tokens,
-        num_invalid_record_tokens=num_invalid_record_tokens,
-        num_non_record_tokens=num_non_record_tokens,
-        valid_record_token_fraction=valid_record_token_fraction,
-        tokens_per_prompt=tokens_per_prompt,
-        tokens_per_second=tokens_per_second,
-        valid_tokens_per_second=valid_tokens_per_second,
-        tokenization_overhead_sec=tokenization_overhead_sec,
-        synthetic_data_quality_score=synthetic_data_quality_score,
-        column_correlation_stability_score=column_correlation_stability_score,
-        deep_structure_stability_score=deep_structure_stability_score,
-        column_distribution_stability_score=column_distribution_stability_score,
-        text_semantic_similarity_score=text_semantic_similarity_score,
-        text_structure_similarity_score=text_structure_similarity_score,
-        data_privacy_score=data_privacy_score,
-        membership_inference_protection_score=membership_inference_protection_score,
-        attribute_inference_protection_score=attribute_inference_protection_score,
-    )
+    # None when ``report`` is missing (e.g. PII-only mode without evaluation).
+    report_scores: dict[str, Any] = {
+        field: report.get_score_by_name(name) if report is not None else None
+        for field, name in _REPORT_SCORE_FIELDS.items()
+    }
+
+    return SafeSynthesizerSummary(timing=timing, **gen_fields, **report_scores)
 
 
 def make_nss_results(
