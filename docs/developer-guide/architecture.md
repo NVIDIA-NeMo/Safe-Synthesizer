@@ -45,7 +45,6 @@ graph TB
     subgraph trainingBackend [Training Backend]
         TrainingBackendBase["TrainingBackend - Abstract"]
         HFBackend["HuggingFaceBackend"]
-        UnslothBackend["UnslothBackend"]
 
         subgraph trainingComponents [Training Components]
             ModelLoader["Model Loader"]
@@ -106,7 +105,6 @@ graph TB
     Assembler --> TrainingBackendBase
 
     TrainingBackendBase --> HFBackend
-    TrainingBackendBase --> UnslothBackend
     HFBackend --> ModelLoader
     HFBackend --> QuantizationComp
     HFBackend --> LoRA
@@ -317,7 +315,6 @@ Path: `src/nemo_safe_synthesizer/training/`
 | Backend | Description |
 |---------|-------------|
 | **HuggingFaceBackend** | Quantization (4-bit, 8-bit), LoRA via PEFT, Differential Privacy via [Opacus](https://opacus.ai/) |
-| **UnslothBackend** | Optimized training with Unsloth library |
 
 ### 4. Generation Backend
 
@@ -364,7 +361,7 @@ synthesizer.run()
 
 Training and generation backends use abstract base classes to allow multiple implementations:
 
-- Training: HuggingFace, Unsloth
+- Training: HuggingFace
 - Generation: VLLM (extensible to others)
 
 ### Component-Based Evaluation

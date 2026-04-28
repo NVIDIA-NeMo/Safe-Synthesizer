@@ -55,7 +55,7 @@ All commits require DCO sign-off and GPG signing. Always use `git commit --signo
 
 Shell scripting: never use `~` inside double-quoted strings -- it does not expand. Use `$HOME` or an absolute path instead.
 
-Testing gotchas: `asyncio_mode = auto` in `pytest.ini` -- async tests work without `@pytest.mark.asyncio`. The `unit_test` marker is deprecated; use `unit`. `datasets==4.3.0` is hard-pinned in `pyproject.toml` due to an unsloth incompatibility -- do not unpin it.
+Testing gotchas: `asyncio_mode = auto` in `pytest.ini` -- async tests work without `@pytest.mark.asyncio`. The `unit_test` marker is deprecated; use `unit`.
 
 For testing, building, syncing, bootstrapping, and other workflows, see the matching skill or `.claude/commands/` file.
 
@@ -106,7 +106,7 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `pii_replacer/` | NER-based PII detection and replacement |
 | `privacy/` | DP transformers (Opacus integration) |
 | `sdk/` | SafeSynthesizer builder, library_builder |
-| `training/` | TrainingBackend, HuggingFace, Unsloth backends |
+| `training/` | TrainingBackend, HuggingFace backend |
 | `artifacts/` | Data quality checks, field analysis, metadata |
 | `observability.py` | CategoryLogger, TracedContext, structured logging |
 | `errors.py` | Error hierarchy: `SafeSynthesizerError` → `UserError` (`DataError`/`ParameterError` are also `ValueError`; `GenerationError` is also `RuntimeError`) and `InternalError` (also `RuntimeError`). See `diagnose-failures` skill |

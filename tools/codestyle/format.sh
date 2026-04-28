@@ -12,7 +12,13 @@
 #   ./format.sh --check src/foo.py       # check mode on specific files
 #
 # Lint-rule violations (ruff check without --fix) are handled by ruff_check.sh.
+# Type-checking is handled by typecheck.sh.
 # Copyright headers are handled separately by copyright_fixer.py.
+#
+# Note: `ty check --fix` (ty 0.0.32+) is intentionally not wired in here yet.
+# The autofix surface is still small and the CLI semantics (file discovery vs.
+# explicit paths, rule suppression, exit codes) are evolving. When we do wire
+# it, it goes in the fix branch below; see the commented placeholder.
 #
 
 set -euo pipefail
@@ -30,4 +36,11 @@ else
     ruff format "${PY_FILES[@]}"
     # this does import sorting and autofixes
     ruff check --fix "${PY_FILES[@]}"
+    # Future: ty autofix goes here once the --fix surface stabilizes. Shape:
+    #   ty check --fix --exit-zero --force-exclude "${PY_FILES[@]}"
+    # --force-exclude so [tool.ty.src.exclude] in pyproject.toml is honored
+    # when paths are passed explicitly; --exit-zero so non-fixable diagnostics
+    # don't fail `make format` (`make typecheck` is the gate). When enabling,
+    # also add "./.agents/" to [tool.ty.src.exclude] -- PEP 723 uv scripts
+    # there would otherwise show up when PY_FILES is passed on the CLI.
 fi

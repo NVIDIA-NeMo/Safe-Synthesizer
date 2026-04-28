@@ -27,7 +27,6 @@ def test_add_pseudo_group_when_no_group_column():
         group_training_examples_by=None,
         is_timeseries=True,
         timestamp_interval_seconds=60,
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
 
@@ -46,7 +45,6 @@ def test_add_pseudo_group_preserves_existing_group():
         group_training_examples_by="group_id",
         is_timeseries=True,
         timestamp_interval_seconds=60,
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
 
@@ -60,7 +58,6 @@ def test_create_elapsed_time_column_with_groups():
     """Test elapsed time resets at start of each group."""
     df = pd.DataFrame({"group_id": ["A", "A", "B", "B"], "value": [1, 2, 3, 4]})
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True
@@ -80,7 +77,6 @@ def test_create_elapsed_time_column_no_groups():
     """Test elapsed time uses global index when no groups."""
     df = pd.DataFrame({"value": [1, 2, 3]})
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True
@@ -98,7 +94,6 @@ def test_create_elapsed_time_column_skips_when_timestamp_exists():
     """Test no elapsed time created when timestamp_column is already set."""
     df = pd.DataFrame({"timestamp": ["2024-01-01", "2024-01-02"], "value": [1, 2]})
     config = SafeSynthesizerParameters.from_params(
-        use_unsloth=False,
         rope_scaling_factor=1,
     )
     config.time_series.is_timeseries = True

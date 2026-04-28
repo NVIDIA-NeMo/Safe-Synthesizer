@@ -73,12 +73,11 @@ class SafeSynthesizerParameters(Parameters):
     def check_dp_compatibility(
         cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
     ) -> DifferentialPrivacyHyperparams | None:
-        """Validate that DP-enabled configs have compatible data and training settings.
+        """Validate that DP-enabled configs have compatible data settings.
 
         When DP is enabled, enforces that ``max_sequences_per_example``
         is ``1`` (or ``"auto"``, which is resolved to ``1``) to bound
-        per-example contribution, and that Unsloth is disabled since it
-        is not yet compatible with DP-SGD. When DP is disabled but
+        per-example contribution. When DP is disabled but
         ``max_sequences_per_example`` is ``"auto"``, defaults it to
         ``10``.
 
@@ -88,9 +87,8 @@ class SafeSynthesizerParameters(Parameters):
         error when DP is actually disabled.
 
         Raises:
-            ParameterError: If DP is enabled and ``data`` or ``training``
-                parameters are missing, ``max_sequences_per_example`` is
-                not ``1``, or Unsloth is enabled alongside DP.
+            ParameterError: If DP is enabled and ``data`` parameters are
+                missing, or ``max_sequences_per_example`` is not ``1``.
         """
         if dp_params is None:
             return dp_params
@@ -108,7 +106,6 @@ class SafeSynthesizerParameters(Parameters):
             raise ParameterError("Data parameters must be provided when DP is enabled.")
 
         match data.max_sequences_per_example:
-            # this should be a valid none or parameter[int|str|none]
             case "auto" | None:
                 logger.info("Setting max_sequences_per_example to 1 because DP is enabled.")
                 data.max_sequences_per_example = 1
@@ -118,17 +115,6 @@ class SafeSynthesizerParameters(Parameters):
                 raise ParameterError(
                     f"When enabling DP, max_sequences_per_example must be set to 1 or 'auto'. Received: {v}"
                 )
-
-        logger.debug("Checking Training compatibility for training parameters.")
-
-        training: TrainingHyperparams | None = info.data.get("training")
-        logger.debug(f"Training parameters: {training}")
-
-        if not training:
-            raise ParameterError("Training parameters must be provided when DP is enabled.")
-
-        if training.use_unsloth not in [False, AUTO_STR]:
-            raise ParameterError("Unsloth is currently not compatible with DP.")
 
         return dp_params
 

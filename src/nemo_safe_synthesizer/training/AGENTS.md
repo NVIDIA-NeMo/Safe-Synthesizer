@@ -3,17 +3,16 @@
 
 # training
 
-Fine-tuning LLMs with HuggingFace Trainer, optional differential privacy (Opacus), and optional Unsloth acceleration.
+Fine-tuning LLMs with HuggingFace Trainer, optional differential privacy (Opacus).
 
 ## Purpose
 
-Train LoRA adapters on tabular or time-series data for synthetic generation. Supports full-precision and quantized PEFT (LoRA), DP-SGD via Opacus, and Unsloth-optimized loading/training.
+Train LoRA adapters on tabular or time-series data for synthetic generation. Supports full-precision and quantized PEFT (LoRA) and DP-SGD via Opacus.
 
 ## Backend Hierarchy
 
-- TrainingBackend (ABC) — defines `prepare_training_data`, `prepare_config`, `prepare_params`, `maybe_quantize`, `load_model`, `train`, `save_model`. Subclasshook checks for these methods.
+- TrainingBackend (ABC) — defines `prepare_training_data`, `prepare_config`, `prepare_params`, `maybe_quantize`, `load_model`, `train`, `save_model`, `teardown`. Subclasshook checks for these methods. `teardown()` is the lifecycle cleanup hook (frees GPU memory, destroys distributed process groups, clears trainer/model state); it must be idempotent and callers should wrap `train()` in `try/finally` to guarantee it runs on error paths.
 - HuggingFaceBackend — uses `AutoModelForCausalLM`, HuggingFace `Trainer`, LoRA via PEFT.
-- UnslothTrainer — extends `HuggingFaceBackend`. Uses `FastLanguageModel` for model loading and `FastLanguageModel.get_peft_model` for PEFT. Requires CUDA; incompatible with DP.
 
 ## FIXED_RUNTIME_TRAINING_ARGS
 
@@ -56,7 +55,6 @@ Trainer removes `PrinterCallback`; adds SafeSynthesizerWorkerCallback or Progres
 - `_trust_remote_code_for_model()` — returns `True` only for `nvidia/` models. Used for `AutoConfig.from_pretrained(..., trust_remote_code=...)`.
 - `_apply_eval_dataset_overrides()` — when `eval_dataset` is provided, overrides `eval_steps`, `eval_strategy="steps"`, `do_eval=True`, `include_for_metrics`, `eval_accumulation_steps`.
 - Timeseries preprocessing — `process_timeseries_data()` adds `PSEUDO_GROUP_COLUMN` (`__nss_sequence_id`) when no group column is specified; treats the whole dataset as one sequence.
-- Unsloth — uses `model_name` instead of `pretrained_model_name_or_path`; uses `max_seq_length` instead of `max_position_embeddings`. Disables `SUPPORTS_LLAMA32` to avoid HF Hub requests.
 
 ## Extension Points
 
@@ -68,6 +66,5 @@ Trainer removes `PrinterCallback`; adds SafeSynthesizerWorkerCallback or Progres
 
 - `backend.py` — TrainingBackend ABC, NSSTrainerResult, _trust_remote_code_for_model
 - `huggingface_backend.py` — HuggingFaceBackend, FIXED_RUNTIME_TRAINING_ARGS, DP config, LoRA/quantization, _apply_rope_scaling
-- `unsloth_backend.py` — UnslothTrainer, _update_for_unsloth, maybe_quantize (unsloth path)
 - `callbacks.py` — InferenceEvalCallback, ProgressBarCallback, SafeSynthesizerWorkerCallback
 - `timeseries_preprocessing.py` — process_timeseries_data, PSEUDO_GROUP_COLUMN

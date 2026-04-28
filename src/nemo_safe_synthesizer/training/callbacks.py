@@ -34,7 +34,6 @@ from ..generation.results import (
     GenerationStatus,
 )
 from ..llm.metadata import ModelMetadata
-from ..llm.utils import optimize_for_inference
 from ..observability import get_logger
 from ..utils import create_schema_prompt
 
@@ -122,62 +121,61 @@ class InferenceEvalCallback(TrainerCallback):
         model = kwargs["model"]
         tokenizer = kwargs["tokenizer"]
 
-        with optimize_for_inference(model):
-            was_stopped = False
+        was_stopped = False
 
-            logger.info(
-                f"🔮 Starting inference-based evaluation with the '{self.processor.name}'",
+        logger.info(
+            f"🔮 Starting inference-based evaluation with the '{self.processor.name}'",
+        )
+
+        for _ in range(self.num_batches):
+            prompt_tokens = tokenizer(
+                [self.templated_prompt] * self.num_prompts_per_batch,
+                return_tensors="pt",
+            )
+            input_ids = prompt_tokens["input_ids"].to(model.device)
+            attention_mask = prompt_tokens["attention_mask"].to(model.device)
+
+            outputs = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=tokenizer.model_max_length - len(input_ids[0]),
+                do_sample=True,
+                use_cache=True,
+                **self.generate_kwargs,
+            )
+            decoded = tokenizer.batch_decode(
+                outputs,
+                skip_special_tokens=self.is_tabular_processor,
             )
 
-            for _ in range(self.num_batches):
-                prompt_tokens = tokenizer(
-                    [self.templated_prompt] * self.num_prompts_per_batch,
-                    return_tensors="pt",
-                )
-                input_ids = prompt_tokens["input_ids"].to(model.device)
-                attention_mask = prompt_tokens["attention_mask"].to(model.device)
+            # Per-row completion token counts feed Batch's token
+            # statistics alongside vLLM-backed generation.  When the
+            # tokenizer has a pad_token_id, trailing pads are
+            # excluded; otherwise we fall back to the full
+            # completion width (slight over-count when generation
+            # ends early, acceptable for an eval metric).
+            prompt_len = input_ids.shape[1]
+            completion_ids = outputs[:, prompt_len:]
+            pad_id = tokenizer.pad_token_id
+            if pad_id is not None:
+                completion_tokens_per_row = (completion_ids != pad_id).sum(dim=1).tolist()
+            else:
+                completion_tokens_per_row = [completion_ids.shape[1]] * outputs.shape[0]
 
-                outputs = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    max_new_tokens=tokenizer.model_max_length - len(input_ids[0]),
-                    do_sample=True,
-                    use_cache=True,
-                    **self.generate_kwargs,
-                )
-                decoded = tokenizer.batch_decode(
-                    outputs,
-                    skip_special_tokens=self.is_tabular_processor,
-                )
+            start_time = time.perf_counter()
+            batch = Batch(processor=self.processor)
+            for idx, (text, n_tokens) in enumerate(zip(decoded, completion_tokens_per_row, strict=True)):
+                batch.process(idx, text, completion_tokens=n_tokens)
+            duration = time.perf_counter() - start_time
+            self.generation.add_batch(batch)
 
-                # Per-row completion token counts feed Batch's token
-                # statistics alongside vLLM-backed generation.  When the
-                # tokenizer has a pad_token_id, trailing pads are
-                # excluded; otherwise we fall back to the full
-                # completion width (slight over-count when generation
-                # ends early, acceptable for an eval metric).
-                prompt_len = input_ids.shape[1]
-                completion_ids = outputs[:, prompt_len:]
-                pad_id = tokenizer.pad_token_id
-                if pad_id is not None:
-                    completion_tokens_per_row = (completion_ids != pad_id).sum(dim=1).tolist()
-                else:
-                    completion_tokens_per_row = [completion_ids.shape[1]] * outputs.shape[0]
+            batch.log_summary()
+            duration_string = f"{duration:.1f} seconds" if duration < 120 else f"{duration / 60:.1f} minutes"
+            logger.info(f"Generation time: {duration_string}")
 
-                start_time = time.perf_counter()
-                batch = Batch(processor=self.processor)
-                for idx, (text, n_tokens) in enumerate(zip(decoded, completion_tokens_per_row, strict=True)):
-                    batch.process(idx, text, completion_tokens=n_tokens)
-                duration = time.perf_counter() - start_time
-                self.generation.add_batch(batch)
-
-                batch.log_summary()
-                duration_string = f"{duration:.1f} seconds" if duration < 120 else f"{duration / 60:.1f} minutes"
-                logger.info(f"Generation time: {duration_string}")
-
-                if self.generation.status != GenerationStatus.IN_PROGRESS:
-                    was_stopped = True
-                    break
+            if self.generation.status != GenerationStatus.IN_PROGRESS:
+                was_stopped = True
+                break
 
             if was_stopped:
                 control.should_training_stop = True

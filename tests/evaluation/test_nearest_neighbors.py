@@ -94,7 +94,7 @@ class TestNearestNeighborSearchReturnsL2Distances:
         """When a CUDA GPU is available, verify the real torch CUDA path returns L2 distances."""
         nn = NearestNeighborSearch(n_neighbors=4)
         if not nn.use_gpu:
-            pytest.skip("CUDA GPU not available")
+            pytest.skip("CUDA GPU not available")  # ty: ignore[invalid-argument-type,too-many-positional-arguments] -- ty can't see through pytest's @_with_exception decorator
 
         data, queries, expected = _make_known_data()
         nn.fit(data)

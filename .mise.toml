@@ -8,22 +8,23 @@
 #   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
 
 
-# will warn when below this version
-min_version = { soft = '2026.4.0' }
+# mise itself is pinned by the Makefile (MISE_VERSION); this enforces the
+# same floor from mise's side so an older mise on PATH fails fast.
+min_version = '2026.4.11'
 
 [tools]
 # Tools for working with JSON, Git, and other system utilities.
 jq = "1.8.1"
 yq = "4.44.1"
 github-cli = "latest"
-"ubi:google/osv-scanner" = "latest"
+"aqua:google/osv-scanner" = "latest"
 ripgrep = "latest"
 
 # Tools for managing Python environments and packages.
 dprint = "latest"
 uv = "0.9.30"
 ruff = "0.15.0"
-ty = "0.0.27"
+ty = "0.0.32"
 
 "aqua:j178/prek" = "latest"
 
@@ -36,3 +37,6 @@ _.file = [".env", ".env.local"]
 
 [settings]
 lockfile = true
+install_before = "7d"  # only resolve to versions released more than 7 days ago - can help mitigate supply chain attacks
+lockfile_platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
+idiomatic_version_file_enable_tools = []

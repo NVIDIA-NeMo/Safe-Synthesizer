@@ -87,7 +87,6 @@ training:
   num_input_records_to_sample: auto
   pretrained_model: HuggingFaceTB/SmolLM3-3B
   rope_scaling_factor: auto
-  use_unsloth: auto
   validation_ratio: 0.0
   validation_steps: 15
   warmup_ratio: 0.05

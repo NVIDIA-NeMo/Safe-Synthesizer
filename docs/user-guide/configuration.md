@@ -74,7 +74,6 @@ for the full field list.
 | `training.lora_r` | `32` | LoRA rank; lower values produce fewer trainable parameters | 16--64 typical; 32 is a reasonable default |
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |
 | `training.pretrained_model` | `"HuggingFaceTB/SmolLM3-3B"` | HuggingFace model ID or local path | See supported families below; `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for fast CPU/low-VRAM iteration |
-| `training.use_unsloth` | `"auto"` | Use the Unsloth backend. Set to `false` or leave at `"auto"` when using DP (`"auto"` resolves to `false` when DP is enabled) | Leave at `"auto"` |
 | `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit |
 | `training.quantization_bits` | `8` | Bit width (4 or 8) when `training.quantize_model` is `true` | Prefer 8 over 4 for quality |
 | `training.attn_implementation` | `"kernels-community/vllm-flash-attn3"` | Attention backend for model loading | Leave at default |
@@ -185,7 +184,6 @@ learn about any individual record. Safe Synthesizer implements DP-SGD
 
 Compatibility constraints:
 
-- Set `training.use_unsloth` to `false` or leave it at `"auto"` -- `"auto"` resolves to `false` when DP is enabled (Unsloth is incompatible with Opacus's per-sample gradient hooks)
 - `data.max_sequences_per_example` must be `1` (or `"auto"`, which resolves to `1` when DP is enabled) -- must be 1 to limit each example's contribution to the gradient, which DP requires
 - Safe Synthesizer disables gradient checkpointing automatically when DP is enabled -- no user action required (gradient checkpointing is incompatible with Opacus)
 

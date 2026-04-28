@@ -277,7 +277,7 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             regexes = [_build_regex({"type": t}, whitespace_pattern) for t in instance_type if t != "object"]
             return rf"({'|'.join(regexes)})"
         case x if x in dispatch:
-            return dispatch[x](**kwargs)
+            return dispatch[x](**kwargs)  # ty: ignore[invalid-argument-type] -- kwargs values are correct per-key; ty can't narrow the union through dict unpacking
 
         case "number":
             return NUMBER

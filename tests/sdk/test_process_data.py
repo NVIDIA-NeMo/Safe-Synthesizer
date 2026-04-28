@@ -17,7 +17,6 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from pydantic import ValidationError
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
@@ -596,19 +595,6 @@ class TestProcessDataConfigValidation:
     the input dataset before holdout split, autoconfig resolution, PII
     replacement, or any disk I/O.
     """
-
-    def test_dp_and_explicit_unsloth_raises_at_process_data(self, fixture_workdir: Workdir) -> None:
-        """DP + explicit ``use_unsloth=True`` raises before any data is processed.
-
-        Pydantic wraps the inner ``ParameterError`` in a ``ValidationError``.
-        """
-        ss = (
-            SafeSynthesizer(workdir=fixture_workdir)
-            .with_train(use_unsloth=True)
-            .with_differential_privacy(dp_enabled=True)
-        )
-        with pytest.raises(ValidationError, match="not compatible with DP"):
-            ss.process_data()
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
     def test_invalid_groupby_raises_before_holdout(

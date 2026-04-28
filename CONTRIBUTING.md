@@ -32,6 +32,8 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
+> Note on mise itself: the mise version is pinned in `Makefile` (`MISE_VERSION`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when the full toolchain (`gpg`, `gpg-agent`, and `dirmngr`) is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update --version <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
+
 ### Setup
 
 1. Get the code:
@@ -436,7 +438,7 @@ make test-smoke-gpu
 make test-e2e
 
 # Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
-make test-nss-tinyllama_unsloth-clinc_oos-ci
+make test-nss-tinyllama_nodp-clinc_oos-ci
 
 # Run CI tests locally in a Linux container (Docker/Podman)
 make test-ci-container
@@ -449,7 +451,7 @@ uv run pytest tests/cli/test_run.py
 
 GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
 
-- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2, Unsloth). Required for merge.
+- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2). Required for merge.
 - GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
 
 When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.

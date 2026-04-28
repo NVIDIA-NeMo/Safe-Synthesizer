@@ -26,7 +26,6 @@ __pycache__/
 # Build artifacts
 dist/
 htmlcov/
-unsloth_compiled_cache/
 coverage.json
 coverage.xml
 
