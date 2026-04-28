@@ -28,6 +28,7 @@ from nemo_safe_synthesizer.defaults import (
 )
 from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
+    GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
     GLOBAL_MAX_SEQ_LENGTH,
     Llama32,
     LLMPromptConfig,
@@ -563,6 +564,98 @@ class TestModelMetadata:
         """Test from_str_or_path raises ValueError for unknown model names."""
         with pytest.raises(ValueError, match="Unknown model name or path"):
             ModelMetadata.from_str_or_path("unknown-model-xyz")
+
+
+class TestGenerationMaxTokensFor:
+    """Tests for ``ModelMetadata.generation_max_tokens_for(prompt_len)``."""
+
+    def test_metadata_generation_max_tokens_for_returns_stat_when_prompt_is_small(self, sample_model_metadata):
+        """Stat-derived ceiling wins when the prompt leaves enough headroom."""
+        sample_model_metadata.max_tokens_per_example = 1000
+
+        expected = int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        # ``max_seq_length=2048`` and ``prompt_len=10`` leave 2038 headroom > 1200.
+        assert sample_model_metadata.generation_max_tokens_for(10) == expected
+
+    def test_metadata_generation_max_tokens_for_clamps_when_prompt_is_large(self, sample_model_metadata):
+        """Prompt clamp wins when ``max_seq_length - prompt_len`` is tighter than the stat."""
+        # ``base_max_seq_length=2048`` and no RoPE scaling.
+        assert sample_model_metadata.max_seq_length == 2048
+        sample_model_metadata.max_tokens_per_example = 1500  # * 1.2 = 1800
+
+        prompt_len = 1000  # 2048 - 1000 = 1048 < 1800
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len) == 1048
+
+    def test_metadata_generation_max_tokens_for_falls_back_to_remaining_context_when_stat_unset(
+        self, sample_model_metadata
+    ):
+        """Unset stat falls back to ``max_seq_length - prompt_len``."""
+        assert sample_model_metadata.max_tokens_per_example is None
+
+        prompt_len = 256
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len) == (
+            sample_model_metadata.max_seq_length - prompt_len
+        )
+
+    @pytest.mark.parametrize("value", [0, -1, -100])
+    def test_metadata_generation_max_tokens_for_treats_non_positive_stat_as_missing(self, sample_model_metadata, value):
+        """Non-positive stats fall through to the remaining-context branch."""
+        sample_model_metadata.max_tokens_per_example = value
+        prompt_len = 32
+        assert sample_model_metadata.generation_max_tokens_for(prompt_len) == (
+            sample_model_metadata.max_seq_length - prompt_len
+        )
+
+    def test_metadata_generation_max_tokens_for_zero_prompt_recovers_legacy_property(self, sample_model_metadata):
+        """``prompt_len=0`` reproduces the old prompt-agnostic ceiling."""
+        sample_model_metadata.max_tokens_per_example = 1000
+        expected = int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        assert sample_model_metadata.generation_max_tokens_for(0) == expected
+
+        # Stat unset path: the legacy property returned ``max_seq_length``.
+        sample_model_metadata.max_tokens_per_example = None
+        assert sample_model_metadata.generation_max_tokens_for(0) == sample_model_metadata.max_seq_length
+
+    def test_metadata_generation_max_tokens_for_never_returns_negative(self, sample_model_metadata):
+        """Prompts at or beyond ``max_seq_length`` produce a non-negative ceiling."""
+        sample_model_metadata.max_tokens_per_example = 500
+        # Beyond-context prompts still produce a safe value vLLM can accept.
+        assert sample_model_metadata.generation_max_tokens_for(sample_model_metadata.max_seq_length + 64) == 0
+
+    def test_metadata_max_tokens_per_example_round_trips_through_metadata_json(self, sample_model_metadata):
+        """``max_tokens_per_example`` persists through save → load."""
+        sample_model_metadata.max_tokens_per_example = 1500
+        sample_model_metadata.save_metadata()
+
+        with patch("nemo_safe_synthesizer.llm.metadata.AutoConfig") as mock_ac:
+            mock_ac.from_pretrained.return_value = sample_model_metadata.autoconfig
+            reloaded = ModelMetadata.from_metadata_json(
+                sample_model_metadata.workdir.train.adapter.metadata,  # ty: ignore[unresolved-attribute]
+                workdir=sample_model_metadata.workdir,
+            )
+
+        assert reloaded.max_tokens_per_example == 1500
+        # prompt_len=0 reproduces the old prompt-agnostic budget for round-trip parity.
+        assert reloaded.generation_max_tokens_for(0) == int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_json")
+    def test_metadata_legacy_json_without_max_tokens_per_example_loads(
+        self, mock_load_json, mock_auto_config, sample_prompt_config, mock_autoconfig_obj, tmp_path, sample_workdir
+    ):
+        """Metadata files written before this field was added still load."""
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+        # Legacy payload: no ``max_tokens_per_example`` key.
+        mock_load_json.return_value = {
+            "model_name_or_path": "legacy-model",
+            "prompt_config": sample_prompt_config.model_dump(),
+            "base_max_seq_length": 2048,
+        }
+
+        metadata = ModelMetadata.from_metadata_json(tmp_path / "metadata.json", workdir=sample_workdir)
+
+        assert metadata.max_tokens_per_example is None
+        assert metadata.generation_max_tokens_for(0) == metadata.max_seq_length
 
 
 class TestResolveModelClass:
