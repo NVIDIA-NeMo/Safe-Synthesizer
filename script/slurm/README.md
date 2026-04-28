@@ -22,7 +22,7 @@ Pipeline entrypoints (invoked by Slurm scripts) via uv:
 
 ### Prerequisites
 
-- Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cw-pdx-cs-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
+- Slurm Cluster Access: Ensure you have access to the Slurm clusters. You can verify this by running `ssh cs-oci-ord-login-01.nvidia.com` in your terminal (VPN connection required). For an introduction to Slurm, see [these onboarding resources](https://confluence.nvidia.com/display/HWINFCSSUP/Onboarding+to+Clusters).
 - An LLM inference endpoint and the API Key: You will need a `NSS_INFERENCE_KEY` to run column classification, if using the default `NSS_INFERENCE_ENDPOINT`. If you do not have one, you can generate it at [build.nvidia.com](https://build.nvidia.com).
 - Weights & Biases API Key: W&B logging is enabled by default (`WANDB_MODE=online`). You will need a `WANDB_API_KEY` — request an account [here](https://confluence.nvidia.com/display/AIALGO/Weights+and+Biases+%28WandB%29+Enterprise+Account). Set `WANDB_MODE=disabled` in `env_variables.sh` to skip W&B.
 - Enroot Credentials: Follow https://confluence.nvidia.com/display/HWINFCSSUP/Using+Containers#UsingContainers-SettingupEnrootCredentials. You should add the lines for all 3 of `nvcr.io`, `authn.nvidia.com`, and `gitlab-master.nvidia.com`.
@@ -286,10 +286,10 @@ These resources are used by the slurm scripts in the following ways:
 
 #### Duplicate shared directory to a new cluster
 
-From a file copier node on the new cluster, run the following to copy Kendrick's shared directory from `cw-pdx-cs`. Took ~30 minutes when run in Jan 2026 to copy 16 GB.
+From a file copier node on the new cluster, run the following to copy Kendrick's shared directory from `cs-oci-ord`. Took ~30 minutes when run in Jan 2026 to copy 16 GB.
 
 ```
-rsync -avzP cw-pdx-cs-001-dc-02.cw-pdx-cs-001.hpc.nvidia.com:/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/ /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/
+rsync -avzP cs-oci-ord-001-dc-02.cs-oci-ord-001.hpc.nvidia.com:/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/ /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer/
 ```
 
 Also good to check on ownership and permissions after copying to ensure 775 permissions (for directories) or 664 (for files).
