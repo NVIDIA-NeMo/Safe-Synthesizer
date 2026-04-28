@@ -6,7 +6,7 @@
 export USER_NAME="${USER_NAME:-}"
 export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}" ## do not change this
 
-# NOTE: This directory is only setup on cw-pdx-cs right now,
+# NOTE: This directory is only setup on cs-oci-ord and cw-pdx-cs right now,
 # will need to create the same structure on other clusters as we need them.
 export NSS_SHARED_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer"
 

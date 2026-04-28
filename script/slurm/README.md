@@ -264,7 +264,7 @@ Solution: Only submit slurm jobs from the login or vscode nodes. (May be ways to
 ### NSS Shared Directory
 
 To reduce duplicated files and make getting started a bit easier, we have a shared directory for common files that do not change across experiments and the people running them.
-At this time, the best recommendation is to place this in someone's user directory, so Kendrick created `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer` on the `cw-pdx-cs` cluster.
+At this time, the best recommendation is to place this in someone's user directory, so Kendrick created `/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer` on the `cw-pdx-cs` and `cs-oci-ord` clusters.
 We will want to duplicate this to other clusters that we use.
 
 The `env_variables.sh` script sets the `NSS_SHARED_DIR` variable to provide access to this location. The structure is:
