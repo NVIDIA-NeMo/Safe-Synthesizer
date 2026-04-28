@@ -101,7 +101,7 @@ chmod 600 /lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USE
 - Review the [Compute Planning spreadsheet](https://docs.google.com/spreadsheets/d/1F6bpK-Z5W5nXKkjKVyEMD9QPw3fJKUcgu0GdXZjZBwQ/edit?gid=757556149#gid=757556149) to confirm available resources and planned usage.
 - Monitor current GPU usage in the [AI Hub Dashboard](https://aihub.nvidia.com/) (~3hr delay):
     - Navigate to Observability > GPU Occupancy Trends.
-    - Select the cluster: `cw-pdx-cs` (primary cluster for NSS experiments).
+    - Select the cluster: `cs-oci-ord` (primary cluster for NSS experiments).
     - Filter by account using the regex: `nemotron`.
     - Set the interval to 1 hour for a detailed view.
 - Use `sshare -U $USER_NAME -l` to check your instantaneous [Fair Share](https://confluence.nvidia.com/display/HWINFCSSUP/Fairshare+Deep+dive) (FS) on a cluster
