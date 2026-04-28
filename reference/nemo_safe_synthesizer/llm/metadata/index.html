@@ -10651,7 +10651,7 @@ to construct instances rather than calling the constructor directly.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -11393,7 +11393,7 @@ config, and resolves the <code>rope_scaling</code> specification into a
 </span><span id="__span-0-414"><a id="__codelineno-0-414" name="__codelineno-0-414"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot save metadata: workdir is not set&quot;</span><span class="p">)</span>
 </span><span id="__span-0-415"><a id="__codelineno-0-415" name="__codelineno-0-415"></a>    <span class="n">write_json</span><span class="p">(</span>
 </span><span id="__span-0-416"><a id="__codelineno-0-416" name="__codelineno-0-416"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-</span><span id="__span-0-417"><a id="__codelineno-0-417" name="__codelineno-0-417"></a>        <span class="n">path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">workdir</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">metadata</span><span class="p">,</span>  <span class="c1"># ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__</span>
+</span><span id="__span-0-417"><a id="__codelineno-0-417" name="__codelineno-0-417"></a>        <span class="n">path</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">workdir</span><span class="o">.</span><span class="n">train</span><span class="o">.</span><span class="n">adapter</span><span class="o">.</span><span class="n">metadata</span><span class="p">,</span>
 </span><span id="__span-0-418"><a id="__codelineno-0-418" name="__codelineno-0-418"></a>        <span class="n">indent</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
 </span><span id="__span-0-419"><a id="__codelineno-0-419" name="__codelineno-0-419"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
@@ -11629,7 +11629,7 @@ configuration.</p>
                 <code>workdir</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                  <code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -11825,7 +11825,7 @@ model artifacts.</p>
                 <code>workdir</code>
             </td>
             <td>
-                  <code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                  <code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -12102,7 +12102,7 @@ model artifacts.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.Granite.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -12404,7 +12404,7 @@ automatic BOS/EOS injection in prompts.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.Llama32.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -12711,7 +12711,7 @@ automatic BOS/EOS injection in prompts.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.Mistral.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -13021,7 +13021,7 @@ automatic BOS/EOS injection in prompts.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.Nemotron.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -13321,7 +13321,7 @@ automatic BOS/EOS injection in prompts.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.Qwen.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -13625,7 +13625,7 @@ will be ignored with a warning.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.SmolLM2.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -13942,7 +13942,7 @@ ignored with a warning.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.SmolLM3.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
@@ -14268,7 +14268,7 @@ ignored with a warning.</p>
   
       pydantic-field
    (nemo_safe_synthesizer.llm.metadata.TinyLlama.workdir)" href="#nemo_safe_synthesizer.llm.metadata.ModelMetadata.workdir">workdir</a></code>
-                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name=None, _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
+                (<code><a class="autorefs autorefs-internal" title="              Workdir(base_path, config_name, dataset_name, run_name='', _run_name_obj=RunName(), _current_phase='unknown', _parent_workdir=None, _explicit_run_path=None)
 
   
       dataclass
