@@ -10,6 +10,8 @@ pytest.importorskip(
     reason="sentence_transformers is required for these tests (install with: uv sync --extra cpu)",
 )
 
+from nemo_safe_synthesizer.config.evaluate import EvaluationParameters
+from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Grade
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
@@ -34,6 +36,39 @@ def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.M
     report = _minimal_multimodal_report()
     ctx = report.jinja_context
     assert ctx["job_id"] == "cluster-job-abc123"
+
+
+def test_from_dataframes_applies_sqs_report_config(training_df, synthetic_df, test_df) -> None:
+    """``sqs_report_rows`` / ``sqs_report_columns`` from config drive the actual subsampling.
+
+    Regression: previously the multimodal report looked up ``sqs_rows`` /
+    ``sqs_columns`` -- keys that do not exist on ``EvaluationParameters`` --
+    so user-supplied row/column limits were silently ignored.
+    """
+    target_rows = 37
+    target_cols = 3
+    config = SafeSynthesizerParameters(
+        evaluation=EvaluationParameters(
+            mia_enabled=False,
+            aia_enabled=False,
+            pii_replay_enabled=False,
+            sqs_report_rows=target_rows,
+            sqs_report_columns=target_cols,
+        ),
+    )
+
+    report = MultimodalReport.from_dataframes(
+        training=training_df,
+        synthetic=synthetic_df,
+        test=test_df,
+        config=config,
+    )
+
+    assert report.evaluation_datasets is not None
+    assert report.evaluation_datasets.training_rows == target_rows
+    assert report.evaluation_datasets.synthetic_rows == target_rows
+    assert report.evaluation_datasets.training_cols == target_cols
+    assert report.evaluation_datasets.synthetic_cols == target_cols
 
 
 @pytest.mark.skip(reason="Times out")
