@@ -62,7 +62,7 @@ def _create_workdir(
     resume: bool = False,
     phase: str | None = None,
     auto_discover_adapter: bool = False,
-    run_name: str | None = None,
+    run_name: str = "",
 ) -> Workdir:
     """Create Workdir from CLI arguments.
 
@@ -239,7 +239,7 @@ def common_setup(
         resume=resume,
         phase=phase,
         auto_discover_adapter=auto_discover_adapter,
-        run_name=run_name,
+        run_name=run_name if run_name is not None else "",
     )
 
     # Ensure directories exist

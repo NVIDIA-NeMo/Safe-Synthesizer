@@ -3,17 +3,12 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import (
     Annotated,
-    Any,
     Literal,
 )
 
-from pydantic import (
-    Field,
-    model_validator,
-)
+from pydantic import Field
 
 from ..configurator.parameters import (
     Parameters,
@@ -25,7 +20,6 @@ from ..configurator.validators import (
 from .base import LRScheduler
 from .types import (
     AUTO_STR,
-    AutoBoolParam,
     AutoFloatParam,
     AutoIntParam,
     OptionalAutoInt,
@@ -164,34 +158,6 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = ["q_proj", "k_proj", "v_proj", "o_proj"]
-
-    use_unsloth: Annotated[
-        AutoBoolParam,
-        Field(
-            title="use_unsloth",
-            description="Deprecated since v0.0.5, to be removed in v0.1.0. The Unsloth backend has been removed.",
-            exclude=True,
-            json_schema_extra={"deprecated": True},
-        ),
-    ] = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def _warn_use_unsloth_deprecated(cls, data: Any) -> Any:
-        """Emit a deprecation warning when ``use_unsloth`` is explicitly set."""
-        if isinstance(data, dict) and "use_unsloth" in data:
-            val = data["use_unsloth"]
-            if val not in (False, None):
-                warnings.warn(
-                    f"use_unsloth={val!r} is deprecated (since v0.0.5) and ignored -- "
-                    "the Unsloth backend has been removed (see issue #390). "
-                    "HuggingFace Trainer is now the only training backend. "
-                    "This parameter will be removed in v0.1.0.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            data["use_unsloth"] = False
-        return data
 
     rope_scaling_factor: Annotated[
         OptionalAutoInt,

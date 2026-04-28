@@ -26,7 +26,6 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
-    "unsloth_compiled_cache",
     "**/*.ipynb",
     ]
 
