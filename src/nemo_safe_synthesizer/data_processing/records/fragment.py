@@ -257,7 +257,7 @@ def build_ner_metadata(preds: list[dict]) -> Metadata:
     return meta.as_dict()
 
 
-def create_ner_api_response(records: list[dict], predictions: list[dict], pure_dict: bool = False) -> list[dict]:
+def create_ner_api_response(records: list[dict], predictions: list[list[dict]], pure_dict: bool = False) -> list[dict]:
     """Build an API-compatible list of ``{data, model_metadata}`` dicts.
 
     Args:

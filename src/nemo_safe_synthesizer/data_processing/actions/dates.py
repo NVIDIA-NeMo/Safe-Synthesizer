@@ -141,7 +141,18 @@ def date_component_permutations() -> list[tuple[str, str, str, str, str]]:
     Each tuple is indexed by (year, month, day, hms, tz) and can be
     passed into a formatter from ``date_component_orders``.
     """
-    return list(itertools.product(*component_formats.values()))
+    # Passing the five iterables positionally (rather than ``*dict.values()``)
+    # lets the type checker resolve ``itertools.product``'s 5-iterable overload
+    # and infer ``tuple[str, str, str, str, str]`` directly.
+    return list(
+        itertools.product(
+            component_formats["y"],
+            component_formats["m"],
+            component_formats["d"],
+            component_formats["hms"],
+            component_formats["tz"],
+        )
+    )
 
 
 def gen_date_str_fmt_permutations() -> set[str]:

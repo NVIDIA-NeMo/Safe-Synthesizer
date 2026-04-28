@@ -11,7 +11,7 @@ Train LoRA adapters on tabular or time-series data for synthetic generation. Sup
 
 ## Backend Hierarchy
 
-- TrainingBackend (ABC) — defines `prepare_training_data`, `prepare_config`, `prepare_params`, `maybe_quantize`, `load_model`, `train`, `save_model`. Subclasshook checks for these methods.
+- TrainingBackend (ABC) — defines `prepare_training_data`, `prepare_config`, `prepare_params`, `maybe_quantize`, `load_model`, `train`, `save_model`, `teardown`. Subclasshook checks for these methods. `teardown()` is the lifecycle cleanup hook (frees GPU memory, destroys distributed process groups, clears trainer/model state); it must be idempotent and callers should wrap `train()` in `try/finally` to guarantee it runs on error paths.
 - HuggingFaceBackend — uses `AutoModelForCausalLM`, HuggingFace `Trainer`, LoRA via PEFT.
 
 ## FIXED_RUNTIME_TRAINING_ARGS

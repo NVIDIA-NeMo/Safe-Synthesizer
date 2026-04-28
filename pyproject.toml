@@ -104,7 +104,7 @@ engine = [
     "tldextract",
     "tqdm>=4.67.1",
     "urllib3>=2.6.1",
-    "wandb==0.26.0",
+    "wandb==0.26.1",
 ]
 
 
