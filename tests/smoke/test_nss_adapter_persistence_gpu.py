@@ -21,27 +21,29 @@ pytestmark = [
 
 
 @pytest.fixture(scope="class")
-def adapter_train_artifacts(_patch_attn_eager, base_smoke_config, iris_df, tmp_path_factory, local_tinyllama_dir):
+def fixture_adapter_train_artifacts(
+    _patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, tmp_path_factory, fixture_local_tinyllama_dir
+):
     """Train once per class, return (workdir, local_model_dir) for all adapter tests."""
     save_path = tmp_path_factory.mktemp("adapter-smoke")
-    nss = train_with_sdk(base_smoke_config, iris_df, save_path)
-    return nss._workdir, local_tinyllama_dir
+    nss = train_with_sdk(fixture_base_smoke_config, fixture_iris_df, save_path)
+    return nss._workdir, fixture_local_tinyllama_dir
 
 
 class TestAdapterPersistence:
     """Train once, verify adapter artifacts in 3 ways."""
 
-    def test_adapter_files_exist_after_train(self, adapter_train_artifacts):
+    def test_adapter_files_exist_after_train(self, fixture_adapter_train_artifacts):
         """Verify all expected adapter files are written to disk."""
-        workdir, _ = adapter_train_artifacts
+        workdir, _ = fixture_adapter_train_artifacts
         assert_adapter_saved(workdir)
         assert workdir.train.adapter.metadata.exists()  # metadata_v2.json
         assert workdir.train.adapter.schema.exists()  # dataset_schema.json
         assert workdir.train.config.exists()  # train/safe-synthesizer-config.json
 
-    def test_adapter_loadable_by_peft(self, adapter_train_artifacts):
+    def test_adapter_loadable_by_peft(self, fixture_adapter_train_artifacts):
         """Verify the adapter can be loaded by PEFT and produces valid output."""
-        workdir, local_dir = adapter_train_artifacts
+        workdir, local_dir = fixture_adapter_train_artifacts
         base = AutoModelForCausalLM.from_pretrained(
             str(local_dir),
             device_map="cpu",
@@ -55,9 +57,9 @@ class TestAdapterPersistence:
         assert output.logits is not None
         assert output.logits.shape[0] == 1
 
-    def test_adapter_config_valid(self, adapter_train_artifacts):
+    def test_adapter_config_valid(self, fixture_adapter_train_artifacts):
         """Verify adapter_config.json has correct LoRA parameters."""
-        workdir, _ = adapter_train_artifacts
+        workdir, _ = fixture_adapter_train_artifacts
         config_path = workdir.train.adapter.path / "adapter_config.json"
         with open(config_path) as f:
             adapter_cfg = json.load(f)

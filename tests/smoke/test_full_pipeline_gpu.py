@@ -25,7 +25,7 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_full_pipeline_smollm2(iris_df, smoke_save_path):
+def test_full_pipeline_smollm2(fixture_iris_df, fixture_smoke_save_path):
     """Train SmolLM2-135M then generate with vLLM in a single end-to-end pass.
 
     SmolLM2-135M with only 50 sampled rows packs into ~1 training example,
@@ -41,8 +41,8 @@ def test_full_pipeline_smollm2(iris_df, smoke_save_path):
         holdout=0,
         max_holdout=0,
     )
-    nss = SafeSynthesizer(config=config, save_path=smoke_save_path)
-    nss.with_data_source(iris_df).process_data().train()
+    nss = SafeSynthesizer(config=config, save_path=fixture_smoke_save_path)
+    nss.with_data_source(fixture_iris_df).process_data().train()
 
     try:
         nss.generate()

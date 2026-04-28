@@ -9,9 +9,9 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Grade
 
 
 @pytest.mark.slow
-def test_deep_structure(evaluation_datasets_5k):
+def test_deep_structure(fixture_evaluation_datasets_5k):
     """PCA (Principal Component Analysis) on 5k rows - very computationally expensive."""
-    deep_structure = DeepStructure.from_evaluation_datasets(evaluation_datasets_5k)
+    deep_structure = DeepStructure.from_evaluation_datasets(fixture_evaluation_datasets_5k)
     assert deep_structure.name == "Deep Structure Stability"
     assert deep_structure.score.score is not None and deep_structure.score.score > 0
     assert deep_structure.training_pca is not None
@@ -20,12 +20,12 @@ def test_deep_structure(evaluation_datasets_5k):
     assert deep_structure.synthetic_pca.shape == (5000, 2)
 
 
-def test_too_few_cols(training_df, synthetic_df, test_df):
+def test_too_few_cols(fixture_training_df, fixture_synthetic_df, fixture_test_df):
     """Edge case test - small dataset, should be fast."""
-    training_df = training_df[["num"]]
-    synthetic_df = synthetic_df[["num"]]
-    test_df = test_df[["num"]]
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df, synthetic_df, test_df)
+    fixture_training_df = fixture_training_df[["num"]]
+    fixture_synthetic_df = fixture_synthetic_df[["num"]]
+    fixture_test_df = fixture_test_df[["num"]]
+    evaluation_datasets = EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df, fixture_test_df)
     deep_structure = DeepStructure.from_evaluation_datasets(evaluation_datasets)
     assert deep_structure.name == "Deep Structure Stability"
     assert deep_structure.training_pca is None

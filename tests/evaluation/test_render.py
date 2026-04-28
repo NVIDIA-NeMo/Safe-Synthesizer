@@ -14,13 +14,19 @@ from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report impor
 
 
 @pytest.mark.slow
-def test_render(training_df_10k, synthetic_df_10k, test_df, skip_privacy_metrics_config, column_statistics):
+def test_render(
+    fixture_training_df_10k,
+    fixture_synthetic_df_10k,
+    fixture_test_df,
+    fixture_skip_privacy_metrics_config,
+    fixture_column_statistics,
+):
     report = MultimodalReport.from_dataframes(
-        training=training_df_10k,
-        synthetic=synthetic_df_10k,
-        test=test_df,
-        config=skip_privacy_metrics_config,
-        column_statistics=column_statistics,
+        training=fixture_training_df_10k,
+        synthetic=fixture_synthetic_df_10k,
+        test=fixture_test_df,
+        config=fixture_skip_privacy_metrics_config,
+        column_statistics=fixture_column_statistics,
     )
     output = render_report(report, "multi_modal_report.j2")
     assert output is not None
@@ -39,13 +45,19 @@ def test_render(training_df_10k, synthetic_df_10k, test_df, skip_privacy_metrics
 
 
 @pytest.mark.slow
-def test_render_dp_enabled(training_df_5k, synthetic_df_5k, test_df, dp_enabled_config, column_statistics):
+def test_render_dp_enabled(
+    fixture_training_df_5k,
+    fixture_synthetic_df_5k,
+    fixture_test_df,
+    fixture_dp_enabled_config,
+    fixture_column_statistics,
+):
     report = MultimodalReport.from_dataframes(
-        training=training_df_5k,
-        synthetic=synthetic_df_5k,
-        test=test_df,
-        config=dp_enabled_config,
-        column_statistics=column_statistics,
+        training=fixture_training_df_5k,
+        synthetic=fixture_synthetic_df_5k,
+        test=fixture_test_df,
+        config=fixture_dp_enabled_config,
+        column_statistics=fixture_column_statistics,
     )
     output = render_report(report, "multi_modal_report.j2")
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report_dp_enabled.html")
@@ -59,13 +71,19 @@ def test_render_dp_enabled(training_df_5k, synthetic_df_5k, test_df, dp_enabled_
 
 
 @pytest.mark.slow
-def test_render_dp_not_enabled(training_df_5k, synthetic_df_5k, test_df, dp_not_enabled_config, column_statistics):
+def test_render_dp_not_enabled(
+    fixture_training_df_5k,
+    fixture_synthetic_df_5k,
+    fixture_test_df,
+    fixture_dp_not_enabled_config,
+    fixture_column_statistics,
+):
     report = MultimodalReport.from_dataframes(
-        training=training_df_5k,
-        synthetic=synthetic_df_5k,
-        test=test_df,
-        config=dp_not_enabled_config,
-        column_statistics=column_statistics,
+        training=fixture_training_df_5k,
+        synthetic=fixture_synthetic_df_5k,
+        test=fixture_test_df,
+        config=fixture_dp_not_enabled_config,
+        column_statistics=fixture_column_statistics,
     )
     output = render_report(report, "multi_modal_report.j2")
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report_dp_not_enabled.html")

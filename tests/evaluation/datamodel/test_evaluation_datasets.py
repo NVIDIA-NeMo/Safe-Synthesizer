@@ -13,8 +13,8 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import (
 )
 
 
-def test_from_dataframes_happy_path(training_df, synthetic_df, test_df):
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df, synthetic_df, test_df)
+def test_from_dataframes_happy_path(fixture_training_df, fixture_synthetic_df, fixture_test_df):
+    evaluation_datasets = EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df, fixture_test_df)
 
     assert evaluation_datasets is not None
     assert len(evaluation_datasets.training) == 100
@@ -61,8 +61,10 @@ def test_from_dataframes_happy_path(training_df, synthetic_df, test_df):
             assert f.distribution_distance is None
 
 
-def test_from_dataframes_with_sampling(training_df_5k, synthetic_df_5k, test_df):
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df, rows=1000)
+def test_from_dataframes_with_sampling(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df):
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df, rows=1000
+    )
 
     assert evaluation_datasets is not None
     assert len(evaluation_datasets.training) == 1000
@@ -73,39 +75,39 @@ def test_from_dataframes_with_sampling(training_df_5k, synthetic_df_5k, test_df)
     assert len(evaluation_datasets.evaluation_fields) == 8
 
 
-def test_degenerate_input(synthetic_df_5k, test_df):
+def test_degenerate_input(fixture_synthetic_df_5k, fixture_test_df):
     with pytest.raises(ValueError):
-        EvaluationDatasets.from_dataframes(None, synthetic_df_5k, test_df)  # ty: ignore[invalid-argument-type]
+        EvaluationDatasets.from_dataframes(None, fixture_synthetic_df_5k, fixture_test_df)  # ty: ignore[invalid-argument-type]
     with pytest.raises(ValueError):
-        EvaluationDatasets.from_dataframes(pd.DataFrame(), synthetic_df_5k, test_df)
+        EvaluationDatasets.from_dataframes(pd.DataFrame(), fixture_synthetic_df_5k, fixture_test_df)
 
 
-def test_column_intersection(training_df, synthetic_df, test_df):
-    training_df = training_df[["num", "num_cat"]]
-    synthetic_df = synthetic_df[["num", "other"]]
-    test_df = test_df[["num", "text"]]
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df, synthetic_df, test_df)
+def test_column_intersection(fixture_training_df, fixture_synthetic_df, fixture_test_df):
+    fixture_training_df = fixture_training_df[["num", "num_cat"]]
+    fixture_synthetic_df = fixture_synthetic_df[["num", "other"]]
+    fixture_test_df = fixture_test_df[["num", "text"]]
+    evaluation_datasets = EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df, fixture_test_df)
     assert len(evaluation_datasets.evaluation_fields) == 1
     assert evaluation_datasets.evaluation_fields[0].name == "num"
 
 
-def test_empty_column_intersection(training_df, synthetic_df):
-    training_df = training_df[["num", "num_cat"]]
-    synthetic_df = synthetic_df[["other", "text"]]
+def test_empty_column_intersection(fixture_training_df, fixture_synthetic_df):
+    fixture_training_df = fixture_training_df[["num", "num_cat"]]
+    fixture_synthetic_df = fixture_synthetic_df[["other", "text"]]
     with pytest.raises(ValueError):
-        EvaluationDatasets.from_dataframes(training_df, synthetic_df)
+        EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df)
 
 
-def test_empty_testdf_intersection(training_df, synthetic_df, test_df):
-    training_df = training_df[["num", "num_cat"]]
-    synthetic_df = synthetic_df[["num", "num_cat"]]
-    test_df = test_df[["other", "text"]]
+def test_empty_testdf_intersection(fixture_training_df, fixture_synthetic_df, fixture_test_df):
+    fixture_training_df = fixture_training_df[["num", "num_cat"]]
+    fixture_synthetic_df = fixture_synthetic_df[["num", "num_cat"]]
+    fixture_test_df = fixture_test_df[["other", "text"]]
     with pytest.raises(ValueError):
-        EvaluationDatasets.from_dataframes(training_df, synthetic_df, test_df)
+        EvaluationDatasets.from_dataframes(fixture_training_df, fixture_synthetic_df, fixture_test_df)
 
 
-def test_get_columns_of_type(training_df):
-    dataset = EvaluationDatasets.from_dataframes(training_df, training_df, training_df)
+def test_get_columns_of_type(fixture_training_df):
+    dataset = EvaluationDatasets.from_dataframes(fixture_training_df, fixture_training_df, fixture_training_df)
     assert set(dataset.get_tabular_columns()) == set(
         ["num", "num_Int64", "num_cat", "num_cat_Int64", "small_cat", "boolean"]
     )
