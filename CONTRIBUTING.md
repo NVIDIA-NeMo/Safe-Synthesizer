@@ -596,6 +596,8 @@ Examples:
 | `v0.0.7-rc4`    |              | ❌ Dash before rc suffix |
 | `v0.1.3alpha1`  |              | ❌ Use rc, not alpha     |
 
+To create and push tags:
+
 ```bash
 # Stable release
 git tag v0.1.0 <commit-sha>
