@@ -63,12 +63,7 @@ class TestConfigValidateErrorPathExitCodes:
         # YAML parses cleanly, but the field values violate SafeSynthesizerParameters:
         # ``training.batch_size`` must be a positive integer, and ``data.holdout`` must
         # be a number in [0, 1]. Either one alone is enough to trigger a ValidationError.
-        malformed_config.write_text(
-            "training:\n"
-            "  batch_size: -1\n"
-            "data:\n"
-            "  holdout: not_a_number\n"
-        )
+        malformed_config.write_text("training:\n  batch_size: -1\ndata:\n  holdout: not_a_number\n")
 
         result = cli_runner.invoke(
             config,
