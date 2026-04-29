@@ -38,6 +38,7 @@ def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.M
     assert ctx["job_id"] == "cluster-job-abc123"
 
 
+@pytest.mark.slow
 def test_from_dataframes_applies_sqs_report_config(fixture_training_df, fixture_synthetic_df, fixture_test_df) -> None:
     """``sqs_report_rows`` / ``sqs_report_columns`` from config drive the actual subsampling.
 
@@ -71,6 +72,7 @@ def test_from_dataframes_applies_sqs_report_config(fixture_training_df, fixture_
     assert report.evaluation_datasets.synthetic_cols == target_cols
 
 
+@pytest.mark.slow
 def test_multimodal_report(
     fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df, fixture_skip_privacy_metrics_config
 ):
