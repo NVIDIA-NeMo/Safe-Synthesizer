@@ -672,6 +672,11 @@ class TestProcessDataConfigValidation:
         with pytest.raises(ParameterError, match="Group by column 'non_existent_group' not found"):
             ss.process_data()
 
+        assert ss.preflight_report is not None
+        assert any(
+            issue.check == "columns.groupby" and issue.code == "column_not_found"
+            for issue in ss.preflight_report.errors
+        )
         mock_holdout_cls.assert_not_called()
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -698,4 +703,9 @@ class TestProcessDataConfigValidation:
         with pytest.raises(ParameterError, match="Order by column 'non_existent_order' not found"):
             ss.process_data()
 
+        assert ss.preflight_report is not None
+        assert any(
+            issue.check == "columns.orderby" and issue.code == "column_not_found"
+            for issue in ss.preflight_report.errors
+        )
         mock_holdout_cls.assert_not_called()

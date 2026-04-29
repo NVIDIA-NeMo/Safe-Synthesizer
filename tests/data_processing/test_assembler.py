@@ -649,44 +649,6 @@ def fixture_sequential_metadata(
     )
 
 
-def test_sequential_assembler_raises_for_missing_group_column(
-    fixture_iris_dataset: Dataset,
-    fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
-    fixture_sequential_metadata: ModelMetadata,
-):
-    """Test that SequentialExampleAssembler raises for missing group column."""
-    with pytest.raises(ParameterError, match="Group by column.*not found"):
-        SequentialExampleAssembler(
-            dataset=fixture_iris_dataset,
-            tokenizer=fixture_tokenizer,
-            metadata=fixture_sequential_metadata,
-            group_training_examples_by="nonexistent_column",
-            order_training_examples_by="sepal.length",
-            cache_file_path=fixture_session_cache_dir,
-            seed=1,
-        )
-
-
-def test_sequential_assembler_raises_for_missing_order_column(
-    fixture_iris_dataset: Dataset,
-    fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
-    fixture_sequential_metadata: ModelMetadata,
-):
-    """Test that SequentialExampleAssembler raises for missing order column."""
-    with pytest.raises(ParameterError, match="Order by column.*not found"):
-        SequentialExampleAssembler(
-            dataset=fixture_iris_dataset,
-            tokenizer=fixture_tokenizer,
-            metadata=fixture_sequential_metadata,
-            group_training_examples_by="variety",
-            order_training_examples_by="nonexistent_column",
-            cache_file_path=fixture_session_cache_dir,
-            seed=1,
-        )
-
-
 def test_sequential_assembler_reorders_columns(
     fixture_chickweight_dataset: Dataset,
     fixture_tokenizer: PreTrainedTokenizer,

@@ -42,9 +42,7 @@ CRASH_CODE = "preflight.check_crash"
 def _report_crash(check_name: str, site: str, exc: BaseException) -> list[PreflightIssue]:
     """Log an uncaught check exception and return the synthetic crash issue."""
     logger.runtime.debug(
-        "Preflight check %r raised from %s; treating as crash.",
-        check_name,
-        site,
+        f"Preflight check {check_name!r} raised from {site}; treating as crash.",
         exc_info=True,
     )
     return [
@@ -89,6 +87,7 @@ def _execute_check(
 def _run_registry(
     ctx: PreflightContext,
     registry: PreflightRegistry,
+    stages: frozenset[PreflightStage] | None = None,
 ) -> list[PreflightCheckResult]:
     """Execute the registry; return one ``PreflightCheckResult`` per considered check.
 
@@ -113,6 +112,12 @@ def _run_registry(
     disabled_checks: set[str] = set()
 
     for check in registry:
+        # Some callers run an early preflight subset before all downstream
+        # context exists (for example, column checks before holdout creates
+        # the training split). Filter at execution time so registry ordering
+        # and dependency semantics remain centralized here.
+        if stages is not None and check.stage not in stages:
+            continue
         if any(dep in errored_checks or dep in disabled_checks for dep in check.requires):
             results.append(PreflightCheckResult(name=check.name, status="skipped"))
             errored_checks.add(check.name)  # propagate: skipped checks block their own dependents
@@ -149,8 +154,7 @@ def _warn_unknown_disabled_checks(
     unknown = [name for name in config.preflight.disabled_checks if name not in registry]
     if unknown:
         logger.user.warning(
-            "Ignoring unknown preflight check name(s) in disabled_checks: %s",
-            sorted(unknown),
+            f"Ignoring unknown preflight check name(s) in disabled_checks: {sorted(unknown)}",
         )
 
 
@@ -161,6 +165,7 @@ def run_preflight(
     metadata: ModelMetadata,
     *,
     registry: PreflightRegistry | None = None,
+    stages: frozenset[PreflightStage] | None = None,
 ) -> PreflightReport:
     """Execute all pre-flight checks against the training split.
 
@@ -172,6 +177,9 @@ def run_preflight(
             original input dataset.
         config: Resolved configuration (``AutoConfigResolver`` already ran).
         metadata: Model metadata (tokenizer and context length).
+        stages: Optional subset of stages to execute. Used when callers
+            need early DataFrame validation before later processing has
+            produced the final training split.
 
     Returns:
         A structured ``PreflightReport``.
@@ -180,17 +188,14 @@ def run_preflight(
     _warn_unknown_disabled_checks(config, effective_registry)
 
     ctx = PreflightContext(data=data, config=config, metadata=metadata)
-    report = PreflightReport(checks=_run_registry(ctx, effective_registry))
+    report = PreflightReport(checks=_run_registry(ctx, effective_registry, stages=stages))
     n_checks = len(report.checks)
     n_skipped = sum(1 for c in report.checks if c.status == "skipped")
     n_errors = len(report.errors)
     n_warns = len(report.warnings)
     logger.user.info(
-        "Preflight: %d check(s) ran, %d skipped — %d error(s), %d warning(s)",
-        n_checks - n_skipped,
-        n_skipped,
-        n_errors,
-        n_warns,
+        f"Preflight: {n_checks - n_skipped} check(s) ran, {n_skipped} skipped — "
+        f"{n_errors} error(s), {n_warns} warning(s)",
     )
     logger.runtime.debug(
         "Preflight complete",

@@ -83,7 +83,7 @@ def test_multiindex_columns_are_rejected_with_actionable_message() -> None:
     # level 0 contains ``"ts"``; the primitives can't answer "is column
     # present?" meaningfully on a MultiIndex schema, so they fail fast.
     df = pd.DataFrame([[1, 2]], columns=pd.MultiIndex.from_tuples([("ts", "a"), ("ts", "b")]))
-    with pytest.raises(ParameterError, match="MultiIndex column DataFrames are not supported"):
+    with pytest.raises(ParameterError, match="MultiIndex columns are not supported"):
         check_groupby_column(df, "ts")
     with pytest.raises(ParameterError, match="MultiIndex"):
         check_timestamp_column(df, "ts")

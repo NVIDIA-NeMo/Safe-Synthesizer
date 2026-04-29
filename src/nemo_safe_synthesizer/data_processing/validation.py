@@ -20,19 +20,15 @@ Two layers:
 
 from __future__ import annotations
 
-from collections.abc import Collection
-
 import pandas as pd
 
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 
 
-def _get_column_names(data: pd.DataFrame | Collection[str]) -> Collection[str]:
-    if isinstance(data, pd.DataFrame):
-        _reject_multiindex_columns(data)
-        return data.columns
-    return data
+def _get_column_names(data: pd.DataFrame) -> pd.Index:
+    _reject_multiindex_columns(data)
+    return data.columns
 
 
 def _reject_multiindex_columns(data: pd.DataFrame) -> None:
@@ -47,7 +43,7 @@ def _reject_multiindex_columns(data: pd.DataFrame) -> None:
     """
     if isinstance(data.columns, pd.MultiIndex):
         raise ParameterError(
-            "MultiIndex column DataFrames are not supported by column validators; "
+            "MultiIndex columns are not supported by column validators; "
             "flatten the column schema (e.g. join levels with '_') before calling."
         )
 
@@ -58,7 +54,7 @@ def _reject_multiindex_columns(data: pd.DataFrame) -> None:
 
 
 def check_column_present(
-    data: pd.DataFrame | Collection[str],
+    data: pd.DataFrame,
     column: str,
     *,
     role: str,
@@ -88,24 +84,22 @@ def check_column_present(
 
 
 def check_column_has_no_nulls(
-    data: pd.DataFrame | Collection[str],
+    data: pd.DataFrame,
     column: str,
     *,
     role: str,
 ) -> None:
     """Raise ``DataError`` if ``column`` contains any null values.
 
-    Only inspects row contents when ``data`` is a DataFrame; pure
-    column-name collections are treated as a no-op.
+    The input must already be a DataFrame so null checks inspect real row
+    contents instead of only column-name metadata.
     """
-    if not isinstance(data, pd.DataFrame):
-        return
     _reject_multiindex_columns(data)
     if data[column].isna().any():
         raise DataError(f"{role} column '{column}' has missing values. Please remove/replace them.")
 
 
-def check_no_pseudo_column_collision(data: pd.DataFrame | Collection[str]) -> None:
+def check_no_pseudo_column_collision(data: pd.DataFrame) -> None:
     """Raise ``DataError`` if the reserved pseudo-group column is in use."""
     columns = _get_column_names(data)
     if PSEUDO_GROUP_COLUMN in columns:
@@ -119,12 +113,12 @@ def check_no_pseudo_column_collision(data: pd.DataFrame | Collection[str]) -> No
 # ---------------------------------------------------------------------------
 
 
-def check_groupby_column(data: pd.DataFrame | Collection[str], group_by: str | None) -> None:
+def check_groupby_column(data: pd.DataFrame, group_by: str | None) -> None:
     """Validate the configured group-by column exists and has no missing values.
 
     Raises:
         ParameterError: If ``group_by`` is configured but not present in ``data``.
-        DataError: If ``data`` is a DataFrame and ``group_by`` contains missing values.
+        DataError: If ``group_by`` contains missing values.
     """
     if group_by is None:
         return
@@ -138,7 +132,7 @@ def check_groupby_column(data: pd.DataFrame | Collection[str], group_by: str | N
 
 
 def check_orderby_column(
-    data: pd.DataFrame | Collection[str],
+    data: pd.DataFrame,
     order_by: str | None,
     *,
     is_timeseries: bool = False,
@@ -160,12 +154,12 @@ def check_orderby_column(
     check_column_present(data, order_by, role="Order by")
 
 
-def check_timestamp_column(data: pd.DataFrame | Collection[str], timestamp_column: str) -> None:
+def check_timestamp_column(data: pd.DataFrame, timestamp_column: str) -> None:
     """Validate the configured timestamp column exists and has no missing values.
 
     Raises:
         ParameterError: If ``timestamp_column`` is not present in ``data``.
-        DataError: If ``data`` is a DataFrame and ``timestamp_column`` contains missing values.
+        DataError: If ``timestamp_column`` contains missing values.
     """
     check_column_present(data, timestamp_column, role="Timestamp")
     check_column_has_no_nulls(data, timestamp_column, role="Timestamp")

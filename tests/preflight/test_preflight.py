@@ -289,6 +289,13 @@ class TestGroupbyColumnCheck:
 
 @pytest.mark.unit
 class TestOrderbyColumnCheck:
+    def test_missing_order_by_column(self, sample_df):
+        config = SafeSynthesizerParameters(
+            data=DataParameters(group_training_examples_by="category", order_training_examples_by="nonexistent_col")
+        )
+        issues = OrderbyColumnCheck().run(make_ctx(config=config, data=sample_df))
+        assert any(i.code == "column_not_found" for i in issues)
+
     def test_timeseries_with_generated_timestamp_bypasses_missing_order_by(self, sample_df):
         config = SafeSynthesizerParameters(
             data=DataParameters(

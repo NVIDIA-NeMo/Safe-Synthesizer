@@ -31,7 +31,6 @@ from ..data_processing.stats import (
     RunningStatistics,
     Statistics,
 )
-from ..data_processing.validation import check_groupby_column, check_orderby_column
 from ..defaults import (
     DEFAULT_CACHE_PREFIX,
     DEFAULT_EXCLUDE_COLUMNS,
@@ -840,7 +839,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         self.group_by_column = group_training_examples_by
         self.order_by_column = order_training_examples_by
 
-        self._validate_columns(dataset)
         dataset = self._reorder_columns(dataset)
         keep_columns = self._build_keep_columns(keep_columns)
 
@@ -853,18 +851,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         )
 
         self._build_schema_prompt_excluding_pseudo_group(dataset, metadata, tokenizer)
-
-    def _validate_columns(self, dataset: Dataset) -> None:
-        """Validate that required columns exist in the dataset.
-
-        Args:
-            dataset: The dataset to validate.
-
-        Raises:
-            ParameterError: If group or order column is not found in dataset.
-        """
-        check_groupby_column(dataset.column_names, self.group_by_column)
-        check_orderby_column(dataset.column_names, self.order_by_column)
 
     def _reorder_columns(self, dataset: Dataset) -> Dataset:
         """Reorder columns: group_by first, order_by second, then the rest.

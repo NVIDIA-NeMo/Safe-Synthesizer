@@ -18,7 +18,6 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
-from ..data_processing.validation import check_groupby_column, check_orderby_column
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
@@ -27,7 +26,7 @@ from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..pii_replacer.nemo_pii import NemoPII
-from ..preflight import PreflightReport, run_preflight
+from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
 from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
@@ -250,13 +249,20 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        check_groupby_column(self._data_source, self._nss_config.data.group_training_examples_by)
-        check_orderby_column(
+        # Run the config/dataframe stages before holdout so invalid column
+        # settings produce structured preflight issues instead of downstream
+        # pandas/sklearn errors. The later full preflight run still uses the
+        # final training split and real metadata for split-dependent checks.
+        preflight = run_preflight(
             self._data_source,
-            self._nss_config.data.order_training_examples_by,
-            is_timeseries=self._nss_config.time_series.is_timeseries,
-            timestamp_column=self._nss_config.time_series.timestamp_column,
+            self._nss_config,
+            ModelMetadata.stub(self._nss_config),
+            stages=frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME}),
         )
+        self.preflight_report = preflight
+        if preflight.errors:
+            summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
+            raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
