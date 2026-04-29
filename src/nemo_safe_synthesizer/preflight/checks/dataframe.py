@@ -107,7 +107,7 @@ class PseudoColumnCheck(DataFrameCheck):
         emit_on_raise(
             collector,
             lambda: check_no_pseudo_column_collision(ctx.data),
-            expect=DataError,
+            expect=(DataError, ParameterError),
             code="pseudo_column_collision",
         )
 

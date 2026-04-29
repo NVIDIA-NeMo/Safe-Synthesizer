@@ -354,6 +354,13 @@ class TestPseudoColumnCheck:
         issues = PseudoColumnCheck().run(make_ctx(config=SafeSynthesizerParameters(), data=df))
         assert any(i.code == "pseudo_column_collision" for i in issues)
 
+    def test_multiindex_columns_are_flagged_as_unsupported_schema(self):
+        df = pd.DataFrame([[1, 2]], columns=pd.MultiIndex.from_tuples([("a", "x"), ("b", "y")]))
+        issues = PseudoColumnCheck().run(make_ctx(config=SafeSynthesizerParameters(), data=df))
+        assert any(
+            i.code == "pseudo_column_collision" and "MultiIndex columns are not supported" in i.message for i in issues
+        )
+
 
 @pytest.mark.unit
 class TestTokenBudgetCheck:

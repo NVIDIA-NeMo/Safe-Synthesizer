@@ -21,7 +21,7 @@ import pytest
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
-from nemo_safe_synthesizer.preflight import PreflightReport
+from nemo_safe_synthesizer.preflight import PreflightReport, PreflightStage
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 _EMPTY_PREFLIGHT = PreflightReport(checks=[])
@@ -305,12 +305,22 @@ class TestProcessDataMetadataLifecycle:
         builder.process_data(check_only=True)
 
         assert builder._llm_metadata is None
-        assert mock_preflight.call_args_list[0].args[2] is stub_metadata
+        full_preflight_calls = [call for call in mock_preflight.call_args_list if "stages" not in call.kwargs]
+        assert len(full_preflight_calls) == 1
+        assert full_preflight_calls[0].args[2] is stub_metadata
 
         builder.process_data(check_only=False)
 
         assert builder._llm_metadata is rebuilt_metadata
-        assert mock_preflight.call_args_list[1].args[2] is rebuilt_metadata
+        full_preflight_calls = [call for call in mock_preflight.call_args_list if "stages" not in call.kwargs]
+        assert len(full_preflight_calls) == 2
+        assert full_preflight_calls[1].args[2] is rebuilt_metadata
+        early_preflight_calls = [call for call in mock_preflight.call_args_list if "stages" in call.kwargs]
+        assert len(early_preflight_calls) == 2
+        assert all(
+            call.kwargs["stages"] == frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME})
+            for call in early_preflight_calls
+        )
         assert mock_metadata_cls.from_config.call_count == 2
 
 
