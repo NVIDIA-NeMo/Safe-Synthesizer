@@ -15,7 +15,7 @@ from nemo_safe_synthesizer.cli.settings import CLISettings
 
 # =============================================================================
 # Fixtures
-# =============================================================================
+# =============================================================================TestRunErrorPathExitCodes
 
 
 @pytest.fixture
@@ -608,16 +608,7 @@ class TestRunGenerateOptions:
 
 
 class TestRunErrorPathExitCodes:
-    """Ensure the `run` command surfaces failures with a non-zero exit code.
-
-    These tests intentionally do NOT use ``patched_run_dependencies`` -- they
-    exercise the real ``common_setup``/``_create_workdir`` paths so that the
-    assertions catch regressions where an error is logged but the CLI still
-    exits 0 (see PR #359 / issue #333). Each test only asserts
-    ``exit_code != 0`` rather than a specific value, since Click may exit 1
-    (``ClickException``/unhandled exception) or 2 (``UsageError``/
-    ``click.Path(exists=True)``) depending on the failure mode.
-    """
+    """Tests that run command error paths exit with non-zero status."""
 
     def test_run_with_no_data_source_exits_nonzero(
         self,

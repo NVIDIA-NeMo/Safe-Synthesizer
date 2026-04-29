@@ -24,13 +24,7 @@ def cli_runner() -> CliRunner:
 
 
 class TestConfigValidateErrorPathExitCodes:
-    """Ensure ``config validate`` returns a non-zero exit code on failures.
-
-    Each test asserts ``exit_code != 0`` rather than a specific value because
-    Click's exit code varies by failure mode: ``FileNotFoundError`` bubbles up
-    as an unhandled exception (exit 1), while ``ValidationError`` is caught
-    in ``merge_overrides`` and re-raised via ``sys.exit(1)``.
-    """
+    """Tests that config validate error paths exit with non-zero status."""
 
     def test_validate_nonexistent_config_exits_nonzero(
         self,
