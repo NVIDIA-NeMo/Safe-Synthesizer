@@ -605,3 +605,99 @@ class TestRunGenerateOptions:
         call_kwargs = mock_common_setup.call_args.kwargs
         settings: CLISettings = call_kwargs["settings"]
         assert settings.dataset_registry == "./registry.yaml"
+
+
+class TestRunErrorPathExitCodes:
+    """Ensure the `run` command surfaces failures with a non-zero exit code.
+
+    These tests intentionally do NOT use ``patched_run_dependencies`` -- they
+    exercise the real ``common_setup``/``_create_workdir`` paths so that the
+    assertions catch regressions where an error is logged but the CLI still
+    exits 0 (see PR #359 / issue #333). Each test only asserts
+    ``exit_code != 0`` rather than a specific value, since Click may exit 1
+    (``ClickException``/unhandled exception) or 2 (``UsageError``/
+    ``click.Path(exists=True)``) depending on the failure mode.
+    """
+
+    def test_run_with_no_data_source_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+    ):
+        """`run` without --data-source must fail with a ClickException."""
+        result = cli_runner.invoke(
+            run,
+            [
+                "--artifact-path",
+                str(tmp_path / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "--data-source is required" in result.output
+
+    def test_run_with_nonexistent_data_source_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+    ):
+        """`run --data-source missing.csv` must fail when the file doesn't exist."""
+        missing_csv = tmp_path / "does_not_exist.csv"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "--data-source",
+                str(missing_csv),
+                "--artifact-path",
+                str(tmp_path / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert result.exception is not None
+
+    def test_run_with_unsupported_data_source_extension_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+    ):
+        """`run --data-source bad.xyz` must fail for an unsupported file extension."""
+        bad_source = tmp_path / "bad_source.xyz"
+        bad_source.write_text("irrelevant contents")
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "--data-source",
+                str(bad_source),
+                "--artifact-path",
+                str(tmp_path / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert result.exception is not None
+
+    def test_generate_with_nonexistent_run_path_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+    ):
+        """`run generate --run-path /nonexistent` must fail with a ClickException."""
+        missing_run = tmp_path / "no_such_run"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "generate",
+                "--data-source",
+                str(dummy_csv),
+                "--run-path",
+                str(missing_run),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert "--run-path does not exist" in result.output
