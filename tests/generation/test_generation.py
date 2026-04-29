@@ -98,6 +98,20 @@ def test_generation_add_batch_stop_no_records_status_first_batch(fixture_stub_ba
     assert generation_with_stop_params.status == GenerationStatus.STOP_NO_RECORDS
 
 
+def test_generation_add_batch_length_truncated_first_batch_uses_patience(fixture_stub_batches):
+    _, bad_batches = fixture_stub_batches
+    bad_batches[0].finish_reasons["length"] = bad_batches[0].num_prompts
+
+    generation_with_stop_params = GenerationBatches(
+        target_num_records=5,
+        invalid_fraction_threshold=0.9,
+        patience=3,
+    )
+    generation_with_stop_params.add_batch(bad_batches[0])
+
+    assert generation_with_stop_params.status == GenerationStatus.IN_PROGRESS
+
+
 # Purpose: Sequence good → bad → good under stricter policy triggers STOP_METRIC_REACHED mid-flight.
 # Data: Threshold 0.2, patience 3.
 # Asserts: status STOP_METRIC_REACHED after third add.

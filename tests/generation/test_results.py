@@ -32,6 +32,7 @@ def _make_batch(
     num_prompts: int,
     num_valid: int = 0,
     num_invalid: int = 0,
+    finish_reasons: dict[str, int] | None = None,
 ) -> Batch:
     """Return a ``Batch`` whose aggregate counts match the requested totals.
 
@@ -52,6 +53,8 @@ def _make_batch(
                 for i in range(num_invalid)
             )
         batch._responses.append(ParsedResponse(records=records, prompt_number=prompt_index))
+    if finish_reasons is not None:
+        batch.finish_reasons.update(finish_reasons)
     return batch
 
 
@@ -95,6 +98,63 @@ class TestEscalateAfterFailedProbe:
         next_count = batches.get_next_num_prompts()
 
         # Escalation: full ``max_num_prompts_per_batch`` clipped only by remaining records.
+        records_remaining = 10_000 - batches.num_valid_records
+        assert next_count == min(batches.max_num_prompts_per_batch, records_remaining + NUM_PROMPT_BUFFER)
+        assert next_count > INITIAL_PROBE_PROMPTS
+
+    def test_results_keeps_probe_size_after_length_truncated_zero_valid_probe(self, fixture_processor):
+        """A zero-valid probe that hit ``max_tokens`` should not be treated as under-sized sampling."""
+        batches = GenerationBatches(
+            target_num_records=10_000,
+            invalid_fraction_threshold=1.0,
+            patience=10,
+        )
+        first_batch = _make_batch(
+            fixture_processor,
+            num_prompts=INITIAL_PROBE_PROMPTS,
+            num_valid=0,
+            num_invalid=5,
+            finish_reasons={"length": INITIAL_PROBE_PROMPTS},
+        )
+        batches.add_batch(first_batch)
+
+        next_count = batches.get_next_num_prompts()
+
+        records_remaining = 10_000 - batches.num_valid_records
+        assert next_count == min(
+            batches.max_num_prompts_per_batch,
+            INITIAL_PROBE_PROMPTS,
+            records_remaining + NUM_PROMPT_BUFFER,
+        )
+
+    def test_results_only_uses_latest_batch_finish_reason_for_zero_valid_probe(self, fixture_processor):
+        """An earlier length truncation should not suppress escalation after a later non-truncated batch."""
+        batches = GenerationBatches(
+            target_num_records=10_000,
+            invalid_fraction_threshold=1.0,
+            patience=10,
+        )
+        batches.add_batch(
+            _make_batch(
+                fixture_processor,
+                num_prompts=INITIAL_PROBE_PROMPTS,
+                num_valid=0,
+                num_invalid=5,
+                finish_reasons={"length": INITIAL_PROBE_PROMPTS},
+            )
+        )
+        batches.add_batch(
+            _make_batch(
+                fixture_processor,
+                num_prompts=INITIAL_PROBE_PROMPTS,
+                num_valid=0,
+                num_invalid=5,
+                finish_reasons={"stop": INITIAL_PROBE_PROMPTS},
+            )
+        )
+
+        next_count = batches.get_next_num_prompts()
+
         records_remaining = 10_000 - batches.num_valid_records
         assert next_count == min(batches.max_num_prompts_per_batch, records_remaining + NUM_PROMPT_BUFFER)
         assert next_count > INITIAL_PROBE_PROMPTS

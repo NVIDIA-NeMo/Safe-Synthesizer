@@ -346,13 +346,19 @@ class GenerationBatches:
         """Wall-clock seconds spent tokenizing records across all batches."""
         return sum(batch.total_tokenization_time_sec for batch in self._batches)
 
+    @property
+    def num_length_truncated_completions(self) -> int:
+        """Total completions that stopped because they reached ``max_tokens``."""
+        return sum(batch.num_length_truncated_completions for batch in self._batches)
+
     def add_batch(self, batch: Batch) -> None:
         """Add a batch and update the generation status.
 
         Stopping rules:
 
-        * The very first batch producing zero valid records always
-          triggers ``STOP_NO_RECORDS``.
+        * The very first batch producing zero valid records triggers
+          ``STOP_NO_RECORDS`` unless it was length-truncated and a
+          patience-based ``stop_condition`` is configured.
         * When a ``stop_condition`` is configured, subsequent batches
           with zero valid records are tolerated until the patience-based
           threshold is reached.
@@ -369,7 +375,7 @@ class GenerationBatches:
             if batch.num_valid_records == 0:
                 self.status = GenerationStatus.STOP_NO_RECORDS
         else:
-            if batch.num_valid_records == 0 and self.num_batches == 0:
+            if batch.num_valid_records == 0 and self.num_batches == 0 and batch.num_length_truncated_completions == 0:
                 self.status = GenerationStatus.STOP_NO_RECORDS
             elif self.stop_condition.has_been_reached(self.running_stopping_metric.mean):
                 self.status = GenerationStatus.STOP_METRIC_REACHED
@@ -386,8 +392,8 @@ class GenerationBatches:
           batch of ``INITIAL_PROBE_PROMPTS`` so the records-per-prompt
           ratio can be measured before committing to a full batch.
         * Prompts sent but no valid records yet -- escalate to the full
-          ``max_num_prompts_per_batch`` budget so the patience-based
-          stopping path can decide whether to abort.
+          ``max_num_prompts_per_batch`` budget unless completions were
+          length-truncated, in which case keep probing conservatively.
         * Have valid records -- size the next batch from the observed
           records-per-prompt ratio, plus ``NUM_PROMPT_BUFFER`` to absorb
           invalid completions.
@@ -400,6 +406,7 @@ class GenerationBatches:
         num_records_remaining = self.target_num_records - self.num_valid_records
         records_per_prompt_known = self.num_valid_records > 0 and self.num_prompts > 0
         is_first_batch = self.num_prompts == 0
+        last_batch = self._batches[-1] if self._batches else None
 
         if records_per_prompt_known:
             valid_records_per_prompt = self.num_valid_records / self.num_prompts
@@ -407,6 +414,13 @@ class GenerationBatches:
             return min(num_prompts, num_prompts_needed + NUM_PROMPT_BUFFER)
 
         if is_first_batch:
+            return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
+
+        if (
+            last_batch is not None
+            and last_batch.num_valid_records == 0
+            and last_batch.num_length_truncated_completions > 0
+        ):
             return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
 
         return min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)
