@@ -135,6 +135,7 @@ class VllmBackend(GeneratorBackend):
             prompt_template=self.model_metadata.prompt_config.template,
         )
         self.llm: vLLM | None = None
+        self._prompt_token_count: int | None = None
 
         # Do not generate detailed error messages in production to avoid leaking sensitive data.
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
@@ -218,6 +219,22 @@ class VllmBackend(GeneratorBackend):
             self.config,
             tokenizer=tokenizer,
         )
+
+    def _get_prompt_token_count(self) -> int:
+        """Return the templated prompt's tokenized length, cached after first call.
+
+        Uses the loaded vLLM tokenizer so encoding matches what the engine
+        will see at runtime. Returns ``0`` when the engine has not yet been
+        initialized -- callers fall back to a prompt-agnostic ceiling in
+        that case.
+        """
+        if self._prompt_token_count is not None:
+            return self._prompt_token_count
+        if self.llm is None:
+            return 0
+        tokenizer = self.llm.get_tokenizer()
+        self._prompt_token_count = len(tokenizer.encode(self.prompt))
+        return self._prompt_token_count
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -523,7 +540,7 @@ class VllmBackend(GeneratorBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.max_seq_length,
+            max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,
             ignore_eos=False,

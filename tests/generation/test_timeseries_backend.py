@@ -3,7 +3,7 @@
 
 """Unit tests for the TimeseriesBackend class private methods."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -24,7 +24,11 @@ from nemo_safe_synthesizer.generation.timeseries_backend import (
     GroupState,
     TimeseriesBackend,
 )
-from nemo_safe_synthesizer.llm.metadata import LLMPromptConfig, ModelMetadata
+from nemo_safe_synthesizer.llm.metadata import (
+    GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
+    LLMPromptConfig,
+    ModelMetadata,
+)
 
 PROMPT_TEMPLATE = "[INST] {instruction} {schema} [/INST]"
 
@@ -457,3 +461,79 @@ class TestBuildModifiedSamplingParamsStopPropagation:
         assert modified.ignore_eos is False
         assert modified.stop == []
         assert modified.stop_token_ids == []
+
+
+class TestGenerationMaxTokensPlumbing:
+    """``SamplingParams.max_tokens`` is sourced from ``metadata.generation_max_tokens_for``."""
+
+    @staticmethod
+    def _capture_sampling_params(
+        backend,
+        *,
+        groups: list[str] | None = None,
+        group_prefills: dict[str, str] | None = None,
+        prompt_token_count: int | None = None,
+    ) -> SamplingParams:
+        """Invoke ``generate`` with ``_generate_parallel_groups`` stubbed out.
+
+        Returns the ``SamplingParams`` the backend constructed. ``groups``
+        and ``group_prefills`` seed minimal state so ``generate()`` reaches
+        SamplingParams construction; ``prompt_token_count`` overrides the
+        backend's prompt-token helper to drive the prompt-length clamp
+        deterministically without standing up a real vLLM engine.
+        """
+        captured: dict[str, SamplingParams] = {}
+
+        def _capture(*, batches, sampling_params, progress_snapshots):  # noqa: ARG001
+            captured["sp"] = sampling_params
+            raise StopIteration("short-circuit")
+
+        backend._generate_parallel_groups = _capture
+        backend._groups = groups if groups is not None else []
+        backend._group_prefills = group_prefills if group_prefills is not None else {}
+        if prompt_token_count is not None:
+            backend._get_prompt_token_count = MagicMock(return_value=prompt_token_count)
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        return captured["sp"]
+
+    def test_uses_helper_when_stat_set_and_prompt_short(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """When the prompt is short, the scaled stat drives ``max_tokens``."""
+        timeseries_model_metadata.max_tokens_per_example = 1000
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        sp = self._capture_sampling_params(backend)
+
+        expected = timeseries_model_metadata.generation_max_tokens_for(0)
+        assert sp.max_tokens == expected
+        assert sp.max_tokens == int(1000 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+
+    def test_falls_back_to_remaining_context_when_stat_unset(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """Without the stat, SamplingParams.max_tokens == ``max_seq_length - prompt_len``."""
+        assert timeseries_model_metadata.max_tokens_per_example is None
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        sp = self._capture_sampling_params(backend)
+
+        # No engine -> prompt-token count is 0 -> clamp gives full window back.
+        assert sp.max_tokens == timeseries_model_metadata.max_seq_length
+
+    def test_prompt_length_clamps_below_scaled_stat(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """Long prompts trigger the ``max_seq_length - prompt_len`` clamp instead of the stat."""
+        # Stat * 1.2 = 1800; clamp = 2048 - 1500 = 548 wins.
+        timeseries_model_metadata.max_tokens_per_example = 1500
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+
+        sp = self._capture_sampling_params(backend, prompt_token_count=1500)
+
+        assert sp.max_tokens is not None
+        assert sp.max_tokens == timeseries_model_metadata.max_seq_length - 1500
+        assert sp.max_tokens < int(1500 * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)

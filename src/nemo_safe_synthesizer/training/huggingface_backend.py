@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -694,6 +695,23 @@ class HuggingFaceBackend(TrainingBackend):
 
         if self.params.time_series.is_timeseries:
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()  # ty: ignore[unresolved-attribute]
+
+        self._propagate_max_tokens_per_example()
+
+    def _propagate_max_tokens_per_example(self) -> None:
+        """Copy the assembler's ``tokens_per_example.max`` onto ``ModelMetadata``.
+
+        Sized from the actual tokenized examples rather than a char-count
+        heuristic, this bound feeds ``ModelMetadata.generation_max_tokens_for``
+        so ``SamplingParams.max_tokens`` caps decoding at output lengths
+        the model was trained to produce. Tight caps let the engine retire
+        EOS-failed sequences promptly (a known fine-tuned-LoRA failure
+        mode) instead of letting them decode wasted tokens to the full
+        context window. No-op when the stat is absent or unpopulated.
+        """
+        tokens_per_example = self.training_examples.stats.get("tokens_per_example")
+        if tokens_per_example is not None and tokens_per_example.count > 0:
+            self.model_metadata.max_tokens_per_example = int(math.ceil(tokens_per_example.max))
 
     @utils.time_function
     def train(self, **training_args: Any) -> None:

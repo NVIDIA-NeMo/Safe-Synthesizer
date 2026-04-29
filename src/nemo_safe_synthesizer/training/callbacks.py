@@ -138,7 +138,7 @@ class InferenceEvalCallback(TrainerCallback):
             outputs = model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                max_new_tokens=tokenizer.model_max_length - len(input_ids[0]),
+                max_new_tokens=self.metadata.generation_max_tokens_for(len(input_ids[0])),
                 do_sample=True,
                 use_cache=True,
                 **self.generate_kwargs,

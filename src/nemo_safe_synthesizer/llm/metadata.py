@@ -55,6 +55,11 @@ logger = get_logger(__name__)
 DEFAULT_MAX_SEQ_LENGTH = 2048
 GLOBAL_MAX_SEQ_LENGTH = 2048 * 6
 
+GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER = 1.2
+"""Margin applied to ``max_tokens_per_example`` when sizing generation
+``SamplingParams.max_tokens``. The stat is the actual tokenized max
+observed during training, so a small jitter margin is sufficient."""
+
 
 class LLMPromptConfig(BaseModel):
     """Prompt template and special-token settings for an LLM.
@@ -323,6 +328,16 @@ class ModelMetadata(BaseModel):
     )
     """Currently used for time series data. May be a single string or a per-column dict."""
 
+    max_tokens_per_example: int | None = Field(
+        default=None,
+        description="Maximum tokenized example length observed during training.",
+    )
+    """Populated by the training backend from the assembler's
+    ``tokens_per_example`` running statistic. Consumed by
+    ``generation_max_tokens_for`` to size ``SamplingParams.max_tokens`` so
+    fine-tuned LoRAs that fail to emit EOS on short structured outputs do
+    not decode wasted tokens to the full context-window cap."""
+
     @model_validator(mode="before")
     @classmethod
     def populate_derived_fields(cls, data: dict) -> dict:
@@ -403,6 +418,37 @@ class ModelMetadata(BaseModel):
         if isinstance(self.rope_scaling, RopeScaling) and self.rope_scaling.factor > 1.0:
             rsf = self.rope_scaling.factor
         return int((self.base_max_seq_length or DEFAULT_MAX_SEQ_LENGTH) * rsf)
+
+    def generation_max_tokens_for(self, prompt_len: int) -> int:
+        """Per-sample ``max_tokens`` ceiling, prompt-aware.
+
+        Returns the smaller of:
+
+        1. ``int(max_tokens_per_example * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)``
+           when the assembler stat is populated, else ``max_seq_length``.
+        2. ``max_seq_length - prompt_len`` -- vLLM raises when
+           ``len(prompt) + max_tokens > max_model_len``
+           (`vllm#33418 <https://github.com/vllm-project/vllm/issues/33418>`_).
+
+        ``max_tokens_per_example`` already includes the prompt: it is the
+        tokenized length of ``prompt + packed records`` produced by the
+        assembler, so the scaled value is an upper bound on any rollout
+        rather than a tight output budget. The explicit ``- prompt_len``
+        clamp is a defensive belt for legacy adapters where the assembler
+        stat is missing and for prompts longer than those seen in training.
+
+        Args:
+            prompt_len: Tokenized length of the prompt this sample will
+                run against. Pass ``0`` to disable the prompt clamp.
+
+        Returns:
+            Non-negative ``max_tokens`` value safe to feed to ``SamplingParams``.
+        """
+        if self.max_tokens_per_example and self.max_tokens_per_example > 0:
+            sized = int(self.max_tokens_per_example * GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER)
+        else:
+            sized = self.max_seq_length
+        return max(0, min(sized, self.max_seq_length - prompt_len))
 
     def save_metadata(self) -> None:
         """Save model metadata to JSON file.
