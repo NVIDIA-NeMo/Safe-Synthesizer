@@ -9,13 +9,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+import nemo_safe_synthesizer.observability as obs
 import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 
 # =============================================================================
 # Fixtures
-# =============================================================================TestRunErrorPathExitCodes
+# =============================================================================
 
 
 @pytest.fixture
@@ -609,6 +610,16 @@ class TestRunGenerateOptions:
 
 class TestRunErrorPathExitCodes:
     """Tests that run command error paths exit with non-zero status."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_observability(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # These tests invoke the real common_setup, which calls
+        # initialize_observability() and flips the module-level
+        # _INITIALIZED_OBSERVABILITY flag. Without this reset, get_logger()
+        # in subsequent tests on the same xdist worker returns a
+        # CategoryLogger wrapping a structlog BoundLogger, and stdlib
+        # LoggerAdapter.isEnabledFor() then fails with AttributeError.
+        monkeypatch.setattr(obs, "_INITIALIZED_OBSERVABILITY", False)
 
     def test_run_with_no_data_source_exits_nonzero(
         self,
