@@ -224,6 +224,69 @@ class TestBuildStructuredOutputParams:
             assert call_args[1].data.group_training_examples_by == "category"
 
 
+class TestResolveVllmModelTarget:
+    """Tests for local snapshot resolution before vLLM initialization."""
+
+    def test_returns_existing_local_path(self, tmp_path):
+        from nemo_safe_synthesizer.generation.vllm_backend import _resolve_vllm_model_target
+
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+
+        assert _resolve_vllm_model_target(str(model_dir)) == str(model_dir)
+
+    def test_returns_cached_snapshot_when_available(self):
+        from nemo_safe_synthesizer.generation.vllm_backend import _resolve_vllm_model_target
+
+        with patch(
+            "nemo_safe_synthesizer.generation.vllm_backend.snapshot_download",
+            return_value="/tmp/hf-cache/snapshots/123",
+        ) as mock_snapshot_download:
+            resolved = _resolve_vllm_model_target("mistralai/Mistral-7B-Instruct-v0.3")
+
+        assert resolved == "/tmp/hf-cache/snapshots/123"
+        mock_snapshot_download.assert_called_once_with(
+            repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+            local_files_only=True,
+        )
+
+    def test_falls_back_to_repo_id_when_cached_snapshot_unavailable(self):
+        from nemo_safe_synthesizer.generation.vllm_backend import _resolve_vllm_model_target
+
+        with patch(
+            "nemo_safe_synthesizer.generation.vllm_backend.snapshot_download",
+            side_effect=FileNotFoundError("not cached"),
+        ):
+            resolved = _resolve_vllm_model_target("mistralai/Mistral-7B-Instruct-v0.3")
+
+        assert resolved == "mistralai/Mistral-7B-Instruct-v0.3"
+
+
+class TestInitializeModelTarget:
+    """Tests that vLLM initialization uses the resolved local model target."""
+
+    def test_initialize_passes_resolved_model_target_to_vllm(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend._resolve_vllm_model_target",
+                return_value="/tmp/hf-cache/snapshots/123",
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert backend.llm is mock_llm
+        assert mock_vllm.call_args.kwargs["model"] == "/tmp/hf-cache/snapshots/123"
+
+
 class TestResolveTemperature:
     """Tests for the _resolve_temperature method."""
 

@@ -9,9 +9,11 @@ import logging
 import os
 import time
 from functools import partial
+from pathlib import Path
 from typing import Any, cast
 
 import torch
+from huggingface_hub import snapshot_download
 from transformers import PreTrainedTokenizerBase
 from vllm import LLM as vLLM
 from vllm import RequestOutput
@@ -97,6 +99,33 @@ def _install_noop_remote_cache_backends() -> None:
 
 
 _install_noop_remote_cache_backends()
+
+
+def _resolve_vllm_model_target(model_name_or_path: str) -> str:
+    """Resolve the vLLM model target to a local snapshot when possible.
+
+    Using a local snapshot avoids Hugging Face Hub metadata lookups during
+    ``vLLM(...)`` initialization, which reduces the chance of transient 429s
+    when many concurrent jobs initialize the same model.
+
+    Falls back to the original model identifier if the target is not a local
+    path and no cached snapshot can be resolved locally.
+    """
+    if Path(model_name_or_path).exists():
+        return model_name_or_path
+
+    try:
+        local_snapshot = snapshot_download(repo_id=model_name_or_path, local_files_only=True)
+    except Exception:
+        logger.debug(
+            "No local Hugging Face snapshot found for vLLM model target; falling back to hub identifier",
+            extra={"ctx": {"model": model_name_or_path}},
+            exc_info=True,
+        )
+        return model_name_or_path
+
+    logger.info(f"Using local Hugging Face snapshot for vLLM initialization: {local_snapshot}")
+    return local_snapshot
 
 
 class VllmBackend(GeneratorBackend):
@@ -203,10 +232,11 @@ class VllmBackend(GeneratorBackend):
         structured_outputs_config = StructuredOutputsConfig(
             backend=self.config.generation.structured_generation_backend,
         )
+        model_target = _resolve_vllm_model_target(self.config.training.pretrained_model)
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
-                model=self.config.training.pretrained_model,
+                model=model_target,
                 gpu_memory_utilization=max_vram,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,

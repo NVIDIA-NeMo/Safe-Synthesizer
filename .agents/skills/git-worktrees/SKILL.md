@@ -1,6 +1,6 @@
+---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
----
 name: git-worktrees
 description: "Create, manage, and clean up git worktrees for isolated development, PR review, and A/B testing of agent configurations. Trigger keywords - worktree, worktrees, git worktree, parallel branches, isolated workspace, worktree cleanup, worktree prune, PR review, address PR comments, work on branch, work on PR."
 license: Apache-2.0
