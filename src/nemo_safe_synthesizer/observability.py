@@ -636,32 +636,26 @@ class CategoryLogger(logging.Logger):
         self.system = _CategoryLogAdapter(base_logger, LogCategory.SYSTEM)
         self.backend = _CategoryLogAdapter(base_logger, LogCategory.BACKEND)
         self.default = self.runtime
+        # Assign standard log methods as direct aliases to self.default rather than
+        # wrapping them in delegation methods. A delegation method in this class would
+        # add an observability.py frame to the call stack, which confuses both
+        # Python's stdlib findCaller() (used for pre-init foreign logs) and structlog's
+        # CallsiteParameterAdder. Using aliases means logger.info() calls
+        # LoggerAdapter.info() directly -- a logging-module frame that is already
+        # skipped by both mechanisms -- so the reported callsite is the real caller.
+        self.__dict__.update(
+            log=self.default.log,
+            debug=self.default.debug,
+            info=self.default.info,
+            warning=self.default.warning,
+            error=self.default.error,
+            exception=self.default.exception,
+            critical=self.default.critical,
+        )
 
     @property
     def name(self) -> str:
         return self._logger.name
-
-    # Delegate standard methods to runtime by default (backwards compatible)
-    def log(self, level: int, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.log(level, msg, *args, **kwargs)
-
-    def debug(self, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.debug(msg, *args, **kwargs)
-
-    def info(self, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.info(msg, *args, **kwargs)
-
-    def warning(self, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.warning(msg, *args, **kwargs)
-
-    def error(self, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.error(msg, *args, **kwargs)
-
-    def exception(self, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.exception(msg, *args, **kwargs)
-
-    def critical(self, msg: object, *args: object, **kwargs: Any) -> None:
-        self.default.critical(msg, *args, **kwargs)
 
     def isEnabledFor(self, level: int) -> bool:
         return self._logger.isEnabledFor(level)
