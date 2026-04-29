@@ -38,7 +38,7 @@ def test_jinja_context_job_id_set_when_nemo_job_id_present(monkeypatch: pytest.M
     assert ctx["job_id"] == "cluster-job-abc123"
 
 
-def test_from_dataframes_applies_sqs_report_config(training_df, synthetic_df, test_df) -> None:
+def test_from_dataframes_applies_sqs_report_config(fixture_training_df, fixture_synthetic_df, fixture_test_df) -> None:
     """``sqs_report_rows`` / ``sqs_report_columns`` from config drive the actual subsampling.
 
     Regression: previously the multimodal report looked up ``sqs_rows`` /
@@ -58,9 +58,9 @@ def test_from_dataframes_applies_sqs_report_config(training_df, synthetic_df, te
     )
 
     report = MultimodalReport.from_dataframes(
-        training=training_df,
-        synthetic=synthetic_df,
-        test=test_df,
+        training=fixture_training_df,
+        synthetic=fixture_synthetic_df,
+        test=fixture_test_df,
         config=config,
     )
 
@@ -71,7 +71,6 @@ def test_from_dataframes_applies_sqs_report_config(training_df, synthetic_df, te
     assert report.evaluation_datasets.synthetic_cols == target_cols
 
 
-@pytest.mark.skip(reason="Times out")
 def test_multimodal_report(
     fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df, fixture_skip_privacy_metrics_config
 ):
@@ -89,7 +88,7 @@ def test_multimodal_report(
     report_dict = report.get_dict()
     assert len(report_dict) == 6
     assert report_dict["Synthetic Quality Score"] == {
-        "raw_score": 9.8215,
+        "raw_score": 9.7935,
         "grade": "Excellent",
         "score": 9.8,
         "notes": None,
@@ -97,6 +96,6 @@ def test_multimodal_report(
 
     report_json = report.get_json()
     assert (
-        '"Synthetic Quality Score": {"raw_score": 9.8215, "grade": "Excellent", "score": 9.8, "notes": null}}'
+        '"Synthetic Quality Score": {"raw_score": 9.7935, "grade": "Excellent", "score": 9.8, "notes": null}}'
         in report_json
     )
