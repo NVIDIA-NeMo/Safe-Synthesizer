@@ -11,7 +11,6 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 - [Repository Settings](#repository-settings)
   - [Branch Naming Convention](#branch-naming-convention)
   - [Conventional Commits](#conventional-commits)
-  - [Semantic Versioning for Tags](#semantic-versioning-for-tags)
   - [Branch Protection](#branch-protection)
 - [Pull Request Process](#pull-request-process)
 - [Issues and Discussions](#issues-and-discussions)
@@ -300,29 +299,6 @@ Examples:
 
 > Since we use squash merging, your PR title should follow this format as it becomes the commit message.
 
-### Semantic Versioning for Tags
-
-Release tags must follow [Semantic Versioning](https://semver.org/) and must be prefixed with `v` on GitHub:
-
-```text
-vMAJOR.MINOR.PATCH[-prerelease][+build]
-```
-
-The release workflow triggers on `v*` tags, derives the package version from the built wheel filename for publishing, and creates the GitHub release as `v${VERSION}`.
-
-Examples:
-
-
-| Tag                    | Valid           |
-| ---------------------- | --------------- |
-| `v1.0.0`                | ✅               |
-| `v2.1.3`                | ✅               |
-| `v1.0.0-alpha`          | ✅               |
-| `v1.0.0-beta.1`         | ✅               |
-| `v1.0.0-rc.1+build.123` | ✅               |
-| `1.0.0`                 | ❌ No `v` prefix |
-| `release-1.0`           | ❌ Wrong format  |
-
 
 ### Branch Protection
 
@@ -603,7 +579,22 @@ Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub 
 
 ### 1. Create and push a tag
 
-Tags must follow [Semantic Versioning](#semantic-versioning-for-tags). For release candidates, use the `rcN` pre-release suffix:
+Release versions follow [PEP440](https://peps.python.org/pep-0440/) with major, minor, and patch release numbers.
+Prerelease versions append the suffix rcN (no dash as specified by PEP440).
+The GitHub tag always starts with a `v` prefix.
+
+Examples:
+
+| GitHub Tag      | PyPI Version | Valid                    |
+|:--------------- |:------------ |:------------------------ |
+| `v1.0.0`        | `1.0.0`      | ✅                       |
+| `v2.1.3`        | `2.1.3`      | ✅                       |
+| `v0.0.5rc0`     | `0.0.5rc0`   | ✅                       |
+| `v0.1.2rc5`     | `0.1.2rc5`   | ✅                       |
+| `1.0.0`         |              | ❌ No `v` prefix         |
+| `release-1.0`   |              | ❌ Wrong format          |
+| `v0.0.7-rc4`    |              | ❌ Dash before rc suffix |
+| `v0.1.3alpha1`  |              | ❌ Use rc, not alpha     |
 
 ```bash
 # Stable release
@@ -617,30 +608,7 @@ git push origin <tag>
 
 ### 2. Run the workflow
 
-Trigger the workflow from the GitHub UI or via `gh`:
-
-**GitHub UI:** Go to **Actions → Release NeMo Safe Synthesizer → Run workflow** and fill in the inputs.
-
-**CLI:**
-
-```bash
-gh workflow run release.yml \
-  --field release-ref=<tag> \
-  --field dry-run=true \
-  --field create-gh-release=false
-```
-
-### 3. Inputs
-
-| Input | Description | Default |
-|---|---|---|
-| `release-ref` | Full SHA or tag to build from | required |
-| `dry-run` | Publish to Test PyPI only; skip real PyPI | `true` |
-| `create-gh-release` | Create a GitHub release and attach the wheel | `true` |
-
-**Dry-run mode** (default): builds the wheel and publishes it to [Test PyPI](https://test.pypi.org/) only. Use this to verify the package before a real release. The workflow always publishes to Test PyPI regardless of `dry-run`.
-
-**Real release**: uncheck `dry-run` (or pass `--field dry-run=false`) to also publish to the real [PyPI](https://pypi.org/). Pre-release tags (`rc`, `alpha`, `beta`, `.dev`) are automatically marked as pre-releases on both PyPI and GitHub.
+The [workflow](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/actions/workflows/release.yml) to release is triggered automatically when a tag starting with `v` is pushed to GitHub.
 
 ## NMP Integration
 
