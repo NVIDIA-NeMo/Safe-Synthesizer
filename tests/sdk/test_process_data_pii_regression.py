@@ -67,7 +67,14 @@ def _patch_heavy_deps(monkeypatch, original_df: pd.DataFrame, replaced_df: pd.Da
     # ModelMetadata: stub
     monkeypatch.setattr(
         f"{MODULE}.ModelMetadata",
-        type("MM", (), {"from_config": staticmethod(lambda c, workdir: None)}),
+        type(
+            "MM",
+            (),
+            {
+                "from_config": staticmethod(lambda c, workdir: None),
+                "stub": staticmethod(lambda c: None),
+            },
+        ),
     )
 
     # run_preflight: no-op so process_data doesn't raise on GPU/env checks
@@ -174,6 +181,7 @@ class TestLoadFromSavePathGuard:
                 {
                     "from_config": staticmethod(lambda c, workdir: None),
                     "from_metadata_json": staticmethod(lambda f, workdir: None),
+                    "stub": staticmethod(lambda c: None),
                 },
             ),
         )
