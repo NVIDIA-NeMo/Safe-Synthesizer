@@ -575,7 +575,7 @@ Before contributing, run `make format` and `make check`. See `AGENTS.md` for ful
 
 ## Releasing
 
-Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, and optionally publishes to the real PyPI and creates a GitHub release.
+Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, publishes to the real PyPI, and creates a GitHub release.
 
 ### 1. Create and push a tag
 
@@ -585,16 +585,16 @@ The GitHub tag always starts with a `v` prefix.
 
 Examples:
 
-| GitHub Tag      | PyPI Version | Valid                                   |
-|:--------------- |:------------ |:--------------------------------------- |
-| `v1.0.0`        | `1.0.0`      | ✅                                      |
-| `v2.1.3`        | `2.1.3`      | ✅                                      |
-| `v0.0.5rc0`     | `0.0.5rc0`   | ✅                                      |
-| `v0.1.2rc5`     | `0.1.2rc5`   | ✅                                      |
-| `1.0.0`         |              | ❌ No `v` prefix                        |
-| `release-1.0`   |              | ❌ Wrong format                         |
-| `v0.0.7-rc4`    |              | ❌ Dash before rc suffix                |
-| `v0.1.3a1`      |              | ❌ Alpha prereleases are not used; use rcN only |
+| GitHub Tag    | PyPI Version | Valid                                           |
+|:------------- |:------------ |:----------------------------------------------- |
+| `v1.0.0`      | `1.0.0`      | ✅                                              |
+| `v2.1.3`      | `2.1.3`      | ✅                                              |
+| `v0.0.5rc0`   | `0.0.5rc0`   | ✅                                              |
+| `v0.1.2rc5`   | `0.1.2rc5`   | ✅                                              |
+| `1.0.0`       |              | ❌ No `v` prefix                                |
+| `release-1.0` |              | ❌ Wrong format                                 |
+| `v0.0.7-rc4`  |              | ❌ Dash before rc suffix                        |
+| `v0.1.3a1`    |              | ❌ Alpha prereleases are not used; use rcN only |
 
 To create and push tags:
 
