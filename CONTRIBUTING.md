@@ -608,7 +608,7 @@ git tag v0.1.0rc1 <commit-sha>
 git push origin <tag>
 ```
 
-### 2. Run the workflow
+### 2. Monitor the workflow run
 
 The [workflow](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/actions/workflows/release.yml) to release is triggered automatically when a tag starting with `v` is pushed to GitHub.
 
