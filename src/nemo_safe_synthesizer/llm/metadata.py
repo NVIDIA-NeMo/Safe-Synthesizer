@@ -38,7 +38,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
+from transformers import AutoConfig, AutoTokenizer, PretrainedConfig, PreTrainedTokenizerBase
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
@@ -100,7 +100,7 @@ class LLMPromptConfig(BaseModel):
     """Integer id for the EOS token."""
 
     @classmethod
-    def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
+    def from_tokenizer(cls, name: str, tokenizer: PreTrainedTokenizerBase | None = None, **kwargs) -> LLMPromptConfig:
         """Create a prompt config by reading from settings of a tokenizer.
 
         If no ``tokenizer`` is supplied one is loaded from ``name``
@@ -473,8 +473,8 @@ class ModelMetadata(BaseModel):
     @staticmethod
     def _load_config_and_tokenizer(
         model_name_or_path: str,
-        tokenizer: AutoTokenizer | None = None,
-    ) -> tuple[PretrainedConfig, AutoTokenizer]:
+        tokenizer: PreTrainedTokenizerBase | None = None,
+    ) -> tuple[PretrainedConfig, PreTrainedTokenizerBase]:
         """Load ``PretrainedConfig`` and (optionally) ``AutoTokenizer`` for a model.
 
         Centralises the repeated boilerplate present in every subclass
@@ -707,7 +707,7 @@ class Mistral(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer: AutoTokenizer | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
