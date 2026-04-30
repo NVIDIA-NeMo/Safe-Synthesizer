@@ -55,6 +55,7 @@ dev = [
 ]
 
 docs = [
+  "mike",
   "mkdocs-material",
   "mkdocstrings[python]",
   "griffe-pydantic",

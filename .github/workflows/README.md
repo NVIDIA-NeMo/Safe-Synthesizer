@@ -14,8 +14,8 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, unit tests, and CPU smoke tests    |
 | [gpu-tests.yml](gpu-tests.yml)                     | Nightly , manual                         | GPU smoke tests (required) and E2E tests              |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
-| [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Builds and deploys documentation to GitHub Pages      |
-| [release.yml](release.yml)                         | Push tags to `v*`                        | Builds and publishes package to Test PyPI or PyPI (production)     |
+| [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Publishes `main` docs as the `latest` GitHub Pages version      |
+| [release.yml](release.yml)                         | Push tags to `v*`                        | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                                      | Scans for accidentally committed secrets              |
 
 ## Pull Request Testing (copy-pr-bot)
