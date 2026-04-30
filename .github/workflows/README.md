@@ -9,14 +9,14 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 All workflows that use `.github/actions/setup-python-env` now default to the version in `../../.python-version`. Set the action input `python-version` only when a job intentionally needs an override.
 
-| Workflow                                           | Trigger                                  | Description                                           |
-| -------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual              | Format, typecheck, unit tests, and CPU smoke tests    |
-| [gpu-tests.yml](gpu-tests.yml)                     | Nightly , manual                         | GPU smoke tests (required) and E2E tests              |
-| [conventional-commit.yml](conventional-commit.yml) | PRs                                      | Validates PR titles follow conventional commit format |
-| [docs.yml](docs.yml)                               | Push to `main` (docs paths)              | Publishes `main` docs as the `latest` GitHub Pages version      |
-| [release.yml](release.yml)                         | Push tags to `v*`                        | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
-| [secrets-detector.yml](secrets-detector.yml)       | PRs                                      | Scans for accidentally committed secrets              |
+| Workflow                                           | Trigger                     | Description                                                                                                |
+| -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, typecheck, unit tests, and CPU smoke tests                                                         |
+| [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
+| [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
+| [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
+| [release.yml](release.yml)                         | Push tags to `v*`           | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
+| [secrets-detector.yml](secrets-detector.yml)       | PRs                         | Scans for accidentally committed secrets                                                                   |
 
 ## Pull Request Testing (copy-pr-bot)
 
@@ -59,7 +59,7 @@ flowchart LR
         unit[Unit Tests]
         smoke_cpu[Smoke Tests]
         ci_status[CI Status]
-        changes_ci --> format & typecheck & unit & smoke_cpu
+        changes_ci --> unit & smoke_cpu
         format & typecheck & unit & smoke_cpu --> ci_status
     end
 
@@ -114,9 +114,9 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 | Unit Tests | `test-ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test-smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
-The `changes` detection job (using `dorny/paths-filter`) skips downstream jobs entirely when only non-source files are modified. Within each job, all tracked files are checked -- `ruff` and `ty` are fast enough for this to take seconds. The CI Status aggregation job is the single required check for branch protection.
+The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run. Format and typecheck are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, or CI path changes. Smoke tests run only when `src/**`, `tests/**`, `pytest.ini`, `pyproject.toml`, or `uv.lock` changes.
 
-If a PR only touches workflow YAML, docs, or other non-source paths, format/typecheck/unit-test jobs are skipped. To verify new CI logic or satisfy reviewers: run `make check` and `make test` locally and note in the PR, or add a trivial Python change (e.g. docstring) to trigger the pipeline.
+Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These paths trigger unit tests through the aggregate `any` output, but do not trigger CPU smoke tests. The CI Status aggregation job is the single required check for branch protection.
 
 To replicate CI locally:
 

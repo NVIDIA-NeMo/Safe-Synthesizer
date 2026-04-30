@@ -46,6 +46,12 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      src: ${{ steps.changes.outputs.src }}
+      tests: ${{ steps.changes.outputs.tests }}
+      pytest_ini: ${{ steps.changes.outputs.pytest_ini }}
+      pyproject: ${{ steps.changes.outputs.pyproject }}
+      uv_lock: ${{ steps.changes.outputs.uv_lock }}
+      docs_src: ${{ steps.changes.outputs.docs_src }}
       any: ${{ steps.changes.outputs.any }}
     steps:
       - uses: actions/checkout@v6
@@ -80,8 +86,6 @@ jobs:
 
   typecheck:
     name: Typecheck
-    needs: changes
-    if: ${{ needs.changes.outputs.any == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -151,7 +155,7 @@ jobs:
   smoke-test:
     name: Smoke Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || needs.changes.outputs.deps == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.pytest_ini == 'true' || needs.changes.outputs.uv_lock == 'true' || needs.changes.outputs.pyproject == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: checkout
