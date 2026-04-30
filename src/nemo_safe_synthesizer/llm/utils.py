@@ -30,8 +30,8 @@ logger = get_logger(__name__)
 def trust_remote_code_for_model(model_name: str | Path) -> bool:
     """Determine whether to trust remote code when loading a model.
 
-    Returns ``True`` only for models whose name starts with
-    ``"nvidia/"``.
+    Returns ``True`` for NVIDIA-owned Hub model identifiers and for paths
+    inside Hugging Face's encoded cache directory for NVIDIA models.
 
     Args:
         model_name: HuggingFace model identifier or local path.
@@ -39,7 +39,8 @@ def trust_remote_code_for_model(model_name: str | Path) -> bool:
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
-    return str(model_name).startswith("nvidia/")
+    model_ref = str(model_name).casefold()
+    return model_ref.startswith("nvidia/") or "models--nvidia--" in model_ref
 
 
 def cleanup_memory() -> None:

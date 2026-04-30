@@ -52,7 +52,7 @@ Trainer removes `PrinterCallback`; adds SafeSynthesizerWorkerCallback or Progres
 ## Gotchas
 
 - `rope_parameters_location` — `"autoconfig"` sets rope scaling on `autoconfig.rope_scaling`; `"automodel"` passes it via `framework_params["rope_scaling"]`. Wrong choice can break rope scaling.
-- `trust_remote_code_for_model()` — from `llm.utils`; returns `True` only for `nvidia/` models. Called directly in `HuggingFaceBackend` for all `from_pretrained` calls.
+- `trust_remote_code_for_model()` — from `llm.utils`; returns `True` for NVIDIA Hub IDs and Hugging Face cache paths containing `models--nvidia--`. Called directly in `HuggingFaceBackend` for all `from_pretrained` calls.
 - `_apply_eval_dataset_overrides()` — when `eval_dataset` is provided, overrides `eval_steps`, `eval_strategy="steps"`, `do_eval=True`, `include_for_metrics`, `eval_accumulation_steps`.
 - Timeseries preprocessing — `process_timeseries_data()` adds `PSEUDO_GROUP_COLUMN` (`__nss_sequence_id`) when no group column is specified; treats the whole dataset as one sequence.
 
