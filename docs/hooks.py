@@ -6,6 +6,23 @@
 import posixpath
 import re
 
+from pygments.formatters.html import HtmlFormatter
+
+# pymdownx.highlight passes filename=None to HtmlFormatter when no title is set
+# (mkdocstrings source rendering hits this path). Pygments 2.20.0 added
+# html.escape() over options.get('filename', ''), which raises AttributeError on
+# None. Coerce None to "" so we keep the security floor without breaking docs.
+_orig_html_formatter_init = HtmlFormatter.__init__
+
+
+def _patched_html_formatter_init(self, **options):
+    if options.get("filename") is None:
+        options["filename"] = ""
+    _orig_html_formatter_init(self, **options)
+
+
+HtmlFormatter.__init__ = _patched_html_formatter_init
+
 
 def on_page_content(html, page, config, **_kwargs):
     """Rewrite relative doc links in notebook pages to absolute URLs.
