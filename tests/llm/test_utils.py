@@ -18,6 +18,8 @@ from nemo_safe_synthesizer.llm.utils import trust_remote_code_for_model
         ("gretel/tabulargemma-2b", False),
         ("meta-llama/Llama-3.2-1B-Instruct", False),
         ("/models/my-local-model", False),
+        ("/tmp/models--nvidia--not-a-cache-entry", False),
+        ("/home/user/.cache/huggingface/models--nvidia--missing-hub", False),
         ("", False),
         ("nvidia", False),
         (Path("/home/user/models/nvidia/Nemotron-Mini-4B-Instruct"), False),

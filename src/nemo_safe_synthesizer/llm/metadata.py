@@ -358,7 +358,8 @@ class ModelMetadata(BaseModel):
         Returns:
             The mutated ``data`` dict with derived fields populated.
         """
-        if data.get("autoconfig") is None and (model_name_or_path := data["model_name_or_path"]):
+        if data.get("autoconfig") is None:
+            model_name_or_path = data["model_name_or_path"]
             data["autoconfig"] = AutoConfig.from_pretrained(
                 model_name_or_path,
                 trust_remote_code=trust_remote_code_for_model(model_name_or_path),

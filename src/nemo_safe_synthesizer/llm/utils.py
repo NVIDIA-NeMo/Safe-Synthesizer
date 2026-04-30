@@ -40,7 +40,19 @@ def trust_remote_code_for_model(model_name: str | Path) -> bool:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
     model_ref = str(model_name).casefold()
-    return model_ref.startswith("nvidia/") or "models--nvidia--" in model_ref
+    if model_ref.startswith("nvidia/"):
+        return True
+
+    path_parts = Path(model_ref).parts
+    while path_parts:
+        match path_parts:
+            case ("huggingface", "hub", *cache_parts):
+                # Brittle by design: this mirrors Hugging Face's current cache path layout.
+                return any(part.startswith("models--nvidia--") for part in cache_parts)
+            case (_, *remaining):
+                path_parts = remaining
+
+    return False
 
 
 def cleanup_memory() -> None:
