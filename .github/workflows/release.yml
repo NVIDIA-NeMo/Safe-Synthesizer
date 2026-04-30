@@ -13,10 +13,10 @@
 # limitations under the License.
 
 # ---------------------------------------------------------------------------
-# Release: build wheel, publish to PyPI (or Test PyPI on dry-run), and
-# optionally create a GitHub release.
+# Release: build wheel, publish to PyPI, create a GitHub release, and
+# publish versioned docs.
 #
-# No version-bump PR, no docs upload, no dummy branch push.
+# No version-bump PR, no dummy branch push.
 # ---------------------------------------------------------------------------
 
 name: "Release NeMo Safe Synthesizer"
@@ -124,3 +124,29 @@ jobs:
             --title "v${VERSION}" \
             --generate-notes \
             $PRERELEASE_FLAG
+
+  publish-release-docs:
+    name: Publish release docs
+    needs: publish-wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout at release ref
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          fetch-depth: 0
+          bootstrap-tools: "true"
+
+      - name: Install docs dependencies
+        run: make bootstrap-nss dev
+
+      - name: Publish versioned docs to GitHub Pages
+        env:
+          VERSION: ${{ needs.publish-wheel.outputs.version }}
+        run: |
+          uv run --frozen --group docs mike deploy --push "${VERSION}"

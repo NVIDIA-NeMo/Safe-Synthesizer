@@ -52,12 +52,7 @@ jobs:
       - name: Install docs dependencies
         run: make bootstrap-nss dev
 
-      - name: Build documentation
-        run: make docs-build
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          publish_branch: gh-pages
+      - name: Deploy latest docs to GitHub Pages
+        run: |
+          uv run --frozen --group docs mike deploy --push --update-aliases main latest
+          uv run --frozen --group docs mike set-default --push latest
