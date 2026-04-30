@@ -580,21 +580,21 @@ Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub 
 ### 1. Create and push a tag
 
 Release versions follow [PEP440](https://peps.python.org/pep-0440/) with major, minor, and patch release numbers.
-Prerelease versions append the suffix rcN (no dash as specified by PEP440).
+This project uses stable releases and release candidates only; prerelease versions append the suffix rcN (no dash, as specified by PEP440).
 The GitHub tag always starts with a `v` prefix.
 
 Examples:
 
-| GitHub Tag      | PyPI Version | Valid                    |
-|:--------------- |:------------ |:------------------------ |
-| `v1.0.0`        | `1.0.0`      | ✅                       |
-| `v2.1.3`        | `2.1.3`      | ✅                       |
-| `v0.0.5rc0`     | `0.0.5rc0`   | ✅                       |
-| `v0.1.2rc5`     | `0.1.2rc5`   | ✅                       |
-| `1.0.0`         |              | ❌ No `v` prefix         |
-| `release-1.0`   |              | ❌ Wrong format          |
-| `v0.0.7-rc4`    |              | ❌ Dash before rc suffix |
-| `v0.1.3alpha1`  |              | ❌ Use rc, not alpha     |
+| GitHub Tag      | PyPI Version | Valid                                   |
+|:--------------- |:------------ |:--------------------------------------- |
+| `v1.0.0`        | `1.0.0`      | ✅                                      |
+| `v2.1.3`        | `2.1.3`      | ✅                                      |
+| `v0.0.5rc0`     | `0.0.5rc0`   | ✅                                      |
+| `v0.1.2rc5`     | `0.1.2rc5`   | ✅                                      |
+| `1.0.0`         |              | ❌ No `v` prefix                        |
+| `release-1.0`   |              | ❌ Wrong format                         |
+| `v0.0.7-rc4`    |              | ❌ Dash before rc suffix                |
+| `v0.1.3a1`      |              | ❌ Alpha prereleases are not used; use rcN only |
 
 To create and push tags:
 
