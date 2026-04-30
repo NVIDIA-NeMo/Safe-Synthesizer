@@ -74,9 +74,11 @@ _PLUGIN_CHECKS: list[PreflightCheck] = []
 def register_preflight_check(check: PreflightCheck) -> PreflightCheck:
     """Register a third-party ``PreflightCheck`` instance for inclusion in the registry.
 
-    Plugin checks are appended after all core checks when the registry is
-    (re)built by ``build_registry``. The function takes an *instance*
-    (not a class) and returns it unchanged, e.g.::
+    Plugin checks are included when the registry is (re)built by
+    ``build_registry``. The registry is sorted by stage, so each plugin
+    lands in its stage block after core checks from the same stage rather
+    than at the absolute end of the registry. The function takes an
+    *instance* (not a class) and returns it unchanged, e.g.::
 
         register_preflight_check(MyCheck())
 
