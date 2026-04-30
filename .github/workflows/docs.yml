@@ -52,6 +52,11 @@ jobs:
       - name: Install docs dependencies
         run: make bootstrap-nss dev
 
+      - name: Configure git for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Deploy latest docs to GitHub Pages
         run: |
           uv run --frozen --group docs mike deploy --push --update-aliases main latest

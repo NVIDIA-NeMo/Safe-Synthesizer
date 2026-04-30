@@ -145,6 +145,11 @@ jobs:
       - name: Install docs dependencies
         run: make bootstrap-nss dev
 
+      - name: Configure git for mike
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Publish versioned docs to GitHub Pages
         env:
           VERSION: ${{ needs.publish-wheel.outputs.version }}
