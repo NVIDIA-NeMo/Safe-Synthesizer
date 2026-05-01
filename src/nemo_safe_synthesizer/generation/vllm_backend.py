@@ -31,7 +31,7 @@ from ..generation.processors import Processor, TabularDataProcessor, create_proc
 from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
-from ..llm.utils import cleanup_memory, get_max_vram
+from ..llm.utils import cleanup_memory, get_max_vram, trust_remote_code_for_model
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
@@ -212,6 +212,7 @@ class VllmBackend(GeneratorBackend):
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
+                trust_remote_code=trust_remote_code_for_model(self.config.training.pretrained_model),
             )
 
         # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;
