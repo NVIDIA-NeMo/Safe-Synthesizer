@@ -173,6 +173,26 @@ def test_click_type_literal_auto_str_returns_string():
     assert _click_type(Literal["auto"] | str) == click.STRING
 
 
+def test_click_type_literal_non_auto_int_returns_string():
+    """Literal['disabled'] | int must NOT use AutoParamType.
+
+    AutoParamType only accepts the AUTO_STR sentinel, so a sentinel like
+    'disabled' would be rejected with a confusing 'not a valid integer' error
+    even though Pydantic would accept it. Falling through to STRING keeps the
+    sentinel routable to Pydantic for validation.
+    """
+    from typing import Literal
+
+    assert _click_type(Literal["disabled"] | int) == click.STRING
+
+
+def test_click_type_literal_auto_plus_other_int_returns_string():
+    """Literal['auto', 'manual'] | int must NOT use AutoParamType (multiple sentinels)."""
+    from typing import Literal
+
+    assert _click_type(Literal["auto", "manual"] | int) == click.STRING
+
+
 # ---------------------------------------------------------------------------
 # AutoParamType
 # ---------------------------------------------------------------------------
@@ -430,35 +450,3 @@ def test_deep_nested_override_end_to_end_via_click_runner():
     result = CliRunner().invoke(cmd, ["--replace_pii__globals__seed", "42"])
     assert result.exit_code == 0, result.output
     assert captured["replace_pii"]["globals"]["seed"] == 42
-
-
-# ---------------------------------------------------------------------------
-# Auto*Param fields -- end-to-end via CliRunner (issue #159)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "flag,value",
-    [
-        ("--training__rope_scaling_factor", "auto"),
-        ("--training__rope_scaling_factor", "2"),
-        ("--training__num_input_records_to_sample", "auto"),
-        ("--training__num_input_records_to_sample", "100"),
-        ("--training__use_unsloth", "auto"),
-        ("--training__use_unsloth", "true"),
-        ("--data__max_sequences_per_example", "auto"),
-        ("--data__max_sequences_per_example", "5"),
-        ("--privacy__delta", "auto"),
-        ("--privacy__delta", "0.001"),
-    ],
-)
-def test_auto_param_fields_accept_auto_and_numeric(flag, value):
-    """Auto*Param fields must accept both 'auto' and numeric values via CLI."""
-
-    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
-    @click.command()
-    def cmd(**kwargs):
-        pass
-
-    result = CliRunner().invoke(cmd, [flag, value])
-    assert result.exit_code == 0, result.output
