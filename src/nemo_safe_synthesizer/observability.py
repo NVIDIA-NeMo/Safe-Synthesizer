@@ -157,6 +157,8 @@ class NSSObservabilitySettings(BaseSettings):
         match value:
             case str():
                 return value.lower() == "true"
+            case bool():
+                return value
             case _:
                 return sys.stdout.isatty()
 

@@ -862,6 +862,9 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             Dataset with reordered columns.
         """
         current_columns = list(dataset.column_names)
+        self._require_column(current_columns, self.group_by_column, role="Group by")
+        self._require_column(current_columns, self.order_by_column, role="Order by")
+
         reordered_columns = [self.group_by_column]
         current_columns.remove(self.group_by_column)
 
@@ -871,6 +874,12 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
 
         reordered_columns.extend(current_columns)
         return dataset.select_columns(reordered_columns)
+
+    @staticmethod
+    def _require_column(columns: list[str], column: str, *, role: str) -> None:
+        """Raise a user-facing error when direct Dataset callers skip preflight."""
+        if column not in columns:
+            raise ParameterError(f"{role} column '{column}' not found in input dataset columns.")
 
     def _build_keep_columns(self, keep_columns: list[str] | None) -> list[str]:
         """Build list of columns to preserve through tokenization.
