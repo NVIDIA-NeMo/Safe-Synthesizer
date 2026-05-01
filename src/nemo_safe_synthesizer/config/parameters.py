@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
-from pydantic import Field, field_validator
-from pydantic_core.core_schema import ValidationInfo
+from pydantic import Field, model_validator
 
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
@@ -69,54 +68,64 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=PiiReplacerConfig.get_default_config,
     )
 
-    @field_validator("privacy", mode="after", check_fields=False)
-    def check_dp_compatibility(
-        cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
-    ) -> DifferentialPrivacyHyperparams | None:
+    @model_validator(mode="after")
+    def _validate_and_resolve_data_params(self) -> Self:
         """Validate that DP-enabled configs have compatible data settings.
 
         When DP is enabled, enforces that ``max_sequences_per_example``
         is ``1`` (or ``"auto"``, which is resolved to ``1``) to bound
         per-example contribution. When DP is disabled but
         ``max_sequences_per_example`` is ``"auto"``, defaults it to
-        ``10``.
+        ``10`` -- or to ``None`` in time-series mode, so each example
+        fills the context window.
 
-        The ``dp_enabled`` check runs before inspecting ``data`` so that
-        an upstream data-section validation failure does not produce a
-        misleading "Data parameters must be provided when DP is enabled"
-        error when DP is actually disabled.
+        DP and time-series mode are mutually exclusive: combining them
+        would force ``max_sequences_per_example=1``, which collapses
+        the temporal structure time-series mode is designed to
+        preserve.
 
         Raises:
-            ParameterError: If DP is enabled and ``data`` parameters are
-                missing, or ``max_sequences_per_example`` is not ``1``.
+            ParameterError: If DP and time-series are both enabled, or
+                if DP is enabled and ``max_sequences_per_example`` is
+                not ``1``.
         """
-        if dp_params is None:
-            return dp_params
-        logger.debug("Checking DP compatibility for privacy parameters. ")
+        dp_enabled = self.privacy is not None and self.privacy.dp_enabled
+        is_timeseries = self.time_series.is_timeseries
 
-        if not dp_params.dp_enabled:
-            data: DataParameters | None = info.data.get("data")
-            if data and data.max_sequences_per_example is not None and data.max_sequences_per_example == AUTO_STR:
-                logger.debug("setting max_sequences_per_example to the default of 10 because DP is disabled")
-                data.max_sequences_per_example = 10
-            return dp_params
+        if dp_enabled and is_timeseries:
+            raise ParameterError(
+                "Differential privacy is not supported in time-series mode. "
+                "Set time_series.is_timeseries=False or privacy.dp_enabled=False."
+            )
 
-        data = info.data.get("data")
-        if not data:
-            raise ParameterError("Data parameters must be provided when DP is enabled.")
+        max_seq = self.data.max_sequences_per_example
 
-        match data.max_sequences_per_example:
-            case "auto" | None:
-                logger.info("Setting max_sequences_per_example to 1 because DP is enabled.")
-                data.max_sequences_per_example = 1
-            case None:
-                data.max_sequences_per_example = 1
-            case v if v not in [AUTO_STR, 1]:
-                raise ParameterError(
-                    f"When enabling DP, max_sequences_per_example must be set to 1 or 'auto'. Received: {v}"
-                )
+        if dp_enabled:
+            match max_seq:
+                case "auto" | None:
+                    logger.info("Setting max_sequences_per_example to 1 because DP is enabled.")
+                    self.data.max_sequences_per_example = 1
+                case 1:
+                    pass
+                case invalid:
+                    raise ParameterError(
+                        f"When enabling DP, max_sequences_per_example must be set to 1 or 'auto'. Received: {invalid}"
+                    )
+            return self
 
-        return dp_params
+        if max_seq != AUTO_STR:
+            return self
+
+        if is_timeseries:
+            logger.info(
+                "Setting max_sequences_per_example to None for time-series mode "
+                "so each example fills the context window."
+            )
+            self.data.max_sequences_per_example = None
+        else:
+            logger.debug("Setting max_sequences_per_example to the default of 10.")
+            self.data.max_sequences_per_example = 10
+        return self
 
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":

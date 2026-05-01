@@ -202,7 +202,7 @@ for the full field list. For DP error diagnostics, see
 | `data.random_state` | `null` | Random seed -- auto-generated if `null`; set an explicit integer for reproducible splits | Set to a fixed integer for reproducibility |
 | `data.group_training_examples_by` | `null` | Column to group records by | Use for multi-row entities (e.g. patient ID, session ID) |
 | `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | Use with a timestamp column for time series data |
-| `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, defaults to `10` otherwise) | Leave at `"auto"` |
+| `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, `null` for time series, `10` otherwise). `null` lets each example fill the context window. | Leave at `"auto"` |
 
 See [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters]
 for the full field list.
