@@ -120,11 +120,12 @@ docs-serve: ## Serve the documentation site locally with live reload
 
 .PHONY: docs-build
 docs-build: ## Build the documentation site
-	uv run --frozen --no-project --group docs mkdocs build
+	uv run --frozen --group docs mkdocs build
 
 .PHONY: docs-deploy
 docs-deploy: ## Deploy the documentation site to GitHub Pages
-	uv run --frozen --no-project --group docs mkdocs gh-deploy --force
+	uv run --frozen --group docs mike deploy --push --update-aliases main latest
+	uv run --frozen --group docs mike set-default --push latest
 
 
 ### CODE QUALITY ###
@@ -475,4 +476,3 @@ endef
 $(foreach config,$(NSS_CONFIGS),\
   $(foreach dataset,$(NSS_DATASETS),\
     $(eval $(call nss_combo_test,$(config),$(dataset)))))
-

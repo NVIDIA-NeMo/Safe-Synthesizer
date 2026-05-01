@@ -10,18 +10,18 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import (
 
 
 @pytest.mark.slow
-def test_column_distribution(evaluation_datasets_5k):
+def test_column_distribution(fixture_evaluation_datasets_5k):
     """Statistical analysis on 5k rows - computationally expensive."""
-    column_distribution = ColumnDistribution.from_evaluation_datasets(evaluation_datasets_5k)
+    column_distribution = ColumnDistribution.from_evaluation_datasets(fixture_evaluation_datasets_5k)
     assert column_distribution.name == "Column Distribution Stability"
     assert len(column_distribution.evaluation_fields) == 8
 
 
 @pytest.mark.slow
-def test_column_distribution_text_other(training_df_5k):
+def test_column_distribution_text_other(fixture_training_df_5k):
     """Statistical analysis on 5k rows - computationally expensive."""
     evaluation_datasets = EvaluationDatasets.from_dataframes(
-        training_df_5k[["text", "other"]], training_df_5k[["text", "other"]], None
+        fixture_training_df_5k[["text", "other"]], fixture_training_df_5k[["text", "other"]], None
     )
     column_distribution = ColumnDistribution.from_evaluation_datasets(evaluation_datasets)
     assert column_distribution.score.score is None

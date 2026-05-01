@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -695,6 +696,23 @@ class HuggingFaceBackend(TrainingBackend):
         if self.params.time_series.is_timeseries:
             self.model_metadata.initial_prefill = assembler._get_initial_prefill()  # ty: ignore[unresolved-attribute]
 
+        self._propagate_max_tokens_per_example()
+
+    def _propagate_max_tokens_per_example(self) -> None:
+        """Copy the assembler's ``tokens_per_example.max`` onto ``ModelMetadata``.
+
+        Sized from the actual tokenized examples rather than a char-count
+        heuristic, this bound feeds ``ModelMetadata.generation_max_tokens_for``
+        so ``SamplingParams.max_tokens`` caps decoding at output lengths
+        the model was trained to produce. Tight caps let the engine retire
+        EOS-failed sequences promptly (a known fine-tuned-LoRA failure
+        mode) instead of letting them decode wasted tokens to the full
+        context window. No-op when the stat is absent or unpopulated.
+        """
+        tokens_per_example = self.training_examples.stats.get("tokens_per_example")
+        if tokens_per_example is not None and tokens_per_example.count > 0:
+            self.model_metadata.max_tokens_per_example = int(math.ceil(tokens_per_example.max))
+
     @utils.time_function
     def train(self, **training_args: Any) -> None:
         """Run the full training pipeline and populate ``results``.
@@ -708,11 +726,12 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer.train()
         training_time_sec = time.monotonic() - training_start
 
-        # Save log_history before save_model() which may delete the trainer
+        # Capture log_history before teardown deletes the trainer.
         log_history = self.trainer.state.log_history
         is_complete = "training_incomplete" not in sum([list(d.keys()) for d in log_history], [])
 
         self.save_model()
+        self.teardown()
 
         self.results = NSSTrainerResult(
             training_df=self.training_df,
@@ -724,11 +743,13 @@ class HuggingFaceBackend(TrainingBackend):
             elapsed_time=training_time_sec,
         )
 
-    def save_model(self, delete_trainable_model: bool = True) -> None:
-        """Save the fine-tuning adapter and related artifacts to the given path.
+    def save_model(self) -> None:
+        """Save the fine-tuning adapter and related artifacts under ``self.workdir``.
 
-        Args:
-            delete_trainable_model: If True, delete the model from memory after saving.
+        Does not release resources -- callers should invoke :meth:`teardown`
+        explicitly when they are done with the backend (the abstract contract
+        on :class:`TrainingBackend` keeps save and teardown as separate
+        lifecycle events).
         """
         if self.dataset_schema is None:
             raise ParameterError("dataset_schema must be set before saving model")
@@ -751,26 +772,40 @@ class HuggingFaceBackend(TrainingBackend):
             path=self.workdir.train.config,
             indent=4,
         )
-        if delete_trainable_model:
-            self.delete_trainable_model()
 
-    def delete_trainable_model(self) -> None:
-        """Delete the trainable model, trainer, and clean up GPU memory and distributed resources."""
+    def teardown(self) -> None:
+        """Release GPU memory, distributed resources, and trainer state. Idempotent -- safe to call multiple times."""
+        if getattr(self, "_torn_down", False):
+            return
+        self._torn_down = True
+
         import torch.distributed as dist
 
-        # Delete the trainer first, as it holds references to the model
-        if hasattr(self, "trainer"):
-            del self.trainer
-        if hasattr(self, "model"):
-            del self.model
-        cleanup_memory()
-        # Clean up distributed process group if it was initialized by the Trainer
+        try:
+            if hasattr(self, "trainer"):
+                del self.trainer
+        except Exception:  # pragma: no cover -- defensive; del on an instance attr does not raise
+            logger.warning("trainer cleanup failed during teardown", exc_info=True)
+
+        try:
+            if hasattr(self, "model"):
+                del self.model
+        except Exception:  # pragma: no cover -- defensive; del on an instance attr does not raise
+            logger.warning("model cleanup failed during teardown", exc_info=True)
+
+        try:
+            cleanup_memory()
+        except Exception:
+            logger.warning("cleanup_memory failed during teardown", exc_info=True)
 
         if TYPE_CHECKING:
             assert hasattr(dist, "destroy_process_group")
             assert hasattr(dist, "is_initialized")
-        if dist.is_initialized():
-            dist.destroy_process_group()
+        try:
+            if dist.is_initialized():
+                dist.destroy_process_group()
+        except Exception:
+            logger.warning("destroy_process_group failed during teardown", exc_info=True)
 
     def __str__(self):
         f = f"HuggingFaceBackend(pretrained_model={self.params.training.pretrained_model}, params={self.params})"

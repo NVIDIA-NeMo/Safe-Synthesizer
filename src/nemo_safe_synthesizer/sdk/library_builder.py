@@ -349,8 +349,9 @@ class SafeSynthesizer(ConfigBuilder):
             self._total_start = time.monotonic()
 
         # Clean up trainer model if it exists (only present when train->generate in same session)
-        if hasattr(self, "trainer") and self.trainer is not None:
-            self.trainer.delete_trainable_model()  # ty: ignore[unresolved-attribute] -- delete_trainable_model is defined on HuggingFaceBackend but not the abstract TrainingBackend base
+        trainer = getattr(self, "trainer", None)
+        if trainer is not None:
+            trainer.teardown()
 
         assert self._workdir is not None
         # Select backend based on time_series configuration

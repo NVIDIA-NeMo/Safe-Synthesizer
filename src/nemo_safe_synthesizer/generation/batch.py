@@ -131,15 +131,28 @@ class Batch:
         """Total tokens across all completions in this batch (from vLLM output)."""
         return self._total_completion_tokens
 
+    def _record_token_totals(self) -> tuple[int, int]:
+        """Return ``(valid_tokens, invalid_tokens)`` from a single scan of ``_responses``."""
+        valid = invalid = 0
+        for resp in self._responses:
+            for record in resp.records:
+                if record.is_valid:
+                    valid += record.token_count
+                else:
+                    invalid += record.token_count
+        return valid, invalid
+
     @property
     def total_valid_record_tokens(self) -> int:
         """Sum of token counts for all valid records in this batch."""
-        return sum(record.token_count for resp in self._responses for record in resp.records if record.is_valid)
+        valid, _ = self._record_token_totals()
+        return valid
 
     @property
     def total_invalid_record_tokens(self) -> int:
         """Sum of token counts for all invalid records in this batch."""
-        return sum(record.token_count for resp in self._responses for record in resp.records if not record.is_valid)
+        _, invalid = self._record_token_totals()
+        return invalid
 
     @property
     def total_non_record_tokens(self) -> int:
@@ -147,7 +160,8 @@ class Batch:
 
         Clamped to zero if negative (possible due to tokenizer boundary effects).
         """
-        value = self._total_completion_tokens - self.total_valid_record_tokens - self.total_invalid_record_tokens
+        valid, invalid = self._record_token_totals()
+        value = self._total_completion_tokens - valid - invalid
         if value < 0:
             logger.warning(
                 "Non-record token count is negative; clamping to 0. "
@@ -156,8 +170,8 @@ class Batch:
                     "ctx": {
                         "delta": value,
                         "completion_tokens": self._total_completion_tokens,
-                        "valid_record_tokens": self.total_valid_record_tokens,
-                        "invalid_record_tokens": self.total_invalid_record_tokens,
+                        "valid_record_tokens": valid,
+                        "invalid_record_tokens": invalid,
                     }
                 },
             )

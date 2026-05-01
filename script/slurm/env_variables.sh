@@ -4,11 +4,11 @@
 
 
 export USER_NAME="${USER_NAME:-}"
-export LUSTRE_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}" ## do not change this
+export LUSTRE_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/${USER_NAME}" ## do not change this
 
-# NOTE: This directory is only setup on cs-oci-ord and cw-dfw-cs right now,
+# NOTE: This directory is only setup on cs-oci-ord and cw-pdx-cs right now,
 # will need to create the same structure on other clusters as we need them.
-export NSS_SHARED_DIR="/lustre/fsw/portfolios/llmservice/users/kendrickb/shared_safe_synthesizer"
+export NSS_SHARED_DIR="/lustre/fsw/portfolios/nemotron/projects/nemotron_data_dev/users/kendrickb/shared_safe_synthesizer"
 
 ## change the followings if you want them to be different
 CONFIGS=(
@@ -19,7 +19,7 @@ CONFIGS=(
     mistral-nodp
     mistral-dp
 ) # the jobs will run all datasets with these configs
-export NSS_DIR="/lustre/fsw/portfolios/llmservice/users/${USER_NAME}/Safe-Synthesizer" # where the nss repo is located
+export NSS_DIR="${LUSTRE_DIR}/Safe-Synthesizer" # where the nss repo is located
 export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
 export CONFIG_DIR="${NSS_SLURM_DIR}/configs" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files

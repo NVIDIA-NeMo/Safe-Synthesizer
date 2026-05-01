@@ -55,14 +55,14 @@ The shared fixtures cover both CPU and GPU smoke tests. Session-scoped fixtures 
 
 Session-scoped (immutable / read-only):
 
-- `base_smoke_config` -- default `SafeSynthesizerParameters` pointing at the local tiny model (Pydantic frozen model)
+- `fixture_base_smoke_config` -- default `SafeSynthesizerParameters` pointing at the local tiny model (Pydantic frozen model)
 - `_patch_attn_eager` -- the attention implementation workaround mentioned above
-- `stub_tokenizer`, `tiny_llama_config`, `local_tinyllama_dir` -- tokenizer and tiny model on disk
-- `iris_df`, `timeseries_df` -- small DataFrames for training input
+- `fixture_stub_tokenizer`, `fixture_tiny_llama_config`, `fixture_local_tinyllama_dir` -- tokenizer and tiny model on disk
+- `fixture_iris_df`, `fixture_timeseries_df` -- small DataFrames for training input
 
 Function-scoped (fresh per test):
 
-- `tiny_model` -- randomly initialized `LlamaForCausalLM` (mutated by training)
+- `fixture_tiny_model` -- randomly initialized `LlamaForCausalLM` (mutated by training)
 
 Helpers (plain functions, not fixtures):
 

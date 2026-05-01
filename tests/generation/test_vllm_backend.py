@@ -18,19 +18,25 @@ from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F401
+from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
 
 @pytest.fixture
 def mock_model_metadata(fixture_session_cache_dir):
-    """Create a mock model metadata object."""
-    metadata = MagicMock()
-    metadata.save_path = fixture_session_cache_dir / "save"
+    """Spec'd mock for ``ModelMetadata`` -- guards against signature drift on the helper."""
+    metadata = MagicMock(spec=ModelMetadata)
     metadata.adapter_path = fixture_session_cache_dir / "adapter"
     metadata.instruction = "Generate data"
     metadata.prompt_config = MagicMock()
     metadata.prompt_config.template = "[INST] {instruction} {schema} [/INST]"
     metadata.prompt_config.bos_token = "<s>"
     metadata.prompt_config.eos_token = "</s>"
+    # Default: generation uses the full context window (mirrors the real
+    # helper's fallback when ``max_tokens_per_example`` is unset).
+    # Individual tests override per-prompt return values where needed.
+    metadata.max_seq_length = 2048
+    metadata.max_tokens_per_example = None
+    metadata.generation_max_tokens_for.return_value = 2048
     return metadata
 
 
@@ -53,7 +59,7 @@ def mock_workdir(fixture_session_cache_dir):
     assert workdir.run_dir.exists(), f"Run dir not created: {workdir.run_dir}"
     assert workdir.train.path.exists(), f"Train dir not created: {workdir.train.path}"
     assert workdir.generate.path.exists(), f"Generate dir not created: {workdir.generate.path}"
-    assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"  # ty: ignore[unresolved-attribute] -- BoundDir delegates via __getattr__
+    assert workdir.train.adapter.path.exists(), f"Adapter path not created: {workdir.train.adapter.path}"
 
     return workdir
 
@@ -521,6 +527,7 @@ class TestGroupedGenerationStopKwargs:
         mock_model_metadata.prompt_config.eos_token = "</s>"
         mock_model_metadata.prompt_config.eos_token_id = 2
         mock_model_metadata.max_seq_length = 2048
+        mock_model_metadata.generation_max_tokens_for.return_value = 2048
 
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         assert not isinstance(backend.processor, TabularDataProcessor)
@@ -546,6 +553,7 @@ class TestGroupedGenerationStopKwargs:
         kwargs are passed, ignore_eos is False, and special-token outputs are off.
         """
         mock_model_metadata.max_seq_length = 2048
+        mock_model_metadata.generation_max_tokens_for.return_value = 2048
 
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         backend.processor = TabularDataProcessor(schema=mock_schema, config=ValidationParameters())
@@ -580,6 +588,7 @@ class TestGroupedGenerationStopKwargs:
         mock_model_metadata.prompt_config.eos_token = "</s>"
         mock_model_metadata.prompt_config.eos_token_id = 2
         mock_model_metadata.max_seq_length = 8192
+        mock_model_metadata.generation_max_tokens_for.return_value = 8192
 
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         assert not isinstance(backend.processor, TabularDataProcessor)
@@ -599,3 +608,66 @@ class TestGroupedGenerationStopKwargs:
         assert "stop" not in captured
         assert "stop_token_ids" not in captured
         assert captured["ignore_eos"] is False
+
+
+class TestGenerationMaxTokensPlumbing:
+    """``SamplingParams.max_tokens`` is sourced from ``metadata.generation_max_tokens_for``."""
+
+    def test_uses_generation_max_tokens_for_with_cached_prompt_len(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """The helper drives ``max_tokens`` and is invoked with the cached prompt-token count."""
+        mock_model_metadata.max_seq_length = 12_288
+        mock_model_metadata.generation_max_tokens_for.return_value = 4_200
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["max_tokens"] == 4_200
+        # Engine is not initialized in this plumbing test, so the cached
+        # prompt-token count falls back to 0; the helper is still called
+        # exactly once with that value.
+        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(0)
+
+    def test_passes_cached_prompt_token_count_when_engine_initialized(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """When the vLLM engine exists, the cached prompt-token count is forwarded to the helper."""
+        mock_model_metadata.max_seq_length = 12_288
+        mock_model_metadata.generation_max_tokens_for.return_value = 4_096
+
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+
+        # Stand in for an initialized engine; the backend tokenizes its templated
+        # prompt once via ``llm.get_tokenizer().encode`` and caches the count.
+        fake_tokenizer = MagicMock()
+        fake_tokenizer.encode.return_value = list(range(37))
+        backend.llm = MagicMock()
+        backend.llm.get_tokenizer.return_value = fake_tokenizer
+
+        captured = {}
+
+        def capture_and_stop(**kwargs):
+            captured.update(kwargs)
+            raise StopIteration("short-circuit")
+
+        backend.prepare_params = capture_and_stop
+
+        with pytest.raises(StopIteration):
+            backend.generate()
+
+        assert captured["max_tokens"] == 4_096
+        mock_model_metadata.generation_max_tokens_for.assert_called_once_with(37)
+        # Cached: a second access does not retokenize.
+        assert backend._get_prompt_token_count() == 37
+        fake_tokenizer.encode.assert_called_once_with(backend.prompt)

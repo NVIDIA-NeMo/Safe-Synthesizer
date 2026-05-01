@@ -110,13 +110,13 @@ Load helpers in root `conftest.py`:
 
 ## Fixture Discovery
 
-9 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/` (currently empty), `tests/smoke/`.
+9 `conftest.py` files: `tests/`, `tests/training/`, `tests/generation/`, `tests/evaluation/`, `tests/cli/`, `tests/data_processing/`, `tests/config/`, `tests/e2e/`, `tests/smoke/`.
 
-Dataset/tokenizer fixtures use the `fixture_` prefix; config/CLI use descriptive names (`mock_workdir`, `training_hyperparams`).
+Dataset/tokenizer fixtures use the `fixture_` prefix; CLI helpers use descriptive names (`mock_workdir`).
 
 Key fixtures in root `conftest.py`:
 
-- `yaml_config_str`, `fixture_session_cache_dir`, `fixture_stub_tokenizer_path`
+- `fixture_yaml_config_str`, `fixture_session_cache_dir`, `fixture_stub_tokenizer_path`
 - Dataset loaders: `fixture_iris_dataset`, `fixture_dow_jones_index_dataset` (loads `dow_jones_index_group_size_8.csv`), `fixture_clinc_oos_dataset` (loads `clinc_oos.csv`), `fixture_chickweight_dataset`, etc.
 - `fixture_mock_processor`, `fixture_mock_processor_without_valid_records`
 
@@ -124,8 +124,8 @@ Per-module fixtures:
 
 - Generation/eval/data_processing: shared tokenizer and JSONL fixtures
 - CLI: `mock_workdir(tmp_path)` for tmp_path-based Workdir
-- Config: `basic_parameter`, `training_hyperparams`, `simple_safe_synthesizer_parameters`
-- Smoke: session-scoped `tiny_llama_config`, `stub_tokenizer`, `local_tinyllama_dir`, `iris_df`, `base_smoke_config`, `_patch_attn_eager`; function-scoped `tiny_model`; helpers `train_with_sdk()`, `assert_adapter_saved()`
+- Config: `basic_parameter`, `fixture_training_hyperparams`, `fixture_simple_safe_synthesizer_parameters`
+- Smoke: session-scoped `fixture_tiny_llama_config`, `fixture_stub_tokenizer`, `fixture_local_tinyllama_dir`, `fixture_iris_df`, `fixture_base_smoke_config`, `_patch_attn_eager`; function-scoped `fixture_tiny_model`; helpers `train_with_sdk()`, `assert_adapter_saved()`
 
 ## Fixture Scoping
 

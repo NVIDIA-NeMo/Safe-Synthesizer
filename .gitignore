@@ -36,6 +36,8 @@ dist
 .ruff_cache
 report.xml
 test_db.sqlite
+# File used for populating vulns
+dependabot.json
 
 # Visual Studio Code config
 .vscode/

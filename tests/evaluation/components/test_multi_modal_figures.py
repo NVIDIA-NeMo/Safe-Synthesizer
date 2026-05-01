@@ -204,17 +204,17 @@ class TestGetAutoBins:
 class TestGenerateMiaFigure:
     """Tests for generate_mia_figure function."""
 
-    def test_generate_mia_figure_basic(self, mia_aia_df):
-        df = mia_aia_df
+    def test_generate_mia_figure_basic(self, fixture_mia_aia_df):
+        df = fixture_mia_aia_df
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
         assert isinstance(fig.data[0], go.Pie)
 
-    def test_generate_mia_figure_with_zero_percentages(self, mia_aia_df):
-        df = mia_aia_df
-        df.loc[df.index[0], "Attack Percentage"] = 0
+    def test_generate_mia_figure_with_zero_percentages(self, fixture_mia_aia_df):
+        df = fixture_mia_aia_df
+        df.loc[df["Attack Percentage"] == 0, "Attack Percentage"] = np.nan
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -222,8 +222,8 @@ class TestGenerateMiaFigure:
         assert isinstance(fig.data[0], go.Pie)
         assert pd.isna(fig.data[0].values).any()
 
-    def test_generate_mia_figure_with_nan_percentages(self, mia_aia_df_with_nan_protection):
-        df = mia_aia_df_with_nan_protection
+    def test_generate_mia_figure_with_nan_percentages(self, fixture_mia_aia_df_with_nan_protection):
+        df = fixture_mia_aia_df_with_nan_protection
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -231,9 +231,9 @@ class TestGenerateMiaFigure:
         pie_trace = fig.data[0]
         assert pie_trace is not None
 
-    def test_generate_mia_figure_ordering(self, mia_aia_df):
+    def test_generate_mia_figure_ordering(self, fixture_mia_aia_df):
         # Test that the figure sorts by Protection grade
-        df = mia_aia_df
+        df = fixture_mia_aia_df
         fig = generate_mia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -242,12 +242,8 @@ class TestGenerateMiaFigure:
 class TestGenerateAiaFigure:
     """Tests for generate_aia_figure function."""
 
-    def test_generate_aia_figure_basic(self, mia_aia_df):
-        df = mia_aia_df
-        fig = generate_aia_figure(df)
-
-        assert isinstance(fig, go.Figure)
-        df = mia_aia_df
+    def test_generate_aia_figure_basic(self, fixture_mia_aia_df):
+        df = fixture_mia_aia_df
         fig = generate_aia_figure(df)
 
         assert isinstance(fig, go.Figure)
@@ -256,16 +252,16 @@ class TestGenerateAiaFigure:
 class TestCorrelationHeatmap:
     """Tests for correlation_heatmap function."""
 
-    def test_correlation_heatmap_basic(self, mia_aia_df):
-        matrix = mia_aia_df
+    def test_correlation_heatmap_basic(self, fixture_mia_aia_df):
+        matrix = fixture_mia_aia_df
         fig = correlation_heatmap(matrix)
 
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
         assert isinstance(fig.data[0], go.Heatmap)
 
-    def test_correlation_heatmap_truncates_long_names(self, mia_aia_df):
-        matrix = mia_aia_df
+    def test_correlation_heatmap_truncates_long_names(self, fixture_mia_aia_df):
+        matrix = fixture_mia_aia_df
         fig = correlation_heatmap(matrix)
 
         assert isinstance(fig, go.Figure)
@@ -292,16 +288,16 @@ class TestGenerateCombinedCorrelationFigure:
 class TestScatterPlot:
     """Tests for scatter_plot function."""
 
-    def test_scatter_plot_basic(self, mia_aia_df):
-        x = mia_aia_df["Risk"]
-        y = mia_aia_df["Attack Percentage"]
+    def test_scatter_plot_basic(self, fixture_mia_aia_df):
+        x = fixture_mia_aia_df["Risk"]
+        y = fixture_mia_aia_df["Attack Percentage"]
         fig = scatter_plot(x, y)
 
         assert isinstance(fig, go.Figure)
 
-    def test_scatter_plot_respects_maximum_points(self, mia_aia_df):
-        x = mia_aia_df["Risk"]
-        y = mia_aia_df["Attack Percentage"]
+    def test_scatter_plot_respects_maximum_points(self, fixture_mia_aia_df):
+        x = fixture_mia_aia_df["Risk"]
+        y = fixture_mia_aia_df["Attack Percentage"]
         fig = scatter_plot(x, y, maximum_points=100)
 
         assert isinstance(fig, go.Figure)
@@ -309,9 +305,9 @@ class TestScatterPlot:
         scatter_trace = fig.data[0]
         assert len(scatter_trace.x) <= 100
 
-    def test_scatter_plot_no_cap_when_zero(self, mia_aia_df):
-        x = mia_aia_df["Risk"]
-        y = mia_aia_df["Attack Percentage"]
+    def test_scatter_plot_no_cap_when_zero(self, fixture_mia_aia_df):
+        x = fixture_mia_aia_df["Risk"]
+        y = fixture_mia_aia_df["Attack Percentage"]
         fig = scatter_plot(x, y, maximum_points=0)
 
         assert isinstance(fig, go.Figure)

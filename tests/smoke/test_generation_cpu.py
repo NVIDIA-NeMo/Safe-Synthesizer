@@ -15,25 +15,25 @@ from nemo_safe_synthesizer.generation.processors import create_processor
 from nemo_safe_synthesizer.utils import create_schema_prompt
 
 
-def test_generate_with_schema_prompt(tiny_model, stub_tokenizer):
+def test_generate_with_schema_prompt(fixture_tiny_model, fixture_stub_tokenizer):
     """Exercises: create_schema_prompt() + model.generate()."""
     prompt = create_schema_prompt(
         columns=["col1", "col2", "col3"],
         instruction=DEFAULT_INSTRUCTION,
         prompt_template=PROMPT_TEMPLATE,
     )
-    input_ids = stub_tokenizer(prompt, return_tensors="pt")["input_ids"]
-    output = tiny_model.generate(input_ids, max_new_tokens=20, do_sample=False)
-    decoded = stub_tokenizer.decode(output[0], skip_special_tokens=True)
+    input_ids = fixture_stub_tokenizer(prompt, return_tensors="pt")["input_ids"]
+    output = fixture_tiny_model.generate(input_ids, max_new_tokens=20, do_sample=False)
+    decoded = fixture_stub_tokenizer.decode(output[0], skip_special_tokens=True)
     assert len(decoded) > len(prompt)  # model produced something
 
 
-def test_processor_parses_generated_text(tiny_model, stub_tokenizer):
+def test_processor_parses_generated_text(fixture_tiny_model, fixture_stub_tokenizer):
     """Exercises: create_processor() does not crash on garbage text from random model."""
     # Generate some text (will be garbage from random model)
-    input_ids = stub_tokenizer("test", return_tensors="pt")["input_ids"]
-    output = tiny_model.generate(input_ids, max_new_tokens=50, do_sample=False)
-    generated_text = stub_tokenizer.decode(output[0], skip_special_tokens=True)
+    input_ids = fixture_stub_tokenizer("test", return_tensors="pt")["input_ids"]
+    output = fixture_tiny_model.generate(input_ids, max_new_tokens=50, do_sample=False)
+    generated_text = fixture_stub_tokenizer.decode(output[0], skip_special_tokens=True)
     assert len(generated_text) > 0
 
     # Create a schema and processor

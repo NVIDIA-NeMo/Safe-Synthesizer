@@ -24,7 +24,7 @@ ripgrep = "latest"
 dprint = "latest"
 uv = "0.9.30"
 ruff = "0.15.0"
-ty = "0.0.27"
+ty = "0.0.32"
 
 "aqua:j178/prek" = "latest"
 

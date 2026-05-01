@@ -15,9 +15,11 @@ from nemo_safe_synthesizer.evaluation.data_model.evaluation_score import Grade
 
 
 @pytest.mark.slow
-def test_correlation(training_df_5k, synthetic_df_5k, test_df):
+def test_correlation(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df):
     """Correlation matrix computation on 5k rows - computationally expensive."""
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df
+    )
     correlation = Correlation.from_evaluation_datasets(evaluation_datasets)
 
     assert correlation.name == "Column Correlation Stability"
@@ -39,14 +41,16 @@ def test_correlation(training_df_5k, synthetic_df_5k, test_df):
 
 
 @pytest.mark.slow
-def test_correlation_all_numeric(training_df_5k, synthetic_df_5k, test_df):
+def test_correlation_all_numeric(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df):
     """Correlation matrix computation on 5k rows - computationally expensive."""
     # We should still do correlation if no nominal columns
     nominal_columns = ["num_cat", "num_cat_Int64", "small_cat", "boolean"]
-    training_df_5k = training_df_5k.drop(nominal_columns, axis=1)
-    synthetic_df_5k = synthetic_df_5k.drop(nominal_columns, axis=1)
+    fixture_training_df_5k = fixture_training_df_5k.drop(nominal_columns, axis=1)
+    fixture_synthetic_df_5k = fixture_synthetic_df_5k.drop(nominal_columns, axis=1)
 
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df
+    )
     correlation = Correlation.from_evaluation_datasets(evaluation_datasets)
 
     assert correlation.name == "Column Correlation Stability"
@@ -60,15 +64,17 @@ def test_correlation_all_numeric(training_df_5k, synthetic_df_5k, test_df):
 
 
 @pytest.mark.slow
-def test_correlation_not_enough_columns(training_df_5k, synthetic_df_5k, test_df, caplog):
+def test_correlation_not_enough_columns(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df, caplog):
     """Correlation matrix computation on 5k rows - computationally expensive."""
     caplog.set_level(logging.INFO)
 
     # Two columns, one is text. We will not have enough to do correlations.
-    training_df_5k = training_df_5k[["num_cat", "text"]]
-    synthetic_df_5k = synthetic_df_5k[["num_cat", "text"]]
+    fixture_training_df_5k = fixture_training_df_5k[["num_cat", "text"]]
+    fixture_synthetic_df_5k = fixture_synthetic_df_5k[["num_cat", "text"]]
 
-    evaluation_datasets = EvaluationDatasets.from_dataframes(training_df_5k, synthetic_df_5k, test_df)
+    evaluation_datasets = EvaluationDatasets.from_dataframes(
+        fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df
+    )
     correlation = Correlation.from_evaluation_datasets(evaluation_datasets)
 
     assert correlation.name == "Column Correlation Stability"

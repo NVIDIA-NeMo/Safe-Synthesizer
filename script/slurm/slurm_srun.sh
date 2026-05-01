@@ -9,7 +9,7 @@ set -euo pipefail
 # but intentionally has no logic and is just a pass through to
 # slurm_nss_matrix.sh.
 
-ACCOUNT="${ACCOUNT:-llmservice_sdg_research}"
+ACCOUNT="${ACCOUNT:-nemotron_data_dev}"
 GPUS_PER_TASK="${GPUS_PER_TASK:-1}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-16}"
 SRUN_EXTRA="${SRUN_EXTRA:-}"

@@ -66,13 +66,13 @@ class _StubModelMetadata:
     prompt_config: _StubPromptConfig = field(default_factory=_StubPromptConfig)
 
 
-def test_hf_trainer_one_step(tiny_model, stub_tokenizer, tiny_training_dataset, tmp_path):
+def test_hf_trainer_one_step(fixture_tiny_model, fixture_stub_tokenizer, fixture_tiny_training_dataset, tmp_path):
     """Exercises: transformers.Trainer forward + backward pass."""
     trainer = Trainer(
-        model=tiny_model,
+        model=fixture_tiny_model,
         args=_cpu_training_args(tmp_path),
-        train_dataset=tiny_training_dataset,
-        data_collator=DataCollatorForTokenClassification(tokenizer=stub_tokenizer),
+        train_dataset=fixture_tiny_training_dataset,
+        data_collator=DataCollatorForTokenClassification(tokenizer=fixture_stub_tokenizer),
     )
     trainer.train()
     assert len(trainer.state.log_history) > 0
@@ -80,7 +80,7 @@ def test_hf_trainer_one_step(tiny_model, stub_tokenizer, tiny_training_dataset, 
     assert "loss" in last_log or "train_loss" in last_log
 
 
-def test_lora_training_one_step(tiny_model, stub_tokenizer, tiny_training_dataset, tmp_path):
+def test_lora_training_one_step(fixture_tiny_model, fixture_stub_tokenizer, fixture_tiny_training_dataset, tmp_path):
     """Exercises: peft.get_peft_model + LoraConfig + Trainer."""
     lora_config = LoraConfig(
         r=8,
@@ -89,13 +89,13 @@ def test_lora_training_one_step(tiny_model, stub_tokenizer, tiny_training_datase
         task_type=TaskType.CAUSAL_LM,
         bias="none",
     )
-    model = get_peft_model(tiny_model, lora_config)
+    model = get_peft_model(fixture_tiny_model, lora_config)
     model.enable_input_require_grads()
     trainer = Trainer(
         model=model,
         args=_cpu_training_args(tmp_path),
-        train_dataset=tiny_training_dataset,
-        data_collator=DataCollatorForTokenClassification(tokenizer=stub_tokenizer),
+        train_dataset=fixture_tiny_training_dataset,
+        data_collator=DataCollatorForTokenClassification(tokenizer=fixture_stub_tokenizer),
     )
     trainer.train()
     assert len(trainer.state.log_history) > 0
@@ -103,7 +103,9 @@ def test_lora_training_one_step(tiny_model, stub_tokenizer, tiny_training_datase
     assert "loss" in last_log or "train_loss" in last_log
 
 
-def test_dp_training_one_step(tiny_model, stub_tokenizer, tiny_training_dataset_with_position_ids, tmp_path):
+def test_dp_training_one_step(
+    fixture_tiny_model, fixture_stub_tokenizer, fixture_tiny_training_dataset_with_position_ids, tmp_path
+):
     """Exercises: OpacusDPTrainer + PrivacyArguments + DataCollatorForPrivateTokenClassification."""
     privacy_args = PrivacyArguments(
         target_epsilon=100.0,
@@ -111,11 +113,11 @@ def test_dp_training_one_step(tiny_model, stub_tokenizer, tiny_training_dataset_
         per_sample_max_grad_norm=1.0,
     )
     args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
-    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=stub_tokenizer)
+    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
     trainer = OpacusDPTrainer(
-        model=tiny_model,
+        model=fixture_tiny_model,
         args=args,
-        train_dataset=tiny_training_dataset_with_position_ids,
+        train_dataset=fixture_tiny_training_dataset_with_position_ids,
         data_collator=data_collator,
         privacy_args=privacy_args,
         true_dataset_size=8,
@@ -125,21 +127,21 @@ def test_dp_training_one_step(tiny_model, stub_tokenizer, tiny_training_dataset_
     assert len(trainer.state.log_history) > 0
 
 
-def test_training_example_assembler(iris_df, stub_tokenizer, tmp_path):
+def test_training_example_assembler(fixture_iris_df, fixture_stub_tokenizer, tmp_path):
     """Exercises: NSS data preparation pipeline (TrainingExampleAssembler)."""
     from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 
     config = SafeSynthesizerParameters.from_params(
         num_input_records_to_sample=10,
     )
-    hf_dataset = Dataset.from_pandas(iris_df, preserve_index=False)
+    hf_dataset = Dataset.from_pandas(fixture_iris_df, preserve_index=False)
 
     # Build a minimal picklable metadata stub (MagicMock can't be pickled by datasets).
     stub_metadata = _StubModelMetadata()
 
     assembler = TrainingExampleAssembler.from_data(
         dataset=hf_dataset,
-        tokenizer=stub_tokenizer,
+        tokenizer=fixture_stub_tokenizer,
         metadata=stub_metadata,  # ty: ignore[invalid-argument-type] -- deliberate test stub
         config=config,
         seed=42,

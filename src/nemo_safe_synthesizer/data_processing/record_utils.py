@@ -85,9 +85,11 @@ class ParsedResponse:
 
     Holds a flat list of
     [`ParsedRecord`][nemo_safe_synthesizer.data_processing.record_utils.ParsedRecord]
-    objects plus aggregated tokenization timing. The ``valid_records``
-    / ``invalid_records`` / ``errors`` views are derived for backward
-    compatibility with callers that want the old parallel-list shape.
+    objects (in input order) plus aggregated tokenization timing.
+    ``valid_records`` / ``invalid_records`` / ``errors`` are convenience
+    views that project the record list into the shapes expected by
+    downstream aggregation code (parsed dicts, original text,
+    ``(msg, validator)`` tuples respectively).
     """
 
     records: list[ParsedRecord] = field(default_factory=list)

@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+"""Config test fixtures: parameter objects for config validation tests."""
+
+from __future__ import annotations
+
 import pytest
 
 from nemo_safe_synthesizer.config import (
@@ -13,8 +17,8 @@ from nemo_safe_synthesizer.config import (
 
 
 @pytest.fixture
-def training_hyperparams():
-    """Training hyperparameters for the Safe Synthesizer."""
+def fixture_training_hyperparams() -> TrainingHyperparams:
+    """Minimal TrainingHyperparams with 100 samples, batch 10, 8 grad-accum steps."""
     return TrainingHyperparams(
         num_input_records_to_sample=100,
         batch_size=10,
@@ -24,8 +28,8 @@ def training_hyperparams():
 
 
 @pytest.fixture
-def simple_safe_synthesizer_parameters():
-    """Simple Safe Synthesizer parameters for the Safe Synthesizer."""
+def fixture_simple_safe_synthesizer_parameters() -> SafeSynthesizerParameters:
+    """SafeSynthesizerParameters with group-by, order-by, structured gen, and DP off."""
     return SafeSynthesizerParameters(
         data=DataParameters(
             group_training_examples_by="my_col",

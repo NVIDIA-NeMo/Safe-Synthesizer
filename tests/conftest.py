@@ -37,7 +37,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture()
-def yaml_config_str() -> str:
+def fixture_yaml_config_str() -> str:
     """Return a representative YAML config string covering all SafeSynthesizerParameters sections."""
     return """
 data:
