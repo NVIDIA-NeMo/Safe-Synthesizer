@@ -66,6 +66,8 @@ R = TypeVar("R")
 
 __all__ = [
     "NSSObservabilitySettings",
+    "NSS_LOG_LEVELS",
+    "NSS_LOG_FORMATS",
     "LogCategory",
     "CategoryLogger",
     "CategoryFilter",
@@ -90,6 +92,14 @@ verbosity_mapping = {
     "DEBUG": (logging.DEBUG, logging.INFO),
     "DEBUG_DEPENDENCIES": (logging.DEBUG, logging.DEBUG),
 }
+
+#: Valid values for the ``NSS_LOG_LEVEL`` environment variable. Derived
+#: from ``verbosity_mapping`` so the validator set stays in sync with
+#: the levels the runtime actually knows how to handle.
+NSS_LOG_LEVELS: frozenset[str] = frozenset(verbosity_mapping.keys())
+
+#: Valid values for the ``NSS_LOG_FORMAT`` environment variable.
+NSS_LOG_FORMATS: frozenset[str] = frozenset({"json", "plain"})
 
 PACKAGES_TO_SET_TO_WARN = [
     "accelerate",
@@ -147,12 +157,10 @@ class NSSObservabilitySettings(BaseSettings):
         match value:
             case str():
                 return value.lower() == "true"
-            case _ if sys.stdout.isatty():
-                warnings.warn("stdout is a tty, setting nss_log_color to True", UserWarning)
-                return True
+            case bool():
+                return value
             case _:
-                warnings.warn("stdout is not a tty, setting nss_log_color to False", UserWarning)
-                return False
+                return sys.stdout.isatty()
 
 
 with warnings.catch_warnings():

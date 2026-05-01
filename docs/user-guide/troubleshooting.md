@@ -32,6 +32,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
+| Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
 
 ---
 
@@ -438,6 +439,41 @@ Incompatible DP settings:
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in
     [Synthetic Data Quality](evaluating-data.md#differential-privacy).
+
+## Pre-flight Validation Codes
+
+When running with `--validate` (CLI) or `process_data(check_only=True)` (SDK),
+the following codes may appear. For an overview of what pre-flight validates,
+how to interpret the output, and how to use the resolved config, see
+[Running -- `run --validate`](running.md#run---validate).
+
+The `Check` column lists the check name (as emitted in the report and
+accepted by `disabled_checks`). `preflight.check_crash` is synthesized
+by the orchestrator and appears attached to the name of whichever check
+raised; treat it as metadata on that check rather than a separate
+check of its own.
+
+| Code | Severity | Check | Description |
+|------|----------|-------|-------------|
+| `torch_missing` | error | `gpu.cuda` | PyTorch not installed; cannot verify GPU availability |
+| `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
+| `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
+| `inference_key_missing` | warning | `env.inference_key` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
+| `hf_token_missing` | warning | `env.hf_token` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set; gated model downloads may fail |
+| `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
+| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
+| `column_nulls` | error | `columns.groupby` | Required column contains null values |
+| `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
+| `constant_column` | warning | `columns.constant` | Column has only one unique value |
+| `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
+| `timestamp_nulls` | error | `timeseries.timestamp` | Timestamp column has nulls |
+| `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
+| `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
+| `record_exceeds_context` | error | `token_budget` | Individual records exceed context window |
+| `group_exceeds_context` | error | `token_budget` | Grouped records exceed context window |
+| `dataset_too_small` | error | `dataset.size` | Dataset has fewer than minimum required rows |
+| `dataset_small` | warning | `dataset.row_count` | Training set below 1000 records |
+| `extreme_oversampling` | warning | `training.oversampling` | Data fraction exceeds 5x |
 
 ---
 

@@ -549,24 +549,6 @@ class TestConfigureStandardTraining:
         assert "data_collator" not in training_args
 
 
-class TestValidateOrderbyColumn:
-    def test_does_nothing_when_no_orderby(self, backend, sample_dataframe):
-        """Test that nothing happens when orderby is None."""
-        backend._validate_orderby_column(sample_dataframe)  # Should not raise
-
-    def test_passes_when_column_exists(self, backend, sample_dataframe):
-        """Test that validation passes when column exists."""
-        backend.params.data.order_training_examples_by = "order_col"
-        backend._validate_orderby_column(sample_dataframe)  # Should not raise
-
-    def test_raises_when_column_missing(self, backend, sample_dataframe):
-        """Test that ParameterError is raised when column is missing."""
-        backend.params.data.order_training_examples_by = "nonexistent_col"
-
-        with pytest.raises(ParameterError, match="Order by column 'nonexistent_col' not found"):
-            backend._validate_orderby_column(sample_dataframe)
-
-
 class TestApplyPreprocessing:
     def test_returns_df_when_no_executor(self, backend, sample_dataframe):
         """Test that the same DataFrame is returned when no action_executor."""

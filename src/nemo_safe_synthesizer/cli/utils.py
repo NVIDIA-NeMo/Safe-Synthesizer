@@ -13,6 +13,7 @@ This module provides utility functions for CLI commands including:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -61,6 +62,7 @@ def _create_workdir(
     resume: bool = False,
     phase: str | None = None,
     auto_discover_adapter: bool = False,
+    run_name: str = "",
 ) -> Workdir:
     """Create Workdir from CLI arguments.
 
@@ -83,6 +85,8 @@ def _create_workdir(
         auto_discover_adapter: If True and resume=True, automatically find the latest
             trained adapter in artifacts_path. Without this flag, run_path must be
             explicitly specified for generation.
+        run_name: Explicit run name to use instead of an auto-generated timestamp.
+            Useful for deterministic paths (e.g. ``"validate"``).
 
     Returns:
         Configured Workdir
@@ -186,6 +190,7 @@ def _create_workdir(
         base_path=base_path,
         dataset_name=dataset_name,
         config_name=config_name,
+        run_name=run_name,
         _current_phase=current_phase,
     )
 
@@ -196,6 +201,9 @@ def common_setup(
     phase: str | None = None,
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
+    skip_wandb: bool = False,
+    quiet: bool = False,
+    run_name: str | None = None,
 ) -> tuple["CategoryLogger", SafeSynthesizerParameters, pd.DataFrame | None, Workdir]:
     """Common setup for all run commands using unified CLISettings.
 
@@ -213,6 +221,10 @@ def common_setup(
         phase: The current phase (train, generate, end_to_end)
         auto_discover_adapter: If True and resume=True, auto-discover the latest trained adapter
         wandb_resume_job_id: Optional wandb run ID or path to file containing the ID to resume
+        skip_wandb: If ``True``, skip wandb initialization (used by --validate / preflight)
+        quiet: If ``True``, suppress console log output (file logging is unaffected)
+        run_name: Explicit run name for the artifact directory (e.g. ``"validate"``).
+            When set, replaces the auto-generated timestamp so repeated runs reuse the same path.
 
     Returns:
         Tuple of (logger, config, dataframe, workdir). For generate-only runs with
@@ -227,6 +239,7 @@ def common_setup(
         resume=resume,
         phase=phase,
         auto_discover_adapter=auto_discover_adapter,
+        run_name=run_name if run_name is not None else "",
     )
 
     # Ensure directories exist
@@ -236,6 +249,7 @@ def common_setup(
     run_logger = _initialize_logging_for_cli_from_settings(
         settings=settings,
         workdir=workdir,
+        quiet=quiet,
     )
 
     # 3. Create DatasetRegistry
@@ -280,7 +294,8 @@ def common_setup(
     config = merge_overrides(settings.config_path, synthesis_overrides)
 
     # 6. Initialize wandb (uses workdir for run ID files)
-    initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
+    if not skip_wandb:
+        initialize_wandb_run(workdir, resume_job_id=wandb_resume_job_id, cfg=config)
 
     return run_logger, config, df, workdir
 
@@ -302,6 +317,7 @@ def _set_wandb_env_vars(
 def _initialize_logging_for_cli_from_settings(
     settings: "CLISettings",
     workdir: Workdir,
+    quiet: bool = False,
 ) -> "CategoryLogger":
     """Initialize logging using CLISettings.
 
@@ -311,6 +327,7 @@ def _initialize_logging_for_cli_from_settings(
     Args:
         settings: Unified CLI settings
         workdir: Workdir for artifact paths (logs go to workdir.log_file)
+        quiet: If ``True``, mute console output (file logging is unaffected)
 
     Returns:
         The configured logger
@@ -341,9 +358,16 @@ def _initialize_logging_for_cli_from_settings(
         log_color=settings.effective_log_color,
     )
 
-    # Initialize the logging system
+    # Initialize the logging system, then mute the console handler in quiet
+    # mode. File handlers are excluded so the run log keeps its full output
+    # -- the file log is the only diagnostic surface left when --validate
+    # suppresses console output.
     structlog.reset_defaults()
     initialize_observability()
+    if quiet:
+        for handler in logging.getLogger().handlers:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                handler.setLevel(logging.CRITICAL)
 
     run_logger = get_logger("nemo_safe_synthesizer")
 

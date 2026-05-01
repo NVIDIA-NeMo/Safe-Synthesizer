@@ -141,10 +141,9 @@ Mock Workdir via `mock_workdir(tmp_path)` in `cli/conftest.py`.
 
 ## GPU Isolation Gotcha
 
-Two GPU isolation hazards require per-file process isolation (`-n 0`):
+One GPU isolation hazard requires per-file process isolation (`-n 0`):
 
-1. vLLM pre-allocates all GPU memory and never releases it within a process. Tests that call `.generate()` must run in separate processes or later tests OOM.
-2. Unsloth patches transformers at import time, poisoning Opacus/DP if they share a process.
+vLLM pre-allocates all GPU memory and never releases it within a process. Tests that call `.generate()` must run in separate processes or later tests OOM.
 
 GPU smoke tests use markers to express isolation requirements:
 

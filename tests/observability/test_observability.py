@@ -82,6 +82,17 @@ class TestNSSObservabilitySettings:
         settings = NSSObservabilitySettings()
         assert settings.nss_log_file == log_file
 
+    @pytest.mark.parametrize("explicit_value", [False, True])
+    @pytest.mark.parametrize("is_tty", [False, True])
+    def test_explicit_log_color_bool_overrides_tty_default(self, explicit_value, is_tty):
+        """Explicit boolean log-color settings should not be recomputed from stdout."""
+        with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
+            stdout.isatty.return_value = is_tty
+
+            settings = NSSObservabilitySettings(nss_log_color=explicit_value)
+
+        assert settings.nss_log_color is explicit_value
+
 
 class TestCategoryFilter:
     """Tests for CategoryFilter logging filter."""

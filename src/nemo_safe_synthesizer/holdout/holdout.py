@@ -15,7 +15,7 @@ from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
 from ..config.data import DEFAULT_HOLDOUT, MIN_HOLDOUT
 from ..config.parameters import SafeSynthesizerParameters
-from ..data_processing.validation import validate_groupby_column
+from ..data_processing.validation import check_groupby_column
 from ..observability import get_logger
 
 MIN_RECORDS_FOR_TEXT_AND_PRIVACY_METRICS = 200
@@ -83,7 +83,7 @@ def grouped_train_test_split(
         ParameterError: If the ``group_by`` column is not present in ``df``.
         DataError: If the ``group_by`` column contains missing values.
     """
-    validate_groupby_column(input_df, group_by)
+    check_groupby_column(input_df, group_by)
 
     if test_size > input_df.groupby(group_by).ngroups or test_size == 1 or test_size == 0:
         logger.info(
@@ -189,7 +189,7 @@ class Holdout:
                 HOLDOUT_TOO_SMALL_ERROR,
             )
 
-        validate_groupby_column(input_df, self.group_by)
+        check_groupby_column(input_df, self.group_by)
 
         if self.group_by:
             training_df, test_df = grouped_train_test_split(
