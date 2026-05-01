@@ -256,7 +256,7 @@ class TrainingHyperparams(Parameters):
                 "are also supported."
             ),
         ),
-    ] = "kernels-community/vllm-flash-attn3"
+    ] = "sdpa"
 
     @property
     def effective_batch_size(self) -> int:

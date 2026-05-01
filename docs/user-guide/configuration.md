@@ -76,7 +76,7 @@ for the full field list.
 | `training.pretrained_model` | `"HuggingFaceTB/SmolLM3-3B"` | HuggingFace model ID or local path | See supported families below; `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for fast CPU/low-VRAM iteration |
 | `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit |
 | `training.quantization_bits` | `8` | Bit width (4 or 8) when `training.quantize_model` is `true` | Prefer 8 over 4 for quality |
-| `training.attn_implementation` | `"kernels-community/vllm-flash-attn3"` | Attention backend for model loading | Leave at default |
+| `training.attn_implementation` | `"spda"` | Attention backend for model loading | Leave at default |
 | `training.rope_scaling_factor` | `"auto"` | Scale the base model's context window via RoPE (`"auto"` or int) | Leave at `"auto"` |
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
 | `training.max_vram_fraction` | `0.8` | Fraction of total GPU VRAM to allocate for training. Must be in [0, 1] | Lower if other GPU consumers are active on the same device |

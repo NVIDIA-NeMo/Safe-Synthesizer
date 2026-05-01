@@ -312,7 +312,7 @@ class TestBuildBaseFrameworkParams:
 
         assert result["pretrained_model_name_or_path"] == "test-model"
         assert result["device_map"] == "auto"
-        assert result["attn_implementation"] == "kernels-community/vllm-flash-attn3"
+        assert result["attn_implementation"] == "sdpa"
         assert result["dtype"] == torch.bfloat16
         assert result["custom_key"] == "custom_value"
 
@@ -351,7 +351,7 @@ class TestBuildBaseFrameworkParams:
         result = backend._build_base_framework_params(model_kwargs)
         assert result["attn_implementation"] == "eager"
         # Reset to default
-        backend.params.training.attn_implementation = "kernels-community/vllm-flash-attn3"
+        backend.params.training.attn_implementation = "sdpa"
 
     def test_uses_custom_dtype(self, mock_get_device_map, backend):
         """Test that custom dtype is used when provided."""
@@ -426,13 +426,13 @@ class TestResolveAttnImplementation:
     def test_kernels_available(self, backend):
         """Test that kernels-community path is returned when kernels is importable."""
         with patch.dict("sys.modules", {"kernels": MagicMock()}):
-            result = backend._resolve_attn_implementation("kernels-community/vllm-flash-attn3")
-        assert result == "kernels-community/vllm-flash-attn3"
+            result = backend._resolve_attn_implementation("sdpa")
+        assert result == "sdpa"
 
     def test_kernels_not_available(self, backend):
         """Test that sdpa fallback is returned when kernels is not importable."""
         with patch.dict("sys.modules", {"kernels": None}):
-            result = backend._resolve_attn_implementation("kernels-community/vllm-flash-attn3")
+            result = backend._resolve_attn_implementation("sdpa")
         assert result == "sdpa"
 
     def test_kernels_community_other_kernel(self, backend):

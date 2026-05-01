@@ -18,15 +18,15 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ```bash
 # With uv (recommended):
-uv pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --index https://flashinfer.ai/whl/cu128 \
-  --index https://download.pytorch.org/whl/cu128 \
+uv pip install "nemo-safe-synthesizer[cu129,engine]" \
+  --index https://flashinfer.ai/whl/cu129 \
+  --index https://download.pytorch.org/whl/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
-pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --extra-index-url https://download.pytorch.org/whl/cu128 \
-  --extra-index-url https://flashinfer.ai/whl/cu128
+pip install "nemo-safe-synthesizer[cu129,engine]" \
+  --extra-index-url https://download.pytorch.org/whl/cu129 \
+  --extra-index-url https://flashinfer.ai/whl/cu129
 ```
 
 Or install from source:
@@ -210,7 +210,7 @@ Controls the HuggingFace attention backend used during model loading for trainin
 ```yaml
 # config.yaml
 training:
-  attn_implementation: "kernels-community/vllm-flash-attn3"
+  attn_implementation: "spda"
 ```
 
 ```bash

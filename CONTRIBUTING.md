@@ -59,7 +59,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
    # Install Python dependencies (choose one)
    make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-   make bootstrap-nss cuda   # CUDA 12.8 (Linux with NVIDIA GPU)
+   make bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
    make bootstrap-nss engine # Engine dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
