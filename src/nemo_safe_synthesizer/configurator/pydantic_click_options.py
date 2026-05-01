@@ -149,11 +149,16 @@ class AutoParamType(click.ParamType):
 
     def convert(
         self,
-        value: object,
+        value: str,
         param: click.Parameter | None,
         ctx: click.Context | None,
     ) -> str | int | float | bool:
         """Convert the raw CLI value to ``AUTO_STR`` or the base numeric/bool type.
+
+        The ``value`` parameter is typed ``str`` to match the parent
+        ``click.ParamType.convert`` stub signature; in practice Click may also
+        pass through default values of any type, but the equality check and
+        delegated ``base_type.convert`` both handle that correctly.
 
         Args:
             value: Raw value from the CLI or the option default.
