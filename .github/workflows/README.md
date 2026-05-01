@@ -114,7 +114,9 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 | Unit Tests | `test-ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test-smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
-The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run. Format and typecheck are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, or CI path changes. Smoke tests run only when `src/**`, `tests/**`, `pytest.ini`, `pyproject.toml`, or `uv.lock` changes.
+The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, or CI path changes. Smoke tests run only when `src/**`, `tests/**`, `pytest.ini`, `pyproject.toml`, or `uv.lock` changes.
+
+On manual dispatch, `changes` is intentionally skipped and the test jobs explicitly bypass that skipped dependency. Manual dispatch runs unit tests and CPU smoke tests even when there is no changed-file signal to inspect.
 
 Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These paths trigger unit tests through the aggregate `any` output, but do not trigger CPU smoke tests. The CI Status aggregation job is the single required check for branch protection.
 
