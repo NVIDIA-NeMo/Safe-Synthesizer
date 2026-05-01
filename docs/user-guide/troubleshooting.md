@@ -461,11 +461,11 @@ check of its own.
 | `inference_key_missing` | warning | `env.inference_key` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
 | `hf_token_missing` | warning | `env.hf_token` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set; gated model downloads may fail |
 | `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
-| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset |
+| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
 | `column_nulls` | error | `columns.groupby` | Required column contains null values |
-| `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name |
+| `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
 | `constant_column` | warning | `columns.constant` | Column has only one unique value |
-| `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing |
+| `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
 | `timestamp_nulls` | error | `timeseries.timestamp` | Timestamp column has nulls |
 | `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
 | `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |

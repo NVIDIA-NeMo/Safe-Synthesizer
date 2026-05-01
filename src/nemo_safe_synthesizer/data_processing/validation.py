@@ -100,7 +100,14 @@ def check_column_has_no_nulls(
 
 
 def check_no_pseudo_column_collision(data: pd.DataFrame) -> None:
-    """Raise ``DataError`` if the reserved pseudo-group column is in use."""
+    """Validate that the reserved pseudo-group column name is not already in use.
+
+    Raises:
+        ParameterError: If ``data`` has ``MultiIndex`` columns and the schema must
+            be flattened before column validation.
+        DataError: If the reserved pseudo-group column is already present in
+            ``data``.
+    """
     columns = _get_column_names(data)
     if PSEUDO_GROUP_COLUMN in columns:
         raise DataError(
