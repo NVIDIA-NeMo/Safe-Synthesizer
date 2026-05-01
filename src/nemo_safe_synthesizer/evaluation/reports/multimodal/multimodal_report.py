@@ -145,8 +145,8 @@ class MultimodalReport(EvaluationReport):
             synthetic=synthetic,
             test=test,
             column_statistics=column_statistics,
-            rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
-            cols=MultimodalReport._get_config_value("sqs_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
+            rows=MultimodalReport._get_config_value("sqs_report_rows", DEFAULT_RECORD_COUNT, config),
+            cols=MultimodalReport._get_config_value("sqs_report_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
             mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
         )
 
@@ -186,8 +186,8 @@ class MultimodalReport(EvaluationReport):
                     synthetic=synthetic,
                     test=test,
                     column_statistics=column_statistics,
-                    rows=MultimodalReport._get_config_value("sqs_rows", DEFAULT_RECORD_COUNT, config),
-                    cols=MultimodalReport._get_config_value("sqs_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
+                    rows=MultimodalReport._get_config_value("sqs_report_rows", DEFAULT_RECORD_COUNT, config),
+                    cols=MultimodalReport._get_config_value("sqs_report_columns", DEFAULT_SQS_REPORT_COLUMNS, config),
                     mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
                     enable_sampling=False,
                 ),
