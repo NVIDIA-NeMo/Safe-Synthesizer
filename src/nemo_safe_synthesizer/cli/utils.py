@@ -38,7 +38,12 @@ logger = get_logger(__name__)
 
 PathT = str | Path
 CLI_NESTED_FIELD_SEPARATOR = "__"
-"""Separator used to denote nested fields in CLI options. e.g., --data__holdout=0.1"""
+"""Separator used to denote nested fields in CLI options.
+
+This must match the ``field_separator`` passed to ``pydantic_options`` and the
+``field_sep`` used by ``parse_overrides``; otherwise a Click option such as
+``--data__holdout=0.1`` will not become ``{"data": {"holdout": 0.1}}``.
+"""
 
 VERBOSITY_TO_LOG_LEVEL: dict[int, Literal["INFO", "DEBUG", "DEBUG_DEPENDENCIES"]] = {
     0: "INFO",

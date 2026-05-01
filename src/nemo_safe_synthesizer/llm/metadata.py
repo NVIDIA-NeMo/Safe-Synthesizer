@@ -1,29 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Model-family metadata for prompt formatting, RoPE scaling, and runtime bookkeeping.
-
-Provides ``ModelMetadata`` and its per-family subclasses (``Llama32``,
-``Mistral``, ``Qwen``, etc.) that capture prompt templates, special-token
-settings, and context-window configuration.  The ``RopeScaling`` model
-handles context-window extension via Rotary Position Embeddings.
-
-A global maximum sequence length (``GLOBAL_MAX_SEQ_LENGTH = 2048 * 6``)
-is applied as a safety cap to prevent OOM and underfitting errors.
-
-Classes:
-    LLMPromptConfig: Prompt template and special-token settings.
-    RopeScaling: RoPE scaling parameters for context-window extension.
-    ModelMetadata: Base container for model-family-specific metadata.
-    Granite: IBM Granite family metadata.
-    Llama32: Meta Llama 3.2 family metadata.
-    Mistral: Mistral AI family metadata.
-    Nemotron: NVIDIA Nemotron family metadata.
-    Qwen: Alibaba Qwen family metadata.
-    SmolLM2: HuggingFace SmolLM2 family metadata.
-    SmolLM3: HuggingFace SmolLM3 family metadata.
-    TinyLlama: TinyLlama family metadata.
-"""
+"""Model-family metadata for prompt formatting, RoPE scaling, and runtime bookkeeping."""
 
 from __future__ import annotations
 
@@ -274,6 +252,11 @@ class ModelMetadata(BaseModel):
     [`from_config`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_config],
     or [`from_metadata_json`][nemo_safe_synthesizer.llm.metadata.ModelMetadata.from_metadata_json]
     to construct instances rather than calling the constructor directly.
+
+    To add a model family, define a ``ModelMetadata`` subclass, configure its
+    ``LLMPromptConfig`` from the tokenizer, override ``default_learning_rate``
+    if needed, and add the subclass to ``_resolve_model_class`` in the intended
+    match order.
     """
 
     # Learning rate when training.learning_rate is "auto". Override in subclasses.
@@ -466,7 +449,15 @@ class ModelMetadata(BaseModel):
 
     @classmethod
     def _resolve_model_class(cls: type["ModelMetadata"], model_name_or_path: Path | str) -> type["ModelMetadata"]:
-        """Resolve model name or path to the matching ``ModelMetadata`` subclass (no instantiation)."""
+        """Resolve model name or path to the matching metadata subclass.
+
+        Uses case-insensitive substring matching over the registered subclass
+        names. The returned class is not instantiated; callers such as
+        ``AutoConfigResolver`` use it to inspect class-level metadata.
+
+        Raises:
+            ValueError: If no registered subclass matches.
+        """
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
         for class_ in classes:
             if class_.__name__.lower() in str(model_name_or_path).lower():
