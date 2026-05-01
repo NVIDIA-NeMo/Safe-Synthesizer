@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""vLLM-based generation backend for tabular data synthesis.
-
-Loads a base model and optional LoRA adapter into vLLM, prepares backend-native
-``SamplingParams``, and generates batches until ``GenerationBatches`` reaches
-the target record count or a stopping condition fires. Structured generation
-supports either a generated regex or vLLM's native JSON schema mode.
-"""
+"""vLLM-based generation backend for tabular data synthesis."""
 
 from __future__ import annotations
 

@@ -9,18 +9,6 @@ tree shape on ``Workdir``; at runtime they resolve to ``Path`` and ``BoundDir``
 objects respectively, giving typed access to every artifact path without
 hard-coding strings throughout the CLI.
 
-``DirNode`` is generic: ``DirNode[T_co]`` where ``T_co`` is the ``BoundDir``
-subtype returned by ``__get__`` for type checkers. Runtime always returns a
-plain ``BoundDir``; the subtype is a typed-view class declared under
-``TYPE_CHECKING`` whose annotations mirror the child nodes. This gives ``ty``
-enough information to resolve paths such as ``workdir.train.config`` and
-``workdir.generate.logs`` without casts at every call site.
-
-Maintenance rule: when adding or renaming a ``FileNode`` or nested ``DirNode``
-under an existing directory node, update the corresponding typed-view
-annotation in the same change. A new top-level ``DirNode`` on ``Workdir`` also
-needs a new typed-view subclass and a ``DirNode[_FooDir]`` annotation.
-
 Typical directory tree:
 
     <base_path>/<config>---<dataset>/<run_name>/

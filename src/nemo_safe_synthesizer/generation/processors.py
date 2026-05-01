@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Processors that parse raw LLM text into validated records.
-
-``create_processor`` selects one of three processors: ``TabularDataProcessor``
-for standard JSONL records, ``TimeSeriesDataProcessor`` for timestamped records
-that need chronological validation, and ``GroupedDataProcessor`` for grouped
-JSONL bounded by BOS/EOS delimiters.
-"""
+"""Processors that parse raw LLM text into validated records."""
 
 from __future__ import annotations
 

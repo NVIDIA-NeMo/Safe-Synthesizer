@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generation result containers and multi-batch accumulator.
-
-``GenerationBatches`` adapts batch size from observed records per prompt,
-tracks invalid-record stopping conditions, and accumulates token statistics.
-``GenerateJobResults`` is the immutable summary built from that accumulator at
-the end of a generation run.
-"""
+"""Generation result containers and multi-batch accumulator."""
 
 from __future__ import annotations
 

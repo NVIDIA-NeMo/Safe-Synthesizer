@@ -1,17 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Executable pipeline for Safe Synthesizer.
-
-Extends ``ConfigBuilder`` with the ``SafeSynthesizer`` class, which adds
-artifact management (via ``Workdir``) and stepwise pipeline execution:
-``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
-
-The SDK is the programmatic entry point for running pipelines outside the CLI.
-It supports config from YAML plus builder overrides, DataFrame or URL data
-sources, PII replacement by default, and separate train/generate/evaluate
-calls when callers need to control stages manually.
-"""
+"""Executable pipeline for Safe Synthesizer."""
 
 from __future__ import annotations
 

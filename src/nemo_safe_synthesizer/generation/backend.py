@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Abstract generator backend.
-
-Generation backends implement the lifecycle ``initialize`` ->
-``prepare_params`` -> ``generate`` -> ``teardown``. ``VllmBackend`` is the
-tabular implementation; ``TimeseriesBackend`` extends it for sliding-window,
-parallel group generation with chronological validation.
-"""
+"""Abstract generator backend."""
 
 from __future__ import annotations
 
