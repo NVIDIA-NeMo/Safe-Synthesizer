@@ -1,14 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI run commands for Safe Synthesizer.
-
-This module provides the run command group for the Safe Synthesizer pipeline:
-
-- ``run`` (default): Full end-to-end pipeline
-- ``run train``: Training stage only
-- ``run generate``: Generation stage only (requires trained model)
-"""
+"""CLI run commands for Safe Synthesizer."""
 
 from __future__ import annotations
 
@@ -38,8 +31,11 @@ if TYPE_CHECKING:
 def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     """Decorator to add common options for run commands.
 
-    Note: Environment variable handling is done by CLISettings, not Click's envvar=.
-    This keeps env var logic in one place (pydantic-settings) rather than duplicating it.
+    Apply this above ``@pydantic_options`` in source order. Python applies
+    decorators bottom-up, so the shared command options are added after the
+    generated parameter options. Environment-variable handling stays in
+    ``CLISettings`` rather than Click ``envvar=`` declarations, so precedence is
+    centralized in one settings model.
     """
     options = []
     options.append(

@@ -330,6 +330,13 @@ def build_json_based_regex(
 ) -> str:
     """Build a regex that constrains LLM output to valid JSONL records.
 
+    Supports ``properties``, ``required``, ``enum``, primitive ``type`` values,
+    arrays/objects with min/max item or property counts, string length bounds,
+    ``pattern``, and ``format`` values for date-time, date, time, and UUID.
+    Use vLLM's native JSON schema structured-output path for unsupported schema
+    features such as ``additionalProperties``, composition keywords, and
+    ``$ref``.
+
     Args:
         schema: JSON schema dictionary describing the record format.
         config: Pipeline configuration (used for grouping and

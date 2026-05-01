@@ -1,12 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Training backend abstraction and result types.
-
-Defines ``TrainingBackend``, the abstract base for all LLM fine-tuning
-backends, and ``NSSTrainerResult``, the dataclass capturing outputs of a
-completed training run.
-"""
+"""Training backend abstraction and result types."""
 
 from __future__ import annotations
 
@@ -72,6 +67,10 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     implementation is
     [`HuggingFaceBackend`][nemo_safe_synthesizer.training.huggingface_backend.HuggingFaceBackend]
     (standard HuggingFace Trainer with full DP-SGD support).
+
+    ``teardown`` is part of the public lifecycle. Implementations must make it
+    idempotent and callers should put ``train`` in ``try/finally`` when they
+    own the training loop.
 
     Args:
         params: NSS pipeline configuration.
