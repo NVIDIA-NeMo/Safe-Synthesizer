@@ -92,6 +92,12 @@ FIXED_RUNTIME_TRAINING_ARGS = {
     "group_by_length": False,
     "ddp_find_unused_parameters": False,
 }
+"""Training arguments fixed by Safe Synthesizer at runtime.
+
+Training duration is controlled by ``num_input_records_to_sample`` and the
+assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
+Trainer behavior stable across CLI and SDK entry points.
+"""
 
 
 class HuggingFaceBackend(TrainingBackend):
@@ -101,6 +107,11 @@ class HuggingFaceBackend(TrainingBackend):
     RoPE scaling, optional differential-privacy training via
     [`OpacusDPTrainer`][nemo_safe_synthesizer.privacy.dp_transformers.dp_utils.OpacusDPTrainer],
     and artifact persistence (adapter, schema, metadata).
+
+    Quantized training prepares the model with
+    ``prepare_model_for_kbit_training`` before applying LoRA. Non-quantized
+    training enables gradient checkpointing, input gradients, and disables
+    ``use_cache`` before wrapping the model.
     """
 
     def __init__(self, *args, **kwargs):
@@ -278,7 +289,11 @@ class HuggingFaceBackend(TrainingBackend):
         self.framework_load_params = framework_params
 
     def _prepare_quantize_base(self, **quantize_params: dict) -> None:
-        """Populate ``quant_params`` with LoRA and optional quantization settings."""
+        """Populate ``quant_params`` with LoRA and optional quantization settings.
+
+        ``peft_implementation="loftq"`` adds a ``LoftQConfig`` initialized
+        with the configured quantization bit width.
+        """
         self.quant_params = dict(
             task_type=TaskType.CAUSAL_LM,
             init_lora_weights=True,
@@ -359,6 +374,9 @@ class HuggingFaceBackend(TrainingBackend):
     def _apply_eval_dataset_overrides(self, training_args: dict) -> None:
         """Apply eval dataset-specific overrides to training args.
 
+        When an explicit eval dataset is present, evaluation is step-based and
+        includes loss for metrics with accumulation disabled.
+
         Args:
             training_args: The training arguments dictionary to modify.
         """
@@ -371,6 +389,11 @@ class HuggingFaceBackend(TrainingBackend):
 
     def _configure_dp_training(self, training_args: dict) -> DataCollatorForPrivateTokenClassification:
         """Configure differential privacy training settings.
+
+        DP uses ``DataCollatorForPrivateTokenClassification`` and
+        ``OpacusDPTrainer``. The HuggingFace ``max_grad_norm`` is set to zero
+        because Opacus handles per-sample clipping. Gradient checkpointing is
+        removed because it is not compatible with the Opacus optimizer wrapping.
 
         Args:
             training_args: The training arguments dictionary to modify.

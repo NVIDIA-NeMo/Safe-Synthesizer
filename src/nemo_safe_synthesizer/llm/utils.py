@@ -1,7 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading."""
+"""GPU memory management, quantization, device mapping, and tokenizer helpers.
+
+``cleanup_memory`` runs garbage collection and clears CUDA cache under
+``torch.no_grad``. ``get_max_vram`` reserves a 2 GiB safety buffer on each GPU
+and applies the configured memory fraction, defaulting to 80 percent.
+``get_quantization_config`` returns the BitsAndBytes configuration used by
+training for 4-bit ``nf4`` or 8-bit ``nf8`` quantization with bfloat16 compute.
+"""
 
 from __future__ import annotations
 

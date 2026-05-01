@@ -6,6 +6,13 @@
 Converts a subset of JSON Schema into a regular expression that can be
 used by vLLM's structured-output backend to constrain model output to
 valid JSONL records.
+
+Supported schema features include ``properties``, ``required``, ``enum``,
+primitive ``type`` values, arrays/objects with min/max item or property
+counts, string length bounds, ``pattern``, and ``format`` values for
+date-time, date, time, and UUID. Unsupported features such as
+``additionalProperties``, composition keywords, and ``$ref`` should use the
+native JSON schema structured-output path instead.
 """
 
 from __future__ import annotations

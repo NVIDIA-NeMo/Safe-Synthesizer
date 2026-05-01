@@ -1,7 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""vLLM-based generation backend for tabular data synthesis."""
+"""vLLM-based generation backend for tabular data synthesis.
+
+Loads a base model and optional LoRA adapter into vLLM, prepares backend-native
+``SamplingParams``, and generates batches until ``GenerationBatches`` reaches
+the target record count or a stopping condition fires. Structured generation
+supports either a generated regex or vLLM's native JSON schema mode.
+"""
 
 from __future__ import annotations
 
@@ -105,6 +111,10 @@ class VllmBackend(GeneratorBackend):
     Loads the base model with a LoRA adapter via vLLM and generates
     synthetic records in batches.  Supports optional structured
     generation (regex or JSON schema) to constrain outputs.
+
+    ``LoRARequest("lora", 1, str(adapter_path))`` is passed to
+    ``llm.generate`` when an adapter is available. The vLLM engine uses
+    ``config.training.lora_r`` as ``max_lora_rank``.
 
     Args:
         config: Pipeline configuration.
@@ -350,8 +360,10 @@ class VllmBackend(GeneratorBackend):
     def prepare_params(self, **kwargs) -> None:
         """Parse parameters and configure the generation method.
 
-        Parses a dictionary of parameters into SamplingParameters,
-        applying necessary transformations from our API to vLLM's API.
+        Parses a dictionary of parameters into ``SamplingParams``, applying
+        necessary transformations from the Safe Synthesizer API to vLLM's API.
+        ``num_beams`` is mapped to ``beam_width`` only when greater than 1;
+        otherwise it is omitted.
 
         Args:
             **kwargs: Sampling parameters to configure.
@@ -523,6 +535,11 @@ class VllmBackend(GeneratorBackend):
         Iterates over generation batches, applying the processor to each
         LLM output, until the configured ``num_records`` target is met or
         a stopping condition fires.
+
+        Non-tabular processors need BOS/EOS delimiters in the raw text, so
+        generation keeps special tokens for those processors and strips them
+        only for ``TabularDataProcessor``. Native EOS stopping remains enabled
+        through ``ignore_eos=False``.
 
         Args:
             data_actions_fn: Optional post-processing / validation function

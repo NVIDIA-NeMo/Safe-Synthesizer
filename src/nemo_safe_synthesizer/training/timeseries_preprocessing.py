@@ -1,7 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Time series preprocessing utilities for Safe Synthesizer training."""
+"""Time series preprocessing utilities for Safe Synthesizer training.
+
+Preprocessing normalizes grouped and ungrouped time series into the same
+training path. When no group column is configured, a reserved pseudo-group
+column (``PSEUDO_GROUP_COLUMN``) is added so the whole dataset is treated as
+one sequence. Timestamp format and interval metadata inferred here are saved
+back into the resolved config for generation.
+"""
 
 from __future__ import annotations
 

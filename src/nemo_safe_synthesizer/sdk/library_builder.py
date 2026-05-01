@@ -3,9 +3,14 @@
 
 """Executable pipeline for Safe Synthesizer.
 
-Extends ``ConfigBuilder`` with the ``SafeSynthesizer`` class, which
-adds artifact management (via ``Workdir``) and stepwise pipeline
-execution: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
+Extends ``ConfigBuilder`` with the ``SafeSynthesizer`` class, which adds
+artifact management (via ``Workdir``) and stepwise pipeline execution:
+``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
+
+The SDK is the programmatic entry point for running pipelines outside the CLI.
+It supports config from YAML plus builder overrides, DataFrame or URL data
+sources, PII replacement by default, and separate train/generate/evaluate
+calls when callers need to control stages manually.
 """
 
 from __future__ import annotations
@@ -53,6 +58,11 @@ class SafeSynthesizer(ConfigBuilder):
         builder.process_data().train().generate().evaluate()
         builder.save_results()
         results = builder.results
+
+    ``train()`` uses ``HuggingFaceBackend``. ``generate()`` chooses
+    ``TimeseriesBackend`` when ``config.time_series.is_timeseries`` is true and
+    ``VllmBackend`` otherwise. Stepwise callers must call ``save_results()``
+    themselves after ``evaluate()``; ``run()`` does this automatically.
 
     Args:
         config: Optional pre-built parameters that seed every

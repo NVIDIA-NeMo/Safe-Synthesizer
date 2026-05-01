@@ -11,6 +11,18 @@ handles context-window extension via Rotary Position Embeddings.
 A global maximum sequence length (``GLOBAL_MAX_SEQ_LENGTH = 2048 * 6``)
 is applied as a safety cap to prevent OOM and underfitting errors.
 
+Model-family dispatch is explicit: ``from_str_or_path`` and
+``_resolve_model_class`` use case-insensitive substring matching against the
+registered subclass names and raise ``ValueError`` when no subclass matches.
+There is no fallback to the base ``ModelMetadata`` class. ``AutoConfigResolver``
+uses ``_resolve_model_class`` to read each family's ``default_learning_rate``
+when ``training.learning_rate`` is ``"auto"``.
+
+To add a model family, define a ``ModelMetadata`` subclass, configure its
+``LLMPromptConfig`` from the tokenizer, override ``default_learning_rate`` if
+needed, and add the subclass to ``_resolve_model_class`` in the intended match
+order.
+
 Classes:
     LLMPromptConfig: Prompt template and special-token settings.
     RopeScaling: RoPE scaling parameters for context-window extension.
@@ -466,7 +478,15 @@ class ModelMetadata(BaseModel):
 
     @classmethod
     def _resolve_model_class(cls: type["ModelMetadata"], model_name_or_path: Path | str) -> type["ModelMetadata"]:
-        """Resolve model name or path to the matching ``ModelMetadata`` subclass (no instantiation)."""
+        """Resolve model name or path to the matching metadata subclass.
+
+        Uses case-insensitive substring matching over the registered subclass
+        names. The returned class is not instantiated; callers such as
+        ``AutoConfigResolver`` use it to inspect class-level metadata.
+
+        Raises:
+            ValueError: If no registered subclass matches.
+        """
         classes = TinyLlama, Qwen, Llama32, SmolLM2, SmolLM3, Mistral, Nemotron, Granite
         for class_ in classes:
             if class_.__name__.lower() in str(model_name_or_path).lower():

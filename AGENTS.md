@@ -31,7 +31,7 @@ Repo-specific skills live in `.agents/skills/`. General-purpose skills (ast-nav,
 | `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
 | `uv-build` | `uv` package management, extras, PyTorch indexes, hatch build, versioning |
 
-Several source modules also have their own `AGENTS.md` with internal patterns and gotchas: `cli/`, `sdk/`, `llm/`, `generation/`, `training/`, and `tests/`. When working in a subtree, check for a local `AGENTS.md` before diving in.
+Durable module-level patterns and gotchas live in the owning Python docstrings and source comments so they build into the API reference. Test-suite guidance lives in `tests/TESTING.md`.
 
 ## Repo Conventions
 
