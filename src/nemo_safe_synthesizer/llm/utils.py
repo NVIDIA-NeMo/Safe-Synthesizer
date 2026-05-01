@@ -1,28 +1,24 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading."""
+"""GPU memory management, quantization, device mapping, and tokenizer helpers for LLM loading.
+
+Optional LLM dependencies are imported inside the helpers that need them so
+lightweight utilities such as ``trust_remote_code_for_model`` remain usable
+without installing the full training or inference stack.
+"""
 
 from __future__ import annotations
 
 import gc
 from pathlib import Path
-from typing import Any, Literal
-
-import torch
-from accelerate import infer_auto_device_map, init_empty_weights
-from peft import (
-    PeftModel,
-)
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    PreTrainedTokenizer,
-)
+from typing import TYPE_CHECKING, Any, Literal
 
 from ..observability import get_logger
+
+if TYPE_CHECKING:
+    from peft import PeftModel
+    from transformers import AutoConfig, BitsAndBytesConfig, PreTrainedTokenizer
 
 logger = get_logger(__name__)
 
@@ -30,8 +26,8 @@ logger = get_logger(__name__)
 def trust_remote_code_for_model(model_name: str | Path) -> bool:
     """Determine whether to trust remote code when loading a model.
 
-    Returns ``True`` only for models whose name starts with
-    ``"nvidia/"``.
+    Returns ``True`` for NVIDIA-owned Hub model identifiers and for paths
+    inside Hugging Face's encoded cache directory for NVIDIA models.
 
     Args:
         model_name: HuggingFace model identifier or local path.
@@ -39,12 +35,26 @@ def trust_remote_code_for_model(model_name: str | Path) -> bool:
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
-    mn = str(model_name)
-    return mn.startswith("nvidia/")
+    model_ref = str(model_name).casefold()
+    if model_ref.startswith("nvidia/"):
+        return True
+
+    path_parts = Path(model_ref).parts
+    while path_parts:
+        match path_parts:
+            case ("huggingface", "hub", *cache_parts):
+                # Brittle by design: this mirrors Hugging Face's current cache path layout.
+                return any(part.startswith("models--nvidia--") for part in cache_parts)
+            case (_, *remaining):
+                path_parts = remaining
+
+    return False
 
 
 def cleanup_memory() -> None:
     """Run garbage collection and empty the CUDA cache."""
+    import torch
+
     gc.collect()
     with torch.no_grad():
         torch.cuda.empty_cache()
@@ -56,6 +66,7 @@ def gpu_stats() -> None:
     Queries CUDA device 0 and logs the peak reserved memory and total
     available memory in GiB.
     """
+    import torch
 
     def round_gb(value: float) -> float:
         return round(value / 1024 / 1024 / 1024, 3)
@@ -80,6 +91,8 @@ def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
     Returns:
         Mapping of CUDA device index to the usable memory fraction.
     """
+    import torch
+
     if max_vram_fraction is None:
         max_vram_fraction = 0.8
     max_memory = {}
@@ -148,6 +161,8 @@ def get_param_from_config(
     Raises:
         ValueError: If neither ``model_name`` nor ``config`` is provided.
     """
+    from transformers import AutoConfig
+
     if config is None:
         if model_name is None:
             raise ValueError("model_name is required if config is not provided")
@@ -170,6 +185,8 @@ def _get_auto_tokenizer(
     Returns:
         Configured ``PreTrainedTokenizer`` with BOS/EOS tokens enabled.
     """
+    from transformers import AutoTokenizer
+
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
         model_max_length=max_position_embeddings,
@@ -204,6 +221,9 @@ def get_device_map(
     Returns:
         Ordered dictionary mapping layer names to device identifiers.
     """
+    from accelerate import infer_auto_device_map, init_empty_weights
+    from transformers import AutoConfig, AutoModelForCausalLM
+
     config = autoconfig or AutoConfig.from_pretrained(
         model_target,
         revision=revision,
@@ -253,6 +273,9 @@ def get_quantization_config(quantization_bits: Literal[4, 8]) -> BitsAndBytesCon
     Raises:
         ValueError: If ``quantization_bits`` is not 4 or 8.
     """
+    import torch
+    from transformers import BitsAndBytesConfig
+
     if quantization_bits == 4:
         return BitsAndBytesConfig(
             load_in_4bit=True,

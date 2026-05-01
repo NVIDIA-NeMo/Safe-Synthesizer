@@ -466,6 +466,16 @@ class TestModelMetadata:
         assert sample_model_metadata.is_adapter is False
         assert sample_model_metadata.instruction == DEFAULT_INSTRUCTION
 
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_empty_model_name_loads_config_at_source(self, mock_auto_config, sample_prompt_config):
+        """Test empty model names fail at the AutoConfig load instead of later derived fields."""
+        mock_auto_config.from_pretrained.side_effect = ValueError("empty model name")
+
+        with pytest.raises(ValueError, match="empty model name"):
+            ModelMetadata.model_validate({"model_name_or_path": "", "prompt_config": sample_prompt_config})
+
+        mock_auto_config.from_pretrained.assert_called_once_with("", trust_remote_code=False)
+
     def test_adapter_path_property(self, sample_model_metadata, sample_workdir):
         """Test the adapter_path property returns the correct path."""
         expected_path = sample_workdir.adapter_path.resolve()

@@ -16,7 +16,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from transformers import AutoConfig, AutoTokenizer, PretrainedConfig
+from transformers import AutoConfig, AutoTokenizer, PretrainedConfig, PreTrainedTokenizerBase
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
@@ -27,6 +27,7 @@ from ..defaults import (
 )
 from ..observability import get_logger
 from ..utils import load_json, write_json
+from .utils import trust_remote_code_for_model
 
 logger = get_logger(__name__)
 
@@ -77,7 +78,7 @@ class LLMPromptConfig(BaseModel):
     """Integer id for the EOS token."""
 
     @classmethod
-    def from_tokenizer(cls, name: str, tokenizer: AutoTokenizer | None = None, **kwargs) -> LLMPromptConfig:
+    def from_tokenizer(cls, name: str, tokenizer: PreTrainedTokenizerBase | None = None, **kwargs) -> LLMPromptConfig:
         """Create a prompt config by reading from settings of a tokenizer.
 
         If no ``tokenizer`` is supplied one is loaded from ``name``
@@ -94,7 +95,9 @@ class LLMPromptConfig(BaseModel):
         Returns:
             A new ``LLMPromptConfig`` populated from the tokenizer.
         """
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(name)
+        tokenizer = tokenizer or AutoTokenizer.from_pretrained(
+            name, trust_remote_code=trust_remote_code_for_model(name)
+        )
         bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
         bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
         eos_token = kwargs.get("eos_token", getattr(tokenizer, "eos_token", None))
@@ -339,7 +342,11 @@ class ModelMetadata(BaseModel):
             The mutated ``data`` dict with derived fields populated.
         """
         if data.get("autoconfig") is None:
-            data["autoconfig"] = AutoConfig.from_pretrained(data["model_name_or_path"])
+            model_name_or_path = data["model_name_or_path"]
+            data["autoconfig"] = AutoConfig.from_pretrained(
+                model_name_or_path,
+                trust_remote_code=trust_remote_code_for_model(model_name_or_path),
+            )
 
         if data.get("base_max_seq_length") is None:
             data["base_max_seq_length"] = get_base_max_seq_length(data["autoconfig"])
@@ -446,6 +453,32 @@ class ModelMetadata(BaseModel):
             path=self.workdir.train.adapter.metadata,
             indent=4,
         )
+
+    @staticmethod
+    def _load_config_and_tokenizer(
+        model_name_or_path: str,
+        tokenizer: PreTrainedTokenizerBase | None = None,
+    ) -> tuple[PretrainedConfig, PreTrainedTokenizerBase]:
+        """Load ``PretrainedConfig`` and (optionally) ``AutoTokenizer`` for a model.
+
+        Centralises the repeated boilerplate present in every subclass
+        ``__init__``: loading the HuggingFace config and, when no
+        pre-loaded tokenizer is supplied, fetching one via
+        ``AutoTokenizer.from_pretrained``.
+
+        Args:
+            model_name_or_path: HuggingFace model identifier or local path.
+            tokenizer: Pre-loaded tokenizer to reuse.  When ``None`` a new
+                one is loaded from ``model_name_or_path``.
+
+        Returns:
+            A ``(config, tokenizer)`` tuple ready to pass to ``super().__init__``.
+        """
+        trust = trust_remote_code_for_model(model_name_or_path)
+        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=trust)
+        if tokenizer is None:
+            tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=trust)
+        return config, tokenizer
 
     @classmethod
     def _resolve_model_class(cls: type["ModelMetadata"], model_name_or_path: Path | str) -> type["ModelMetadata"]:
@@ -588,8 +621,7 @@ class Granite(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
         super().__init__(
             autoconfig=config,
@@ -628,8 +660,7 @@ class Llama32(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
         super().__init__(
             autoconfig=config,
@@ -668,12 +699,11 @@ class Mistral(ModelMetadata):
     def __init__(
         self,
         model_name_or_path: str,
-        tokenizer: AutoTokenizer | None = None,
+        tokenizer: PreTrainedTokenizerBase | None = None,
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for Mistral due to longer default context lengths. Ignoring."
@@ -714,8 +744,7 @@ class Nemotron(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer: AutoTokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
         super().__init__(
             autoconfig=config,
@@ -751,8 +780,7 @@ class Qwen(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
         super().__init__(
             autoconfig=config,
@@ -792,14 +820,13 @@ class SmolLM2(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
         if rope_scaling_factor:
             logger.warning(
                 f"Rope scaling factor {rope_scaling_factor} is not supported for SmolLM2 due to longer default context lengths. Ignoring."
             )
 
-        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")
+        im_start_id = tokenizer.convert_tokens_to_ids("<|im_start|>")  # ty: ignore[unresolved-attribute] -- third-party stub
         super().__init__(
             autoconfig=config,
             instruction=DEFAULT_INSTRUCTION,
@@ -840,8 +867,7 @@ class SmolLM3(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path) if tokenizer is None else tokenizer
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
         # we use the bos token here explicitly for support during group-by SFT.
         # the groupby assumes there is a bos token at the start of the prompt.
@@ -890,8 +916,7 @@ class TinyLlama(ModelMetadata):
         rope_scaling_factor: float | None = None,
         **kwargs,
     ) -> None:
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_name_or_path)
-        config = AutoConfig.from_pretrained(model_name_or_path)
+        config, tokenizer = ModelMetadata._load_config_and_tokenizer(model_name_or_path, tokenizer)
 
         super().__init__(
             autoconfig=config,
