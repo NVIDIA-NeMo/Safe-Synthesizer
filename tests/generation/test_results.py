@@ -103,7 +103,7 @@ class TestEscalateAfterFailedProbe:
         assert next_count > INITIAL_PROBE_PROMPTS
 
     def test_results_keeps_probe_size_after_length_truncated_zero_valid_probe(self, fixture_processor):
-        """A zero-valid probe that hit ``max_tokens`` should not be treated as under-sized sampling."""
+        """An all-length-truncated zero-valid probe retries at probe size."""
         batches = GenerationBatches(
             target_num_records=10_000,
             invalid_fraction_threshold=1.0,
@@ -126,6 +126,28 @@ class TestEscalateAfterFailedProbe:
             INITIAL_PROBE_PROMPTS,
             records_remaining + NUM_PROMPT_BUFFER,
         )
+
+    def test_results_escalates_after_partially_length_truncated_zero_valid_probe(self, fixture_processor):
+        """A mixed-finish zero-valid probe should not be treated as fully inconclusive."""
+        batches = GenerationBatches(
+            target_num_records=10_000,
+            invalid_fraction_threshold=1.0,
+            patience=10,
+        )
+        first_batch = _make_batch(
+            fixture_processor,
+            num_prompts=INITIAL_PROBE_PROMPTS,
+            num_valid=0,
+            num_invalid=5,
+            finish_reasons={"length": 1, "stop": INITIAL_PROBE_PROMPTS - 1},
+        )
+        batches.add_batch(first_batch)
+
+        next_count = batches.get_next_num_prompts()
+
+        records_remaining = 10_000 - batches.num_valid_records
+        assert next_count == min(batches.max_num_prompts_per_batch, records_remaining + NUM_PROMPT_BUFFER)
+        assert next_count > INITIAL_PROBE_PROMPTS
 
     def test_results_only_uses_latest_batch_finish_reason_for_zero_valid_probe(self, fixture_processor):
         """An earlier length truncation should not suppress escalation after a later non-truncated batch."""

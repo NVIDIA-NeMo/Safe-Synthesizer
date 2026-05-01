@@ -112,6 +112,24 @@ def test_generation_add_batch_length_truncated_first_batch_uses_patience(fixture
     assert generation_with_stop_params.status == GenerationStatus.IN_PROGRESS
 
 
+def test_generation_add_batch_partially_length_truncated_first_batch_stops(
+    fixture_mock_processor_without_valid_records,
+):
+    batch = Batch(fixture_mock_processor_without_valid_records)
+    for prompt_idx in range(INITIAL_PROBE_PROMPTS):
+        batch.process(prompt_idx, "stub")
+    batch.finish_reasons.update({"length": 1, "stop": INITIAL_PROBE_PROMPTS - 1})
+
+    generation_with_stop_params = GenerationBatches(
+        target_num_records=5,
+        invalid_fraction_threshold=0.9,
+        patience=3,
+    )
+    generation_with_stop_params.add_batch(batch)
+
+    assert generation_with_stop_params.status == GenerationStatus.STOP_NO_RECORDS
+
+
 # Purpose: Sequence good → bad → good under stricter policy triggers STOP_METRIC_REACHED mid-flight.
 # Data: Threshold 0.2, patience 3.
 # Asserts: status STOP_METRIC_REACHED after third add.

@@ -351,14 +351,35 @@ class GenerationBatches:
         """Total completions that stopped because they reached ``max_tokens``."""
         return sum(batch.num_length_truncated_completions for batch in self._batches)
 
+    @staticmethod
+    def _has_no_valid_records(batch: Batch) -> bool:
+        """Return whether a batch produced zero valid records."""
+        return batch.num_valid_records == 0
+
+    @classmethod
+    def _is_inconclusive_zero_valid_batch(cls, batch: Batch) -> bool:
+        """Return whether every completion in a zero-valid batch reached ``max_tokens``."""
+        return (
+            cls._has_no_valid_records(batch)
+            and batch.num_prompts > 0
+            and batch.num_length_truncated_completions == batch.num_prompts
+        )
+
+    @classmethod
+    def _should_stop_after_first_zero_valid_batch(cls, batch: Batch) -> bool:
+        """Return whether a first zero-valid batch has enough signal to stop immediately."""
+        return cls._has_no_valid_records(batch) and not cls._is_inconclusive_zero_valid_batch(batch)
+
     def add_batch(self, batch: Batch) -> None:
         """Add a batch and update the generation status.
 
         Stopping rules:
 
-        * The very first batch producing zero valid records triggers
-          ``STOP_NO_RECORDS`` unless it was length-truncated and a
-          patience-based ``stop_condition`` is configured.
+        * The very first batch producing zero valid records normally
+          triggers ``STOP_NO_RECORDS``. A fully length-truncated probe is
+          the exception: every completion may have been cut off before it
+          could emit a complete record, so a patience-based
+          ``stop_condition`` gets to decide whether to continue.
         * When a ``stop_condition`` is configured, subsequent batches
           with zero valid records are tolerated until the patience-based
           threshold is reached.
@@ -372,10 +393,10 @@ class GenerationBatches:
         self._apply_data_actions_fn(batch)
         self.running_stopping_metric.update(batch.stopping_metric)
         if self.stop_condition is None:
-            if batch.num_valid_records == 0:
+            if self._has_no_valid_records(batch):
                 self.status = GenerationStatus.STOP_NO_RECORDS
         else:
-            if batch.num_valid_records == 0 and self.num_batches == 0 and batch.num_length_truncated_completions == 0:
+            if self.num_batches == 0 and self._should_stop_after_first_zero_valid_batch(batch):
                 self.status = GenerationStatus.STOP_NO_RECORDS
             elif self.stop_condition.has_been_reached(self.running_stopping_metric.mean):
                 self.status = GenerationStatus.STOP_METRIC_REACHED
@@ -392,8 +413,9 @@ class GenerationBatches:
           batch of ``INITIAL_PROBE_PROMPTS`` so the records-per-prompt
           ratio can be measured before committing to a full batch.
         * Prompts sent but no valid records yet -- escalate to the full
-          ``max_num_prompts_per_batch`` budget unless completions were
-          length-truncated, in which case keep probing conservatively.
+          ``max_num_prompts_per_batch`` budget unless the latest batch
+          was fully length-truncated, in which case keep probing
+          conservatively instead of expanding GPU work.
         * Have valid records -- size the next batch from the observed
           records-per-prompt ratio, plus ``NUM_PROMPT_BUFFER`` to absorb
           invalid completions.
@@ -416,11 +438,7 @@ class GenerationBatches:
         if is_first_batch:
             return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
 
-        if (
-            last_batch is not None
-            and last_batch.num_valid_records == 0
-            and last_batch.num_length_truncated_completions > 0
-        ):
+        if last_batch is not None and self._is_inconclusive_zero_valid_batch(last_batch):
             return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
 
         return min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)

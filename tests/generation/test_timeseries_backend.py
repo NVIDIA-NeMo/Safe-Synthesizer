@@ -5,6 +5,7 @@
 
 import json
 import re
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -23,8 +24,10 @@ from nemo_safe_synthesizer.config import (
 )
 from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.generation.processors import TimeSeriesDataProcessor
+from nemo_safe_synthesizer.generation.results import GenerationBatches
 from nemo_safe_synthesizer.generation.timeseries_backend import (
     GroupState,
+    GroupProcessingResult,
     TimeseriesBackend,
 )
 from nemo_safe_synthesizer.llm.metadata import (
@@ -464,6 +467,49 @@ class TestBuildModifiedSamplingParamsStopPropagation:
         assert modified.ignore_eos is False
         assert modified.stop == []
         assert modified.stop_token_ids == []
+
+
+class TestGenerateParallelGroups:
+    """Tests for processing vLLM completions during parallel time-series generation."""
+
+    def test_records_completion_finish_reasons(
+        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
+    ):
+        """The generated batch should preserve vLLM finish reasons for stopping logic."""
+        backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
+        backend.llm = MagicMock()
+        backend.llm.generate.return_value = [
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        finish_reason="length",
+                        text='{"timestamp": "2024-01-01 01:00:00", "value": 3}\n',
+                        token_ids=[1, 2, 3],
+                    )
+                ]
+            )
+        ]
+        backend._groups = ["group_A"]
+
+        captured = {}
+
+        def _capture_result(state, batch, invalid_fraction_threshold):  # noqa: ARG001
+            captured["batch"] = batch
+            return GroupProcessingResult.COMPLETED
+
+        backend._process_group_result = _capture_result
+
+        batches = GenerationBatches(target_num_records=100)
+        sampling_params = SamplingParams(max_tokens=10)
+
+        backend._generate_parallel_groups(
+            batches=batches,
+            sampling_params=sampling_params,
+            progress_snapshots=[],
+        )
+
+        assert captured["batch"].finish_reasons["length"] == 1
+        assert batches.num_length_truncated_completions == 1
 
 
 class TestGenerationMaxTokensPlumbing:
