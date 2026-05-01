@@ -164,7 +164,10 @@ class GenerationBatches:
     """Accumulator that tracks batches during the generation phase.
 
     Manages the stopping condition, running statistics, and optional
-    post-processing via ``data_actions_fn``.
+    post-processing via ``data_actions_fn``. The first batch uses a small
+    probe when a target record count is available; later batches estimate the
+    required prompt count from ``num_valid_records / num_prompts`` with
+    ``NUM_PROMPT_BUFFER`` added to absorb invalid completions.
 
     Args:
         target_num_records: Target number of valid records to generate.

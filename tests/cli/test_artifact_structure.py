@@ -764,8 +764,7 @@ class TestTypedViewDrift:
 
     Failures here mean somebody added/renamed a child on one side of the
     ``DirNode[_FooDir]`` ↔ typed-view-subclass pair without updating the
-    other. The cli/AGENTS.md ``artifact_structure.py`` section covers the
-    convention.
+    other. ``artifact_structure.py`` documents the convention.
     """
 
     @pytest.fixture(scope="class")
