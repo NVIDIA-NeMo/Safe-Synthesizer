@@ -5,6 +5,7 @@
 
 import posixpath
 import re
+from typing import Any
 
 from pygments.formatters.html import HtmlFormatter
 
@@ -15,13 +16,13 @@ from pygments.formatters.html import HtmlFormatter
 _orig_html_formatter_init = HtmlFormatter.__init__
 
 
-def _patched_html_formatter_init(self, **options):
+def _patched_html_formatter_init(self: HtmlFormatter, **options: Any) -> None:
     if options.get("filename") is None:
         options["filename"] = ""
     _orig_html_formatter_init(self, **options)
 
 
-HtmlFormatter.__init__ = _patched_html_formatter_init
+setattr(HtmlFormatter, "__init__", _patched_html_formatter_init)
 
 
 def on_page_content(html, page, config, **_kwargs):
