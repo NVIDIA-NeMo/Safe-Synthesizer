@@ -8607,9 +8607,6 @@
     <div class="doc doc-contents first">
 
         <p>Executable pipeline for Safe Synthesizer.</p>
-<p>Extends <code>ConfigBuilder</code> with the <code>SafeSynthesizer</code> class, which
-adds artifact management (via <code>Workdir</code>) and stepwise pipeline
-execution: <code>process_data</code> -&gt; <code>train</code> -&gt; <code>generate</code> -&gt; <code>evaluate</code>.</p>
 
 
 
@@ -8681,6 +8678,10 @@ builder.process_data().train().generate().evaluate()
 builder.save_results()
 results = builder.results
 </code></pre></div>
+<p><code>train()</code> uses <code>HuggingFaceBackend</code>. <code>generate()</code> chooses
+<code>TimeseriesBackend</code> when <code>config.time_series.is_timeseries</code> is true and
+<code>VllmBackend</code> otherwise. Stepwise callers must call <code>save_results()</code>
+themselves after <code>evaluate()</code>; <code>run()</code> does this automatically.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
