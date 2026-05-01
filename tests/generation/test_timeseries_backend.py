@@ -26,8 +26,8 @@ from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_
 from nemo_safe_synthesizer.generation.processors import TimeSeriesDataProcessor
 from nemo_safe_synthesizer.generation.results import GenerationBatches
 from nemo_safe_synthesizer.generation.timeseries_backend import (
-    GroupState,
     GroupProcessingResult,
+    GroupState,
     TimeseriesBackend,
 )
 from nemo_safe_synthesizer.llm.metadata import (
@@ -472,9 +472,7 @@ class TestBuildModifiedSamplingParamsStopPropagation:
 class TestGenerateParallelGroups:
     """Tests for processing vLLM completions during parallel time-series generation."""
 
-    def test_records_completion_finish_reasons(
-        self, timeseries_base_params, timeseries_model_metadata, mock_workdir
-    ):
+    def test_records_completion_finish_reasons(self, timeseries_base_params, timeseries_model_metadata, mock_workdir):
         """The generated batch should preserve vLLM finish reasons for stopping logic."""
         backend = create_timeseries_backend(timeseries_base_params, timeseries_model_metadata, mock_workdir)
         backend.llm = MagicMock()
