@@ -29,6 +29,10 @@
          <lastmod>2026-05-01</lastmod>
     </url>
     <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/developer-guide/preflight-plugins/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/product-overview/data_synthesis/</loc>
          <lastmod>2026-05-01</lastmod>
     </url>
@@ -157,6 +161,10 @@
          <lastmod>2026-05-01</lastmod>
     </url>
     <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/config/preflight/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/config/replace_pii/</loc>
          <lastmod>2026-05-01</lastmod>
     </url>
@@ -190,6 +198,10 @@
     </url>
     <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/data_processing/assembler/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/data_processing/budget/</loc>
          <lastmod>2026-05-01</lastmod>
     </url>
     <url>
@@ -629,6 +641,42 @@
          <lastmod>2026-05-01</lastmod>
     </url>
     <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/base/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/helpers/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/orchestrator/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/registry/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/types/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/checks/advisory/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/checks/dataframe/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/checks/environment/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/preflight/checks/metadata/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/privacy/dp_transformers/dp_utils/</loc>
          <lastmod>2026-05-01</lastmod>
     </url>
@@ -650,6 +698,14 @@
     </url>
     <url>
          <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/sdk/library_builder/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/tooling/modes/</loc>
+         <lastmod>2026-05-01</lastmod>
+    </url>
+    <url>
+         <loc>https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/tooling/preflight/</loc>
          <lastmod>2026-05-01</lastmod>
     </url>
     <url>
