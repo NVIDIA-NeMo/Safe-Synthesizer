@@ -14,7 +14,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from outlines_core.json_schema import (
+from outlines_core._json_schema import (
     BOOLEAN,
     DATE,
     DATE_TIME,
