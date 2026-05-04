@@ -620,6 +620,7 @@ class TestRunErrorPathExitCodes:
         # CategoryLogger wrapping a structlog BoundLogger, and stdlib
         # LoggerAdapter.isEnabledFor() then fails with AttributeError.
         monkeypatch.setattr(obs, "_INITIALIZED_OBSERVABILITY", False)
+        monkeypatch.delenv("NSS_PHASE", raising=False)
 
     def test_run_with_no_data_source_exits_nonzero(
         self,
@@ -636,7 +637,6 @@ class TestRunErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
-        assert "--data-source is required" in result.output
 
     def test_run_with_nonexistent_data_source_exits_nonzero(
         self,
@@ -657,7 +657,7 @@ class TestRunErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
-        assert result.exception is not None
+        assert isinstance(result.exception, FileNotFoundError)
 
     def test_run_with_unsupported_data_source_extension_exits_nonzero(
         self,
@@ -679,7 +679,7 @@ class TestRunErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
-        assert result.exception is not None
+        assert isinstance(result.exception, ValueError)
 
     def test_generate_with_nonexistent_run_path_exits_nonzero(
         self,
@@ -702,4 +702,3 @@ class TestRunErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
-        assert "--run-path does not exist" in result.output

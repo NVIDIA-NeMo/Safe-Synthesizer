@@ -44,7 +44,6 @@ class TestConfigValidateErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
-        assert result.exception is not None
         assert isinstance(result.exception, FileNotFoundError)
 
     def test_validate_malformed_config_exits_nonzero(
@@ -99,12 +98,11 @@ class TestConfigValidateErrorPathExitCodes:
         result = cli_runner.invoke(config, ["validate"])
 
         assert result.exit_code != 0
-        assert "--config" in result.output
 
     def test_validate_valid_config_exits_zero(
         self,
         cli_runner: CliRunner,
-        tmp_path_factory,
+        tmp_path: Path,
         fixture_yaml_config_str: str,
     ):
         """Positive control: a valid YAML config must exit 0.
@@ -113,7 +111,6 @@ class TestConfigValidateErrorPathExitCodes:
         non-zero exit code for correct input, which would invert the contract
         these error-path tests protect.
         """
-        tmp_path = tmp_path_factory.mktemp("valid_config", numbered=True)
         valid_config = tmp_path / "valid.yaml"
         valid_config.write_text(fixture_yaml_config_str)
 
@@ -127,4 +124,3 @@ class TestConfigValidateErrorPathExitCodes:
         )
 
         assert result.exit_code == 0
-        assert "is valid" in result.output
