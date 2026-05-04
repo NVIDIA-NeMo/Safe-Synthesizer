@@ -294,16 +294,20 @@ effect visible.
 If this stage takes more than 10 minutes, you might need to train the model
 more or examine the training parameters.
 
-To diagnose, run with `-v` (debug logging). The logs will show:
+To diagnose, check the batch summary logs first. When vLLM reports why
+outputs stopped, the `Batch Generation Summary` includes aggregate
+`finish_reasons` counts. Run with `-v` (debug logging) for per-prompt
+details:
 
 - Sampling parameters, including EOS token configuration, `max_tokens`,
   and stop conditions
 - Per-prompt output: token count, `finish_reason`, and `stop_reason`
 
-If every prompt shows `finish_reason=stop`, the stop condition is working
-and the generation time is real inference time. If any prompt shows
-`finish_reason=length`, it ran to `max_tokens` without producing an EOS
-token -- this typically indicates insufficient training (see
+If outputs show `finish_reason=stop`, the stop condition is working and
+the generation time is real inference time. If outputs show
+`finish_reason=length`, they ran to `max_tokens` without producing an EOS
+token or a complete parseable record -- this can indicate insufficient
+training or an overly tight output-token budget (see
 [Grouped Data Produces Very Few Training Examples](#grouped-data-produces-very-few-training-examples)).
 
 ### GenerationError
@@ -317,7 +321,11 @@ Generation stopped prematurely due to no valid records
 : The first batch produced zero valid records. The model may be underfitting
   or the schema may not match the training data. Increase
   `training.num_input_records_to_sample` to give the model more context,
-  and check training logs for quality issues.
+  and check training logs for quality issues. If the batch summary shows
+  `finish_reasons` dominated by `length`, generation reached `max_tokens`
+  before producing valid records; inspect prompt size, schema size, and
+  grouped/time-series prefill length before treating it as model quality
+  alone.
 
 ```text
 Generation stopped prematurely because the average fraction of invalid records was higher than...

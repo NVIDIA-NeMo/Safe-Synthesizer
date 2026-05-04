@@ -283,6 +283,15 @@ class TestRenderRichTable:
         assert "0.72" in result
         assert "95.00%" in result
 
+    def test_renders_mapping_values_without_python_repr(self):
+        """Mapping values in flat tables are rendered as compact key-value lists."""
+        data = {"num_prompts": 10, "finish_reasons": {"length": 10, "stop": 2}}
+        result = _render_rich_table(data)
+
+        assert "Finish Reasons" in result
+        assert "length: 10, stop: 2" in result
+        assert "{'length': 10" not in result
+
     def test_renders_nested_dict(self):
         """Test rendering a nested statistics dictionary."""
         data = {

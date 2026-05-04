@@ -794,6 +794,7 @@ class TimeseriesBackend(VllmBackend):
                 group_state = active_states[prompt_idx]
                 batch = group_batches[group_state.group_id]
                 for completion_idx, completion in enumerate(output.outputs):
+                    batch.finish_reasons[str(completion.finish_reason or "unknown")] += 1
                     batch.process(completion_idx, completion.text, completion_tokens=len(completion.token_ids))
 
             duration = time.perf_counter() - start_time

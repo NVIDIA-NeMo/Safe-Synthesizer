@@ -471,6 +471,7 @@ class VllmBackend(GeneratorBackend):
 
         for idx, output in enumerate(outputs):
             out = output.outputs[0]
+            batch.finish_reasons[str(out.finish_reason or "unknown")] += 1
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
                     f"prompt {idx}: {len(out.token_ids)} tokens, "

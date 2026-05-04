@@ -38,7 +38,7 @@ import sys
 import threading
 import time
 import warnings
-from collections.abc import Callable, Generator, MutableMapping
+from collections.abc import Callable, Generator, Mapping, MutableMapping
 from datetime import datetime
 from enum import Enum
 from functools import wraps
@@ -204,6 +204,16 @@ def _move_category_for_column(logger: logging.Logger, method_name: str, event_di
     return event_dict
 
 
+def _format_table_value(key: str, value: object) -> str:
+    """Format values for user-facing Rich tables."""
+    if isinstance(value, float):
+        is_fraction = 0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+        return f"{value:.2%}" if is_fraction else f"{value:.2f}"
+    if isinstance(value, Mapping):
+        return ", ".join(f"{mapping_key}: {value[mapping_key]}" for mapping_key in sorted(value))
+    return str(value)
+
+
 def _render_rich_table(data: dict, title: str | None = None) -> str:
     """Render a dictionary as a Rich ASCII table string."""
     table = Table(title=title, box=box.ASCII)
@@ -227,13 +237,7 @@ def _render_rich_table(data: dict, title: str | None = None) -> str:
         table.add_column("Value")
         for key, value in data.items():
             display_key = key.replace("_", " ").title()
-            if isinstance(value, float):
-                is_fraction = (
-                    0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
-                )
-                display_value = f"{value:.2%}" if is_fraction else f"{value:.2f}"
-            else:
-                display_value = str(value)
+            display_value = _format_table_value(key, value)
             table.add_row(display_key, display_value)
 
     return _convert_rich_table_to_string(table)
