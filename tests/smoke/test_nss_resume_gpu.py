@@ -23,10 +23,10 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_preflight_iris_df, tmp_path):
+def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_gpu_smoke_df, tmp_path):
     """Train, then create a new SafeSynthesizer instance and generate from saved state.
 
-    Uses preflight-sized iris rows with holdout=0.05 so load_from_save_path()
+    Uses a preflight-sized tabular fixture with holdout=0.05 so load_from_save_path()
     has a non-empty test.csv to read. The base holdout=0 config produces an empty
     test split which causes EmptyDataError on resume.
     """
@@ -41,7 +41,7 @@ def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_pr
     )
 
     # Step 1: Train
-    nss1 = train_with_sdk(config, fixture_preflight_iris_df, tmp_path)
+    nss1 = train_with_sdk(config, fixture_gpu_smoke_df, tmp_path)
     workdir = nss1._workdir
 
     # Step 2: New instance (simulates a new process / CLI invocation)

@@ -20,15 +20,15 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_train_one_batch(fixture_base_smoke_config, fixture_preflight_iris_df, tmp_path):
+def test_nss_train_one_batch(fixture_base_smoke_config, fixture_gpu_smoke_df, tmp_path):
     """Train one batch through the SafeSynthesizer SDK with local tiny model."""
-    nss = train_with_sdk(fixture_base_smoke_config, fixture_preflight_iris_df, tmp_path)
+    nss = train_with_sdk(fixture_base_smoke_config, fixture_gpu_smoke_df, tmp_path)
     assert nss._workdir is not None
     assert_adapter_saved(nss._workdir)
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_train_dp_one_batch(fixture_local_tinyllama_dir, fixture_preflight_iris_df, tmp_path):
+def test_nss_train_dp_one_batch(fixture_local_tinyllama_dir, fixture_gpu_smoke_df, tmp_path):
     """Train one batch with DP enabled through the SafeSynthesizer SDK.
 
     Uses num_input_records_to_sample=100 (vs 10 for non-DP) to keep the epoch
@@ -45,6 +45,6 @@ def test_nss_train_dp_one_batch(fixture_local_tinyllama_dir, fixture_preflight_i
         dp_enabled=True,
         epsilon=100.0,
     )
-    nss = train_with_sdk(config, fixture_preflight_iris_df, tmp_path)
+    nss = train_with_sdk(config, fixture_gpu_smoke_df, tmp_path)
     assert nss._workdir is not None
     assert_adapter_saved(nss._workdir)

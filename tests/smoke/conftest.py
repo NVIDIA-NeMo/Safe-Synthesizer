@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from math import ceil
 from pathlib import Path
 
 import pandas as pd
@@ -99,10 +98,9 @@ def fixture_iris_df(stub_datasets_dir) -> pd.DataFrame:
 
 
 @pytest.fixture(scope="session")
-def fixture_preflight_iris_df(fixture_iris_df) -> pd.DataFrame:
-    """Iris rows repeated enough to satisfy preflight's training-size floor."""
-    repeat_count = ceil(200 / len(fixture_iris_df))
-    return pd.concat([fixture_iris_df] * repeat_count, ignore_index=True)
+def fixture_gpu_smoke_df(stub_datasets_dir) -> pd.DataFrame:
+    """Small tabular dataset sized for GPU smoke tests that run preflight."""
+    return pd.read_csv(stub_datasets_dir / "clinc_oos.csv", nrows=210)
 
 
 @pytest.fixture(scope="session")
