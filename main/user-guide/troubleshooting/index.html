@@ -10092,16 +10092,20 @@ progress bar, which shows per-prompt completion rates and makes the tail
 effect visible.</p>
 <p>If this stage takes more than 10 minutes, you might need to train the model
 more or examine the training parameters.</p>
-<p>To diagnose, run with <code>-v</code> (debug logging). The logs will show:</p>
+<p>To diagnose, check the batch summary logs first. When vLLM reports why
+outputs stopped, the <code>Batch Generation Summary</code> includes aggregate
+<code>finish_reasons</code> counts. Run with <code>-v</code> (debug logging) for per-prompt
+details:</p>
 <ul>
 <li>Sampling parameters, including EOS token configuration, <code>max_tokens</code>,
   and stop conditions</li>
 <li>Per-prompt output: token count, <code>finish_reason</code>, and <code>stop_reason</code></li>
 </ul>
-<p>If every prompt shows <code>finish_reason=stop</code>, the stop condition is working
-and the generation time is real inference time. If any prompt shows
-<code>finish_reason=length</code>, it ran to <code>max_tokens</code> without producing an EOS
-token -- this typically indicates insufficient training (see
+<p>If outputs show <code>finish_reason=stop</code>, the stop condition is working and
+the generation time is real inference time. If outputs show
+<code>finish_reason=length</code>, they ran to <code>max_tokens</code> without producing an EOS
+token or a complete parseable record -- this can indicate insufficient
+training or an overly tight output-token budget (see
 <a href="#grouped-data-produces-very-few-training-examples">Grouped Data Produces Very Few Training Examples</a>).</p>
 <h3 id="generationerror">GenerationError<a class="headerlink" href="#generationerror" title="Permanent link">&para;</a></h3>
 <p>Generation failures during synthetic data production. The two most common:</p>
@@ -10112,7 +10116,11 @@ token -- this typically indicates insufficient training (see
 <p>The first batch produced zero valid records. The model may be underfitting
   or the schema may not match the training data. Increase
   <code>training.num_input_records_to_sample</code> to give the model more context,
-  and check training logs for quality issues.</p>
+  and check training logs for quality issues. If the batch summary shows
+  <code>finish_reasons</code> dominated by <code>length</code>, generation reached <code>max_tokens</code>
+  before producing valid records; inspect prompt size, schema size, and
+  grouped/time-series prefill length before treating it as model quality
+  alone.</p>
 </dd>
 <dt><div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
 </span></code></pre></div></dt>
