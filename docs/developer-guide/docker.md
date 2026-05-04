@@ -24,7 +24,7 @@ flowchart TD
 
     subgraph stages [Build Stages]
         tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
-        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu129+engine"]
+        deps["deps\nInstalls Python 3.13 via uv\nuv sync cu129+engine"]
         runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
         dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
     end
@@ -101,7 +101,7 @@ command).
 | `CUDA_VERSION` | `12.8.1` | CUDA toolkit version in the base image tag |
 | `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
 | `CUDA_IMAGE_TYPE` | `runtime` | Base image variant for the deps stage. Change to `devel` if a dependency requires CUDA headers for compilation |
-| `PYTHON_VERSION` | `3.11.13` | Python version installed via `uv python install` |
+| `PYTHON_VERSION` | `3.13` | Python version installed via `uv python install` |
 | `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`). Automatically populated by `docker buildx build --platform` |
 | `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc`. Override for arm64: `90;90a;120;120a` |
 
@@ -262,8 +262,8 @@ To reduce size:
 
 | Aspect | `Dockerfile.cuda` | `Dockerfile.test_ci` |
 |--------|-------------------|----------------------|
-| Base | `nvidia/cuda:12.9.1-runtime-ubuntu22.04` | `python:3.11-slim` |
-| Extras | `cu129` + `engine` | `cpu` + `engine` |
+| Base | `nvidia/cuda:12.9.1-runtime-ubuntu22.04` | `python:3.13-slim` |
+| Extras | `cu128` + `engine` | `cpu` + `engine` |
 | GPU | Required | Not needed |
 | Stages | `tools` / `deps` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |

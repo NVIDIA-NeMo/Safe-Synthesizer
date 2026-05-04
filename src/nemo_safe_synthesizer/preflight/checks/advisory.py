@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing_extensions import override
+
 from ..base import AdvisoryCheck, IssueCollector
 from ..types import DataFrameView
 from ._helpers import resolved_record_count
@@ -28,6 +30,7 @@ class SmallDatasetCheck(AdvisoryCheck):
     min_rows_warning: int = 1000
     requires = ("dataset.size",)
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_rows = len(ctx.data)
         if n_rows < self.min_rows_warning:
@@ -44,6 +47,7 @@ class OversamplingCheck(AdvisoryCheck):
     label = "Oversampling"
     oversampling_ratio: float = 5.0
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_records = resolved_record_count(ctx)
         if n_records is None:

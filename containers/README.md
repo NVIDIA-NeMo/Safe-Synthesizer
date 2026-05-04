@@ -10,7 +10,7 @@ Dockerfiles for running and testing Safe-Synthesizer in containers.
 | File | Base | Purpose |
 |------|------|---------|
 | `Dockerfile.cuda` | `nvidia/cuda:12.8.1-runtime-ubuntu22.04` | GPU runtime and dev images for training, generation, and evaluation |
-| `Dockerfile.test_ci` | `python:3.11.13-slim` | CPU-only test image (`mise run test:ci-container`) |
+| `Dockerfile.test_ci` | `python:3.13-slim` | CPU-only test image (`mise run test:ci-container`) |
 | `entrypoint.sh` | -- | Wrapper entrypoint for the runtime image (mount/GPU checks) |
 
 ## CUDA Image
@@ -83,7 +83,7 @@ Key flags:
 | `CUDA_VERSION` | `12.8.1` | CUDA toolkit version in the base image tag |
 | `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
 | `CUDA_IMAGE_TYPE` | `runtime` | Base image variant (`runtime` or `devel`) |
-| `PYTHON_VERSION` | `3.11.13` | Python version installed via `uv python install` to `/opt/python` |
+| `PYTHON_VERSION` | `3.13` | Python version installed via `uv python install` to `/opt/python` |
 | `UV_VERSION` | `0.9.30` | uv version for the deps stage (matches `.mise.toml` pin) |
 | `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`) |
 | `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc` (override for arm64: `90;90a;120;120a`) |

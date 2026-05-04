@@ -9,10 +9,12 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Prerequisites
 
-- Python 3.11–3.13 (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because ray, a transitive dependency of vLLM, does not yet publish `cp314` wheels)
+- Python 3.11–3.13 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because ray, a transitive dependency of vLLM, does not yet publish `cp314` wheels)
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip -- Python package manager
 - NVIDIA GPU (A100 or larger) for training and generation
 - Linux only -- macOS, Windows, and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
+
+> Contributor note: although the default development/runtime interpreter is Python 3.13, source code must remain Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax such as PEP 695 `type` statements or bracketed generic class/function parameters in shared package code yet.
 
 ### Installation
 

@@ -1,6 +1,6 @@
-FROM python:3.11.13-slim AS setup
+FROM python:3.13.13-slim AS setup
 
-ARG PYTHON_VERSION=3.11.13
+ARG PYTHON_VERSION=3.13.13
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

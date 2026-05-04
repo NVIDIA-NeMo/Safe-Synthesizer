@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing_extensions import override
+
 from ...data_processing.validation import (
     check_column_has_no_nulls,
     check_column_present,
@@ -38,6 +40,7 @@ class DatasetSizeCheck(DataFrameCheck):
     category = "data quality"
     min_rows: int = 200
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         n_rows = len(ctx.data)
         if n_rows < self.min_rows:
@@ -53,6 +56,7 @@ class GroupbyColumnCheck(DataFrameCheck):
     name = "columns.groupby"
     label = "Group-by column"
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         column = ctx.config.data.group_training_examples_by
         if column is None:
@@ -79,6 +83,7 @@ class OrderbyColumnCheck(DataFrameCheck):
     name = "columns.orderby"
     label = "Order-by column"
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         config = ctx.config
         column = config.data.order_training_examples_by
@@ -103,6 +108,7 @@ class PseudoColumnCheck(DataFrameCheck):
     name = "columns.pseudo"
     label = "Pseudo column"
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         emit_on_raise(
             collector,
@@ -118,6 +124,7 @@ class ConstantColumnCheck(DataFrameCheck):
     name = "columns.constant"
     label = "Constant columns"
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         data = ctx.data
         for col in data.columns:
@@ -134,11 +141,13 @@ class TimestampColumnCheck(DataFrameCheck):
     name = "timeseries.timestamp"
     label = "Timestamp column"
 
+    @override
     def enabled(self, ctx: PreflightContext) -> bool:
         if not super().enabled(ctx):
             return False
         return bool(ctx.config.time_series.is_timeseries)
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         timestamp_column = ctx.config.time_series.timestamp_column
         if timestamp_column is None:

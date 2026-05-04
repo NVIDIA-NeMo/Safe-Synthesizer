@@ -106,11 +106,12 @@ apt-get update && apt-get install -y --no-install-recommends \
 
 # Ensure Python environment is available inside the container
 source "${LUSTRE_DIR}/.uv/bin/env"
+NSS_PYTHON_VERSION="${NSS_PYTHON_VERSION:-3.13}"
 if [[ -n "${NSS_VERSION:-}" ]]; then
     # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
     # lustre so concurrent array jobs can share it without redundant downloads.
-    PYPI_VENV="${LUSTRE_DIR}/.venv_nss_${NSS_VERSION}"
-    uv venv --python 3.11 "${PYPI_VENV}"
+    PYPI_VENV="${LUSTRE_DIR}/.venv_nss_py${NSS_PYTHON_VERSION}_${NSS_VERSION}"
+    uv venv --python "${NSS_PYTHON_VERSION}" "${PYPI_VENV}"
     source "${PYPI_VENV}/bin/activate"
     uv pip install "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}" \
         --index https://flashinfer.ai/whl/cu129 \
@@ -118,7 +119,7 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
         --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
         --index-strategy unsafe-best-match
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
-    echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION}"
+    echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
 else
     uv sync --frozen --extra cu129 --extra engine --group dev
     source "${NSS_DIR}/.venv/bin/activate"

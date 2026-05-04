@@ -87,6 +87,10 @@ jobs:
       }}
     timeout-minutes: 30
     runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
     steps:
       - name: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
