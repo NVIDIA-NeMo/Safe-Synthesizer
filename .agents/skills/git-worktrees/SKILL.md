@@ -29,10 +29,10 @@ uv sync --frozen
 
 This creates a local `.venv` in the worktree. With uv's cache the install takes ~2-3 seconds on a warm cache.
 
-If you need different extras (e.g. `cu128` vs `cpu`), pass them explicitly:
+If you need different extras (e.g. `cu130` vs `cpu`), pass them explicitly:
 
 ```bash
-uv sync --frozen --extra cu128 --extra engine --group dev
+uv sync --frozen --extra cu130 --extra engine --group dev
 ```
 
 Never run bare `uv sync` without `--frozen` -- it re-locks `uv.lock` and creates dirty state.

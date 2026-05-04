@@ -5,7 +5,7 @@
 #
 # Stages:
 #   tools   -- install mise and all dev tools (uv, ruff, etc.)
-#   deps    -- install Python, uv, and all cu128+engine dependencies
+#   deps    -- install Python, uv, and all cu130+engine dependencies
 #   runtime -- minimal CLI wrapper (ENTRYPOINT entrypoint.sh -> safe-synthesizer)
 #   dev     -- extends runtime with dev tools, tests, and interactive shell
 #
@@ -58,7 +58,7 @@ ARG TARGETARCH
 # ---------------------------------------------------------------------------
 # Build arguments
 # ---------------------------------------------------------------------------
-ARG CUDA_VERSION=12.8.1
+ARG CUDA_VERSION=13.0.2
 ARG UBUNTU_VERSION=22.04
 # Use "runtime" when all deps ship pre-built wheels (current state).
 # Switch to "devel" if a future dependency requires CUDA compilation.
@@ -142,14 +142,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # not when source code changes.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --extra cu128 --extra engine --no-group dev
+    uv sync --no-install-project --extra cu130 --extra engine --no-group dev
 
 # -- Project layer: install the project (non-editable so the venv is
 # self-contained and source code is not needed in the runtime image).
 COPY README.md ./
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-editable --extra cu128 --extra engine --no-group dev
+    uv sync --no-editable --extra cu130 --extra engine --no-group dev
 
 # ---------------------------------------------------------------------------
 # Stage 3: runtime -- minimal image wrapping the safe-synthesizer CLI
@@ -233,7 +233,7 @@ COPY . .
 
 # Install dev dependencies into the existing venv.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra cu128 --extra engine --group dev
+    uv sync --extra cu130 --extra engine --group dev
 
 RUN git config --global --add safe.directory /workspace
 

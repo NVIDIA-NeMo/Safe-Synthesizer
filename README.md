@@ -18,15 +18,15 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ```bash
 # With uv (recommended):
-uv pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --index https://flashinfer.ai/whl/cu128 \
-  --index https://download.pytorch.org/whl/cu128 \
+uv pip install "nemo-safe-synthesizer[cu130,engine]" \
+  --index https://flashinfer.ai/whl/cu130 \
+  --index https://download.pytorch.org/whl/cu130 \
   --index-strategy unsafe-best-match
 
 # With pip:
-pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --extra-index-url https://download.pytorch.org/whl/cu128 \
-  --extra-index-url https://flashinfer.ai/whl/cu128
+pip install "nemo-safe-synthesizer[cu130,engine]" \
+  --extra-index-url https://download.pytorch.org/whl/cu130 \
+  --extra-index-url https://flashinfer.ai/whl/cu130
 ```
 
 Or install from source:

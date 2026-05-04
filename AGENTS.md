@@ -24,7 +24,7 @@ Common commands: `make test` (unit tests), `make format` (auto-fix formatting + 
 The canonical `uv sync` command for a full GPU/dev environment is:
 
 ```bash
-uv sync --frozen --extra cu128 --extra engine --group dev
+uv sync --frozen --extra cu130 --extra engine --group dev
 ```
 
 Bare `uv sync --frozen` (without extras) installs an incomplete environment -- `ty`, import checks, and GPU tests will fail.

@@ -82,7 +82,7 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Bootstrap CUDA environment
-        run: make bootstrap-nss cu128
+        run: make bootstrap-nss cu130
 
       - name: Check GPU availability
         run: |
@@ -114,7 +114,7 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Bootstrap CUDA environment
-        run: make bootstrap-nss cu128
+        run: make bootstrap-nss cu130
 
       - name: Check GPU availability
         run: |

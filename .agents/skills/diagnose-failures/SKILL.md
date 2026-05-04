@@ -55,7 +55,7 @@ Common `ty` error patterns:
 
 | Error | Likely cause | Fix |
 |-------|-------------|-----|
-| `unresolved-import` | Missing extra in venv | Run `uv sync --frozen --extra cu128 --extra engine --group dev` |
+| `unresolved-import` | Missing extra in venv | Run `uv sync --frozen --extra cu130 --extra engine --group dev` |
 | `unresolved-attribute` | Computed property treated as config field | Check if the attribute is a `@property`, not a Pydantic field |
 | `possibly-unbound` | Variable assigned only in one branch | Add an `else` branch or initialise before the conditional |
 | `invalid-argument-type` | Wrong type passed to function | Check the function signature; use `cast()` only as a last resort |
@@ -87,8 +87,8 @@ gh run view <run-id> --log-failed
 
 ## Import / Dependency Errors
 
-- Check if the import requires an extras gate: `cpu`, `cu128`, or `engine`
-- Common: `vllm`, `torch`, `unsloth` need `cpu` or `cu128` extra
+- Check if the import requires an extras gate: `cpu`, `cu130`, or `engine`
+- Common: `vllm`, `torch`, `unsloth` need `cpu` or `cu130` extra
 - Use the `diagnose-deps` skill for lockfile diff diagnosis after `uv lock`
 - Run: `uv run tools/diff-lockfile.py` to see what changed
 
@@ -97,7 +97,7 @@ gh run view <run-id> --log-failed
 | Error | Likely Cause | Fix |
 |-------|-------------|-----|
 | `CUDA out of memory` | Batch too large or model too big | Reduce `batch_size` or use quantization |
-| `CUDA not available` | Wrong extra installed | Reinstall with `make bootstrap-nss cu128` |
+| `CUDA not available` | Wrong extra installed | Reinstall with `make bootstrap-nss cu130` |
 | `NCCL error` | Multi-GPU issues | Use `CUDA_VISIBLE_DEVICES=0` for single-GPU |
 
 ### Running GPU / e2e Tests
