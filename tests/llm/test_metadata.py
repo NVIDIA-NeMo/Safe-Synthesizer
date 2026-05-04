@@ -32,6 +32,7 @@ from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
     GLOBAL_MAX_SEQ_LENGTH,
+    Granite,
     Llama32,
     LLMPromptConfig,
     Mistral,
@@ -95,6 +96,7 @@ MODEL_DETECTION_SCENARIOS = [
     ModelDetectionScenario("smollm3", "HuggingFaceTB/SmolLM3-3B", SmolLM3),
     ModelDetectionScenario("mistral", "mistralai/Mistral-7B-Instruct-v0.3", Mistral),
     ModelDetectionScenario("nemotron", "nvidia/Nemotron-4-340B", Nemotron),
+    ModelDetectionScenario("granite", "ibm-granite/granite-3.0-2b-instruct", Granite),
 ]
 
 # Model initialization scenarios - tests each model's specific configuration
@@ -150,6 +152,16 @@ MODEL_INIT_SCENARIOS = [
         expected_bos_token="<|im_start|>",
         expected_bos_token_id=1,
         use_global_max_seq=True,
+    ),
+    ModelInitScenario(
+        id="granite",
+        model_class=Granite,
+        model_path="ibm-granite/granite-3.0-2b-instruct",
+        expected_template="user\n {instruction} {schema} \n assistant\n{prefill}",
+        expected_add_bos=False,
+        expected_add_eos=True,
+        expected_bos_token=None,
+        expected_bos_token_id=None,
     ),
     ModelInitScenario(
         id="mistral",
@@ -297,7 +309,7 @@ def mock_tokenizer():
     """Create a mock tokenizer for testing."""
     tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
     tokenizer.bos_token = "<s>"
-    tokenizer.bos_token_id = 1
+    tokenizer.bos_token_id = 10
     tokenizer.eos_token = "</s>"
     tokenizer.eos_token_id = 2
     _token_ids = {"<|im_start|>": 1, "<|im_end|>": 2}
@@ -1021,6 +1033,21 @@ class TestModelMetadataKwargsPassthrough:
         assert metadata.rope_scaling.factor == 4
         assert metadata.rope_scaling_factor == 4
         assert metadata.max_seq_length == 4 * DEFAULT_MAX_SEQ_LENGTH
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
+    @pytest.mark.parametrize("model_class", [Mistral, SmolLM2, SmolLM3])
+    def test_unsupported_families_ignore_raw_rope_scaling(
+        self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj, model_class
+    ):
+        """Raw rope_scaling kwargs should not bypass unsupported-family defaults."""
+        mock_auto_tokenizer.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+
+        metadata = model_class(model_name_or_path=f"test-{model_class.__name__}", rope_scaling=2)
+
+        assert metadata.rope_scaling is None
+        assert metadata.rope_scaling_factor == 1.0
 
 
 class TestTinyLlamaWithTokenizer:

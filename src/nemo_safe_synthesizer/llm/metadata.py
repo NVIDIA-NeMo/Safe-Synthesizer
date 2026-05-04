@@ -391,6 +391,12 @@ class ModelMetadata(BaseModel):
             data["autoconfig"] = autoconfig
         if tokenizer is not None:
             data["tokenizer"] = tokenizer
+        if is_model_family and not metadata_cls.supports_rope_scaling and data.get("rope_scaling") is not None:
+            logger.warning(
+                f"Rope scaling {data['rope_scaling']} is not supported for {metadata_cls.__name__} "
+                "due to longer default context lengths. Ignoring."
+            )
+            data["rope_scaling"] = None
         if rope_scaling_factor is not None and "rope_scaling" not in data:
             data["rope_scaling"] = metadata_cls._rope_scaling_from_factor(rope_scaling_factor)
 
