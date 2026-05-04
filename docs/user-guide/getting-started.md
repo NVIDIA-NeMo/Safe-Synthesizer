@@ -15,11 +15,11 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11–3.13 (dev tooling currently pins 3.11 via `.python-version` in the repo root; Python 3.14+ is **not** supported — see [Troubleshooting](troubleshooting.md#python-314-is-not-supported))
-- CUDA runtime 12.8+
+- CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
 !!! failure "Linux only -- macOS, Windows, and Apple Silicon are not supported"
-    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.8+
+    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 13.0+
     to run the training and generation pipeline. The [CPU install tab below](#install-the-package)
     is for development and configuration validation only -- it cannot train models or
     generate synthetic data.
@@ -29,22 +29,22 @@ does at each stage.
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.
 
-=== "CUDA 12.8 (Linux with NVIDIA GPU)"
+=== "CUDA 13.0 (Linux with NVIDIA GPU)"
 
     === "pip"
 
         ```bash
-        pip install "nemo-safe-synthesizer[cu128,engine]" \
-          --extra-index-url https://download.pytorch.org/whl/cu128 \
-          --extra-index-url https://flashinfer.ai/whl/cu128
+        pip install "nemo-safe-synthesizer[cu130,engine]" \
+          --extra-index-url https://download.pytorch.org/whl/cu130 \
+          --extra-index-url https://flashinfer.ai/whl/cu130
         ```
 
     === "uv"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer[cu128,engine]" \
-          --index https://flashinfer.ai/whl/cu128 \
-          --index https://download.pytorch.org/whl/cu128 \
+        uv pip install "nemo-safe-synthesizer[cu130,engine]" \
+          --index https://flashinfer.ai/whl/cu130 \
+          --index https://download.pytorch.org/whl/cu130 \
           --index-strategy unsafe-best-match
         ```
 

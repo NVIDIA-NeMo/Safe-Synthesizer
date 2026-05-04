@@ -59,7 +59,7 @@ make test-nss-mistral_dp-dow_jones_index-ci
 Details:
 
 - Driven by `tests/e2e/test_dataset_config.py` with YAML configs under `tests/e2e/required_configs/`
-- Each target bootstraps `cu128`, runs single-process (`-n 0`) with coverage
+- Each target bootstraps `cu130`, runs single-process (`-n 0`) with coverage
 - These are not part of `make test-e2e` -- they are standalone CI targets
 
 ## Pytest Markers
@@ -135,7 +135,7 @@ Tokenizers are function-scoped (expensive to load). Most fixtures are function-s
 
 `ParsedResponse`: `valid_records=[...]`, `invalid_records=[...]`, `errors=[...]`, `prompt_number=int`. Use `fixture_mock_processor` or `fixture_mock_processor_without_valid_records`.
 
-Optional dependencies: use `pytest.importorskip` to gate on packages that require specific extras. E2e tests use this for `sentence_transformers` and `vllm` (require `cu128` extra).
+Optional dependencies: use `pytest.importorskip` to gate on packages that require specific extras. E2e tests use this for `sentence_transformers` and `vllm` (require `cu130` extra).
 
 Mock Workdir via `mock_workdir(tmp_path)` in `cli/conftest.py`.
 

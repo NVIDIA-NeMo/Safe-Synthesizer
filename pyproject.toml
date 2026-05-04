@@ -117,46 +117,47 @@ engine = [
 cpu = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "flashinfer-python==0.6.6; sys_platform=='linux'",
-  "flashinfer-cubin==0.6.6; sys_platform=='linux'",
+  "flashinfer-python==0.6.8.post1; sys_platform=='linux'",
+  "flashinfer-cubin==0.6.8.post1; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1",
   "peft",
   "opacus",
   "sentence-transformers",
-  "torch==2.10.0; sys_platform == 'darwin'",
-  "torch==2.10.0+cpu; sys_platform == 'linux'",
-  "torchvision==0.25.0; sys_platform == 'darwin'",
-  "torchvision==0.25.0+cpu; sys_platform == 'linux'",
-  "torchao==0.16.0",
+  "torch==2.11.0; sys_platform == 'darwin'",
+  "torch==2.11.0+cpu; sys_platform == 'linux'",
+  "torchaudio==2.11.0; sys_platform == 'darwin'",
+  "torchaudio==2.11.0+cpu; sys_platform == 'linux'",
+  "torchvision==0.26.0; sys_platform == 'darwin'",
+  "torchvision==0.26.0+cpu; sys_platform == 'linux'",
+  "torchao==0.17.0",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
-  "vllm==0.18.0; sys_platform=='linux'",
+  "vllm==0.20.0; sys_platform=='linux'",
 ]
 
-cu128 = [
+cu130 = [
   "accelerate",
   "bitsandbytes==0.49.1",
-  "flashinfer-python==0.6.6; sys_platform == 'linux'",
-  "flashinfer-cubin==0.6.6; sys_platform == 'linux'",
-  "flashinfer-jit-cache==0.6.6+cu128; sys_platform == 'linux'",
+  "flashinfer-python==0.6.8.post1; sys_platform == 'linux'",
+  "flashinfer-cubin==0.6.8.post1; sys_platform == 'linux'",
+  "flashinfer-jit-cache==0.6.8.post1+cu130; sys_platform == 'linux'",
   "gliner",
   "kernels>=0.12.1",
-  "nvidia-cublas-cu12; sys_platform == 'linux'",
   "nvidia-ml-py; sys_platform == 'linux'",
   "opacus",
   "peft",
   "sentence-transformers",
-  "torch==2.10.0+cu128; sys_platform == 'linux'",
+  "torch==2.11.0+cu130; sys_platform == 'linux'",
   "torch-c-dlpack-ext",
-  "torchvision==0.25.0+cu128; sys_platform == 'linux'",
-  "torchao==0.16.0+cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "torchaudio==2.11.0+cu130; sys_platform == 'linux'",
+  "torchvision==0.26.0+cu130; sys_platform == 'linux'",
+  "torchao==0.17.0+cu130; sys_platform == 'linux' and platform_machine == 'x86_64'",
   "transformers==4.57.3",
   "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
-  "vllm==0.18.0; sys_platform == 'linux'",
-  "xformers==v0.0.34; sys_platform == 'linux' and platform_machine == 'x86_64'",
+  "vllm==0.20.0; sys_platform == 'linux'",
 ]
 
 # at some point, do per-subpackage dependencies
@@ -174,15 +175,9 @@ cache-keys = [
 conflicts = [
   [
     { extra = "cpu" },
-    { extra = "cu128" },
+    { extra = "cu130" },
   ],
 ]
-# xformers requires torch and more to be built.
-no-build-isolation-package = ["xformers"]
-dependency-metadata = [
-      { name = "xformers", requires-dist = ["setuptools", "torch", "wheel"]},
-
-  ]
 
 
 override-dependencies = [
@@ -223,77 +218,51 @@ constraint-dependencies = [
 
 [tool.uv.sources]
   # here we specifiy the dep's source from which UV should attempt to resolve
-  triton = { index = "pytorch-cu128", extra = "cu128" }
-  xformers = { index = "pytorch-cu128", extra = "cu128" }
-# for torch - we have a "cpu" dep set and "cu128" dep set, specified in the optional dependencies above
+  triton = { index = "pytorch-cu130", extra = "cu130" }
+# for torch - we have a "cpu" dep set and "cu130" dep set, specified in the optional dependencies above
   torch = [
     { index = "pytorch-cpu", extra="cpu", marker = "sys_platform=='linux'"},
-    { index = "pytorch-cu128", extra="cu128"},
+    { index = "pytorch-cu130", extra="cu130"},
   ]
   torchao = [
-    { index = "pytorch-cu128", extra="cu128"},
+    { index = "pytorch-cu130", extra="cu130"},
   ]
   torchvision = [
     { index = "pytorch-cpu", extra="cpu" },
-    { index = "pytorch-cu128", extra="cu128"},
+    { index = "pytorch-cu130", extra="cu130"},
+  ]
+  torchaudio = [
+    { index = "pytorch-cpu", extra="cpu" },
+    { index = "pytorch-cu130", extra="cu130"},
   ]
   flashinfer-python = [
-    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu130"},
   ]
   flashinfer-cubin = [
-    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu130"},
   ]
   flashinfer-jit-cache = [
-    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu128"},
+    { index = "flashinfer-jit-cache", marker = "sys_platform=='linux'", extra="cu130"},
   ]
-  nvidia-cublas-cu12 = [
-    { index = "pytorch-cu128" },
+  # torch 2.11.0+cu130 directly requires only these four nvidia-*-cu13 wheels;
+  # other CUDA libs are bundled into torch itself for cu13 builds.
+  nvidia-cudnn-cu13 = [
+    { index = "pytorch-cu130" },
   ]
-  nvidia-cuda-cupti-cu12 = [
-    { index = "pytorch-cu128" },
+  nvidia-cusparselt-cu13 = [
+    { index = "pytorch-cu130" },
   ]
-  nvidia-cuda-nvrtc-cu12 = [
-    { index = "pytorch-cu128" },
+  nvidia-nccl-cu13 = [
+    { index = "pytorch-cu130" },
   ]
-  nvidia-cuda-nvprof-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-
-  nvidia-cuda-runtime-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-
-  nvidia-cuda-nvml-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-
-
-  nvidia-cudnn-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-  nvidia-cusparse-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-  nvidia-cusparselt-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-  nvidia-nccl-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-  nvidia-nvjitlink-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-  nvidia-nvshmem-cu12 = [
-    { index = "pytorch-cu128" },
-  ]
-  nvidia-nvtx-cu12 = [
-    { index = "pytorch-cu128" },
+  nvidia-nvshmem-cu13 = [
+    { index = "pytorch-cu130" },
   ]
 
 
 [[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 # required for linux cpu - it's got a `+cpu` on the version
@@ -309,7 +278,7 @@ explicit = true
 
 [[tool.uv.index]]
 name = "flashinfer-jit-cache"
-url = "https://flashinfer.ai/whl/cu128"
+url = "https://flashinfer.ai/whl/cu130"
 explicit = true
 
 [[tool.uv.index]]

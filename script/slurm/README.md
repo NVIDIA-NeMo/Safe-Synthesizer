@@ -57,7 +57,7 @@ export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 # (such as startup for your jobs) should be much faster since uv will
 # pull cached wheels from UV_CACHE_DIR.
 # (Be sure to run from the root of the Safe-Synthesizer repo)
-make bootstrap-nss cu128
+make bootstrap-nss cu130
 ```
 
 #### Nice to have

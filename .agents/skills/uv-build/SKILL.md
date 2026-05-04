@@ -19,7 +19,7 @@ make bootstrap-tools && make bootstrap-nss cpu
 # Pick a variant:
 make bootstrap-nss dev       # dev tools only (no engine/torch)
 make bootstrap-nss cpu       # + engine + CPU PyTorch
-make bootstrap-nss cu128     # + engine + CUDA 12.8 PyTorch
+make bootstrap-nss cu130     # + engine + CUDA 13.0 PyTorch
 make bootstrap-nss engine    # + engine (no torch)
 ```
 
@@ -30,11 +30,11 @@ Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
 | Extra | What it installs |
 |-------|------------------|
 | `cpu` | PyTorch CPU, faiss-cpu, flashinfer (Linux only) |
-| `cu128` | PyTorch+CUDA 12.8, faiss-gpu, flashinfer-jit-cache |
+| `cu130` | PyTorch+CUDA 13.0, faiss-gpu, flashinfer-jit-cache |
 | `engine` | ML pipeline deps (outlines, wandb, tiktoken, etc.) -- no torch |
 | `microservices` | `nemo-microservices` from local path |
 
-`cpu` and `cu128` conflict -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
+`cpu` and `cu130` conflict -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
 
 ## Index Management
 
@@ -43,9 +43,9 @@ PyTorch wheels come from dedicated indexes, not PyPI:
 | Index | URL | Used for |
 |-------|-----|----------|
 | `pytorch-cpu` | `download.pytorch.org/whl/cpu` | torch, torchvision (CPU, Linux) |
-| `pytorch-cu128` | `download.pytorch.org/whl/cu128` | torch, torchvision, triton, xformers (CUDA) |
+| `pytorch-cu130` | `download.pytorch.org/whl/cu130` | torch, torchvision, triton (CUDA) |
 | `nv-shared-pypi-local` | NVIDIA Artifactory | Internal NVIDIA packages |
-| `flashinfer-jit-cache` | `flashinfer.ai/whl/cu128` | FlashInfer JIT cache |
+| `flashinfer-jit-cache` | `flashinfer.ai/whl/cu130` | FlashInfer JIT cache |
 | `nvidia-pypi-public` | `pypi.nvidia.com` | Public NVIDIA packages |
 
 All indexes are `explicit = true` (only used when a package is mapped to them in `[tool.uv.sources]`).
