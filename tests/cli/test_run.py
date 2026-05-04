@@ -676,6 +676,11 @@ class TestAutoParamCliOverrides:
     model validators that resolve ``"auto"`` to a concrete value).
     """
 
+    # Note: ``AutoBoolParam`` is defined in ``config.types`` but no field of
+    # ``SafeSynthesizerParameters`` currently uses it (the only such field,
+    # ``training.use_unsloth``, was removed when the Unsloth backend was
+    # dropped). Bool conversion is exercised at the unit level by
+    # ``tests/configurator/test_pydantic_click_options.py``.
     @pytest.mark.parametrize(
         "flag,raw_value,nested_path,expected",
         [
@@ -686,10 +691,6 @@ class TestAutoParamCliOverrides:
             ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
             ("--data__max_sequences_per_example", "auto", ("data", "max_sequences_per_example"), "auto"),
             ("--data__max_sequences_per_example", "5", ("data", "max_sequences_per_example"), 5),
-            # AutoBoolParam
-            ("--training__use_unsloth", "auto", ("training", "use_unsloth"), "auto"),
-            ("--training__use_unsloth", "true", ("training", "use_unsloth"), True),
-            ("--training__use_unsloth", "false", ("training", "use_unsloth"), False),
             # AutoFloatParam
             ("--privacy__delta", "auto", ("privacy", "delta"), "auto"),
             ("--privacy__delta", "0.001", ("privacy", "delta"), 0.001),
@@ -733,11 +734,11 @@ class TestAutoParamCliOverrides:
     @pytest.mark.parametrize(
         "flag,raw_value,nested_path,expected",
         [
-            # rope_scaling_factor and num_input_records_to_sample pass through
-            # Pydantic validation unchanged for both 'auto' and explicit
-            # values; max_sequences_per_example and use_unsloth are excluded
-            # because their model validators rewrite 'auto' (or any value) to
-            # a concrete default.
+            # rope_scaling_factor, num_input_records_to_sample, and
+            # privacy.delta pass through Pydantic validation unchanged for both
+            # 'auto' and explicit values. max_sequences_per_example is excluded
+            # because its model validator rewrites 'auto' to a concrete default
+            # (10 with DP disabled, 1 with DP enabled).
             ("--training__rope_scaling_factor", "auto", ("training", "rope_scaling_factor"), "auto"),
             ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
             ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
