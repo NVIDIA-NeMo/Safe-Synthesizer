@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+import warnings
+from typing import Any, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_core.core_schema import ValidationInfo
 
 from ..configurator.parameters import Parameters
@@ -15,6 +16,7 @@ from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
+from .preflight import PreflightParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
@@ -69,6 +71,11 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=PiiReplacerConfig.get_default_config,
     )
 
+    preflight: PreflightParameters = Field(
+        description="Preflight validation overrides, including checks to skip via ``disabled_checks``.",
+        default_factory=PreflightParameters,
+    )
+
     @field_validator("privacy", mode="after", check_fields=False)
     def check_dp_compatibility(
         cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
@@ -109,14 +116,23 @@ class SafeSynthesizerParameters(Parameters):
             case "auto" | None:
                 logger.info("Setting max_sequences_per_example to 1 because DP is enabled.")
                 data.max_sequences_per_example = 1
-            case None:
-                data.max_sequences_per_example = 1
             case v if v not in [AUTO_STR, 1]:
                 raise ParameterError(
                     f"When enabling DP, max_sequences_per_example must be set to 1 or 'auto'. Received: {v}"
                 )
 
         return dp_params
+
+    @model_validator(mode="after")
+    def check_timeseries_group_column(self) -> Self:
+        if self.time_series is not None and self.time_series.is_timeseries:
+            if self.data.group_training_examples_by is None:
+                warnings.warn(
+                    "is_timeseries=True without group_training_examples_by: "
+                    "an internal __nss_sequence_id column will be added automatically.",
+                    stacklevel=2,
+                )
+        return self
 
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
@@ -158,4 +174,6 @@ class SafeSynthesizerParameters(Parameters):
         }
         if "replace_pii" in kwargs:
             extra["replace_pii"] = kwargs["replace_pii"]
+        if "preflight" in kwargs:
+            extra["preflight"] = kwargs["preflight"]
         return cls(**extra)

@@ -14,6 +14,12 @@ import pandas as pd
 from ..config import SafeSynthesizerParameters
 from ..config.time_series import TimeSeriesParameters
 from ..data_processing.actions.utils import guess_datetime_format
+from ..data_processing.validation import (
+    check_no_pseudo_column_collision,
+)
+from ..data_processing.validation import (
+    check_timestamp_column as _check_timestamp_column,
+)
 from ..defaults import PSEUDO_GROUP_COLUMN
 from ..errors import DataError, ParameterError
 from ..observability import get_logger
@@ -39,10 +45,7 @@ def _add_pseudo_group_if_needed(df: pd.DataFrame, config: SafeSynthesizerParamet
     group_by_col = config.data.group_training_examples_by
 
     if group_by_col is None:
-        if PSEUDO_GROUP_COLUMN in df.columns:
-            raise DataError(
-                f"Column '{PSEUDO_GROUP_COLUMN}' is reserved for internal use. Please rename this column in your data."
-            )
+        check_no_pseudo_column_collision(df)
         logger.info("No group column specified, treating entire dataset as a single sequence")
         df[PSEUDO_GROUP_COLUMN] = 0  # All rows belong to one "group"
         config.data.group_training_examples_by = PSEUDO_GROUP_COLUMN
@@ -95,24 +98,6 @@ def _create_elapsed_time_column(
     ts_config.timestamp_format = "elapsed_seconds"
 
     return df, True
-
-
-def _validate_timestamp_column(df: pd.DataFrame, timestamp_column: str) -> None:
-    """Validate that the timestamp column exists and has no nulls.
-
-    Args:
-        df: The input DataFrame.
-        timestamp_column: Name of the timestamp column.
-
-    Raises:
-        ParameterError: If timestamp column is not found.
-        DataError: If timestamp column has missing values.
-    """
-    if timestamp_column not in df.columns:
-        raise ParameterError(f"Timestamp column '{timestamp_column}' not found in the input data.")
-
-    if df[timestamp_column].isnull().any():
-        raise DataError(f"Timestamp column '{timestamp_column}' has missing values. Please clean the column.")
 
 
 def _sort_by_group_and_timestamp(df: pd.DataFrame, group_by_col: str | None, timestamp_col: str) -> pd.DataFrame:
@@ -251,6 +236,12 @@ def process_timeseries_data(
 ) -> tuple[pd.DataFrame, SafeSynthesizerParameters]:
     """Process time series data and validate/infer timestamp parameters.
 
+    Normalizes grouped and ungrouped time series into the same training path.
+    When no group column is configured, a reserved pseudo-group column
+    (``PSEUDO_GROUP_COLUMN``) is added so the whole dataset is treated as one
+    sequence. Timestamp format and interval metadata inferred here are saved
+    back into the resolved config for generation.
+
     This function:
     1. Creates a timestamp column if one doesn't exist
     2. Validates the timestamp column exists and has no missing values
@@ -289,7 +280,7 @@ def process_timeseries_data(
 
     # Step 3: Validate timestamp column -- run before any dtype checks so a missing
     # column raises ParameterError with actionable guidance rather than KeyError.
-    _validate_timestamp_column(training_df, ts_config.timestamp_column)
+    _check_timestamp_column(training_df, ts_config.timestamp_column)
 
     if not is_elapsed_time:
         is_elapsed_time = _detect_elapsed_seconds_format(training_df, ts_config)

@@ -42,7 +42,6 @@ class Expected:
         max_seq: Expected resolved value for max_sequences_per_example
         raises: Exception class expected to be raised (None = no error expected)
         raises_match: Regex pattern to match exception message
-       max_seq: Expected resolved value for max_sequences_per_example
     """
 
     rope_scaling_factor: int | None  # None = auto-resolved

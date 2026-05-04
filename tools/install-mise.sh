@@ -140,7 +140,7 @@ if command -v mise >/dev/null 2>&1; then
         exit 0
     fi
     echo "ERROR: found mise ${installed} on PATH but this repo pins ${MISE_VERSION}" >&2
-    echo "       run 'mise self-update --version ${expected}' or uninstall the current mise and rerun 'make setup'" >&2
+    echo "       run 'mise self-update ${expected}' or uninstall the current mise and rerun 'make setup'" >&2
     exit 1
 fi
 

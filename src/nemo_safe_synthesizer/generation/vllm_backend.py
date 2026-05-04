@@ -31,7 +31,7 @@ from ..generation.processors import Processor, TabularDataProcessor, create_proc
 from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
-from ..llm.utils import cleanup_memory, get_max_vram
+from ..llm.utils import cleanup_memory, get_max_vram, trust_remote_code_for_model
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
@@ -106,6 +106,10 @@ class VllmBackend(GeneratorBackend):
     synthetic records in batches.  Supports optional structured
     generation (regex or JSON schema) to constrain outputs.
 
+    ``LoRARequest("lora", 1, str(adapter_path))`` is passed to
+    ``llm.generate`` when an adapter is available. The vLLM engine uses
+    ``config.training.lora_r`` as ``max_lora_rank``.
+
     Args:
         config: Pipeline configuration.
         model_metadata: Model metadata (prompt template, adapter path,
@@ -135,6 +139,7 @@ class VllmBackend(GeneratorBackend):
             prompt_template=self.model_metadata.prompt_config.template,
         )
         self.llm: vLLM | None = None
+        self._prompt_token_count: int | None = None
 
         # Do not generate detailed error messages in production to avoid leaking sensitive data.
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
@@ -207,6 +212,7 @@ class VllmBackend(GeneratorBackend):
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
+                trust_remote_code=trust_remote_code_for_model(self.config.training.pretrained_model),
             )
 
         # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;
@@ -218,6 +224,22 @@ class VllmBackend(GeneratorBackend):
             self.config,
             tokenizer=tokenizer,
         )
+
+    def _get_prompt_token_count(self) -> int:
+        """Return the templated prompt's tokenized length, cached after first call.
+
+        Uses the loaded vLLM tokenizer so encoding matches what the engine
+        will see at runtime. Returns ``0`` when the engine has not yet been
+        initialized -- callers fall back to a prompt-agnostic ceiling in
+        that case.
+        """
+        if self._prompt_token_count is not None:
+            return self._prompt_token_count
+        if self.llm is None:
+            return 0
+        tokenizer = self.llm.get_tokenizer()
+        self._prompt_token_count = len(tokenizer.encode(self.prompt))
+        return self._prompt_token_count
 
     def _build_structured_output_params(self) -> StructuredOutputsParams | None:
         """Build structured output parameters based on generation config.
@@ -333,8 +355,10 @@ class VllmBackend(GeneratorBackend):
     def prepare_params(self, **kwargs) -> None:
         """Parse parameters and configure the generation method.
 
-        Parses a dictionary of parameters into SamplingParameters,
-        applying necessary transformations from our API to vLLM's API.
+        Parses a dictionary of parameters into ``SamplingParams``, applying
+        necessary transformations from the Safe Synthesizer API to vLLM's API.
+        ``num_beams`` is mapped to ``beam_width`` only when greater than 1;
+        otherwise it is omitted.
 
         Args:
             **kwargs: Sampling parameters to configure.
@@ -447,6 +471,7 @@ class VllmBackend(GeneratorBackend):
 
         for idx, output in enumerate(outputs):
             out = output.outputs[0]
+            batch.finish_reasons[str(out.finish_reason or "unknown")] += 1
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
                     f"prompt {idx}: {len(out.token_ids)} tokens, "
@@ -507,6 +532,11 @@ class VllmBackend(GeneratorBackend):
         LLM output, until the configured ``num_records`` target is met or
         a stopping condition fires.
 
+        Non-tabular processors need BOS/EOS delimiters in the raw text, so
+        generation keeps special tokens for those processors and strips them
+        only for ``TabularDataProcessor``. Native EOS stopping remains enabled
+        through ``ignore_eos=False``.
+
         Args:
             data_actions_fn: Optional post-processing / validation function
                 applied to each batch of generated records.
@@ -523,7 +553,7 @@ class VllmBackend(GeneratorBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.max_seq_length,
+            max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
             skip_special_tokens=not need_special_token_outputs,
             include_stop_str_in_output=need_special_token_outputs,
             ignore_eos=False,

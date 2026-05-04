@@ -36,6 +36,8 @@ dist
 .ruff_cache
 report.xml
 test_db.sqlite
+# File used for populating vulns
+dependabot.json
 
 # Visual Studio Code config
 .vscode/
@@ -70,9 +72,6 @@ docs/**/_snippets/**/*.tgz
 
 # this is sometimes used by wandb as a local path.
 wandb/
-
-# output from unsloth defaults to the local path
-unsloth_compiled_cache/
 
 # symbolic link to the nmp repo folder for uv dependency resolution.
 .nmp_repo

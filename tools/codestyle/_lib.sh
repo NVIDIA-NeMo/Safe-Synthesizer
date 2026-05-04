@@ -53,9 +53,18 @@ collect_py_files() {
         PY_FILES=("${rest[@]}")
     else
         local IFS=$'\n'
+        local -a tracked_py_files
         # shellcheck disable=SC2207
-        PY_FILES=($(git ls-files '*.py'))
+        tracked_py_files=($(git ls-files '*.py'))
         unset IFS
+
+        # `git ls-files` still reports tracked files deleted from the working tree.
+        # Skip missing paths so format/check commands keep working during file removals.
+        PY_FILES=()
+        local path
+        for path in "${tracked_py_files[@]}"; do
+            [[ -e "$path" ]] && PY_FILES+=("$path")
+        done
     fi
 
     if [[ ${#PY_FILES[@]} -eq 0 ]]; then

@@ -549,24 +549,6 @@ class TestConfigureStandardTraining:
         assert "data_collator" not in training_args
 
 
-class TestValidateOrderbyColumn:
-    def test_does_nothing_when_no_orderby(self, backend, sample_dataframe):
-        """Test that nothing happens when orderby is None."""
-        backend._validate_orderby_column(sample_dataframe)  # Should not raise
-
-    def test_passes_when_column_exists(self, backend, sample_dataframe):
-        """Test that validation passes when column exists."""
-        backend.params.data.order_training_examples_by = "order_col"
-        backend._validate_orderby_column(sample_dataframe)  # Should not raise
-
-    def test_raises_when_column_missing(self, backend, sample_dataframe):
-        """Test that ParameterError is raised when column is missing."""
-        backend.params.data.order_training_examples_by = "nonexistent_col"
-
-        with pytest.raises(ParameterError, match="Order by column 'nonexistent_col' not found"):
-            backend._validate_orderby_column(sample_dataframe)
-
-
 class TestApplyPreprocessing:
     def test_returns_df_when_no_executor(self, backend, sample_dataframe):
         """Test that the same DataFrame is returned when no action_executor."""
@@ -651,3 +633,65 @@ class TestPrepareConfigIntegration:
 
         assert backend.framework_load_params is not None
         assert backend.framework_load_params["pretrained_model_name_or_path"] == "test-model"
+
+
+class TestPropagateMaxTokensPerExample:
+    """Tests for HuggingFaceBackend._propagate_max_tokens_per_example."""
+
+    @staticmethod
+    def _make_stat(count: int, max_value: float) -> MagicMock:
+        """Create a stub mirroring ``RunningStatistics`` shape."""
+        stat = MagicMock()
+        stat.count = count
+        stat.max = max_value
+        return stat
+
+    def _set_training_examples_stats(self, backend: HuggingFaceBackend, stats: dict) -> None:
+        """Attach a minimal ``training_examples`` stub exposing ``.stats``."""
+        training_examples = MagicMock()
+        training_examples.stats = stats
+        backend.training_examples = training_examples
+
+    def test_copies_max_onto_metadata(self, backend):
+        """Populated stat is written as ``math.ceil`` onto metadata."""
+        self._set_training_examples_stats(
+            backend,
+            {"tokens_per_example": self._make_stat(count=7, max_value=2251.5)},
+        )
+
+        backend._propagate_max_tokens_per_example()
+
+        # math.ceil(2251.5) = 2252
+        assert backend.model_metadata.max_tokens_per_example == 2252
+
+    def test_noop_when_stat_missing(self, backend):
+        """Missing ``tokens_per_example`` key leaves the metadata untouched."""
+        backend.model_metadata.max_tokens_per_example = None
+        self._set_training_examples_stats(backend, {"records_per_example": self._make_stat(1, 10)})
+
+        backend._propagate_max_tokens_per_example()
+
+        assert backend.model_metadata.max_tokens_per_example is None
+
+    def test_noop_when_stat_unpopulated(self, backend):
+        """Stat with ``count == 0`` is treated as absent."""
+        backend.model_metadata.max_tokens_per_example = None
+        self._set_training_examples_stats(
+            backend,
+            {"tokens_per_example": self._make_stat(count=0, max_value=float("-inf"))},
+        )
+
+        backend._propagate_max_tokens_per_example()
+
+        assert backend.model_metadata.max_tokens_per_example is None
+
+    def test_rounds_up_fractional_max(self, backend):
+        """Fractional ``max`` (from running mean interactions) rounds up."""
+        self._set_training_examples_stats(
+            backend,
+            {"tokens_per_example": self._make_stat(count=3, max_value=1000.01)},
+        )
+
+        backend._propagate_max_tokens_per_example()
+
+        assert backend.model_metadata.max_tokens_per_example == 1001

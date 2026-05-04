@@ -237,6 +237,28 @@ class TimeseriesBackend(VllmBackend):
         self._group_prefills: dict[str, str] = initial_prefill_value
         self._groups: list[str] = list(self._group_prefills.keys())
 
+    def _get_prompt_token_count(self) -> int:
+        """Return the longest active prompt length for ``SamplingParams``.
+
+        Time-series generation prepends a per-group prefill to the templated
+        prompt. SamplingParams is constructed once per ``generate()`` call,
+        so the safe choice is the longest prompt any active group will see
+        in this run -- templated prompt + longest initial prefill.
+
+        Falls back to the templated prompt's token count alone when the
+        engine has not yet been initialized or no group prefills are
+        populated.
+        """
+        base = super()._get_prompt_token_count()
+        if self.llm is None or not self._group_prefills:
+            return base
+        tokenizer = self.llm.get_tokenizer()
+        longest_prefill_tokens = max(
+            (len(tokenizer.encode(prefill)) for prefill in self._group_prefills.values() if prefill),
+            default=0,
+        )
+        return base + longest_prefill_tokens
+
     def _build_progress_snapshots(self, total: int, is_group_based: bool = False) -> list[ProgressSnapshot]:
         """Build progress snapshots for saving intermediate results.
 
@@ -772,6 +794,7 @@ class TimeseriesBackend(VllmBackend):
                 group_state = active_states[prompt_idx]
                 batch = group_batches[group_state.group_id]
                 for completion_idx, completion in enumerate(output.outputs):
+                    batch.finish_reasons[str(completion.finish_reason or "unknown")] += 1
                     batch.process(completion_idx, completion.text, completion_tokens=len(completion.token_ids))
 
             duration = time.perf_counter() - start_time
@@ -898,7 +921,7 @@ class TimeseriesBackend(VllmBackend):
             top_p=self.config.generation.top_p,
             top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
             min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-            max_tokens=self.model_metadata.max_seq_length,
+            max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
             skip_special_tokens=True,
             include_stop_str_in_output=False,
             ignore_eos=False,

@@ -5,7 +5,7 @@
 
 Covers two invariants:
 
-1. ``training.csv`` and the evaluator reference must use the **original**
+1. ``training.csv`` and the evaluator reference must use the original
    (pre-PII) training data so that privacy metrics remain valid.
 2. ``train()`` and ``run()`` must raise after ``load_from_save_path()``.
 """
@@ -67,8 +67,20 @@ def _patch_heavy_deps(monkeypatch, original_df: pd.DataFrame, replaced_df: pd.Da
     # ModelMetadata: stub
     monkeypatch.setattr(
         f"{MODULE}.ModelMetadata",
-        type("MM", (), {"from_config": staticmethod(lambda c, workdir: None)}),
+        type(
+            "MM",
+            (),
+            {
+                "from_config": staticmethod(lambda c, workdir: None),
+                "stub": staticmethod(lambda c: None),
+            },
+        ),
     )
+
+    # run_preflight: no-op so process_data doesn't raise on GPU/env checks
+    from nemo_safe_synthesizer.preflight import PreflightReport
+
+    monkeypatch.setattr(f"{MODULE}.run_preflight", lambda *args, **kwargs: PreflightReport(checks=[]))
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +181,7 @@ class TestLoadFromSavePathGuard:
                 {
                     "from_config": staticmethod(lambda c, workdir: None),
                     "from_metadata_json": staticmethod(lambda f, workdir: None),
+                    "stub": staticmethod(lambda c: None),
                 },
             ),
         )

@@ -193,6 +193,10 @@ class DirNode(Generic[T_co]):
     :class:`_TrainDir` et al.). Runtime always returns a plain ``BoundDir``;
     the subscripted type is a typing-only fiction.
 
+    Keep the typed-view subclass annotations in sync with ``children``. The
+    tests compare every ``DirNode[_FooDir](...)`` child set with the matching
+    ``_FooDir`` annotations to prevent descriptor/type-view drift.
+
     Args:
         name: The directory name (e.g., "train").
         **children: Child nodes (FileNode or DirNode instances).

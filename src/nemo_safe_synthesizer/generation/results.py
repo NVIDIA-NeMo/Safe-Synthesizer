@@ -29,6 +29,20 @@ from ..observability import get_logger
 from ..utils import DataActionsFn
 
 NUM_PROMPT_BUFFER = 10
+"""Extra prompts added on top of the records-per-prompt estimate to absorb invalid completions."""
+
+INITIAL_PROBE_PROMPTS = 10
+"""Prompt count used for the first batch when no records-per-prompt history exists yet.
+
+Sending a small probe lets the accumulator measure the records-per-prompt
+ratio cheaply. Subsequent batches escalate to the full ``max_num_prompts_per_batch``
+once at least one prompt has been processed (regardless of whether it produced
+valid records), avoiding the overshoot that an upfront full-batch causes when
+the target count is much larger than the per-prompt yield.
+"""
+
+ADAPTIVE_MAX_PROMPTS_CEILING = 2000
+"""Upper bound for ``target_num_records``-derived ``max_num_prompts_per_batch``."""
 
 logger = get_logger(__name__)
 
@@ -150,13 +164,20 @@ class GenerationBatches:
     """Accumulator that tracks batches during the generation phase.
 
     Manages the stopping condition, running statistics, and optional
-    post-processing via ``data_actions_fn``.
+    post-processing via ``data_actions_fn``. The first batch uses a small
+    probe when a target record count is available; later batches estimate the
+    required prompt count from ``num_valid_records / num_prompts`` with
+    ``NUM_PROMPT_BUFFER`` added to absorb invalid completions.
 
     Args:
         target_num_records: Target number of valid records to generate.
         batches: Pre-existing batches to seed the accumulator with.
         max_num_prompts_per_batch: Maximum prompts per LLM generation
-            call.
+            call. ``None`` (the default) derives the cap adaptively from
+            ``target_num_records`` -- ``min(2000, max(MAX_NUM_PROMPTS_PER_BATCH,
+            target_num_records // 20))`` -- so small jobs do not request
+            an oversized batch and large jobs do not stall on a single
+            small batch.
         invalid_fraction_threshold: Fraction of invalid records that
             triggers stopping after ``patience`` consecutive batches.
         patience: Consecutive batch count before the threshold triggers
@@ -176,7 +197,7 @@ class GenerationBatches:
         self,
         target_num_records: int | None = None,
         batches: list[Batch] | None = None,
-        max_num_prompts_per_batch: int = MAX_NUM_PROMPTS_PER_BATCH,
+        max_num_prompts_per_batch: int | None = None,
         invalid_fraction_threshold: float | None = None,
         patience: int | None = None,
         data_actions_fn: DataActionsFn | None = None,
@@ -184,7 +205,9 @@ class GenerationBatches:
         self._batches = batches or []
         self._start_time = time.perf_counter()
         self.target_num_records = target_num_records
-        self.max_num_prompts_per_batch = max_num_prompts_per_batch
+        self.max_num_prompts_per_batch = self._resolve_max_num_prompts_per_batch(
+            max_num_prompts_per_batch, target_num_records
+        )
         self.status = GenerationStatus.IN_PROGRESS
         self.running_stopping_metric = RunningStatistics()
 
@@ -199,6 +222,25 @@ class GenerationBatches:
 
         self.data_actions_fn = data_actions_fn
         self._batches_df: pd.DataFrame | None = None
+
+    @staticmethod
+    def _resolve_max_num_prompts_per_batch(
+        max_num_prompts_per_batch: int | None,
+        target_num_records: int | None,
+    ) -> int:
+        """Resolve the per-batch prompt cap from explicit or adaptive defaults.
+
+        An explicit value is honored as-is for backwards compatibility.
+        ``None`` falls back to ``MAX_NUM_PROMPTS_PER_BATCH`` when no target
+        is set; otherwise it scales with ``target_num_records`` -- one
+        prompt per ~20 desired records, floored at ``MAX_NUM_PROMPTS_PER_BATCH``
+        and capped at ``ADAPTIVE_MAX_PROMPTS_CEILING``.
+        """
+        if max_num_prompts_per_batch is not None:
+            return max_num_prompts_per_batch
+        if target_num_records is None:
+            return MAX_NUM_PROMPTS_PER_BATCH
+        return min(ADAPTIVE_MAX_PROMPTS_CEILING, max(MAX_NUM_PROMPTS_PER_BATCH, target_num_records // 20))
 
     def _apply_data_actions_fn(self, batch: Batch) -> None:
         """Post-process and validate a batch via ``data_actions_fn``.
@@ -304,13 +346,40 @@ class GenerationBatches:
         """Wall-clock seconds spent tokenizing records across all batches."""
         return sum(batch.total_tokenization_time_sec for batch in self._batches)
 
+    @property
+    def num_length_truncated_completions(self) -> int:
+        """Total completions that stopped because they reached ``max_tokens``."""
+        return sum(batch.num_length_truncated_completions for batch in self._batches)
+
+    @staticmethod
+    def _has_no_valid_records(batch: Batch) -> bool:
+        """Return whether a batch produced zero valid records."""
+        return batch.num_valid_records == 0
+
+    @classmethod
+    def _is_inconclusive_zero_valid_batch(cls, batch: Batch) -> bool:
+        """Return whether every completion in a zero-valid batch reached ``max_tokens``."""
+        return (
+            cls._has_no_valid_records(batch)
+            and batch.num_prompts > 0
+            and batch.num_length_truncated_completions == batch.num_prompts
+        )
+
+    @classmethod
+    def _should_stop_after_first_zero_valid_batch(cls, batch: Batch) -> bool:
+        """Return whether a first zero-valid batch has enough signal to stop immediately."""
+        return cls._has_no_valid_records(batch) and not cls._is_inconclusive_zero_valid_batch(batch)
+
     def add_batch(self, batch: Batch) -> None:
         """Add a batch and update the generation status.
 
         Stopping rules:
 
-        * The very first batch producing zero valid records always
-          triggers ``STOP_NO_RECORDS``.
+        * The very first batch producing zero valid records normally
+          triggers ``STOP_NO_RECORDS``. A fully length-truncated probe is
+          the exception: every completion may have been cut off before it
+          could emit a complete record, so a patience-based
+          ``stop_condition`` gets to decide whether to continue.
         * When a ``stop_condition`` is configured, subsequent batches
           with zero valid records are tolerated until the patience-based
           threshold is reached.
@@ -324,10 +393,10 @@ class GenerationBatches:
         self._apply_data_actions_fn(batch)
         self.running_stopping_metric.update(batch.stopping_metric)
         if self.stop_condition is None:
-            if batch.num_valid_records == 0:
+            if self._has_no_valid_records(batch):
                 self.status = GenerationStatus.STOP_NO_RECORDS
         else:
-            if batch.num_valid_records == 0 and self.num_batches == 0:
+            if self.num_batches == 0 and self._should_stop_after_first_zero_valid_batch(batch):
                 self.status = GenerationStatus.STOP_NO_RECORDS
             elif self.stop_condition.has_been_reached(self.running_stopping_metric.mean):
                 self.status = GenerationStatus.STOP_METRIC_REACHED
@@ -335,26 +404,44 @@ class GenerationBatches:
         self._batches.append(batch)
 
     def get_next_num_prompts(self) -> int:
-        """Return an estimate of the optimal number of prompts to process in the next batch."""
+        """Return an estimate of the optimal number of prompts to process in the next batch.
+
+        The accumulator scales the per-batch prompt count through three
+        regimes:
+
+        * Truly-first batch (no prompts ever sent) -- send a small probe
+          batch of ``INITIAL_PROBE_PROMPTS`` so the records-per-prompt
+          ratio can be measured before committing to a full batch.
+        * Prompts sent but no valid records yet -- escalate to the full
+          ``max_num_prompts_per_batch`` budget unless the latest batch
+          was fully length-truncated, in which case keep probing
+          conservatively instead of expanding GPU work.
+        * Have valid records -- size the next batch from the observed
+          records-per-prompt ratio, plus ``NUM_PROMPT_BUFFER`` to absorb
+          invalid completions.
+        """
         num_prompts = self.max_num_prompts_per_batch
 
         if self.target_num_records is None:
             return num_prompts
 
         num_records_remaining = self.target_num_records - self.num_valid_records
+        records_per_prompt_known = self.num_valid_records > 0 and self.num_prompts > 0
+        is_first_batch = self.num_prompts == 0
+        last_batch = self._batches[-1] if self._batches else None
 
-        if self.num_valid_records > 0 and self.num_prompts > 0:
+        if records_per_prompt_known:
             valid_records_per_prompt = self.num_valid_records / self.num_prompts
             num_prompts_needed = round(num_records_remaining / (valid_records_per_prompt + EPS))
-            num_prompts = min(num_prompts, num_prompts_needed + NUM_PROMPT_BUFFER)
-        else:
-            # First batch: no records-per-prompt history yet.  Assume at
-            # least 1 record per prompt (the actual ratio is typically much
-            # higher) to avoid sending max_num_prompts_per_batch prompts
-            # when the target is small.
-            num_prompts = min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)
+            return min(num_prompts, num_prompts_needed + NUM_PROMPT_BUFFER)
 
-        return num_prompts
+        if is_first_batch:
+            return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
+
+        if last_batch is not None and self._is_inconclusive_zero_valid_batch(last_batch):
+            return min(num_prompts, INITIAL_PROBE_PROMPTS, num_records_remaining + NUM_PROMPT_BUFFER)
+
+        return min(num_prompts, num_records_remaining + NUM_PROMPT_BUFFER)
 
     def job_complete(self) -> None:
         """Update the generation job status to a finished state and log the results."""

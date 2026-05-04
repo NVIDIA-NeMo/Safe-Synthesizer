@@ -21,7 +21,10 @@ import pytest
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.preflight import PreflightReport, PreflightStage
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+_EMPTY_PREFLIGHT = PreflightReport(checks=[])
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -150,6 +153,7 @@ def _wire_process_data_mocks(
 class TestProcessDataPiiSeparation:
     """``process_data`` must keep original and PII-replaced DataFrames separate."""
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -158,6 +162,7 @@ class TestProcessDataPiiSeparation:
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
+        mock_preflight,
         fixture_process_data_setup_without_pii,
     ):
         """Without PII replacement, ``_original_training_df`` matches the training split."""
@@ -172,6 +177,7 @@ class TestProcessDataPiiSeparation:
         assert builder._training_df is not None
         pd.testing.assert_frame_equal(builder._training_df, train_split)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
@@ -182,6 +188,7 @@ class TestProcessDataPiiSeparation:
         mock_resolver_cls,
         mock_metadata_cls,
         mock_pii_cls,
+        mock_preflight,
         fixture_process_data_setup_with_pii,
     ):
         """With PII replacement, ``_original_training_df`` preserves the pre-PII data."""
@@ -197,6 +204,7 @@ class TestProcessDataPiiSeparation:
         pd.testing.assert_frame_equal(builder._training_df, pii_replaced_df)
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.NemoPII")
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
@@ -207,6 +215,7 @@ class TestProcessDataPiiSeparation:
         mock_resolver_cls,
         mock_metadata_cls,
         mock_pii_cls,
+        mock_preflight,
         fixture_process_data_setup_with_pii,
         fixture_workdir,
     ):
@@ -233,6 +242,7 @@ class TestProcessDataPiiSeparation:
         saved_transformed = pd.read_csv(transformed_csv)
         pd.testing.assert_frame_equal(saved_transformed, pii_replaced_df)
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -241,6 +251,7 @@ class TestProcessDataPiiSeparation:
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
+        mock_preflight,
         fixture_process_data_setup_without_pii,
         fixture_workdir,
     ):
@@ -259,6 +270,58 @@ class TestProcessDataPiiSeparation:
 
         transformed_csv = fixture_workdir.dataset.transformed_training
         assert not transformed_csv.exists()
+
+
+# ---------------------------------------------------------------------------
+# Tests: metadata lifecycle in validate mode
+# ---------------------------------------------------------------------------
+
+
+class TestProcessDataMetadataLifecycle:
+    """Validate-mode metadata fallback should not persist stub metadata."""
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
+    @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
+    def test_check_only_stub_metadata_not_persisted_for_followup_run(
+        self,
+        mock_holdout_cls,
+        mock_resolver_cls,
+        mock_metadata_cls,
+        mock_preflight,
+        fixture_process_data_setup_without_pii,
+    ):
+        """A check-only stub does not block rebuilding metadata for later full runs."""
+        builder, train_split, test_split, _, _ = fixture_process_data_setup_without_pii
+        mock_holdout_cls.return_value.train_test_split.return_value = (train_split, test_split)
+        mock_resolver_cls.return_value.return_value = builder._nss_config
+
+        stub_metadata = MagicMock(name="stub_metadata")
+        rebuilt_metadata = MagicMock(name="rebuilt_metadata")
+        mock_metadata_cls.stub.return_value = stub_metadata
+        mock_metadata_cls.from_config.side_effect = [RuntimeError("offline"), rebuilt_metadata]
+
+        builder.process_data(check_only=True)
+
+        assert builder._llm_metadata is None
+        full_preflight_calls = [call for call in mock_preflight.call_args_list if "stages" not in call.kwargs]
+        assert len(full_preflight_calls) == 1
+        assert full_preflight_calls[0].args[2] is stub_metadata
+
+        builder.process_data(check_only=False)
+
+        assert builder._llm_metadata is rebuilt_metadata
+        full_preflight_calls = [call for call in mock_preflight.call_args_list if "stages" not in call.kwargs]
+        assert len(full_preflight_calls) == 2
+        assert full_preflight_calls[1].args[2] is rebuilt_metadata
+        early_preflight_calls = [call for call in mock_preflight.call_args_list if "stages" in call.kwargs]
+        assert len(early_preflight_calls) == 2
+        assert all(
+            call.kwargs["stages"] == frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME})
+            for call in early_preflight_calls
+        )
+        assert mock_metadata_cls.from_config.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +554,7 @@ class TestLoadFromSavePathHoldoutZero:
 
         return workdir, train_split
 
+    @patch("nemo_safe_synthesizer.sdk.library_builder.run_preflight", return_value=_EMPTY_PREFLIGHT)
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     @patch("nemo_safe_synthesizer.sdk.library_builder.AutoConfigResolver")
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -499,6 +563,7 @@ class TestLoadFromSavePathHoldoutZero:
         mock_holdout_cls,
         mock_resolver_cls,
         mock_metadata_cls,
+        mock_preflight,
         fixture_workdir,
         fixture_sample_patient_dataframe,
     ):
@@ -617,6 +682,11 @@ class TestProcessDataConfigValidation:
         with pytest.raises(ParameterError, match="Group by column 'non_existent_group' not found"):
             ss.process_data()
 
+        assert ss.preflight_report is not None
+        assert any(
+            issue.check == "columns.groupby" and issue.code == "column_not_found"
+            for issue in ss.preflight_report.errors
+        )
         mock_holdout_cls.assert_not_called()
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.Holdout")
@@ -643,4 +713,9 @@ class TestProcessDataConfigValidation:
         with pytest.raises(ParameterError, match="Order by column 'non_existent_order' not found"):
             ss.process_data()
 
+        assert ss.preflight_report is not None
+        assert any(
+            issue.check == "columns.orderby" and issue.code == "column_not_found"
+            for issue in ss.preflight_report.errors
+        )
         mock_holdout_cls.assert_not_called()

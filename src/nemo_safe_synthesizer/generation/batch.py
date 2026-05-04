@@ -94,6 +94,7 @@ class Batch:
         self._responses: list[ParsedResponse] = []
         self._processor = processor
         self._total_completion_tokens: int = 0
+        self.finish_reasons: Counter[str] = Counter()
 
     @property
     def num_prompts(self) -> int:
@@ -130,6 +131,11 @@ class Batch:
     def total_completion_tokens(self) -> int:
         """Total tokens across all completions in this batch (from vLLM output)."""
         return self._total_completion_tokens
+
+    @property
+    def num_length_truncated_completions(self) -> int:
+        """Number of completions that stopped because they reached ``max_tokens``."""
+        return self.finish_reasons["length"]
 
     def _record_token_totals(self) -> tuple[int, int]:
         """Return ``(valid_tokens, invalid_tokens)`` from a single scan of ``_responses``."""
@@ -259,12 +265,14 @@ class Batch:
         err_stats: pd.DataFrame = self.error_statistics(detailed_errors=detailed_errors)
 
         # Build structured summary data - processor renders as table for console
-        summary_data: dict[str, int | float] = {
+        summary_data: dict[str, object] = {
             "num_prompts": self.num_prompts,
             "num_valid_records": self.num_valid_records,
             "num_invalid_records": self.num_invalid_records,
             "valid_record_fraction": round(self.valid_record_fraction, 2),
         }
+        if self.finish_reasons:
+            summary_data["finish_reasons"] = dict(self.finish_reasons)
         if self.num_data_config_rejected_records:
             summary_data["num_data_config_rejected_records"] = self.num_data_config_rejected_records
         if self._total_completion_tokens > 0:

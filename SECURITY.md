@@ -2,6 +2,18 @@
 
 NVIDIA is dedicated to the security and trust of our software products and services, including all source code repositories managed through our organization.
 
+## Dependency security floors
+
+A machine-generated `constraints.txt` is maintained at the root of this repository.
+It lists the minimum versions of all dependencies (direct and transitive) required to avoid known CVEs tracked by Dependabot.
+
+Downstream users who want to apply these floors can pass it to their installer:
+
+```bash
+pip install nemo-safe-synthesizer -c constraints.txt
+uv pip install nemo-safe-synthesizer -c constraints.txt
+```
+
 If you need to report a security issue, please use the appropriate contact points outlined below. **Please do not report security vulnerabilities through GitHub.** If a potential security issue is inadvertently reported via a public issue or pull request, NVIDIA maintainers may limit public discussion and redirect the reporter to the appropriate private disclosure channels.
 
 ## Reporting Potential Security Vulnerability in an NVIDIA Product

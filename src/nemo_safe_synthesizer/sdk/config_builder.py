@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Builder-pattern configuration layer for Safe Synthesizer.
-
-Provides ``ConfigBuilder``, the base builder that accumulates
-per-section configuration objects (training, generation, data, etc.)
-via fluent ``with_*`` methods before resolving them into a single
-``SafeSynthesizerParameters``.
-"""
+"""Builder-pattern configuration layer for Safe Synthesizer."""
 
 from __future__ import annotations
 
@@ -63,7 +57,8 @@ class ConfigBuilder(object):
     Each ``with_*`` method accepts an optional typed config object or
     a plain dict, plus ``**kwargs`` overrides.  ``kwargs`` always take
     precedence over fields in the config/dict.  All ``with_*`` methods
-    return ``self`` for chaining.
+    return ``Self`` so subclasses preserve their concrete type through
+    fluent chains.
 
     Args:
         config: Optional pre-built parameters.  When supplied, the

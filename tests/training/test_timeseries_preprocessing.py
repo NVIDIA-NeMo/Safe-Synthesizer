@@ -188,7 +188,7 @@ class TestInferAndConvertTimestampFormat:
     def test_raises_parameter_error_with_informative_message(self, column_name, values, expected_match):
         """ParameterError is raised when format cannot be inferred, with an actionable message."""
         df = pd.DataFrame({column_name: values})
-        config = SafeSynthesizerParameters.from_params(use_unsloth=False, rope_scaling_factor=1)
+        config = SafeSynthesizerParameters.from_params(rope_scaling_factor=1)
         config.time_series.timestamp_column = column_name
         config.time_series.timestamp_format = None
 
@@ -203,7 +203,6 @@ class TestProcessTimeseriesElapsedSecondsDetection:
     def _make_config(**overrides):
         defaults = dict(
             is_timeseries=True,
-            use_unsloth=False,
             rope_scaling_factor=1,
         )
         defaults.update(overrides)

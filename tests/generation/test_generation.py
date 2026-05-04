@@ -17,7 +17,7 @@ from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
 from nemo_safe_synthesizer.generation.results import (
-    NUM_PROMPT_BUFFER,
+    INITIAL_PROBE_PROMPTS,
     GenerateJobResults,
     GenerationBatches,
     GenerationStatus,
@@ -98,6 +98,38 @@ def test_generation_add_batch_stop_no_records_status_first_batch(fixture_stub_ba
     assert generation_with_stop_params.status == GenerationStatus.STOP_NO_RECORDS
 
 
+def test_generation_add_batch_length_truncated_first_batch_uses_patience(fixture_stub_batches):
+    _, bad_batches = fixture_stub_batches
+    bad_batches[0].finish_reasons["length"] = bad_batches[0].num_prompts
+
+    generation_with_stop_params = GenerationBatches(
+        target_num_records=5,
+        invalid_fraction_threshold=0.9,
+        patience=3,
+    )
+    generation_with_stop_params.add_batch(bad_batches[0])
+
+    assert generation_with_stop_params.status == GenerationStatus.IN_PROGRESS
+
+
+def test_generation_add_batch_partially_length_truncated_first_batch_stops(
+    fixture_mock_processor_without_valid_records,
+):
+    batch = Batch(fixture_mock_processor_without_valid_records)
+    for prompt_idx in range(INITIAL_PROBE_PROMPTS):
+        batch.process(prompt_idx, "stub")
+    batch.finish_reasons.update({"length": 1, "stop": INITIAL_PROBE_PROMPTS - 1})
+
+    generation_with_stop_params = GenerationBatches(
+        target_num_records=5,
+        invalid_fraction_threshold=0.9,
+        patience=3,
+    )
+    generation_with_stop_params.add_batch(batch)
+
+    assert generation_with_stop_params.status == GenerationStatus.STOP_NO_RECORDS
+
+
 # Purpose: Sequence good → bad → good under stricter policy triggers STOP_METRIC_REACHED mid-flight.
 # Data: Threshold 0.2, patience 3.
 # Asserts: status STOP_METRIC_REACHED after third add.
@@ -168,20 +200,18 @@ def test_get_next_num_prompts(fixture_stub_batches):
     assert generation_with_target.get_next_num_prompts() == 16
 
 
-# Purpose: First batch (no history) caps prompts to target + buffer instead of max.
-# Data: Empty GenerationBatches with small target_num_records and no prior batches.
-# Asserts: Returns target + NUM_PROMPT_BUFFER when that's less than max; returns max otherwise.
+# Purpose: First batch (no history) ships a small probe so the records-per-prompt
+# ratio can be measured before committing to a full batch.
+# Data: Empty GenerationBatches with various target_num_records and no prior batches.
+# Asserts: Returns INITIAL_PROBE_PROMPTS regardless of target whenever the records-remaining
+# bound (target + NUM_PROMPT_BUFFER) is at least the probe size.
 @pytest.mark.parametrize(
-    "target, expected",
-    [
-        (10, 10 + NUM_PROMPT_BUFFER),
-        (50, 50 + NUM_PROMPT_BUFFER),
-        (200, 100),  # target + buffer exceeds max (100), so capped
-    ],
+    "target",
+    [10, 50, 200],
 )
-def test_get_next_num_prompts_first_batch(target, expected):
+def test_get_next_num_prompts_first_batch(target):
     generation = GenerationBatches(target_num_records=target)
-    assert generation.get_next_num_prompts() == expected
+    assert generation.get_next_num_prompts() == INITIAL_PROBE_PROMPTS
 
 
 # Purpose: Build a DataFrame of valid records across batches, honoring max record cap and validity.
