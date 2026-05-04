@@ -20,11 +20,11 @@ pytestmark = [
 
 
 @pytest.fixture(scope="class")
-def fixture_trained_nss(_patch_attn_eager, fixture_base_smoke_config, fixture_iris_df, tmp_path_factory):
+def fixture_trained_nss(_patch_attn_eager, fixture_base_smoke_config, fixture_preflight_iris_df, tmp_path_factory):
     """Train once per class; both SDK chain and manual VllmBackend tests consume this."""
     save_path = tmp_path_factory.mktemp("gen-smoke")
     nss = SafeSynthesizer(config=fixture_base_smoke_config, save_path=save_path)
-    nss.with_data_source(fixture_iris_df).process_data().train()
+    nss.with_data_source(fixture_preflight_iris_df).process_data().train()
     return nss
 
 

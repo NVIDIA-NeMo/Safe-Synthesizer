@@ -44,7 +44,8 @@ If the new file uses vLLM, also add it to the explicit file list in the `test-sm
 ## Things that will bite you
 
 - LoRA rank must be 8 (not 4). vLLM silently rejects rank 4. Use `lora_r=8`.
-- Iris only has 151 rows, but holdout needs >=200. Set `holdout=0, max_holdout=0` to skip it.
+- Preflight requires at least 200 training rows. GPU tests that train should use
+  `fixture_preflight_iris_df` or `fixture_preflight_timeseries_df`.
 - Attention implementation: HuggingFaceBackend defaults to `flashinfer`, which HF doesn't recognize. The `_patch_attn_eager` fixture overrides it to `"sdpa"`.
 - Stub tokenizer vocab is 32000. If you change the tiny model config, keep `vocab_size=32000` or you'll get shape mismatches.
 - CPU tests need `optim="adamw_torch"`. The production default (`paged_adamw_32bit`) requires bitsandbytes CUDA kernels.
@@ -58,7 +59,9 @@ Session-scoped (immutable / read-only):
 - `fixture_base_smoke_config` -- default `SafeSynthesizerParameters` pointing at the local tiny model (Pydantic frozen model)
 - `_patch_attn_eager` -- the attention implementation workaround mentioned above
 - `fixture_stub_tokenizer`, `fixture_tiny_llama_config`, `fixture_local_tinyllama_dir` -- tokenizer and tiny model on disk
-- `fixture_iris_df`, `fixture_timeseries_df` -- small DataFrames for training input
+- `fixture_iris_df`, `fixture_timeseries_df` -- small DataFrames for CPU smoke paths
+- `fixture_preflight_iris_df`, `fixture_preflight_timeseries_df` -- larger DataFrames for GPU paths
+  that run preflight
 
 Function-scoped (fresh per test):
 

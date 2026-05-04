@@ -5,7 +5,6 @@
 
 import sys
 
-import pandas as pd
 import pytest
 import torch
 
@@ -24,16 +23,13 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_iris_df, tmp_path):
+def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_preflight_iris_df, tmp_path):
     """Train, then create a new SafeSynthesizer instance and generate from saved state.
 
-    Uses doubled fixture_iris_df (302 rows) with holdout=0.05 so load_from_save_path()
+    Uses preflight-sized iris rows with holdout=0.05 so load_from_save_path()
     has a non-empty test.csv to read. The base holdout=0 config produces an empty
     test split which causes EmptyDataError on resume.
     """
-    # Double the dataset to exceed the 200-row holdout minimum
-    large_df = pd.concat([fixture_iris_df, fixture_iris_df], ignore_index=True)
-
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
         pretrained_model=str(fixture_local_tinyllama_dir),
@@ -45,7 +41,7 @@ def test_nss_resume_generate_after_train(fixture_local_tinyllama_dir, fixture_ir
     )
 
     # Step 1: Train
-    nss1 = train_with_sdk(config, large_df, tmp_path)
+    nss1 = train_with_sdk(config, fixture_preflight_iris_df, tmp_path)
     workdir = nss1._workdir
 
     # Step 2: New instance (simulates a new process / CLI invocation)

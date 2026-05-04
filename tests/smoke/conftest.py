@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from math import ceil
 from pathlib import Path
 
 import pandas as pd
@@ -98,6 +99,13 @@ def fixture_iris_df(stub_datasets_dir) -> pd.DataFrame:
 
 
 @pytest.fixture(scope="session")
+def fixture_preflight_iris_df(fixture_iris_df) -> pd.DataFrame:
+    """Iris rows repeated enough to satisfy preflight's training-size floor."""
+    repeat_count = ceil(200 / len(fixture_iris_df))
+    return pd.concat([fixture_iris_df] * repeat_count, ignore_index=True)
+
+
+@pytest.fixture(scope="session")
 def fixture_timeseries_df() -> pd.DataFrame:
     """Minimal timeseries stub: 2 groups, 5 rows each, 60s intervals."""
     return pd.DataFrame(
@@ -118,6 +126,23 @@ def fixture_timeseries_df() -> pd.DataFrame:
             "value": [10, 20, 30, 40, 50, 100, 110, 120, 130, 140],
         }
     )
+
+
+@pytest.fixture(scope="session")
+def fixture_preflight_timeseries_df() -> pd.DataFrame:
+    """Timeseries stub with 200 rows for GPU paths that run preflight."""
+    start = pd.Timestamp("2024-01-01 00:00:00")
+    rows = []
+    for group, offset in (("A", 0), ("B", 1000)):
+        for i in range(100):
+            rows.append(
+                {
+                    "group_id": group,
+                    "timestamp": start + pd.Timedelta(seconds=60 * i),
+                    "value": offset + i,
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 @pytest.fixture(scope="session")

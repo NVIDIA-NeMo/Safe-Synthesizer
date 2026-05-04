@@ -21,7 +21,7 @@ pytestmark = [
 
 
 @pytest.mark.usefixtures("_patch_attn_eager")
-def test_nss_timeseries_train_and_generate(fixture_local_tinyllama_dir, fixture_timeseries_df, tmp_path):
+def test_nss_timeseries_train_and_generate(fixture_local_tinyllama_dir, fixture_preflight_timeseries_df, tmp_path):
     """Train and generate through the TimeseriesBackend with inline stub data."""
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
@@ -38,7 +38,7 @@ def test_nss_timeseries_train_and_generate(fixture_local_tinyllama_dir, fixture_
         order_training_examples_by="timestamp",
     )
     nss = SafeSynthesizer(config=config, save_path=tmp_path)
-    nss.with_data_source(fixture_timeseries_df).process_data().train()
+    nss.with_data_source(fixture_preflight_timeseries_df).process_data().train()
     try:
         nss.generate()
     except GenerationError as exc:
