@@ -19,7 +19,7 @@
 # See: https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/
 # ---------------------------------------------------------------------------
 
-name: GPU Smoke Tests
+name: GPU Tests
 
 on:
   schedule:
@@ -30,6 +30,16 @@ on:
   #   branches:
   #     - "pull-request/[0-9]+"
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "GPU test suite to run"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - smoke
+          - e2e
 
 defaults:
   run:
@@ -43,7 +53,7 @@ jobs:
   changes:
     name: Detect changes
     # No `if` guard here: dorny/paths-filter outputs `true` for all filters on
-    # workflow_dispatch (no base to diff against), so the GPU job always runs.
+    # workflow_dispatch (no base to diff against), so the GPU jobs always run.
     # Guarding this job would skip it, and a skipped `needs` dependency causes
     # downstream jobs to be skipped even when their own `if` condition passes.
     runs-on: linux-amd64-cpu4
@@ -61,7 +71,7 @@ jobs:
   gpu-smoke-test:
     name: GPU Smoke Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ (needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'smoke') }}
     timeout-minutes: 30
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
@@ -77,19 +87,40 @@ jobs:
         timeout-minutes: 20
         run: make test-smoke-gpu
 
+  gpu-e2e-test:
+    name: GPU E2E Tests
+    needs: changes
+    if: ${{ (needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'e2e') }}
+    timeout-minutes: 60
+    runs-on: linux-amd64-gpu-a100-latest-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup GPU test environment
+        uses: ./.github/actions/setup-gpu-test-env
+
+      - name: Run GPU E2E tests
+        timeout-minutes: 45
+        run: make test-e2e
+
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.
+  # Smoke tests are required; E2E failures produce a warning but don't block.
   # ---------------------------------------------------------------------------
-  gpu-smoke-ci-status:
-    name: GPU Smoke CI Status
+  gpu-ci-status:
+    name: GPU CI Status
     if: always() && !cancelled()
-    needs: [changes, gpu-smoke-test]
+    needs: [changes, gpu-smoke-test, gpu-e2e-test]
     runs-on: linux-amd64-cpu4
     steps:
       - name: Check job results
         run: |
           echo "changes:        ${{ needs.changes.result }}"
           echo "gpu-smoke-test: ${{ needs.gpu-smoke-test.result }}"
+          echo "gpu-e2e-test:   ${{ needs.gpu-e2e-test.result }}"
 
           if [[ "${{ needs.changes.result }}" == "failure" ]]; then
             echo "::error::Change detection failed"
@@ -101,4 +132,8 @@ jobs:
             exit 1
           fi
 
-          echo "All required GPU smoke jobs passed (or were skipped)."
+          if [[ "${{ needs.gpu-e2e-test.result }}" == "failure" ]]; then
+            echo "::warning::GPU E2E tests failed (informational, does not block merge)"
+          fi
+
+          echo "All required GPU jobs passed (or were skipped)."

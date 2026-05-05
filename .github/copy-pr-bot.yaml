@@ -13,9 +13,8 @@
 #
 # On-demand runs: comment `/sync` on any open PR to trigger GPU test runs
 # immediately without pushing a new commit. The bot pushes the current HEAD to
-# pull-request/<number>, which fires gpu-smoke-tests.yml and gpu-e2e-tests.yml
-# and posts GPU status check results back to the PR. Useful for draft PRs or
-# re-running flaky tests.
+# pull-request/<number>, which fires gpu-tests.yml and posts the GPU CI Status
+# check result back to the PR. Useful for draft PRs or re-running flaky tests.
 
 enabled: true
 auto_sync_draft: false
