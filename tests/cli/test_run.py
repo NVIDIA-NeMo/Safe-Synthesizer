@@ -12,9 +12,8 @@ from click.testing import CliRunner
 import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
-from nemo_safe_synthesizer.tooling import PreflightRenderContext
 from nemo_safe_synthesizer.cli.utils import merge_overrides
-
+from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
 # =============================================================================
 # Fixtures
