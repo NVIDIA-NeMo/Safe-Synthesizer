@@ -43,6 +43,15 @@ runs:
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends make
 
+    - name: Setup uv cache
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          .python-version
+          pyproject.toml
+          uv.lock
+
     - name: Setup Python environment
       uses: ./.github/actions/setup-python-env
       with:
