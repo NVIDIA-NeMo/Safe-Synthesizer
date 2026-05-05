@@ -63,7 +63,24 @@ runs:
       shell: bash
       run: make bootstrap-nss ${{ inputs.cuda-extra }}
 
-    - name: Check GPU availability
+    - name: Report GPU environment
       shell: bash
       run: |
-        uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
+        if command -v nvidia-smi >/dev/null 2>&1; then
+          nvidia-smi --query-gpu=driver_version,name --format=csv,noheader
+        else
+          echo "nvidia-smi: not available"
+        fi
+        uv run python - <<'PY'
+        import platform
+        import torch
+
+        print("python:", platform.python_version())
+        print("machine:", platform.machine())
+        print("torch:", torch.__version__)
+        print("torch cuda:", torch.version.cuda)
+        print("cuda available:", torch.cuda.is_available())
+        if torch.cuda.is_available():
+            print("device count:", torch.cuda.device_count())
+            print("device 0:", torch.cuda.get_device_name(0))
+        PY

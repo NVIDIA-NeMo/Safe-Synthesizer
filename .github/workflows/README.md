@@ -11,7 +11,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 
 | Workflow                                           | Trigger                     | Description                                                                                                |
 | -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, typecheck, unit tests, and CPU smoke tests                                                         |
+| [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, lock/generated dependency checks, typecheck, unit tests, and CPU smoke tests                       |
 | [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
@@ -20,9 +20,9 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 
 ## Pull Request Testing
 
-GPU tests on PRs are currently disabled due to internal constraints. `gpu-tests.yml` has its `push` trigger commented out, so it runs only on the nightly schedule or manual `workflow_dispatch`.
+GPU tests on PRs are currently disabled due to internal constraints. The `pull-request/*` push trigger is commented out in `gpu-tests.yml`, so copy-pr-bot syncs do not start GPU workflow runs until that trigger is reenabled.
 
-GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. When PR GPU testing is re-enabled, use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern:
+When PR GPU tests are reenabled, `gpu-tests.yml` should use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern because NVIDIA self-hosted runners block `pull_request`-triggered jobs:
 
 1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
 2. The push to `pull-request/<number>` triggers the GPU workflow
@@ -49,7 +49,7 @@ When this path is re-enabled, use `/sync` when:
 flowchart LR
     subgraph triggers [Triggers]
         push[Push to main]
-        schedule[Nightly Schedule]
+        schedule[Nightly schedule]
         pr[Pull Request event]
         manual[Manual Dispatch]
     end
@@ -112,7 +112,7 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 | Job | `make` target | What it checks |
 | --- | --- | --- |
 | Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
-| Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
+| Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml`; generated CUDA dependency sections match `cuda_deps.toml` |
 | Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
 | Unit Tests | `test-ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test-smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
@@ -127,7 +127,7 @@ To replicate CI locally:
 
 ```bash
 make check       # format-check + typecheck
-make lock-check  # verify uv.lock
+make lock-check  # verify uv.lock and generated CUDA dependency sections
 make test        # unit tests
 make test-smoke  # CPU smoke tests
 ```
@@ -138,7 +138,7 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. The `push` trigger for `pull-request/*` branches is currently commented out due to internal blockers, so PRs do not automatically produce GPU status checks. We expect to re-enable that path as soon as those blockers are resolved. There are several key jobs:
 
-- GPU Smoke Tests: staged smoke tests on a gpu runner with a 30-minute job timeout. The train-only, generation, resume, structured generation, timeseries, and SmolLM2 lanes run as separate workflow steps. Required for merge when the workflow is part of branch protection.
+- GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. Required for merge.
 - GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
 

@@ -82,28 +82,30 @@ verify-python-version: ## Verify Python version and install if necessary
 	uv venv --seed --allow-existing --python 3.11
 
 .PHONY: bootstrap-python
-bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu129'. Here mostly for legacy usage.
-	uv sync --frozen --extra ${PYTORCH_DEPS} --extra engine --group dev
+bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu128'. Here mostly for legacy usage.
+	uv sync --frozen --extra ${PYTORCH_DEPS} --group dev
 
 # Dynamic targets for bootstrap-nss
-# Usage: make bootstrap-nss {dev,engine,cpu,cuda}
-BOOTSTRAP_EXTRAS := dev engine cpu cuda cu129
+# Usage: make bootstrap-nss {dev,docs,cpu,cuda,cu128,cu130}
+BOOTSTRAP_EXTRAS := dev docs cpu cuda cu128 cu130
 $(BOOTSTRAP_EXTRAS):
 	@:
 
 .PHONY: bootstrap-nss
-bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss {dev,engine,cpu,cuda}
+bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss {dev,docs,cpu,cuda,cu128,cu130}
 	$(eval EXTRA := $(filter-out $@, $(MAKECMDGOALS)))
 	@echo "~~~~~~"
 	@echo "attempting to install nss package with primary extra: $(EXTRA)"
 	@if [ "$(EXTRA)" = "cuda" ]; then \
-		uv sync --frozen --extra cu129 --extra engine --group dev; \
-	elif [ "$(EXTRA)" = "cu129" ]; then \
-		uv sync --frozen --extra cu129 --extra engine --group dev; \
+		uv sync --frozen --extra cu129 --group dev; \
+	elif [ "$(EXTRA)" = "cu128" ]; then \
+		uv sync --frozen --extra cu129 --group dev; \
 	elif [ "$(EXTRA)" = "cpu" ]; then \
-		uv sync --frozen --extra cpu --extra engine --group dev; \
-	elif [ "$(EXTRA)" = "engine" ]; then \
-		uv sync --frozen --extra engine --group dev; \
+		uv sync --frozen --extra cpu --group dev; \
+	elif [ "$(EXTRA)" = "cu130" ]; then \
+		uv sync --frozen --extra cu130 --group dev; \
+	elif [ "$(EXTRA)" = "docs" ]; then \
+		uv sync --frozen --group docs; \
 	elif [ "$(EXTRA)" = "dev" ]; then \
 		uv sync --frozen --group dev; \
 	else \
@@ -149,7 +151,8 @@ typecheck: ## Run ty type checks
 	bash tools/codestyle/typecheck.sh
 
 .PHONY: lock-check
-lock-check: ## Check that uv.lock is up to date
+lock-check: ## Check that uv.lock and generated CUDA dependency sections are up to date
+	uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check
 	uv lock
 	git diff --exit-code uv.lock
 # NOTE: mise.lock drift check is intentionally disabled because of `yq`.
@@ -343,6 +346,8 @@ test-ci-container: container-build-test ## Run CI unit tests in a Linux containe
 CONTAINER_GPU_FILE := containers/Dockerfile.cuda
 CONTAINER_GPU_IMAGE ?= nss-gpu:latest
 CONTAINER_GPU_IMAGE_DEV ?= nss-gpu-dev:latest
+CONTAINER_GPU_CUDA_EXTRA ?= cu128
+CONTAINER_GPU_CUDA_VERSION ?= 12.8.1
 # Multi-arch: override for arm64 builds (e.g., Blackwell).
 #   make container-build-gpu CONTAINER_GPU_PLATFORM=linux/arm64
 CONTAINER_GPU_PLATFORM ?= linux/amd64
@@ -377,12 +382,16 @@ CONTAINER_GPU_RUN_OPTS := \
 CONTAINER_GPU_BUILD_RUNTIME := --platform $(CONTAINER_GPU_PLATFORM) \
 	--tag $(CONTAINER_GPU_IMAGE) \
 	--target runtime \
+	--build-arg CUDA_EXTRA=$(CONTAINER_GPU_CUDA_EXTRA) \
+	--build-arg CUDA_VERSION=$(CONTAINER_GPU_CUDA_VERSION) \
 	--progress=plain \
 	-f $(CONTAINER_GPU_FILE)
 
 CONTAINER_GPU_BUILD_DEV := --platform $(CONTAINER_GPU_PLATFORM) \
 	--tag $(CONTAINER_GPU_IMAGE_DEV) \
 	--target dev \
+	--build-arg CUDA_EXTRA=$(CONTAINER_GPU_CUDA_EXTRA) \
+	--build-arg CUDA_VERSION=$(CONTAINER_GPU_CUDA_VERSION) \
 	--progress=plain \
 	-f $(CONTAINER_GPU_FILE)
 
@@ -422,6 +431,8 @@ endif
 		--platform linux/amd64,linux/arm64 \
 		--tag $(CONTAINER_GPU_REGISTRY)/$(CONTAINER_GPU_IMAGE) \
 		--target runtime \
+		--build-arg CUDA_EXTRA=$(CONTAINER_GPU_CUDA_EXTRA) \
+		--build-arg CUDA_VERSION=$(CONTAINER_GPU_CUDA_VERSION) \
 		--progress=plain \
 		--push \
 		-f $(CONTAINER_GPU_FILE) .

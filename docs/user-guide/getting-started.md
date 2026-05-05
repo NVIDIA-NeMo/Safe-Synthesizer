@@ -26,37 +26,117 @@ does at each stage.
 
 ### Install the Package
 
-The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
-indexes outside PyPI. You must pass the extra index URLs shown below.
+Choose exactly one runtime extra: `cpu`, `cu128`, or `cu130`. The runtime
+extras include the CLI pipeline dependencies. Do not combine `cpu`, `cu128`,
+and `cu130`; they conflict by design.
 
-=== "CUDA 12.9 (Linux with NVIDIA GPU)"
+The CUDA and Linux CPU extras depend on packages hosted on indexes outside
+PyPI. You must pass the index URLs shown below for published-package installs.
+From a source checkout, `uv sync` reads the configured indexes from
+`pyproject.toml`.
+
+Published-package installs also use the exported
+[`constraints.txt`](https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt)
+security floor file. The same constraints file applies to all runtime extras;
+CUDA-specific package selection comes from the chosen extra and index URLs.
+
+#### Option 1: Installer Script
+
+The installer script is the shortest published-package path. It wraps the same
+extras, index URLs, and constraints file shown in the raw commands below.
+
+```bash
+# CUDA 12.8
+curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=128 bash
+
+# CUDA 13.0
+curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=130 bash
+
+# CPU-only development install
+curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=cpu bash
+```
+
+To inspect the script before running it:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh
+CUDA=130 bash install_nss.sh
+```
+
+#### Option 2: Raw Commands
+
+Use the raw commands when you want to audit or customize every installer flag.
+
+!!! info "Why `--index-strategy unsafe-best-match`"
+    FlashInfer publishes wheels to flashinfer.ai, but `flashinfer-python`
+    can also appear on other package indexes at older versions. uv's default
+    `first-match` strategy stops at the first index that contains a package
+    name, so it can pick up the wrong version and fail to resolve.
+    `--index-strategy unsafe-best-match` tells uv to consider all indexes and
+    pick the best matching version.
+
+=== "CUDA 12.8 (Linux with NVIDIA GPU)"
+
+    Use this for CUDA 12.8 environments.
 
     === "pip"
 
         ```bash
-        pip install "nemo-safe-synthesizer[cu129,engine]" \
-          --extra-index-url https://download.pytorch.org/whl/cu129 \
-          --extra-index-url https://flashinfer.ai/whl/cu129 \
-          --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
+        pip install "nemo-safe-synthesizer[cu128]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
+          --extra-index-url https://download.pytorch.org/whl/cu128 \
+          --extra-index-url https://flashinfer.ai/whl/cu128 \
+          --extra-index-url https://pypi.nvidia.com
         ```
 
     === "uv"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer[cu129,engine]" \
-          --index https://flashinfer.ai/whl/cu129 \
-          --index https://download.pytorch.org/whl/cu129 \
-          --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
+        uv pip install "nemo-safe-synthesizer[cu128]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
+          --index https://flashinfer.ai/whl/cu128 \
+          --index https://download.pytorch.org/whl/cu128 \
+          --index https://pypi.nvidia.com \
           --index-strategy unsafe-best-match
         ```
 
-        !!! info "Why `--index-strategy unsafe-best-match`"
-            FlashInfer publishes wheels to flashinfer.ai, but `flashinfer-python`
-            also appears on the PyTorch index at older versions. uv's default
-            `first-match` strategy stops at the first index that contains a
-            package name, so it picks up the wrong version from the PyTorch
-            index and fails to resolve. `--index-strategy unsafe-best-match`
-            tells uv to consider all indexes and pick the best matching version.
+    === "source checkout"
+
+        ```bash
+        uv sync --frozen --extra cu128
+        ```
+
+=== "CUDA 13.0 (Linux with NVIDIA GPU)"
+
+    Use this for CUDA 13.0 environments. CUDA 13.x bindings require Linux
+    NVIDIA driver 580.65.06 or newer.
+
+    === "pip"
+
+        ```bash
+        pip install "nemo-safe-synthesizer[cu130]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
+          --extra-index-url https://download.pytorch.org/whl/cu130 \
+          --extra-index-url https://flashinfer.ai/whl/cu130 \
+          --extra-index-url https://pypi.nvidia.com
+        ```
+
+    === "uv"
+
+        ```bash
+        uv pip install "nemo-safe-synthesizer[cu130]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
+          --index https://flashinfer.ai/whl/cu130 \
+          --index https://download.pytorch.org/whl/cu130 \
+          --index https://pypi.nvidia.com \
+          --index-strategy unsafe-best-match
+        ```
+
+    === "source checkout"
+
+        ```bash
+        uv sync --frozen --extra cu130
+        ```
 
 === "CPU (macOS / Linux without GPU)"
 
@@ -68,26 +148,30 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
     === "pip (macOS)"
 
         ```bash
-        pip install "nemo-safe-synthesizer[cpu,engine]"
+        pip install "nemo-safe-synthesizer[cpu]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt
         ```
 
     === "pip (Linux)"
 
         ```bash
-        pip install "nemo-safe-synthesizer[cpu,engine]" \
+        pip install "nemo-safe-synthesizer[cpu]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
           --extra-index-url https://download.pytorch.org/whl/cpu
         ```
 
     === "uv (macOS)"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer[cpu,engine]"
+        uv pip install "nemo-safe-synthesizer[cpu]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt
         ```
 
     === "uv (Linux)"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer[cpu,engine]" \
+        uv pip install "nemo-safe-synthesizer[cpu]" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
           --index https://download.pytorch.org/whl/cpu
         ```
 
@@ -118,13 +202,15 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
     === "pip"
 
         ```bash
-        pip install "nemo-safe-synthesizer"
+        pip install "nemo-safe-synthesizer" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt
         ```
 
     === "uv"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer"
+        uv pip install "nemo-safe-synthesizer" \
+          -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt
         ```
 
     !!! note "Limited use"

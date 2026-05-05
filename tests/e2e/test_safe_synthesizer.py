@@ -17,18 +17,19 @@ import pytest
 # Skip all tests in this module if sentence_transformers is not available
 pytest.importorskip(
     "sentence_transformers",
-    reason="sentence_transformers and a GPU are required for these tests (install with: uv sync --extra cu129)",
+    reason="sentence_transformers and a GPU are required for these tests (install a CUDA runtime extra such as: uv sync --extra cu128 or uv sync --extra cu130)",
 )
 
 # Skip all tests in this module if vllm is not properly available.
 vllm = pytest.importorskip(
-    "vllm", reason="vllm with GPU support is required for these tests (install with: uv sync --extra cu129)"
+    "vllm",
+    reason="vllm with GPU support is required for these tests (install a CUDA runtime extra such as: uv sync --extra cu128 or uv sync --extra cu130)",
 )
 
 try:
     from vllm import LLM  # noqa: F401
 except ImportError:
-    skip_reason = "vllm with GPU support is required for these tests (install with: uv sync --extra cu129)"
+    skip_reason = "vllm with GPU support is required for these tests (install a CUDA runtime extra such as: uv sync --extra cu129 or uv sync --extra cu130)"
     pytest.skip(skip_reason, allow_module_level=True)  # ty: ignore[invalid-argument-type,too-many-positional-arguments]
 
 

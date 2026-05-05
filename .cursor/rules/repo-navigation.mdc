@@ -27,7 +27,7 @@ Cursor discovers skills directly from `.agents/skills/` -- no symlinks needed.
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | Package metadata, dependencies, extras (cpu/cu128/engine), uv config |
+| `pyproject.toml` | Package metadata, dependencies, runtime extras (cpu/cu128/cu130), uv config |
 | `pytest.ini` | Test markers, pytest options, timeout, parallelism |
 | `ruff.toml` | Ruff linting and formatting rules |
 | `mkdocs.yml` | Documentation site config (MkDocs Material) |

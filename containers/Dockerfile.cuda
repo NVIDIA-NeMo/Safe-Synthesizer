@@ -5,7 +5,7 @@
 #
 # Stages:
 #   tools   -- install mise and all dev tools (uv, ruff, etc.)
-#   deps    -- install Python, uv, and all cu129+engine dependencies
+#   deps    -- install Python, uv, and the selected CUDA extra dependencies
 #   runtime -- minimal CLI wrapper (ENTRYPOINT entrypoint.sh -> safe-synthesizer)
 #   dev     -- extends runtime with dev tools, tests, and interactive shell
 #
@@ -59,6 +59,7 @@ ARG TARGETARCH
 # Build arguments
 # ---------------------------------------------------------------------------
 ARG CUDA_VERSION=12.9.1
+ARG CUDA_EXTRA=cu129
 ARG UBUNTU_VERSION=22.04
 # Use "runtime" when all deps ship pre-built wheels (current state).
 # Switch to "devel" if a future dependency requires CUDA compilation.
@@ -110,6 +111,7 @@ RUN cp "$(mise which uv)" /usr/local/bin/uv && \
 # ---------------------------------------------------------------------------
 FROM nvidia/cuda:${CUDA_VERSION}-${CUDA_IMAGE_TYPE}-ubuntu${UBUNTU_VERSION} AS deps
 
+ARG CUDA_EXTRA
 ARG PYTHON_VERSION
 
 COPY --from=tools /usr/local/bin/uv /usr/local/bin/uv
@@ -142,14 +144,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # not when source code changes.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --extra cu129 --extra engine --no-group dev
+    uv sync --no-install-project --extra ${CUDA_EXTRA} --no-group dev
 
 # -- Project layer: install the project (non-editable so the venv is
 # self-contained and source code is not needed in the runtime image).
 COPY README.md ./
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-editable --extra cu129 --extra engine --no-group dev
+    uv sync --no-editable --extra ${CUDA_EXTRA} --no-group dev
 
 # ---------------------------------------------------------------------------
 # Stage 3: runtime -- minimal image wrapping the safe-synthesizer CLI
@@ -203,6 +205,7 @@ CMD ["--help"]
 # ---------------------------------------------------------------------------
 FROM runtime AS dev
 
+ARG CUDA_EXTRA
 USER root
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -233,7 +236,7 @@ COPY . .
 
 # Install dev dependencies into the existing venv.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra cu129 --extra engine --group dev
+    uv sync --extra ${CUDA_EXTRA} --group dev
 
 RUN git config --global --add safe.directory /workspace
 

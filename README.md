@@ -16,19 +16,47 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Installation
 
+Choose one CUDA runtime extra. See the
+[installation guide](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/#install-the-package)
+for CPU and Docker installs.
+
+Installer script:
+
 ```bash
-# With uv (recommended):
-uv pip install "nemo-safe-synthesizer[cu129,engine]" \
+# CUDA 12.8 with the installer script:
+curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=128 bash
+
+# CUDA 13.0 with the installer script:
+curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=130 bash
+```
+
+Raw commands:
+
+```bash
+CONSTRAINTS_URL="https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt"
+
+# CUDA 12.8 with uv (recommended):
+uv pip install "nemo-safe-synthesizer[cu129]" \
+  -c "$CONSTRAINTS_URL" \
   --index https://flashinfer.ai/whl/cu129 \
   --index https://download.pytorch.org/whl/cu129 \
-  --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
+  --index https://pypi.nvidia.com \
   --index-strategy unsafe-best-match
 
-# With pip:
-pip install "nemo-safe-synthesizer[cu129,engine]" \
+# CUDA 13.0 with uv (requires NVIDIA Linux driver 580.65.06+):
+uv pip install "nemo-safe-synthesizer[cu130]" \
+  -c "$CONSTRAINTS_URL" \
+  --index https://flashinfer.ai/whl/cu130 \
+  --index https://download.pytorch.org/whl/cu130 \
+  --index https://pypi.nvidia.com \
+  --index-strategy unsafe-best-match
+
+# CUDA 12.8 with pip:
+pip install "nemo-safe-synthesizer[cu129]" \
+  -c "$CONSTRAINTS_URL" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
-  --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
+  --extra-index-url https://pypi.nvidia.com
 ```
 
 Or install from source:
@@ -37,7 +65,9 @@ Or install from source:
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
 make setup # installs the pinned mise version (if missing) + pinned tool versions from mise.lock
-make bootstrap-nss cuda
+uv sync --frozen --extra cu128 --group dev
+# or, for CUDA 13.0:
+uv sync --frozen --extra cu130 --group dev
 ```
 
 Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).

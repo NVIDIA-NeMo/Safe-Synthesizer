@@ -13,9 +13,9 @@
 # limitations under the License.
 
 # ---------------------------------------------------------------------------
-# GPU tests run on NVIDIA on-prem self-hosted runners and use the copy-pr-bot
-# pattern: PRs are tested via push events to pull-request/* branches rather
-# than pull_request events.
+# GPU tests run on NVIDIA on-prem self-hosted runners. PR copy-pr-bot testing
+# uses push events to pull-request/* branches rather than pull_request events,
+# but that push trigger is currently disabled below.
 # See: https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/
 # ---------------------------------------------------------------------------
 
@@ -58,6 +58,8 @@ jobs:
       contents: read
     outputs:
       src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
+      deps: ${{ steps.changes.outputs.deps }}
+      ci: ${{ steps.changes.outputs.ci }}
     steps:
       - uses: actions/checkout@v6
       - name: Detect changes
@@ -65,7 +67,7 @@ jobs:
         uses: ./.github/actions/detect-changes
 
   gpu-smoke-test:
-    name: GPU Smoke Tests
+    name: GPU Smoke Tests (Python 3.11, ${{ matrix.cuda-extra }})
     needs: changes
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
@@ -74,7 +76,9 @@ jobs:
         always() &&
         (
           github.event_name == 'workflow_dispatch' ||
-          needs.changes.outputs.src_test_deps == 'true'
+          needs.changes.outputs.src_test_deps == 'true' ||
+          needs.changes.outputs.deps == 'true' ||
+          needs.changes.outputs.ci == 'true'
         ) &&
         (
           github.event_name != 'workflow_dispatch' ||
@@ -82,8 +86,17 @@ jobs:
           inputs.suite == 'smoke'
         )
       }}
+    continue-on-error: ${{ matrix.required == false }}
     timeout-minutes: 30
     runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cuda-extra: cu128
+            required: true
+          - cuda-extra: cu130
+            required: false
     steps:
       - name: checkout
         uses: actions/checkout@v6
@@ -92,6 +105,9 @@ jobs:
 
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
+        with:
+          python-version: "3.11"
+          cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU smoke tests - train only
         timeout-minutes: 10
@@ -118,7 +134,7 @@ jobs:
         run: make test-smoke-gpu-smollm2
 
   gpu-e2e-test:
-    name: GPU E2E Tests
+    name: GPU E2E Tests (Python 3.11, ${{ matrix.cuda-extra }})
     needs: changes
     # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
     # manual runs bypass that skipped dependency and run the selected GPU suite.
@@ -127,7 +143,9 @@ jobs:
         always() &&
         (
           github.event_name == 'workflow_dispatch' ||
-          needs.changes.outputs.src_test_deps == 'true'
+          needs.changes.outputs.src_test_deps == 'true' ||
+          needs.changes.outputs.deps == 'true' ||
+          needs.changes.outputs.ci == 'true'
         ) &&
         (
           github.event_name != 'workflow_dispatch' ||
@@ -135,8 +153,17 @@ jobs:
           inputs.suite == 'e2e'
         )
       }}
+    continue-on-error: ${{ matrix.required == false }}
     timeout-minutes: 60
     runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cuda-extra: cu128
+            required: true
+          - cuda-extra: cu130
+            required: false
     steps:
       - name: checkout
         uses: actions/checkout@v6
@@ -145,6 +172,9 @@ jobs:
 
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
+        with:
+          python-version: "3.11"
+          cuda-extra: ${{ matrix.cuda-extra }}
 
       - name: Run GPU E2E tests
         timeout-minutes: 45

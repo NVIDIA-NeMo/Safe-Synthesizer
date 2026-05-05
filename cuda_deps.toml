@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+requires_torch = [
+  "accelerate",
+  "bitsandbytes==0.49.1",
+  { name = "flashinfer-python", version = "0.6.8.post1", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
+  { name = "flashinfer-cubin", version = "0.6.8.post1", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
+  "gliner",
+  "kernels>=0.12.1",
+  "opacus",
+  "peft",
+  "sentence-transformers",
+  "transformers==4.57.3",
+  { name = "triton", specifier = ">=2.0.0", sys_platform = "linux", source_kind = "pytorch" },
+  "trl>=0.23.0",
+  "vllm==0.20.0; sys_platform == 'linux'",
+]
+
+runtime_deps = [
+  "anyascii",
+  "pycountry",
+  "betterproto",
+  "flashtext",
+  "cached-property",
+  "category-encoders",
+  "dython",
+  "dateparser",
+  "faker",
+  "datasets>=4.8.4",
+  "huggingface-hub>=0.34.4,<1",
+  "json-repair",
+  "matplotlib",
+  "outlines>=1.0.0",
+  "prv-accountant",
+  "smart-open==7.0.5",
+  "python-stdnum",
+  "pandas>=2.1.3, <3",
+  "plotly",
+  "ratelimit",
+  "scikit-learn",
+  "range_regex>=0.1.0",
+  "tenacity==9.1.4",
+  "tiktoken>=0.7.0,<1.0",
+  "tldextract",
+  "tqdm>=4.67.1",
+  "urllib3>=2.6.1",
+  "wandb==0.26.1",
+]
+
+cuda_dependencies = [
+  { name = "flashinfer-jit-cache", version = "0.6.8.post1", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'", variants = ["cu129"] },
+  { name = "nvidia-cublas", sys_platform = "linux" },
+  "nvidia-ml-py; sys_platform == 'linux'",
+  { name = "torch", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  "torch-c-dlpack-ext",
+  { name = "torchvision", version = "0.26.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "torchao", version = "0.16.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
+]
+
+generated_extras = ["engine", "cpu", "cu129", "cu130"]
+
+# CUDA Python packaging context:
+# - Starting with CUDA Python 12.8, cuda-python is a metapackage that currently
+#   depends on cuda-bindings; the newer docs describe split components such as
+#   cuda.core, cuda.bindings, and cuda.pathfinder.
+# - CUDA 13.x optional Toolkit components are installed through the cuda-toolkit
+#   PyPI metapackage, and current NVIDIA package names are generally unsuffixed
+#   (for example, nvidia-cuda-nvrtc and nvidia-nvjitlink).
+# - Keep NVIDIA package routing per-library: nvidia-cublas is unsuffixed for both
+#   CUDA 12 and CUDA 13, while other CUDA 12 runtime packages may still need a
+#   -cu12 suffix and CUDA-specific PyTorch indexes.
+# - CUDA 13.x bindings require Linux driver 580.65.06 or newer.
+nvidia_cuda_libraries = [
+  { name = "cublas", nvidia_package_suffix = "", index = "nvidia-pypi-public" },
+  "cuda-cupti",
+  "cuda-nvrtc",
+  "cuda-nvprof",
+  "cuda-runtime",
+  "cuda-nvml",
+  "cudnn",
+  "cusparse",
+  "cusparselt",
+  "nccl",
+  "nvjitlink",
+  "nvshmem",
+  "nvtx",
+]
+
+conflict_extras = ["cpu"]
+
+[cpu]
+dependencies = [
+  { name = "torch", version = "2.11.0", sys_platform = "darwin" },
+  { name = "torch", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu", source_marker = "sys_platform=='linux'" },
+  { name = "torchvision", version = "0.26.0", sys_platform = "darwin" },
+  { name = "torchvision", version = "0.26.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+  "torchao==0.17.0",
+]
+
+[[indexes]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[indexes]]
+name = "nv-shared-pypi-local"
+url = "https://urm.nvidia.com/artifactory/api/pypi/nv-shared-pypi-local/simple"
+explicit = true
+
+[[indexes]]
+name = "nvidia-pypi-public"
+url = "https://pypi.nvidia.com"
+explicit = true
+
+[cuda_indexes.pytorch]
+name = "pytorch-{extra}"
+url = "https://download.pytorch.org/whl/{extra}"
+explicit = true
+
+[cuda_indexes.flashinfer]
+name = "flashinfer-{extra}"
+url = "https://flashinfer.ai/whl/{extra}"
+explicit = true
+
+[variants.cu129]
+cuda_package_suffix = "cu12"
+
+[variants.cu130]
+cuda_package_suffix = "cu13"
+nvidia_package_suffix = ""

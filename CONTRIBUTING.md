@@ -59,8 +59,9 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
    # Install Python dependencies (choose one)
    make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-   make bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
-   make bootstrap-nss engine # Engine dependencies only
+   make bootstrap-nss cu129   # CUDA 12.9 (Linux with NVIDIA GPU)
+   make bootstrap-nss cu130  # CUDA 13.0 (Linux with NVIDIA GPU)
+   make bootstrap-nss docs   # Documentation dependencies only
    make bootstrap-nss dev    # Minimal dev dependencies only
   ```
 
@@ -490,6 +491,60 @@ All `make` targets check the entire project. Pre-commit scopes checks to staged 
 | uv lock drift | `make lock-check` | not checked | on `pyproject.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
+## Dependency Updates
+
+Dependency updates have two generated surfaces:
+
+- CUDA/runtime extras: `cuda_deps.toml` is the source of truth. `pyproject.toml` is generated from it.
+- Security floors: `[tool.uv] constraint-dependencies` in `pyproject.toml` is the source of truth. `constraints.txt` is generated from it and published for downstream `pip` / `uv pip` installs.
+
+### CUDA and Accelerator Dependencies
+
+Edit `cuda_deps.toml` for changes to the CPU, CUDA 12.8, CUDA 13.0, PyTorch, FlashInfer, or NVIDIA package matrix. Do not hand-edit the generated `cpu`, `cu128`, `cu130`, `[tool.uv.sources]`, or `[[tool.uv.index]]` sections in `pyproject.toml`.
+
+After editing `cuda_deps.toml`, regenerate `pyproject.toml`:
+
+```bash
+uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml
+uv lock
+```
+
+Then verify the generated sections are current:
+
+```bash
+uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check
+uv run pytest tests/test_gen_cuda_deps.py
+make lock-check
+```
+
+When adding a new CUDA extra, update all user-facing install surfaces in the same PR:
+
+- `generated_extras` in `cuda_deps.toml`
+- `install_nss.sh`
+- `docs/user-guide/getting-started.md`
+- `README.md`
+
+Use dry runs to confirm the installer emits the expected command matrix:
+
+```bash
+DRY_RUN=1 CUDA=128 bash install_nss.sh
+DRY_RUN=1 CUDA=130 bash install_nss.sh
+DRY_RUN=1 CUDA=cpu bash install_nss.sh
+```
+
+### Security Floors and Constraints
+
+Dependabot CVE floors are applied with `tools/patch_dependabot.py`. The script bumps direct dependencies in `pyproject.toml`, adds transitive floors to `[tool.uv] constraint-dependencies`, writes the exported `constraints.txt`, and refreshes `uv.lock`.
+
+```bash
+export GITHUB_TOKEN="$(gh auth token)"
+uv run tools/patch_dependabot.py
+```
+
+The exported `constraints.txt` is intentionally not CUDA-version-specific. Runtime selection comes from the selected extra (`cpu`, `cu128`, `cu130`) and package indexes; security floors come from the shared constraints file.
+
+If you update `[tool.uv] constraint-dependencies` by hand, regenerate `constraints.txt` before opening a PR. The simplest supported path is to run `tools/patch_dependabot.py` with a cached `dependabot.json` or an active `GITHUB_TOKEN`, then review the resulting `pyproject.toml`, `constraints.txt`, and `uv.lock` diff.
+
 ## Documentation
 
 This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) for its documentation site, hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
@@ -579,7 +634,29 @@ Before contributing, run `make format` and `make check`. See `AGENTS.md` for ful
 
 Releases are published to PyPI via the **Release NeMo Safe Synthesizer** GitHub Actions workflow. The workflow builds the wheel from a git tag, publishes to Test PyPI as a pre-flight check, publishes to the real PyPI, and creates a GitHub release.
 
-### 1. Create and push a tag
+### 1. Run dependency and install preflight
+
+Before tagging a release, verify generated dependency artifacts and install instructions are current:
+
+```bash
+uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check
+uv run pytest tests/test_gen_cuda_deps.py
+make lock-check
+DRY_RUN=1 CUDA=128 bash install_nss.sh
+DRY_RUN=1 CUDA=130 bash install_nss.sh
+DRY_RUN=1 CUDA=cpu bash install_nss.sh
+```
+
+If Dependabot security floors changed since the last release, run:
+
+```bash
+export GITHUB_TOKEN="$(gh auth token)"
+uv run tools/patch_dependabot.py
+```
+
+Review `pyproject.toml`, `constraints.txt`, and `uv.lock` together. The release publishes the wheel to PyPI, but downstream installers also depend on the raw `constraints.txt` and `install_nss.sh` URLs from the release branch.
+
+### 2. Create and push a tag
 
 Release versions follow [PEP440](https://peps.python.org/pep-0440/) with major, minor, and patch release numbers.
 This project uses stable releases and release candidates only; prerelease versions append the suffix rcN (no dash, as specified by PEP440).
@@ -610,7 +687,7 @@ git tag v0.1.0rc1 <commit-sha>
 git push origin <tag>
 ```
 
-### 2. Monitor the workflow run
+### 3. Monitor the workflow run
 
 The [workflow](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/actions/workflows/release.yml) to release is triggered automatically when a tag starting with `v` is pushed to GitHub.
 
