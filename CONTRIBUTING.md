@@ -427,17 +427,18 @@ uv run pytest tests/cli/test_run.py
 
 ### GPU Tests (CI)
 
-GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
+GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. GPU coverage is split across two workflows:
 
-- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2). Required for merge.
-- GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
+- `gpu-smoke-tests.yml` -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2). Required for merge.
+- `gpu-e2e-tests.yml` -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
 
-When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
+When you open a ready-for-review PR, copy-pr-bot automatically triggers GPU test runs. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire both GPU workflows, and post the `GPU Smoke CI Status` and `GPU E2E CI Status` check results back to the PR.
 
 To trigger from the CLI instead (no PR status check):
 
 ```bash
-gh workflow run gpu-tests.yml --ref <your-branch>
+gh workflow run gpu-smoke-tests.yml --ref <your-branch>
+gh workflow run gpu-e2e-tests.yml --ref <your-branch>
 ```
 
 ### Test Requirements
