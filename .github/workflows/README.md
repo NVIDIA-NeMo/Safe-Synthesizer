@@ -138,7 +138,7 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Test Workflows
 
-The `gpu-smoke-tests.yml` and `gpu-e2e-tests.yml` workflows run nightly at 02:00 UTC and using `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
+The `gpu-smoke-tests.yml` and `gpu-e2e-tests.yml` workflows run nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. There are several key jobs:
 
 - GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. Required for merge.
 - GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
@@ -160,10 +160,13 @@ To trigger from the PR UI and get a status check result, use `/sync` -- see [On-
 
 ### Runners
 
+Internal runners and projects are defined in an internal repo, `nv-gha-runners/enterprise-runner-configuration`.
+
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
 | GPU Smoke Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
+| GPU Smoke Tests | GPU Smoke Tests | `linux-arm64-gpu-a100-latest-1` | NVIDIA self-hosted GPU (arm64) |
 | GPU Smoke Tests | Detect Changes, GPU Smoke CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | GPU E2E Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU E2E Tests | Detect Changes, GPU E2E CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
