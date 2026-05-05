@@ -206,8 +206,6 @@ test-smoke: ## Run CPU smoke tests (~few min, no GPU required)
 	$(PYTEST_CMD) -m "smoke and not requires_gpu"
 
 SMOKE_DIR := tests/smoke
-.PHONY: test-smoke-gpu
-test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
 # Uses PYTEST_NO_XDIST_CMD (-n 0) because CUDA device-side asserts poison
 # xdist workers. Groups are split for GPU memory isolation.
 #
@@ -215,16 +213,38 @@ test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
 #   - Train-only (no vLLM): add pytest.mark.requires_gpu -> auto-discovered below
 #   - Uses vLLM: also add pytest.mark.vllm -> add the file to the vLLM list below
 #   - Downloads from Hub: also add pytest.mark.smollm2 (or similar) -> auto-discovered below
-#
-# 1) Train-only tests share a process (no vLLM, safe to batch).
+
+.PHONY: test-smoke-gpu
+test-smoke-gpu: ## Run all GPU smoke test stages (requires CUDA)
+	$(MAKE) test-smoke-gpu-train-only
+	$(MAKE) test-smoke-gpu-generation
+	$(MAKE) test-smoke-gpu-resume
+	$(MAKE) test-smoke-gpu-structured-generation
+	$(MAKE) test-smoke-gpu-timeseries
+	$(MAKE) test-smoke-gpu-smollm2
+
+.PHONY: test-smoke-gpu-train-only
+test-smoke-gpu-train-only: ## Run GPU train-only smoke tests (no vLLM)
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and not vllm and not smollm2"
-# 2) Each vLLM test file gets its own process -- vLLM pre-allocates all GPU
-#    memory and never releases it within a process.
+
+.PHONY: test-smoke-gpu-generation
+test-smoke-gpu-generation: ## Run GPU generation smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_generation_gpu.py
+
+.PHONY: test-smoke-gpu-resume
+test-smoke-gpu-resume: ## Run GPU resume smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_resume_gpu.py
+
+.PHONY: test-smoke-gpu-structured-generation
+test-smoke-gpu-structured-generation: ## Run GPU structured generation smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_structured_gen_gpu.py
+
+.PHONY: test-smoke-gpu-timeseries
+test-smoke-gpu-timeseries: ## Run GPU timeseries smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_timeseries_gpu.py
-# 3) SmolLM2 (Hub download + vLLM) is marker-isolated.
+
+.PHONY: test-smoke-gpu-smollm2
+test-smoke-gpu-smollm2: ## Run GPU SmolLM2 smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and smollm2"
 
 

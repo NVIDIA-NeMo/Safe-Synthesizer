@@ -42,6 +42,12 @@ outputs:
   deps:
     description: "'true' if any dep related files changed"
     value: ${{ steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' }}
+  src_test:
+    description: "'true' if source or test files changed"
+    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' }}
+  src_test_deps:
+    description: "'true' if source, test, dependency, or CI files changed"
+    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
   ci:
     description: "'true' if any CI workflow or action files changed"
     value: ${{ steps.filter.outputs.ci }}

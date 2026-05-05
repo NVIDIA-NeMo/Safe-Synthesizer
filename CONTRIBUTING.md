@@ -318,6 +318,7 @@ The `main` branch has the following protections:
 | Deletions                       | Blocked      |
 | Merge strategy                  | Squash only  |
 
+`GPU CI Status` is not currently a live branch-protection requirement because PR GPU runs are blocked by internal issues. We expect to re-enable it as soon as those blockers are resolved.
 
 ## Pull Request Process
 
@@ -427,17 +428,19 @@ uv run pytest tests/cli/test_run.py
 
 ### GPU Tests (CI)
 
-GPU tests run on NVIDIA self-hosted A100 runners and require the copy-pr-bot setup -- they cannot run on a local machine unless you have a compatible GPU environment. The `gpu-tests.yml` workflow runs two jobs:
+GPU tests run on NVIDIA self-hosted A100 runners -- they cannot run on a local machine unless you have a compatible GPU environment. `gpu-tests.yml` currently runs only on the nightly schedule or manual `workflow_dispatch`; the `push` trigger for copy-pr-bot PR branches is commented out due to internal blockers. We expect to re-enable PR GPU runs as soon as those blockers are resolved. The workflow has two main test jobs:
 
-- GPU Smoke Tests -- quick smoke tests (training, generation, structured gen, timeseries, SmolLM2). Required for merge.
+- GPU Smoke Tests -- staged smoke tests (train-only, generation, resume, structured gen, timeseries, SmolLM2). Required when the workflow is part of branch protection.
 - GPU E2E Tests -- full end-to-end pipeline tests. Informational -- failures produce a warning but don't block merge.
 
-When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU test run. For draft PRs, or to re-run after a flaky failure, comment `/sync` on the PR. The bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
+Manual dispatch includes a `suite` dropdown: `all`, `smoke`, or `e2e`. Manual runs create workflow runs for the selected branch, but they do not post a PR status check. When PR GPU testing is re-enabled, copy-pr-bot can push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR.
 
 To trigger from the CLI instead (no PR status check):
 
 ```bash
 gh workflow run gpu-tests.yml --ref <your-branch> -f suite=all
+gh workflow run gpu-tests.yml --ref <your-branch> -f suite=smoke
+gh workflow run gpu-tests.yml --ref <your-branch> -f suite=e2e
 ```
 
 ### Test Requirements

@@ -57,8 +57,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      src: ${{ steps.changes.outputs.src }}
-      test: ${{ steps.changes.outputs.test }}
+      src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
       - uses: actions/checkout@v6
       - name: Detect changes
@@ -75,8 +74,7 @@ jobs:
         always() &&
         (
           github.event_name == 'workflow_dispatch' ||
-          needs.changes.outputs.src == 'true' ||
-          needs.changes.outputs.test == 'true'
+          needs.changes.outputs.src_test_deps == 'true'
         ) &&
         (
           github.event_name != 'workflow_dispatch' ||
@@ -95,9 +93,29 @@ jobs:
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
 
-      - name: Run GPU smoke tests
+      - name: Run GPU smoke tests - train only
+        timeout-minutes: 10
+        run: make test-smoke-gpu-train-only
+
+      - name: Run GPU smoke tests - generation
+        timeout-minutes: 10
+        run: make test-smoke-gpu-generation
+
+      - name: Run GPU smoke tests - resume
+        timeout-minutes: 10
+        run: make test-smoke-gpu-resume
+
+      - name: Run GPU smoke tests - structured generation
+        timeout-minutes: 10
+        run: make test-smoke-gpu-structured-generation
+
+      - name: Run GPU smoke tests - timeseries
+        timeout-minutes: 10
+        run: make test-smoke-gpu-timeseries
+
+      - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
-        run: make test-smoke-gpu
+        run: make test-smoke-gpu-smollm2
 
   gpu-e2e-test:
     name: GPU E2E Tests
@@ -109,8 +127,7 @@ jobs:
         always() &&
         (
           github.event_name == 'workflow_dispatch' ||
-          needs.changes.outputs.src == 'true' ||
-          needs.changes.outputs.test == 'true'
+          needs.changes.outputs.src_test_deps == 'true'
         ) &&
         (
           github.event_name != 'workflow_dispatch' ||
