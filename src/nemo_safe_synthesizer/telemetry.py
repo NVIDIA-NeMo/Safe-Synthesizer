@@ -16,6 +16,8 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
+import threading
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -26,15 +28,11 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     import httpx
 
-TELEMETRY_ENABLED = os.getenv("NEMO_TELEMETRY_ENABLED", "true").lower() in ("1", "true", "yes")
 CLIENT_ID = "184482118588404"
 NEMO_TELEMETRY_VERSION = "nemo-telemetry/1.0"
+DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
-NEMO_TELEMETRY_ENDPOINT = os.getenv(
-    "NEMO_TELEMETRY_ENDPOINT", "https://events.telemetry.data.nvidia.com/v1.1/events/json"
-).lower()
 CPU_ARCHITECTURE = platform.uname().machine
-SESSION_PREFIX = os.getenv("NEMO_SESSION_PREFIX")
 
 
 class NemoSourceEnum(str, Enum):
@@ -49,21 +47,31 @@ class DeploymentTypeEnum(str, Enum):
     UNDEFINED = "undefined"
 
 
-_deployment_type_raw = os.getenv("NEMO_DEPLOYMENT_TYPE", "sdk").lower()
-try:
-    DEPLOYMENT_TYPE = DeploymentTypeEnum(_deployment_type_raw)
-except ValueError:
-    valid_values = [e.value for e in DeploymentTypeEnum]
-    raise ValueError(
-        f"Invalid NEMO_DEPLOYMENT_TYPE: {_deployment_type_raw!r}. Must be one of: {valid_values}"
-    ) from None
-
-
 class TaskStatusEnum(str, Enum):
     COMPLETED = "completed"
     ERROR = "error"
     CANCELED = "canceled"
     UNDEFINED = "undefined"
+
+
+def _telemetry_enabled() -> bool:
+    return os.getenv("NEMO_TELEMETRY_ENABLED", "true").lower() in ("1", "true", "yes")
+
+
+def _telemetry_endpoint() -> str:
+    return os.getenv("NEMO_TELEMETRY_ENDPOINT", DEFAULT_ENDPOINT)
+
+
+def _deployment_type() -> DeploymentTypeEnum:
+    raw = os.getenv("NEMO_DEPLOYMENT_TYPE", "sdk").lower()
+    try:
+        return DeploymentTypeEnum(raw)
+    except ValueError:
+        return DeploymentTypeEnum.SDK
+
+
+def _session_prefix() -> str | None:
+    return os.getenv("NEMO_SESSION_PREFIX")
 
 
 def bucket_records(n: int) -> str:
@@ -117,7 +125,7 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         description="The final status of the task.",
     )
     deployment_type: DeploymentTypeEnum = Field(
-        default=DEPLOYMENT_TYPE,
+        default_factory=_deployment_type,
         alias="deploymentType",
         description="How Safe Synthesizer was invoked (cli, sdk, nmp).",
     )
@@ -216,6 +224,8 @@ def _get_iso_timestamp(dt: datetime | None = None) -> str:
 def build_payload(
     events: list[QueuedEvent], *, source_client_version: str, session_id: str = "undefined"
 ) -> dict[str, Any]:
+    if not events:
+        raise ValueError("build_payload requires at least one event")
     return {
         "browserType": "undefined",  # do not change
         "clientId": CLIENT_ID,
@@ -249,7 +259,7 @@ def build_payload(
         "events": [
             {
                 "ts": _get_iso_timestamp(queued.timestamp),
-                "parameters": queued.event.model_dump(by_alias=True),
+                "parameters": queued.event.model_dump(by_alias=True, mode="json"),
                 "name": queued.event._event_name,
             }
             for queued in events
@@ -260,6 +270,14 @@ def build_payload(
 class TelemetryHandler:
     """
     Handles telemetry event batching, flushing, and retry logic for NeMo products.
+
+    Supports two usage patterns:
+
+    - **Background mode**: call ``start()`` (or use ``with handler:``) to spawn
+      a daemon thread with its own event loop that drives periodic flushing.
+      ``stop()`` schedules a final flush, then stops the loop and joins the thread.
+    - **Fire-and-flush mode**: skip ``start()``, ``enqueue()`` events, then call
+      ``stop()`` to flush once via ``asyncio.run``. No background thread is created.
 
     Args:
         flush_interval_seconds (float): The interval in seconds to flush the events.
@@ -286,71 +304,164 @@ class TelemetryHandler:
         self._max_retries = max_retries
         self._events: list[QueuedEvent] = []
         self._dlq: list[QueuedEvent] = []  # Dead letter queue for retry
-        self._flush_signal = asyncio.Event()
+        self._queue_lock = threading.Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+        self._flush_signal: asyncio.Event | None = None
         self._timer_task: asyncio.Task | None = None
         self._running = False
         self._source_client_version = source_client_version
-        # Apply session prefix if environment variable is set
-        if SESSION_PREFIX:
-            self._session_id = f"{SESSION_PREFIX}{session_id}"
-        else:
-            self._session_id = session_id
+        prefix = _session_prefix()
+        self._session_id = f"{prefix}{session_id}" if prefix else session_id
+
+    # -- Async API -----------------------------------------------------------
 
     async def astart(self) -> None:
+        """Start the background timer task on the current event loop."""
         if self._running:
             return
+        self._loop = asyncio.get_running_loop()
+        self._flush_signal = asyncio.Event()
         self._running = True
         self._timer_task = asyncio.create_task(self._timer_loop())
 
     async def astop(self) -> None:
+        """Cancel the timer task and flush any remaining events."""
+        if not self._running:
+            await self._flush_events()
+            return
         self._running = False
-        self._flush_signal.set()
-        if self._timer_task:
+        if self._flush_signal is not None:
+            self._flush_signal.set()
+        if self._timer_task is not None:
             self._timer_task.cancel()
             try:
                 await self._timer_task
             except asyncio.CancelledError:
-                pass
+                pass  # expected: we just cancelled the task during shutdown
+            self._timer_task = None
+        await self._flush_events()
+        self._loop = None
+        self._flush_signal = None
+
+    async def aflush(self) -> None:
+        """Flush all queued events immediately and await completion."""
+        await self._flush_events()
+
+    # -- Sync API ------------------------------------------------------------
+
+    def start(self) -> None:
+        """Spawn a daemon thread with a persistent event loop for periodic flushing."""
+        if self._running:
+            return
+        ready = threading.Event()
+        startup_error: list[BaseException] = []
+
+        def _run() -> None:
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                self._loop = loop
+                self._flush_signal = asyncio.Event()
+                self._timer_task = loop.create_task(self._timer_loop())
+                self._running = True
+            except BaseException as exc:  # noqa: BLE001
+                startup_error.append(exc)
+                ready.set()
+                return
+            ready.set()
+            try:
+                loop.run_forever()
+            finally:
+                loop.close()
+
+        self._thread = threading.Thread(target=_run, name="nemo-telemetry", daemon=True)
+        self._thread.start()
+        ready.wait()
+        if startup_error:
+            self._thread = None
+            raise startup_error[0]
+
+    def stop(self) -> None:
+        """Flush pending events. If a background thread is running, shut it down and join."""
+        if self._running and self._loop is not None and self._thread is not None:
+            loop = self._loop
+            future = asyncio.run_coroutine_threadsafe(self._astop_inner(), loop)
+            try:
+                future.result(timeout=30)
+            except Exception:  # noqa: BLE001
+                pass  # best-effort: telemetry must not disrupt callers
+            loop.call_soon_threadsafe(loop.stop)
+            self._thread.join(timeout=5)
+            self._thread = None
+            self._loop = None
+            self._flush_signal = None
+            self._timer_task = None
+            self._running = False
+            return
+        # Fire-and-flush: no background thread; flush once on a fresh loop.
+        if self._events or self._dlq:
+            try:
+                asyncio.run(self._flush_events())
+            except Exception:  # noqa: BLE001
+                pass  # best-effort: telemetry must not disrupt callers
+
+    def flush(self) -> None:
+        """Flush all queued events immediately and wait for completion."""
+        if self._running and self._loop is not None and self._thread is not None:
+            future: Future[None] = asyncio.run_coroutine_threadsafe(self._flush_events(), self._loop)
+            try:
+                future.result(timeout=30)
+            except Exception:  # noqa: BLE001
+                pass  # best-effort
+            return
+        if self._events or self._dlq:
+            try:
+                asyncio.run(self._flush_events())
+            except Exception:  # noqa: BLE001
+                pass  # best-effort
+
+    async def _astop_inner(self) -> None:
+        """Async shutdown body run on the background loop."""
+        self._running = False
+        if self._flush_signal is not None:
+            self._flush_signal.set()
+        if self._timer_task is not None:
+            self._timer_task.cancel()
+            try:
+                await self._timer_task
+            except asyncio.CancelledError:
+                pass  # expected: we just cancelled the task during shutdown
             self._timer_task = None
         await self._flush_events()
 
-    async def aflush(self) -> None:
-        self._flush_signal.set()
-
-    def start(self) -> None:
-        self._run_sync(self.astart())
-
-    def stop(self) -> None:
-        self._run_sync(self.astop())
-
-    def flush(self) -> None:
-        self._flush_signal.set()
+    # -- Enqueue / signalling ------------------------------------------------
 
     def enqueue(self, event: object) -> None:
-        if not TELEMETRY_ENABLED:
+        if not _telemetry_enabled():
             return
         if not isinstance(event, NSSTrainingAndGenerationEvent):
             # Silently fail as we prioritize not disrupting upstream call sites and telemetry is best effort
             return
         queued = QueuedEvent(event=event, timestamp=datetime.now(timezone.utc))
-        self._events.append(queued)
-        if len(self._events) >= self._max_queue_size:
-            self._flush_signal.set()
+        with self._queue_lock:
+            self._events.append(queued)
+            should_signal = len(self._events) >= self._max_queue_size
+        if should_signal:
+            self._signal_flush()
 
-    def _run_sync(self, coro: Any) -> Any:
+    def _signal_flush(self) -> None:
+        """Set the flush signal, threadsafe across the background-loop boundary."""
+        loop = self._loop
+        signal = self._flush_signal
+        if loop is None or signal is None:
+            return
         try:
-            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(signal.set)
         except RuntimeError:
-            loop = None
+            pass  # loop already closed during shutdown
 
-        if loop and loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result()
-        else:
-            return asyncio.run(coro)
+    # -- Context managers ----------------------------------------------------
 
     def __enter__(self) -> TelemetryHandler:
         self.start()
@@ -366,7 +477,10 @@ class TelemetryHandler:
     async def __aexit__(self, *_: object) -> None:
         await self.astop()
 
+    # -- Internal loop -------------------------------------------------------
+
     async def _timer_loop(self) -> None:
+        assert self._flush_signal is not None
         while self._running:
             try:
                 await asyncio.wait_for(
@@ -374,22 +488,27 @@ class TelemetryHandler:
                     timeout=self._flush_interval,
                 )
             except asyncio.TimeoutError:
-                pass
+                pass  # expected: timeout drives the periodic flush cadence
             self._flush_signal.clear()
             await self._flush_events()
 
     async def _flush_events(self) -> None:
-        dlq_events, self._dlq = self._dlq, []
-        new_events, self._events = self._events, []
+        with self._queue_lock:
+            dlq_events, self._dlq = self._dlq, []
+            new_events, self._events = self._events, []
         events_to_send = dlq_events + new_events
         if events_to_send:
             await self._send_events(events_to_send)
 
     async def _send_events(self, events: list[QueuedEvent]) -> None:
-        import httpx
+        try:
+            import httpx
 
-        async with httpx.AsyncClient() as client:
-            await self._send_events_with_client(client, events)
+            async with httpx.AsyncClient() as client:
+                await self._send_events_with_client(client, events)
+        except Exception:  # noqa: BLE001
+            # Import or client setup failed; preserve events for retry rather than dropping silently.
+            self._add_to_dlq(events)
 
     async def _send_events_with_client(self, client: httpx.AsyncClient, events: list[QueuedEvent]) -> None:
         if not events:
@@ -397,7 +516,7 @@ class TelemetryHandler:
 
         payload = build_payload(events, source_client_version=self._source_client_version, session_id=self._session_id)
         try:
-            response = await client.post(NEMO_TELEMETRY_ENDPOINT, json=payload)
+            response = await client.post(_telemetry_endpoint(), json=payload)
             # 2xx, 400, 422 are all considered complete (no retry)
             # 400/422 indicate bad payload which retrying won't fix
             if response.status_code in (400, 422) or response.is_success:
@@ -418,8 +537,9 @@ class TelemetryHandler:
             self._add_to_dlq(events)
 
     def _add_to_dlq(self, events: list[QueuedEvent]) -> None:
-        for queued in events:
-            queued.retry_count += 1
-            if queued.retry_count > self._max_retries:
-                continue
-            self._dlq.append(queued)
+        with self._queue_lock:
+            for queued in events:
+                queued.retry_count += 1
+                if queued.retry_count > self._max_retries:
+                    continue
+                self._dlq.append(queued)

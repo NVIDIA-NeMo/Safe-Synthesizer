@@ -1,17 +1,23 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import threading
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from nemo_safe_synthesizer.telemetry import (
-    TELEMETRY_ENABLED,
     DeploymentTypeEnum,
     NemoSourceEnum,
     NSSTrainingAndGenerationEvent,
     QueuedEvent,
     TaskStatusEnum,
     TelemetryHandler,
+    _deployment_type,
+    _telemetry_enabled,
+    _telemetry_endpoint,
     bucket_columns,
     bucket_records,
     build_payload,
@@ -56,6 +62,35 @@ class TestBucketColumns:
     def test_upper_bucket(self):
         assert bucket_columns(51) == "51+"
         assert bucket_columns(500) == "51+"
+
+
+# =============================================================================
+# Env-var helpers
+# =============================================================================
+
+
+class TestEnvHelpers:
+    def test_telemetry_enabled_default(self, monkeypatch):
+        monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
+        assert _telemetry_enabled() is True
+
+    def test_telemetry_enabled_disabled(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+        assert _telemetry_enabled() is False
+
+    def test_telemetry_endpoint_preserves_case(self, monkeypatch):
+        custom = "https://Events.Telemetry.example.COM/v1/Events?Token=AbC"
+        monkeypatch.setenv("NEMO_TELEMETRY_ENDPOINT", custom)
+        assert _telemetry_endpoint() == custom
+
+    def test_deployment_type_default(self, monkeypatch):
+        monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+        assert _deployment_type() == DeploymentTypeEnum.SDK
+
+    def test_deployment_type_invalid_falls_back_to_sdk(self, monkeypatch):
+        monkeypatch.setenv("NEMO_DEPLOYMENT_TYPE", "definitely-not-real")
+        # Must not raise — telemetry must never block runtime over a misconfigured env var.
+        assert _deployment_type() == DeploymentTypeEnum.SDK
 
 
 # =============================================================================
@@ -155,7 +190,6 @@ class TestNSSTrainingAndGenerationEvent:
         assert "syntheticQualityScore" in dumped
         assert "dataPrivacyScore" in dumped
         assert dumped["replacePiiEnabled"] is True
-        assert dumped["nemoSource"] == NemoSourceEnum.SAFE_SYNTHESIZER
 
 
 # =============================================================================
@@ -176,7 +210,8 @@ class TestBuildPayload:
         assert payload["sessionId"] == "test-session"
         assert len(payload["events"]) == 1
 
-    def test_event_fields(self):
+    def test_event_fields_serialize_enums_as_strings(self):
+        """Payload must be JSON-safe: enum fields render as their string values, not Enum objects."""
         queued = self._make_queued(task="train", status=TaskStatusEnum.ERROR)
         payload = build_payload([queued], source_client_version="0.0.1")
         event_entry = payload["events"][0]
@@ -184,8 +219,18 @@ class TestBuildPayload:
         assert event_entry["ts"] == "2025-01-01T12:00:00.000Z"
         params = event_entry["parameters"]
         assert params["task"] == "train"
-        assert params["taskStatus"] == TaskStatusEnum.ERROR
-        assert params["nemoSource"] == NemoSourceEnum.SAFE_SYNTHESIZER
+        assert params["taskStatus"] == "error"
+        assert params["nemoSource"] == "safe-synthesizer"
+        assert params["deploymentType"] == "sdk"
+
+    def test_payload_is_json_serializable(self):
+        """Regression: the full payload must be encodable by the stdlib JSON encoder."""
+        import json
+
+        queued = self._make_queued(status=TaskStatusEnum.ERROR)
+        payload = build_payload([queued], source_client_version="1.0.0")
+        # Should not raise.
+        json.dumps(payload)
 
     def test_multiple_events(self):
         events = [self._make_queued(task=t) for t in ("train", "generate", "evaluate")]
@@ -199,6 +244,10 @@ class TestBuildPayload:
         payload = build_payload([queued], source_client_version="1.0.0")
         assert payload["sessionId"] == "undefined"
 
+    def test_empty_events_raises(self):
+        with pytest.raises(ValueError):
+            build_payload([], source_client_version="1.0.0")
+
 
 # =============================================================================
 # TelemetryHandler — telemetry disabled
@@ -206,23 +255,19 @@ class TestBuildPayload:
 
 
 class TestTelemetryDisabled:
-    def test_enqueue_noop_when_disabled(self):
+    def test_enqueue_noop_when_disabled(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
         handler = TelemetryHandler()
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
-        with patch("nemo_safe_synthesizer.telemetry.TELEMETRY_ENABLED", False):
-            handler.enqueue(event)
+        handler.enqueue(event)
         assert handler._events == []
 
-    def test_enqueue_noop_for_non_event(self):
-        """Silently ignores non-TelemetryEvent objects regardless of TELEMETRY_ENABLED."""
+    def test_enqueue_noop_for_non_event(self, monkeypatch):
+        """Silently ignores non-TelemetryEvent objects regardless of env."""
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler()
-        with patch("nemo_safe_synthesizer.telemetry.TELEMETRY_ENABLED", True):
-            handler.enqueue("not an event")  # type: ignore[arg-type]
+        handler.enqueue("not an event")  # type: ignore[arg-type]
         assert handler._events == []
-
-    def test_telemetry_enabled_env_var(self):
-        """Sanity-check: the module-level constant reflects the environment."""
-        assert isinstance(TELEMETRY_ENABLED, bool)
 
 
 # =============================================================================
@@ -231,21 +276,64 @@ class TestTelemetryDisabled:
 
 
 class TestTelemetryHandlerEnqueue:
-    def test_enqueue_adds_event(self):
+    def test_enqueue_adds_event(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler()
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
-        with patch("nemo_safe_synthesizer.telemetry.TELEMETRY_ENABLED", True):
-            handler.enqueue(event)
+        handler.enqueue(event)
         assert len(handler._events) == 1
         assert handler._events[0].event is event
 
-    def test_enqueue_triggers_flush_at_max_queue_size(self):
+    def test_enqueue_at_max_queue_size_signals_flush_when_running(self, monkeypatch):
+        """When a background loop is up, hitting max_queue_size should signal it. Without a loop, no-op is safe."""
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler(max_queue_size=3)
         event = NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED)
-        with patch("nemo_safe_synthesizer.telemetry.TELEMETRY_ENABLED", True):
-            for _ in range(3):
-                handler.enqueue(event)
-        assert handler._flush_signal.is_set()
+        for _ in range(3):
+            handler.enqueue(event)
+        # No background loop → no signal object, nothing should raise.
+        assert len(handler._events) == 3
+
+
+# =============================================================================
+# TelemetryHandler — _flush_events queue clearing and DLQ
+# =============================================================================
+
+
+class TestFlushEventsQueueClearing:
+    async def test_flush_events_clears_queue(self):
+        """_flush_events() must drain _events even when the underlying send succeeds."""
+        handler = TelemetryHandler(source_client_version="1.0.0")
+        event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
+        handler._events.append(QueuedEvent(event=event, timestamp=datetime.now(timezone.utc)))
+
+        async def fake_send(events):
+            assert len(events) == 1  # received the queued event
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            await handler._flush_events()
+
+        assert handler._events == []
+        assert handler._dlq == []
+
+    async def test_flush_events_includes_dlq(self):
+        handler = TelemetryHandler(source_client_version="1.0.0")
+        event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
+        handler._dlq.append(QueuedEvent(event=event, timestamp=datetime.now(timezone.utc), retry_count=1))
+        handler._events.append(QueuedEvent(event=event, timestamp=datetime.now(timezone.utc)))
+
+        sent: list[list[QueuedEvent]] = []
+
+        async def fake_send(events):
+            sent.append(list(events))
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            await handler._flush_events()
+
+        assert handler._events == []
+        assert handler._dlq == []
+        assert len(sent) == 1
+        assert len(sent[0]) == 2  # dlq + new
 
 
 # =============================================================================
@@ -261,10 +349,9 @@ class TestTelemetryHandlerSend:
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
         return QueuedEvent(event=event, timestamp=datetime.now(timezone.utc))
 
-    async def test_successful_send_clears_queue(self):
+    async def test_successful_send_does_not_dlq(self):
         handler = self._make_handler()
         queued = self._make_queued()
-        handler._events.append(queued)
 
         mock_response = MagicMock(status_code=200, is_success=True)
         mock_client = AsyncMock()
@@ -314,7 +401,184 @@ class TestTelemetryHandlerSend:
         await handler._send_events_with_client(mock_client, events)
         assert mock_client.post.await_count == 3  # 1 original + 2 splits
 
-    async def test_session_prefix_applied(self):
-        with patch("nemo_safe_synthesizer.telemetry.SESSION_PREFIX", "pfx-"):
-            handler = TelemetryHandler(session_id="abc")
+    async def test_send_events_routes_to_dlq_on_client_setup_failure(self):
+        """If httpx client creation raises, events must land in DLQ rather than vanish."""
+        handler = self._make_handler()
+        queued = self._make_queued()
+
+        with patch("httpx.AsyncClient", side_effect=RuntimeError("boom")):
+            await handler._send_events([queued])
+
+        assert len(handler._dlq) == 1
+
+    def test_session_prefix_applied(self, monkeypatch):
+        monkeypatch.setenv("NEMO_SESSION_PREFIX", "pfx-")
+        handler = TelemetryHandler(session_id="abc")
         assert handler._session_id == "pfx-abc"
+
+
+# =============================================================================
+# TelemetryHandler — aflush awaits a real flush
+# =============================================================================
+
+
+class TestAflushAwaits:
+    async def test_aflush_actually_flushes(self):
+        handler = TelemetryHandler(source_client_version="1.0.0")
+        event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
+        handler.enqueue(event)
+        assert len(handler._events) == 1
+
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            await handler.aflush()
+
+        # aflush must actually drain the queue and hand events to _send_events.
+        assert handler._events == []
+        assert sent == [1]
+
+
+# =============================================================================
+# TelemetryHandler — sync lifecycle and context manager
+# =============================================================================
+
+
+class TestSyncLifecycle:
+    def test_fire_and_flush_without_start(self, monkeypatch):
+        """Pattern used by the SDK: construct, enqueue, stop. No start() call. stop() must flush."""
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+        handler = TelemetryHandler(source_client_version="1.0.0")
+        event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
+        handler.enqueue(event)
+        assert len(handler._events) == 1
+
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            handler.stop()
+
+        assert handler._events == []
+        assert sent == [1]
+        # No background thread should have been spawned.
+        assert handler._thread is None
+
+    def test_start_spawns_thread_and_stop_flushes(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+        handler = TelemetryHandler(source_client_version="1.0.0", flush_interval_seconds=60.0)
+
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            handler.start()
+            assert handler._thread is not None
+            assert handler._thread.is_alive()
+
+            handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+            handler.stop()
+
+        assert handler._thread is None
+        assert handler._loop is None
+        assert sent == [1]
+
+    def test_sync_context_manager(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        with patch.object(TelemetryHandler, "_send_events", side_effect=fake_send, autospec=False):
+            with TelemetryHandler(source_client_version="1.0.0", flush_interval_seconds=60.0) as handler:
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+
+        assert sent == [1]
+
+    def test_sync_flush_during_background_run(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+        handler = TelemetryHandler(source_client_version="1.0.0", flush_interval_seconds=60.0)
+
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            handler.start()
+            try:
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+                handler.flush()
+                # flush() must complete the send before returning.
+                assert sent == [1]
+                assert handler._events == []
+            finally:
+                handler.stop()
+
+    def test_timer_driven_flush(self, monkeypatch):
+        """With a short flush interval, the background timer should drive a flush without explicit calls."""
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+        handler = TelemetryHandler(source_client_version="1.0.0", flush_interval_seconds=0.05)
+
+        flushed = threading.Event()
+
+        async def fake_send(events):
+            flushed.set()
+
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            handler.start()
+            try:
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+                # Wait up to 2s for the timer to fire and the send mock to be called.
+                assert flushed.wait(timeout=2.0), "timer-driven flush did not fire"
+            finally:
+                handler.stop()
+
+
+# =============================================================================
+# TelemetryHandler — async lifecycle
+# =============================================================================
+
+
+class TestAsyncLifecycle:
+    async def test_async_context_manager_flushes_on_exit(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        async with TelemetryHandler(source_client_version="1.0.0", flush_interval_seconds=60.0) as handler:
+            with patch.object(handler, "_send_events", side_effect=fake_send):
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+                # Exit will call astop → _flush_events → _send_events
+                await handler.astop()
+
+        assert sent == [1]
+
+    async def test_enqueue_at_max_size_signals_flush_in_async_mode(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+
+        flushed = asyncio.Event()
+
+        async def fake_send(events):
+            flushed.set()
+
+        handler = TelemetryHandler(source_client_version="1.0.0", flush_interval_seconds=60.0, max_queue_size=2)
+        with patch.object(handler, "_send_events", side_effect=fake_send):
+            await handler.astart()
+            try:
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+                await asyncio.wait_for(flushed.wait(), timeout=2.0)
+            finally:
+                await handler.astop()
