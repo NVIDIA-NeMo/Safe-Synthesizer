@@ -34,7 +34,14 @@ runs:
   steps:
     - name: Install make
       shell: bash
-      run: apt-get update && apt-get install -y --no-install-recommends make
+      run: |
+        if command -v make >/dev/null 2>&1; then
+          echo "make is already installed: $(command -v make)"
+          exit 0
+        fi
+
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends make
 
     - name: Setup Python environment
       uses: ./.github/actions/setup-python-env

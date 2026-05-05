@@ -52,10 +52,7 @@ concurrency:
 jobs:
   changes:
     name: Detect changes
-    # No `if` guard here: dorny/paths-filter outputs `true` for all filters on
-    # workflow_dispatch (no base to diff against), so the GPU jobs always run.
-    # Guarding this job would skip it, and a skipped `needs` dependency causes
-    # downstream jobs to be skipped even when their own `if` condition passes.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: linux-amd64-cpu4
     permissions:
       contents: read
@@ -71,7 +68,22 @@ jobs:
   gpu-smoke-test:
     name: GPU Smoke Tests
     needs: changes
-    if: ${{ (needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'smoke') }}
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the selected GPU suite.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src == 'true' ||
+          needs.changes.outputs.test == 'true'
+        ) &&
+        (
+          github.event_name != 'workflow_dispatch' ||
+          inputs.suite == 'all' ||
+          inputs.suite == 'smoke'
+        )
+      }}
     timeout-minutes: 30
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
@@ -90,7 +102,22 @@ jobs:
   gpu-e2e-test:
     name: GPU E2E Tests
     needs: changes
-    if: ${{ (needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch') && (github.event_name != 'workflow_dispatch' || inputs.suite == 'all' || inputs.suite == 'e2e') }}
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the selected GPU suite.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src == 'true' ||
+          needs.changes.outputs.test == 'true'
+        ) &&
+        (
+          github.event_name != 'workflow_dispatch' ||
+          inputs.suite == 'all' ||
+          inputs.suite == 'e2e'
+        )
+      }}
     timeout-minutes: 60
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:

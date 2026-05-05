@@ -141,7 +141,7 @@ The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggere
 - GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job -- single required check for branch protection. Fails if smoke tests fail; warns if E2E tests fail.
 
-The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so downstream jobs always run on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
+The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs to source and test changes.
 
 GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: installing `make`, setting up Python from `.python-version`, bootstrapping CUDA dependencies, and checking GPU availability.
 
