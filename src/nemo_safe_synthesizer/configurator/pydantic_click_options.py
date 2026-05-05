@@ -27,7 +27,9 @@ import click
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
-__all__ = ["pydantic_options", "parse_overrides"]
+from ..config.types import AUTO_STR
+
+__all__ = ["pydantic_options", "parse_overrides", "AutoParamType"]
 
 
 def parse_overrides(values: dict[str, Any] | None = None, field_sep: str = "__") -> dict[str, Any]:
@@ -128,19 +130,84 @@ _CLICK_TYPE_PRIORITY: list[tuple[type, click.ParamType]] = [
 ]
 
 
+class AutoParamType(click.ParamType):
+    """A Click type that accepts the sentinel ``AUTO_STR`` or a base numeric/bool value.
+
+    Used for ``Auto*Param`` fields (``AutoIntParam``, ``AutoFloatParam``,
+    ``AutoBoolParam``) so that ``--flag auto`` and ``--flag 2`` both work.
+    The ``--help`` display shows ``integer|auto``, ``float|auto``, or
+    ``boolean|auto`` instead of the generic ``TEXT`` label.
+
+    Args:
+        base_type: The underlying Click type (``click.INT``, ``click.FLOAT``,
+            or ``click.BOOL``) used to parse and validate non-``AUTO_STR`` values.
+    """
+
+    def __init__(self, base_type: click.ParamType) -> None:
+        self.base_type = base_type
+        self.name = f"{base_type.name}|{AUTO_STR}"
+
+    def convert(
+        self,
+        value: str,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> str | int | float | bool:
+        """Convert the raw CLI value to ``AUTO_STR`` or the base numeric/bool type.
+
+        The ``value`` parameter is typed ``str`` to match the parent
+        ``click.ParamType.convert`` stub signature; in practice Click may also
+        pass through default values of any type, but the equality check and
+        delegated ``base_type.convert`` both handle that correctly.
+
+        Args:
+            value: Raw value from the CLI or the option default.
+            param: The Click parameter object (passed through to the base type).
+            ctx: The Click context (passed through to the base type).
+
+        Returns:
+            ``AUTO_STR`` if ``value`` equals it, otherwise the result of
+            delegating to ``self.base_type.convert()``.
+        """
+        if value == AUTO_STR:
+            return AUTO_STR
+        return self.base_type.convert(value, param, ctx)  # type: ignore[return-value]
+
+
 def _has_string_literal(args: set) -> bool:
     """Check if any member is a ``Literal`` containing a string value."""
     return any(get_origin(a) is Literal and any(isinstance(v, str) for v in get_args(a)) for a in args)
+
+
+def _is_auto_only_literal_union(args: set) -> bool:
+    """Check that the union's string-valued ``Literal`` members are exactly ``{AUTO_STR}``.
+
+    Returns ``True`` only if every string-valued Literal member contributes the
+    single value ``AUTO_STR`` -- e.g. ``Literal["auto"] | int``. Returns
+    ``False`` for unions like ``Literal["disabled"] | int`` or
+    ``Literal["auto", "manual"] | int``, where ``AutoParamType`` would
+    silently reject the non-``"auto"`` sentinels at parse time.
+    """
+    string_values: set[str] = set()
+    for a in args:
+        if get_origin(a) is Literal:
+            for v in get_args(a):
+                if isinstance(v, str):
+                    string_values.add(v)
+    return string_values == {AUTO_STR}
 
 
 def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
     Unwraps ``Annotated[T, ...]`` and ``T | None`` unions, then returns the
-    widest Click type that covers any member of the union.  String-valued
-    ``Literal`` members (e.g. ``Literal["auto"]``) force ``click.STRING``
-    so Click won't reject the sentinel before Pydantic validates it.
-    Falls back to ``click.STRING`` for unrecognized types.
+    widest Click type that covers any member of the union. ``Auto*Param``
+    fields (``Literal["auto"] | <numeric|bool>``) get an ``AutoParamType``
+    wrapping the numeric/bool base so Click can validate non-sentinel values
+    while still accepting the ``"auto"`` sentinel. Other string-valued
+    ``Literal`` members fall through to ``click.STRING`` so Click won't
+    reject the sentinel before Pydantic validates it. Falls back to
+    ``click.STRING`` for unrecognized types.
     """
     t = annotation
     if get_origin(t) is Annotated:
@@ -148,6 +215,18 @@ def _click_type(annotation: Any) -> click.ParamType:
     args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
     if _has_string_literal(args):
+        # Auto*Param: Literal["auto"] | <numeric|bool> -- wrap in AutoParamType so
+        # --help shows "integer|auto" instead of "TEXT" and Click validates the
+        # numeric side before handing the value to Pydantic. The detection is
+        # tightened to only fire when the literal values are exactly {AUTO_STR};
+        # other sentinels (e.g. Literal["disabled"] | int) fall through to STRING
+        # so AutoParamType doesn't reject them with a confusing error.
+        if _is_auto_only_literal_union(args):
+            for py_type, click_type in _CLICK_TYPE_PRIORITY:
+                if py_type is str:
+                    continue
+                if py_type in args:
+                    return AutoParamType(click_type)
         return click.STRING
     for py_type, click_type in _CLICK_TYPE_PRIORITY:
         if py_type in args:

@@ -13,6 +13,7 @@ from pydantic.fields import FieldInfo
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.configurator.pydantic_click_options import (
+    AutoParamType,
     FlagParam,
     LeafParam,
     _click_type,
@@ -140,17 +141,98 @@ def test_click_type_str_or_int_returns_string():
     assert _click_type(str | int | None) == click.STRING
 
 
-def test_click_type_literal_auto_int_returns_string():
-    """Literal['auto'] | int must use STRING so Click accepts 'auto'."""
+def test_click_type_literal_auto_int_returns_auto_param_type():
+    """Literal['auto'] | int must use AutoParamType so Click accepts both 'auto' and integers."""
     from typing import Literal
 
-    assert _click_type(Literal["auto"] | int) == click.STRING
+    result = _click_type(Literal["auto"] | int)
+    assert isinstance(result, AutoParamType)
+    assert result.base_type is click.INT
 
 
-def test_click_type_literal_auto_float_returns_string():
+def test_click_type_literal_auto_float_returns_auto_param_type():
     from typing import Literal
 
-    assert _click_type(Literal["auto"] | float) == click.STRING
+    result = _click_type(Literal["auto"] | float)
+    assert isinstance(result, AutoParamType)
+    assert result.base_type is click.FLOAT
+
+
+def test_click_type_literal_auto_bool_returns_auto_param_type():
+    from typing import Literal
+
+    result = _click_type(Literal["auto"] | bool)
+    assert isinstance(result, AutoParamType)
+    assert result.base_type is click.BOOL
+
+
+def test_click_type_literal_auto_str_returns_string():
+    """Literal['auto'] | str has no numeric side -- STRING is correct."""
+    from typing import Literal
+
+    assert _click_type(Literal["auto"] | str) == click.STRING
+
+
+def test_click_type_literal_non_auto_int_returns_string():
+    """Literal['disabled'] | int must NOT use AutoParamType.
+
+    AutoParamType only accepts the AUTO_STR sentinel, so a sentinel like
+    'disabled' would be rejected with a confusing 'not a valid integer' error
+    even though Pydantic would accept it. Falling through to STRING keeps the
+    sentinel routable to Pydantic for validation.
+    """
+    from typing import Literal
+
+    assert _click_type(Literal["disabled"] | int) == click.STRING
+
+
+def test_click_type_literal_auto_plus_other_int_returns_string():
+    """Literal['auto', 'manual'] | int must NOT use AutoParamType (multiple sentinels)."""
+    from typing import Literal
+
+    assert _click_type(Literal["auto", "manual"] | int) == click.STRING
+
+
+# ---------------------------------------------------------------------------
+# AutoParamType
+# ---------------------------------------------------------------------------
+
+
+def test_auto_param_type_accepts_auto_sentinel():
+    assert AutoParamType(click.INT).convert("auto", None, None) == "auto"
+
+
+@pytest.mark.parametrize(
+    "base_type,value,expected",
+    [
+        (click.INT, "2", 2),
+        (click.INT, "100", 100),
+        (click.FLOAT, "1.5", 1.5),
+        (click.FLOAT, "0.001", 0.001),
+        (click.BOOL, "true", True),
+        (click.BOOL, "false", False),
+    ],
+)
+def test_auto_param_type_converts_numeric_values(base_type, value, expected):
+    assert AutoParamType(base_type).convert(value, None, None) == expected
+
+
+def test_auto_param_type_rejects_non_auto_string():
+    runner = CliRunner()
+
+    @click.command()
+    @click.option("--val", type=AutoParamType(click.INT))
+    def cmd(val):
+        pass
+
+    result = runner.invoke(cmd, ["--val", "notanumber"])
+    assert result.exit_code != 0
+
+
+def test_auto_param_type_name():
+    assert AutoParamType(click.INT).name == "integer|auto"
+    assert AutoParamType(click.FLOAT).name == "float|auto"
+    assert AutoParamType(click.BOOL).name == "boolean|auto"
 
 
 def test_click_type_plain_int_returns_int():

@@ -12,6 +12,7 @@ from click.testing import CliRunner
 import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
+from nemo_safe_synthesizer.cli.utils import merge_overrides
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
 
 # =============================================================================
@@ -661,3 +662,113 @@ class TestRunGenerateOptions:
         call_kwargs = mock_common_setup.call_args.kwargs
         settings: CLISettings = call_kwargs["settings"]
         assert settings.dataset_registry == "./registry.yaml"
+
+
+class TestAutoParamCliOverrides:
+    """End-to-end tests for ``Auto*Param`` field CLI overrides (issue #159).
+
+    These tests drive the real ``run`` Click command and capture the parsed
+    ``synthesis_overrides`` reaching ``common_setup`` to verify each CLI value
+    is parsed correctly. A separate test checks that the value also lands on
+    the resolved ``SafeSynthesizerParameters`` object (using fields that pass
+    through Pydantic validation unchanged -- some ``Auto*Param`` fields have
+    model validators that resolve ``"auto"`` to a concrete value).
+    """
+
+    # Note: ``AutoBoolParam`` is defined in ``config.types`` but no field of
+    # ``SafeSynthesizerParameters`` currently uses it (the only such field,
+    # ``training.use_unsloth``, was removed when the Unsloth backend was
+    # dropped). Bool conversion is exercised at the unit level by
+    # ``tests/configurator/test_pydantic_click_options.py``.
+    @pytest.mark.parametrize(
+        "flag,raw_value,nested_path,expected",
+        [
+            # AutoIntParam / OptionalAutoInt
+            ("--training__rope_scaling_factor", "auto", ("training", "rope_scaling_factor"), "auto"),
+            ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
+            ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
+            ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
+            ("--data__max_sequences_per_example", "auto", ("data", "max_sequences_per_example"), "auto"),
+            ("--data__max_sequences_per_example", "5", ("data", "max_sequences_per_example"), 5),
+            # AutoFloatParam
+            ("--privacy__delta", "auto", ("privacy", "delta"), "auto"),
+            ("--privacy__delta", "0.001", ("privacy", "delta"), 0.001),
+        ],
+    )
+    def test_auto_param_override_is_parsed_into_synthesis_overrides(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        patched_run_dependencies: dict,
+        flag: str,
+        raw_value: str,
+        nested_path: tuple[str, ...],
+        expected: object,
+    ):
+        """Auto*Param CLI flags accept ``"auto"`` and typed values, and reach ``common_setup``."""
+        result = cli_runner.invoke(
+            run,
+            ["--data-source", str(dummy_csv), flag, raw_value],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+
+        mock_common_setup = patched_run_dependencies["common_setup"]
+        mock_common_setup.assert_called_once()
+        settings: CLISettings = mock_common_setup.call_args.kwargs["settings"]
+
+        # Click parses the raw CLI string (``"auto"`` stays a string, numbers
+        # and bools are coerced) and ``parse_overrides`` reshapes the flat
+        # kwargs into the nested overrides dict before it reaches settings.
+        node: object = settings.synthesis_overrides
+        for key in nested_path:
+            assert isinstance(node, dict) and key in node, (
+                f"missing {'.'.join(nested_path)} in synthesis_overrides: {settings.synthesis_overrides}"
+            )
+            node = node[key]
+        assert node == expected
+        assert type(node) is type(expected)
+
+    @pytest.mark.parametrize(
+        "flag,raw_value,nested_path,expected",
+        [
+            # rope_scaling_factor, num_input_records_to_sample, and
+            # privacy.delta pass through Pydantic validation unchanged for both
+            # 'auto' and explicit values. max_sequences_per_example is excluded
+            # because its model validator rewrites 'auto' to a concrete default
+            # (10 with DP disabled, 1 with DP enabled).
+            ("--training__rope_scaling_factor", "auto", ("training", "rope_scaling_factor"), "auto"),
+            ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
+            ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
+            ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
+            ("--privacy__delta", "auto", ("privacy", "delta"), "auto"),
+            ("--privacy__delta", "0.001", ("privacy", "delta"), 0.001),
+        ],
+    )
+    def test_auto_param_override_reaches_params_object(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        patched_run_dependencies: dict,
+        flag: str,
+        raw_value: str,
+        nested_path: tuple[str, ...],
+        expected: object,
+    ):
+        """The parsed CLI value also lands on the validated ``SafeSynthesizerParameters`` object."""
+        result = cli_runner.invoke(
+            run,
+            ["--data-source", str(dummy_csv), flag, raw_value],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        settings: CLISettings = patched_run_dependencies["common_setup"].call_args.kwargs["settings"]
+
+        params = merge_overrides(None, settings.synthesis_overrides)
+        resolved: object = params
+        for key in nested_path:
+            resolved = getattr(resolved, key)
+        assert resolved == expected
+        assert type(resolved) is type(expected)
