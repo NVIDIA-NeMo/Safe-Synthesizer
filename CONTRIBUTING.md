@@ -437,7 +437,7 @@ When you open a ready-for-review PR, copy-pr-bot automatically triggers a GPU te
 To trigger from the CLI instead (no PR status check):
 
 ```bash
-gh workflow run gpu-tests.yml --ref <your-branch>
+gh workflow run gpu-tests.yml --ref <your-branch> -f suite=all
 ```
 
 ### Test Requirements

@@ -20,6 +20,8 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 
 ## Pull Request Testing (copy-pr-bot)
 
+GPU tests on PRs are currently disabled due to internal constraints. We hope to reenable them asap. The rest of this information is kept for posterity, but it is also relevant to the external tests ran for unit and cpu smoke tests.
+
 GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. They use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern instead:
 
 1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
@@ -133,29 +135,35 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Tests Workflow
 
-The `gpu-tests.yml` workflow runs on a schedule and using `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
+The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. There are several key jobs:
 
 - GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. Required for merge.
-- GPU E2E Tests: End-to-end tests on a gpu runner with a 55-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job -- single required check for branch protection. Fails if smoke tests fail; warns if E2E tests fail.
 
-The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so downstream jobs always run on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
+The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs to source and test changes.
+
+GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: installing `make`, setting up Python from `.python-version`, bootstrapping CUDA dependencies, and checking GPU availability.
 
 To trigger manually from the CLI (produces a run but not a PR status check):
 
 ```bash
-gh workflow run gpu-tests.yml --ref <branch-name>
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=all
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=smoke
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=e2e
 ```
 
 To trigger from the PR UI and get a status check result, use `/sync` -- see [On-demand GPU test runs](#on-demand-gpu-test-runs) above.
 
 ### Runners
 
+Internal runners and projects are defined in an internal repo, `nv-gha-runners/enterprise-runner-configuration`.
+
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
-| GPU Tests | GPU Smoke Tests | `nemo-ci-aws-gpu-x2` | NVIDIA self-hosted GPU |
-| GPU Tests | GPU E2E Tests | `nemo-ci-aws-gpu-x2` | NVIDIA self-hosted GPU |
+| GPU Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
+| GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
