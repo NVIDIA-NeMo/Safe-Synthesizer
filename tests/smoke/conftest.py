@@ -34,7 +34,7 @@ def fixture_tiny_llama_config(fixture_stub_tokenizer) -> LlamaConfig:
         num_hidden_layers=2,
         num_attention_heads=2,
         num_key_value_heads=2,
-        max_position_embeddings=512,
+        max_position_embeddings=2048,
     )
 
 
@@ -128,11 +128,13 @@ def fixture_timeseries_df() -> pd.DataFrame:
 
 @pytest.fixture(scope="session")
 def fixture_preflight_timeseries_df() -> pd.DataFrame:
-    """Timeseries stub with 200 rows for GPU paths that run preflight."""
+    """Timeseries stub sized to fit the tiny GPU smoke model context window."""
     start = pd.Timestamp("2024-01-01 00:00:00")
     rows = []
-    for group, offset in (("A", 0), ("B", 1000)):
-        for i in range(100):
+    for group_idx in range(4):
+        group = f"group_{group_idx:02d}"
+        offset = group_idx * 1000
+        for i in range(50):
             rows.append(
                 {
                     "group_id": group,
