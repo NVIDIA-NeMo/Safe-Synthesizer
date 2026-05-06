@@ -6,9 +6,8 @@
 # dependencies = [
 #     "click",
 #     "pydantic",
-#     "starlette",
+#     "proxy.py>=2.4.10",
 #     "structlog",
-#     "uvicorn",
 # ]
 # ///
 # pyright: reportMissingImports=false
@@ -18,10 +17,11 @@ Warning: This is an agent-made diagnostic tool with minimal test coverage. It
 has worked for the NSS/Hugging Face checks it was built for, but it is not a
 general-purpose HTTP proxy and may miss clients that ignore proxy variables.
 
-The proxy is intentionally not a forwarding proxy. It records requests, blocks
-Hugging Face destinations, and returns 502 for other proxied traffic. Use it to
+The proxy records requests and blocks Hugging Face destinations by default.
+Other proxied traffic passes through and is included in the summary. Use it to
 confirm that an offline/local-only code path stays local, or to prove where a
-real Hugging Face request first occurs.
+real Hugging Face request first occurs. Pass ``--allow-passthrough-hf`` when you
+need Hugging Face requests to complete while still tracking them.
 
 One-shot command wrapper::
 
@@ -74,19 +74,22 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from enum import IntEnum
-from urllib.parse import urlsplit
+from multiprocessing import Manager
+from multiprocessing.managers import SyncManager
+from typing import Any, ClassVar
+from unittest.mock import patch
 
 import click
 import structlog
-import uvicorn
+from proxy import Proxy
+from proxy.http import httpStatusCodes
+from proxy.http.exception import HttpRequestRejected
+from proxy.http.parser import HttpParser
+from proxy.http.proxy import HttpProxyBasePlugin
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.routing import Route
-from starlette.types import ASGIApp, Receive, Scope, Send
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -127,6 +130,11 @@ class ProxySummary(BaseModel):
         """Return only requests that targeted Hugging Face."""
         return [request for request in self.requests if request.is_huggingface]
 
+    @property
+    def other_requests(self) -> list[ProxyRequest]:
+        """Return proxied requests that did not target Hugging Face."""
+        return [request for request in self.requests if not request.is_huggingface]
+
 
 class ProxyEnv(BaseModel):
     """Environment variables needed to route traffic through the guard."""
@@ -139,7 +147,7 @@ class ProxyEnv(BaseModel):
 class ProxyState:
     """Thread-safe request log for the guard proxy."""
 
-    requests: list[ProxyRequest] = field(default_factory=list)
+    requests: Any = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def record(self, request: ProxyRequest) -> None:
@@ -160,13 +168,14 @@ class ProxyState:
 
 @dataclass(slots=True)
 class RunningServer:
-    """Background uvicorn server instance."""
+    """Background proxy.py server instance."""
 
-    server: uvicorn.Server
-    thread: threading.Thread
+    server: Proxy
     host: str
     port: int
     state: ProxyState
+    allow_passthrough_hf: bool
+    manager: SyncManager | None = None
 
     @property
     def proxy_url(self) -> str:
@@ -175,108 +184,114 @@ class RunningServer:
 
     def stop(self) -> None:
         """Stop the background server."""
-        self.server.should_exit = True
-        self.thread.join(timeout=STARTUP_TIMEOUT_SECONDS)
-        if self.thread.is_alive():
-            logger.warning("guard proxy server thread did not stop promptly")
+        self.server.__exit__(None, None, None)
+        if self.manager is not None:
+            self.manager.shutdown()
 
 
-class GuardProxyMiddleware:
-    """Record and reject all proxied traffic before Starlette routing."""
+class GuardProxyPlugin(HttpProxyBasePlugin):
+    """Record proxied traffic and optionally pass through Hugging Face requests."""
 
-    def __init__(self, app: ASGIApp, state: ProxyState) -> None:
-        self.app = app
-        self.state = state
+    state: ClassVar[ProxyState] = ProxyState()
+    allow_passthrough_hf: ClassVar[bool] = False
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or _is_status_request(scope):
-            await self.app(scope, receive, send)
-            return
+    @classmethod
+    def configure(cls, *, state: ProxyState, allow_passthrough_hf: bool) -> None:
+        """Configure shared state for the next embedded proxy instance."""
+        cls.state = state
+        cls.allow_passthrough_hf = allow_passthrough_hf
 
-        request = Request(scope, receive)
-        proxy_request = _proxy_request_from_starlette(request)
+    def before_upstream_connection(self, request: HttpParser) -> HttpParser | None:
+        """Record the destination and decide whether proxy.py may connect upstream."""
+        proxy_request = _proxy_request_from_proxy_py(request)
         self.state.record(proxy_request)
-        response = _proxy_response(proxy_request)
-        await response(scope, receive, send)
+        if not proxy_request.is_huggingface or self.allow_passthrough_hf:
+            return request
+        raise _proxy_rejection(proxy_request)
 
 
-def _create_app(state: ProxyState) -> Starlette:
-    async def status(_: Request) -> JSONResponse:
-        return JSONResponse(state.summary().model_dump())
-
-    starlette_app = Starlette(routes=[Route("/__status__", status, methods=["GET"])])
-    starlette_app.add_middleware(GuardProxyMiddleware, state=state)
-    return starlette_app
-
-
-def _is_status_request(scope: Scope) -> bool:
-    return scope.get("method") == "GET" and scope.get("path") == "/__status__"
+def _proxy_rejection(request: ProxyRequest) -> HttpRequestRejected:
+    return HttpRequestRejected(
+        status_code=httpStatusCodes.BAD_GATEWAY,
+        reason=b"Bad Gateway",
+        headers={b"content-type": b"text/plain; charset=utf-8"},
+        body=_proxy_response_body(request),
+    )
 
 
-def _proxy_response(request: ProxyRequest) -> Response:
+def _proxy_response_body(request: ProxyRequest) -> bytes:
     if request.is_huggingface:
-        return Response(f"Blocked Hugging Face request to {request.host}\n", status_code=502)
-    return Response("Guard proxy does not forward requests\n", status_code=502)
+        return f"Blocked Hugging Face request to {request.host}\n".encode()
+    return b"Guard proxy blocked request\n"
 
 
-def _proxy_request_from_starlette(request: Request) -> ProxyRequest:
-    target = _request_target(request)
-    host = _request_host(request.method, target, request.headers.get("host", ""))
+def _proxy_request_from_proxy_py(request: HttpParser) -> ProxyRequest:
+    method = _request_value(request.method)
+    host = _normalize_host(_request_value(request.host))
+    target = _proxy_py_target(request, method=method, host=host)
     return ProxyRequest(
-        method=request.method,
+        method=method,
         target=target,
         host=host,
         is_huggingface=_is_huggingface_host(host),
     )
 
 
-def _request_target(request: Request) -> str:
-    raw_path = request.scope.get("raw_path", b"")
-    if isinstance(raw_path, bytes) and raw_path:
-        return raw_path.decode("latin-1")
-    return request.url.path
-
-
-def _request_host(method: str, target: str, host_header: str) -> str:
+def _proxy_py_target(request: HttpParser, *, method: str, host: str) -> str:
     if method == "CONNECT":
-        return target.rsplit(":", 1)[0].strip("[]").casefold()
+        return f"{host}:{request.port}"
+    path = _request_value(request.path)
+    if path:
+        return path
+    return host
 
-    parsed = urlsplit(target)
-    if parsed.hostname:
-        return parsed.hostname.casefold()
-    return host_header.rsplit(":", 1)[0].strip("[]").casefold()
+
+def _request_value(value: bytes | str | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("latin-1")
+    return value
+
+
+def _normalize_host(host: str) -> str:
+    return host.strip().strip("[]").rstrip(".").casefold()
 
 
 def _is_huggingface_host(host: str) -> bool:
-    return any(host == domain or host.endswith(f".{domain}") for domain in HF_DOMAINS)
+    normalized = _normalize_host(host)
+    return any(normalized == domain or normalized.endswith(f".{domain}") for domain in HF_DOMAINS)
 
 
-def _start_server(host: str, port: int) -> RunningServer:
-    state = ProxyState()
-    config = uvicorn.Config(
-        _create_app(state),
-        host=host,
-        port=port,
-        access_log=False,
-        log_level="warning",
+def _start_server(host: str, port: int, *, allow_passthrough_hf: bool = False) -> RunningServer:
+    manager = Manager()
+    state = ProxyState(requests=manager.list())
+    GuardProxyPlugin.configure(state=state, allow_passthrough_hf=allow_passthrough_hf)
+    server = Proxy(
+        input_args=[
+            "--hostname",
+            host,
+            "--port",
+            str(port),
+            "--num-workers",
+            "1",
+            "--num-acceptors",
+            "1",
+            "--threaded",
+            "--log-level",
+            "warning",
+        ],
+        plugins=[GuardProxyPlugin],
     )
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    actual_host, actual_port = _wait_for_server(server, thread)
-    return RunningServer(server=server, thread=thread, host=actual_host, port=actual_port, state=state)
-
-
-def _wait_for_server(server: uvicorn.Server, thread: threading.Thread) -> tuple[str, int]:
-    deadline = time.monotonic() + STARTUP_TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        if server.started and server.servers:
-            sockname = server.servers[0].sockets[0].getsockname()
-            return str(sockname[0]), int(sockname[1])
-        if not thread.is_alive():
-            raise RuntimeError("guard proxy server stopped during startup")
-        time.sleep(0.01)
-    raise TimeoutError("guard proxy server did not start")
+    server.__enter__()
+    return RunningServer(
+        server=server,
+        host=str(server.flags.hostname),
+        port=int(server.flags.port),
+        state=state,
+        allow_passthrough_hf=allow_passthrough_hf,
+        manager=manager,
+    )
 
 
 def _proxy_env(proxy_url: str) -> ProxyEnv:
@@ -298,7 +313,6 @@ def _write_env_instructions(env: ProxyEnv) -> None:
     sys.stderr.write("Export these variables for a manual run:\n")
     for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
         sys.stderr.write(f"export {key}={env.variables[key]!r}\n")
-    sys.stderr.write(f"Status endpoint: {env.proxy_url}/__status__\n")
 
 
 def _write_run_summary(summary: ProxySummary, *, as_json: bool) -> None:
@@ -320,19 +334,23 @@ def _log_guard_pass(summary: ProxySummary) -> None:
 
 def _write_human_summary(summary: ProxySummary) -> None:
     hf_requests = summary.huggingface_requests
+    other_requests = summary.other_requests
     if hf_requests:
         sys.stderr.write("Hugging Face network requests observed:\n")
         for request in hf_requests:
             sys.stderr.write(f"- {request.method} {request.host} {request.target}\n")
-        return
-
-    if summary.requests:
-        sys.stderr.write(f"No Hugging Face requests observed. Total proxied requests: {summary.request_count}\n")
     else:
+        sys.stderr.write("No Hugging Face requests observed.\n")
+
+    if other_requests:
+        sys.stderr.write("Other proxied requests observed:\n")
+        for request in other_requests:
+            sys.stderr.write(f"- {request.method} {request.host} {request.target}\n")
+    elif not summary.requests:
         sys.stderr.write("No proxied requests observed.\n")
 
 
-def test_proxy_response_blocks_huggingface_request() -> None:
+def test_proxy_response_body_blocks_huggingface_request() -> None:
     request = ProxyRequest(
         method="CONNECT",
         target="huggingface.co:443",
@@ -340,24 +358,106 @@ def test_proxy_response_blocks_huggingface_request() -> None:
         is_huggingface=True,
     )
 
-    response = _proxy_response(request)
+    rejection = _proxy_rejection(request)
 
-    assert response.status_code == 502
-    assert response.body == b"Blocked Hugging Face request to huggingface.co\n"
+    assert rejection.status_code == 502
+    assert rejection.body == b"Blocked Hugging Face request to huggingface.co\n"
 
 
-def test_proxy_response_rejects_non_huggingface_without_forwarding() -> None:
-    request = ProxyRequest(
-        method="GET",
-        target="http://example.com/models",
-        host="example.com",
-        is_huggingface=False,
-    )
+def test_proxy_plugin_blocks_case_insensitive_huggingface_host() -> None:
+    from proxy.http.parser import httpParserTypes
 
-    response = _proxy_response(request)
+    state = ProxyState()
+    parser = HttpParser(httpParserTypes.REQUEST_PARSER)
+    parser.parse(memoryview(b"CONNECT HuggingFace.co:443 HTTP/1.1\r\nHost: HuggingFace.co:443\r\n\r\n"))
+    plugin = object.__new__(GuardProxyPlugin)
 
-    assert response.status_code == 502
-    assert response.body == b"Guard proxy does not forward requests\n"
+    GuardProxyPlugin.configure(state=state, allow_passthrough_hf=False)
+
+    try:
+        plugin.before_upstream_connection(parser)
+    except HttpRequestRejected as rejection:
+        assert rejection.status_code == 502
+        assert rejection.body == b"Blocked Hugging Face request to huggingface.co\n"
+    else:
+        raise AssertionError("expected mixed-case Hugging Face request to be rejected")
+    assert state.summary().huggingface_requests == [
+        ProxyRequest(
+            method="CONNECT",
+            target="huggingface.co:443",
+            host="huggingface.co",
+            is_huggingface=True,
+        )
+    ]
+
+
+def test_proxy_plugin_blocks_huggingface_by_default() -> None:
+    from proxy.http.parser import httpParserTypes
+
+    state = ProxyState()
+    parser = HttpParser(httpParserTypes.REQUEST_PARSER)
+    parser.parse(memoryview(b"CONNECT huggingface.co:443 HTTP/1.1\r\nHost: huggingface.co:443\r\n\r\n"))
+    plugin = object.__new__(GuardProxyPlugin)
+
+    GuardProxyPlugin.configure(state=state, allow_passthrough_hf=False)
+
+    try:
+        plugin.before_upstream_connection(parser)
+    except HttpRequestRejected as rejection:
+        assert rejection.status_code == 502
+        assert rejection.body == b"Blocked Hugging Face request to huggingface.co\n"
+    else:
+        raise AssertionError("expected Hugging Face request to be rejected")
+    assert state.summary().requests == [
+        ProxyRequest(
+            method="CONNECT",
+            target="huggingface.co:443",
+            host="huggingface.co",
+            is_huggingface=True,
+        )
+    ]
+
+
+def test_proxy_plugin_allows_huggingface_passthrough_when_enabled() -> None:
+    from proxy.http.parser import httpParserTypes
+
+    state = ProxyState()
+    parser = HttpParser(httpParserTypes.REQUEST_PARSER)
+    parser.parse(memoryview(b"CONNECT huggingface.co:443 HTTP/1.1\r\nHost: huggingface.co:443\r\n\r\n"))
+    plugin = object.__new__(GuardProxyPlugin)
+
+    GuardProxyPlugin.configure(state=state, allow_passthrough_hf=True)
+
+    assert plugin.before_upstream_connection(parser) is parser
+    assert state.summary().huggingface_requests == [
+        ProxyRequest(
+            method="CONNECT",
+            target="huggingface.co:443",
+            host="huggingface.co",
+            is_huggingface=True,
+        )
+    ]
+
+
+def test_proxy_plugin_allows_non_huggingface_passthrough_by_default() -> None:
+    from proxy.http.parser import httpParserTypes
+
+    state = ProxyState()
+    parser = HttpParser(httpParserTypes.REQUEST_PARSER)
+    parser.parse(memoryview(b"GET http://example.com/models HTTP/1.1\r\nHost: example.com\r\n\r\n"))
+    plugin = object.__new__(GuardProxyPlugin)
+
+    GuardProxyPlugin.configure(state=state, allow_passthrough_hf=False)
+
+    assert plugin.before_upstream_connection(parser) is parser
+    assert state.summary().other_requests == [
+        ProxyRequest(
+            method="GET",
+            target="/models",
+            host="example.com",
+            is_huggingface=False,
+        )
+    ]
 
 
 def test_proxy_state_summary_counts_huggingface_and_non_huggingface_requests() -> None:
@@ -384,6 +484,41 @@ def test_proxy_state_summary_counts_huggingface_and_non_huggingface_requests() -
     assert summary.huggingface_request_count == 1
     assert summary.requests == [huggingface_request, non_huggingface_request]
     assert summary.huggingface_requests == [huggingface_request]
+    assert summary.other_requests == [non_huggingface_request]
+
+
+def test_run_wires_proxy_env_and_returns_child_status() -> None:
+    state = ProxyState()
+    state.record(
+        ProxyRequest(
+            method="GET",
+            target="/models",
+            host="example.com",
+            is_huggingface=False,
+        )
+    )
+    server = RunningServer(
+        server=nullcontext(),
+        host="127.0.0.1",
+        port=43210,
+        state=state,
+        allow_passthrough_hf=False,
+    )
+
+    with (
+        patch(f"{__name__}._start_server", return_value=server) as start_server,
+        patch(f"{__name__}.subprocess.run", return_value=subprocess.CompletedProcess(["child"], 7)) as run_child,
+        patch(f"{__name__}._write_run_summary") as write_summary,
+    ):
+        exit_code = run("child", host="127.0.0.1", port=0)
+
+    assert exit_code == 7
+    start_server.assert_called_once_with("127.0.0.1", 0, allow_passthrough_hf=False)
+    assert run_child.call_args.kwargs["check"] is False
+    assert run_child.call_args.kwargs["env"]["HTTP_PROXY"] == "http://127.0.0.1:43210"
+    summary = write_summary.call_args.args[0]
+    assert summary.request_count == 1
+    assert summary.huggingface_request_count == 0
 
 
 def _normalize_command(command: tuple[str, ...]) -> list[str]:
@@ -401,15 +536,22 @@ def cli() -> None:
 @cli.command()
 @click.option("--host", default=DEFAULT_HOST, show_default=True, help="Host interface for the guard proxy.")
 @click.option("--port", default=DEFAULT_PORT, show_default=True, type=int, help="Port for the guard proxy.")
-def serve(*, host: str, port: int) -> None:
+@click.option(
+    "--allow-passthrough-hf/--no-allow-passthrough-hf",
+    default=False,
+    show_default=True,
+    help="Forward Hugging Face requests after recording them.",
+)
+def serve(*, host: str, port: int, allow_passthrough_hf: bool) -> None:
     """Run the guard proxy until interrupted."""
-    server = _start_server(host, port)
+    server = _start_server(host, port, allow_passthrough_hf=allow_passthrough_hf)
     _write_env_instructions(_proxy_env(server.proxy_url))
     try:
-        while server.thread.is_alive():
+        while True:
             time.sleep(0.5)
     except KeyboardInterrupt:
         server.stop()
+        _write_run_summary(server.state.summary(), as_json=False)
 
 
 def run(
@@ -417,6 +559,7 @@ def run(
     host: str = DEFAULT_HOST,
     port: int = 0,
     json_output: bool = False,
+    allow_passthrough_hf: bool = False,
 ) -> int:
     """Run a command through the guard proxy."""
     normalized = _normalize_command(command)
@@ -424,7 +567,7 @@ def run(
         sys.stderr.write("error: missing command after `run --`\n")
         return int(ExitCode.bad_input)
 
-    server = _start_server(host, port)
+    server = _start_server(host, port, allow_passthrough_hf=allow_passthrough_hf)
     try:
         completed = subprocess.run(
             normalized, env={**os.environ, **_proxy_env(server.proxy_url).variables}, check=False
@@ -436,7 +579,7 @@ def run(
     if not json_output:
         _log_guard_pass(summary)
     _write_run_summary(summary, as_json=json_output)
-    if summary.huggingface_requests:
+    if summary.huggingface_requests and not allow_passthrough_hf:
         return int(ExitCode.failure)
     return completed.returncode
 
@@ -447,10 +590,25 @@ def run(
     "--port", default=0, show_default=True, type=int, help="Port for the guard proxy. Use 0 for any free port."
 )
 @click.option("--json", "json_output", is_flag=True, help="Write a machine-readable JSON summary to stdout.")
+@click.option(
+    "--allow-passthrough-hf/--no-allow-passthrough-hf",
+    default=False,
+    show_default=True,
+    help="Forward Hugging Face requests after recording them.",
+)
 @click.argument("command", nargs=-1, type=click.UNPROCESSED)
-def run_cli(command: tuple[str, ...], *, host: str, port: int, json_output: bool) -> None:
+def run_cli(
+    command: tuple[str, ...],
+    *,
+    host: str,
+    port: int,
+    json_output: bool,
+    allow_passthrough_hf: bool,
+) -> None:
     """Run a command through the guard proxy."""
-    raise click.exceptions.Exit(run(*command, host=host, port=port, json_output=json_output))
+    raise click.exceptions.Exit(
+        run(*command, host=host, port=port, json_output=json_output, allow_passthrough_hf=allow_passthrough_hf)
+    )
 
 
 def main() -> int:
