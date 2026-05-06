@@ -266,6 +266,9 @@ class TestInitializeModelRef:
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
         mock_llm = MagicMock()
         mock_llm.get_tokenizer.return_value = MagicMock()
+        model_ref = MagicMock()
+        model_ref.target.return_value = "/tmp/hf-cache/snapshots/123"
+        model_ref.trust_remote_code = True
 
         with (
             patch(
@@ -278,6 +281,7 @@ class TestInitializeModelRef:
         ):
             backend.initialize()
 
+        parse.assert_called_once_with(base_params.training.pretrained_model)
         assert backend.llm is mock_llm
         assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True

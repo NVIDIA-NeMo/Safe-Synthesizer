@@ -13,7 +13,9 @@ from __future__ import annotations
 import gc
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from ..observability import get_logger
@@ -210,14 +212,18 @@ def trust_remote_code_for_model(model_name: str | Path, *, cache_root: str | Pat
 
     Returns ``True`` for model identifiers owned by trusted organizations,
     including configured Hugging Face cache snapshots for those organizations.
+    Returns ``True`` for model identifiers owned by trusted organizations,
+    including configured Hugging Face cache snapshots for those organizations.
 
     Args:
         model_name: HuggingFace model identifier or local path.
+        cache_root: Hugging Face Hub cache root. Defaults to the configured hub cache.
         cache_root: Hugging Face Hub cache root. Defaults to the configured hub cache.
 
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
+    return ModelRef.parse(model_name, cache_root=cache_root).trust_remote_code
     return ModelRef.parse(model_name, cache_root=cache_root).trust_remote_code
 
 
