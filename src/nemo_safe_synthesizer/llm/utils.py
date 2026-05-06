@@ -11,8 +11,9 @@ without installing the full training or inference stack.
 from __future__ import annotations
 
 import gc
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from ..observability import get_logger
 
@@ -23,32 +24,140 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def trust_remote_code_for_model(model_name: str | Path) -> bool:
+@dataclass(frozen=True, slots=True)
+class ModelRef:
+    """Resolved model reference for local cache and trust policy decisions."""
+
+    original: str | Path
+    repo_id: str | None = None
+    revision: str = "main"
+    local_path: Path | None = None
+    cache_root: Path | None = None
+
+    trusted_orgs: ClassVar[frozenset[str]] = frozenset({"nvidia"})
+
+    @classmethod
+    def parse(
+        cls,
+        model_name: str | Path,
+        *,
+        revision: str = "main",
+        cache_root: str | Path | None = None,
+    ) -> Self:
+        """Parse a model identifier or path without contacting Hugging Face."""
+        cache_root_path = Path(cache_root) if cache_root is not None else cls._default_hf_cache_root()
+        model_path = Path(model_name)
+        if model_path.exists():
+            repo_id = cls._repo_id_from_hf_cache_path(model_path, cache_root_path)
+            return cls(
+                original=model_name,
+                repo_id=repo_id,
+                revision=revision,
+                local_path=model_path,
+                cache_root=cache_root_path,
+            )
+
+        model_ref = str(model_name)
+        repo_id = cls._repo_id_from_hub_identifier(model_ref)
+        local_path = cls._cached_snapshot_for_repo(repo_id, revision, cache_root_path) if repo_id else None
+        return cls(
+            original=model_name,
+            repo_id=repo_id,
+            revision=revision,
+            local_path=local_path,
+            cache_root=cache_root_path,
+        )
+
+    @staticmethod
+    def _default_hf_cache_root() -> Path:
+        """Return Hugging Face's configured Hub cache root. Their implementation
+        reads and sets this from several environment variables - HF_HOME, HF_HUB_CACHE, etc.
+        """
+        from huggingface_hub.constants import HF_HUB_CACHE
+
+        return Path(HF_HUB_CACHE)
+
+    @staticmethod
+    def _repo_id_from_hub_identifier(model_ref: str) -> str | None:
+        """Extract the organization and name from a Hugging Face model identifier.
+        This is the format used by the Hugging Face Hub API.
+        """
+        if not model_ref or model_ref.startswith(("/", ".")) or "/" not in model_ref:
+            return None
+        org, name = model_ref.split("/", 1)
+        if not org or not name:
+            return None
+        return model_ref
+
+    @staticmethod
+    def _repo_id_from_hf_cache_path(path: Path, cache_root: Path) -> str | None:
+        path_resolved = path.resolve(strict=False)
+        from huggingface_hub import scan_cache_dir
+        from huggingface_hub.errors import CacheNotFound
+
+        try:
+            repos = scan_cache_dir(cache_root).repos
+        except (CacheNotFound, ValueError):
+            return None
+
+        for repo in repos:
+            if repo.repo_type != "model":
+                continue
+            for revision in repo.revisions:
+                snapshot_path = revision.snapshot_path.resolve(strict=False)
+                if path_resolved.is_relative_to(snapshot_path):
+                    return repo.repo_id
+        return None
+
+    @staticmethod
+    def _cached_snapshot_for_repo(repo_id: str, revision: str, cache_root: Path) -> Path | None:
+        from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import LocalEntryNotFoundError
+
+        try:
+            return Path(
+                snapshot_download(
+                    repo_id,
+                    revision=revision,
+                    cache_dir=cache_root,
+                    local_files_only=True,
+                )
+            )
+        except LocalEntryNotFoundError:
+            return None
+
+    @classmethod
+    def is_trusted_org(cls, org: str) -> bool:
+        """Return whether an organization is allowed to load remote code."""
+        return org.casefold() in cls.trusted_orgs
+
+    @property
+    def trust_remote_code(self) -> bool:
+        """Whether loaders should pass ``trust_remote_code=True`` for this model."""
+        if not self.repo_id or "/" not in self.repo_id:
+            return False
+        org, _ = self.repo_id.split("/", 1)
+        return self.is_trusted_org(org)
+
+    def target(self) -> str:
+        """Return the local snapshot path when available, otherwise the original input."""
+        return str(self.local_path or self.original)
+
+
+def trust_remote_code_for_model(model_name: str | Path, *, cache_root: str | Path | None = None) -> bool:
     """Determine whether to trust remote code when loading a model.
 
-    Returns ``True`` for NVIDIA-owned Hub model identifiers and for paths
-    inside Hugging Face's encoded cache directory for NVIDIA models.
+    Returns ``True`` for model identifiers owned by trusted organizations,
+    including configured Hugging Face cache snapshots for those organizations.
 
     Args:
         model_name: HuggingFace model identifier or local path.
+        cache_root: Hugging Face Hub cache root. Defaults to the configured hub cache.
 
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
-    model_ref = str(model_name).casefold()
-    if model_ref.startswith("nvidia/"):
-        return True
-
-    path_parts = Path(model_ref).parts
-    while path_parts:
-        match path_parts:
-            case ("huggingface", "hub", *cache_parts):
-                # Brittle by design: this mirrors Hugging Face's current cache path layout.
-                return any(part.startswith("models--nvidia--") for part in cache_parts)
-            case (_, *remaining):
-                path_parts = remaining
-
-    return False
+    return ModelRef.parse(model_name, cache_root=cache_root).trust_remote_code
 
 
 def cleanup_memory() -> None:
