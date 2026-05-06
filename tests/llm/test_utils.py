@@ -134,3 +134,10 @@ def test_model_ref_falls_back_to_original_when_cache_missing(tmp_path: Path) -> 
 
     assert ref.trust_remote_code is False
     assert ref.target() == "meta-llama/Llama-3.2-1B-Instruct"
+
+
+def test_model_ref_preserves_empty_model_name(tmp_path: Path) -> None:
+    ref = ModelRef.parse("", cache_root=tmp_path / "empty-cache")
+
+    assert ref.trust_remote_code is False
+    assert ref.target() == ""

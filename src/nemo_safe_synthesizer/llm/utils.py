@@ -47,6 +47,10 @@ class ModelRef:
     ) -> Self:
         """Parse a model identifier or path without contacting Hugging Face."""
         cache_root_path = Path(cache_root) if cache_root is not None else cls._default_hf_cache_root()
+        model_ref = str(model_name)
+        if not model_ref:
+            return cls(original=model_name, revision=revision, cache_root=cache_root_path)
+
         model_path = Path(model_name)
         if model_path.exists():
             repo_id = cls._repo_id_from_hf_cache_path(model_path, cache_root_path)
@@ -58,7 +62,6 @@ class ModelRef:
                 cache_root=cache_root_path,
             )
 
-        model_ref = str(model_name)
         repo_id = cls._repo_id_from_hub_identifier(model_ref)
         local_path = cls._cached_snapshot_for_repo(repo_id, revision, cache_root_path) if repo_id else None
         return cls(

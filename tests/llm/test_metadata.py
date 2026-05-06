@@ -838,6 +838,36 @@ class TestFromConfig:
             assert metadata.rope_scaling.factor == expected_rope_factor
         assert metadata.max_sequences_per_example == expected_max_seq
 
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    def test_from_config_uses_cached_model_ref_target(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+        mock_tokenizer,
+        mock_autoconfig_obj,
+    ):
+        """Metadata loads resolve cached model refs before calling HuggingFace APIs."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+
+        mock_config = MagicMock()
+        mock_config.training.pretrained_model = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        mock_config.training.rope_scaling_factor = None
+        mock_config.data.max_sequences_per_example = None
+
+        with patch("nemo_safe_synthesizer.llm.metadata.ModelRef.parse", return_value=model_ref) as parse:
+            metadata = ModelMetadata.from_config(mock_config)
+
+        assert isinstance(metadata, TinyLlama)
+        parse.assert_called_once_with(mock_config.training.pretrained_model)
+        mock_auto_config.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+        mock_auto_tokenizer.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+
 
 class TestModelMetadataKwargsPassthrough:
     """Tests for kwargs passthrough in model classes."""

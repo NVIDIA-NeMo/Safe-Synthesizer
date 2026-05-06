@@ -28,7 +28,7 @@ from ..defaults import (
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
-from .utils import trust_remote_code_for_model
+from .utils import ModelRef
 
 logger = get_logger(__name__)
 
@@ -96,9 +96,12 @@ class LLMPromptConfig(BaseModel):
         Returns:
             A new ``LLMPromptConfig`` populated from the tokenizer.
         """
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(
-            name, trust_remote_code=trust_remote_code_for_model(name)
-        )
+        if tokenizer is None:
+            model_ref = ModelRef.parse(name)
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_ref.target(),
+                trust_remote_code=model_ref.trust_remote_code,
+            )
         bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
         bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
         eos_token = kwargs.get("eos_token", getattr(tokenizer, "eos_token", None))
@@ -362,13 +365,11 @@ class ModelMetadata(BaseModel):
         """
         if data.get("autoconfig") is None:
             model_name_or_path = data["model_name_or_path"]
-            try:
-                data["autoconfig"] = AutoConfig.from_pretrained(
-                    model_name_or_path,
-                    trust_remote_code=trust_remote_code_for_model(model_name_or_path),
-                )
-            except OSError as err:
-                raise _model_load_parameter_error(model_name_or_path, err) from err
+            model_ref = ModelRef.parse(model_name_or_path)
+            data["autoconfig"] = AutoConfig.from_pretrained(
+                model_ref.target(),
+                trust_remote_code=model_ref.trust_remote_code,
+            )
 
         if data.get("base_max_seq_length") is None:
             data["base_max_seq_length"] = get_base_max_seq_length(data["autoconfig"])
@@ -496,13 +497,15 @@ class ModelMetadata(BaseModel):
         Returns:
             A ``(config, tokenizer)`` tuple ready to pass to ``super().__init__``.
         """
-        trust = trust_remote_code_for_model(model_name_or_path)
-        try:
-            config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=trust)
-            if tokenizer is None:
-                tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=trust)
-        except OSError as err:
-            raise _model_load_parameter_error(model_name_or_path, err) from err
+        model_ref = ModelRef.parse(model_name_or_path)
+        config: PretrainedConfig = AutoConfig.from_pretrained(
+            model_ref.target(), trust_remote_code=model_ref.trust_remote_code
+        )
+        if tokenizer is None:
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_ref.target(),
+                trust_remote_code=model_ref.trust_remote_code,
+            )
         return config, tokenizer
 
     @classmethod

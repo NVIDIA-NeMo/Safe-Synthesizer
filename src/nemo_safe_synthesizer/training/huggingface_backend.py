@@ -52,12 +52,12 @@ from ..defaults import (
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
 from ..llm.utils import (
+    ModelRef,
     add_bos_eos_tokens_to_tokenizer,
     cleanup_memory,
     get_device_map,
     get_max_vram,
     get_quantization_config,
-    trust_remote_code_for_model,
 )
 from ..observability import get_logger, traced_runtime, traced_user
 from ..privacy.dp_transformers.dp_utils import (
@@ -119,9 +119,10 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
+        self.model_ref = ModelRef.parse(self.params.training.pretrained_model)
         self.autoconfig = AutoConfig.from_pretrained(
-            self.params.training.pretrained_model,
-            trust_remote_code=trust_remote_code_for_model(self.params.training.pretrained_model),
+            self.model_ref.target(),
+            trust_remote_code=self.model_ref.trust_remote_code,
         )
 
     def _load_pretrained_model(self, **model_args: Any) -> None:
@@ -133,8 +134,8 @@ class HuggingFaceBackend(TrainingBackend):
 
         self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
             AutoTokenizer.from_pretrained(
-                self.params.training.pretrained_model,
-                trust_remote_code=trust_remote_code_for_model(self.params.training.pretrained_model),
+                self.model_ref.target(),
+                trust_remote_code=self.model_ref.trust_remote_code,
                 model_max_length=model_args.get("max_seq_length", None),
             )
         )
@@ -205,16 +206,15 @@ class HuggingFaceBackend(TrainingBackend):
         Returns:
             Dictionary of parameters for ``from_pretrained``.
         """
-        trust_remote_code = trust_remote_code_for_model(self.params.training.pretrained_model)
         return dict(
-            pretrained_model_name_or_path=self.params.training.pretrained_model,
-            trust_remote_code=trust_remote_code,
+            pretrained_model_name_or_path=self.model_ref.target(),
+            trust_remote_code=self.model_ref.trust_remote_code,
             device_map=model_kwargs.pop(
                 "device_map",
                 get_device_map(
-                    self.params.training.pretrained_model,
+                    self.model_ref.target(),
                     autoconfig=self.autoconfig,
-                    trust_remote_code=trust_remote_code,
+                    trust_remote_code=self.model_ref.trust_remote_code,
                 ),
             ),
             attn_implementation=model_kwargs.pop(
