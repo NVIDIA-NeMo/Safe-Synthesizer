@@ -13,9 +13,7 @@ from __future__ import annotations
 import gc
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from ..observability import get_logger
@@ -131,6 +129,63 @@ class ModelRef:
             )
         except LocalEntryNotFoundError:
             return None
+        if not ModelRef._snapshot_has_model_artifacts(snapshot_path, cache_root):
+            return None
+        return snapshot_path
+
+    @classmethod
+    def _snapshot_has_model_artifacts(cls, snapshot_path: Path, cache_root: Path) -> bool:
+        """Return whether HF Hub's cache index reports weight artifacts in ``snapshot_path``."""
+        from huggingface_hub import scan_cache_dir
+        from huggingface_hub.errors import CacheNotFound
+
+        artifact_patterns = cls._model_artifact_patterns()
+        snapshot_resolved = snapshot_path.resolve(strict=False)
+
+        try:
+            repos = scan_cache_dir(cache_root).repos
+        except (CacheNotFound, ValueError):
+            return False
+
+        for repo in repos:
+            if repo.repo_type != "model":
+                continue
+            for revision in repo.revisions:
+                if revision.snapshot_path.resolve(strict=False) != snapshot_resolved:
+                    continue
+                return any(
+                    fnmatchcase(cached_file.file_name, pattern)
+                    for cached_file in revision.files
+                    for pattern in artifact_patterns
+                )
+        return False
+
+    @staticmethod
+    def _model_artifact_patterns() -> tuple[str, ...]:
+        """Return known model artifact names using HF Hub's public constants."""
+        from huggingface_hub.constants import (
+            FLAX_WEIGHTS_NAME,
+            PYTORCH_WEIGHTS_FILE_PATTERN,
+            PYTORCH_WEIGHTS_NAME,
+            SAFETENSORS_SINGLE_FILE,
+            SAFETENSORS_WEIGHTS_FILE_PATTERN,
+            TF2_WEIGHTS_FILE_PATTERN,
+            TF2_WEIGHTS_NAME,
+            TF_WEIGHTS_NAME,
+        )
+
+        return (
+            PYTORCH_WEIGHTS_NAME,
+            PYTORCH_WEIGHTS_FILE_PATTERN.format(suffix="*"),
+            SAFETENSORS_SINGLE_FILE,
+            SAFETENSORS_WEIGHTS_FILE_PATTERN.format(suffix="*"),
+            TF2_WEIGHTS_NAME,
+            TF2_WEIGHTS_FILE_PATTERN.format(suffix="*"),
+            TF_WEIGHTS_NAME,
+            FLAX_WEIGHTS_NAME,
+            "*.gguf",
+            "consolidated*.pth",
+        )
         if not ModelRef._snapshot_has_model_artifacts(snapshot_path, cache_root):
             return None
         return snapshot_path
