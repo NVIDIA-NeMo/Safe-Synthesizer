@@ -1,6 +1,6 @@
+---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
----
 name: configurator
 description: "Pydantic models and the Pydantic-to-Click configurator for config, CLI, and SDK validation. Triggers on: configurator, pydantic_options, Parameter, parse_overrides, LeafParam, FlagParam, _collect_params, CLI options, config fields, DependsOnValidator, ValueValidator, AutoParam, Pydantic, BaseModel, NSSBaseModel, BaseSettings, field_validator, model_validator, ConfigDict, TypeAdapter, pydantic-settings, validation."
 ---

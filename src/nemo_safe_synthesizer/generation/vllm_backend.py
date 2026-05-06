@@ -31,7 +31,7 @@ from ..generation.processors import Processor, TabularDataProcessor, create_proc
 from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
-from ..llm.utils import cleanup_memory, get_max_vram, trust_remote_code_for_model
+from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
@@ -203,16 +203,17 @@ class VllmBackend(GeneratorBackend):
         structured_outputs_config = StructuredOutputsConfig(
             backend=self.config.generation.structured_generation_backend,
         )
+        model_ref = ModelRef.parse(self.config.training.pretrained_model)
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
-                model=self.config.training.pretrained_model,
+                model=model_ref.target(),
                 gpu_memory_utilization=max_vram,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
-                trust_remote_code=trust_remote_code_for_model(self.config.training.pretrained_model),
+                trust_remote_code=model_ref.trust_remote_code,
             )
 
         # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;

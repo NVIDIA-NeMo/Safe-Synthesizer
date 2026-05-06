@@ -18,6 +18,7 @@ pytest.importorskip(
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
+from pydantic import ValidationError
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
@@ -26,6 +27,7 @@ from nemo_safe_synthesizer.defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
@@ -475,6 +477,37 @@ class TestModelMetadata:
             ModelMetadata.model_validate({"model_name_or_path": "", "prompt_config": sample_prompt_config})
 
         mock_auto_config.from_pretrained.assert_called_once_with("", trust_remote_code=False)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_offline_huggingface_cache_miss_has_actionable_error(self, mock_auto_config):
+        """Offline cache misses should explain how to make the model available."""
+        mock_auto_config.from_pretrained.side_effect = OSError(
+            "We couldn't connect to 'https://huggingface.co' to load the files, "
+            "and couldn't find them in the cached files."
+        )
+
+        with pytest.raises(ParameterError) as exc_info:
+            TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+
+        message = str(exc_info.value)
+        assert "Could not load model metadata" in message
+        assert "local Hugging Face cache" in message
+        assert "pre-download the model" in message
+        assert "HF_HUB_OFFLINE" in message
+        assert "Original error:" in message
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_derived_field_config_load_has_actionable_error(self, mock_auto_config, sample_prompt_config):
+        """Derived autoconfig loading should use the same friendly cache-miss error."""
+        mock_auto_config.from_pretrained.side_effect = OSError("outgoing traffic has been disabled")
+
+        with pytest.raises(ValidationError, match="local Hugging Face cache"):
+            ModelMetadata.model_validate(
+                {
+                    "model_name_or_path": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+                    "prompt_config": sample_prompt_config,
+                }
+            )
 
     def test_adapter_path_property(self, sample_model_metadata, sample_workdir):
         """Test the adapter_path property returns the correct path."""

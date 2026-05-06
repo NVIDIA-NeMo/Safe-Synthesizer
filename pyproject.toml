@@ -50,6 +50,8 @@ dev = [
   "types-colorama>=0.4.6",
   "textual",
   "tomlkit>=0.13.0",
+  # for the proxy tool used to monitor calls to HF during testing
+  "proxy-py>=2.4.10",
   {include-group = "docs"},
   {include-group = "test"},
 ]

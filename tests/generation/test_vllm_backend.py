@@ -3,6 +3,7 @@
 
 """Unit tests for the VllmBackend class private methods and module-level side effects."""
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,6 +20,31 @@ from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F401
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+
+
+def _write_cached_snapshot(
+    cache_root: Path,
+    repo_id: str,
+    *,
+    revision: str = "main",
+    commit: str = "abc123",
+) -> Path:
+    repo_cache = cache_root / f"models--{repo_id.replace('/', '--')}"
+    snapshot = repo_cache / "snapshots" / commit
+    snapshot.mkdir(parents=True)
+    refs = repo_cache / "refs"
+    refs.mkdir()
+    (refs / revision).write_text(commit)
+    (snapshot / "model.safetensors").write_text("cached")
+    return snapshot
+
+
+@pytest.fixture
+def fixture_cached_nvidia_snapshot(tmp_path: Path) -> tuple[Path, Path]:
+    """Realistic Hugging Face cache layout for a cached trusted model."""
+    cache_root = tmp_path / "hf-cache"
+    snapshot = _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct")
+    return cache_root, snapshot
 
 
 @pytest.fixture
@@ -222,6 +248,39 @@ class TestBuildStructuredOutputParams:
             mock_build_regex.assert_called_once()
             call_args, _ = mock_build_regex.call_args
             assert call_args[1].data.group_training_examples_by == "category"
+
+
+class TestInitializeModelRef:
+    """Tests that vLLM initialization uses a parsed model reference."""
+
+    def test_initialize_passes_cached_snapshot_target_and_trust_to_vllm(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        fixture_cached_nvidia_snapshot,
+    ):
+        cache_root, snapshot = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root",
+                return_value=cache_root,
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert backend.llm is mock_llm
+        assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
+        assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
 
 
 class TestResolveTemperature:
