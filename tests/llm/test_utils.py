@@ -16,6 +16,7 @@ def _write_cached_snapshot(
     *,
     revision: str = "main",
     commit: str = "abc123",
+    files: tuple[str, ...] = ("model.safetensors",),
 ) -> Path:
     repo_cache = cache_root / f"models--{repo_id.replace('/', '--')}"
     snapshot = repo_cache / "snapshots" / commit
@@ -23,6 +24,10 @@ def _write_cached_snapshot(
     refs = repo_cache / "refs"
     refs.mkdir()
     (refs / revision).write_text(commit)
+    for file in files:
+        artifact = snapshot / file
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text("cached")
     return snapshot
 
 
@@ -72,6 +77,56 @@ def test_model_ref_prefers_cached_snapshot_for_hub_id(tmp_path: Path) -> None:
 
     assert ref.trust_remote_code is True
     assert ref.target() == str(snapshot)
+
+
+@pytest.mark.parametrize("files", [("config.json",), ("model.safetensors.index.json",)])
+def test_model_ref_ignores_cached_snapshot_without_model_artifacts(tmp_path: Path, files: tuple[str, ...]) -> None:
+    cache_root = tmp_path / "custom-cache"
+    _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct", files=files)
+
+    ref = ModelRef.parse("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
+
+    assert ref.repo_id == "nvidia/Nemotron-Mini-4B-Instruct"
+    assert ref.trust_remote_code is True
+    assert ref.target() == "nvidia/Nemotron-Mini-4B-Instruct"
+
+
+def test_model_ref_prefers_cached_snapshot_for_single_component_hub_id(tmp_path: Path) -> None:
+    cache_root = tmp_path / "custom-cache"
+    snapshot = _write_cached_snapshot(cache_root, "gpt2")
+
+    ref = ModelRef.parse("gpt2", cache_root=cache_root)
+
+    assert ref.repo_id == "gpt2"
+    assert ref.trust_remote_code is False
+    assert ref.target() == str(snapshot)
+
+
+def test_model_ref_resolves_single_component_hub_id_revision(tmp_path: Path) -> None:
+    cache_root = tmp_path / "custom-cache"
+    snapshot = _write_cached_snapshot(
+        cache_root,
+        "bert-base-uncased",
+        revision="v1",
+        commit="def456",
+    )
+
+    ref = ModelRef.parse("bert-base-uncased", revision="v1", cache_root=cache_root)
+
+    assert ref.repo_id == "bert-base-uncased"
+    assert ref.target() == str(snapshot)
+
+
+def test_model_ref_existing_local_path_takes_precedence_over_single_component_hub_id(tmp_path: Path) -> None:
+    cache_root = tmp_path / "custom-cache"
+    _write_cached_snapshot(cache_root, "gpt2")
+    local_model = tmp_path / "gpt2"
+    local_model.mkdir()
+
+    ref = ModelRef.parse(local_model, cache_root=cache_root)
+
+    assert ref.repo_id is None
+    assert ref.target() == str(local_model)
 
 
 def test_model_ref_falls_back_to_original_when_cache_missing(tmp_path: Path) -> None:
