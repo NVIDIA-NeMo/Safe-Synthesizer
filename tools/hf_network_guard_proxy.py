@@ -4,7 +4,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "cyclopts",
+#     "click",
 #     "pydantic",
 #     "starlette",
 #     "structlog",
@@ -76,12 +76,11 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Annotated
 from urllib.parse import urlsplit
 
+import click
 import structlog
 import uvicorn
-from cyclopts import App, Parameter
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -94,7 +93,6 @@ DEFAULT_PORT = 8765
 HF_DOMAINS = ("huggingface.co", "hf.co")
 STARTUP_TIMEOUT_SECONDS = 5.0
 
-app = App(help=__doc__)
 logger = structlog.get_logger(__name__)
 
 
@@ -334,6 +332,60 @@ def _write_human_summary(summary: ProxySummary) -> None:
         sys.stderr.write("No proxied requests observed.\n")
 
 
+def test_proxy_response_blocks_huggingface_request() -> None:
+    request = ProxyRequest(
+        method="CONNECT",
+        target="huggingface.co:443",
+        host="huggingface.co",
+        is_huggingface=True,
+    )
+
+    response = _proxy_response(request)
+
+    assert response.status_code == 502
+    assert response.body == b"Blocked Hugging Face request to huggingface.co\n"
+
+
+def test_proxy_response_rejects_non_huggingface_without_forwarding() -> None:
+    request = ProxyRequest(
+        method="GET",
+        target="http://example.com/models",
+        host="example.com",
+        is_huggingface=False,
+    )
+
+    response = _proxy_response(request)
+
+    assert response.status_code == 502
+    assert response.body == b"Guard proxy does not forward requests\n"
+
+
+def test_proxy_state_summary_counts_huggingface_and_non_huggingface_requests() -> None:
+    state = ProxyState()
+    huggingface_request = ProxyRequest(
+        method="CONNECT",
+        target="huggingface.co:443",
+        host="huggingface.co",
+        is_huggingface=True,
+    )
+    non_huggingface_request = ProxyRequest(
+        method="GET",
+        target="http://example.com/models",
+        host="example.com",
+        is_huggingface=False,
+    )
+
+    state.record(huggingface_request)
+    state.record(non_huggingface_request)
+    summary = state.summary()
+    state.record(non_huggingface_request)
+
+    assert summary.request_count == 2
+    assert summary.huggingface_request_count == 1
+    assert summary.requests == [huggingface_request, non_huggingface_request]
+    assert summary.huggingface_requests == [huggingface_request]
+
+
 def _normalize_command(command: tuple[str, ...]) -> list[str]:
     normalized = list(command)
     if normalized and normalized[0] == "--":
@@ -341,8 +393,15 @@ def _normalize_command(command: tuple[str, ...]) -> list[str]:
     return normalized
 
 
-@app.command
-def serve(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
+@click.group(help=__doc__)
+def cli() -> None:
+    """Command line entry point."""
+
+
+@cli.command()
+@click.option("--host", default=DEFAULT_HOST, show_default=True, help="Host interface for the guard proxy.")
+@click.option("--port", default=DEFAULT_PORT, show_default=True, type=int, help="Port for the guard proxy.")
+def serve(*, host: str, port: int) -> None:
     """Run the guard proxy until interrupted."""
     server = _start_server(host, port)
     _write_env_instructions(_proxy_env(server.proxy_url))
@@ -353,12 +412,11 @@ def serve(*, host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
         server.stop()
 
 
-@app.command
 def run(
     *command: str,
     host: str = DEFAULT_HOST,
     port: int = 0,
-    json_output: Annotated[bool, Parameter(name="--json")] = False,
+    json_output: bool = False,
 ) -> int:
     """Run a command through the guard proxy."""
     normalized = _normalize_command(command)
@@ -383,9 +441,20 @@ def run(
     return completed.returncode
 
 
+@cli.command("run", context_settings={"ignore_unknown_options": True, "allow_extra_args": True})
+@click.option("--host", default=DEFAULT_HOST, show_default=True, help="Host interface for the guard proxy.")
+@click.option(
+    "--port", default=0, show_default=True, type=int, help="Port for the guard proxy. Use 0 for any free port."
+)
+@click.option("--json", "json_output", is_flag=True, help="Write a machine-readable JSON summary to stdout.")
+@click.argument("command", nargs=-1, type=click.UNPROCESSED)
+def run_cli(command: tuple[str, ...], *, host: str, port: int, json_output: bool) -> None:
+    """Run a command through the guard proxy."""
+    raise click.exceptions.Exit(run(*command, host=host, port=port, json_output=json_output))
+
+
 def main() -> int:
-    app()
-    return int(ExitCode.ok)
+    return int(cli(standalone_mode=False) or ExitCode.ok)
 
 
 if __name__ == "__main__":
