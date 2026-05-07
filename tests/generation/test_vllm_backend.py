@@ -3,7 +3,6 @@
 
 """Unit tests for the VllmBackend class private methods and module-level side effects."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,29 +21,10 @@ from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
 
-def _write_cached_snapshot(
-    cache_root: Path,
-    repo_id: str,
-    *,
-    revision: str = "main",
-    commit: str = "abc123",
-) -> Path:
-    repo_cache = cache_root / f"models--{repo_id.replace('/', '--')}"
-    snapshot = repo_cache / "snapshots" / commit
-    snapshot.mkdir(parents=True)
-    refs = repo_cache / "refs"
-    refs.mkdir()
-    (refs / revision).write_text(commit)
-    (snapshot / "model.safetensors").write_text("cached")
-    return snapshot
-
-
 @pytest.fixture
-def fixture_cached_nvidia_snapshot(tmp_path: Path) -> tuple[Path, Path]:
+def fixture_cached_nvidia_snapshot(hf_cached_snapshot_factory):
     """Realistic Hugging Face cache layout for a cached trusted model."""
-    cache_root = tmp_path / "hf-cache"
-    snapshot = _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct")
-    return cache_root, snapshot
+    return hf_cached_snapshot_factory("nvidia/Nemotron-Mini-4B-Instruct")
 
 
 @pytest.fixture
@@ -251,7 +231,7 @@ class TestBuildStructuredOutputParams:
 
 
 class TestInitializeModelRef:
-    """Tests that vLLM initialization uses a parsed model reference."""
+    """Tests intentionally tied to HF cache layout through ``ModelRef``."""
 
     def test_initialize_passes_cached_snapshot_target_and_trust_to_vllm(
         self,
@@ -261,6 +241,7 @@ class TestInitializeModelRef:
         mock_workdir,
         fixture_cached_nvidia_snapshot,
     ):
+        """Cached snapshot target selection intentionally follows HF cache design."""
         cache_root, snapshot = fixture_cached_nvidia_snapshot
         base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
         backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)

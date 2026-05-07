@@ -275,7 +275,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
 | `env.inference_key` | config | `NSS_INFERENCE_KEY` is set when PII classification is enabled (warning only) |
-| `env.hf_token` | config | `HF_TOKEN` or `HUGGING_FACE_HUB_TOKEN` is set; warns unconditionally when neither is present so gated-repo downloads don't fail later (warning only) |
+| `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
 | `columns.orderby` | dataframe | `order_training_examples_by` column is present |
