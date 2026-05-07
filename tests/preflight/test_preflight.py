@@ -7,18 +7,19 @@ import json
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 from rich.console import Console
-from transformers import PreTrainedTokenizerBase
+from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
-from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.preflight import (
@@ -104,9 +105,7 @@ class TestCUDAAvailabilityCheck:
 @pytest.mark.unit
 class TestVRAMHeadroomCheck:
     @staticmethod
-    def _autoconfig(**overrides):
-        from types import SimpleNamespace
-
+    def _autoconfig(**overrides) -> PretrainedConfig:
         defaults = dict(
             hidden_size=4096,
             num_hidden_layers=32,
@@ -118,12 +117,38 @@ class TestVRAMHeadroomCheck:
             tie_word_embeddings=False,
         )
         defaults.update(overrides)
-        return SimpleNamespace(**defaults)
+        return cast(PretrainedConfig, SimpleNamespace(**defaults))
+
+    @staticmethod
+    def _metadata(autoconfig=None):
+        md = MagicMock(spec=ModelMetadata, autoconfig=autoconfig)
+        md.max_seq_length = DEFAULT_MAX_SEQ_LENGTH
+        return md
+
+    @staticmethod
+    def _estimated_vram_gib(config: SafeSynthesizerParameters, autoconfig: PretrainedConfig) -> float:
+        from nemo_safe_synthesizer.preflight.checks.environment import (
+            estimate_base_model_params,
+            estimate_training_vram_components,
+        )
+
+        result = estimate_base_model_params(autoconfig)
+        assert result is not None
+        n_params, _method = result
+        comp = estimate_training_vram_components(
+            n_params=n_params,
+            training_cfg=config.training,
+            batch_size=config.training.batch_size,
+            seq_len=DEFAULT_MAX_SEQ_LENGTH,
+            hidden_size=getattr(autoconfig, "hidden_size", None),
+            num_hidden_layers=getattr(autoconfig, "num_hidden_layers", None),
+        )
+        return comp.total_gib
 
     def test_low_vram_warns(self, default_config):
-        """Llama-3-8B-shaped config on a 1 GiB GPU must warn."""
-        metadata = MagicMock(spec=ModelMetadata, autoconfig=self._autoconfig())
-        fake_props = MagicMock(total_memory=1 * 1024**3)
+        """A marginally oversized model emits a warning, not a hard error."""
+        metadata = self._metadata(autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=16 * 1024**3)
         with (
             patch("torch.cuda.is_available", return_value=True),
             patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
@@ -134,7 +159,7 @@ class TestVRAMHeadroomCheck:
 
     def test_ample_vram_is_silent(self, default_config):
         """Same config on an 80 GiB GPU must not warn (QLoRA ~5 GiB base + overhead)."""
-        metadata = MagicMock(spec=ModelMetadata, autoconfig=self._autoconfig())
+        metadata = self._metadata(autoconfig=self._autoconfig())
         fake_props = MagicMock(total_memory=80 * 1024**3)
         with (
             patch("torch.cuda.is_available", return_value=True),
@@ -143,6 +168,88 @@ class TestVRAMHeadroomCheck:
         ):
             issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         assert not any(i.code == "low_vram" for i in issues)
+
+    def test_absurd_batch_errors(self, default_config):
+        """Per-device batch_size far too large must fail preflight."""
+        default_config.training.batch_size = 100_000
+        metadata = self._metadata(autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=80 * 1024**3)
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+        assert any(i.code == "vram_exceeds_capacity" and i.severity == "error" for i in issues)
+
+    @pytest.mark.parametrize(
+        ("ratio", "expected_code", "expected_severity"),
+        [
+            pytest.param(1.49, "low_vram", "warning", id="below-hard-fail-ratio"),
+            pytest.param(1.50, "vram_exceeds_capacity", "error", id="at-hard-fail-ratio"),
+        ],
+    )
+    def test_vram_hard_fail_ratio_boundary(self, default_config, ratio, expected_code, expected_severity):
+        """The 1.5x hard-fail threshold is inclusive."""
+        autoconfig = self._autoconfig()
+        metadata = self._metadata(autoconfig=autoconfig)
+        estimated_gib = self._estimated_vram_gib(default_config, autoconfig)
+        fake_props = MagicMock(total_memory=100 * 1024**3)
+        available_fraction = estimated_gib / (ratio * 100)
+        opposite_code = "vram_exceeds_capacity" if expected_code == "low_vram" else "low_vram"
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: available_fraction}),
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+        assert any(i.code == expected_code and i.severity == expected_severity for i in issues)
+        assert not any(i.code == opposite_code for i in issues)
+
+    @pytest.mark.parametrize("quantization_bits", (4, 8))
+    def test_quantized_load_can_reduce_full_vram_check_below_warning(self, default_config, quantization_bits):
+        """Runtime quantization settings affect the complete VRAM preflight path."""
+        metadata = self._metadata(autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=14 * 1024**3)
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            default_config.training.quantize_model = True
+            default_config.training.quantization_bits = quantization_bits
+            quantized_issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+            default_config.training.quantize_model = False
+            unquantized_issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+
+        assert not any(i.code in {"low_vram", "vram_exceeds_capacity"} for i in quantized_issues)
+        assert any(i.code in {"low_vram", "vram_exceeds_capacity"} for i in unquantized_issues)
+
+    def test_gradient_accumulation_steps_does_not_fake_batch(self, default_config):
+        """Larger gradient_accumulation_steps alone should not match absurd batch activation."""
+        metadata = self._metadata(autoconfig=self._autoconfig())
+        default_config.training.gradient_accumulation_steps = 10_000
+        fake_props = MagicMock(total_memory=80 * 1024**3)
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+        assert not any(i.code == "low_vram" for i in issues)
+
+    @pytest.mark.parametrize("fraction", (0.80, 0.50))
+    def test_get_max_vram_receives_max_vram_fraction(self, default_config, fraction):
+        default_config.training.max_vram_fraction = fraction
+        metadata = self._metadata(autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=80 * 1024**3)
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}) as mock_gmv,
+            patch("torch.cuda.get_device_properties", return_value=fake_props),
+        ):
+            VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
+        mock_gmv.assert_called_once_with(max_vram_fraction=fraction)
 
     def test_stub_metadata_skips_silently(self, default_config):
         """Stubbed metadata (autoconfig=None) must skip without raising."""
@@ -154,8 +261,8 @@ class TestVRAMHeadroomCheck:
             issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         assert issues == []
 
-    def test_lora_uses_more_bytes_per_param_than_qlora(self, default_config):
-        """LoRA (bf16 base) must estimate > QLoRA (4-bit base) on the same shape."""
+    def test_unquantized_load_uses_more_bytes_per_param_than_quantized_load(self, default_config):
+        """bf16 base weights must estimate higher than a quantized base load."""
         from nemo_safe_synthesizer.preflight.checks.environment import (
             bytes_per_base_weight,
             estimate_base_model_params,
@@ -168,12 +275,37 @@ class TestVRAMHeadroomCheck:
         n, method = result
         assert method == "approximate"
         assert n > 7e9  # Llama-3-8B shape ~8B params
-        default_config.training.peft_implementation = "lora"
-        bpw_lora = bytes_per_base_weight(default_config.training)
-        default_config.training.peft_implementation = "QLORA"
+        default_config.training.quantize_model = False
+        bpw_unquantized = bytes_per_base_weight(default_config.training)
+        default_config.training.quantize_model = True
         default_config.training.quantization_bits = 4
-        bpw_qlora = bytes_per_base_weight(default_config.training)
-        assert bpw_lora > bpw_qlora
+        bpw_quantized = bytes_per_base_weight(default_config.training)
+        assert bpw_unquantized > bpw_quantized
+
+    def test_qlora_peft_label_without_quantize_model_uses_unquantized_base_weights(self, default_config):
+        """Only quantize_model controls k-bit base-weight memory."""
+        from nemo_safe_synthesizer.preflight.checks.environment import bytes_per_base_weight
+
+        default_config.training.peft_implementation = "QLORA"
+        default_config.training.quantize_model = False
+
+        assert bytes_per_base_weight(default_config.training) == 2.0
+
+    def test_vram_component_estimate_falls_back_without_activation_shape(self, default_config):
+        from nemo_safe_synthesizer.preflight.checks.environment import estimate_training_vram_components
+
+        comp = estimate_training_vram_components(
+            n_params=1_000_000_000,
+            training_cfg=default_config.training,
+            batch_size=default_config.training.batch_size,
+            seq_len=None,
+            hidden_size=4096,
+            num_hidden_layers=32,
+        )
+
+        assert comp.activation_gib is None
+        assert comp.overhead_gib == pytest.approx(2.0)
+        assert comp.total_gib == pytest.approx(comp.base_weights_gib + 2.0)
 
     @pytest.mark.parametrize(
         ("model_type", "fields", "expected_params_millions"),
