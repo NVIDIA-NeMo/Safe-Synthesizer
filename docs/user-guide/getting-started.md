@@ -158,6 +158,23 @@ Commands:
   run        Run the Safe Synthesizer end-to-end pipeline.
 ```
 
+### Optional Agent Skill
+
+This repository includes an Agent Skill at `.agents/skills/safe-synthesizer/`.
+When working from a source checkout, no separate install step is required for
+agents that discover project skills from `.agents/skills/`.
+
+Use it by asking an agent a Safe Synthesizer usage question, or by explicitly
+invoking the skill in an agent that supports slash-style skill calls, for
+example:
+`/safe-synthesizer How do I run on a CSV with DP enabled?`
+
+The skill routes common requests to task notes for running the CLI or SDK,
+setting parameters, diagnosing failures, and finding artifacts. It points the
+agent back to this user guide and the developer guide instead of duplicating
+the full documentation. For copy-based installs into another project or a
+user-level skill directory, see `.agents/skills/safe-synthesizer/README.md`.
+
 ---
 
 ## Quick Start

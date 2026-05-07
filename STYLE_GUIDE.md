@@ -54,6 +54,7 @@ These are the building blocks of this codebase -- the specific types, base class
 - Pydantic: `NSSBaseModel` for config/parameter models in `config/` which define the user-facing configuration of NSS. Raw `BaseModel` or module-specific bases (e.g., `ReportBaseModel`) for data transfer objects and internal structures.
 - `BaseSettings` for env/CLI settings. Prefer `AliasChoices` on individual fields when you need a field to respond to both its Python name and an env var name (e.g., `validation_alias=AliasChoices("config_path", "NSS_CONFIG")`). `env_prefix` is acceptable for simple settings classes where all fields share a common prefix and no per-field aliasing is needed. Note that not all parts of the repo do this yet and we can follow up to ensure this is stable.
 - `Field(description=...)` is the canonical field docstring for Pydantic models. griffe-pydantic extracts it for the API reference; the configurator uses it for CLI help text. Always include it.
+- For configuration-management behavior (Pydantic-to-Click option generation, `parse_overrides()`, `Parameter[T]`, nullable sub-config disable flags), see [docs/developer-guide/configuration_management.md](docs/developer-guide/configuration_management.md).
 - Assignment style (`type = Field(default=..., description="...")`) is the default for model fields. Prefer it because type checkers (`ty`, `mypy`, `pyright`) understand `default`, `default_factory`, and `alias` in assignment-style `Field()` and synthesize correct `__init__` signatures -- they cannot see these through `Annotated`. `default_factory` has no bare-assignment equivalent, so it only works correctly in assignment style (see the next bullet for how this interacts with `Annotated`).
 - [`Annotated`](https://docs.python.org/3.11/library/typing.html#typing.Annotated) ([PEP 593](https://peps.python.org/pep-0593/)) attaches metadata to a type annotation. Type checkers treat `Annotated[T, ...]` as `T` and ignore the metadata. Pydantic scans the metadata for `Field()` and its own validators (see [Pydantic: The annotated pattern](https://docs.pydantic.dev/latest/concepts/fields/#the-annotated-pattern)).
 - Use `Annotated` only when the field carries additional metadata beyond `Field()` -- `ValueValidator`, `AutoParam`, `DependsOnValidator`, reusable constrained type aliases, nested-type constraints, or discriminated unions. A complex type like `Literal[...]` alone does not qualify; use assignment style for those.
@@ -78,6 +79,7 @@ class TrainingHyperparams(NSSBaseModel):
 - `@traced` decorators are an optional enhancement for entry-point functions, not a universal requirement
 - Never `print()` for operational output. Approved alternatives: `click.echo()` for CLI output, `sys.stdout.write()` for raw output in tools.
 - Use `extra={}` for data that downstream tools should query or aggregate (metrics, counts, durations). f-strings are fine for human-readable context that doesn't need machine parsing.
+- For entry-point initialization, log environment variables, `backend` logs, and tracing API details, see [docs/developer-guide/observability.md](docs/developer-guide/observability.md).
 
 ```python
 
