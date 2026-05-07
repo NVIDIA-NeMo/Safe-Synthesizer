@@ -39,6 +39,7 @@ jobs:
     runs-on: linux-amd64-cpu4
     outputs:
       version: ${{ steps.build.outputs.version }}
+      is_prerelease: ${{ steps.build.outputs.is_prerelease }}
     steps:
       - name: Checkout at release ref
         uses: actions/checkout@v6
@@ -63,6 +64,11 @@ jobs:
           WHEEL=$(ls dist/*.whl)
           VERSION=$(echo "$WHEEL" | sed -n 's/.*-\([0-9][^-]*\)-.*/\1/p')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          IS_PRERELEASE=false
+          if echo "$VERSION" | grep -qE '(rc|alpha|beta|\.dev)'; then
+            IS_PRERELEASE=true
+          fi
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
           echo "Built: $WHEEL (version $VERSION)"
 
       - uses: actions/upload-artifact@v7
@@ -113,9 +119,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.publish-wheel.outputs.version }}
+          IS_PRERELEASE: ${{ needs.publish-wheel.outputs.is_prerelease }}
         run: |
           PRERELEASE_FLAG=""
-          if echo "$VERSION" | grep -qE '(rc|alpha|beta|\.dev)'; then
+          if [ "$IS_PRERELEASE" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
           fi
 
@@ -128,6 +135,7 @@ jobs:
   publish-release-docs:
     name: Publish release docs
     needs: publish-wheel
+    if: ${{ needs.publish-wheel.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout at release ref
