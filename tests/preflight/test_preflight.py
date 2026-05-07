@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,8 +28,7 @@ from nemo_safe_synthesizer.preflight import (
     CUDAAvailabilityCheck,
     DatasetSizeCheck,
     GroupbyColumnCheck,
-    HFModelCacheCheck,
-    HFTokenCheck,
+    HFModelAvailabilityCheck,
     InferenceKeyCheck,
     OrderbyColumnCheck,
     OversamplingCheck,
@@ -262,21 +262,7 @@ class TestInferenceKeyCheck:
 
 
 @pytest.mark.unit
-class TestHFTokenCheck:
-    def test_missing_token_emits_warning(self, default_config):
-        with patch.dict("os.environ", {}, clear=True):
-            issues = HFTokenCheck().run(make_ctx(config=default_config))
-        assert any(i.code == "hf_token_missing" and i.severity == "warning" for i in issues)
-
-    @pytest.mark.parametrize("env_var", ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"])
-    def test_either_recognized_env_var_satisfies_check(self, default_config, env_var):
-        with patch.dict("os.environ", {env_var: "hf_xxx"}, clear=True):
-            issues = HFTokenCheck().run(make_ctx(config=default_config))
-        assert not any(i.code == "hf_token_missing" for i in issues)
-
-
-@pytest.mark.unit
-class TestHFModelCacheCheck:
+class TestHFModelAvailabilityCheck:
     """Tests intentionally tied to HF cache and Transformers model directory design."""
 
     @staticmethod
@@ -285,13 +271,18 @@ class TestHFModelCacheCheck:
         monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
     @staticmethod
+    def _clear_hf_tokens(monkeypatch) -> None:
+        monkeypatch.delenv("HF_TOKEN", raising=False)
+        monkeypatch.delenv("HUGGING_FACE_HUB_TOKEN", raising=False)
+
+    @staticmethod
     def _use_cache_root(monkeypatch, cache_root: Path) -> None:
         monkeypatch.setattr(ModelRef, "_default_hf_cache_root", staticmethod(lambda: cache_root))
 
     def test_empty_model_ref_errors(self, pretrained_config, ctx_factory, monkeypatch):
         self._allow_online_lookup(monkeypatch)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("")))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config("")))
 
         assert any(i.code == "model_ref_empty" and i.severity == "error" for i in issues)
 
@@ -303,7 +294,9 @@ class TestHFModelCacheCheck:
         self._allow_online_lookup(monkeypatch)
         self._use_cache_root(monkeypatch, cache_root)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct")))
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
 
         assert issues == []
 
@@ -312,11 +305,27 @@ class TestHFModelCacheCheck:
     ):
         """Missing-cache behavior intentionally follows HF online fallback rules."""
         self._allow_online_lookup(monkeypatch)
+        self._clear_hf_tokens(monkeypatch)
         self._use_cache_root(monkeypatch, tmp_path / "empty")
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("gpt2")))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config("gpt2")))
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "warning" for i in issues)
+        assert any(i.code == "hf_token_missing" and i.severity == "warning" for i in issues)
+
+    @pytest.mark.parametrize("env_var", ["HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"])
+    def test_missing_cache_with_hf_token_does_not_warn_for_token(
+        self, tmp_path, env_var, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Token warnings are conditional on online HF access and missing token env."""
+        self._allow_online_lookup(monkeypatch)
+        self._use_cache_root(monkeypatch, tmp_path / "empty")
+        monkeypatch.setenv(env_var, "hf_xxx")
+
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config("gpt2")))
+
+        assert any(i.code == "hf_model_not_cached" and i.severity == "warning" for i in issues)
+        assert not any(i.code == "hf_token_missing" for i in issues)
 
     @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
     @pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
@@ -327,22 +336,25 @@ class TestHFModelCacheCheck:
         self._use_cache_root(monkeypatch, tmp_path / "empty")
         monkeypatch.setenv(offline_var, value)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("gpt2")))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config("gpt2")))
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "error" for i in issues)
+        assert not any(i.code == "hf_token_missing" for i in issues)
 
     @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", ""])
     def test_missing_cache_warns_when_offline_env_is_falsey(
         self, tmp_path, value, pretrained_config, ctx_factory, monkeypatch
     ):
         """Falsey offline env handling intentionally tracks HF flag semantics."""
+        self._clear_hf_tokens(monkeypatch)
         self._use_cache_root(monkeypatch, tmp_path / "empty")
         monkeypatch.setenv("HF_HUB_OFFLINE", value)
         monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("gpt2")))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config("gpt2")))
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "warning" for i in issues)
+        assert any(i.code == "hf_token_missing" and i.severity == "warning" for i in issues)
 
     def test_partial_cached_snapshot_errors(
         self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
@@ -352,7 +364,9 @@ class TestHFModelCacheCheck:
         self._allow_online_lookup(monkeypatch)
         self._use_cache_root(monkeypatch, cache_root)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct")))
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
 
         assert any(i.code == "hf_model_cache_incomplete" and i.severity == "error" for i in issues)
         assert "model weights" in _issue_by_code(issues, "hf_model_cache_incomplete").message
@@ -371,9 +385,79 @@ class TestHFModelCacheCheck:
         self._allow_online_lookup(monkeypatch)
         self._use_cache_root(monkeypatch, cache_root)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct")))
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
 
         assert any(i.code == "hf_model_cache_incomplete" and i.severity == "error" for i in issues)
+
+    @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
+    def test_missing_trusted_remote_code_errors_when_offline(
+        self, hf_cached_snapshot_factory, offline_var, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Missing remote-code files intentionally track Transformers auto-map design."""
+        cache_root, snapshot = hf_cached_snapshot_factory()
+        (snapshot / "config.json").write_text(
+            json.dumps(
+                {
+                    "auto_map": {
+                        "AutoConfig": "configuration_nemotron.NemotronConfig",
+                        "AutoModelForCausalLM": "modeling_nemotron.NemotronForCausalLM",
+                    }
+                }
+            )
+        )
+        self._use_cache_root(monkeypatch, cache_root)
+        monkeypatch.setenv(offline_var, "1")
+
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
+
+        issue = _issue_by_code(issues, "hf_remote_code_not_cached")
+        assert issue.severity == "error"
+        assert "configuration_nemotron.py" in issue.message
+        assert "modeling_nemotron.py" in issue.message
+        assert not any(i.code == "hf_token_missing" for i in issues)
+
+    def test_missing_trusted_remote_code_warns_when_online_allowed(
+        self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Missing remote-code files warn when HF downloads are still allowed."""
+        cache_root, snapshot = hf_cached_snapshot_factory()
+        (snapshot / "config.json").write_text(
+            json.dumps({"auto_map": {"AutoModelForCausalLM": "modeling_nemotron.NemotronForCausalLM"}})
+        )
+        self._allow_online_lookup(monkeypatch)
+        self._clear_hf_tokens(monkeypatch)
+        self._use_cache_root(monkeypatch, cache_root)
+
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
+
+        issue = _issue_by_code(issues, "hf_remote_code_not_cached")
+        assert issue.severity == "warning"
+        assert "modeling_nemotron.py" in issue.message
+        assert any(i.code == "hf_token_missing" and i.severity == "warning" for i in issues)
+
+    def test_cached_snapshot_with_trusted_remote_code_files_is_silent(
+        self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Complete trusted remote-code snapshots do not require HF access."""
+        cache_root, snapshot = hf_cached_snapshot_factory()
+        (snapshot / "config.json").write_text(
+            json.dumps({"auto_map": {"AutoModelForCausalLM": "modeling_nemotron.NemotronForCausalLM"}})
+        )
+        (snapshot / "modeling_nemotron.py").write_text("class NemotronForCausalLM: pass\n")
+        self._allow_online_lookup(monkeypatch)
+        self._use_cache_root(monkeypatch, cache_root)
+
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
+
+        assert issues == []
 
     def test_existing_local_model_directory_requires_model_files(
         self, tmp_path, model_files_factory, pretrained_config, ctx_factory, monkeypatch
@@ -382,7 +466,7 @@ class TestHFModelCacheCheck:
         model_dir = model_files_factory(tmp_path / "local-model", files=("config.json",))
         self._allow_online_lookup(monkeypatch)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config(str(model_dir))))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config(str(model_dir))))
 
         assert any(i.code == "local_model_incomplete" and i.severity == "error" for i in issues)
         issue = _issue_by_code(issues, "local_model_incomplete")
@@ -393,7 +477,7 @@ class TestHFModelCacheCheck:
         model_dir = tmp_path / "missing-model"
         self._allow_online_lookup(monkeypatch)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config(str(model_dir))))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config(str(model_dir))))
 
         assert any(i.code == "local_model_missing" and i.severity == "error" for i in issues)
 
@@ -402,14 +486,14 @@ class TestHFModelCacheCheck:
         model_file.write_text("cached")
         self._allow_online_lookup(monkeypatch)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config(str(model_file))))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config(str(model_file))))
 
         assert any(i.code == "local_model_not_directory" and i.severity == "error" for i in issues)
 
     def test_invalid_model_ref_errors(self, pretrained_config, ctx_factory, monkeypatch):
         self._allow_online_lookup(monkeypatch)
 
-        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("not-a-valid/repo##id")))
+        issues = HFModelAvailabilityCheck().run(ctx_factory(config=pretrained_config("not-a-valid/repo##id")))
 
         assert any(i.code == "model_ref_invalid" and i.severity == "error" for i in issues)
 

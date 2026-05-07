@@ -25,8 +25,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CUDAAvailabilityCheck",
-    "HFModelCacheCheck",
-    "HFTokenCheck",
+    "HFModelAvailabilityCheck",
     "InferenceKeyCheck",
     "VRAMHeadroomCheck",
     "bytes_per_base_weight",
@@ -337,25 +336,6 @@ class InferenceKeyCheck(ConfigCheck):
                 )
 
 
-class HFTokenCheck(ConfigCheck):
-    """Check HF_TOKEN or HUGGING_FACE_HUB_TOKEN environment variable."""
-
-    name = "env.hf_token"
-    label = "HF token"
-    category = "environment"
-
-    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
-        hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-        if not hf_token:
-            collector.warning(
-                "hf_token_missing",
-                (
-                    "HF_TOKEN is not set. Model downloads from gated repos will fail. "
-                    "Set HF_TOKEN or HUGGING_FACE_HUB_TOKEN in your environment."
-                ),
-            )
-
-
 _OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
 
 
@@ -368,16 +348,20 @@ def _hf_offline_enabled() -> bool:
     return any(_env_flag_enabled(name) for name in _OFFLINE_ENV_VARS)
 
 
+def _has_hf_token() -> bool:
+    return bool(os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN"))
+
+
 def _is_missing_local_path(model_name: str) -> bool:
     path = Path(model_name)
     return path.is_absolute() or model_name.startswith(".")
 
 
-class HFModelCacheCheck(ConfigCheck):
-    """Validate local model or Hugging Face cache readiness for the pretrained model."""
+class HFModelAvailabilityCheck(ConfigCheck):
+    """Validate local model, HF cache, and online HF access readiness."""
 
-    name = "env.hf_model_cache"
-    label = "HF model cache"
+    name = "env.hf_model_availability"
+    label = "HF model availability"
     category = "environment"
 
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
@@ -386,9 +370,11 @@ class HFModelCacheCheck(ConfigCheck):
             collector.error("model_ref_empty", "`training.pretrained_model` must not be empty.")
             return
 
-        model_path = Path(model_name)
-        if model_path.exists():
-            self._check_local_path(model_path, collector)
+        model_ref = ModelRef.parse(model_name)
+        if model_ref.local_path is not None and Path(model_name).resolve(strict=False) == model_ref.local_path.resolve(
+            strict=False
+        ):
+            self._check_local_path(model_ref.local_path, collector, model_ref=model_ref)
             return
 
         if _is_missing_local_path(model_name):
@@ -398,7 +384,6 @@ class HFModelCacheCheck(ConfigCheck):
             )
             return
 
-        model_ref = ModelRef.parse(model_name)
         if model_ref.repo_id is None:
             collector.error(
                 "model_ref_invalid",
@@ -424,9 +409,10 @@ class HFModelCacheCheck(ConfigCheck):
                     "or rate-limited jobs."
                 ),
             )
+        self._report_missing_remote_code(model_ref, snapshot_path, collector)
 
     @staticmethod
-    def _check_local_path(model_path: Path, collector: IssueCollector) -> None:
+    def _check_local_path(model_path: Path, collector: IssueCollector, *, model_ref: ModelRef) -> None:
         if not model_path.is_dir():
             collector.error(
                 "local_model_not_directory",
@@ -440,6 +426,7 @@ class HFModelCacheCheck(ConfigCheck):
                 "local_model_incomplete",
                 f"Local model directory '{model_path}' is missing {', '.join(missing)}.",
             )
+        HFModelAvailabilityCheck._report_missing_remote_code(model_ref, model_path, collector)
 
     @staticmethod
     def _report_missing_cache(model_ref: ModelRef, collector: IssueCollector) -> None:
@@ -455,4 +442,42 @@ class HFModelCacheCheck(ConfigCheck):
         collector.warning(
             "hf_model_not_cached",
             f"{message} Model loading will contact Hugging Face unless the model is pre-downloaded.",
+        )
+        HFModelAvailabilityCheck._report_missing_hf_token(collector)
+
+    @staticmethod
+    def _report_missing_remote_code(model_ref: ModelRef, model_path: Path, collector: IssueCollector) -> None:
+        if not model_ref.trust_remote_code:
+            return
+
+        missing = ModelRef.missing_remote_code_components(model_path)
+        if not missing:
+            return
+
+        message = (
+            f"Trusted Hugging Face model '{model_ref.repo_id}' at '{model_path}' references remote code "
+            f"that is not cached locally: {', '.join(missing)}."
+        )
+        if _hf_offline_enabled():
+            collector.error(
+                "hf_remote_code_not_cached",
+                f"{message} Offline Hugging Face mode is enabled, so Transformers cannot fetch it.",
+            )
+            return
+        collector.warning(
+            "hf_remote_code_not_cached",
+            f"{message} Model loading may contact Hugging Face to fetch it.",
+        )
+        HFModelAvailabilityCheck._report_missing_hf_token(collector)
+
+    @staticmethod
+    def _report_missing_hf_token(collector: IssueCollector) -> None:
+        if _has_hf_token():
+            return
+        collector.warning(
+            "hf_token_missing",
+            (
+                "HF_TOKEN is not set. Model downloads from gated repos will fail. "
+                "Set HF_TOKEN or HUGGING_FACE_HUB_TOKEN in your environment."
+            ),
         )

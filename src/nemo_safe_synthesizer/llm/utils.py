@@ -42,6 +42,8 @@ class ModelRef:
       repo/revision, even when the snapshot is incomplete.
     - ``missing_required_components()`` reports whether a local model directory
       has the components this project expects before an offline load.
+    - ``missing_remote_code_components()`` reports trusted remote-code files
+      referenced by Transformers ``auto_map`` metadata but absent locally.
 
     Deliberate Hugging Face coupling:
     repo-id validation, cache-root resolution, cache scanning, snapshot layout,
@@ -83,7 +85,13 @@ class ModelRef:
         revision: str = "main",
         cache_root: str | Path | None = None,
     ) -> Self:
-        """Parse a model identifier or path without contacting Hugging Face."""
+        """Parse a model identifier or path without contacting Hugging Face.
+
+        This is safe to call in preflight and loader setup because it uses
+        Hugging Face's local cache APIs only. Cached-model hits may still cost a
+        few milliseconds because HF cache scanning walks cache metadata to
+        confirm model artifacts exist.
+        """
         cache_root_path = Path(cache_root) if cache_root is not None else cls._default_hf_cache_root()
         model_ref = str(model_name)
         if not model_ref:
@@ -271,6 +279,59 @@ class ModelRef:
     def missing_required_components(cls, model_dir: Path) -> list[str]:
         """Return local model components missing from ``model_dir``."""
         return [name for name, present in cls._required_component_status(model_dir).items() if not present]
+
+    @classmethod
+    def missing_remote_code_components(cls, model_dir: Path) -> list[str]:
+        """Return trusted remote-code components referenced by config but absent locally."""
+        required = cls._remote_code_components(model_dir)
+        missing: list[str] = []
+        for component, local_path in required:
+            if local_path is None or not (model_dir / local_path).is_file():
+                missing.append(component)
+        return sorted(missing)
+
+    @classmethod
+    def _remote_code_components(cls, model_dir: Path) -> list[tuple[str, Path | None]]:
+        config_path = model_dir / "config.json"
+        try:
+            data = json.loads(config_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return []
+
+        auto_map = data.get("auto_map")
+        if not isinstance(auto_map, dict):
+            return []
+
+        components: list[tuple[str, Path | None]] = []
+        for value in auto_map.values():
+            for class_ref in cls._auto_map_class_refs(value):
+                component = cls._remote_code_component(class_ref)
+                if component is not None:
+                    components.append(component)
+        return components
+
+    @staticmethod
+    def _auto_map_class_refs(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, str)]
+        return []
+
+    @staticmethod
+    def _remote_code_component(class_ref: str) -> tuple[str, Path | None] | None:
+        repo_id: str | None = None
+        module_ref = class_ref
+        if "--" in class_ref:
+            repo_id, module_ref = class_ref.split("--", 1)
+        if "." not in module_ref:
+            return None
+
+        module_name, _ = module_ref.rsplit(".", 1)
+        module_path = Path(*module_name.split(".")).with_suffix(".py")
+        if repo_id is not None:
+            return f"remote code from {repo_id} ({module_path.as_posix()})", None
+        return module_path.as_posix(), module_path
 
     @classmethod
     def _has_complete_model_artifacts(cls, model_dir: Path, files: list[Path]) -> bool:
