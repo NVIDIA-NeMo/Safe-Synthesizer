@@ -171,7 +171,7 @@ class AutoParamType(click.ParamType):
         """
         if value == AUTO_STR:
             return AUTO_STR
-        return self.base_type.convert(value, param, ctx)  # type: ignore[return-value]
+        return self.base_type.convert(value, param, ctx)
 
 
 def _has_string_literal(args: set) -> bool:

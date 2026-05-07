@@ -99,9 +99,8 @@ def _build_nss_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> N
 
 def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
     """Enqueue and immediately flush a single telemetry event. Never raises."""
-    if getattr(ss, "_telemetry_emitted", False):
+    if not getattr(ss, "_emit_telemetry", True):
         return
-    ss._telemetry_emitted = True
     try:
         event = _build_nss_telemetry_event(ss, status)
         handler = TelemetryHandler(source_client_version=__version__)
@@ -165,13 +164,14 @@ class SafeSynthesizer(ConfigBuilder):
     results: SafeSynthesizerResults
     """Final pipeline results, populated after ``evaluate()`` or ``run()``."""
 
-    _telemetry_emitted: bool
+    _emit_telemetry: bool
 
     def __init__(
         self,
         config: SafeSynthesizerParameters | None = None,
         workdir: Workdir | None = None,
         save_path: Path | str | None = None,
+        emit_telemetry: bool = True,
     ):
         super().__init__(config=config)
         self._workdir = workdir
@@ -199,7 +199,7 @@ class SafeSynthesizer(ConfigBuilder):
         self.preflight_report: PreflightReport | None = None
         self._data_processed: bool = False
         self._preflight_config_path: Path | None = None
-        self._telemetry_emitted: bool = False
+        self._emit_telemetry: bool = emit_telemetry
 
     def _ensure_observability(self) -> None:
         """Initialize structured logging when running via the SDK.

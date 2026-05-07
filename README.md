@@ -116,6 +116,8 @@ Options:
                                   via NSS_DATASET_REGISTRY env var. If both
                                   env var and CLI option are provided, the CLI
                                   option takes precedence.
+  --no-emit-telemetry             Disable NeMo Safe Synthesizer telemetry for
+                                  this command.
   --help                          Show this message and exit.
 
 Commands:
@@ -410,7 +412,13 @@ You may opt out of telemetry collection at any time. Opting out applies only to 
 
 Use of third-party endpoints, including NVIDIA Build: NeMo Safe Synthesizer can be configured to use various inference endpoints, including build.nvidia.com (NVIDIA Build). If you choose to use NVIDIA Build or any other third-party endpoint, that endpoint's own terms of service and privacy practices apply independently of this library. Any opt-out you exercise within NeMo Safe Synthesizer does not extend to data collection by your chosen endpoint. NVIDIA Build is intended for evaluation and testing purposes only and may not be used in production environments. Do not submit any confidential information or personal data when using NVIDIA Build.
 
-To disable, set `NEMO_TELEMETRY_ENABLED=false` (other accepted disabling values: `0`, `no`) in your environment before running:
+Telemetry is enabled by default. To disable it for one CLI invocation, pass `--no-emit-telemetry`:
+
+```bash
+safe-synthesizer run --no-emit-telemetry --data-source my_data.csv
+```
+
+To disable telemetry for the current shell, set `NEMO_TELEMETRY_ENABLED=false` (other accepted disabling values: `0`, `no`) in your environment before running:
 
 ```bash
 export NEMO_TELEMETRY_ENABLED=false

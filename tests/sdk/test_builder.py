@@ -12,7 +12,8 @@ from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,
     PiiReplacerConfig,
 )
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
+from nemo_safe_synthesizer.telemetry import TaskStatusEnum
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
 _REPORT_HTML = "<html><body>report</body></html>"
@@ -21,7 +22,8 @@ PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
 
 def test_safe_synthesizer_builder_sanity():
-    SafeSynthesizer(config=SafeSynthesizerParameters())
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+    assert builder._emit_telemetry is True
 
 
 @pytest.fixture
@@ -352,6 +354,73 @@ def test_builder_seeded_from_config_with_pii_enabled():
     config = SafeSynthesizer(config=existing).with_data_source(_SMALL_DF).resolve()._nss_config
     assert config is not None
     assert config.replace_pii is not None
+
+
+def _builder_for_telemetry() -> SafeSynthesizer:
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+    builder._data_source = _SMALL_DF
+    builder._total_start = 0.0
+    return builder
+
+
+class TestTelemetryEmission:
+    def test_emit_nss_telemetry_enqueues_and_flushes_event(self, monkeypatch):
+        handlers = []
+
+        class FakeTelemetryHandler:
+            def __init__(self, source_client_version: str) -> None:
+                self.source_client_version = source_client_version
+                self.events = []
+                self.stopped = False
+                handlers.append(self)
+
+            def enqueue(self, event) -> None:
+                self.events.append(event)
+
+            def stop(self) -> None:
+                self.stopped = True
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", FakeTelemetryHandler)
+        builder = _builder_for_telemetry()
+
+        _emit_nss_telemetry(builder, TaskStatusEnum.COMPLETED)
+        _emit_nss_telemetry(builder, TaskStatusEnum.ERROR)
+
+        assert len(handlers) == 2
+        assert [handler.stopped for handler in handlers] == [True, True]
+        assert [len(handler.events) for handler in handlers] == [1, 1]
+        events = [handler.events[0] for handler in handlers]
+        assert [event.task for event in events] == ["run", "run"]
+        assert [event.task_status for event in events] == [TaskStatusEnum.COMPLETED, TaskStatusEnum.ERROR]
+
+    def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
+        class FailingTelemetryHandler:
+            def __init__(self, source_client_version: str) -> None:
+                pass
+
+            def enqueue(self, event) -> None:
+                pass
+
+            def stop(self) -> None:
+                raise RuntimeError("telemetry send failed")
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", FailingTelemetryHandler)
+        builder = _builder_for_telemetry()
+
+        _emit_nss_telemetry(builder, TaskStatusEnum.ERROR)
+
+        assert builder._emit_telemetry is True
+
+    def test_emit_nss_telemetry_skips_when_disabled(self, monkeypatch):
+        handler_cls = MagicMock()
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.TelemetryHandler", handler_cls)
+        builder = _builder_for_telemetry()
+        builder._emit_telemetry = False
+
+        _emit_nss_telemetry(builder, TaskStatusEnum.COMPLETED)
+
+        handler_cls.assert_not_called()
+        assert builder._emit_telemetry is False
 
 
 def test_with_replace_pii_reenable_after_disable():

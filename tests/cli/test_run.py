@@ -91,7 +91,7 @@ def patched_run_dependencies(mock_common_setup_return: tuple, mock_safe_synthesi
         patch(
             "nemo_safe_synthesizer.sdk.library_builder.SafeSynthesizer",
             return_value=mock_safe_synthesizer,
-        ),
+        ) as mock_safe_synthesizer_cls,
     ):
         mock_common_setup.return_value = mock_common_setup_return
 
@@ -102,6 +102,7 @@ def patched_run_dependencies(mock_common_setup_return: tuple, mock_safe_synthesi
         yield {
             "common_setup": mock_common_setup,
             "traced_user": mock_traced_user,
+            "safe_synthesizer_cls": mock_safe_synthesizer_cls,
             "safe_synthesizer": mock_safe_synthesizer,
         }
 
@@ -120,6 +121,60 @@ class TestRunCommandOptions:
 
         assert result.exit_code == 0
         assert "--output-file" in result.output
+
+    def test_run_help_shows_no_emit_telemetry_option(self, cli_runner: CliRunner):
+        """Verify --no-emit-telemetry appears in run command help."""
+        result = cli_runner.invoke(run, ["--help"])
+
+        assert result.exit_code == 0
+        assert "--no-emit-telemetry" in result.output
+
+    def test_run_defaults_to_emit_telemetry(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        fixture_session_cache_dir: Path,
+        patched_run_dependencies: dict,
+    ):
+        """Without --no-emit-telemetry, the SDK emits telemetry by default."""
+        result = cli_runner.invoke(
+            run,
+            [
+                "--data-source",
+                str(dummy_csv),
+                "--artifact-path",
+                str(fixture_session_cache_dir),
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        mock_safe_synthesizer_cls = patched_run_dependencies["safe_synthesizer_cls"]
+        assert mock_safe_synthesizer_cls.call_args.kwargs["emit_telemetry"] is True
+
+    def test_run_no_emit_telemetry_disables_sdk_telemetry(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        fixture_session_cache_dir: Path,
+        patched_run_dependencies: dict,
+    ):
+        """--no-emit-telemetry opts out for this CLI invocation."""
+        result = cli_runner.invoke(
+            run,
+            [
+                "--data-source",
+                str(dummy_csv),
+                "--artifact-path",
+                str(fixture_session_cache_dir),
+                "--no-emit-telemetry",
+            ],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        mock_safe_synthesizer_cls = patched_run_dependencies["safe_synthesizer_cls"]
+        assert mock_safe_synthesizer_cls.call_args.kwargs["emit_telemetry"] is False
 
 
 class TestOutputFileOverride:

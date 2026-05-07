@@ -8,6 +8,14 @@ make test-smoke             # CPU only, no GPU needed
 make test-smoke-gpu          # GPU tests (requires CUDA)
 ```
 
+Telemetry smoke is opt-in because it sends a real network request:
+
+```bash
+NSS_TELEMETRY_SMOKE_SEND=1 uv run --frozen pytest tests/smoke/test_telemetry_smoke.py -vvs -n0
+```
+
+Set `NEMO_TELEMETRY_ENDPOINT` to point at a local or controlled endpoint if you do not want to contact the default NVIDIA telemetry endpoint.
+
 ## When should I add a smoke test?
 
 If you're adding a new training backend, generation backend, evaluation

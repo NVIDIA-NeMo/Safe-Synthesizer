@@ -266,7 +266,7 @@ class TestTelemetryDisabled:
         """Silently ignores non-TelemetryEvent objects regardless of env."""
         monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler()
-        handler.enqueue("not an event")  # type: ignore[arg-type]
+        handler.enqueue("not an event")
         assert handler._events == []
 
 

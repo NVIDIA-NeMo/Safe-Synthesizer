@@ -158,6 +158,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
     )
+    options.append(
+        click.option(
+            "--no-emit-telemetry",
+            is_flag=True,
+            default=False,
+            help="Disable NeMo Safe Synthesizer telemetry for this command.",
+        )
+    )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
     for option in reversed(options):
         f = option(f)
@@ -312,6 +320,7 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    no_emit_telemetry: bool = False,
     validate: bool = False,
     **kwargs: object,
 ) -> None:
@@ -361,7 +370,11 @@ def run(
             from ..sdk.library_builder import SafeSynthesizer
 
             assert df is not None
-            nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+            nss: SafeSynthesizer = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=not no_emit_telemetry,
+            ).with_data_source(df)
 
             if validate:
                 _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
@@ -402,6 +415,7 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    no_emit_telemetry: bool = False,
     validate: bool = False,
     **kwargs: object,
 ) -> None:
@@ -443,7 +457,7 @@ def run_train(
     try:
         with traced_user("SafeSynthesizer"):
             assert df is not None
-            nss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
+            nss = SafeSynthesizer(config, workdir=workdir, emit_telemetry=not no_emit_telemetry).with_data_source(df)
 
             if validate:
                 _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
@@ -489,6 +503,7 @@ def run_generate(
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
     dataset_registry: str | None = None,
+    no_emit_telemetry: bool = False,
     **kwargs: object,
 ) -> None:
     """Run the generation stage only.
@@ -530,7 +545,7 @@ def run_generate(
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        nss = SafeSynthesizer(config, workdir=workdir)
+        nss = SafeSynthesizer(config, workdir=workdir, emit_telemetry=not no_emit_telemetry)
 
         # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
