@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/generation/utils/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/developer-guide/observability/">
       
       
-        <link rel="prev" href="../timeseries_backend/">
+        <link rel="prev" href="../example-generation/">
       
       
-        <link rel="next" href="../vllm_backend/">
+        <link rel="next" href="../preflight-plugins/">
       
       
         
       
       
-      <link rel="icon" href="../../../../assets/shield-favicon.svg">
+      <link rel="icon" href="../../assets/shield-favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.2">
     
     
       
-        <title>utils - NeMo Safe Synthesizer</title>
+        <title>Observability - NeMo Safe Synthesizer</title>
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,13 +53,13 @@
       
     
     
-      <link rel="stylesheet" href="../../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../../../css/style.css">
+      <link rel="stylesheet" href="../../css/style.css">
     
-      <link rel="stylesheet" href="../../../../css/mkdocstrings.css">
+      <link rel="stylesheet" href="../../css/mkdocstrings.css">
     
-    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo_safe_synthesizer.generation.utils" class="md-skip">
+        <a href="#observability" class="md-skip">
           Skip to content
         </a>
       
@@ -102,7 +102,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="NeMo Safe Synthesizer" class="md-header__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
+    <a href="../.." title="NeMo Safe Synthesizer" class="md-header__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M256 0c4.6 0 9.2 1 13.4 2.9l188.4 79.9c22 9.3 38.4 31 38.3 57.2-.5 99.2-41.3 280.7-213.6 363.2-16.7 8-36.1 8-52.8 0C57.3 420.7 16.6 239.2 16.1 140c-.1-26.2 16.3-47.9 38.3-57.2L242.7 2.9C246.9 1 251.4 0 256 0"/></svg>
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              utils
+              Observability
             
           </span>
         </div>
@@ -235,7 +235,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../.." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -256,7 +256,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../product-overview/pipeline/" class="md-tabs__link">
+        <a href="../../product-overview/pipeline/" class="md-tabs__link">
           
   
   
@@ -278,7 +278,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../tutorials/" class="md-tabs__link">
+        <a href="../../tutorials/" class="md-tabs__link">
           
   
   
@@ -300,7 +300,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../user-guide/getting-started/" class="md-tabs__link">
+        <a href="../../user-guide/getting-started/" class="md-tabs__link">
           
   
   
@@ -324,7 +324,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../../../developer-guide/architecture/" class="md-tabs__link">
+        <a href="../architecture/" class="md-tabs__link">
           
   
   
@@ -346,7 +346,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../../blog/" class="md-tabs__link">
+        <a href="../../blog/" class="md-tabs__link">
           
   
   
@@ -382,7 +382,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="NeMo Safe Synthesizer" class="md-nav__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
+    <a href="../.." title="NeMo Safe Synthesizer" class="md-nav__button md-logo" aria-label="NeMo Safe Synthesizer" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M256 0c4.6 0 9.2 1 13.4 2.9l188.4 79.9c22 9.3 38.4 31 38.3 57.2-.5 99.2-41.3 280.7-213.6 363.2-16.7 8-36.1 8-52.8 0C57.3 420.7 16.6 239.2 16.1 140c-.1-26.2 16.3-47.9 38.3-57.2L242.7 2.9C246.9 1 251.4 0 256 0"/></svg>
@@ -412,7 +412,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -503,7 +503,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../product-overview/pipeline/" class="md-nav__link">
+      <a href="../../product-overview/pipeline/" class="md-nav__link">
         
   
   
@@ -531,7 +531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../product-overview/data_synthesis/" class="md-nav__link">
+      <a href="../../product-overview/data_synthesis/" class="md-nav__link">
         
   
   
@@ -559,7 +559,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../product-overview/pii_replacement/" class="md-nav__link">
+      <a href="../../product-overview/pii_replacement/" class="md-nav__link">
         
   
   
@@ -587,7 +587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../product-overview/evaluation/" class="md-nav__link">
+      <a href="../../product-overview/evaluation/" class="md-nav__link">
         
   
   
@@ -651,7 +651,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../tutorials/" class="md-nav__link ">
+            <a href="../../tutorials/" class="md-nav__link ">
               
   
   
@@ -695,7 +695,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../tutorials/safe-synthesizer-101/" class="md-nav__link">
+      <a href="../../tutorials/safe-synthesizer-101/" class="md-nav__link">
         
   
   
@@ -723,7 +723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../tutorials/differential-privacy/" class="md-nav__link">
+      <a href="../../tutorials/differential-privacy/" class="md-nav__link">
         
   
   
@@ -824,7 +824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/getting-started/" class="md-nav__link">
+      <a href="../../user-guide/getting-started/" class="md-nav__link">
         
   
   
@@ -852,7 +852,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/running/" class="md-nav__link">
+      <a href="../../user-guide/running/" class="md-nav__link">
         
   
   
@@ -880,7 +880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/docker/" class="md-nav__link">
+      <a href="../../user-guide/docker/" class="md-nav__link">
         
   
   
@@ -968,7 +968,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/evaluating-data/" class="md-nav__link">
+      <a href="../../user-guide/evaluating-data/" class="md-nav__link">
         
   
   
@@ -996,7 +996,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/troubleshooting/" class="md-nav__link">
+      <a href="../../user-guide/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1092,7 +1092,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/configuration/" class="md-nav__link">
+      <a href="../../user-guide/configuration/" class="md-nav__link">
         
   
   
@@ -1120,7 +1120,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/environment/" class="md-nav__link">
+      <a href="../../user-guide/environment/" class="md-nav__link">
         
   
   
@@ -1236,7 +1236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../developer-guide/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -1264,7 +1264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../developer-guide/configuration_management/" class="md-nav__link">
+      <a href="../configuration_management/" class="md-nav__link">
         
   
   
@@ -1292,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../developer-guide/docker/" class="md-nav__link">
+      <a href="../docker/" class="md-nav__link">
         
   
   
@@ -1320,7 +1320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../developer-guide/example-generation/" class="md-nav__link">
+      <a href="../example-generation/" class="md-nav__link">
         
   
   
@@ -1345,10 +1345,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../developer-guide/observability/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1364,6 +1391,81 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initialization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1376,7 +1478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../developer-guide/preflight-plugins/" class="md-nav__link">
+      <a href="../preflight-plugins/" class="md-nav__link">
         
   
   
@@ -1401,8 +1503,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1422,11 +1522,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7" >
         
           
           <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
@@ -1447,7 +1549,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1462,10 +1564,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1522,11 +1622,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7_1" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1" >
         
           
           <label class="md-nav__link" for="__nav_5_7_1" id="__nav_5_7_1_label" tabindex="0">
@@ -1547,7 +1649,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_5_7_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_7_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1683,7 +1785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../artifacts/analyzers/field_features/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/artifacts/analyzers/field_features/" class="md-nav__link">
         
   
   
@@ -1777,7 +1879,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../artifacts/base/fields/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/artifacts/base/fields/" class="md-nav__link">
         
   
   
@@ -1895,7 +1997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/artifact_structure/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/artifact_structure/" class="md-nav__link">
         
   
   
@@ -1923,7 +2025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/artifacts/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/artifacts/" class="md-nav__link">
         
   
   
@@ -1951,7 +2053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/cli/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/cli/" class="md-nav__link">
         
   
   
@@ -1979,7 +2081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/config/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/config/" class="md-nav__link">
         
   
   
@@ -2007,7 +2109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/datasets/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/datasets/" class="md-nav__link">
         
   
   
@@ -2035,7 +2137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/run/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/run/" class="md-nav__link">
         
   
   
@@ -2063,7 +2165,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/settings/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/settings/" class="md-nav__link">
         
   
   
@@ -2091,7 +2193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/utils/" class="md-nav__link">
         
   
   
@@ -2119,7 +2221,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../cli/wandb_setup/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/cli/wandb_setup/" class="md-nav__link">
         
   
   
@@ -2241,7 +2343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/autoconfig/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/autoconfig/" class="md-nav__link">
         
   
   
@@ -2269,7 +2371,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/base/" class="md-nav__link">
         
   
   
@@ -2297,7 +2399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/data/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/data/" class="md-nav__link">
         
   
   
@@ -2325,7 +2427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/differential_privacy/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/differential_privacy/" class="md-nav__link">
         
   
   
@@ -2353,7 +2455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/evaluate/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/evaluate/" class="md-nav__link">
         
   
   
@@ -2381,7 +2483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/external_results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/external_results/" class="md-nav__link">
         
   
   
@@ -2409,7 +2511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/generate/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/generate/" class="md-nav__link">
         
   
   
@@ -2437,7 +2539,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/internal_results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/internal_results/" class="md-nav__link">
         
   
   
@@ -2465,7 +2567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/job/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/job/" class="md-nav__link">
         
   
   
@@ -2493,7 +2595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/parameters/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/parameters/" class="md-nav__link">
         
   
   
@@ -2521,7 +2623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/preflight/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/preflight/" class="md-nav__link">
         
   
   
@@ -2549,7 +2651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/replace_pii/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/replace_pii/" class="md-nav__link">
         
   
   
@@ -2577,7 +2679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/time_series/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/time_series/" class="md-nav__link">
         
   
   
@@ -2605,7 +2707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/training/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/training/" class="md-nav__link">
         
   
   
@@ -2633,7 +2735,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../config/types/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/config/types/" class="md-nav__link">
         
   
   
@@ -2733,7 +2835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configurator/parameter/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/parameter/" class="md-nav__link">
         
   
   
@@ -2761,7 +2863,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configurator/parameters/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/parameters/" class="md-nav__link">
         
   
   
@@ -2789,7 +2891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configurator/pydantic_click_options/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/pydantic_click_options/" class="md-nav__link">
         
   
   
@@ -2817,7 +2919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configurator/validators/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/configurator/validators/" class="md-nav__link">
         
   
   
@@ -2989,7 +3091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/data_actions/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/data_actions/" class="md-nav__link">
         
   
   
@@ -3017,7 +3119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/dates/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/dates/" class="md-nav__link">
         
   
   
@@ -3045,7 +3147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/distributions/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/distributions/" class="md-nav__link">
         
   
   
@@ -3073,7 +3175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/actions/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/actions/utils/" class="md-nav__link">
         
   
   
@@ -3109,7 +3211,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/assembler/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/assembler/" class="md-nav__link">
         
   
   
@@ -3137,7 +3239,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/budget/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/budget/" class="md-nav__link">
         
   
   
@@ -3165,7 +3267,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/dataset/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/dataset/" class="md-nav__link">
         
   
   
@@ -3193,7 +3295,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/record_utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/record_utils/" class="md-nav__link">
         
   
   
@@ -3285,7 +3387,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/base/" class="md-nav__link">
         
   
   
@@ -3313,7 +3415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/fragment/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/fragment/" class="md-nav__link">
         
   
   
@@ -3341,7 +3443,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/json_record/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/json_record/" class="md-nav__link">
         
   
   
@@ -3369,7 +3471,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/records/value_path/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/records/value_path/" class="md-nav__link">
         
   
   
@@ -3405,7 +3507,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/stats/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/stats/" class="md-nav__link">
         
   
   
@@ -3433,7 +3535,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../data_processing/validation/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/data_processing/validation/" class="md-nav__link">
         
   
   
@@ -3469,7 +3571,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../defaults/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/defaults/" class="md-nav__link">
         
   
   
@@ -3497,7 +3599,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../errors/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/errors/" class="md-nav__link">
         
   
   
@@ -3683,7 +3785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/attribute_inference_protection/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/attribute_inference_protection/" class="md-nav__link">
         
   
   
@@ -3711,7 +3813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/column_distribution/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/column_distribution/" class="md-nav__link">
         
   
   
@@ -3739,7 +3841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/component/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/component/" class="md-nav__link">
         
   
   
@@ -3767,7 +3869,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/composite_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/composite_score/" class="md-nav__link">
         
   
   
@@ -3795,7 +3897,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/correlation/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/correlation/" class="md-nav__link">
         
   
   
@@ -3823,7 +3925,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/data_privacy_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/data_privacy_score/" class="md-nav__link">
         
   
   
@@ -3851,7 +3953,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/dataset_statistics/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/dataset_statistics/" class="md-nav__link">
         
   
   
@@ -3879,7 +3981,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/deep_structure/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/deep_structure/" class="md-nav__link">
         
   
   
@@ -3907,7 +4009,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/membership_inference_protection/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/membership_inference_protection/" class="md-nav__link">
         
   
   
@@ -3935,7 +4037,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/multi_modal_figures/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/multi_modal_figures/" class="md-nav__link">
         
   
   
@@ -3963,7 +4065,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/pii_replay/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/pii_replay/" class="md-nav__link">
         
   
   
@@ -3991,7 +4093,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/privacy_metric_utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/privacy_metric_utils/" class="md-nav__link">
         
   
   
@@ -4019,7 +4121,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/sqs_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/sqs_score/" class="md-nav__link">
         
   
   
@@ -4047,7 +4149,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/text_semantic_similarity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/text_semantic_similarity/" class="md-nav__link">
         
   
   
@@ -4075,7 +4177,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/components/text_structure_similarity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/components/text_structure_similarity/" class="md-nav__link">
         
   
   
@@ -4111,7 +4213,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/constants/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/constants/" class="md-nav__link">
         
   
   
@@ -4205,7 +4307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/entity_metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/entity_metadata/" class="md-nav__link">
         
   
   
@@ -4233,7 +4335,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/evaluation_datasets/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_datasets/" class="md-nav__link">
         
   
   
@@ -4261,7 +4363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/evaluation_field/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_field/" class="md-nav__link">
         
   
   
@@ -4289,7 +4391,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/evaluation_report/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_report/" class="md-nav__link">
         
   
   
@@ -4317,7 +4419,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/data_model/evaluation_score/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/data_model/evaluation_score/" class="md-nav__link">
         
   
   
@@ -4353,7 +4455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/evaluator/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/evaluator/" class="md-nav__link">
         
   
   
@@ -4381,7 +4483,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/nearest_neighbors/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/nearest_neighbors/" class="md-nav__link">
         
   
   
@@ -4409,7 +4511,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/render/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/render/" class="md-nav__link">
         
   
   
@@ -4553,7 +4655,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/reports/multimodal/multimodal_report/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/reports/multimodal/multimodal_report/" class="md-nav__link">
         
   
   
@@ -4655,7 +4757,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../evaluation/statistics/stats/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/evaluation/statistics/stats/" class="md-nav__link">
         
   
   
@@ -4696,10 +4798,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -4730,11 +4830,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7_1_9" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_9" >
         
           
           <label class="md-nav__link" for="__nav_5_7_1_9" id="__nav_5_7_1_9_label" tabindex="0">
@@ -4755,7 +4857,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_9_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_9_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_7_1_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -4773,7 +4875,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/backend/" class="md-nav__link">
         
   
   
@@ -4801,7 +4903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../batch/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/batch/" class="md-nav__link">
         
   
   
@@ -4829,7 +4931,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../processors/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/processors/" class="md-nav__link">
         
   
   
@@ -4857,7 +4959,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../regex_manager/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/regex_manager/" class="md-nav__link">
         
   
   
@@ -4885,7 +4987,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/results/" class="md-nav__link">
         
   
   
@@ -4913,7 +5015,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../stopping/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/stopping/" class="md-nav__link">
         
   
   
@@ -4941,7 +5043,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../timeseries_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/timeseries_backend/" class="md-nav__link">
         
   
   
@@ -4966,35 +5068,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    utils
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../reference/nemo_safe_synthesizer/generation/utils/" class="md-nav__link">
         
   
   
@@ -5010,52 +5087,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.generation.utils" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;utils
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" utils">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.generation.utils.GenerationStatus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerationStatus
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -5068,7 +5099,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../vllm_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/generation/vllm_backend/" class="md-nav__link">
         
   
   
@@ -5162,7 +5193,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../holdout/holdout/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/holdout/holdout/" class="md-nav__link">
         
   
   
@@ -5258,7 +5289,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../llm/metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/llm/metadata/" class="md-nav__link">
         
   
   
@@ -5286,7 +5317,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../llm/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/llm/utils/" class="md-nav__link">
         
   
   
@@ -5322,7 +5353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../observability/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/observability/" class="md-nav__link">
         
   
   
@@ -5350,7 +5381,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../package_info/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/package_info/" class="md-nav__link">
         
   
   
@@ -5506,7 +5537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/data_editor/detect/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/detect/" class="md-nav__link">
         
   
   
@@ -5534,7 +5565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/data_editor/edit/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/edit/" class="md-nav__link">
         
   
   
@@ -5562,7 +5593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/data_editor/environment/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/environment/" class="md-nav__link">
         
   
   
@@ -5590,7 +5621,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/data_editor/filters/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/data_editor/filters/" class="md-nav__link">
         
   
   
@@ -5626,7 +5657,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/nemo_pii/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/nemo_pii/" class="md-nav__link">
         
   
   
@@ -5752,7 +5783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/const/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/const/" class="md-nav__link">
         
   
   
@@ -5780,7 +5811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/custom/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/custom/" class="md-nav__link">
         
   
   
@@ -5808,7 +5839,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/datetime/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/datetime/" class="md-nav__link">
         
   
   
@@ -5836,7 +5867,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/entity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/entity/" class="md-nav__link">
         
   
   
@@ -5864,7 +5895,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/factory/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/factory/" class="md-nav__link">
         
   
   
@@ -5892,7 +5923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/fasttext/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/fasttext/" class="md-nav__link">
         
   
   
@@ -5920,7 +5951,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/helpers/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/helpers/" class="md-nav__link">
         
   
   
@@ -5948,7 +5979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/labels/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/labels/" class="md-nav__link">
         
   
   
@@ -5976,7 +6007,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/metadata/" class="md-nav__link">
         
   
   
@@ -6004,7 +6035,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/model/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/model/" class="md-nav__link">
         
   
   
@@ -6032,7 +6063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/models/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/models/" class="md-nav__link">
         
   
   
@@ -6060,7 +6091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/ner/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/ner/" class="md-nav__link">
         
   
   
@@ -6088,7 +6119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/ner_mp/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/ner_mp/" class="md-nav__link">
         
   
   
@@ -6116,7 +6147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/nlp/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/nlp/" class="md-nav__link">
         
   
   
@@ -6144,7 +6175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/person_name/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/person_name/" class="md-nav__link">
         
   
   
@@ -6172,7 +6203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/pipeline/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/pipeline/" class="md-nav__link">
         
   
   
@@ -6200,7 +6231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/predictor/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/predictor/" class="md-nav__link">
         
   
   
@@ -6228,7 +6259,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regex/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regex/" class="md-nav__link">
         
   
   
@@ -6374,7 +6405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/aba_routing_number/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/aba_routing_number/" class="md-nav__link">
         
   
   
@@ -6402,7 +6433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/age/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/age/" class="md-nav__link">
         
   
   
@@ -6430,7 +6461,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/credit_card/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/credit_card/" class="md-nav__link">
         
   
   
@@ -6458,7 +6489,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/domain_name/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/domain_name/" class="md-nav__link">
         
   
   
@@ -6486,7 +6517,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/email/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/email/" class="md-nav__link">
         
   
   
@@ -6514,7 +6545,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/facebook/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/facebook/" class="md-nav__link">
         
   
   
@@ -6542,7 +6573,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/generic_key/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/generic_key/" class="md-nav__link">
         
   
   
@@ -6570,7 +6601,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/github/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/github/" class="md-nav__link">
         
   
   
@@ -6598,7 +6629,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/google/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/google/" class="md-nav__link">
         
   
   
@@ -6626,7 +6657,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/google_olc/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/google_olc/" class="md-nav__link">
         
   
   
@@ -6654,7 +6685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/iban/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/iban/" class="md-nav__link">
         
   
   
@@ -6682,7 +6713,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/imei/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/imei/" class="md-nav__link">
         
   
   
@@ -6710,7 +6741,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/ip_address/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/ip_address/" class="md-nav__link">
         
   
   
@@ -6738,7 +6769,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/jwt/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/jwt/" class="md-nav__link">
         
   
   
@@ -6766,7 +6797,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/lat_lon/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/lat_lon/" class="md-nav__link">
         
   
   
@@ -6794,7 +6825,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/md5/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/md5/" class="md-nav__link">
         
   
   
@@ -6822,7 +6853,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/race_ethnicity/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/race_ethnicity/" class="md-nav__link">
         
   
   
@@ -6850,7 +6881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/sendgrid/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sendgrid/" class="md-nav__link">
         
   
   
@@ -6878,7 +6909,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/sex_gender/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sex_gender/" class="md-nav__link">
         
   
   
@@ -6906,7 +6937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/sha256/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sha256/" class="md-nav__link">
         
   
   
@@ -6934,7 +6965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/sha512/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/sha512/" class="md-nav__link">
         
   
   
@@ -6962,7 +6993,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/slack/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/slack/" class="md-nav__link">
         
   
   
@@ -6990,7 +7021,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/square/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/square/" class="md-nav__link">
         
   
   
@@ -7018,7 +7049,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/stripe/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/stripe/" class="md-nav__link">
         
   
   
@@ -7046,7 +7077,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/swift/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/swift/" class="md-nav__link">
         
   
   
@@ -7074,7 +7105,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/twilio/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/twilio/" class="md-nav__link">
         
   
   
@@ -7102,7 +7133,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/url/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/url/" class="md-nav__link">
         
   
   
@@ -7130,7 +7161,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/us_phone/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_phone/" class="md-nav__link">
         
   
   
@@ -7158,7 +7189,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/us_ssn/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_ssn/" class="md-nav__link">
         
   
   
@@ -7186,7 +7217,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/us_zipcode/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/us_zipcode/" class="md-nav__link">
         
   
   
@@ -7214,7 +7245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/regexes/uuid/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/regexes/uuid/" class="md-nav__link">
         
   
   
@@ -7312,7 +7343,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/report/base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/report/base/" class="md-nav__link">
         
   
   
@@ -7340,7 +7371,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/report/metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/report/metadata/" class="md-nav__link">
         
   
   
@@ -7368,7 +7399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/report/results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/report/results/" class="md-nav__link">
         
   
   
@@ -7404,7 +7435,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/ner/utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/ner/utils/" class="md-nav__link">
         
   
   
@@ -7440,7 +7471,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../pii_replacer/transform_result/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/pii_replacer/transform_result/" class="md-nav__link">
         
   
   
@@ -7544,7 +7575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/base/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/base/" class="md-nav__link">
         
   
   
@@ -7636,7 +7667,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/checks/advisory/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/checks/advisory/" class="md-nav__link">
         
   
   
@@ -7664,7 +7695,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/checks/dataframe/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/checks/dataframe/" class="md-nav__link">
         
   
   
@@ -7692,7 +7723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/checks/environment/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/checks/environment/" class="md-nav__link">
         
   
   
@@ -7720,7 +7751,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/checks/metadata/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/checks/metadata/" class="md-nav__link">
         
   
   
@@ -7756,7 +7787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/helpers/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/helpers/" class="md-nav__link">
         
   
   
@@ -7784,7 +7815,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/orchestrator/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/orchestrator/" class="md-nav__link">
         
   
   
@@ -7812,7 +7843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/registry/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/registry/" class="md-nav__link">
         
   
   
@@ -7840,7 +7871,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../preflight/types/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/preflight/types/" class="md-nav__link">
         
   
   
@@ -7998,7 +8029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../privacy/dp_transformers/dp_utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/dp_utils/" class="md-nav__link">
         
   
   
@@ -8026,7 +8057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../privacy/dp_transformers/linear/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/linear/" class="md-nav__link">
         
   
   
@@ -8054,7 +8085,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../privacy/dp_transformers/privacy_args/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/privacy_args/" class="md-nav__link">
         
   
   
@@ -8082,7 +8113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../privacy/dp_transformers/sampler/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/privacy/dp_transformers/sampler/" class="md-nav__link">
         
   
   
@@ -8126,7 +8157,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../results/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/results/" class="md-nav__link">
         
   
   
@@ -8214,7 +8245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdk/config_builder/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/sdk/config_builder/" class="md-nav__link">
         
   
   
@@ -8242,7 +8273,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sdk/library_builder/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/sdk/library_builder/" class="md-nav__link">
         
   
   
@@ -8278,7 +8309,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../telemetry/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/telemetry/" class="md-nav__link">
         
   
   
@@ -8366,7 +8397,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tooling/modes/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/tooling/modes/" class="md-nav__link">
         
   
   
@@ -8394,7 +8425,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../tooling/preflight/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/tooling/preflight/" class="md-nav__link">
         
   
   
@@ -8494,7 +8525,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../training/backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/backend/" class="md-nav__link">
         
   
   
@@ -8522,7 +8553,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../training/callbacks/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/callbacks/" class="md-nav__link">
         
   
   
@@ -8550,7 +8581,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../training/huggingface_backend/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/huggingface_backend/" class="md-nav__link">
         
   
   
@@ -8578,7 +8609,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../training/timeseries_preprocessing/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/training/timeseries_preprocessing/" class="md-nav__link">
         
   
   
@@ -8614,7 +8645,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../utils/" class="md-nav__link">
+      <a href="../../reference/nemo_safe_synthesizer/utils/" class="md-nav__link">
         
   
   
@@ -8692,7 +8723,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../../../blog/" class="md-nav__link ">
+            <a href="../../blog/" class="md-nav__link ">
               
   
   
@@ -8796,7 +8827,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../blog/archive/2026/" class="md-nav__link">
+      <a href="../../blog/archive/2026/" class="md-nav__link">
         
   
   
@@ -8849,6 +8880,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -8857,30 +8890,57 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.generation.utils" class="md-nav__link">
+  <a href="#model" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;utils
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" utils">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.generation.utils.GenerationStatus" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerationStatus
+        Model
       
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Initialization
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Files
+      
+    </span>
+  </a>
   
 </li>
       
@@ -8909,7 +8969,7 @@
   
   
     <li class="md-path__item">
-      <a href="../../../.." class="md-path__link">
+      <a href="../.." class="md-path__link">
         
   <span class="md-ellipsis">
     Home
@@ -8927,104 +8987,10 @@
     
     
       <li class="md-path__item">
-        <a href="../../../../developer-guide/architecture/" class="md-path__link">
+        <a href="../architecture/" class="md-path__link">
           
   <span class="md-ellipsis">
     Developer Guide
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../../artifacts/analyzers/field_features/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    API Reference
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-    
-  
-
-    
-  
-
-    
-  
-
-      
-        
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../../artifacts/analyzers/field_features/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    nemo_safe_synthesizer
-  </span>
-
-        </a>
-      </li>
-    
-  
-
-    
-  
-
-    
-  
-
-      
-        
-  
-  
-    
-    
-      <li class="md-path__item">
-        <a href="../backend/" class="md-path__link">
-          
-  <span class="md-ellipsis">
-    generation
   </span>
 
         </a>
@@ -9046,193 +9012,113 @@
   
 
 
-  <h1>utils</h1>
-
-<div class="doc doc-object doc-module">
-
-
-
-<h2 id="nemo_safe_synthesizer.generation.utils" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>utils</code>
-
-
-<a href="#nemo_safe_synthesizer.generation.utils" class="headerlink" title="Permanent link">&para;</a></h2>
-
-    <div class="doc doc-contents first">
-
-        <p>Shared constants and enums for the generation pipeline.</p>
-
-
-
-
-
-
-
-
-
-
-<p><span class="doc-section-title">Classes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            GenerationStatus (nemo_safe_synthesizer.generation.utils.GenerationStatus)" href="#nemo_safe_synthesizer.generation.utils.GenerationStatus">GenerationStatus</a></code></td>
-            <td>
-              <div class="doc-md-description">
-                <p>Status of a generation job.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<h3 id="nemo_safe_synthesizer.generation.utils.GenerationStatus" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>GenerationStatus</code>
-
-
-<a href="#nemo_safe_synthesizer.generation.utils.GenerationStatus" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-            <p class="doc doc-class-bases">
-              Bases: <code><span title="enum.StrEnum">StrEnum</span></code></p>
-
-
-
-        <p>Status of a generation job.</p>
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.COMPLETE">COMPLETE</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>All target records were generated successfully.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.INCOMPLETE">INCOMPLETE</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Generation ended before reaching the target count.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.IN_PROGRESS">IN_PROGRESS</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Generation is still running.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.STOP_NO_RECORDS">STOP_NO_RECORDS</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Stopped because a batch produced zero valid records.</p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.generation.utils.GenerationStatus.STOP_METRIC_REACHED">STOP_METRIC_REACHED</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Stopped because the invalid-fraction threshold
-was exceeded for too many consecutive batches.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
-
-
-
-
-  </div>
-
-    </div>
-
-</div>
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+<h1 id="observability">Observability<a class="headerlink" href="#observability" title="Permanent link">&para;</a></h1>
+<p>Safe Synthesizer centralizes structured logging and tracing in
+<code>src/nemo_safe_synthesizer/observability.py</code>. For normative code style, see
+<a href="../../STYLE_GUIDE.md#logging-and-observability">STYLE_GUIDE.md</a>. This page
+covers the high-level model.</p>
+<h2 id="model">Model<a class="headerlink" href="#model" title="Permanent link">&para;</a></h2>
+<p>Package code creates loggers with <code>get_logger(__name__)</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.observability</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_logger</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">logger</span> <span class="o">=</span> <span class="n">get_logger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+</span></code></pre></div>
+<p><code>get_logger()</code> returns a <code>CategoryLogger</code> with category adapters:</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runtime</code></td>
+<td>Internal operational detail, timings, memory, debug state.</td>
+</tr>
+<tr>
+<td><code>user</code></td>
+<td>Progress and results that matter to the person running the pipeline.</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>Startup, shutdown, configuration, and lifecycle events.</td>
+</tr>
+<tr>
+<td><code>backend</code></td>
+<td>Dependency or external-library activity, such as Torch, Hugging Face, vLLM, or WandB.</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>extra={}</code> for fields that downstream tooling should query. Keep secrets,
+credentials, tokens, raw PII, and full data records out of logs.</p>
+<h2 id="initialization">Initialization<a class="headerlink" href="#initialization" title="Permanent link">&para;</a></h2>
+<p>Logging is not initialized on import. Entry points own process-wide logging
+configuration; library modules do not call <code>initialize_observability()</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.observability</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">configure_logging_from_workdir</span><span class="p">,</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">initialize_observability</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="p">)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">configure_logging_from_workdir</span><span class="p">(</span><span class="n">workdir</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">)</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">initialize_observability</span><span class="p">()</span>
+</span></code></pre></div>
+<h2 id="tracing">Tracing<a class="headerlink" href="#tracing" title="Permanent link">&para;</a></h2>
+<p>Tracing is optional. Use <code>traced_*</code> decorators or <code>traced(...)</code> context blocks
+for entry points, phase boundaries, or operations where duration and error
+metadata help diagnose runs.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.observability</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogCategory</span><span class="p">,</span> <span class="n">traced</span><span class="p">,</span> <span class="n">traced_user</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nd">@traced_user</span><span class="p">(</span><span class="s2">&quot;training.epoch&quot;</span><span class="p">)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_epoch</span><span class="p">(</span><span class="n">epoch_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="o">...</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">with</span> <span class="n">traced</span><span class="p">(</span><span class="s2">&quot;validation&quot;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="n">LogCategory</span><span class="o">.</span><span class="n">RUNTIME</span><span class="p">):</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">validate</span><span class="p">(</span><span class="n">loaded</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Each traced block logs entry, exit with <code>duration_ms</code>, and errors with
+<code>error_type</code>.</p>
+<h2 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
+<p><code>NSSObservabilitySettings</code> reads logging settings from the environment or
+<code>.env</code>. User-facing details live in <a href="../../user-guide/environment/">Environment Variables</a>.</p>
+<ul>
+<li><code>NSS_LOG_FORMAT</code>: <code>json</code> or <code>plain</code>.</li>
+<li><code>NSS_LOG_LEVEL</code>: <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code>, <code>CRITICAL</code>,
+  <code>DEBUG_DEPENDENCIES</code>, or <code>DEBUG</code>.</li>
+<li><code>NSS_LOG_FILE</code>: optional JSON log file path.</li>
+<li><code>NSS_LOG_COLOR</code>: colorized console output.</li>
+<li><code>OTEL_SERVICE_NAME</code>: OpenTelemetry service name.</li>
+</ul>
+<p><code>DEBUG</code> raises Safe Synthesizer logs to debug and leaves dependency logs at
+info. <code>DEBUG_DEPENDENCIES</code> also raises backend dependency logs to debug.</p>
+<h2 id="key-files">Key Files<a class="headerlink" href="#key-files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/nemo_safe_synthesizer/observability.py</code></td>
+<td>Category loggers, settings, structlog configuration, tracing decorators, and heartbeat helpers.</td>
+</tr>
+<tr>
+<td><code>src/nemo_safe_synthesizer/cli/utils.py</code></td>
+<td>CLI logging setup helpers.</td>
+</tr>
+<tr>
+<td><code>docs/user-guide/environment.md</code></td>
+<td>User-facing environment variable reference.</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -9270,7 +9156,7 @@ was exceeded for too many consecutive batches.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../timeseries_backend/" class="md-footer__link md-footer__link--prev" aria-label="Previous: timeseries_backend">
+          <a href="../example-generation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Example Generation">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9280,20 +9166,20 @@ was exceeded for too many consecutive batches.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                timeseries_backend
+                Example Generation
               </div>
             </div>
           </a>
         
         
           
-          <a href="../vllm_backend/" class="md-footer__link md-footer__link--next" aria-label="Next: vllm_backend">
+          <a href="../preflight-plugins/" class="md-footer__link md-footer__link--next" aria-label="Next: Preflight Plugins">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                vllm_backend
+                Preflight Plugins
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -9334,16 +9220,16 @@ was exceeded for too many consecutive batches.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["content.code.copy", "content.code.select", "content.code.annotate", "content.tabs.link", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "toc.follow"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.code.copy", "content.code.select", "content.code.annotate", "content.tabs.link", "navigation.tabs", "navigation.sections", "navigation.expand", "navigation.path", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../../../js/mathjax.js"></script>
+        <script src="../../js/mathjax.js"></script>
       
         <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
-        <script src="../../../../js/toc-toggle.js"></script>
+        <script src="../../js/toc-toggle.js"></script>
       
     
   </body>
