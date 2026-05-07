@@ -17,18 +17,16 @@ etc.).  It extends ``pydantic.BaseModel`` with:
 from __future__ import annotations
 
 import json
-import types
 import typing
 from abc import ABCMeta
 from collections.abc import Generator, Iterator, Mapping
 from pathlib import Path
-from typing import Any, Self, get_args, get_origin
+from typing import Any, Self, get_args
 
 import yaml
 from pydantic import (
     BaseModel,
 )
-from typing_extensions import TypeIs
 
 from ..config.base import (
     pydantic_model_config,
@@ -79,13 +77,15 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             name = field[0]
             info = field[1]
             anno = getattr(info, "annotation", None)
-            if get_origin(anno) in (typing.Union, types.UnionType):
-                if any(_is_parameters_type(arg) for arg in get_args(anno)):
-                    value = getattr(self, name)
-                    if value is not None:
-                        yield value
+            anno_type = type(anno)
+            if getattr(anno_type, "__origin__", None) is typing.Union:
+                args = get_args(anno)
+                for arg in args:
+                    for subtype in get_args(arg):
+                        if isinstance(subtype, type) and issubclass(subtype, Parameters):
+                            yield getattr(self, name)
 
-            elif _is_parameters_type(anno):
+            elif isinstance(anno, type) and issubclass(anno, Parameters):
                 yield getattr(self, name)
 
             elif isinstance(getattr(self, name), Parameters):
@@ -235,8 +235,3 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             for field_name, value in param.items():
                 if value == "auto":
                     yield field_name
-
-
-def _is_parameters_type(value: Any) -> TypeIs[type[Parameters]]:
-    """Return whether ``value`` is a concrete ``Parameters`` subclass."""
-    return isinstance(value, type) and issubclass(value, Parameters)
