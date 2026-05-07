@@ -7,16 +7,12 @@ Agent-neutral skill definitions. Skills here are available to any agent (Cursor,
 
 ## Directory layout
 
-```
+```text
 .agents/
 └── skills/             # One subdirectory per skill, each containing SKILL.md
-    ├── configurator/
-    ├── diagnose-failures/
     ├── git-worktrees/
     ├── github-cli/
-    ├── python-observability/
-    ├── sync-agent-config/
-    ├── usage/
+    ├── safe-synthesizer/
     └── uv-build/
 ```
 
@@ -25,15 +21,17 @@ Agent-neutral skill definitions. Skills here are available to any agent (Cursor,
 Each skill is a self-contained directory with a `SKILL.md` that an agent reads on demand. Skills provide domain knowledge and step-by-step workflows for recurring tasks.
 
 | Skill | Purpose |
-|-------|---------|
-| `configurator` | Pydantic-to-Click parameter mapping and configurator patterns |
-| `diagnose-failures` | Systematic failure diagnosis using the error hierarchy |
+| ----- | ------- |
 | `git-worktrees` | Git worktree workflows, DCO/GPG signing, Cursor worktree automation |
 | `github-cli` | `gh` CLI usage for PRs, issues, and CI |
-| `python-observability` | Structured logging with `CategoryLogger` and `TracedContext` |
-| `sync-agent-config` | Syncing agent config changes between repos |
-| `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
+| `safe-synthesizer` | Usage-facing router for CLI/SDK runs, config, troubleshooting, and artifacts |
 | `uv-build` | Building and publishing Python packages with `uv` |
+
+Detailed implementation guidance that used to live in skills now lives in
+developer docs:
+
+- [Configuration Management](../docs/developer-guide/configuration_management.md)
+- [Observability](../docs/developer-guide/observability.md)
 
 ## Discoverability
 
