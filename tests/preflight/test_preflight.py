@@ -19,6 +19,7 @@ from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
+from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
     ConfigCheck,
@@ -47,43 +48,6 @@ from nemo_safe_synthesizer.preflight import (
 from nemo_safe_synthesizer.tooling import PreflightRenderContext, render_preflight_report
 
 from .conftest import make_ctx
-
-
-def _write_model_files(
-    path: Path, files: tuple[str, ...] = ("config.json", "tokenizer.json", "model.safetensors")
-) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    for name in files:
-        target = path / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("cached")
-    return path
-
-
-def _write_cached_snapshot(
-    cache_root: Path,
-    repo_id: str,
-    *,
-    revision: str = "main",
-    commit: str = "abc123",
-    files: tuple[str, ...] = ("config.json", "tokenizer.json", "model.safetensors"),
-) -> Path:
-    repo_cache = cache_root / f"models--{repo_id.replace('/', '--')}"
-    snapshot = repo_cache / "snapshots" / commit
-    _write_model_files(snapshot, files)
-    refs = repo_cache / "refs"
-    refs.mkdir(exist_ok=True)
-    (refs / revision).write_text(commit)
-    return snapshot
-
-
-def _write_weight_index(snapshot: Path, *, shards: tuple[str, ...]) -> None:
-    weight_map = {f"layer_{idx}.weight": shard for idx, shard in enumerate(shards)}
-    (snapshot / "model.safetensors.index.json").write_text(
-        '{"metadata": {}, "weight_map": {'
-        + ", ".join(f'"{key}": "{value}"' for key, value in weight_map.items())
-        + "}}"
-    )
 
 
 def _issue_by_code(issues: list[PreflightIssue], code: str) -> PreflightIssue:
@@ -313,140 +277,139 @@ class TestHFTokenCheck:
 
 @pytest.mark.unit
 class TestHFModelCacheCheck:
-    def test_empty_model_ref_errors(self, default_config):
-        default_config.training.pretrained_model = ""
+    """Tests intentionally tied to HF cache and Transformers model directory design."""
 
-        with patch.dict("os.environ", {}, clear=True):
-            issues = HFModelCacheCheck().run(make_ctx(config=default_config))
+    @staticmethod
+    def _allow_online_lookup(monkeypatch) -> None:
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+
+    @staticmethod
+    def _use_cache_root(monkeypatch, cache_root: Path) -> None:
+        monkeypatch.setattr(ModelRef, "_default_hf_cache_root", staticmethod(lambda: cache_root))
+
+    def test_empty_model_ref_errors(self, pretrained_config, ctx_factory, monkeypatch):
+        self._allow_online_lookup(monkeypatch)
+
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("")))
 
         assert any(i.code == "model_ref_empty" and i.severity == "error" for i in issues)
 
-    def test_cached_snapshot_with_required_files_is_silent(self, tmp_path):
-        cache_root = tmp_path / "hf-cache"
-        _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct")
-        config = SafeSynthesizerParameters(
-            training=TrainingHyperparams(pretrained_model="nvidia/Nemotron-Mini-4B-Instruct")
-        )
+    def test_cached_snapshot_with_required_files_is_silent(
+        self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Complete HF snapshot handling intentionally tracks Hub cache layout."""
+        cache_root, _ = hf_cached_snapshot_factory()
+        self._allow_online_lookup(monkeypatch)
+        self._use_cache_root(monkeypatch, cache_root)
 
-        with (
-            patch("nemo_safe_synthesizer.llm.utils.ModelRef._default_hf_cache_root", return_value=cache_root),
-            patch.dict("os.environ", {}, clear=True),
-        ):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct")))
 
         assert issues == []
 
-    def test_missing_cache_warns_when_online_lookup_allowed(self, tmp_path):
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model="gpt2"))
+    def test_missing_cache_warns_when_online_lookup_allowed(
+        self, tmp_path, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Missing-cache behavior intentionally follows HF online fallback rules."""
+        self._allow_online_lookup(monkeypatch)
+        self._use_cache_root(monkeypatch, tmp_path / "empty")
 
-        with (
-            patch("nemo_safe_synthesizer.llm.utils.ModelRef._default_hf_cache_root", return_value=tmp_path / "empty"),
-            patch.dict("os.environ", {}, clear=True),
-        ):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("gpt2")))
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "warning" for i in issues)
 
     @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
     @pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on"])
-    def test_missing_cache_errors_when_offline(self, tmp_path, offline_var, value):
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model="gpt2"))
+    def test_missing_cache_errors_when_offline(
+        self, tmp_path, offline_var, value, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Offline errors intentionally track HF offline env-var semantics."""
+        self._use_cache_root(monkeypatch, tmp_path / "empty")
+        monkeypatch.setenv(offline_var, value)
 
-        with (
-            patch("nemo_safe_synthesizer.llm.utils.ModelRef._default_hf_cache_root", return_value=tmp_path / "empty"),
-            patch.dict("os.environ", {offline_var: value}, clear=True),
-        ):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("gpt2")))
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "error" for i in issues)
 
     @pytest.mark.parametrize("value", ["0", "false", "FALSE", "no", "off", ""])
-    def test_missing_cache_warns_when_offline_env_is_falsey(self, tmp_path, value):
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model="gpt2"))
+    def test_missing_cache_warns_when_offline_env_is_falsey(
+        self, tmp_path, value, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Falsey offline env handling intentionally tracks HF flag semantics."""
+        self._use_cache_root(monkeypatch, tmp_path / "empty")
+        monkeypatch.setenv("HF_HUB_OFFLINE", value)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
-        with (
-            patch("nemo_safe_synthesizer.llm.utils.ModelRef._default_hf_cache_root", return_value=tmp_path / "empty"),
-            patch.dict("os.environ", {"HF_HUB_OFFLINE": value}, clear=True),
-        ):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("gpt2")))
 
         assert any(i.code == "hf_model_not_cached" and i.severity == "warning" for i in issues)
 
-    def test_partial_cached_snapshot_errors(self, tmp_path):
-        cache_root = tmp_path / "hf-cache"
-        _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct", files=("config.json", "tokenizer.json"))
-        config = SafeSynthesizerParameters(
-            training=TrainingHyperparams(pretrained_model="nvidia/Nemotron-Mini-4B-Instruct")
-        )
+    def test_partial_cached_snapshot_errors(
+        self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Partial HF snapshot validation intentionally tracks Transformers load needs."""
+        cache_root, _ = hf_cached_snapshot_factory(files=("config.json", "tokenizer.json"))
+        self._allow_online_lookup(monkeypatch)
+        self._use_cache_root(monkeypatch, cache_root)
 
-        with (
-            patch("nemo_safe_synthesizer.llm.utils.ModelRef._default_hf_cache_root", return_value=cache_root),
-            patch.dict("os.environ", {}, clear=True),
-        ):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct")))
 
         assert any(i.code == "hf_model_cache_incomplete" and i.severity == "error" for i in issues)
         assert "model weights" in _issue_by_code(issues, "hf_model_cache_incomplete").message
 
-    def test_incomplete_sharded_cached_snapshot_errors(self, tmp_path):
-        cache_root = tmp_path / "hf-cache"
-        snapshot = _write_cached_snapshot(
-            cache_root,
-            "nvidia/Nemotron-Mini-4B-Instruct",
+    def test_incomplete_sharded_cached_snapshot_errors(
+        self, hf_cached_snapshot_factory, hf_weight_index_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Sharded snapshot validation intentionally tracks HF weight-index design."""
+        cache_root, snapshot = hf_cached_snapshot_factory(
             files=("config.json", "tokenizer.json", "model-00001-of-00002.safetensors"),
         )
-        _write_weight_index(
+        hf_weight_index_factory(
             snapshot,
             shards=("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"),
         )
-        config = SafeSynthesizerParameters(
-            training=TrainingHyperparams(pretrained_model="nvidia/Nemotron-Mini-4B-Instruct")
-        )
+        self._allow_online_lookup(monkeypatch)
+        self._use_cache_root(monkeypatch, cache_root)
 
-        with (
-            patch("nemo_safe_synthesizer.llm.utils.ModelRef._default_hf_cache_root", return_value=cache_root),
-            patch.dict("os.environ", {}, clear=True),
-        ):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct")))
 
         assert any(i.code == "hf_model_cache_incomplete" and i.severity == "error" for i in issues)
 
-    def test_existing_local_model_directory_requires_model_files(self, tmp_path):
-        model_dir = _write_model_files(tmp_path / "local-model", files=("config.json",))
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model=str(model_dir)))
+    def test_existing_local_model_directory_requires_model_files(
+        self, tmp_path, model_files_factory, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Local directory validation intentionally mirrors Transformers model layout."""
+        model_dir = model_files_factory(tmp_path / "local-model", files=("config.json",))
+        self._allow_online_lookup(monkeypatch)
 
-        with patch.dict("os.environ", {}, clear=True):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config(str(model_dir))))
 
         assert any(i.code == "local_model_incomplete" and i.severity == "error" for i in issues)
         issue = _issue_by_code(issues, "local_model_incomplete")
         assert "tokenizer" in issue.message
         assert "model weights" in issue.message
 
-    def test_missing_path_like_model_errors(self, tmp_path):
+    def test_missing_path_like_model_errors(self, tmp_path, pretrained_config, ctx_factory, monkeypatch):
         model_dir = tmp_path / "missing-model"
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model=str(model_dir)))
+        self._allow_online_lookup(monkeypatch)
 
-        with patch.dict("os.environ", {}, clear=True):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config(str(model_dir))))
 
         assert any(i.code == "local_model_missing" and i.severity == "error" for i in issues)
 
-    def test_existing_local_model_file_errors(self, tmp_path):
+    def test_existing_local_model_file_errors(self, tmp_path, pretrained_config, ctx_factory, monkeypatch):
         model_file = tmp_path / "model.safetensors"
         model_file.write_text("cached")
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model=str(model_file)))
+        self._allow_online_lookup(monkeypatch)
 
-        with patch.dict("os.environ", {}, clear=True):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config(str(model_file))))
 
         assert any(i.code == "local_model_not_directory" and i.severity == "error" for i in issues)
 
-    def test_invalid_model_ref_errors(self):
-        config = SafeSynthesizerParameters(training=TrainingHyperparams(pretrained_model="not-a-valid/repo##id"))
+    def test_invalid_model_ref_errors(self, pretrained_config, ctx_factory, monkeypatch):
+        self._allow_online_lookup(monkeypatch)
 
-        with patch.dict("os.environ", {}, clear=True):
-            issues = HFModelCacheCheck().run(make_ctx(config=config))
+        issues = HFModelCacheCheck().run(ctx_factory(config=pretrained_config("not-a-valid/repo##id")))
 
         assert any(i.code == "model_ref_invalid" and i.severity == "error" for i in issues)
 

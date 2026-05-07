@@ -30,11 +30,30 @@ logger = get_logger(__name__)
 class ModelRef:
     """Resolved model reference for local cache and trust policy decisions.
 
-    This class intentionally mirrors Hugging Face Hub and Transformers cache
-    behavior: repo-id validation, cache-root resolution, snapshot layout,
-    artifact names, and shard index handling are all tied to their current
-    implementations. If model loading starts failing after an upstream HF
-    change, inspect this class first.
+    Intended public API:
+    - ``parse()`` normalizes a user-supplied model string or path without
+      contacting Hugging Face.
+    - ``target()`` returns the value that should be passed to
+      ``from_pretrained``-style loaders: a local snapshot path when available,
+      otherwise the original model reference.
+    - ``trust_remote_code`` reports whether the reference belongs to a trusted
+      organization after accounting for resolved local HF cache paths.
+    - ``partial_cached_snapshot()`` returns HF's local snapshot path for the
+      repo/revision, even when the snapshot is incomplete.
+    - ``missing_required_components()`` reports whether a local model directory
+      has the components this project expects before an offline load.
+
+    Deliberate Hugging Face coupling:
+    repo-id validation, cache-root resolution, cache scanning, snapshot layout,
+    artifact names, tokenizer filenames, and sharded weight index parsing mirror
+    current Hugging Face Hub and Transformers behavior. This is intentional so
+    NSS decisions match the libraries that load the model. If model loading or
+    cache preflight behavior changes after an upstream HF release, inspect this
+    class first.
+
+    Internal helpers are not a generic model-layout abstraction. They should
+    stay close to HF's implementation rather than grow compatibility shims for
+    unrelated storage formats.
     """
 
     original: str | Path
@@ -44,14 +63,16 @@ class ModelRef:
     cache_root: Path | None = None
 
     trusted_orgs: ClassVar[frozenset[str]] = frozenset({"nvidia"})
-    tokenizer_artifact_names: ClassVar[tuple[str, ...]] = (
-        "tokenizer.json",
-        "tokenizer.model",
-        "sentencepiece.bpe.model",
-        "spiece.model",
-        "vocab.json",
-        "vocab.txt",
-        "merges.txt",
+    tokenizer_artifact_names: ClassVar[frozenset[str]] = frozenset(
+        {
+            "tokenizer.json",
+            "tokenizer.model",
+            "sentencepiece.bpe.model",
+            "spiece.model",
+            "vocab.json",
+            "vocab.txt",
+            "merges.txt",
+        }
     )
 
     @classmethod

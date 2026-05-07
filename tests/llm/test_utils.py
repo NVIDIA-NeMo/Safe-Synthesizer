@@ -10,36 +10,6 @@ import pytest
 from nemo_safe_synthesizer.llm.utils import ModelRef, trust_remote_code_for_model
 
 
-def _write_cached_snapshot(
-    cache_root: Path,
-    repo_id: str,
-    *,
-    revision: str = "main",
-    commit: str = "abc123",
-    files: tuple[str, ...] = ("model.safetensors",),
-) -> Path:
-    repo_cache = cache_root / f"models--{repo_id.replace('/', '--')}"
-    snapshot = repo_cache / "snapshots" / commit
-    snapshot.mkdir(parents=True)
-    refs = repo_cache / "refs"
-    refs.mkdir()
-    (refs / revision).write_text(commit)
-    for file in files:
-        artifact = snapshot / file
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text("cached")
-    return snapshot
-
-
-def _write_weight_index(snapshot: Path, *, shards: tuple[str, ...]) -> None:
-    weight_map = {f"layer_{idx}.weight": shard for idx, shard in enumerate(shards)}
-    (snapshot / "model.safetensors.index.json").write_text(
-        '{"metadata": {}, "weight_map": {'
-        + ", ".join(f'"{key}": "{value}"' for key, value in weight_map.items())
-        + "}}"
-    )
-
-
 @pytest.mark.parametrize(
     "model_name, expected",
     [
@@ -67,9 +37,10 @@ def test_trust_remote_code_for_model_requires_configured_cache_root(tmp_path: Pa
     assert trust_remote_code_for_model(spoofed_snapshot, cache_root=cache_root) is False
 
 
-def test_model_ref_trusts_snapshot_under_configured_cache_root(tmp_path: Path) -> None:
+def test_model_ref_trusts_snapshot_under_configured_cache_root(tmp_path: Path, hf_cached_snapshot_factory) -> None:
+    """HF cache path recognition intentionally tracks Hub snapshot metadata."""
     cache_root = tmp_path / "custom-cache"
-    snapshot = _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct")
+    _, snapshot = hf_cached_snapshot_factory("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
 
     ref = ModelRef.parse(snapshot, cache_root=cache_root)
 
@@ -78,9 +49,10 @@ def test_model_ref_trusts_snapshot_under_configured_cache_root(tmp_path: Path) -
     assert ref.target() == str(snapshot)
 
 
-def test_model_ref_prefers_cached_snapshot_for_hub_id(tmp_path: Path) -> None:
+def test_model_ref_prefers_cached_snapshot_for_hub_id(tmp_path: Path, hf_cached_snapshot_factory) -> None:
+    """HF cache selection intentionally tracks Hub snapshot resolution."""
     cache_root = tmp_path / "custom-cache"
-    snapshot = _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct")
+    _, snapshot = hf_cached_snapshot_factory("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
 
     ref = ModelRef.parse("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
 
@@ -89,9 +61,12 @@ def test_model_ref_prefers_cached_snapshot_for_hub_id(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("files", [("config.json",), ("model.safetensors.index.json",)])
-def test_model_ref_ignores_cached_snapshot_without_model_artifacts(tmp_path: Path, files: tuple[str, ...]) -> None:
+def test_model_ref_ignores_cached_snapshot_without_model_artifacts(
+    tmp_path: Path, files: tuple[str, ...], hf_cached_snapshot_factory
+) -> None:
+    """HF artifact filtering intentionally tracks Hub weight-file conventions."""
     cache_root = tmp_path / "custom-cache"
-    _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct", files=files)
+    hf_cached_snapshot_factory("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root, files=files)
 
     ref = ModelRef.parse("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
 
@@ -100,9 +75,12 @@ def test_model_ref_ignores_cached_snapshot_without_model_artifacts(tmp_path: Pat
     assert ref.target() == "nvidia/Nemotron-Mini-4B-Instruct"
 
 
-def test_model_ref_prefers_cached_snapshot_for_single_component_hub_id(tmp_path: Path) -> None:
+def test_model_ref_prefers_cached_snapshot_for_single_component_hub_id(
+    tmp_path: Path, hf_cached_snapshot_factory
+) -> None:
+    """HF cache lookup intentionally handles Hub's single-component repo ids."""
     cache_root = tmp_path / "custom-cache"
-    snapshot = _write_cached_snapshot(cache_root, "gpt2")
+    _, snapshot = hf_cached_snapshot_factory("gpt2", cache_root=cache_root)
 
     ref = ModelRef.parse("gpt2", cache_root=cache_root)
 
@@ -111,11 +89,12 @@ def test_model_ref_prefers_cached_snapshot_for_single_component_hub_id(tmp_path:
     assert ref.target() == str(snapshot)
 
 
-def test_model_ref_resolves_single_component_hub_id_revision(tmp_path: Path) -> None:
+def test_model_ref_resolves_single_component_hub_id_revision(tmp_path: Path, hf_cached_snapshot_factory) -> None:
+    """HF revision lookup intentionally tracks Hub refs-to-snapshots layout."""
     cache_root = tmp_path / "custom-cache"
-    snapshot = _write_cached_snapshot(
-        cache_root,
+    _, snapshot = hf_cached_snapshot_factory(
         "bert-base-uncased",
+        cache_root=cache_root,
         revision="v1",
         commit="def456",
     )
@@ -126,9 +105,12 @@ def test_model_ref_resolves_single_component_hub_id_revision(tmp_path: Path) -> 
     assert ref.target() == str(snapshot)
 
 
-def test_model_ref_existing_local_path_takes_precedence_over_single_component_hub_id(tmp_path: Path) -> None:
+def test_model_ref_existing_local_path_takes_precedence_over_single_component_hub_id(
+    tmp_path: Path, hf_cached_snapshot_factory
+) -> None:
+    """HF-style cache presence must not override an explicit existing local path."""
     cache_root = tmp_path / "custom-cache"
-    _write_cached_snapshot(cache_root, "gpt2")
+    hf_cached_snapshot_factory("gpt2", cache_root=cache_root)
     local_model = tmp_path / "gpt2"
     local_model.mkdir()
 
@@ -152,32 +134,30 @@ def test_model_ref_preserves_empty_model_name(tmp_path: Path) -> None:
     assert ref.target() == ""
 
 
-def test_model_ref_reports_missing_required_components(tmp_path: Path) -> None:
-    model_dir = tmp_path / "model"
-    model_dir.mkdir()
-    (model_dir / "config.json").write_text("{}")
+def test_model_ref_reports_missing_required_components(tmp_path: Path, model_files_factory) -> None:
+    """Local component checks intentionally mirror Transformers load requirements."""
+    model_dir = model_files_factory(tmp_path / "model", files=("config.json",))
 
     assert ModelRef.missing_required_components(model_dir) == ["tokenizer", "model weights"]
 
 
-def test_model_ref_reports_missing_root_config(tmp_path: Path) -> None:
+def test_model_ref_reports_missing_root_config(tmp_path: Path, model_files_factory) -> None:
+    """Root config handling intentionally mirrors Transformers directory loading."""
     model_dir = tmp_path / "model"
-    nested = model_dir / "nested"
-    nested.mkdir(parents=True)
-    (nested / "config.json").write_text("{}")
-    (model_dir / "tokenizer.json").write_text("cached")
-    (model_dir / "model.safetensors").write_text("cached")
+    model_files_factory(model_dir, files=("nested/config.json", "tokenizer.json", "model.safetensors"))
 
     assert ModelRef.missing_required_components(model_dir) == ["config"]
 
 
-def test_model_ref_reports_incomplete_sharded_weights(tmp_path: Path) -> None:
-    model_dir = tmp_path / "model"
-    model_dir.mkdir()
-    (model_dir / "config.json").write_text("{}")
-    (model_dir / "tokenizer.json").write_text("cached")
-    (model_dir / "model-00001-of-00002.safetensors").write_text("cached")
-    _write_weight_index(
+def test_model_ref_reports_incomplete_sharded_weights(
+    tmp_path: Path, model_files_factory, hf_weight_index_factory
+) -> None:
+    """Shard completeness intentionally tracks HF weight-index semantics."""
+    model_dir = model_files_factory(
+        tmp_path / "model",
+        files=("config.json", "tokenizer.json", "model-00001-of-00002.safetensors"),
+    )
+    hf_weight_index_factory(
         model_dir,
         shards=("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"),
     )
@@ -185,14 +165,20 @@ def test_model_ref_reports_incomplete_sharded_weights(tmp_path: Path) -> None:
     assert ModelRef.missing_required_components(model_dir) == ["model weights"]
 
 
-def test_model_ref_accepts_complete_sharded_weights(tmp_path: Path) -> None:
-    model_dir = tmp_path / "model"
-    model_dir.mkdir()
-    (model_dir / "config.json").write_text("{}")
-    (model_dir / "tokenizer.json").write_text("cached")
-    (model_dir / "model-00001-of-00002.safetensors").write_text("cached")
-    (model_dir / "model-00002-of-00002.safetensors").write_text("cached")
-    _write_weight_index(
+def test_model_ref_accepts_complete_sharded_weights(
+    tmp_path: Path, model_files_factory, hf_weight_index_factory
+) -> None:
+    """Shard acceptance intentionally tracks HF weight-index semantics."""
+    model_dir = model_files_factory(
+        tmp_path / "model",
+        files=(
+            "config.json",
+            "tokenizer.json",
+            "model-00001-of-00002.safetensors",
+            "model-00002-of-00002.safetensors",
+        ),
+    )
+    hf_weight_index_factory(
         model_dir,
         shards=("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"),
     )
@@ -200,9 +186,12 @@ def test_model_ref_accepts_complete_sharded_weights(tmp_path: Path) -> None:
     assert ModelRef.missing_required_components(model_dir) == []
 
 
-def test_model_ref_partial_cached_snapshot_returns_partial_snapshot(tmp_path: Path) -> None:
+def test_model_ref_partial_cached_snapshot_returns_partial_snapshot(tmp_path: Path, hf_cached_snapshot_factory) -> None:
+    """Partial snapshot discovery intentionally delegates to HF local cache rules."""
     cache_root = tmp_path / "custom-cache"
-    snapshot = _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct", files=("config.json",))
+    _, snapshot = hf_cached_snapshot_factory(
+        "nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root, files=("config.json",)
+    )
 
     ref = ModelRef.parse("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
 
