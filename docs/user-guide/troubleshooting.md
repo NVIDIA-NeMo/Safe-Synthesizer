@@ -14,7 +14,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| Install fails on Python 3.14 | ray has no `cp314` wheels | [Use Python 3.11–3.13](#python-314-is-not-supported) |
+| Install fails on Python 3.14 | vLLM and dependency wheels are not ready | [Use Python 3.11–3.13](#python-314-is-not-supported) |
 | "kernels package not installed" | Optional Kernels Hub backend selected without `kernels` installed | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
@@ -112,10 +112,10 @@ fast tokenizer (most popular models do; check
 ### Python 3.14 Is Not Supported
 
 Safe Synthesizer requires **Python 3.11, 3.12, or 3.13**. Python 3.14+ is not
-supported because [ray](https://github.com/ray-project/ray) (a transitive
-dependency of vLLM) does not publish `cp314` wheels. Attempting to install on
-Python 3.14 fails with an unresolvable dependency error during `pip install` or
-`uv pip install`.
+supported because vLLM currently declares `<3.14` support while upstream
+resolves Python 3.14 wheel compatibility across its dependency stack. Attempting
+to install on Python 3.14 fails with an unresolvable dependency error during
+`pip install` or `uv pip install`.
 
 To fix, create a virtual environment with a supported interpreter:
 
