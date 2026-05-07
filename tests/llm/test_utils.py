@@ -31,6 +31,15 @@ def _write_cached_snapshot(
     return snapshot
 
 
+def _write_weight_index(snapshot: Path, *, shards: tuple[str, ...]) -> None:
+    weight_map = {f"layer_{idx}.weight": shard for idx, shard in enumerate(shards)}
+    (snapshot / "model.safetensors.index.json").write_text(
+        '{"metadata": {}, "weight_map": {'
+        + ", ".join(f'"{key}": "{value}"' for key, value in weight_map.items())
+        + "}}"
+    )
+
+
 @pytest.mark.parametrize(
     "model_name, expected",
     [
@@ -141,3 +150,61 @@ def test_model_ref_preserves_empty_model_name(tmp_path: Path) -> None:
 
     assert ref.trust_remote_code is False
     assert ref.target() == ""
+
+
+def test_model_ref_reports_missing_required_components(tmp_path: Path) -> None:
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}")
+
+    assert ModelRef.missing_required_components(model_dir) == ["tokenizer", "model weights"]
+
+
+def test_model_ref_reports_missing_root_config(tmp_path: Path) -> None:
+    model_dir = tmp_path / "model"
+    nested = model_dir / "nested"
+    nested.mkdir(parents=True)
+    (nested / "config.json").write_text("{}")
+    (model_dir / "tokenizer.json").write_text("cached")
+    (model_dir / "model.safetensors").write_text("cached")
+
+    assert ModelRef.missing_required_components(model_dir) == ["config"]
+
+
+def test_model_ref_reports_incomplete_sharded_weights(tmp_path: Path) -> None:
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}")
+    (model_dir / "tokenizer.json").write_text("cached")
+    (model_dir / "model-00001-of-00002.safetensors").write_text("cached")
+    _write_weight_index(
+        model_dir,
+        shards=("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"),
+    )
+
+    assert ModelRef.missing_required_components(model_dir) == ["model weights"]
+
+
+def test_model_ref_accepts_complete_sharded_weights(tmp_path: Path) -> None:
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}")
+    (model_dir / "tokenizer.json").write_text("cached")
+    (model_dir / "model-00001-of-00002.safetensors").write_text("cached")
+    (model_dir / "model-00002-of-00002.safetensors").write_text("cached")
+    _write_weight_index(
+        model_dir,
+        shards=("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"),
+    )
+
+    assert ModelRef.missing_required_components(model_dir) == []
+
+
+def test_model_ref_partial_cached_snapshot_returns_partial_snapshot(tmp_path: Path) -> None:
+    cache_root = tmp_path / "custom-cache"
+    snapshot = _write_cached_snapshot(cache_root, "nvidia/Nemotron-Mini-4B-Instruct", files=("config.json",))
+
+    ref = ModelRef.parse("nvidia/Nemotron-Mini-4B-Instruct", cache_root=cache_root)
+
+    assert ref.target() == "nvidia/Nemotron-Mini-4B-Instruct"
+    assert ref.partial_cached_snapshot() == snapshot

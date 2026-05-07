@@ -283,7 +283,9 @@ class TestBuildBaseFrameworkParams:
         model_ref.trust_remote_code = True
         mock_get_device_map.return_value = "auto"
 
-        with patch("nemo_safe_synthesizer.training.huggingface_backend.ModelRef.parse", return_value=model_ref) as parse:
+        with patch(
+            "nemo_safe_synthesizer.training.huggingface_backend.ModelRef.parse", return_value=model_ref
+        ) as parse:
             backend = HuggingFaceBackend(
                 params=base_params,
                 model_metadata=mock_model_metadata,

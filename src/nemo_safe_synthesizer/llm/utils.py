@@ -11,6 +11,7 @@ without installing the full training or inference stack.
 from __future__ import annotations
 
 import gc
+import json
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -27,7 +28,14 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class ModelRef:
-    """Resolved model reference for local cache and trust policy decisions."""
+    """Resolved model reference for local cache and trust policy decisions.
+
+    This class intentionally mirrors Hugging Face Hub and Transformers cache
+    behavior: repo-id validation, cache-root resolution, snapshot layout,
+    artifact names, and shard index handling are all tied to their current
+    implementations. If model loading starts failing after an upstream HF
+    change, inspect this class first.
+    """
 
     original: str | Path
     repo_id: str | None = None
@@ -36,6 +44,15 @@ class ModelRef:
     cache_root: Path | None = None
 
     trusted_orgs: ClassVar[frozenset[str]] = frozenset({"nvidia"})
+    tokenizer_artifact_names: ClassVar[tuple[str, ...]] = (
+        "tokenizer.json",
+        "tokenizer.model",
+        "sentencepiece.bpe.model",
+        "spiece.model",
+        "vocab.json",
+        "vocab.txt",
+        "merges.txt",
+    )
 
     @classmethod
     def parse(
@@ -98,6 +115,12 @@ class ModelRef:
 
     @staticmethod
     def _repo_id_from_hf_cache_path(path: Path, cache_root: Path) -> str | None:
+        """Return the HF repo id for a path inside the configured Hub cache.
+
+        This relies on ``huggingface_hub.scan_cache_dir`` and the current
+        ``models--org--repo/snapshots/<commit>`` cache model. It is deliberately
+        not a generic path parser.
+        """
         path_resolved = path.resolve(strict=False)
         from huggingface_hub import scan_cache_dir
         from huggingface_hub.errors import CacheNotFound
@@ -117,7 +140,13 @@ class ModelRef:
         return None
 
     @staticmethod
-    def _cached_snapshot_for_repo(repo_id: str, revision: str, cache_root: Path) -> Path | None:
+    def _local_snapshot_for_repo(repo_id: str, revision: str, cache_root: Path) -> Path | None:
+        """Return HF's local snapshot path without validating completeness.
+
+        Delegates to ``snapshot_download(local_files_only=True)`` so behavior
+        stays aligned with Hugging Face cache resolution instead of duplicating
+        ref-file lookup rules.
+        """
         from huggingface_hub import snapshot_download
         from huggingface_hub.errors import LocalEntryNotFoundError
 
@@ -132,7 +161,14 @@ class ModelRef:
             )
         except LocalEntryNotFoundError:
             return None
-        if not ModelRef._snapshot_has_model_artifacts(snapshot_path, cache_root):
+        return snapshot_path
+
+    @classmethod
+    def _cached_snapshot_for_repo(cls, repo_id: str, revision: str, cache_root: Path) -> Path | None:
+        snapshot_path = cls._local_snapshot_for_repo(repo_id, revision, cache_root)
+        if snapshot_path is None:
+            return None
+        if not cls._snapshot_has_model_artifacts(snapshot_path, cache_root):
             return None
         return snapshot_path
 
@@ -165,7 +201,11 @@ class ModelRef:
 
     @staticmethod
     def _model_artifact_patterns() -> tuple[str, ...]:
-        """Return known model artifact names using HF Hub's public constants."""
+        """Return known model artifact names using HF Hub's public constants.
+
+        Keep this close to Hugging Face's weight naming conventions. New HF
+        artifact names or index formats should be reflected here.
+        """
         from huggingface_hub.constants import (
             FLAX_WEIGHTS_NAME,
             PYTORCH_WEIGHTS_FILE_PATTERN,
@@ -189,63 +229,58 @@ class ModelRef:
             "*.gguf",
             "consolidated*.pth",
         )
-        if not ModelRef._snapshot_has_model_artifacts(snapshot_path, cache_root):
-            return None
-        return snapshot_path
 
     @classmethod
-    def _snapshot_has_model_artifacts(cls, snapshot_path: Path, cache_root: Path) -> bool:
-        """Return whether HF Hub's cache index reports weight artifacts in ``snapshot_path``."""
-        from huggingface_hub import scan_cache_dir
-        from huggingface_hub.errors import CacheNotFound
+    def _required_component_status(cls, model_dir: Path) -> dict[str, bool]:
+        """Return required local model component presence for a Transformers load.
 
-        artifact_patterns = cls._model_artifact_patterns()
-        snapshot_resolved = snapshot_path.resolve(strict=False)
+        The checks are intentionally shaped around ``from_pretrained`` layouts:
+        root ``config.json``, recognized tokenizer files, and HF-style weight
+        files or shard indexes. Revisit this if Transformers changes accepted
+        directory layouts.
+        """
+        files = [path for path in model_dir.rglob("*") if path.is_file()]
+        return {
+            "config": (model_dir / "config.json").is_file(),
+            "tokenizer": any(path.name in cls.tokenizer_artifact_names for path in files),
+            "model weights": cls._has_complete_model_artifacts(model_dir, files),
+        }
 
-        try:
-            repos = scan_cache_dir(cache_root).repos
-        except (CacheNotFound, ValueError):
-            return False
+    @classmethod
+    def missing_required_components(cls, model_dir: Path) -> list[str]:
+        """Return local model components missing from ``model_dir``."""
+        return [name for name, present in cls._required_component_status(model_dir).items() if not present]
 
-        for repo in repos:
-            if repo.repo_type != "model":
-                continue
-            for revision in repo.revisions:
-                if revision.snapshot_path.resolve(strict=False) != snapshot_resolved:
-                    continue
-                return any(
-                    fnmatchcase(cached_file.file_name, pattern)
-                    for cached_file in revision.files
-                    for pattern in artifact_patterns
-                )
-        return False
+    @classmethod
+    def _has_complete_model_artifacts(cls, model_dir: Path, files: list[Path]) -> bool:
+        weight_indexes = [path for path in files if path.name.endswith(".index.json")]
+        if weight_indexes:
+            return any(cls._index_references_existing_shards(model_dir, index_path) for index_path in weight_indexes)
+
+        return any(fnmatchcase(path.name, pattern) for path in files for pattern in cls._model_artifact_patterns())
 
     @staticmethod
-    def _model_artifact_patterns() -> tuple[str, ...]:
-        """Return known model artifact names using HF Hub's public constants."""
-        from huggingface_hub.constants import (
-            FLAX_WEIGHTS_NAME,
-            PYTORCH_WEIGHTS_FILE_PATTERN,
-            PYTORCH_WEIGHTS_NAME,
-            SAFETENSORS_SINGLE_FILE,
-            SAFETENSORS_WEIGHTS_FILE_PATTERN,
-            TF2_WEIGHTS_FILE_PATTERN,
-            TF2_WEIGHTS_NAME,
-            TF_WEIGHTS_NAME,
-        )
+    def _index_references_existing_shards(model_dir: Path, index_path: Path) -> bool:
+        """Return whether an HF weight index references shards present on disk."""
+        try:
+            data = json.loads(index_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return False
 
-        return (
-            PYTORCH_WEIGHTS_NAME,
-            PYTORCH_WEIGHTS_FILE_PATTERN.format(suffix="*"),
-            SAFETENSORS_SINGLE_FILE,
-            SAFETENSORS_WEIGHTS_FILE_PATTERN.format(suffix="*"),
-            TF2_WEIGHTS_NAME,
-            TF2_WEIGHTS_FILE_PATTERN.format(suffix="*"),
-            TF_WEIGHTS_NAME,
-            FLAX_WEIGHTS_NAME,
-            "*.gguf",
-            "consolidated*.pth",
-        )
+        weight_map = data.get("weight_map")
+        if not isinstance(weight_map, dict) or not weight_map:
+            return False
+
+        shard_names = {name for name in weight_map.values() if isinstance(name, str)}
+        if not shard_names:
+            return False
+        return all((model_dir / name).is_file() for name in shard_names)
+
+    def partial_cached_snapshot(self) -> Path | None:
+        """Return the local HF snapshot for this repo/revision, even if it is partial."""
+        if self.repo_id is None or self.cache_root is None:
+            return None
+        return self._local_snapshot_for_repo(self.repo_id, self.revision, self.cache_root)
 
     @classmethod
     def is_trusted_org(cls, org: str) -> bool:
@@ -270,18 +305,14 @@ def trust_remote_code_for_model(model_name: str | Path, *, cache_root: str | Pat
 
     Returns ``True`` for model identifiers owned by trusted organizations,
     including configured Hugging Face cache snapshots for those organizations.
-    Returns ``True`` for model identifiers owned by trusted organizations,
-    including configured Hugging Face cache snapshots for those organizations.
 
     Args:
         model_name: HuggingFace model identifier or local path.
-        cache_root: Hugging Face Hub cache root. Defaults to the configured hub cache.
         cache_root: Hugging Face Hub cache root. Defaults to the configured hub cache.
 
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
-    return ModelRef.parse(model_name, cache_root=cache_root).trust_remote_code
     return ModelRef.parse(model_name, cache_root=cache_root).trust_remote_code
 
 

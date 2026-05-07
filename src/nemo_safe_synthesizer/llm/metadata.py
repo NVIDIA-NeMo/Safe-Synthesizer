@@ -366,10 +366,13 @@ class ModelMetadata(BaseModel):
         if data.get("autoconfig") is None:
             model_name_or_path = data["model_name_or_path"]
             model_ref = ModelRef.parse(model_name_or_path)
-            data["autoconfig"] = AutoConfig.from_pretrained(
-                model_ref.target(),
-                trust_remote_code=model_ref.trust_remote_code,
-            )
+            try:
+                data["autoconfig"] = AutoConfig.from_pretrained(
+                    model_ref.target(),
+                    trust_remote_code=model_ref.trust_remote_code,
+                )
+            except OSError as err:
+                raise _model_load_parameter_error(model_name_or_path, err) from err
 
         if data.get("base_max_seq_length") is None:
             data["base_max_seq_length"] = get_base_max_seq_length(data["autoconfig"])
@@ -498,14 +501,17 @@ class ModelMetadata(BaseModel):
             A ``(config, tokenizer)`` tuple ready to pass to ``super().__init__``.
         """
         model_ref = ModelRef.parse(model_name_or_path)
-        config: PretrainedConfig = AutoConfig.from_pretrained(
-            model_ref.target(), trust_remote_code=model_ref.trust_remote_code
-        )
-        if tokenizer is None:
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_ref.target(),
-                trust_remote_code=model_ref.trust_remote_code,
+        try:
+            config: PretrainedConfig = AutoConfig.from_pretrained(
+                model_ref.target(), trust_remote_code=model_ref.trust_remote_code
             )
+            if tokenizer is None:
+                tokenizer = AutoTokenizer.from_pretrained(
+                    model_ref.target(),
+                    trust_remote_code=model_ref.trust_remote_code,
+                )
+        except OSError as err:
+            raise _model_load_parameter_error(model_name_or_path, err) from err
         return config, tokenizer
 
     @classmethod

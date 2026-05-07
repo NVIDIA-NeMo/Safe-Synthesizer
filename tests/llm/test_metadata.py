@@ -868,6 +868,34 @@ class TestFromConfig:
         mock_auto_config.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
         mock_auto_tokenizer.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
 
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    def test_from_config_wraps_model_load_errors(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+    ):
+        """Metadata load failures keep user-facing parameter diagnostics."""
+        model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        model_ref = MagicMock()
+        model_ref.target.return_value = model_name
+        model_ref.trust_remote_code = False
+        mock_auto_config.from_pretrained.side_effect = OSError("outgoing traffic has been disabled")
+
+        mock_config = MagicMock()
+        mock_config.training.pretrained_model = model_name
+        mock_config.training.rope_scaling_factor = None
+        mock_config.data.max_sequences_per_example = None
+
+        with (
+            patch("nemo_safe_synthesizer.llm.metadata.ModelRef.parse", return_value=model_ref),
+            pytest.raises(ParameterError, match="local Hugging Face cache"),
+        ):
+            ModelMetadata.from_config(mock_config)
+
+        mock_auto_config.from_pretrained.assert_called_once_with(model_name, trust_remote_code=False)
+        mock_auto_tokenizer.from_pretrained.assert_not_called()
+
 
 class TestModelMetadataKwargsPassthrough:
     """Tests for kwargs passthrough in model classes."""

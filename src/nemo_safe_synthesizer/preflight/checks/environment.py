@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from ...config.replace_pii import has_inference_key
+from ...llm.utils import ModelRef
 from ...observability import get_logger
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CUDAAvailabilityCheck",
+    "HFModelCacheCheck",
     "HFTokenCheck",
     "InferenceKeyCheck",
     "VRAMHeadroomCheck",
@@ -351,3 +354,105 @@ class HFTokenCheck(ConfigCheck):
                     "Set HF_TOKEN or HUGGING_FACE_HUB_TOKEN in your environment."
                 ),
             )
+
+
+_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+
+def _env_flag_enabled(name: str) -> bool:
+    value = os.environ.get(name)
+    return value is not None and value.casefold() in {"1", "true", "yes", "on"}
+
+
+def _hf_offline_enabled() -> bool:
+    return any(_env_flag_enabled(name) for name in _OFFLINE_ENV_VARS)
+
+
+def _is_missing_local_path(model_name: str) -> bool:
+    path = Path(model_name)
+    return path.is_absolute() or model_name.startswith(".")
+
+
+class HFModelCacheCheck(ConfigCheck):
+    """Validate local model or Hugging Face cache readiness for the pretrained model."""
+
+    name = "env.hf_model_cache"
+    label = "HF model cache"
+    category = "environment"
+
+    def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
+        model_name = ctx.config.training.pretrained_model
+        if not model_name:
+            collector.error("model_ref_empty", "`training.pretrained_model` must not be empty.")
+            return
+
+        model_path = Path(model_name)
+        if model_path.exists():
+            self._check_local_path(model_path, collector)
+            return
+
+        if _is_missing_local_path(model_name):
+            collector.error(
+                "local_model_missing",
+                f"`training.pretrained_model` points to missing local path '{model_name}'.",
+            )
+            return
+
+        model_ref = ModelRef.parse(model_name)
+        if model_ref.repo_id is None:
+            collector.error(
+                "model_ref_invalid",
+                (
+                    f"`training.pretrained_model` value '{model_name}' is neither an existing local path "
+                    "nor a valid Hugging Face model ID."
+                ),
+            )
+            return
+
+        snapshot_path = model_ref.local_path or model_ref.partial_cached_snapshot()
+        if snapshot_path is None:
+            self._report_missing_cache(model_ref, collector)
+            return
+
+        missing = ModelRef.missing_required_components(snapshot_path)
+        if missing:
+            collector.error(
+                "hf_model_cache_incomplete",
+                (
+                    f"Cached Hugging Face model '{model_ref.repo_id}' at '{snapshot_path}' is missing "
+                    f"{', '.join(missing)}. Pre-download the full model snapshot before running offline "
+                    "or rate-limited jobs."
+                ),
+            )
+
+    @staticmethod
+    def _check_local_path(model_path: Path, collector: IssueCollector) -> None:
+        if not model_path.is_dir():
+            collector.error(
+                "local_model_not_directory",
+                f"`training.pretrained_model` points to '{model_path}', but local models must be directories.",
+            )
+            return
+
+        missing = ModelRef.missing_required_components(model_path)
+        if missing:
+            collector.error(
+                "local_model_incomplete",
+                f"Local model directory '{model_path}' is missing {', '.join(missing)}.",
+            )
+
+    @staticmethod
+    def _report_missing_cache(model_ref: ModelRef, collector: IssueCollector) -> None:
+        message = (
+            f"Hugging Face model '{model_ref.repo_id}' is not present in the local cache at '{model_ref.cache_root}'."
+        )
+        if _hf_offline_enabled():
+            collector.error(
+                "hf_model_not_cached",
+                f"{message} Offline Hugging Face mode is enabled, so model loading will fail.",
+            )
+            return
+        collector.warning(
+            "hf_model_not_cached",
+            f"{message} Model loading will contact Hugging Face unless the model is pre-downloaded.",
+        )

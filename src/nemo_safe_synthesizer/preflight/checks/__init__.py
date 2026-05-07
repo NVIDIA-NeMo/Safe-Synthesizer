@@ -26,6 +26,7 @@ from .dataframe import (
 )
 from .environment import (
     CUDAAvailabilityCheck,
+    HFModelCacheCheck,
     HFTokenCheck,
     InferenceKeyCheck,
     VRAMHeadroomCheck,
@@ -38,6 +39,7 @@ __all__ = [
     "SmallDatasetCheck",
     "DatasetSizeCheck",
     "GroupbyColumnCheck",
+    "HFModelCacheCheck",
     "HFTokenCheck",
     "InferenceKeyCheck",
     "OrderbyColumnCheck",
@@ -59,6 +61,7 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     CUDAAvailabilityCheck(),
     InferenceKeyCheck(),
     HFTokenCheck(),
+    HFModelCacheCheck(),
     # DATAFRAME
     DatasetSizeCheck(),
     GroupbyColumnCheck(),
