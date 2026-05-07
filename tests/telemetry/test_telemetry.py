@@ -423,7 +423,8 @@ class TestTelemetryHandlerSend:
 
 
 class TestAflushAwaits:
-    async def test_aflush_actually_flushes(self):
+    async def test_aflush_actually_flushes(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler(source_client_version="1.0.0")
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
         handler.enqueue(event)
