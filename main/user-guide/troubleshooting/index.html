@@ -10396,8 +10396,26 @@ check of its own.</p>
 <tr>
 <td><code>hf_token_missing</code></td>
 <td>warning</td>
-<td><code>env.hf_token</code></td>
-<td>Neither <code>HF_TOKEN</code> nor <code>HUGGING_FACE_HUB_TOKEN</code> set; gated model downloads may fail</td>
+<td><code>env.hf_model_availability</code></td>
+<td>Neither <code>HF_TOKEN</code> nor <code>HUGGING_FACE_HUB_TOKEN</code> set, and model loading may need online Hugging Face access</td>
+</tr>
+<tr>
+<td><code>hf_model_not_cached</code></td>
+<td>warning/error</td>
+<td><code>env.hf_model_availability</code></td>
+<td>Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled</td>
+</tr>
+<tr>
+<td><code>hf_model_cache_incomplete</code></td>
+<td>error</td>
+<td><code>env.hf_model_availability</code></td>
+<td>Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards</td>
+</tr>
+<tr>
+<td><code>hf_remote_code_not_cached</code></td>
+<td>warning/error</td>
+<td><code>env.hf_model_availability</code></td>
+<td>Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled</td>
 </tr>
 <tr>
 <td><code>preflight.check_crash</code></td>

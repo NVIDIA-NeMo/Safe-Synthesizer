@@ -10321,9 +10321,9 @@ execute in order (<code>config</code> → <code>dataframe</code> → <code>metad
 <td><code>NSS_INFERENCE_KEY</code> is set when PII classification is enabled (warning only)</td>
 </tr>
 <tr>
-<td><code>env.hf_token</code></td>
+<td><code>env.hf_model_availability</code></td>
 <td>config</td>
-<td><code>HF_TOKEN</code> or <code>HUGGING_FACE_HUB_TOKEN</code> is set; warns unconditionally when neither is present so gated-repo downloads don't fail later (warning only)</td>
+<td>The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed</td>
 </tr>
 <tr>
 <td><code>dataset.size</code></td>
