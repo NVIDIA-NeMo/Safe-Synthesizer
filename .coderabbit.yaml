@@ -1,0 +1,319 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+language: en
+early_access: true
+
+reviews:
+
+  auto_apply_labels: true
+  auto_title_placeholder: "@coderabbitai"
+  collapse_walkthrough: false
+  changed_files_summary: true
+  enable_prompt_for_ai_agents: false
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  in_progress_fortune: false
+  poem: false
+  profile: chill
+  review_status: true
+  request_changes_workflow: false
+  review_details: true
+  sequence_diagrams: false
+
+  labeling_instructions:
+    - label: python
+      instructions: Apply when the PR changes Python source or tests.
+    - label: tests
+      instructions: Apply when the PR changes test code, fixtures, pytest config, or test documentation.
+    - label: documentation
+      instructions: Apply when the PR changes README, docs, markdown guides, or API documentation.
+    - label: ci
+      instructions: Apply when the PR changes GitHub Actions, CODEOWNERS, Dependabot, CodeQL, Codecov, or CI scripts.
+    - label: dependencies
+      instructions: Apply when the PR changes pyproject.toml, constraints.txt, .mise.toml, or dependency/tooling configuration.
+    - label: containers
+      instructions: Apply when the PR changes Dockerfiles, container docs, or container build scripts.
+    - label: shell
+      instructions: Apply when the PR changes shell scripts, Makefile targets, or command-line tooling.
+
+  path_filters:
+    - "!uv.lock"
+    - "!mise.lock"
+    - "!site/**"
+    - "!dist/**"
+    - "!build/**"
+    - "!htmlcov/**"
+    - "!coverage.*"
+    - "!*-artifacts/**"
+    - "!.venv/**"
+    - "!.ruff_cache/**"
+    - "!.pytest_cache/**"
+    - "!.git/**"
+    - "!__pycache__/**"
+    - "!node_modules/**"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: >-
+        Review as a senior maintainer for NeMo Safe Synthesizer. Prioritize
+        issues that can change behavior, break user workflows, weaken privacy
+        guarantees, hide failures, make tests unreliable, or create maintenance
+        risk. Avoid generic style commentary unless it points to a concrete
+        project convention that automated tools will not catch.
+
+        Comment only when the finding is actionable and tied to changed code.
+        For each finding, state the impact, the condition that triggers it, and
+        the smallest practical fix. Prefer one precise comment over broad
+        advice. Do not ask for refactors outside the PR scope unless the changed
+        code creates the problem.
+
+        Review type guidance:
+        - Potential issue: use for correctness bugs, data loss, privacy leaks,
+          security risks, broken public APIs, invalid config behavior, missing
+          validation, hidden failures, nondeterministic tests, or CI breakage.
+        - Refactor suggestion: use for local maintainability problems introduced
+          by the diff when they have clear future cost, such as duplicated setup,
+          unclear boundaries, over-mocking, avoidable complexity, or opaque test
+          helpers.
+        - Nitpick: avoid in chill mode. Do not emit formatting, import-order,
+          wording, or style-only comments unless automated tools cannot catch the
+          issue and it affects maintainability.
+
+        Severity guidance:
+        - Critical: security/privacy leaks, data loss, training/test/holdout
+          contamination, or broken release/package/core pipeline execution.
+        - Major: incorrect generation/training/evaluation behavior, broken
+          CLI/SDK public API, invalid config defaults or validators, or GPU/vLLM
+          cleanup and process-isolation bugs likely to fail CI or production
+          runs.
+        - Minor: localized bugs, missing focused tests for changed behavior, or
+          bad test patterns that weaken regression coverage.
+        - Trivial: small cleanup with no behavior impact. Usually suppress in
+          chill mode.
+        - Info: context only. Avoid unless it helps reviewers understand risk.
+
+        Review against these repository sources of truth:
+        - STYLE_GUIDE.md for Python, tests, docs, shell, Dockerfile, YAML, and
+          general style.
+        - CONTRIBUTING.md for PR process, conventional commits, DCO, branch
+          rules, and local validation commands.
+        - tests/TESTING.md for pytest markers, fixture conventions, GPU
+          isolation, smoke/e2e tests, and test-data patterns.
+        - Makefile for validation commands. Prefer make targets over direct
+          tool invocations.
+        - ruff.toml for Python formatting and lint rules.
+        - pyproject.toml for packaging, uv, dependency groups, optional extras,
+          indexes, and ty configuration.
+
+        Safe-Synthesizer-specific review focus:
+        - Data handling: preserve the distinction between input, training, test,
+          synthetic, and holdout data. Check column validation, group handling,
+          nullable dtypes, ordering assumptions, token budgets, and
+          reproducibility.
+        - Privacy: treat PII replacement, DP settings, holdout separation, and
+          evaluation privacy metrics as high-risk. Flag changes that could
+          expose raw training records, identifiers, secrets, or held-out data.
+        - Configuration: Pydantic fields should use Field(description=...) and
+          maintain CLI/config/help behavior. Check default values, override
+          merging, validators, aliases, and backwards-compatible user-facing
+          config changes.
+        - Generation and training: check teardown paths, GPU memory cleanup,
+          vLLM process isolation, retry/stop conditions, structured generation
+          contracts, and model/download assumptions.
+        - Errors and logs: user-facing failures should raise project errors from
+          nemo_safe_synthesizer.errors with precise messages. Library code
+          should use nemo_safe_synthesizer.observability.get_logger(), not
+          print().
+        - Public API: preserve __all__, builder method chaining, SDK behavior,
+          CLI option names, artifact paths, and result schemas unless the PR
+          explicitly migrates them.
+        - Dependencies: use uv workflows. Do not suggest pip or raw python
+          commands. Treat pyproject.toml, uv.lock, .mise.toml, and mise.lock
+          changes as high-risk supply-chain and reproducibility changes.
+
+        Python conventions to enforce when relevant:
+        - Target Python 3.11 through 3.13. Python 3.14+ is not supported.
+        - Use modern typing: X | Y, list[str], dict[str, T], Self, Sequence, and
+          Mapping where appropriate.
+        - Include from __future__ import annotations in Python modules.
+        - Prefer pathlib.Path over os.path.
+        - Avoid Any, cast(), and type ignores unless the PR demonstrates why a
+          better typed design is not practical.
+        - Public APIs and nontrivial functions need Google-style docstrings.
+
+        Test expectations:
+        - New behavior needs focused tests near the affected subsystem.
+        - Tests should prove user-visible behavior, invariants, or regression
+          coverage. Flag slop tests that only execute code, assert weak
+          existence checks, or mirror the implementation.
+        - Tests should use existing fixtures or add focused fixtures when setup
+          is shared. Keep tests DRY when reasonable, but do not hide the
+          behavior under test behind opaque helper layers.
+        - Flag change detector tests: brittle tests that fail on harmless
+          refactors, formatting, ordering, wording, or implementation details
+          without proving a real contract changed.
+        - Tests should mirror source structure and use test_*.py names.
+        - Unit tests are default; smoke and e2e tests follow marker conventions.
+        - CUDA-dependent tests need requires_gpu plus the appropriate category.
+        - vLLM/GPU generation tests need process-isolation awareness.
+        - Do not add __init__.py files under tests/.
+        - Use tmp_path for filesystem writes and avoid shared mutable state.
+
+        Documentation expectations:
+        - Docs use MkDocs Material and Diataxis categories.
+        - Markdown should follow STYLE_GUIDE.md.
+        - Avoid decorative bold in normal prose.
+        - Use backticks for code identifiers, paths, commands, and config keys.
+
+    - path: "src/nemo_safe_synthesizer/config/**/*.py"
+      instructions: >-
+        Treat config changes as user-facing API changes. Check Pydantic field
+        descriptions, defaults, validators, aliases, override behavior, CLI help
+        text impact, YAML compatibility, and documented parameter semantics.
+
+    - path: "src/nemo_safe_synthesizer/configurator/**/*.py"
+      instructions: >-
+        Review Pydantic-to-Click mapping carefully. Check option names, type
+        conversion, nullable sub-config behavior, validation errors, help text,
+        and compatibility with parse_overrides().
+
+    - path: "src/nemo_safe_synthesizer/data_processing/**/*.py"
+      instructions: >-
+        Review for data-contract regressions. Check input/training/test/synthetic
+        naming, group boundaries, token-budget math, record ordering, schema and
+        column validation, nullable dtypes, and deterministic behavior.
+
+    - path: "src/nemo_safe_synthesizer/evaluation/**/*.py"
+      instructions: >-
+        Treat evaluation changes as correctness-sensitive. Check metric inputs,
+        holdout usage, privacy metric semantics, report data shape, missing-data
+        handling, and whether unavailable metrics fail or degrade intentionally.
+
+    - path: "src/nemo_safe_synthesizer/generation/**/*.py"
+      instructions: >-
+        Review generation changes for retry loops, stopping conditions, invalid
+        record handling, regex/structured output contracts, backend teardown,
+        memory cleanup, and vLLM assumptions.
+
+    - path: "src/nemo_safe_synthesizer/training/**/*.py"
+      instructions: >-
+        Review training changes for dataset preprocessing, model path handling,
+        artifact writes, LoRA/DP behavior, GPU memory usage, reproducibility, and
+        cleanup on failure.
+
+    - path: "src/nemo_safe_synthesizer/privacy/**/*.py"
+      instructions: >-
+        Treat privacy changes as high-risk. Check DP accounting, parameter
+        validation, data leakage, seed handling, model state persistence, and
+        whether privacy guarantees are documented accurately.
+
+    - path: "src/nemo_safe_synthesizer/pii_replacer/**/*.py"
+      instructions: >-
+        Treat PII replacement changes as high-risk. Check entity coverage,
+        replacement determinism, leakage of original values, handling of empty
+        or multilingual text, and compatibility with optional dependencies.
+
+    - path: "src/**/*.py"
+      instructions: >-
+        Review library code against STYLE_GUIDE.md. Focus on behavior, API
+        contracts, error handling, resource cleanup, typing, logging, and
+        user-facing failures. Public APIs and nontrivial functions need
+        Google-style docstrings.
+
+    - path: "tests/**/*.py"
+      instructions: >-
+        Review tests against tests/TESTING.md. Check marker usage, fixture
+        naming, tmp_path usage, determinism, and GPU/vLLM process-isolation
+        requirements. Flag slop tests that only check that code runs, assert
+        result is not None when stronger invariants exist, over-mock internal
+        implementation details, patch around the bug instead of reproducing it,
+        or add broad snapshot/golden churn without a clear contract. Flag change
+        detector tests that fail on harmless refactors, formatting, record
+        ordering, incidental wording, or private implementation details without
+        demonstrating a behavior regression. Prefer existing fixtures or focused
+        new fixtures for repeated setup; keep tests DRY when reasonable without
+        making the behavior under test opaque. print() is allowed in tests.
+
+    - path: "docs/**"
+      instructions: >-
+        Review documentation as MkDocs Material content. Check Diataxis fit,
+        accurate commands, internal links, code fences, and markdown style from
+        STYLE_GUIDE.md.
+
+    - path: "README.md"
+      instructions: >-
+        Treat README.md as the project overview. Check that setup, usage, and
+        links stay consistent with CONTRIBUTING.md, Makefile, and docs/.
+
+    - path: "pyproject.toml"
+      instructions: >-
+        Treat pyproject.toml as high-risk. Check package metadata, uv indexes,
+        dependency groups, optional extras, Python version bounds, hatch config,
+        ty config, and dependency consistency.
+
+    - path: "Makefile"
+      instructions: >-
+        Treat Makefile targets as the validation source of truth. Check that
+        new targets are documented with target-name: ## Description, declared
+        .PHONY where appropriate, and use uv/mise conventions.
+
+    - path: ".github/**"
+      instructions: >-
+        Review GitHub configuration for branch protection expectations,
+        CODEOWNERS alignment, least privilege permissions, pinned actions where
+        practical, and consistency with CONTRIBUTING.md.
+
+    - path: "containers/**"
+      instructions: >-
+        Review container changes against STYLE_GUIDE.md and containers/README.md.
+        Check cache mounts, uv usage, non-root runtime behavior, CUDA settings,
+        and copy order.
+
+    - path: "*.sh"
+      instructions: >-
+        Review shell scripts for #!/usr/bin/env bash, set -euo pipefail where
+        appropriate, quoting, repo root detection, and shellcheck compliance.
+
+    - path: "*.yaml"
+      instructions: >-
+        Review YAML for 2-space indentation, SPDX headers when required,
+        unquoted values unless needed, and newline at EOF.
+
+    - path: "*.yml"
+      instructions: >-
+        Review YAML for 2-space indentation, SPDX headers when required,
+        unquoted values unless needed, and newline at EOF.
+
+  abort_on_close: true
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - WIP
+      - "[WIP]"
+      - draft
+    labels: []
+    drafts: false
+    base_branches:
+      - main
+
+  tools:
+    ruff:
+      enabled: true
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: false
+    languagetool:
+      enabled: true
+      disabled_rules:
+        - EN_QUOTES
+        - PASSIVE_VOICE
+
+chat:
+  auto_reply: true
