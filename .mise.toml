@@ -37,12 +37,11 @@ _.file = [".env", ".env.local"]
 
 [task_config]
 includes = [
+  ".mise/tasks",
   "tasks/setup.toml",
   "tasks/docs.toml",
   "tasks/quality.toml",
   "tasks/tests.toml",
-  "tasks/containers.toml",
-  "tasks/release.toml",
 ]
 
 [settings]

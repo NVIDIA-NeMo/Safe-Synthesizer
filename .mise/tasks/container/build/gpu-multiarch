@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Build multi-arch GPU image (requires docker + registry)"
+#MISE alias="container-build-gpu-multiarch"
+
+set -euo pipefail
+
+if [[ -z "${CONTAINER_GPU_REGISTRY:-}" ]]; then
+  echo "CONTAINER_GPU_REGISTRY is required for multi-arch builds. Multi-platform manifests must be pushed to a registry." >&2
+  exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Multi-arch builds require Docker with buildx. Podman does not support buildx." >&2
+  exit 1
+fi
+
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --tag "${CONTAINER_GPU_REGISTRY}/${CONTAINER_GPU_IMAGE:-nss-gpu:latest}" \
+  --target runtime \
+  --progress=plain \
+  --push \
+  -f "${CONTAINER_GPU_FILE:-containers/Dockerfile.cuda}" \
+  .

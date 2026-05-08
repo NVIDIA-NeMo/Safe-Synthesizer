@@ -42,6 +42,8 @@ mise run bootstrap-nss cuda
 
 Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
 
+Project commands run through mise tasks. `tasks/*.toml` holds short task definitions, and `.mise/tasks/` holds executable file tasks for longer shell logic. Run `mise tasks` to inspect the available commands.
+
 ### Running
 
 Activate Python virtual environment and run the CLI using `safe-synthesizer`:

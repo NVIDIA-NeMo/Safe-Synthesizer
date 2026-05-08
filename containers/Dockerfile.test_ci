@@ -14,6 +14,7 @@ WORKDIR /workspace
 
 # Install mise and all dev tools including uv (cached until .mise.toml or task files change)
 COPY .mise.toml .
+COPY .mise/tasks/ .mise/tasks/
 COPY tasks/ tasks/
 COPY mise.lock .
 RUN mkdir -p /workspace/tools

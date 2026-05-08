@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Build CUDA dev container (tools + test deps)"
+#MISE alias="container-build-gpu-dev"
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+container_cmd="$(resolve_container_cmd)"
+
+"${container_cmd}" build \
+  --platform "${CONTAINER_GPU_PLATFORM:-linux/amd64}" \
+  --tag "${CONTAINER_GPU_IMAGE_DEV:-nss-gpu-dev:latest}" \
+  --target dev \
+  --progress=plain \
+  -f "${CONTAINER_GPU_FILE:-containers/Dockerfile.cuda}" \
+  .

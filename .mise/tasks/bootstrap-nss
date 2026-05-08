@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Bootstrap Python dependencies"
+#USAGE arg "<extra>" help="Python dependency profile" {
+#USAGE   choices "dev" "engine" "cpu" "cuda" "cu128"
+#USAGE }
+
+set -euo pipefail
+
+mise run venv
+
+echo "~~~~~~"
+echo "attempting to install nss package with primary extra: ${usage_extra?}"
+
+case "${usage_extra?}" in
+  cuda|cu128)
+    uv sync --frozen --extra cu128 --extra engine --group dev
+    ;;
+  cpu)
+    uv sync --frozen --extra cpu --extra engine --group dev
+    ;;
+  engine)
+    uv sync --frozen --extra engine --group dev
+    ;;
+  dev)
+    uv sync --frozen --group dev
+    ;;
+  *)
+    echo "Error: Invalid extra '${usage_extra?}'. Use one of: dev engine cpu cuda cu128" >&2
+    exit 1
+    ;;
+esac

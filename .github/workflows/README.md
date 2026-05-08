@@ -107,7 +107,7 @@ flowchart LR
 
 ## CI Checks Workflow
 
-The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task so `tasks/*.toml` files are the single source of truth for how each check runs.
+The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task. Short task definitions live in `tasks/*.toml`; bash-heavy tasks live as executable file tasks in `.mise/tasks/`.
 
 | Job | mise task | What it checks |
 | --- | --- | --- |

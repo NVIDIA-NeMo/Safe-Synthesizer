@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Remove Python virtual environment"
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+venv_path="$(resolve_venv_path)"
+rm -rf "${venv_path}"

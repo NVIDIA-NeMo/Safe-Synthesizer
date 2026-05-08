@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Build only the setup stage (tools, no Python deps)"
+#MISE alias="container-build-test-setup"
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+container_cmd="$(resolve_container_cmd)"
+
+"${container_cmd}" build \
+  --platform "${CONTAINER_TEST_PLATFORM:-linux/amd64}" \
+  --progress=plain \
+  -f "${CONTAINER_TEST_FILE:-containers/Dockerfile.test_ci}" \
+  --tag "${CONTAINER_TEST_IMAGE_SETUP:-nss-test-setup:latest}" \
+  --target setup \
+  .

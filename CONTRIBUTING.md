@@ -558,7 +558,7 @@ mise run format check test
 
 We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-CI calls the same tools through atomic read-only mise tasks, so `tasks/*.toml` files are the single source of truth for how each check runs. `mise run check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
+CI calls the same tools through atomic read-only mise tasks. Short task definitions live in `tasks/*.toml`; bash-heavy tasks live as executable file tasks in `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
 
 You can also run tools directly on specific files:
 
@@ -731,7 +731,7 @@ make use-nss-artifactory    # Revert to Artifactory (always do this before commi
 
 See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
 
-Run `mise tasks` to see all available mise tasks. The Makefile keeps a small set of bootstrap and compatibility wrappers.
+Run `mise tasks` to see all available mise tasks. The Makefile only bootstraps mise and prints deprecation messages for old `make <task>` commands; use `mise run <task>` for project tasks.
 
 ---
 
