@@ -37,6 +37,8 @@ reviews:
       instructions: Apply when the PR changes Dockerfiles, container docs, or container build scripts.
     - label: shell
       instructions: Apply when the PR changes shell scripts, Makefile targets, or command-line tooling.
+    - label: tooling
+      instructions: Apply when the PR changes tools/, script/, developer automation, codestyle wrappers, or release/build helpers.
 
   path_filters:
     - "!uv.lock"
@@ -259,6 +261,30 @@ reviews:
         new targets are documented with target-name: ## Description, declared
         .PHONY where appropriate, and use uv/mise conventions.
 
+    - path: "tools/**"
+      instructions: >-
+        Review tools as developer and CI infrastructure. Check that scripts use
+        uv or Makefile wrappers instead of ad hoc python/pip commands, preserve
+        read-only behavior for check targets, fail with clear messages, avoid
+        hidden network or filesystem side effects, and stay consistent with
+        STYLE_GUIDE.md and CONTRIBUTING.md. Tooling may use print() when it is a
+        standalone script or intentional CLI output.
+
+    - path: "tools/codestyle/**"
+      instructions: >-
+        Treat codestyle wrappers as CI-critical. Check consistency with Makefile
+        targets, ruff.toml, ty configuration, copyright handling, staged-file
+        behavior, read-only check modes, and whether fixes mutate only expected
+        files.
+
+    - path: "script/**"
+      instructions: >-
+        Review standalone scripts for reproducibility and operational safety.
+        Check argument validation, quoting, repo-root detection, environment
+        variables, generated artifacts, external commands, GPU/cluster
+        assumptions, and whether the script should be wired through Makefile or
+        documented in README/docs.
+
     - path: ".github/**"
       instructions: >-
         Review GitHub configuration for branch protection expectations,
@@ -271,17 +297,17 @@ reviews:
         Check cache mounts, uv usage, non-root runtime behavior, CUDA settings,
         and copy order.
 
-    - path: "*.sh"
+    - path: "**/*.sh"
       instructions: >-
         Review shell scripts for #!/usr/bin/env bash, set -euo pipefail where
         appropriate, quoting, repo root detection, and shellcheck compliance.
 
-    - path: "*.yaml"
+    - path: "**/*.yaml"
       instructions: >-
         Review YAML for 2-space indentation, SPDX headers when required,
         unquoted values unless needed, and newline at EOF.
 
-    - path: "*.yml"
+    - path: "**/*.yml"
       instructions: >-
         Review YAML for 2-space indentation, SPDX headers when required,
         unquoted values unless needed, and newline at EOF.
