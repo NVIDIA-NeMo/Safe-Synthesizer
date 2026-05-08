@@ -96,19 +96,6 @@ reviews:
           chill mode.
         - Info: context only. Avoid unless it helps reviewers understand risk.
 
-        Review against these repository sources of truth:
-        - STYLE_GUIDE.md for Python, tests, docs, shell, Dockerfile, YAML, and
-          general style.
-        - CONTRIBUTING.md for PR process, conventional commits, DCO, branch
-          rules, and local validation commands.
-        - tests/TESTING.md for pytest markers, fixture conventions, GPU
-          isolation, smoke/e2e tests, and test-data patterns.
-        - Makefile for validation commands. Prefer make targets over direct
-          tool invocations.
-        - ruff.toml for Python formatting and lint rules.
-        - pyproject.toml for packaging, uv, dependency groups, optional extras,
-          indexes, and ty configuration.
-
         Safe-Synthesizer-specific review focus:
         - Data handling: preserve the distinction between input, training, test,
           synthetic, and holdout data. Check column validation, group handling,
@@ -131,19 +118,10 @@ reviews:
         - Public API: preserve __all__, builder method chaining, SDK behavior,
           CLI option names, artifact paths, and result schemas unless the PR
           explicitly migrates them.
-        - Dependencies: use uv workflows. Do not suggest pip or raw python
-          commands. Treat pyproject.toml, uv.lock, .mise.toml, and mise.lock
-          changes as high-risk supply-chain and reproducibility changes.
-
-        Python conventions to enforce when relevant:
-        - Target Python 3.11 through 3.13. Python 3.14+ is not supported.
-        - Use modern typing: X | Y, list[str], dict[str, T], Self, Sequence, and
-          Mapping where appropriate.
-        - Include from __future__ import annotations in Python modules.
-        - Prefer pathlib.Path over os.path.
-        - Avoid Any, cast(), and type ignores unless the PR demonstrates why a
-          better typed design is not practical.
-        - Public APIs and nontrivial functions need Google-style docstrings.
+        - Dependencies and tools: use uv workflows. Do not suggest pip or raw
+          python commands. Review source configuration files for supply-chain
+          and reproducibility risk. Lockfiles are generated artifacts and are
+          intentionally excluded from review.
 
         Test expectations:
         - New behavior needs focused tests near the affected subsystem.
@@ -162,12 +140,6 @@ reviews:
         - vLLM/GPU generation tests need process-isolation awareness.
         - Do not add __init__.py files under tests/.
         - Use tmp_path for filesystem writes and avoid shared mutable state.
-
-        Documentation expectations:
-        - Docs use MkDocs Material and Diataxis categories.
-        - Markdown should follow STYLE_GUIDE.md.
-        - Avoid decorative bold in normal prose.
-        - Use backticks for code identifiers, paths, commands, and config keys.
 
     - path: "src/nemo_safe_synthesizer/config/**/*.py"
       instructions: >-
@@ -253,7 +225,38 @@ reviews:
       instructions: >-
         Treat pyproject.toml as high-risk. Check package metadata, uv indexes,
         dependency groups, optional extras, Python version bounds, hatch config,
-        ty config, and dependency consistency.
+        ty config, script entry points, dependency consistency, and whether
+        changes require regenerating uv.lock.
+
+    - path: "constraints.txt"
+      instructions: >-
+        Treat constraints.txt as high-risk supply-chain configuration. Check
+        that constraints are justified, compatible with pyproject.toml, and do
+        not silently broaden dependency versions.
+
+    - path: ".mise.toml"
+      instructions: >-
+        Treat .mise.toml as toolchain supply-chain configuration. Check pinned
+        tool choices, install cadence, platform coverage, environment settings,
+        and whether changes require regenerating mise.lock.
+
+    - path: ".pre-commit-config.yaml"
+      instructions: >-
+        Treat pre-commit configuration as a developer and CI consistency layer.
+        Check hook stages, file filters, local hook commands, DCO checks, and
+        consistency with Makefile validation targets.
+
+    - path: "ruff.toml"
+      instructions: >-
+        Review Ruff configuration against STYLE_GUIDE.md. Check selected rules,
+        ignores, per-file ignores, Python target version, line length, and
+        whether changes hide real defects or conflict with Makefile targets.
+
+    - path: "pytest.ini"
+      instructions: >-
+        Review pytest configuration against tests/TESTING.md. Check marker
+        definitions, strict marker/config settings, test discovery, xdist
+        defaults, timeouts, and warning filters.
 
     - path: "Makefile"
       instructions: >-
@@ -340,6 +343,17 @@ reviews:
       disabled_rules:
         - EN_QUOTES
         - PASSIVE_VOICE
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "STYLE_GUIDE.md"
+      - "CONTRIBUTING.md"
+      - "tests/TESTING.md"
+      - ".cursor/rules/*.mdc"
 
 chat:
   auto_reply: true
