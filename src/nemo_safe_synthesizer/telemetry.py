@@ -22,8 +22,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field
+
+from .observability import get_logger
 
 if TYPE_CHECKING:
     import httpx
@@ -33,6 +36,7 @@ NEMO_TELEMETRY_VERSION = "nemo-telemetry/1.0"
 DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
+logger = get_logger(__name__)
 
 
 class NemoSourceEnum(str, Enum):
@@ -44,6 +48,7 @@ class DeploymentTypeEnum(str, Enum):
     CLI = "cli"  # Library invoked via the CLI entry point
     SDK = "sdk"  # Library invoked programmatically via the SDK
     NMP = "nmp"  # Deployed through NVIDIA NeMo Platform
+    SLURM = "slurm"  # Deployed through SLURM
     UNDEFINED = "undefined"
 
 
@@ -60,6 +65,16 @@ def _telemetry_enabled() -> bool:
 
 def _telemetry_endpoint() -> str:
     return os.getenv("NEMO_TELEMETRY_ENDPOINT", DEFAULT_ENDPOINT)
+
+
+def _redact_endpoint(endpoint: str) -> str:
+    """Redact query parameters before logging telemetry endpoints."""
+    try:
+        parsed = urlsplit(endpoint)
+    except ValueError:
+        return "<invalid-endpoint>"
+    query = "<redacted>" if parsed.query else ""
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
 
 
 def _deployment_type() -> DeploymentTypeEnum:
@@ -515,8 +530,28 @@ class TelemetryHandler:
             return
 
         payload = build_payload(events, source_client_version=self._source_client_version, session_id=self._session_id)
+        endpoint = _telemetry_endpoint()
+        logger.runtime.debug(
+            "Sending telemetry events",
+            extra={
+                "ctx": {
+                    "endpoint": _redact_endpoint(endpoint),
+                    "event_count": len(events),
+                    "events": [
+                        {
+                            "name": queued.event._event_name,
+                            "task": queued.event.task,
+                            "task_status": queued.event.task_status.value,
+                            "deployment_type": queued.event.deployment_type.value,
+                            "retry_count": queued.retry_count,
+                        }
+                        for queued in events
+                    ],
+                }
+            },
+        )
         try:
-            response = await client.post(_telemetry_endpoint(), json=payload)
+            response = await client.post(endpoint, json=payload)
             # 2xx, 400, 422 are all considered complete (no retry)
             # 400/422 indicate bad payload which retrying won't fix
             if response.status_code in (400, 422) or response.is_success:

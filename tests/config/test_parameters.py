@@ -16,6 +16,17 @@ def test_safe_synthesizer_parameters():
     )
     assert config.replace_pii is None
     assert config.training.batch_size == 1
+    assert config.emit_telemetry is True
+
+
+def test_emit_telemetry_can_be_disabled_from_yaml():
+    c = SafeSynthesizerParameters.from_yaml_str("emit_telemetry: false\n")
+    assert c.emit_telemetry is False
+
+
+def test_emit_telemetry_can_be_disabled_from_params():
+    c = SafeSynthesizerParameters.from_params(emit_telemetry=False)
+    assert c.emit_telemetry is False
 
 
 def test_pii_replacer_default():

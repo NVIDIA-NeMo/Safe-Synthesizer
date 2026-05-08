@@ -462,3 +462,13 @@ def get_quantization_config(quantization_bits: Literal[4, 8]) -> BitsAndBytesCon
         )
     else:
         raise ValueError(f"Invalid quantization bits: {quantization_bits}")
+
+
+def get_device_name() -> str:
+    """Get the name of the current device (first index). Returns 'undefined' if the device is not available."""
+    try:
+        import torch
+
+        return torch.cuda.get_device_properties(0).name
+    except Exception:
+        return "undefined"

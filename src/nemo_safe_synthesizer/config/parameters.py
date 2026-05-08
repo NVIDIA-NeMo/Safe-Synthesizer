@@ -76,6 +76,11 @@ class SafeSynthesizerParameters(Parameters):
         default_factory=PreflightParameters,
     )
 
+    emit_telemetry: bool = Field(
+        default=True,
+        description="Whether to emit anonymous Safe Synthesizer telemetry events.",
+    )
+
     @field_validator("privacy", mode="after", check_fields=False)
     def check_dp_compatibility(
         cls, dp_params: DifferentialPrivacyHyperparams | None, info: ValidationInfo
@@ -176,4 +181,6 @@ class SafeSynthesizerParameters(Parameters):
             extra["replace_pii"] = kwargs["replace_pii"]
         if "preflight" in kwargs:
             extra["preflight"] = kwargs["preflight"]
+        if "emit_telemetry" in kwargs:
+            extra["emit_telemetry"] = kwargs["emit_telemetry"]
         return cls(**extra)

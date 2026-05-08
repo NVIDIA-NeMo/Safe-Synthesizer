@@ -13,7 +13,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     PiiReplacerConfig,
 )
 from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
-from nemo_safe_synthesizer.telemetry import TaskStatusEnum
+from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
 _REPORT_HTML = "<html><body>report</body></html>"
@@ -23,6 +23,25 @@ PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
 def test_safe_synthesizer_builder_sanity():
     builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+    assert builder._emit_telemetry is True
+    assert builder._deployment_type == DeploymentTypeEnum.SDK
+
+
+def test_safe_synthesizer_builder_uses_config_telemetry_setting():
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=False))
+    assert builder._emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_resolve_preserves_config_telemetry_setting():
+    builder = (
+        SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=False)).with_data_source(_SMALL_DF).resolve()
+    )
+    assert builder._nss_config is not None
+    assert builder._nss_config.emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_explicit_telemetry_override_wins():
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=False), emit_telemetry=True)
     assert builder._emit_telemetry is True
 
 
@@ -364,6 +383,51 @@ def _builder_for_telemetry() -> SafeSynthesizer:
 
 
 class TestTelemetryEmission:
+    def test_run_emits_completed_after_save_results(self, monkeypatch, tmp_path: Path):
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
+        emitted = []
+
+        def fake_emit(ss, status):
+            emitted.append(status)
+
+        def fake_save_results(*, output_file=None):
+            emitted.append("save_results")
+            return builder
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder._emit_nss_telemetry", fake_emit)
+        builder._data_source = _SMALL_DF
+        builder.process_data = MagicMock(return_value=builder)
+        builder.train = MagicMock(return_value=builder)
+        builder.generate = MagicMock(return_value=builder)
+        builder.evaluate = MagicMock(return_value=builder)
+        builder.save_results = MagicMock(side_effect=fake_save_results)
+
+        builder.run()
+
+        builder.evaluate.assert_called_once_with(emit_telemetry=False)
+        assert emitted == ["save_results", TaskStatusEnum.COMPLETED]
+
+    def test_run_emits_error_when_save_results_fails(self, monkeypatch, tmp_path: Path):
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
+        emitted = []
+
+        def fake_emit(ss, status):
+            emitted.append(status)
+
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder._emit_nss_telemetry", fake_emit)
+        builder._data_source = _SMALL_DF
+        builder.process_data = MagicMock(return_value=builder)
+        builder.train = MagicMock(return_value=builder)
+        builder.generate = MagicMock(return_value=builder)
+        builder.evaluate = MagicMock(return_value=builder)
+        builder.save_results = MagicMock(side_effect=RuntimeError("save failed"))
+
+        with pytest.raises(RuntimeError, match="save failed"):
+            builder.run()
+
+        builder.evaluate.assert_called_once_with(emit_telemetry=False)
+        assert emitted == [TaskStatusEnum.ERROR]
+
     def test_emit_nss_telemetry_enqueues_and_flushes_event(self, monkeypatch):
         handlers = []
 
@@ -392,6 +456,7 @@ class TestTelemetryEmission:
         events = [handler.events[0] for handler in handlers]
         assert [event.task for event in events] == ["run", "run"]
         assert [event.task_status for event in events] == [TaskStatusEnum.COMPLETED, TaskStatusEnum.ERROR]
+        assert [event.deployment_type for event in events] == [DeploymentTypeEnum.SDK, DeploymentTypeEnum.SDK]
 
     def test_emit_nss_telemetry_swallows_handler_errors(self, monkeypatch):
         class FailingTelemetryHandler:

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import nemo_safe_synthesizer.telemetry as telemetry_module
 from nemo_safe_synthesizer.telemetry import (
     DeploymentTypeEnum,
     NemoSourceEnum,
@@ -284,6 +285,13 @@ class TestTelemetryHandlerEnqueue:
         assert len(handler._events) == 1
         assert handler._events[0].event is event
 
+    def test_enqueue_does_not_add_event_when_telemetry_is_disabled(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+        handler = TelemetryHandler()
+        event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
+        handler.enqueue(event)
+        assert len(handler._events) == 0
+
     def test_enqueue_at_max_queue_size_signals_flush_when_running(self, monkeypatch):
         """When a background loop is up, hitting max_queue_size should signal it. Without a loop, no-op is safe."""
         monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
@@ -348,6 +356,44 @@ class TestTelemetryHandlerSend:
     def _make_queued(self) -> QueuedEvent:
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
         return QueuedEvent(event=event, timestamp=datetime.now(timezone.utc))
+
+    async def test_debug_logs_event_metadata_before_post(self, monkeypatch):
+        handler = self._make_handler()
+        queued = self._make_queued()
+        events_seen: list[str] = []
+        debug_calls = []
+
+        monkeypatch.setenv("NEMO_TELEMETRY_ENDPOINT", "https://Events.Telemetry.example.COM/v1/Events?Token=AbC")
+
+        def fake_debug(message, *, extra):
+            events_seen.append("debug")
+            debug_calls.append((message, extra))
+
+        async def fake_post(*args, **kwargs):
+            events_seen.append("post")
+            return MagicMock(status_code=200, is_success=True)
+
+        monkeypatch.setattr(telemetry_module.logger.runtime, "debug", fake_debug)
+        mock_client = AsyncMock()
+        mock_client.post.side_effect = fake_post
+
+        await handler._send_events_with_client(mock_client, [queued])
+
+        assert events_seen == ["debug", "post"]
+        message, extra = debug_calls[0]
+        assert message == "Sending telemetry events"
+        ctx = extra["ctx"]
+        assert ctx["endpoint"] == "https://Events.Telemetry.example.COM/v1/Events?<redacted>"
+        assert ctx["event_count"] == 1
+        assert ctx["events"] == [
+            {
+                "name": "train_and_generation_event",
+                "task": "generate",
+                "task_status": "completed",
+                "deployment_type": "sdk",
+                "retry_count": 0,
+            }
+        ]
 
     async def test_successful_send_does_not_dlq(self):
         handler = self._make_handler()

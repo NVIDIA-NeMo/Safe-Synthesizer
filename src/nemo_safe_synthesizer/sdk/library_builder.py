@@ -24,12 +24,20 @@ from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
+from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
 from ..package_info import __version__
 from ..pii_replacer.nemo_pii import NemoPII
 from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
-from ..telemetry import NSSTrainingAndGenerationEvent, TaskStatusEnum, TelemetryHandler, bucket_columns, bucket_records
+from ..telemetry import (
+    DeploymentTypeEnum,
+    NSSTrainingAndGenerationEvent,
+    TaskStatusEnum,
+    TelemetryHandler,
+    bucket_columns,
+    bucket_records,
+)
 from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
@@ -40,7 +48,7 @@ if TYPE_CHECKING:
     from ..training.backend import TrainingBackend
 
 
-def _build_nss_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
+def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
     """Build a telemetry event from the current pipeline state."""
     cfg = ss._nss_config
 
@@ -70,18 +78,12 @@ def _build_nss_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> N
         records_bucket = bucket_records(len(ss._data_source))
         columns_bucket = bucket_columns(len(ss._data_source.columns))
 
-    gpu = "undefined"
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            gpu = torch.cuda.get_device_properties(0).name
-    except Exception:  # noqa: BLE001
-        pass
+    gpu = get_device_name()
 
     return NSSTrainingAndGenerationEvent(
         task="run",
         task_status=status,
+        deployment_type=ss._deployment_type,
         job_duration_sec=duration,
         num_records_generated=num_records,
         replace_pii_enabled=replace_pii,
@@ -99,10 +101,10 @@ def _build_nss_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> N
 
 def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
     """Enqueue and immediately flush a single telemetry event. Never raises."""
-    if not getattr(ss, "_emit_telemetry", True):
-        return
     try:
-        event = _build_nss_telemetry_event(ss, status)
+        if not ss._emit_telemetry:
+            return
+        event = _build_telemetry_event(ss, status)
         handler = TelemetryHandler(source_client_version=__version__)
         handler.enqueue(event)
         handler.stop()  # Flushes the queue and sends
@@ -165,13 +167,15 @@ class SafeSynthesizer(ConfigBuilder):
     """Final pipeline results, populated after ``evaluate()`` or ``run()``."""
 
     _emit_telemetry: bool
+    _deployment_type: DeploymentTypeEnum
 
     def __init__(
         self,
         config: SafeSynthesizerParameters | None = None,
         workdir: Workdir | None = None,
         save_path: Path | str | None = None,
-        emit_telemetry: bool = True,
+        emit_telemetry: bool | None = None,
+        deployment_type: DeploymentTypeEnum = DeploymentTypeEnum.SDK,
     ):
         super().__init__(config=config)
         self._workdir = workdir
@@ -199,7 +203,12 @@ class SafeSynthesizer(ConfigBuilder):
         self.preflight_report: PreflightReport | None = None
         self._data_processed: bool = False
         self._preflight_config_path: Path | None = None
-        self._emit_telemetry: bool = emit_telemetry
+        self._emit_telemetry: bool = emit_telemetry if emit_telemetry is not None else self._config_emit_telemetry()
+        self._deployment_type: DeploymentTypeEnum = deployment_type
+
+    def _config_emit_telemetry(self) -> bool:
+        """Return the current config's telemetry setting, defaulting on before resolution."""
+        return True if self._nss_config is None else self._nss_config.emit_telemetry
 
     def _ensure_observability(self) -> None:
         """Initialize structured logging when running via the SDK.
@@ -527,8 +536,13 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.evaluate", category=LogCategory.RUNTIME)
-    def evaluate(self) -> SafeSynthesizer:
+    def evaluate(self, *, emit_telemetry: bool = True) -> SafeSynthesizer:
         """Run quality and privacy evaluations and populate ``results``.
+
+        Args:
+            emit_telemetry: Whether to emit a completed telemetry event after
+                evaluation. Full pipeline runners set this to ``False`` and
+                emit completion after results are saved.
 
         Returns:
             Self for method chaining.
@@ -572,7 +586,8 @@ class SafeSynthesizer(ConfigBuilder):
             report=self.evaluator.report,
             generate_results=self.generator.gen_results,
         )
-        _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
+        if emit_telemetry:
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
         return self
 
     def run(self, output_file: Path | str | None = None) -> None:
@@ -602,8 +617,9 @@ class SafeSynthesizer(ConfigBuilder):
             assert isinstance(self._data_source, pd.DataFrame)
 
         try:
-            self.process_data().train().generate().evaluate()
+            self.process_data().train().generate().evaluate(emit_telemetry=False)
             self.save_results(output_file=output_file)
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
         except KeyboardInterrupt:
             _emit_nss_telemetry(self, TaskStatusEnum.CANCELED)
             raise

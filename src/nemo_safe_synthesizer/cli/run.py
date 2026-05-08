@@ -9,7 +9,7 @@ import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -20,6 +20,7 @@ from ..configurator.pydantic_click_options import (
 )
 from ..errors import UserError
 from ..observability import traced_user
+from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
 from ..tooling import PreflightRenderContext, render_preflight_report
 from .settings import CLISettings
 from .utils import (
@@ -170,6 +171,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     for option in reversed(options):
         f = option(f)
     return f
+
+
+def _parse_run_overrides(kwargs: dict[str, Any], *, no_emit_telemetry: bool) -> dict[str, Any]:
+    """Parse generated config options plus manual run aliases into config overrides."""
+    overrides = parse_overrides(kwargs)
+    if no_emit_telemetry:
+        overrides["emit_telemetry"] = False
+    return overrides
 
 
 def _format_dataset_runtime_info(data: pd.DataFrame) -> str:
@@ -345,7 +354,7 @@ def run(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs, no_emit_telemetry=no_emit_telemetry),
         dataset_registry=dataset_registry,
     )
 
@@ -373,7 +382,8 @@ def run(
             nss: SafeSynthesizer = SafeSynthesizer(
                 config=config,
                 workdir=workdir,
-                emit_telemetry=not no_emit_telemetry,
+                emit_telemetry=config.emit_telemetry,
+                deployment_type=DeploymentTypeEnum.CLI,
             ).with_data_source(df)
 
             if validate:
@@ -436,7 +446,7 @@ def run_train(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs, no_emit_telemetry=no_emit_telemetry),
         dataset_registry=dataset_registry,
     )
 
@@ -457,7 +467,12 @@ def run_train(
     try:
         with traced_user("SafeSynthesizer"):
             assert df is not None
-            nss = SafeSynthesizer(config, workdir=workdir, emit_telemetry=not no_emit_telemetry).with_data_source(df)
+            nss = SafeSynthesizer(
+                config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+                deployment_type=DeploymentTypeEnum.CLI,
+            ).with_data_source(df)
 
             if validate:
                 _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
@@ -528,7 +543,7 @@ def run_generate(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs, no_emit_telemetry=no_emit_telemetry),
         dataset_registry=dataset_registry,
     )
 
@@ -541,11 +556,16 @@ def run_generate(
         auto_discover_adapter=auto_discover_adapter,
         wandb_resume_job_id=wandb_resume_job_id,
     )
-    from ..sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        nss = SafeSynthesizer(config, workdir=workdir, emit_telemetry=not no_emit_telemetry)
+        nss = SafeSynthesizer(
+            config,
+            workdir=workdir,
+            emit_telemetry=config.emit_telemetry,
+            deployment_type=DeploymentTypeEnum.CLI,
+        )
 
         # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
@@ -557,9 +577,10 @@ def run_generate(
                 nss.load_from_save_path()
                 .process_data()
                 .generate()
-                .evaluate()
+                .evaluate(emit_telemetry=False)
                 .save_results(output_file=final_output_file)
             )
+            _emit_nss_telemetry(nss, TaskStatusEnum.COMPLETED)
             nss.results.summary.log_summary(run_logger)
             nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
