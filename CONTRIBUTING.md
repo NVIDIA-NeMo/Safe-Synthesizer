@@ -59,10 +59,10 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
    make setup
 
    # Install Python dependencies (choose one)
-   make bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
-   make bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
-   make bootstrap-nss engine # Engine dependencies only
-   make bootstrap-nss dev    # Minimal dev dependencies only
+   mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
+   mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)
+   mise run bootstrap-nss engine # Engine dependencies only
+   mise run bootstrap-nss dev    # Minimal dev dependencies only
   ```
 
 3. (Optional) If you use git worktrees or AI agents that create worktrees, add mise trust for worktree paths. Without this, tools and env vars won't load in new worktree directories:
@@ -419,7 +419,7 @@ This section is the canonical source. To add, rename, or remove a label, open a 
 3. Make your changes and commit using [conventional commits](#conventional-commits)
 4. Run tests locally:
   ```bash
-   make test
+   mise run test
   ```
 5. Push your branch:
   ```bash
@@ -491,25 +491,25 @@ See [tests/TESTING.md](tests/TESTING.md) for the full test matrix and usage.
 
 ```bash
 # Run unit tests (excludes slow unit tests, smoke and e2e)
-make test
+mise run test
 
 # Run all unit tests including slow tests (excludes smoke and e2e)
-make test-unit-slow
+mise run test:unit-slow
 
 # Run CPU smoke tests (~10 seconds, no GPU required)
-make test-smoke
+mise run test:smoke
 
 # Run GPU smoke tests (requires CUDA)
-make test-smoke-gpu
+mise run test:smoke:gpu
 
 # Run end-to-end tests (requires CUDA)
-make test-e2e
+mise run test:e2e
 
 # Run a specific config-dataset e2e combo (12 total, see tests/TESTING.md)
-make test-nss-tinyllama_nodp-clinc_oos-ci
+mise run test-nss-tinyllama_nodp-clinc_oos-ci
 
 # Run CI tests locally in a Linux container (Docker/Podman)
-make test-ci-container
+mise run test:ci-container
 
 # Run specific test files directly
 uv run pytest tests/cli/test_run.py
@@ -536,7 +536,7 @@ gh workflow run gpu-tests.yml --ref <your-branch> -f suite=e2e
 
 Before submitting a PR:
 
-- All existing tests pass (`make test`)
+- All existing tests pass (`mise run test`)
 - New features include tests
 - Bug fixes include regression tests
 
@@ -546,19 +546,19 @@ For detailed style guidelines covering Python, markdown, Dockerfiles, shell scri
 
 ### Formatting, Linting, and Type Checking
 
-Use `make` targets instead of running `ruff` or `ty` directly. The targets use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
+Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
 
 ```bash
-make format   # auto-fix: ruff format + import sorting + copyright headers
-make check    # read-only: all CI checks (format + lint + typecheck + copyright)
-make test     # unit tests
+mise run format   # auto-fix: ruff format + import sorting + copyright headers
+mise run check    # read-only: all CI checks (format + lint + typecheck + copyright)
+mise run test     # unit tests
 # or just
-make format check test
+mise run format check test
 ```
 
 We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-CI calls the same tools through atomic read-only `make` targets, so the Makefile is the single source of truth for how each check runs. `make check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the `make` targets.
+CI calls the same tools through atomic read-only mise tasks, so `tasks/*.toml` files are the single source of truth for how each check runs. `mise run check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
 
 You can also run tools directly on specific files:
 
@@ -567,16 +567,16 @@ bash tools/codestyle/format.sh --check src/nemo_safe_synthesizer/cli/run.py
 bash tools/codestyle/ruff_check.sh src/nemo_safe_synthesizer/cli/run.py
 ```
 
-All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `make format` adds them automatically; exclusions are listed in `.copyrightignore`.
+All source files (`.py`, `.sh`, `.yaml`, `.yml`, `.md`) require SPDX copyright headers. `mise run format` adds them automatically; exclusions are listed in `.copyrightignore`.
 
-All `make` targets check the entire project. Pre-commit scopes checks to staged files.
+All mise tasks check the entire project. Pre-commit scopes checks to staged files.
 
-| Check | CI target | `make format` / `make check` | Pre-commit |
+| Check | CI task | `mise run format` / `mise run check` | Pre-commit |
 |---|---|---|---|
-| ruff format + lint | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
-| ty typecheck | `make typecheck` | read-only | all files |
-| copyright headers | `make format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
-| uv lock drift | `make lock-check` | not checked | on `pyproject.toml` changes |
+| ruff format + lint | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| ty typecheck | `mise run typecheck` | read-only | all files |
+| copyright headers | `mise run format-check` | `format`: auto-fix; `check`: read-only | staged files (auto-fix) |
+| uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
 ## Documentation
@@ -585,7 +585,7 @@ This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/
 
 ### Local Preview
 
-Documentation dependencies are included in the `dev` bootstrap profile. If you already ran `make bootstrap-nss dev` (or `cpu`/`cuda`), you're set. Otherwise install them directly:
+Documentation dependencies are included in the `dev` bootstrap profile. If you already ran `mise run bootstrap-nss dev` (or `cpu`/`cuda`), you're set. Otherwise install them directly:
 
 ```bash
 uv sync --group docs
@@ -594,7 +594,7 @@ uv sync --group docs
 Start a local server with live reload:
 
 ```bash
-make docs-serve
+mise run docs:serve
 # Browse to http://127.0.0.1:8000
 ```
 
@@ -606,7 +606,7 @@ system browser.
 Build the static site (output in `site/`):
 
 ```bash
-make docs-build
+mise run docs:build
 ```
 
 ### Directory Layout
@@ -625,7 +625,7 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 
 1. Create or edit the `.md` file under the appropriate `docs/` subdirectory.
 2. Add the page to the `nav:` section of `mkdocs.yml` so it appears in the sidebar.
-3. Run `make docs-serve` and verify the page renders correctly.
+3. Run `mise run docs:serve` and verify the page renders correctly.
 
 ### MkDocs Material Features
 
@@ -662,7 +662,7 @@ This project supports AI coding assistants. Configuration is layered so that con
 
 Conventions defined in `AGENTS.md` (code style, markdown style, testing, etc.) apply universally. Durable module-level guidance belongs in Python docstrings and source comments so it appears in the generated API reference; test-suite guidance belongs in `tests/TESTING.md`. Tool-specific config (`.cursor/rules/`, `CLAUDE.md`) reinforces those conventions for its respective tool.
 
-Before contributing, run `make format` and `make check`. See `AGENTS.md` for full conventions.
+Before contributing, run `mise run format` and `mise run check`. See `AGENTS.md` for full conventions.
 
 ## Releasing
 
@@ -709,10 +709,10 @@ NeMo Safe Synthesizer is developed as a standalone package and published to PyPI
 
 ### Publishing to Artifactory
 
-The `publish-internal` Makefile target builds a wheel and uploads it to NVIDIA Artifactory:
+The `publish:internal` mise task builds a wheel and uploads it to NVIDIA Artifactory:
 
 ```bash
-make publish-internal
+mise run publish:internal
 ```
 
 This requires `TWINE_REPOSITORY_URL`, `TWINE_USERNAME`, and `TWINE_PASSWORD` environment variables. CI handles this automatically on tagged releases.
@@ -731,7 +731,7 @@ make use-nss-artifactory    # Revert to Artifactory (always do this before commi
 
 See the NMP service README (`services/safe-synthesizer/README.md`) in NMP for details.
 
-Run `make help` to see all available Makefile targets.
+Run `mise tasks` to see all available mise tasks. The Makefile keeps a small set of bootstrap and compatibility wrappers.
 
 ---
 

@@ -14,25 +14,25 @@ Comprehensive testing reference for Safe-Synthesizer developers. Covers commands
 
 ## Running Tests
 
-All `make` targets, grouped by scope:
+All mise test tasks, grouped by scope:
 
 ```bash
-make test                  # Unit (excludes slow, e2e, and smoke)
-make test-unit-slow        # Unit tests including slow (excludes e2e and smoke)
-make test-smoke            # CPU smoke tests (~few min, no GPU required)
-make test-smoke-gpu        # All staged GPU smoke tests (requires CUDA)
-make test-smoke-gpu-train-only
-make test-smoke-gpu-generation
-make test-smoke-gpu-resume
-make test-smoke-gpu-structured-generation
-make test-smoke-gpu-timeseries
-make test-smoke-gpu-smollm2
-make test-e2e              # All e2e (requires CUDA) -- runs default + dp
-make test-e2e-default      # e2e default (no-DP) tests only
-make test-e2e-dp           # e2e DP tests only
-make test-ci               # CI unit tests with coverage (excludes slow, e2e, gpu, smoke)
-make test-ci-slow          # CI slow tests with coverage
-make test-ci-container     # CI tests in a Linux container (Docker/Podman)
+mise run test                              # Unit (excludes slow, e2e, and smoke)
+mise run test:unit-slow                    # Unit tests including slow (excludes e2e and smoke)
+mise run test:smoke                        # CPU smoke tests (~few min, no GPU required)
+mise run test:smoke:gpu                    # All staged GPU smoke tests (requires CUDA)
+mise run test:smoke:gpu:train-only
+mise run test:smoke:gpu:generation
+mise run test:smoke:gpu:resume
+mise run test:smoke:gpu:structured-generation
+mise run test:smoke:gpu:timeseries
+mise run test:smoke:gpu:smollm2
+mise run test:e2e                          # All e2e (requires CUDA) -- runs default + dp
+mise run test:e2e:default                  # e2e default (no-DP) tests only
+mise run test:e2e:dp                       # e2e DP tests only
+mise run test:ci                           # CI unit tests with coverage (excludes slow, e2e, gpu, smoke)
+mise run test:ci-slow                      # CI slow tests with coverage
+mise run test:ci-container                 # CI tests in a Linux container (Docker/Podman)
 ```
 
 Run a single test:
@@ -45,10 +45,10 @@ Test runner: `uv run --frozen pytest -n auto --dist loadscope -vv`
 
 ## Config-Dataset Combo Tests
 
-Two test functions (`test_clinc_oos_dataset`, `test_dow_jones_index_dataset`) each parametrized over 6 model configs = 12 combinations. Each has a dedicated Makefile target:
+Two test functions (`test_clinc_oos_dataset`, `test_dow_jones_index_dataset`) each parametrized over 6 model configs = 12 combinations. Each has a dedicated mise task:
 
 ```bash
-make test-nss-{CONFIG}-{DATASET}-ci
+mise run test-nss-{CONFIG}-{DATASET}-ci
 ```
 
 Configs: `tinyllama_nodp`, `tinyllama_dp`, `smollm3_nodp`, `smollm3_dp`, `mistral_nodp`, `mistral_dp`
@@ -58,15 +58,15 @@ Datasets: `clinc_oos`, `dow_jones_index`
 Example:
 
 ```bash
-make test-nss-tinyllama_nodp-clinc_oos-ci
-make test-nss-mistral_dp-dow_jones_index-ci
+mise run test-nss-tinyllama_nodp-clinc_oos-ci
+mise run test-nss-mistral_dp-dow_jones_index-ci
 ```
 
 Details:
 
 - Driven by `tests/e2e/test_dataset_config.py` with YAML configs under `tests/e2e/required_configs/`
 - Each target bootstraps `cu129`, runs single-process (`-n 0`) with coverage
-- These are not part of `make test-e2e` -- they are standalone CI targets
+- These are not part of `mise run test:e2e` -- they are standalone CI tasks
 
 ## Pytest Markers
 
@@ -80,7 +80,7 @@ Defined in `pytest.ini` (`--strict-markers` is enabled):
 | `e2e`          | End-to-end pipeline tests (requires CUDA)                                                        |
 | `requires_gpu` | Test needs CUDA hardware (modifier, stacks on any category: `unit`/`smoke`/`e2e`)                |
 | `vllm`         | Tests using vLLM generation backend (each file runs in its own process for GPU memory isolation) |
-| `smollm2`      | SmolLM2 Hub download tests (Makefile uses for process isolation)                                 |
+| `smollm2`      | SmolLM2 Hub download tests (mise tasks use for process isolation)                                |
 | `noautouse`    | Skip autouse fixtures for specific tests                                                         |
 
 Every test should have exactly one of the category markers: `unit, smoke, e2e`.
@@ -148,15 +148,15 @@ One GPU isolation hazard requires per-file process isolation (`-n 0`):
 
 vLLM pre-allocates all GPU memory and never releases it within a process. Tests that call `.generate()` must run in separate processes or later tests OOM.
 
-GPU smoke tests use staged Make targets for process isolation and CI visibility:
+GPU smoke tests use staged mise tasks for process isolation and CI visibility:
 
 - `requires_gpu`: all GPU tests
 - `vllm`: tests using vLLM generation (each file gets its own process)
 - `smollm2`: marker-isolated group (auto-discovered)
 
-`make test-smoke-gpu` runs staged Make targets in order. Train-only tests are auto-discovered with marker algebra (`requires_gpu and not vllm and not smollm2`), vLLM tests run through dedicated per-file stage targets for process isolation, and SmolLM2 uses marker selection. The GPU workflow runs the same stages as separate GitHub Actions steps so failures show which lane broke. When adding a new vLLM test file, add `pytest.mark.vllm`, create a dedicated `test-smoke-gpu-*` target, and include it in `test-smoke-gpu`.
+`mise run test:smoke:gpu` runs staged mise tasks in order. Train-only tests are auto-discovered with marker algebra (`requires_gpu and not vllm and not smollm2`), vLLM tests run through dedicated per-file stage tasks for process isolation, and SmolLM2 uses marker selection. The GPU workflow runs the same stages as separate GitHub Actions steps so failures show which lane broke. When adding a new vLLM test file, add `pytest.mark.vllm`, create a dedicated `test:smoke:gpu:*` task, and include it in `test:smoke:gpu`.
 
-`make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
+`mise run test:e2e` splits into `test:e2e:default` + `test:e2e:dp`, each single-process over `tests/e2e/`.
 
 See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotchas.
 

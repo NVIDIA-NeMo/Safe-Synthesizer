@@ -8,9 +8,9 @@
 #   - buildctl: only needed for container builds. Install manually or via `brew install buildkit`.
 
 
-# mise itself is pinned by the Makefile (MISE_VERSION); this enforces the
-# same floor from mise's side so an older mise on PATH fails fast.
-min_version = '2026.4.11'
+# mise itself is pinned by bootstrap callers (Makefile, CI, and containers);
+# this enforces the same floor from mise's side so an older mise on PATH fails fast.
+min_version = '2026.5.2'
 
 [tools]
 # Tools for working with JSON, Git, and other system utilities.
@@ -31,9 +31,19 @@ ty = "0.0.32"
 
 [env]
 # Activate the project virtualenv (equivalent to the old .envrc "layout python3").
-VIRTUAL_ENV = "{{config_root}}/.venv"
-_.path = [".venv/bin"]
+VIRTUAL_ENV = "{{ env.UV_PROJECT_ENVIRONMENT | default(value=config_root ~ '/.venv') }}"
+_.path = ["{{ env.UV_PROJECT_ENVIRONMENT | default(value=config_root ~ '/.venv') }}/bin"]
 _.file = [".env", ".env.local"]
+
+[task_config]
+includes = [
+  "tasks/setup.toml",
+  "tasks/docs.toml",
+  "tasks/quality.toml",
+  "tasks/tests.toml",
+  "tasks/containers.toml",
+  "tasks/release.toml",
+]
 
 [settings]
 lockfile = true

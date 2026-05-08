@@ -5,6 +5,6 @@ description: Format code
 ---
 Format code using ruff (formatting + import sorting + copyright headers).
 
-* Run with: `make format`
+* Run with: `mise run format`
 * Underlying command: `bash tools/codestyle/format.sh`
 * Always run this before committing

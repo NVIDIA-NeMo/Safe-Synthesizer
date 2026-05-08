@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+["docs:serve"]
+description = "Serve the documentation site locally with live reload"
+alias = "docs-serve"
+run = "uv run --frozen --group docs mkdocs serve --livereload"
+
+["docs:build"]
+description = "Build the documentation site"
+alias = "docs-build"
+run = "uv run --frozen --group docs mkdocs build"
+
+["docs:deploy"]
+description = "Deploy the documentation site to GitHub Pages"
+alias = "docs-deploy"
+run = [
+  "uv run --frozen --group docs mike deploy --push --update-aliases main latest",
+  "uv run --frozen --group docs mike set-default --push latest",
+]

@@ -5,6 +5,6 @@ description: Check code quality
 ---
 Run all read-only CI checks (formatting, lint rules, type checking, copyright).
 
-* Run with: `make check`
-* Runs `make format-check` (ruff format + ruff check + copyright) + `make typecheck` (ty)
-* Always run after `make format`
+* Run with: `mise run check`
+* Runs `mise run format-check` (ruff format + ruff check + copyright) + `mise run typecheck` (ty)
+* Always run after `mise run format`

@@ -80,8 +80,8 @@ docs/
 
 ## Build Commands
 
-- `make docs-serve` -- local dev server with live reload
-- `make docs-build` -- build static site
+- `mise run docs:serve` -- local dev server with live reload
+- `mise run docs:build` -- build static site
 
 ## Quality Principles
 

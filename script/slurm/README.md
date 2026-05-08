@@ -51,13 +51,13 @@ export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
 export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
 export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
-# With the above env vars, the usual make command should work.
+# With the above env vars, the usual mise task should work.
 # Note this may be quite slow the first time due to very slow network
 # connectivity on slurm to download from pypi, but subsequent executions
 # (such as startup for your jobs) should be much faster since uv will
 # pull cached wheels from UV_CACHE_DIR.
 # (Be sure to run from the root of the Safe-Synthesizer repo)
-make bootstrap-nss cu129
+mise run bootstrap-nss cu129
 ```
 
 #### Nice to have

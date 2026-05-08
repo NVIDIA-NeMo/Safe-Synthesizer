@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+["build-wheel"]
+description = "Build wheel (version from git tag via uv-dynamic-versioning)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "~~~~~~"
+rm -rf dist/
+uv build --wheel
+echo "wheel built: $(ls dist/*.whl)"
+'''
+
+["publish:internal"]
+description = "Build and publish wheel to NVIDIA Artifactory"
+alias = "publish-internal"
+depends = ["build-wheel"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${TWINE_REPOSITORY_URL:?TWINE_REPOSITORY_URL is not set. Set it to the URL of the Artifactory repository.}"
+: "${TWINE_USERNAME:?TWINE_USERNAME is not set. Set it to the username for the Artifactory repository.}"
+: "${TWINE_PASSWORD:?TWINE_PASSWORD is not set. Set it to the password for the Artifactory repository.}"
+
+echo "~~~~~~"
+echo "uploading to Artifactory: ${TWINE_REPOSITORY_URL}"
+uvx twine upload \
+  --repository-url "${TWINE_REPOSITORY_URL}" \
+  --non-interactive \
+  --verbose \
+  dist/*.whl
+echo "published: $(ls dist/*.whl)"
+'''
+
+["publish:pypi"]
+description = "Build and publish wheel to PyPI"
+alias = "publish-pypi"
+depends = ["build-wheel"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${TWINE_USERNAME:?TWINE_USERNAME is not set. For PyPI token auth, set TWINE_USERNAME=__token__.}"
+: "${TWINE_PASSWORD:?TWINE_PASSWORD is not set. For PyPI token auth, set TWINE_PASSWORD=<your-pypi-token>.}"
+
+echo "~~~~~~"
+echo "uploading to PyPI"
+uvx twine upload \
+  --non-interactive \
+  --verbose \
+  dist/*.whl
+echo "published: $(ls dist/*.whl)"
+'''

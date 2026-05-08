@@ -188,15 +188,15 @@ change `CUDA_IMAGE_TYPE` to `devel`.
 
 ---
 
-## Makefile Targets
+## Mise Tasks
 
-| Target | Description |
+| Task | Description |
 |--------|-------------|
-| `container-build-gpu` | Build the `runtime` stage |
-| `container-build-gpu-dev` | Build the `dev` stage |
-| `container-build-gpu-multiarch` | Build multi-arch manifest (requires `CONTAINER_GPU_REGISTRY`) |
-| `container-run-gpu` | Run a command in the runtime container |
-| `container-run-gpu-dev` | Run a command in the dev container |
+| `container:build:gpu` | Build the `runtime` stage |
+| `container:build:gpu-dev` | Build the `dev` stage |
+| `container:build:gpu-multiarch` | Build multi-arch manifest (requires `CONTAINER_GPU_REGISTRY`) |
+| `container:run:gpu` | Run a command in the runtime container |
+| `container:run:gpu-dev` | Run a command in the dev container |
 
 For interactive shells, use `docker run -it --entrypoint /bin/bash` directly --
 this gives full control over mounts and flags. See the
@@ -227,7 +227,7 @@ docker run --rm nss-gpu:latest --help
 Run unit tests inside the dev container:
 
 ```bash
-make container-run-gpu-dev CMD="make test"
+CMD="mise run test" mise run container:run:gpu-dev
 ```
 
 Interactive dev shell (use `docker run` directly for full mount control):
@@ -267,13 +267,13 @@ To reduce size:
 | GPU | Required | Not needed |
 | Stages | `tools` / `deps` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |
-| Build target | `make container-build-gpu` | `make container-build-test` |
+| Build task | `mise run container:build:gpu` | `mise run container:build:test` |
 
 The `setup` stage installs system packages and mise-managed dev tools
 (ruff, ty, uv, etc.). The `install-deps` stage extends it with the Python
-environment (`make bootstrap-nss cpu`). `make container-build-test` builds
-the full image; `make container-build-test-setup` builds only the `setup`
-stage for fast tool-installation verification (`make test-tool-install`).
+environment (`mise run bootstrap-nss cpu`). `mise run container:build:test` builds
+the full image; `mise run container:build:test-setup` builds only the `setup`
+stage for fast tool-installation verification (`mise run test:tool-install`).
 
 Both follow the conventions in [STYLE_GUIDE.md -- Dockerfiles](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#dockerfiles).
 
@@ -302,10 +302,10 @@ pass architecture-specific flags to `nvcc`.
 
 ### Building for arm64 (Blackwell)
 
-Single-platform arm64 build via Make:
+Single-platform arm64 build via mise:
 
 ```bash
-make container-build-gpu CONTAINER_GPU_PLATFORM=linux/arm64
+CONTAINER_GPU_PLATFORM=linux/arm64 mise run container:build:gpu
 ```
 
 This uses `docker build --platform linux/arm64`, which works with local
@@ -319,7 +319,7 @@ single tag. Clients pull the correct variant automatically. Because
 directly to a registry:
 
 ```bash
-make container-build-gpu-multiarch CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo
+CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
 ```
 
 This runs:
@@ -366,9 +366,9 @@ docker build -f containers/Dockerfile.cuda \
   --target runtime -t nss-gpu:arm64-devel .
 ```
 
-### Makefile targets
+### Mise tasks
 
-| Target | Description |
+| Task | Description |
 |--------|-------------|
-| `container-build-gpu` | Single-platform build (default `linux/amd64`, override with `CONTAINER_GPU_PLATFORM`) |
-| `container-build-gpu-multiarch` | Multi-platform manifest build (requires `CONTAINER_GPU_REGISTRY`) |
+| `container:build:gpu` | Single-platform build (default `linux/amd64`, override with `CONTAINER_GPU_PLATFORM`) |
+| `container:build:gpu-multiarch` | Multi-platform manifest build (requires `CONTAINER_GPU_REGISTRY`) |

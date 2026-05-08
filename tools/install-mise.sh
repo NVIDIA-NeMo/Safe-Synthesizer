@@ -6,8 +6,8 @@
 # install-mise.sh -- install the pinned mise version, preferring the
 # GPG-verified path when the local toolchain supports it.
 #
-# Inputs (required, passed by the Makefile):
-#   MISE_VERSION  mise version to install, e.g. "v2026.4.11"
+# Inputs (required, passed by bootstrap callers):
+#   MISE_VERSION  mise version to install, e.g. "v2026.5.2"
 #   MISE_GPG_KEY  fingerprint of the mise release signing key
 #
 # Optional env:
@@ -32,7 +32,7 @@
 #     back to https://mise.run (no signature verification; warn loudly).
 #   - In either install path, pass MISE_VERSION through to the installer
 #     via the documented MISE_VERSION env var so the installed binary
-#     matches the value pinned in the Makefile.
+#     matches the value pinned by the caller.
 #   - Assert the installed binary reports the pinned version before exit.
 #
 # See: https://mise.jdx.dev/installing-mise.html
@@ -43,8 +43,8 @@ set -euo pipefail
 # ${VAR:?msg} aborts the script with the given message when VAR is unset or
 # empty. Paired with `:` (the no-op builtin) it becomes an assert-and-die
 # guard that surfaces a clearer error than `set -u`'s "unbound variable".
-: "${MISE_VERSION:?MISE_VERSION is required (pass from Makefile)}"
-: "${MISE_GPG_KEY:?MISE_GPG_KEY is required (pass from Makefile)}"
+: "${MISE_VERSION:?MISE_VERSION is required (pass from bootstrap caller)}"
+: "${MISE_GPG_KEY:?MISE_GPG_KEY is required (pass from bootstrap caller)}"
 
 readonly MISE_SIG_URL="https://mise.jdx.dev/install.sh.sig"
 readonly MISE_RUN_URL="https://mise.run"

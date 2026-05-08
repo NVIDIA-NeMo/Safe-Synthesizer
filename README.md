@@ -36,8 +36,8 @@ Or install from source:
 ```bash
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
-make setup # installs the pinned mise version (if missing) + pinned tool versions from mise.lock
-make bootstrap-nss cuda
+make setup # installs pinned mise, pinned tools from mise.lock, and .venv
+mise run bootstrap-nss cuda
 ```
 
 Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).

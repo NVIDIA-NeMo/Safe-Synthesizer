@@ -13,7 +13,7 @@
 # limitations under the License.
 
 name: "Setup GPU Test Environment"
-description: "Common setup for GPU test workflows: make, Python, CUDA dependencies, and GPU availability"
+description: "Common setup for GPU test workflows: mise, Python, CUDA dependencies, and GPU availability"
 
 inputs:
   python-version:
@@ -32,17 +32,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install make
-      shell: bash
-      run: |
-        if command -v make >/dev/null 2>&1; then
-          echo "make is already installed: $(command -v make)"
-          exit 0
-        fi
-
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends make
-
     - name: Setup uv cache
       uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
       with:
@@ -61,7 +50,7 @@ runs:
 
     - name: Bootstrap CUDA environment
       shell: bash
-      run: make bootstrap-nss ${{ inputs.cuda-extra }}
+      run: mise run bootstrap-nss ${{ inputs.cuda-extra }}
 
     - name: Check GPU availability
       shell: bash
