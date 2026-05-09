@@ -212,7 +212,9 @@ class TestBuildPayload:
         assert payload["sessionId"] == "test-session"
         assert len(payload["events"]) == 1
 
-    def test_event_fields_serialize_enums_as_strings(self):
+    def test_event_fields_serialize_enums_as_strings(self, monkeypatch):
+        monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+
         """Payload must be JSON-safe: enum fields render as their string values, not Enum objects."""
         queued = self._make_queued(task="train", status=TaskStatusEnum.ERROR)
         payload = build_payload([queued], source_client_version="0.0.1")
