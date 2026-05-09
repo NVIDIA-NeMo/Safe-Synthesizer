@@ -21,7 +21,8 @@ _REPORT_HTML = "<html><body>report</body></html>"
 PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
 
-def test_safe_synthesizer_builder_sanity():
+def test_safe_synthesizer_builder_sanity(monkeypatch):
+    monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
     builder = SafeSynthesizer(config=SafeSynthesizerParameters())
     assert builder._emit_telemetry is True
     assert builder._deployment_type == DeploymentTypeEnum.SDK
@@ -404,7 +405,7 @@ class TestTelemetryEmission:
 
         builder.run()
 
-        builder.evaluate.assert_called_once_with(emit_telemetry=False)
+        builder.evaluate.assert_called_once_with()
         assert emitted == ["save_results", TaskStatusEnum.COMPLETED]
 
     def test_run_emits_error_when_save_results_fails(self, monkeypatch, tmp_path: Path):
@@ -425,7 +426,7 @@ class TestTelemetryEmission:
         with pytest.raises(RuntimeError, match="save failed"):
             builder.run()
 
-        builder.evaluate.assert_called_once_with(emit_telemetry=False)
+        builder.evaluate.assert_called_once_with()
         assert emitted == [TaskStatusEnum.ERROR]
 
     def test_emit_nss_telemetry_enqueues_and_flushes_event(self, monkeypatch):

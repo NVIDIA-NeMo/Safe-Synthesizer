@@ -35,6 +35,7 @@ from ..telemetry import (
     NSSTrainingAndGenerationEvent,
     TaskStatusEnum,
     TelemetryHandler,
+    _deployment_type,
     bucket_columns,
     bucket_records,
 )
@@ -175,7 +176,7 @@ class SafeSynthesizer(ConfigBuilder):
         workdir: Workdir | None = None,
         save_path: Path | str | None = None,
         emit_telemetry: bool | None = None,
-        deployment_type: DeploymentTypeEnum = DeploymentTypeEnum.SDK,
+        deployment_type: DeploymentTypeEnum | None = None,
     ):
         super().__init__(config=config)
         self._workdir = workdir
@@ -204,7 +205,9 @@ class SafeSynthesizer(ConfigBuilder):
         self._data_processed: bool = False
         self._preflight_config_path: Path | None = None
         self._emit_telemetry: bool = emit_telemetry if emit_telemetry is not None else self._config_emit_telemetry()
-        self._deployment_type: DeploymentTypeEnum = deployment_type
+        self._deployment_type: DeploymentTypeEnum = (
+            deployment_type if deployment_type is not None else _deployment_type()
+        )
 
     def _config_emit_telemetry(self) -> bool:
         """Return the current config's telemetry setting, defaulting on before resolution."""
@@ -536,13 +539,8 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.evaluate", category=LogCategory.RUNTIME)
-    def evaluate(self, *, emit_telemetry: bool = True) -> SafeSynthesizer:
+    def evaluate(self) -> SafeSynthesizer:
         """Run quality and privacy evaluations and populate ``results``.
-
-        Args:
-            emit_telemetry: Whether to emit a completed telemetry event after
-                evaluation. Full pipeline runners set this to ``False`` and
-                emit completion after results are saved.
 
         Returns:
             Self for method chaining.
@@ -586,8 +584,6 @@ class SafeSynthesizer(ConfigBuilder):
             report=self.evaluator.report,
             generate_results=self.generator.gen_results,
         )
-        if emit_telemetry:
-            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
         return self
 
     def run(self, output_file: Path | str | None = None) -> None:
@@ -617,7 +613,7 @@ class SafeSynthesizer(ConfigBuilder):
             assert isinstance(self._data_source, pd.DataFrame)
 
         try:
-            self.process_data().train().generate().evaluate(emit_telemetry=False)
+            self.process_data().train().generate().evaluate()
             self.save_results(output_file=output_file)
             _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
         except KeyboardInterrupt:

@@ -159,26 +159,20 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
     )
-    options.append(
-        click.option(
-            "--no-emit-telemetry",
-            is_flag=True,
-            default=False,
-            help="Disable NeMo Safe Synthesizer telemetry for this command.",
-        )
-    )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
     for option in reversed(options):
         f = option(f)
     return f
 
 
-def _parse_run_overrides(kwargs: dict[str, Any], *, no_emit_telemetry: bool) -> dict[str, Any]:
+def _parse_run_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Parse generated config options plus manual run aliases into config overrides."""
-    overrides = parse_overrides(kwargs)
-    if no_emit_telemetry:
-        overrides["emit_telemetry"] = False
-    return overrides
+    return parse_overrides(kwargs)
+
+
+def _set_cli_deployment_type_default() -> None:
+    """Default telemetry deployment type for CLI commands without overriding Slurm or explicit settings."""
+    os.environ.setdefault("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.CLI.value)
 
 
 def _format_dataset_runtime_info(data: pd.DataFrame) -> str:
@@ -329,7 +323,6 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
-    no_emit_telemetry: bool = False,
     validate: bool = False,
     **kwargs: object,
 ) -> None:
@@ -341,6 +334,8 @@ def run(
     # If a subcommand is invoked, skip the default behavior
     if ctx.invoked_subcommand is not None:
         return
+
+    _set_cli_deployment_type_default()
 
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
@@ -354,7 +349,7 @@ def run(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=_parse_run_overrides(kwargs, no_emit_telemetry=no_emit_telemetry),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -383,7 +378,6 @@ def run(
                 config=config,
                 workdir=workdir,
                 emit_telemetry=config.emit_telemetry,
-                deployment_type=DeploymentTypeEnum.CLI,
             ).with_data_source(df)
 
             if validate:
@@ -425,7 +419,6 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
-    no_emit_telemetry: bool = False,
     validate: bool = False,
     **kwargs: object,
 ) -> None:
@@ -434,6 +427,8 @@ def run_train(
     This command processes data and trains the model, saving the adapter to the run directory.
     Use 'run generate' afterwards to generate synthetic data from the trained adapter.
     """
+    _set_cli_deployment_type_default()
+
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -446,7 +441,7 @@ def run_train(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=_parse_run_overrides(kwargs, no_emit_telemetry=no_emit_telemetry),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -471,7 +466,6 @@ def run_train(
                 config,
                 workdir=workdir,
                 emit_telemetry=config.emit_telemetry,
-                deployment_type=DeploymentTypeEnum.CLI,
             ).with_data_source(df)
 
             if validate:
@@ -518,7 +512,6 @@ def run_generate(
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
     dataset_registry: str | None = None,
-    no_emit_telemetry: bool = False,
     **kwargs: object,
 ) -> None:
     """Run the generation stage only.
@@ -530,6 +523,8 @@ def run_generate(
     or use --auto-discover-adapter with --artifact-path to automatically find
     the latest trained run.
     """
+    _set_cli_deployment_type_default()
+
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
@@ -543,7 +538,7 @@ def run_generate(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=_parse_run_overrides(kwargs, no_emit_telemetry=no_emit_telemetry),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -564,7 +559,6 @@ def run_generate(
             config,
             workdir=workdir,
             emit_telemetry=config.emit_telemetry,
-            deployment_type=DeploymentTypeEnum.CLI,
         )
 
         # Only set data source if provided via --data-source
@@ -577,7 +571,7 @@ def run_generate(
                 nss.load_from_save_path()
                 .process_data()
                 .generate()
-                .evaluate(emit_telemetry=False)
+                .evaluate()
                 .save_results(output_file=final_output_file)
             )
             _emit_nss_telemetry(nss, TaskStatusEnum.COMPLETED)
@@ -585,6 +579,12 @@ def run_generate(
             nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
             nss.results.summary.log_wandb()
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(nss, TaskStatusEnum.CANCELED)
+            raise
+        except Exception:
+            _emit_nss_telemetry(nss, TaskStatusEnum.ERROR)
+            raise
         finally:
             if hasattr(nss, "generator") and nss.generator is not None:
                 nss.generator.teardown()

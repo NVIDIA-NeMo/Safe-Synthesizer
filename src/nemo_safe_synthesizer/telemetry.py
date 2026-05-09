@@ -82,7 +82,7 @@ def _deployment_type() -> DeploymentTypeEnum:
     try:
         return DeploymentTypeEnum(raw)
     except ValueError:
-        return DeploymentTypeEnum.SDK
+        return DeploymentTypeEnum.UNDEFINED
 
 
 def _session_prefix() -> str | None:

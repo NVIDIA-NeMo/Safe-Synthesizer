@@ -3,6 +3,7 @@
 
 """Tests for the CLI run command and its options."""
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -132,12 +133,12 @@ class TestRunCommandOptions:
         assert result.exit_code == 0
         assert "--output-file" in result.output
 
-    def test_run_help_shows_no_emit_telemetry_option(self, cli_runner: CliRunner):
-        """Verify --no-emit-telemetry appears in run command help."""
+    def test_run_help_shows_emit_telemetry_config_option(self, cli_runner: CliRunner):
+        """Verify the generated telemetry config option appears in run command help."""
         result = cli_runner.invoke(run, ["--help"])
 
         assert result.exit_code == 0
-        assert "--no-emit-telemetry" in result.output
+        assert "--emit_telemetry" in result.output
 
     def test_run_defaults_to_emit_telemetry(
         self,
@@ -145,8 +146,11 @@ class TestRunCommandOptions:
         dummy_csv: Path,
         fixture_session_cache_dir: Path,
         patched_run_dependencies: dict,
+        monkeypatch: pytest.MonkeyPatch,
     ):
-        """Without --no-emit-telemetry, the SDK emits telemetry by default."""
+        """Telemetry is enabled by default."""
+        monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+
         result = cli_runner.invoke(
             run,
             [
@@ -161,16 +165,20 @@ class TestRunCommandOptions:
         assert result.exit_code == 0
         mock_safe_synthesizer_cls = patched_run_dependencies["safe_synthesizer_cls"]
         assert mock_safe_synthesizer_cls.call_args.kwargs["emit_telemetry"] is True
-        assert mock_safe_synthesizer_cls.call_args.kwargs["deployment_type"] == DeploymentTypeEnum.CLI
+        assert "deployment_type" not in mock_safe_synthesizer_cls.call_args.kwargs
+        assert os.environ["NEMO_DEPLOYMENT_TYPE"] == DeploymentTypeEnum.CLI.value
 
-    def test_run_no_emit_telemetry_disables_sdk_telemetry(
+    def test_run_preserves_existing_deployment_type(
         self,
         cli_runner: CliRunner,
         dummy_csv: Path,
         fixture_session_cache_dir: Path,
         patched_run_dependencies: dict,
+        monkeypatch: pytest.MonkeyPatch,
     ):
-        """--no-emit-telemetry opts out for this CLI invocation."""
+        """An existing deployment type, such as Slurm, wins over the CLI default."""
+        monkeypatch.setenv("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.SLURM.value)
+
         result = cli_runner.invoke(
             run,
             [
@@ -178,15 +186,12 @@ class TestRunCommandOptions:
                 str(dummy_csv),
                 "--artifact-path",
                 str(fixture_session_cache_dir),
-                "--no-emit-telemetry",
             ],
             catch_exceptions=False,
         )
 
         assert result.exit_code == 0
-        mock_safe_synthesizer_cls = patched_run_dependencies["safe_synthesizer_cls"]
-        assert mock_safe_synthesizer_cls.call_args.kwargs["emit_telemetry"] is False
-        assert mock_safe_synthesizer_cls.call_args.kwargs["deployment_type"] == DeploymentTypeEnum.CLI
+        assert os.environ["NEMO_DEPLOYMENT_TYPE"] == DeploymentTypeEnum.SLURM.value
 
     def test_run_emit_telemetry_config_override_disables_sdk_telemetry(
         self,
@@ -631,8 +636,36 @@ class TestRunGenerateOptions:
         settings: CLISettings = call_kwargs["settings"]
         assert settings.run_path == str(run_dir)
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.evaluate.assert_called_once_with(emit_telemetry=False)
+        mock_ss.evaluate.assert_called_once_with()
         patched_run_dependencies["emit_telemetry"].assert_called_once_with(mock_ss, TaskStatusEnum.COMPLETED)
+
+    def test_generate_emits_error_when_save_results_fails(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+        patched_run_dependencies: dict,
+    ):
+        """Verify generate reports an error status if saving results fails."""
+        run_dir = tmp_path / "trained-run"
+        mock_ss = patched_run_dependencies["safe_synthesizer"]
+        mock_ss.save_results.side_effect = RuntimeError("save failed")
+
+        with pytest.raises(RuntimeError, match="save failed"):
+            cli_runner.invoke(
+                run,
+                [
+                    "generate",
+                    "--data-source",
+                    str(dummy_csv),
+                    "--run-path",
+                    str(run_dir),
+                ],
+                catch_exceptions=False,
+            )
+
+        patched_run_dependencies["emit_telemetry"].assert_called_once_with(mock_ss, TaskStatusEnum.ERROR)
+        mock_ss.generator.teardown.assert_called_once_with()
 
     def test_generate_with_auto_discover_calls_common_setup(
         self,

@@ -88,10 +88,10 @@ class TestEnvHelpers:
         monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
         assert _deployment_type() == DeploymentTypeEnum.SDK
 
-    def test_deployment_type_invalid_falls_back_to_sdk(self, monkeypatch):
+    def test_deployment_type_invalid_falls_back_to_undefined(self, monkeypatch):
         monkeypatch.setenv("NEMO_DEPLOYMENT_TYPE", "definitely-not-real")
         # Must not raise — telemetry must never block runtime over a misconfigured env var.
-        assert _deployment_type() == DeploymentTypeEnum.SDK
+        assert _deployment_type() == DeploymentTypeEnum.UNDEFINED
 
 
 # =============================================================================
@@ -100,7 +100,8 @@ class TestEnvHelpers:
 
 
 class TestNSSTrainingAndGenerationEvent:
-    def test_defaults(self):
+    def test_defaults(self, monkeypatch):
+        monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
         event = NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED)
         assert event.nemo_source == NemoSourceEnum.SAFE_SYNTHESIZER
         assert event.deployment_type == DeploymentTypeEnum.SDK
