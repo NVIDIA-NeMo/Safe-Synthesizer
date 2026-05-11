@@ -143,26 +143,8 @@ jobs:
         with:
           fetch-depth: 0
 
-<<<<<<< HEAD
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
-=======
-      - name: Install make
-        run: apt-get update && apt-get install -y --no-install-recommends make
-
-      - name: Setup Python environment
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: "3.11"
-          bootstrap-tools: "true"
-
-      - name: Bootstrap CUDA environment
-        run: make bootstrap-nss cu129
-
-      - name: Check GPU availability
-        run: |
-          uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
->>>>>>> 4a11f2bd (chore(deps): bump vllm 0.18→0.20 + torch 2.10→2.11 stack)
 
       - name: Run GPU E2E tests
         timeout-minutes: 45

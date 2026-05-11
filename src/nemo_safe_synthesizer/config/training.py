@@ -256,7 +256,7 @@ class TrainingHyperparams(Parameters):
                 "are also supported."
             ),
         ),
-    ] = "sdpa"
+    ] = "FLASH_ATTN"
 
     @property
     def effective_batch_size(self) -> int:
