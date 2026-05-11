@@ -15,7 +15,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | Install fails on Python 3.14 | ray has no `cp314` wheels | [Use Python 3.11–3.13](#python-314-is-not-supported) |
-| "kernels package not installed" | No network for Kernels Hub | Set `training.attn_implementation: sdpa` |
+| "kernels package not installed" | Optional Kernels Hub backend selected without `kernels` installed | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |

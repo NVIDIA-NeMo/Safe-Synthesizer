@@ -304,7 +304,7 @@ class TestBuildBaseFrameworkParams:
         )
 
     def test_builds_correct_params_with_kernels(self, mock_get_device_map, backend):
-        """Test that base framework params use kernels-community attn when kernels is available."""
+        """Test that base framework params use the configured default attention implementation."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"custom_key": "custom_value"}
         with patch.dict("sys.modules", {"kernels": MagicMock()}):
@@ -317,7 +317,7 @@ class TestBuildBaseFrameworkParams:
         assert result["custom_key"] == "custom_value"
 
     def test_builds_correct_params_without_kernels(self, mock_get_device_map, backend):
-        """Test that base framework params fall back to sdpa when kernels is not available."""
+        """Test that base framework params use the default when kernels is not available."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"custom_key": "custom_value"}
         with patch.dict("sys.modules", {"kernels": None}):

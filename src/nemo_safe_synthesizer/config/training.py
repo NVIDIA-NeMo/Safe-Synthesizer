@@ -248,15 +248,13 @@ class TrainingHyperparams(Parameters):
             title="attn_implementation",
             description=(
                 "The attention implementation to use for model loading. "
-                "Default uses Flash Attention 3 via the HuggingFace Kernels Hub "
-                "(requires the 'kernels' pip package; falls back to 'sdpa' if the 'kernels' package is not installed). "
+                "Default uses 'sdpa' (PyTorch scaled dot product attention) for broad compatibility. "
                 "Other common values: 'flash_attention_2' (requires flash-attn pip package), "
-                "'sdpa' (PyTorch scaled dot product attention), 'eager' (standard PyTorch). "
-                "Custom HuggingFace Kernels Hub paths (e.g. 'kernels-community/flash-attn2') "
-                "are also supported."
+                "'flash_attention_3' (requires flash-attn-3 support), 'eager' (standard PyTorch). "
+                "Custom HuggingFace Kernels Hub paths (e.g. 'kernels-community/flash-attn2') are also supported."
             ),
         ),
-    ] = "FLASH_ATTN"
+    ] = "sdpa"
 
     @property
     def effective_batch_size(self) -> int:
