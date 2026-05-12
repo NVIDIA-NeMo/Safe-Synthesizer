@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import ClassVar, Literal
 
+import torch  # noqa: F401 -- transformers v5 type hints reference `torch.*` lazily; needed for pydantic forward-ref resolution
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -990,3 +991,23 @@ class TinyLlama(ModelMetadata):
             tokenizer=tokenizer,
             **kwargs,
         )
+
+
+# Pydantic 2.12 + transformers v5 + `from __future__ import annotations` interact
+# such that forward references inside `PretrainedConfig | None` and
+# `PreTrainedTokenizerBase | None` unions are only resolvable after the module
+# has fully loaded. Rebuild eagerly so callers don't trip the lazy
+# "not fully defined" guard the first time they instantiate a subclass.
+for _cls in (
+    ModelMetadata,
+    Granite,
+    Llama32,
+    Mistral,
+    Nemotron,
+    Qwen,
+    SmolLM2,
+    SmolLM3,
+    TinyLlama,
+):
+    _cls.model_rebuild()
+del _cls

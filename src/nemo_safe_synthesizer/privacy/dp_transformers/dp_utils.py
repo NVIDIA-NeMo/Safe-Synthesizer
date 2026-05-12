@@ -55,8 +55,8 @@ from .sampler import (
     ShuffledEntitySampler,
 )
 
-if utils.is_safetensors_available():
-    import safetensors.torch
+import safetensors.torch  # transformers v5 makes safetensors a hard dep
+
 from ...observability import get_logger
 
 logger = get_logger(__name__)
@@ -660,7 +660,6 @@ class OpacusDPTrainer(Trainer):
                 unwrapped_model.save_pretrained(
                     output_dir,
                     state_dict=state_dict,
-                    safe_serialization=self.args.save_safetensors,
                 )
             else:
                 logger.info("Trainer.model is not a `PreTrainedModel`, only saving its state dict.")
@@ -679,7 +678,6 @@ class OpacusDPTrainer(Trainer):
             model_to_save.save_pretrained(
                 output_dir,
                 state_dict=state_dict,
-                safe_serialization=self.args.save_safetensors,
             )
 
         if self.tokenizer is not None:
