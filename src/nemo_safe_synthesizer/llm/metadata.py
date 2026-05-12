@@ -17,7 +17,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from transformers import AutoConfig, AutoTokenizer, PretrainedConfig, PreTrainedTokenizerBase
+from transformers import AutoConfig, PretrainedConfig, PreTrainedTokenizerBase
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
@@ -29,7 +29,7 @@ from ..defaults import (
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
-from .utils import ModelRef
+from .utils import ModelRef, load_fast_tokenizer
 
 logger = get_logger(__name__)
 
@@ -99,7 +99,7 @@ class LLMPromptConfig(BaseModel):
         """
         if tokenizer is None:
             model_ref = ModelRef.parse(name)
-            tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer = load_fast_tokenizer(
                 model_ref.target(),
                 trust_remote_code=model_ref.trust_remote_code,
             )
@@ -507,7 +507,7 @@ class ModelMetadata(BaseModel):
                 model_ref.target(), trust_remote_code=model_ref.trust_remote_code
             )
             if tokenizer is None:
-                tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer = load_fast_tokenizer(
                     model_ref.target(),
                     trust_remote_code=model_ref.trust_remote_code,
                 )

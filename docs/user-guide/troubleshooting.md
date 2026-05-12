@@ -66,6 +66,47 @@ configuration reference.
 
 ## Installation
 
+### Transformers v5 + vLLM Resolution Conflict
+
+`uv sync` fails with an error like
+``transformers (==4.x.y) is incompatible with vllm (==0.20.0)`` (or any pin
+of `transformers<5` originating from a vLLM wheel's metadata).
+
+vLLM 0.20.0's published metadata still lists `transformers<5` even though
+the runtime works against v5. Safe Synthesizer's `pyproject.toml` includes
+an entry in `[tool.uv.override-dependencies]` that relaxes this constraint:
+
+```toml
+override-dependencies = [
+    "transformers>=5.0,<6",
+]
+```
+
+If you've vendored or copied parts of `pyproject.toml` into another
+project and see this error, add that override entry. Remove it once vLLM
+publishes a v5-aware wheel.
+
+### Slow Tokenizer Warning
+
+After upgrading to transformers v5 you may see a log line like:
+
+> Loaded slow (Python) tokenizer for `<model>` — no Rust backend available.
+
+This means the model's tokenizer has no Rust (`tokenizers` crate)
+implementation and v5 fell back to the SentencePiece/Python backend. Data
+prep continues to work but tokenization is ~5–10× slower than the fast
+path. Common causes:
+
+- Local cached tokenizer is missing `tokenizer.json` — re-download
+  with `huggingface-cli download <model>`
+- Model is too new and ships only `tokenizer.model` (SentencePiece). Fast
+  conversion may land later upstream.
+- `trust_remote_code=True` model with a custom slow tokenizer class.
+
+The warning is informational. To suppress it, switch to a model with a
+fast tokenizer (most popular models do; check
+`AutoTokenizer.from_pretrained(model).is_fast`).
+
 ### Python 3.14 Is Not Supported
 
 Safe Synthesizer requires **Python 3.11, 3.12, or 3.13**. Python 3.14+ is not
@@ -97,11 +138,15 @@ Training OOM errors appear during the "Training" phase with HuggingFace Trainer
 stack traces. If you see `torch.cuda.OutOfMemoryError`:
 
 1. Enable 4-bit quantization -- the single largest memory saver. Set
-   `training.quantize_model: true` and `training.quantization_bits: 4`. QLoRA
-   stores the frozen base model in 4-bit NF4 while training LoRA adapters in
-   full precision, cutting model weight memory by ~4x. Quantization reduces
+   `training.quantize_model: true` and `training.quantization_scheme: bnb-4bit`
+   (or for back-compat, `training.quantization_bits: 4`). QLoRA stores the
+   frozen base model in 4-bit NF4 while training LoRA adapters in full
+   precision, cutting model weight memory by ~4x. Quantization reduces
    precision in the frozen weights; in practice QLoRA typically produces
-   results close to full-precision LoRA, but verify with your evaluation report
+   results close to full-precision LoRA, but verify with your evaluation
+   report. On Blackwell hardware, `nvfp4` and `mxfp4` schemes offer similar
+   4-bit footprint with hardware-accelerated matmul — see
+   [Quantization schemes](configuration.md#quantization-schemes)
 2. Reduce the context window -- see
    [Context Length and Record Fitting](#context-length-and-record-fitting) for
    how to lower `training.rope_scaling_factor`, truncate records, or simplify

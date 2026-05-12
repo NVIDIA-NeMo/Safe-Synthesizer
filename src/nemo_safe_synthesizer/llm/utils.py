@@ -21,7 +21,10 @@ from ..observability import get_logger
 
 if TYPE_CHECKING:
     from peft import PeftModel
-    from transformers import AutoConfig, BitsAndBytesConfig, PreTrainedTokenizer
+    from transformers import AutoConfig, PreTrainedTokenizer
+    from transformers.utils.quantization_config import QuantizationConfigMixin
+
+    from ..config.training import QuantizationScheme
 
 logger = get_logger(__name__)
 
@@ -532,14 +535,60 @@ def _get_auto_tokenizer(
     Returns:
         Configured ``PreTrainedTokenizer`` with BOS/EOS tokens enabled.
     """
-    from transformers import AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_fast_tokenizer(
         model_name,
         model_max_length=max_position_embeddings,
     )
     tokenizer = add_bos_eos_tokens_to_tokenizer(tokenizer)
     return tokenizer
+
+
+def load_fast_tokenizer(model_name_or_path: Path | str, **kwargs: Any) -> PreTrainedTokenizer:
+    """Load a tokenizer, preferring the Rust ``tokenizers`` backend.
+
+    Centralizes our tokenizer loads so we consistently request the fast
+    (Rust) backend that transformers v5 auto-selects, and log when the
+    selected backend falls back to the slow Python implementation.
+
+    Why this matters under v5: transformers v5 consolidated the previously
+    split ``tokenization_*.py`` / ``tokenization_*_fast.py`` modules into
+    a single file per model with automatic backend selection. ``use_fast``
+    defaults to ``True``, but a small set of models with no Rust port
+    (older SentencePiece-only checkpoints) still resolve to the slow
+    backend. Surfacing that fallback gives operators a clear signal when
+    tokenization is on the slow path — meaningful in our data-prep
+    pipeline where assembling training examples is tokenizer-bound.
+
+    Args:
+        model_name_or_path: HuggingFace model id or local path.
+        **kwargs: Forwarded to ``AutoTokenizer.from_pretrained`` (e.g.
+            ``model_max_length``, ``trust_remote_code``). ``use_fast`` is
+            forced to ``True``.
+
+    Returns:
+        Loaded ``PreTrainedTokenizer`` (Rust-backed when available).
+    """
+    from transformers import AutoTokenizer
+
+    kwargs.setdefault("use_fast", True)
+    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, **kwargs)
+    if not getattr(tokenizer, "is_fast", False):
+        logger.warning(
+            "Loaded slow (Python) tokenizer for %r — no Rust backend available. "
+            "Data-prep tokenization will be ~5-10x slower than the fast path.",
+            str(model_name_or_path),
+        )
+    return tokenizer
+
+
+def get_device_name() -> str:
+    """Get the name of the current device (first index). Returns 'undefined' if the device is not available."""
+    try:
+        import torch
+
+        return torch.cuda.get_device_properties(0).name
+    except Exception:
+        return "undefined"
 
 
 def get_device_map(
@@ -605,47 +654,65 @@ def count_trainable_params(model: PeftModel) -> tuple[int, int]:
     return trainable_params, all_params
 
 
-def get_quantization_config(quantization_bits: Literal[4, 8]) -> BitsAndBytesConfig:
-    """Build a ``BitsAndBytesConfig`` for 4-bit or 8-bit quantization.
+def get_quantization_config(scheme: QuantizationScheme | str | Literal[4, 8]) -> QuantizationConfigMixin:
+    """Build a transformers v5 quantization config for the requested scheme.
 
-    Both configurations use NormalFloat quantization with double
-    quantization enabled and ``bfloat16`` as the compute dtype.
+    Accepts a :class:`QuantizationScheme` (or its string value) for new
+    callers, or an integer ``4`` / ``8`` for backward compatibility with the
+    legacy ``quantization_bits`` field (4 → ``bnb-4bit``, 8 → ``bnb-8bit``).
 
     Args:
-        quantization_bits: Number of bits — must be ``4`` or ``8``.
+        scheme: A ``QuantizationScheme`` value, its string equivalent
+            (e.g. ``"nvfp4"``), or the legacy bit-count alias.
 
     Returns:
-        A ``BitsAndBytesConfig`` ready to pass to model loading.
+        A transformers ``QuantizationConfigMixin`` subclass instance
+        (``BitsAndBytesConfig``, ``FineGrainedFP8Config``, ``TorchAoConfig``,
+        or ``Mxfp4Config``) ready to pass to ``from_pretrained()`` via the
+        ``quantization_config=`` kwarg.
 
     Raises:
-        ValueError: If ``quantization_bits`` is not 4 or 8.
+        ValueError: If ``scheme`` is not a recognized scheme name or bit count.
+        ImportError: If the underlying quantization backend is not installed
+            (e.g. torchao for NVFP4 / MXFP4).
     """
     import torch
-    from transformers import BitsAndBytesConfig
 
-    if quantization_bits == 4:
+    from ..config.training import QuantizationScheme
+
+    if isinstance(scheme, int):
+        scheme = QuantizationScheme.BNB_4BIT if scheme == 4 else QuantizationScheme.BNB_8BIT
+    scheme = QuantizationScheme(scheme)  # normalize string / enum
+
+    if scheme is QuantizationScheme.BNB_4BIT:
+        from transformers import BitsAndBytesConfig
+
         return BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
-    elif quantization_bits == 8:
+    if scheme is QuantizationScheme.BNB_8BIT:
+        from transformers import BitsAndBytesConfig
+
         return BitsAndBytesConfig(
             load_in_8bit=True,
             bnb_8bit_quant_type="nf8",
             bnb_8bit_use_double_quant=True,
             bnb_8bit_compute_dtype=torch.bfloat16,
         )
-    else:
-        raise ValueError(f"Invalid quantization bits: {quantization_bits}")
+    if scheme is QuantizationScheme.FP8:
+        from transformers import FineGrainedFP8Config
 
+        return FineGrainedFP8Config()
+    if scheme is QuantizationScheme.NVFP4:
+        from torchao.prototype.mx_formats import NVFP4WeightOnlyConfig
+        from transformers import TorchAoConfig
 
-def get_device_name() -> str:
-    """Get the name of the current device (first index). Returns 'undefined' if the device is not available."""
-    try:
-        import torch
+        return TorchAoConfig(quant_type=NVFP4WeightOnlyConfig())
+    if scheme is QuantizationScheme.MXFP4:
+        from transformers import Mxfp4Config  # ty:ignore[unresolved-import]
 
-        return torch.cuda.get_device_properties(0).name
-    except Exception:
-        return "undefined"
+        return Mxfp4Config()
+    raise ValueError(f"Unknown quantization scheme: {scheme!r}")

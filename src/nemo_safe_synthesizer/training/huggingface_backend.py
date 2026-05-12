@@ -25,8 +25,6 @@ from peft import get_peft_model as get_peft_model_hf
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
     DataCollatorForTokenClassification,
     EvalPrediction,
     IntervalStrategy,
@@ -37,6 +35,7 @@ from transformers import (
     TrainingArguments,
 )
 from transformers.trainer_pt_utils import get_model_param_count
+from transformers.utils.quantization_config import QuantizationConfigMixin
 
 from .. import utils
 from ..cli.artifact_structure import BoundDir
@@ -58,6 +57,7 @@ from ..llm.utils import (
     get_device_map,
     get_max_vram,
     get_quantization_config,
+    load_fast_tokenizer,
 )
 from ..observability import get_logger, traced_runtime, traced_user
 from ..privacy.dp_transformers.dp_utils import (
@@ -76,6 +76,9 @@ from ..training.callbacks import (
 )
 from ..training.timeseries_preprocessing import process_timeseries_data
 from ..utils import write_json
+
+if TYPE_CHECKING:
+    from ..config.training import QuantizationScheme
 
 logger = get_logger(__name__)
 
@@ -133,7 +136,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.model = self.model_loader_type.from_pretrained(**self.framework_load_params, config=self.autoconfig)
 
         self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
-            AutoTokenizer.from_pretrained(
+            load_fast_tokenizer(
                 self.model_ref.target(),
                 trust_remote_code=self.model_ref.trust_remote_code,
                 model_max_length=model_args.get("max_seq_length", None),
@@ -224,21 +227,35 @@ class HuggingFaceBackend(TrainingBackend):
             **model_kwargs,
         )
 
-    def _get_quantization_config_if_enabled(self) -> BitsAndBytesConfig | None:
-        """Get the quantization config if quantization is enabled.
+    def _resolve_quantization_scheme(self) -> "QuantizationScheme":
+        """Resolve which quantization scheme to apply.
 
-        Returns:
-            The quantization config, or None if quantization is disabled.
+        Prefers the explicit ``quantization_scheme`` field; falls back to
+        the legacy ``quantization_bits`` alias when unset.
+        """
+        from ..config.training import QuantizationScheme
+
+        cfg = self.params.training
+        if cfg.quantization_scheme is not None:
+            return cfg.quantization_scheme
+        return QuantizationScheme.BNB_4BIT if cfg.quantization_bits == 4 else QuantizationScheme.BNB_8BIT
+
+    def _get_quantization_config_if_enabled(self) -> QuantizationConfigMixin | None:
+        """Build the v5 quantization config for the configured scheme, or None.
+
+        Returns ``None`` when ``quantize_model`` is disabled. Otherwise
+        resolves the scheme (new ``quantization_scheme`` field, or legacy
+        ``quantization_bits`` fallback) and returns the corresponding v5
+        config object — ``BitsAndBytesConfig`` for the bnb-* schemes,
+        ``FineGrainedFP8Config``/``TorchAoConfig``/``Mxfp4Config`` for the
+        others.
         """
         if not self.params.training.quantize_model:
             return None
 
-        if self.params.training.quantization_bits:
-            logger.info(f"Quantizing model to {self.params.training.quantization_bits} bits")
-            return get_quantization_config(self.params.training.quantization_bits)
-        else:
-            logger.warning("Quantization bits not specified. 8 bits will be used")
-            return get_quantization_config(8)
+        scheme = self._resolve_quantization_scheme()
+        logger.info(f"Quantizing model with scheme={scheme.value}")
+        return get_quantization_config(scheme)
 
     def _apply_rope_scaling(self, framework_params: dict, **kwargs: Any) -> None:
         """Apply rope scaling from model_metadata to the config.
@@ -316,13 +333,20 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
         if self.params.training.quantize_model:
+            scheme = self._resolve_quantization_scheme()
             self.quant_params = self.quant_params | quantize_params
-            logger.info(f"Quantizing model to {self.params.training.quantization_bits} bits")
+            logger.info(f"Quantizing model with scheme={scheme.value} (~{scheme.effective_bits} bits/param)")
             self.quant_params["peft_type"] = self.params.training.peft_implementation.upper()
             self.quant_params["init_lora_weights"] = True
             if self.params.training.peft_implementation == "loftq":
-                logger.info(f"using loftq with {self.params.training.quantization_bits} bits")
-                self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=self.params.training.quantization_bits)
+                if not scheme.is_bitsandbytes:
+                    raise ParameterError(
+                        f"peft_implementation='loftq' requires a bitsandbytes scheme; "
+                        f"got quantization_scheme={scheme.value}. Use bnb-4bit or bnb-8bit, "
+                        f"or switch to peft_implementation='qlora'/'lora'."
+                    )
+                logger.info(f"using loftq with {scheme.effective_bits} bits")
+                self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=scheme.effective_bits)
 
     def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply LoRA wrapping (and optional k-bit quantization) to the model."""

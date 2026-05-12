@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import (
     Annotated,
     Literal,
@@ -26,8 +27,50 @@ from .types import (
 )
 
 __all__ = [
+    "QuantizationScheme",
     "TrainingHyperparams",
 ]
+
+
+class QuantizationScheme(StrEnum):
+    """Quantization schemes supported when ``quantize_model=True``.
+
+    Members are string values so they serialize cleanly through pydantic
+    and JSON configs.
+
+    Selection guide:
+    - ``bnb-4bit`` / ``bnb-8bit``: bitsandbytes NF4 / int8. Widest hardware
+      support (Ampere+), works with QLoRA and LoftQ. Default for training.
+    - ``fp8``: transformers ``FineGrainedFP8Config``. Float8 with block-wise
+      scaling. Requires Hopper (sm_90+) or Blackwell. Inference-leaning.
+    - ``nvfp4``: NVIDIA FP4 via ``torchao.prototype.mx_formats.NVFP4WeightOnlyConfig``
+      wrapped in ``TorchAoConfig``. Requires Blackwell (sm_100+). Weight-only.
+    - ``mxfp4``: OCP Microscaling FP4 via transformers ``Mxfp4Config``.
+      Hardware support varies by torch/torchao version.
+    """
+
+    BNB_4BIT = "bnb-4bit"
+    BNB_8BIT = "bnb-8bit"
+    FP8 = "fp8"
+    NVFP4 = "nvfp4"
+    MXFP4 = "mxfp4"
+
+    @property
+    def effective_bits(self) -> int:
+        """Per-parameter bit width for memory estimation."""
+        return {
+            QuantizationScheme.BNB_4BIT: 4,
+            QuantizationScheme.BNB_8BIT: 8,
+            QuantizationScheme.FP8: 8,
+            QuantizationScheme.NVFP4: 4,
+            QuantizationScheme.MXFP4: 4,
+        }[self]
+
+    @property
+    def is_bitsandbytes(self) -> bool:
+        """Whether the scheme is implemented via bitsandbytes (QLoRA-compatible)."""
+        return self in (QuantizationScheme.BNB_4BIT, QuantizationScheme.BNB_8BIT)
+
 
 ValueGTZero = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
 
@@ -218,9 +261,27 @@ class TrainingHyperparams(Parameters):
         Literal[4, 8],
         Field(
             title="quantization_bits",
-            description="The number of bits to use for quantization if ``quantize_model`` is ``True``. Accepts 8 or 4.",
+            description=(
+                "Bit width for bitsandbytes quantization. Used only when "
+                "``quantization_scheme`` is not set (back-compat alias: 4 → bnb-4bit, "
+                "8 → bnb-8bit). Prefer ``quantization_scheme`` for new configs."
+            ),
         ),
     ] = 8
+
+    quantization_scheme: Annotated[
+        QuantizationScheme | None,
+        Field(
+            title="quantization_scheme",
+            description=(
+                "Quantization scheme to use when ``quantize_model=True``. Accepts "
+                "``bnb-4bit``, ``bnb-8bit``, ``fp8``, ``nvfp4``, or ``mxfp4``. "
+                "If unset, falls back to ``quantization_bits`` for backward "
+                "compatibility. Non-bitsandbytes schemes are incompatible with "
+                "``peft_implementation='loftq'``."
+            ),
+        ),
+    ] = None
 
     peft_implementation: Annotated[
         str,

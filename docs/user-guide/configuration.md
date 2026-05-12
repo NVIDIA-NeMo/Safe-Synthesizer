@@ -75,7 +75,8 @@ for the full field list.
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |
 | `training.pretrained_model` | `"HuggingFaceTB/SmolLM3-3B"` | HuggingFace model ID or local path | See supported families below; `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for fast CPU/low-VRAM iteration |
 | `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit |
-| `training.quantization_bits` | `8` | Bit width (4 or 8) when `training.quantize_model` is `true` | Prefer 8 over 4 for quality |
+| `training.quantization_scheme` | `null` | Quantization scheme: `bnb-4bit`, `bnb-8bit`, `fp8`, `nvfp4`, `mxfp4` | See [Quantization schemes](#quantization-schemes) below; leave unset to fall back to `quantization_bits` |
+| `training.quantization_bits` | `8` | Legacy bit width (4 or 8) used when `quantization_scheme` is unset | Prefer setting `quantization_scheme` explicitly for new configs |
 | `training.attn_implementation` | `"sdpa"` | Attention backend for model loading | Leave at default |
 | `training.rope_scaling_factor` | `"auto"` | Scale the base model's context window via RoPE (`"auto"` or int) | Leave at `"auto"` |
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
@@ -107,6 +108,38 @@ When `training.pretrained_model` is set to a Hugging Face Hub model ID, the mode
 
 !!! warning "Security Note: Pretrained models from Hugging Face Hub"
     Loading and using pretrained models from Hugging Face Hub (or any public source) can expose your environment to significant risks, including arbitrary code execution (ACE) or remote code execution (RCE) vulnerabilities. Only use models you have reviewed yourself or from organizations and authors you explicitly trust. Malicious or modified models may contain embedded code, backdoors, or privacy-leaking mechanisms.
+
+### Quantization schemes
+
+When `training.quantize_model: true`, Safe Synthesizer applies one of the
+following quantization schemes via transformers v5's
+`quantization_config=` interface:
+
+| Scheme | Backend | Bits/param | Hardware | Notes |
+|--------|---------|-----------:|----------|-------|
+| `bnb-4bit` | bitsandbytes NF4 + bf16 compute | 4 | Ampere+ (sm_80+) | Default for QLoRA fine-tuning. LoftQ-compatible. |
+| `bnb-8bit` | bitsandbytes int8 | 8 | Ampere+ (sm_80+) | Higher quality than 4-bit; uses ~2x the VRAM. LoftQ-compatible. |
+| `fp8` | `FineGrainedFP8Config` | 8 | Hopper (sm_90+) / Blackwell | Float8 with block-wise scaling. Inference-leaning. |
+| `nvfp4` | `TorchAoConfig(NVFP4WeightOnlyConfig())` | 4 | Blackwell (sm_100+) | Weight-only NVIDIA FP4. Requires recent torchao. |
+| `mxfp4` | `Mxfp4Config` | 4 | Varies by torch/torchao version | OCP Microscaling FP4. |
+
+Select a scheme with `training.quantization_scheme`:
+
+```yaml
+training:
+  quantize_model: true
+  quantization_scheme: nvfp4   # or bnb-4bit / bnb-8bit / fp8 / mxfp4
+```
+
+If `quantization_scheme` is unset, Safe Synthesizer falls back to
+`quantization_bits` for backward compatibility (`4` → `bnb-4bit`,
+`8` → `bnb-8bit`).
+
+!!! note "LoftQ + non-BNB schemes"
+    `peft_implementation: loftq` is incompatible with `fp8`, `nvfp4`, and
+    `mxfp4` — LoftQ requires the bitsandbytes runtime. Setting both will
+    raise a `ParameterError` at startup. Use `qlora` or `lora` with the
+    non-BNB schemes.
 
 ---
 

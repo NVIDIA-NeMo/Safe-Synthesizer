@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import opacus
 import pandas as pd
+import safetensors.torch  # transformers v5 makes safetensors a hard dep
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
@@ -45,6 +46,7 @@ from transformers import (
 )
 from transformers.trainer import TRAINING_ARGS_NAME
 
+from ...observability import get_logger
 from . import linear  # imported for side effects  # noqa
 from .privacy_args import (
     PrivacyArguments,
@@ -54,10 +56,6 @@ from .sampler import (
     PoissonEntitySampler,
     ShuffledEntitySampler,
 )
-
-import safetensors.torch  # transformers v5 makes safetensors a hard dep
-
-from ...observability import get_logger
 
 logger = get_logger(__name__)
 
