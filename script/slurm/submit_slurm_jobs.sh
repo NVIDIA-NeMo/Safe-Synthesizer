@@ -22,6 +22,9 @@ ACCOUNT="${ACCOUNT:-nemotron_data_dev}"
 TIME_LIMIT="04:00:00"
 TRAIN_TIME_LIMIT=""
 GENERATE_TIME_LIMIT=""
+# Optional handoff for external orchestrators: record the submitted array id so
+# a separate wait/resume step can monitor the exact Slurm job.
+JOB_ID_FILE=""
 
 # Parse flags (order-independent). Unknown flags are ignored.
 while [ $# -gt 0 ]; do
@@ -52,10 +55,12 @@ while [ $# -gt 0 ]; do
       TRAIN_TIME_LIMIT="${2:-$TRAIN_TIME_LIMIT}"; shift 2;;
     --generate-time-limit)
       GENERATE_TIME_LIMIT="${2:-$GENERATE_TIME_LIMIT}"; shift 2;;
+    --job-id-file)
+      JOB_ID_FILE="${2:-}"; shift 2;;
     --dry-run)
       DRY_RUN="true"; shift;;
     --help|-h)
-      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--nss-version VERSION] [--dry-run]"
+      echo "Usage: $0 [--configs c1,c2] [--dataset-urls name1,url1,path1] [--dataset-group short|long] [--runs N] [--exp-name NAME] [--pipeline-mode two_stage|end_to_end] [--partition P] [--wandb-project PROJECT] [--max-concurrent-slurm-jobs N] [--time-limit TIME] [--train-time-limit TIME] [--generate-time-limit TIME] [--nss-version VERSION] [--job-id-file PATH] [--dry-run]"
       echo ""
       echo "Provide either --dataset-urls to specify a list of datasets by name, url, or path, or --dataset-group to use a predefined set of datasets."
       echo "Time limits:"
@@ -65,6 +70,7 @@ while [ $# -gt 0 ]; do
       echo "    --nss-version VERSION  install nemo-safe-synthesizer==VERSION from PyPI instead of syncing the repo"
       echo "                           example: --nss-version 0.2.3"
       echo "                           if omitted, the repo at NSS_DIR is used (default behavior)"
+      echo "    --job-id-file PATH     write submitted end-to-end Slurm array job id to PATH"
 
       exit 0;;
     --) shift; break;;
@@ -292,11 +298,19 @@ if [[ "${PIPELINE_MODE}" == "two_stage" ]]; then
       ${NSS_SLURM_DIR}/slurm_srun.sh )
 
 else
-  sbatch "${common_args[@]}" \
+  end_to_end_array_id=$( \
+    sbatch "${common_args[@]}" \
     --time="${TIME_LIMIT}" \
     --job-name nss_end_to_end \
     --export=ALL,NSS_PHASE=end_to_end \
-    ${NSS_SLURM_DIR}/slurm_srun.sh
+    ${NSS_SLURM_DIR}/slurm_srun.sh )
+  if [[ -n "${end_to_end_array_id:-}" ]]; then
+    printf '%s\n' "${end_to_end_array_id}"
+  fi
+  if [[ -n "${JOB_ID_FILE:-}" && -z "${DRY_RUN:-}" ]]; then
+    mkdir -p "$(dirname "${JOB_ID_FILE}")"
+    printf '%s\n' "${end_to_end_array_id}" > "${JOB_ID_FILE}"
+  fi
 fi
 
 if [ -n "${DRY_RUN:-}" ]; then
