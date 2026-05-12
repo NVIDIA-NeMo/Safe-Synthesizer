@@ -570,16 +570,12 @@ class OpacusDPTrainer(Trainer):
         model.train()
         getattr(self.optimizer, "train", lambda: None)()
 
-        # Compared to the original HF implementation (as of 4.48), we use
-        # `num_items_in_batch=None` to avoid any extra scaling, since Opacus
-        # already does it; we only divide the loss by the number of gradient
-        # accumulation steps after loss.backward(), to get correct logging
+        # Pass `num_items_in_batch=None` so the HF Trainer skips its built-in
+        # per-token scaling; Opacus already applies per-sample gradient scaling
+        # and we divide the logged loss by gradient_accumulation_steps below.
         inputs = self._prepare_inputs(inputs)
         with self.compute_loss_context_manager():
-            try:
-                loss = self.compute_loss(model, inputs, num_items_in_batch=None)
-            except TypeError:  # older transformers
-                loss = self.compute_loss(model, inputs)
+            loss = self.compute_loss(model, inputs, num_items_in_batch=None)
         del inputs
 
         loss.backward()
