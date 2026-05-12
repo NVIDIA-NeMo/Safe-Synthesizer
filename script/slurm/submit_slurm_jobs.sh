@@ -307,7 +307,7 @@ else
   if [[ -n "${end_to_end_array_id:-}" ]]; then
     printf '%s\n' "${end_to_end_array_id}"
   fi
-  if [[ -n "${JOB_ID_FILE:-}" && -z "${DRY_RUN:-}" ]]; then
+  if [[ -n "${JOB_ID_FILE:-}" && -n "${end_to_end_array_id:-}" && -z "${DRY_RUN:-}" ]]; then
     mkdir -p "$(dirname "${JOB_ID_FILE}")"
     printf '%s\n' "${end_to_end_array_id}" > "${JOB_ID_FILE}"
   fi
