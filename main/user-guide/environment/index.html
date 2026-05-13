@@ -1377,6 +1377,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_telemetry_enabled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NEMO_TELEMETRY_ENABLED
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9231,6 +9242,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_telemetry_enabled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NEMO_TELEMETRY_ENABLED
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9602,6 +9624,14 @@ CLI and SDK (with the default or custom <code>NSS_INFERENCE_ENDPOINT</code>).</p
 </span></code></pre></div>
 <p>Defaults to <code>max(1, cpu_count - 1)</code> (one CPU left free), further capped so
 there are at least 1,000 records per worker.</p>
+<h3 id="nemo_telemetry_enabled"><code>NEMO_TELEMETRY_ENABLED</code><a class="headerlink" href="#nemo_telemetry_enabled" title="Permanent link">&para;</a></h3>
+<p>Controls whether telemetry is sent for train/generate events.</p>
+<p>Defaults to <code>true</code>. Set it to <code>false</code> to disable telemetry for the current shell:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NEMO_TELEMETRY_ENABLED</span><span class="o">=</span><span class="nb">false</span>
+</span></code></pre></div>
+<p>You can also disable telemetry in a Safe Synthesizer config file:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">emit_telemetry</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span></code></pre></div>
 <hr />
 <h2 id="container-usage">Container Usage<a class="headerlink" href="#container-usage" title="Permanent link">&para;</a></h2>
 <p>When running Safe Synthesizer in a Docker container, these variables are
@@ -9648,12 +9678,12 @@ particularly important:</p>
 </tbody>
 </table>
 <p>Example:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/workspace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">NSS_ARTIFACTS_PATH</span><span class="o">=</span>/workspace/artifacts<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/workspace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>-v<span class="w"> </span>~/.cache/huggingface:/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">HF_HOME</span><span class="o">=</span>/workspace/.hf_cache<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">NSS_ARTIFACTS_PATH</span><span class="o">=</span>/workspace/artifacts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span>nss-gpu:latest<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>/workspace/config.yaml<span class="w"> </span>--data-source<span class="w"> </span>/workspace/data.csv
 </span></code></pre></div>
 <p>See <a href="../docker/">Docker</a> for full container setup and Makefile shortcuts.</p>
 <hr />
