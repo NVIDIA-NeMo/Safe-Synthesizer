@@ -13,7 +13,7 @@ ACCOUNT="${ACCOUNT:-nemotron_data_dev}"
 GPUS_PER_TASK="${GPUS_PER_TASK:-1}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-16}"
 SRUN_EXTRA="${SRUN_EXTRA:-}"
-export NEMO_DEPLOYMENT_TYPE="${NEMO_DEPLOYMENT_TYPE:-slurm}"
+export NEMO_DEPLOYMENT_TYPE="${NEMO_DEPLOYMENT_TYPE:-slurm-nvidia-internal}"
 
 # No --time flag used in srun since we have a single srun in each allocation so
 # the time limit is controleld by the --time flag on the sbatch calls in

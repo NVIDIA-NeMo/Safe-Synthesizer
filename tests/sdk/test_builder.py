@@ -23,9 +23,26 @@ PATCH_PREFIX = "nemo_safe_synthesizer.sdk.builder"
 
 def test_safe_synthesizer_builder_sanity(monkeypatch):
     monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+    monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
     builder = SafeSynthesizer(config=SafeSynthesizerParameters())
     assert builder._emit_telemetry is True
     assert builder._deployment_type == DeploymentTypeEnum.SDK
+
+
+def test_safe_synthesizer_builder_uses_env_telemetry_setting_when_unset(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    builder = SafeSynthesizer()
+
+    assert builder._emit_telemetry is False
+
+
+def test_safe_synthesizer_builder_config_default_uses_env_telemetry_setting(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+
+    assert builder._emit_telemetry is False
 
 
 def test_safe_synthesizer_builder_uses_config_telemetry_setting():

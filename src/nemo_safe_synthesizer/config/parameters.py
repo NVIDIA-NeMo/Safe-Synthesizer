@@ -12,6 +12,7 @@ from pydantic_core.core_schema import ValidationInfo
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
+from ..telemetry import _telemetry_enabled
 from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
@@ -77,8 +78,11 @@ class SafeSynthesizerParameters(Parameters):
     )
 
     emit_telemetry: bool = Field(
-        default=True,
-        description="Whether to emit anonymous Safe Synthesizer telemetry events.",
+        default_factory=_telemetry_enabled,
+        description=(
+            "Whether to emit anonymous Safe Synthesizer telemetry events. "
+            "Defaults from NEMO_TELEMETRY_ENABLED when unset."
+        ),
     )
 
     @field_validator("privacy", mode="after", check_fields=False)

@@ -52,6 +52,7 @@ class DeploymentTypeEnum(str, Enum):
     SDK = "sdk"  # Library invoked programmatically via the SDK
     NMP = "nmp"  # Deployed through NVIDIA NeMo Platform
     SLURM = "slurm"  # Deployed through SLURM
+    SLURM_INTERNAL = "slurm-nvidia-internal"  # Deployed through SLURM internal (NVIDIA internal cluster)
     UNDEFINED = "undefined"
 
 

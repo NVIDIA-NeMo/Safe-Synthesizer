@@ -150,6 +150,7 @@ class TestRunCommandOptions:
     ):
         """Telemetry is enabled by default."""
         monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+        monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
 
         result = cli_runner.invoke(
             run,
@@ -217,6 +218,14 @@ class TestRunCommandOptions:
         assert result.exit_code == 0
         mock_safe_synthesizer_cls = patched_run_dependencies["safe_synthesizer_cls"]
         assert mock_safe_synthesizer_cls.call_args.kwargs["emit_telemetry"] is False
+
+    def test_merge_overrides_uses_env_telemetry_when_unset(self, monkeypatch: pytest.MonkeyPatch):
+        """Omitting --emit_telemetry allows NEMO_TELEMETRY_ENABLED to provide the default."""
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+        config = merge_overrides(None, {})
+
+        assert config.emit_telemetry is False
 
 
 class TestOutputFileOverride:

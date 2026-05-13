@@ -22,6 +22,7 @@ from ..config import (
     TrainingHyperparams,
 )
 from ..observability import get_logger
+from ..telemetry import _telemetry_enabled
 
 logger = get_logger(__name__)
 
@@ -85,7 +86,7 @@ class ConfigBuilder(object):
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
             self._time_series_config: TimeSeriesParameters = TimeSeriesParameters()
-            self._emit_telemetry_config = True
+            self._emit_telemetry_config = _telemetry_enabled()
 
         self._data_source: DataSource | None = None
         self._classify_model_provider: str | None = None

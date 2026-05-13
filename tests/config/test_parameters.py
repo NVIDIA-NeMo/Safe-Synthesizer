@@ -10,7 +10,8 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 
 
-def test_safe_synthesizer_parameters():
+def test_safe_synthesizer_parameters(monkeypatch):
+    monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
     config = SafeSynthesizerParameters(
         replace_pii=None,
     )
@@ -26,6 +27,30 @@ def test_emit_telemetry_can_be_disabled_from_yaml():
 
 def test_emit_telemetry_can_be_disabled_from_params():
     c = SafeSynthesizerParameters.from_params(emit_telemetry=False)
+    assert c.emit_telemetry is False
+
+
+def test_emit_telemetry_defaults_from_env_when_unset(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    c = SafeSynthesizerParameters()
+
+    assert c.emit_telemetry is False
+
+
+def test_emit_telemetry_explicit_value_overrides_env(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    c = SafeSynthesizerParameters(emit_telemetry=True)
+
+    assert c.emit_telemetry is True
+
+
+def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
+    monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+
+    c = SafeSynthesizerParameters.from_yaml_str("training: {}\n")
+
     assert c.emit_telemetry is False
 
 

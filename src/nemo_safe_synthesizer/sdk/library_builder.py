@@ -36,6 +36,7 @@ from ..telemetry import (
     TaskStatusEnum,
     TelemetryHandler,
     _deployment_type,
+    _telemetry_enabled,
     bucket_columns,
     bucket_records,
     sanitize_model_for_telemetry,
@@ -212,7 +213,7 @@ class SafeSynthesizer(ConfigBuilder):
 
     def _config_emit_telemetry(self) -> bool:
         """Return the current config's telemetry setting, defaulting on before resolution."""
-        return True if self._nss_config is None else self._nss_config.emit_telemetry
+        return _telemetry_enabled() if self._nss_config is None else self._nss_config.emit_telemetry
 
     def _ensure_observability(self) -> None:
         """Initialize structured logging when running via the SDK.
