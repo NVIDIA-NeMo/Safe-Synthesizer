@@ -394,7 +394,7 @@ def test_builder_seeded_from_config_with_pii_enabled():
 
 
 def _builder_for_telemetry() -> SafeSynthesizer:
-    builder = SafeSynthesizer(config=SafeSynthesizerParameters())
+    builder = SafeSynthesizer(config=SafeSynthesizerParameters(emit_telemetry=True))
     builder._data_source = _SMALL_DF
     builder._total_start = 0.0
     return builder

@@ -129,10 +129,10 @@ def bucket_records(n: int) -> str:
 
     Used to avoid transmitting exact record counts in telemetry.
     """
-    if n <= 100:
-        return "1-100"
+    if n <= 200:
+        return "1-200"
     if n <= 1_000:
-        return "101-1000"
+        return "201-1000"
     if n <= 10_000:
         return "1001-10000"
     if n <= 100_000:
