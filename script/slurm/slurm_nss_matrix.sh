@@ -120,8 +120,8 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION}"
 else
-    source "${NSS_DIR}/.venv/bin/activate"
     uv sync --frozen --extra cu129 --extra engine --group dev
+    source "${NSS_DIR}/.venv/bin/activate"
     NSS_RUN_CMD="uv run safe-synthesizer"
 fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
