@@ -38,6 +38,7 @@ from ..telemetry import (
     _deployment_type,
     bucket_columns,
     bucket_records,
+    sanitize_model_for_telemetry,
 )
 from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
@@ -71,7 +72,7 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
     dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
     ts_enabled = cfg is not None and cfg.time_series.is_timeseries
     group_by = cfg is not None and cfg.data.group_training_examples_by is not None
-    model = cfg.training.pretrained_model if cfg is not None else "undefined"
+    model = sanitize_model_for_telemetry(cfg.training.pretrained_model if cfg is not None else None)
 
     records_bucket = "undefined"
     columns_bucket = "undefined"

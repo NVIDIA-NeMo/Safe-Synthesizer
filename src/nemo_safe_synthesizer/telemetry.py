@@ -21,9 +21,11 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, ClassVar
 from urllib.parse import urlsplit, urlunsplit
 
+from huggingface_hub.utils import HFValidationError, validate_repo_id
 from pydantic import BaseModel, Field
 
 from .observability import get_logger
@@ -36,6 +38,7 @@ NEMO_TELEMETRY_VERSION = "nemo-telemetry/1.0"
 DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
+LOCAL_MODEL_LABEL = "local_path"
 logger = get_logger(__name__)
 
 
@@ -83,6 +86,37 @@ def _deployment_type() -> DeploymentTypeEnum:
         return DeploymentTypeEnum(raw)
     except ValueError:
         return DeploymentTypeEnum.UNDEFINED
+
+
+def sanitize_model_for_telemetry(model: str | None) -> str:
+    """Return a telemetry-safe pretrained model label.
+
+    Hugging Face repo IDs are safe to report, but local model paths may embed
+    user or machine details. Prefer the coarse local label when the value looks
+    path-like or does not satisfy Hugging Face repo ID syntax.
+    """
+    if model is None:
+        return "undefined"
+
+    model = model.strip()
+    if not model:
+        return "undefined"
+
+    if model.startswith(("/", "./", "../", "~")):
+        return LOCAL_MODEL_LABEL
+    if "\\" in model or PureWindowsPath(model).drive:
+        return LOCAL_MODEL_LABEL
+    if model.count("/") > 1:
+        return LOCAL_MODEL_LABEL
+    if Path(model).expanduser().exists():
+        return LOCAL_MODEL_LABEL
+
+    try:
+        validate_repo_id(model)
+    except HFValidationError:
+        return LOCAL_MODEL_LABEL
+
+    return model
 
 
 def _session_prefix() -> str | None:

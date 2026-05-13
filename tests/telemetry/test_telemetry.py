@@ -22,6 +22,7 @@ from nemo_safe_synthesizer.telemetry import (
     bucket_columns,
     bucket_records,
     build_payload,
+    sanitize_model_for_telemetry,
 )
 
 # =============================================================================
@@ -92,6 +93,53 @@ class TestEnvHelpers:
         monkeypatch.setenv("NEMO_DEPLOYMENT_TYPE", "definitely-not-real")
         # Must not raise — telemetry must never block runtime over a misconfigured env var.
         assert _deployment_type() == DeploymentTypeEnum.UNDEFINED
+
+
+# =============================================================================
+# Model telemetry sanitization
+# =============================================================================
+
+
+class TestSanitizeModelForTelemetry:
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt2",
+            "bert-base-uncased",
+            "HuggingFaceTB/SmolLM3-3B",
+            "mistralai/Mistral-7B-Instruct-v0.3",
+        ],
+    )
+    def test_hf_model_ids_are_preserved(self, model):
+        assert sanitize_model_for_telemetry(model) == model
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "/home/alice/models/private-model",
+            "./models/private-model",
+            "../models/private-model",
+            "~/models/private-model",
+            "org/team/private-model",
+            "C:/Users/alice/models/private-model",
+            r"C:\Users\alice\models\private-model",
+            r"models\private-model",
+            "not a valid repo id",
+        ],
+    )
+    def test_path_like_or_invalid_values_are_redacted(self, model):
+        assert sanitize_model_for_telemetry(model) == "local_path"
+
+    def test_existing_relative_path_is_redacted(self, tmp_path, monkeypatch):
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+        monkeypatch.chdir(tmp_path)
+
+        assert sanitize_model_for_telemetry("local-model") == "local_path"
+
+    @pytest.mark.parametrize("model", [None, "", "   "])
+    def test_empty_values_are_undefined(self, model):
+        assert sanitize_model_for_telemetry(model) == "undefined"
 
 
 # =============================================================================
