@@ -32,12 +32,12 @@ from nemo_safe_synthesizer.telemetry import (
 
 class TestBucketRecords:
     def test_lower_boundary(self):
-        assert bucket_records(1) == "1-100"
-        assert bucket_records(100) == "1-100"
+        assert bucket_records(1) == "1-200"
+        assert bucket_records(100) == "1-200"
 
     def test_mid_buckets(self):
-        assert bucket_records(101) == "101-1000"
-        assert bucket_records(1000) == "101-1000"
+        assert bucket_records(201) == "201-1000"
+        assert bucket_records(1000) == "201-1000"
         assert bucket_records(1001) == "1001-10000"
         assert bucket_records(10000) == "1001-10000"
         assert bucket_records(10001) == "10001-100000"
@@ -213,7 +213,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert event.job_duration_sec == 42.5
         assert event.num_records_generated == 1000
         assert event.num_tokens_generated == 50000
-        assert event.input_records_bucket == "101-1000"
+        assert event.input_records_bucket == "201-1000"
         assert event.input_columns_bucket == "6-10"
         assert event.synthetic_quality_score == 0.87
         assert event.data_privacy_score == 0.95
