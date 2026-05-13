@@ -21,9 +21,14 @@ from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, ClassVar
+from urllib.parse import urlsplit, urlunsplit
 
+from huggingface_hub.utils import HFValidationError, validate_repo_id
 from pydantic import BaseModel, Field
+
+from .observability import get_logger
 
 if TYPE_CHECKING:
     import httpx
@@ -33,6 +38,8 @@ NEMO_TELEMETRY_VERSION = "nemo-telemetry/1.0"
 DEFAULT_ENDPOINT = "https://events.telemetry.data.nvidia.com/v1.1/events/json"
 MAX_RETRIES = 3
 CPU_ARCHITECTURE = platform.uname().machine
+LOCAL_MODEL_LABEL = "local_path"
+logger = get_logger(__name__)
 
 
 class NemoSourceEnum(str, Enum):
@@ -44,6 +51,8 @@ class DeploymentTypeEnum(str, Enum):
     CLI = "cli"  # Library invoked via the CLI entry point
     SDK = "sdk"  # Library invoked programmatically via the SDK
     NMP = "nmp"  # Deployed through NVIDIA NeMo Platform
+    SLURM = "slurm"  # Deployed through SLURM
+    SLURM_INTERNAL = "slurm-nvidia-internal"  # Deployed through SLURM internal (NVIDIA internal cluster)
     UNDEFINED = "undefined"
 
 
@@ -62,12 +71,53 @@ def _telemetry_endpoint() -> str:
     return os.getenv("NEMO_TELEMETRY_ENDPOINT", DEFAULT_ENDPOINT)
 
 
+def _redact_endpoint(endpoint: str) -> str:
+    """Redact query parameters before logging telemetry endpoints."""
+    try:
+        parsed = urlsplit(endpoint)
+    except ValueError:
+        return "<invalid-endpoint>"
+    query = "<redacted>" if parsed.query else ""
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
+
+
 def _deployment_type() -> DeploymentTypeEnum:
     raw = os.getenv("NEMO_DEPLOYMENT_TYPE", "sdk").lower()
     try:
         return DeploymentTypeEnum(raw)
     except ValueError:
-        return DeploymentTypeEnum.SDK
+        return DeploymentTypeEnum.UNDEFINED
+
+
+def sanitize_model_for_telemetry(model: str | None) -> str:
+    """Return a telemetry-safe pretrained model label.
+
+    Hugging Face repo IDs are safe to report, but local model paths may embed
+    user or machine details. Prefer the coarse local label when the value looks
+    path-like or does not satisfy Hugging Face repo ID syntax.
+    """
+    if model is None:
+        return "undefined"
+
+    model = model.strip()
+    if not model:
+        return "undefined"
+
+    if model.startswith(("/", "./", "../", "~")):
+        return LOCAL_MODEL_LABEL
+    if "\\" in model or PureWindowsPath(model).drive:
+        return LOCAL_MODEL_LABEL
+    if model.count("/") > 1:
+        return LOCAL_MODEL_LABEL
+    if Path(model).expanduser().exists():
+        return LOCAL_MODEL_LABEL
+
+    try:
+        validate_repo_id(model)
+    except HFValidationError:
+        return LOCAL_MODEL_LABEL
+
+    return model
 
 
 def _session_prefix() -> str | None:
@@ -79,10 +129,10 @@ def bucket_records(n: int) -> str:
 
     Used to avoid transmitting exact record counts in telemetry.
     """
-    if n <= 100:
-        return "1-100"
+    if n <= 200:
+        return "1-200"
     if n <= 1_000:
-        return "101-1000"
+        return "201-1000"
     if n <= 10_000:
         return "1001-10000"
     if n <= 100_000:
@@ -515,8 +565,28 @@ class TelemetryHandler:
             return
 
         payload = build_payload(events, source_client_version=self._source_client_version, session_id=self._session_id)
+        endpoint = _telemetry_endpoint()
+        logger.runtime.debug(
+            "Sending telemetry events",
+            extra={
+                "ctx": {
+                    "endpoint": _redact_endpoint(endpoint),
+                    "event_count": len(events),
+                    "events": [
+                        {
+                            "name": queued.event._event_name,
+                            "task": queued.event.task,
+                            "task_status": queued.event.task_status.value,
+                            "deployment_type": queued.event.deployment_type.value,
+                            "retry_count": queued.retry_count,
+                        }
+                        for queued in events
+                    ],
+                }
+            },
+        )
         try:
-            response = await client.post(_telemetry_endpoint(), json=payload)
+            response = await client.post(endpoint, json=payload)
             # 2xx, 400, 422 are all considered complete (no retry)
             # 400/422 indicate bad payload which retrying won't fix
             if response.status_code in (400, 422) or response.is_success:

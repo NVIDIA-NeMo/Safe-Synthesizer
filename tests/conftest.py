@@ -37,6 +37,12 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.unit)
 
 
+@pytest.fixture(autouse=True)
+def fixture_isolate_deployment_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests opt into deployment type instead of inheriting process state."""
+    monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+
+
 @pytest.fixture()
 def fixture_yaml_config_str() -> str:
     """Return a representative YAML config string covering all SafeSynthesizerParameters sections."""

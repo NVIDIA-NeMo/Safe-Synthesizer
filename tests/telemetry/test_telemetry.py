@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import nemo_safe_synthesizer.telemetry as telemetry_module
 from nemo_safe_synthesizer.telemetry import (
     DeploymentTypeEnum,
     NemoSourceEnum,
@@ -21,6 +22,7 @@ from nemo_safe_synthesizer.telemetry import (
     bucket_columns,
     bucket_records,
     build_payload,
+    sanitize_model_for_telemetry,
 )
 
 # =============================================================================
@@ -30,12 +32,12 @@ from nemo_safe_synthesizer.telemetry import (
 
 class TestBucketRecords:
     def test_lower_boundary(self):
-        assert bucket_records(1) == "1-100"
-        assert bucket_records(100) == "1-100"
+        assert bucket_records(1) == "1-200"
+        assert bucket_records(100) == "1-200"
 
     def test_mid_buckets(self):
-        assert bucket_records(101) == "101-1000"
-        assert bucket_records(1000) == "101-1000"
+        assert bucket_records(201) == "201-1000"
+        assert bucket_records(1000) == "201-1000"
         assert bucket_records(1001) == "1001-10000"
         assert bucket_records(10000) == "1001-10000"
         assert bucket_records(10001) == "10001-100000"
@@ -87,10 +89,57 @@ class TestEnvHelpers:
         monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
         assert _deployment_type() == DeploymentTypeEnum.SDK
 
-    def test_deployment_type_invalid_falls_back_to_sdk(self, monkeypatch):
+    def test_deployment_type_invalid_falls_back_to_undefined(self, monkeypatch):
         monkeypatch.setenv("NEMO_DEPLOYMENT_TYPE", "definitely-not-real")
         # Must not raise — telemetry must never block runtime over a misconfigured env var.
-        assert _deployment_type() == DeploymentTypeEnum.SDK
+        assert _deployment_type() == DeploymentTypeEnum.UNDEFINED
+
+
+# =============================================================================
+# Model telemetry sanitization
+# =============================================================================
+
+
+class TestSanitizeModelForTelemetry:
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "gpt2",
+            "bert-base-uncased",
+            "HuggingFaceTB/SmolLM3-3B",
+            "mistralai/Mistral-7B-Instruct-v0.3",
+        ],
+    )
+    def test_hf_model_ids_are_preserved(self, model):
+        assert sanitize_model_for_telemetry(model) == model
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "/home/alice/models/private-model",
+            "./models/private-model",
+            "../models/private-model",
+            "~/models/private-model",
+            "org/team/private-model",
+            "C:/Users/alice/models/private-model",
+            r"C:\Users\alice\models\private-model",
+            r"models\private-model",
+            "not a valid repo id",
+        ],
+    )
+    def test_path_like_or_invalid_values_are_redacted(self, model):
+        assert sanitize_model_for_telemetry(model) == "local_path"
+
+    def test_existing_relative_path_is_redacted(self, tmp_path, monkeypatch):
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+        monkeypatch.chdir(tmp_path)
+
+        assert sanitize_model_for_telemetry("local-model") == "local_path"
+
+    @pytest.mark.parametrize("model", [None, "", "   "])
+    def test_empty_values_are_undefined(self, model):
+        assert sanitize_model_for_telemetry(model) == "undefined"
 
 
 # =============================================================================
@@ -99,7 +148,8 @@ class TestEnvHelpers:
 
 
 class TestNSSTrainingAndGenerationEvent:
-    def test_defaults(self):
+    def test_defaults(self, monkeypatch):
+        monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
         event = NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED)
         assert event.nemo_source == NemoSourceEnum.SAFE_SYNTHESIZER
         assert event.deployment_type == DeploymentTypeEnum.SDK
@@ -163,7 +213,7 @@ class TestNSSTrainingAndGenerationEvent:
         assert event.job_duration_sec == 42.5
         assert event.num_records_generated == 1000
         assert event.num_tokens_generated == 50000
-        assert event.input_records_bucket == "101-1000"
+        assert event.input_records_bucket == "201-1000"
         assert event.input_columns_bucket == "6-10"
         assert event.synthetic_quality_score == 0.87
         assert event.data_privacy_score == 0.95
@@ -210,7 +260,9 @@ class TestBuildPayload:
         assert payload["sessionId"] == "test-session"
         assert len(payload["events"]) == 1
 
-    def test_event_fields_serialize_enums_as_strings(self):
+    def test_event_fields_serialize_enums_as_strings(self, monkeypatch):
+        monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
+
         """Payload must be JSON-safe: enum fields render as their string values, not Enum objects."""
         queued = self._make_queued(task="train", status=TaskStatusEnum.ERROR)
         payload = build_payload([queued], source_client_version="0.0.1")
@@ -266,7 +318,7 @@ class TestTelemetryDisabled:
         """Silently ignores non-TelemetryEvent objects regardless of env."""
         monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler()
-        handler.enqueue("not an event")  # type: ignore[arg-type]
+        handler.enqueue("not an event")
         assert handler._events == []
 
 
@@ -283,6 +335,13 @@ class TestTelemetryHandlerEnqueue:
         handler.enqueue(event)
         assert len(handler._events) == 1
         assert handler._events[0].event is event
+
+    def test_enqueue_does_not_add_event_when_telemetry_is_disabled(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "false")
+        handler = TelemetryHandler()
+        event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
+        handler.enqueue(event)
+        assert len(handler._events) == 0
 
     def test_enqueue_at_max_queue_size_signals_flush_when_running(self, monkeypatch):
         """When a background loop is up, hitting max_queue_size should signal it. Without a loop, no-op is safe."""
@@ -348,6 +407,44 @@ class TestTelemetryHandlerSend:
     def _make_queued(self) -> QueuedEvent:
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
         return QueuedEvent(event=event, timestamp=datetime.now(timezone.utc))
+
+    async def test_debug_logs_event_metadata_before_post(self, monkeypatch):
+        handler = self._make_handler()
+        queued = self._make_queued()
+        events_seen: list[str] = []
+        debug_calls = []
+
+        monkeypatch.setenv("NEMO_TELEMETRY_ENDPOINT", "https://Events.Telemetry.example.COM/v1/Events?Token=AbC")
+
+        def fake_debug(message, *, extra):
+            events_seen.append("debug")
+            debug_calls.append((message, extra))
+
+        async def fake_post(*args, **kwargs):
+            events_seen.append("post")
+            return MagicMock(status_code=200, is_success=True)
+
+        monkeypatch.setattr(telemetry_module.logger.runtime, "debug", fake_debug)
+        mock_client = AsyncMock()
+        mock_client.post.side_effect = fake_post
+
+        await handler._send_events_with_client(mock_client, [queued])
+
+        assert events_seen == ["debug", "post"]
+        message, extra = debug_calls[0]
+        assert message == "Sending telemetry events"
+        ctx = extra["ctx"]
+        assert ctx["endpoint"] == "https://Events.Telemetry.example.COM/v1/Events?<redacted>"
+        assert ctx["event_count"] == 1
+        assert ctx["events"] == [
+            {
+                "name": "train_and_generation_event",
+                "task": "generate",
+                "task_status": "completed",
+                "deployment_type": "sdk",
+                "retry_count": 0,
+            }
+        ]
 
     async def test_successful_send_does_not_dlq(self):
         handler = self._make_handler()
@@ -423,7 +520,8 @@ class TestTelemetryHandlerSend:
 
 
 class TestAflushAwaits:
-    async def test_aflush_actually_flushes(self):
+    async def test_aflush_actually_flushes(self, monkeypatch):
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
         handler = TelemetryHandler(source_client_version="1.0.0")
         event = NSSTrainingAndGenerationEvent(task="generate", task_status=TaskStatusEnum.COMPLETED)
         handler.enqueue(event)

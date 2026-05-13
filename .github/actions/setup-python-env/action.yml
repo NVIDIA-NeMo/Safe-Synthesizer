@@ -92,3 +92,7 @@ runs:
       uses: astral-sh/setup-uv@v6
       with:
         enable-cache: true
+
+    - name: Disable telemetry in CI
+      shell: bash
+      run: echo "NEMO_TELEMETRY_ENABLED=false" >> "$GITHUB_ENV"
