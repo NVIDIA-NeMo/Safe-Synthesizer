@@ -177,6 +177,52 @@ class TestSafeSynthesizerParameters:
         params = TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time")
         assert params.timestamp_column == "event_time"
 
+    def test_dp_and_time_series_are_mutually_exclusive(self):
+        """DP + time-series raises because DP would force ``max_sequences_per_example=1``,
+        collapsing the per-example temporal structure time-series mode is built around.
+        """
+        with pytest.raises(ValidationError, match="not supported in time-series mode"):
+            SafeSynthesizerParameters(
+                privacy=DifferentialPrivacyHyperparams(dp_enabled=True),
+                time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time"),
+            )
+
+    @pytest.mark.parametrize(
+        "max_seq_input, expected",
+        [
+            pytest.param("auto", None, id="auto_resolves_to_none_in_timeseries"),
+            pytest.param(None, None, id="explicit_none_preserved"),
+            pytest.param(5, 5, id="explicit_value_preserved"),
+        ],
+    )
+    def test_max_sequences_per_example_default_in_timeseries(self, max_seq_input, expected):
+        """In time-series mode, ``max_sequences_per_example='auto'`` resolves to ``None``.
+
+        The default of ``10`` would chop sequences into short fragments and
+        lose the long-range temporal structure the model needs to learn,
+        so we let each example fill the context window instead.
+        """
+        params = SafeSynthesizerParameters(
+            data=DataParameters(max_sequences_per_example=max_seq_input),
+            time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="event_time"),
+        )
+        assert params.data.max_sequences_per_example == expected
+
+    @pytest.mark.parametrize(
+        "max_seq_input, expected",
+        [
+            pytest.param("auto", 10, id="auto_resolves_to_10"),
+            pytest.param(None, None, id="explicit_none_preserved"),
+            pytest.param(5, 5, id="explicit_value_preserved"),
+        ],
+    )
+    def test_max_sequences_per_example_default_non_timeseries(self, max_seq_input, expected):
+        """Outside time-series mode, ``max_sequences_per_example='auto'`` resolves to ``10``."""
+        params = SafeSynthesizerParameters(
+            data=DataParameters(max_sequences_per_example=max_seq_input),
+        )
+        assert params.data.max_sequences_per_example == expected
+
     def test_timestamp_interval_must_be_positive(self):
         """Negative ``timestamp_interval_seconds`` is rejected at construction time."""
         with pytest.raises(ValueError, match="positive"):
