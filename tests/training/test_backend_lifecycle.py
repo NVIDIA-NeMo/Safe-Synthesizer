@@ -42,8 +42,8 @@ def _bare_hf_backend() -> HuggingFaceBackend:
 class TestHuggingFaceBackendTeardown:
     def test_idempotent_after_first_call(self):
         backend = _bare_hf_backend()
-        backend.trainer = MagicMock()  # type: ignore[attr-defined]
-        backend.model = MagicMock()  # type: ignore[attr-defined]
+        backend.trainer = MagicMock()
+        backend.model = MagicMock()
 
         with (
             patch("nemo_safe_synthesizer.training.huggingface_backend.cleanup_memory") as cleanup,
@@ -85,8 +85,8 @@ class TestHuggingFaceBackendTeardown:
         # doesn't prevent the rest from running, and ``_torn_down`` still
         # flips so a retry no-ops instead of compounding the failure.
         backend = _bare_hf_backend()
-        backend.trainer = MagicMock()  # type: ignore[attr-defined]
-        backend.model = MagicMock()  # type: ignore[attr-defined]
+        backend.trainer = MagicMock()
+        backend.model = MagicMock()
 
         with (
             patch(

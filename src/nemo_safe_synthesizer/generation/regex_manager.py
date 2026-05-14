@@ -14,7 +14,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from outlines_core.json_schema import (
+from outlines_core._json_schema import (  # noqa: F401  # ty:ignore[unresolved-import]
     BOOLEAN,
     DATE,
     DATE_TIME,
@@ -329,6 +329,13 @@ def build_json_based_regex(
     whitespace_pattern: str | None = None,
 ) -> str:
     """Build a regex that constrains LLM output to valid JSONL records.
+
+    Supports ``properties``, ``required``, ``enum``, primitive ``type`` values,
+    arrays/objects with min/max item or property counts, string length bounds,
+    ``pattern``, and ``format`` values for date-time, date, time, and UUID.
+    Use vLLM's native JSON schema structured-output path for unsupported schema
+    features such as ``additionalProperties``, composition keywords, and
+    ``$ref``.
 
     Args:
         schema: JSON schema dictionary describing the record format.

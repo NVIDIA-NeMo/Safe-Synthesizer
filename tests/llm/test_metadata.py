@@ -18,7 +18,8 @@ pytest.importorskip(
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
-from transformers import PretrainedConfig
+from pydantic import ValidationError
+from transformers import PretrainedConfig, PreTrainedTokenizerBase
 
 from nemo_safe_synthesizer.cli.artifact_structure import Workdir
 from nemo_safe_synthesizer.defaults import (
@@ -26,6 +27,7 @@ from nemo_safe_synthesizer.defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.llm.metadata import (
     DEFAULT_MAX_SEQ_LENGTH,
     GENERATION_MAX_TOKENS_SAFETY_MULTIPLIER,
@@ -293,7 +295,7 @@ ROPE_SCALING_SCENARIOS = [
 @pytest.fixture
 def mock_tokenizer():
     """Create a mock tokenizer for testing."""
-    tokenizer = MagicMock()
+    tokenizer = MagicMock(spec=PreTrainedTokenizerBase)
     tokenizer.bos_token = "<s>"
     tokenizer.bos_token_id = 1
     tokenizer.eos_token = "</s>"
@@ -465,6 +467,47 @@ class TestModelMetadata:
         assert sample_model_metadata.base_max_seq_length == 2048
         assert sample_model_metadata.is_adapter is False
         assert sample_model_metadata.instruction == DEFAULT_INSTRUCTION
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_empty_model_name_loads_config_at_source(self, mock_auto_config, sample_prompt_config):
+        """Test empty model names fail at the AutoConfig load instead of later derived fields."""
+        mock_auto_config.from_pretrained.side_effect = ValueError("empty model name")
+
+        with pytest.raises(ValueError, match="empty model name"):
+            ModelMetadata.model_validate({"model_name_or_path": "", "prompt_config": sample_prompt_config})
+
+        mock_auto_config.from_pretrained.assert_called_once_with("", trust_remote_code=False)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_offline_huggingface_cache_miss_has_actionable_error(self, mock_auto_config):
+        """Offline cache misses should explain how to make the model available."""
+        mock_auto_config.from_pretrained.side_effect = OSError(
+            "We couldn't connect to 'https://huggingface.co' to load the files, "
+            "and couldn't find them in the cached files."
+        )
+
+        with pytest.raises(ParameterError) as exc_info:
+            TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+
+        message = str(exc_info.value)
+        assert "Could not load model metadata" in message
+        assert "local Hugging Face cache" in message
+        assert "pre-download the model" in message
+        assert "HF_HUB_OFFLINE" in message
+        assert "Original error:" in message
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    def test_derived_field_config_load_has_actionable_error(self, mock_auto_config, sample_prompt_config):
+        """Derived autoconfig loading should use the same friendly cache-miss error."""
+        mock_auto_config.from_pretrained.side_effect = OSError("outgoing traffic has been disabled")
+
+        with pytest.raises(ValidationError, match="local Hugging Face cache"):
+            ModelMetadata.model_validate(
+                {
+                    "model_name_or_path": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+                    "prompt_config": sample_prompt_config,
+                }
+            )
 
     def test_adapter_path_property(self, sample_model_metadata, sample_workdir):
         """Test the adapter_path property returns the correct path."""
@@ -794,6 +837,64 @@ class TestFromConfig:
             assert isinstance(metadata.rope_scaling, RopeScaling)
             assert metadata.rope_scaling.factor == expected_rope_factor
         assert metadata.max_sequences_per_example == expected_max_seq
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    def test_from_config_uses_cached_model_ref_target(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+        mock_tokenizer,
+        mock_autoconfig_obj,
+    ):
+        """Metadata loads resolve cached model refs before calling HuggingFace APIs."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
+
+        mock_config = MagicMock()
+        mock_config.training.pretrained_model = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        mock_config.training.rope_scaling_factor = None
+        mock_config.data.max_sequences_per_example = None
+
+        with patch("nemo_safe_synthesizer.llm.metadata.ModelRef.parse", return_value=model_ref) as parse:
+            metadata = ModelMetadata.from_config(mock_config)
+
+        assert isinstance(metadata, TinyLlama)
+        parse.assert_called_once_with(mock_config.training.pretrained_model)
+        mock_auto_config.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+        mock_auto_tokenizer.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
+    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    def test_from_config_wraps_model_load_errors(
+        self,
+        mock_auto_tokenizer,
+        mock_auto_config,
+    ):
+        """Metadata load failures keep user-facing parameter diagnostics."""
+        model_name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        model_ref = MagicMock()
+        model_ref.target.return_value = model_name
+        model_ref.trust_remote_code = False
+        mock_auto_config.from_pretrained.side_effect = OSError("outgoing traffic has been disabled")
+
+        mock_config = MagicMock()
+        mock_config.training.pretrained_model = model_name
+        mock_config.training.rope_scaling_factor = None
+        mock_config.data.max_sequences_per_example = None
+
+        with (
+            patch("nemo_safe_synthesizer.llm.metadata.ModelRef.parse", return_value=model_ref),
+            pytest.raises(ParameterError, match="local Hugging Face cache"),
+        ):
+            ModelMetadata.from_config(mock_config)
+
+        mock_auto_config.from_pretrained.assert_called_once_with(model_name, trust_remote_code=False)
+        mock_auto_tokenizer.from_pretrained.assert_not_called()
 
 
 class TestModelMetadataKwargsPassthrough:

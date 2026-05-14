@@ -15,7 +15,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | Install fails on Python 3.14 | ray has no `cp314` wheels | [Use Python 3.11–3.13](#python-314-is-not-supported) |
-| "kernels package not installed" | No network for Kernels Hub | Set `training.attn_implementation: sdpa` |
+| "kernels package not installed" | Optional Kernels Hub backend selected without `kernels` installed | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
 | OOM in generation | VRAM exhausted | [Verify training cleanup](#out-of-memory-during-generation) |
@@ -32,6 +32,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 | PII uses default entities | Classifier failed | [Set entities explicitly](evaluating-data.md#pii-uses-unexpected-entity-types) |
 | "timestamp_column has missing values" | Dirty time series data | Clean NaN/nulls from timestamp column |
 | "groups must have same start" | Inconsistent groups | [Align group start timestamps](#groups-must-have-same-start) |
+| Pre-flight validation fails | Dataset or config issue | [Pre-flight validation codes](#pre-flight-validation-codes) |
 
 ---
 
@@ -293,16 +294,20 @@ effect visible.
 If this stage takes more than 10 minutes, you might need to train the model
 more or examine the training parameters.
 
-To diagnose, run with `-v` (debug logging). The logs will show:
+To diagnose, check the batch summary logs first. When vLLM reports why
+outputs stopped, the `Batch Generation Summary` includes aggregate
+`finish_reasons` counts. Run with `-v` (debug logging) for per-prompt
+details:
 
 - Sampling parameters, including EOS token configuration, `max_tokens`,
   and stop conditions
 - Per-prompt output: token count, `finish_reason`, and `stop_reason`
 
-If every prompt shows `finish_reason=stop`, the stop condition is working
-and the generation time is real inference time. If any prompt shows
-`finish_reason=length`, it ran to `max_tokens` without producing an EOS
-token -- this typically indicates insufficient training (see
+If outputs show `finish_reason=stop`, the stop condition is working and
+the generation time is real inference time. If outputs show
+`finish_reason=length`, they ran to `max_tokens` without producing an EOS
+token or a complete parseable record -- this can indicate insufficient
+training or an overly tight output-token budget (see
 [Grouped Data Produces Very Few Training Examples](#grouped-data-produces-very-few-training-examples)).
 
 ### GenerationError
@@ -316,7 +321,11 @@ Generation stopped prematurely due to no valid records
 : The first batch produced zero valid records. The model may be underfitting
   or the schema may not match the training data. Increase
   `training.num_input_records_to_sample` to give the model more context,
-  and check training logs for quality issues.
+  and check training logs for quality issues. If the batch summary shows
+  `finish_reasons` dominated by `length`, generation reached `max_tokens`
+  before producing valid records; inspect prompt size, schema size, and
+  grouped/time-series prefill length before treating it as model quality
+  alone.
 
 ```text
 Generation stopped prematurely because the average fraction of invalid records was higher than...
@@ -438,6 +447,44 @@ Incompatible DP settings:
 !!! tip "Differential Privacy"
     DP errors and privacy budget troubleshooting are covered in
     [Synthetic Data Quality](evaluating-data.md#differential-privacy).
+
+## Pre-flight Validation Codes
+
+When running with `--validate` (CLI) or `process_data(check_only=True)` (SDK),
+the following codes may appear. For an overview of what pre-flight validates,
+how to interpret the output, and how to use the resolved config, see
+[Running -- `run --validate`](running.md#run---validate).
+
+The `Check` column lists the check name (as emitted in the report and
+accepted by `disabled_checks`). `preflight.check_crash` is synthesized
+by the orchestrator and appears attached to the name of whichever check
+raised; treat it as metadata on that check rather than a separate
+check of its own.
+
+| Code | Severity | Check | Description |
+|------|----------|-------|-------------|
+| `torch_missing` | error | `gpu.cuda` | PyTorch not installed; cannot verify GPU availability |
+| `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
+| `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
+| `inference_key_missing` | warning | `env.inference_key` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
+| `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
+| `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
+| `hf_model_cache_incomplete` | error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards |
+| `hf_remote_code_not_cached` | warning/error | `env.hf_model_availability` | Trusted model references remote code that is not cached locally; severity is error when HF offline mode is enabled |
+| `preflight.check_crash` | error | (crashing check) | A check raised an unexpected exception; the issue's `check` field names the crashing check and other checks continued running |
+| `column_not_found` | error | `columns.groupby` / `columns.orderby` | Required column missing from dataset, or input DataFrame uses unsupported MultiIndex columns |
+| `column_nulls` | error | `columns.groupby` | Required column contains null values |
+| `pseudo_column_collision` | error | `columns.pseudo` | Dataset contains reserved internal column name, or input DataFrame uses unsupported MultiIndex columns |
+| `constant_column` | warning | `columns.constant` | Column has only one unique value |
+| `timestamp_not_found` | error | `timeseries.timestamp` | Timestamp column missing, or input DataFrame uses unsupported MultiIndex columns |
+| `timestamp_nulls` | error | `timeseries.timestamp` | Timestamp column has nulls |
+| `tokenizer_unavailable` | warning | `token_budget` | Model tokenizer could not be loaded; token checks skipped |
+| `schema_exceeds_context` | error | `token_budget` | Schema prompt exceeds model context window |
+| `record_exceeds_context` | error | `token_budget` | Individual records exceed context window |
+| `group_exceeds_context` | error | `token_budget` | Grouped records exceed context window |
+| `dataset_too_small` | error | `dataset.size` | Dataset has fewer than minimum required rows |
+| `dataset_small` | warning | `dataset.row_count` | Training set below 1000 records |
+| `extreme_oversampling` | warning | `training.oversampling` | Data fraction exceeds 5x |
 
 ---
 

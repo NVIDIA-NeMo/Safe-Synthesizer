@@ -21,18 +21,39 @@ outputs:
   src:
     description: "'true' if any file under src/ changed"
     value: ${{ steps.filter.outputs.src }}
+  docs_src:
+    description: "'true' if docs source/config files changed"
+    value: ${{ steps.filter.outputs.docs_src }}
+  tests:
+    description: "'true' if any file under tests/ changed"
+    value: ${{ steps.filter.outputs.tests }}
+  pytest_ini:
+    description: "'true' if pytest.ini changed"
+    value: ${{ steps.filter.outputs.pytest_ini }}
+  pyproject:
+    description: "'true' if pyproject.toml changed"
+    value: ${{ steps.filter.outputs.pyproject }}
+  uv_lock:
+    description: "'true' if uv.lock changed"
+    value: ${{ steps.filter.outputs.uv_lock }}
   test:
     description: "'true' if any file under tests/ or pytest.ini changed"
     value: ${{ steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' }}
   deps:
     description: "'true' if any dep related files changed"
     value: ${{ steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' }}
+  src_test:
+    description: "'true' if source or test files changed"
+    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' }}
+  src_test_deps:
+    description: "'true' if source, test, dependency, or CI files changed"
+    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
   ci:
     description: "'true' if any CI workflow or action files changed"
     value: ${{ steps.filter.outputs.ci }}
   any:
-    description: "'true' if any source, test, dependency, or CI file changed"
-    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
+    description: "'true' if any source, docs source, test, dependency, or CI file changed"
+    value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.docs_src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
 
 runs:
   using: "composite"
@@ -47,6 +68,10 @@ runs:
         filters: |
           src:
             - 'src/**'
+          docs_src:
+            - 'docs/*.py'
+            - 'docs/**/*.py'
+            - 'mkdocs.yml'
           tests:
             - 'tests/**'
           pyproject:

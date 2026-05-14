@@ -14,7 +14,7 @@ The NearestNeighborSearch abstraction in nemo_safe_synthesizer.evaluation.neares
 automatically selects the best available backend (torch GPU > sklearn CPU).
 
 Run standalone:
-    uv run --frozen --extra cu128 python tests/evaluation/components/benchmark_nearest_neighbor.py
+    uv run --frozen --extra cu129 python tests/evaluation/components/benchmark_nearest_neighbor.py
 """
 
 import logging

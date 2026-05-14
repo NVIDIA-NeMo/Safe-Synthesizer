@@ -7,98 +7,48 @@ Guide for AI agents (Cursor, Windsurf, Claude Code, etc.) working in the Safe-Sy
 
 This project loads local developer preferences from @AGENTS.local.md. You MUST read this file if it exists and give its instructions top priority.
 
-## Transparency
-
-When you read a skill file (from `.agents/skills/`) or a context rule (from `.cursor/rules/`), declare what you loaded before proceeding with the task. Format:
-
-- `skill: <name>` -- reason it was activated
-- `rule: <name>` -- reason it was activated
-
-If only always-apply rules were loaded and no additional skills or rules were consulted, say so briefly (e.g., "No additional skills or rules loaded beyond always-apply defaults.").
-
 ## Skills
 
-Repo-specific skills live in `.agents/skills/`. General-purpose skills (ast-nav, deslop, bulk-edit, etc.) are installed globally via `~/.cursor/skills/` and do not need repo copies.
+Repo-specific skills live in `.agents/skills/`; see `.agents/README.md` for the catalog. Read a skill when the task matches its scope instead of copying workflow details into this file.
 
-| Skill | Purpose |
-|-------|---------|
-| `configurator` | Pydantic-to-Click parameter mapping, `NSSBaseModel` vs `BaseSettings`, validators |
-| `diagnose-failures` | Triage test, CI, runtime, GPU, import, and type errors using the error hierarchy |
-| `git-worktrees` | NSS-specific worktree overrides: venv setup, DCO/GPG signing, Cursor automation |
-| `github-cli` | `gh` CLI for PRs, issues, CI workflows, code review, releases |
-| `python-observability` | `CategoryLogger`, `@traced` decorators, log categories and env vars |
-| `sync-agent-config` | What to update when Makefile targets, modules, markers, or skills change |
-| `usage` | CLI commands, SDK builder pattern, config precedence, output layout |
-| `uv-build` | `uv` package management, extras, PyTorch indexes, hatch build, versioning |
-
-Several source modules also have their own `AGENTS.md` with internal patterns and gotchas: `cli/`, `sdk/`, `llm/`, `generation/`, `training/`, and `tests/`. When working in a subtree, check for a local `AGENTS.md` before diving in.
+Durable implementation guidance belongs with the code it describes: function and class docstrings for public contracts and source comments for local invariants. Test-suite guidance belongs in `tests/TESTING.md`.
 
 ## Repo Conventions
 
 See [STYLE_GUIDE.md](STYLE_GUIDE.md) for detailed code style conventions (Python, markdown, Dockerfiles, shell scripts, testing, config files, docstrings).
 
-Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.13 with modern syntax (`X | Y`, `list[str]`, `Self`). Python 3.14+ is not supported (ray has no cp314 wheels).
+Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.13 with modern syntax (`X | Y`, `list[str]`, `Self`). Python 3.14+ is not supported.
 
 Common commands: `make test` (unit tests), `make format` (auto-fix formatting + lint + copyright), `make check` (all read-only CI checks), `make typecheck` (ty only). Always use Make targets or the wrapper scripts in `tools/` instead of running `ruff` or `ty` directly. Use `uv run` for Python execution. When in doubt, read the source (`make help`, `pytest --markers`).
 
-The canonical `uv sync` command for this repo (GPU dev environment):
+The canonical `uv sync` command for a full GPU/dev environment is:
 
 ```bash
-uv sync --frozen --extra cu128 --extra engine --group dev
+uv sync --frozen --extra cu129 --extra engine --group dev
 ```
 
-Bare `uv sync --frozen` (without extras) installs an incomplete environment -- `ty`, import checks, and GPU tests will fail. Subagents must use the full command. The `session_context.sh` hook runs bare `uv sync --frozen` as a fallback for missing venvs; if you need GPU extras, run the full command manually after.
+Bare `uv sync --frozen` (without extras) installs an incomplete environment -- `ty`, import checks, and GPU tests will fail.
 
 Feature branches off `main`. Branch names often include an issue number prefix (e.g., `<author>/123-short-name`).
 
-All commits require DCO sign-off and GPG signing. Always use `git commit --signoff --gpg-sign` (or `-s -S`) -- never write the `Signed-off-by` trailer manually, and never pass `--no-gpg-sign`.
+Do not commit unless the user asks for a commit or PR work. When committing, all commits require DCO sign-off and GPG signing. Always use `git commit --signoff --gpg-sign` (or `-s -S`) -- never write the `Signed-off-by` trailer manually, and never pass `--no-gpg-sign`.
 
 Shell scripting: never use `~` inside double-quoted strings -- it does not expand. Use `$HOME` or an absolute path instead.
 
 Testing gotchas: `asyncio_mode = auto` in `pytest.ini` -- async tests work without `@pytest.mark.asyncio`. The `unit_test` marker is deprecated; use `unit`.
 
-For testing, building, syncing, bootstrapping, and other workflows, see the matching skill or `.claude/commands/` file.
-
-## Agent Behavior
-
-For multi-file or long-running sessions, commit after each logical tier of work.
-
-Use `council` (multi-agent parallel exploration) for design decisions, broad codebase exploration, and tasks with multiple valid approaches. For narrow, single-answer questions ("why does this test fail?", "what does this function do?"), use grep/read directly -- council adds latency without benefit for focused lookups.
-
-## Hooks and worktree setup
-
-Hook scripts live in `.cursor/hooks/` and are loaded by both Cursor (`.cursor/hooks.json`) and Claude Code (`.claude/settings.json`).
-
-| Script | Event | Purpose |
-|--------|-------|---------|
-| `session_context.sh` | `sessionStart` | Reports venv state; runs `uv sync --frozen` if `.venv` absent |
-| `enforce-signoff.sh` | `beforeShellExecution` / `PreToolUse(Bash)` | Blocks `git commit` without `--signoff` / `-s`; blocks missing `--gpg-sign` / `-S` |
-
-Cursor parallel-agent worktrees are configured via `.cursor/worktrees.json`, which runs `.cursor/setup-worktree.sh` at worktree creation. The setup script runs `uv sync --frozen` and copies `.env`, `.env.local`, and `mise.local.toml` from the main worktree if present.
-
-For manual worktrees (agent-created via `git worktree add`), run the full sync command after creation (not bare `uv sync --frozen` -- that omits extras). See the `git-worktrees` skill for the full workflow.
-
-## Fast-model subagent suitability
-
-Prefer a fast model (`model: fast`) when delegating focused, narrow tasks to a subagent:
-
-- Verification -- run tests, spot-check implementation (handled by `.cursor/agents/verifier.md`)
-- Read-only CI checks -- `make format-check`, `make lint`, `make typecheck`; report pass/fail
-- Narrow exploration -- single module or 1-2 files
-- Dependency diff -- run `tools/diff-lockfile.py` and summarize output
-
-Use the default model for synthesis, broad exploration, and multi-step reasoning.
+For testing, building, syncing, bootstrapping, worktrees, GitHub, and other recurring workflows, see the matching skill in `.agents/skills/`.
 
 ## Module Map
 
 Source code lives in `src/nemo_safe_synthesizer/`:
 
 | Path | Purpose |
-|------|---------|
+| ---- | ------- |
 | `cli/` | Click CLI, main entry point |
 | `config/` | Pydantic parameter models, SafeSynthesizerParameters |
 | `configurator/` | Pydantic-to-Click mapping, Parameter types, validators |
-| `data_processing/` | Holdout, actions, assembler, records |
+| `data_processing/` | Holdout, actions, assembler, records, shared token budget (`budget.py`), shared column validators (`validation.py`) |
 | `evaluation/` | Evaluator, components (privacy, MI, AIA, PII replay), reports |
 | `generation/` | GeneratorBackend, VllmBackend, regex manager, batch gen |
 | `holdout/` | Train/test splitting |
@@ -106,12 +56,14 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `pii_replacer/` | NER-based PII detection and replacement |
 | `privacy/` | DP transformers (Opacus integration) |
 | `sdk/` | SafeSynthesizer builder, library_builder |
-| `training/` | TrainingBackend, HuggingFace backend |
+| `training/` | TrainingBackend, HuggingFace backend, timeseries_preprocessing (`timeseries_preprocessing.py`) |
 | `artifacts/` | Data quality checks, field analysis, metadata |
 | `observability.py` | CategoryLogger, TracedContext, structured logging |
-| `errors.py` | Error hierarchy: `SafeSynthesizerError` → `UserError` (`DataError`/`ParameterError` are also `ValueError`; `GenerationError` is also `RuntimeError`) and `InternalError` (also `RuntimeError`). See `diagnose-failures` skill |
+| `errors.py` | Error hierarchy: `SafeSynthesizerError` → `UserError` (`DataError`/`ParameterError` are also `ValueError`; `GenerationError` is also `RuntimeError`) and `InternalError` (also `RuntimeError`). See the `safe-synthesizer` skill for user-facing runtime failure triage |
 | `defaults.py` | Default settings, constants (`DEFAULT_ARTIFACTS_PATH`, `PSEUDO_GROUP_COLUMN`) |
 | `package_info.py` | Package version (uv-dynamic-versioning) |
+| `preflight/` | Pre-flight validation (runs against the training split produced by `Holdout`, not the full input). Package layout: `types` (dataclasses), `base` (`PreflightCheck` ABC hierarchy — `ConfigCheck`/`DataFrameCheck`/`MetadataCheck`/`AdvisoryCheck`), `registry` (`get_registry() -> PreflightRegistry`, plugin registration), `orchestrator` (`run_preflight`, `_run_registry` with dependency gating), `checks/` (15 granular core checks grouped by stage: `environment.py` for CONFIG, `dataframe.py` for DATAFRAME, `metadata.py` for METADATA, `advisory.py` for ADVISORY, plus `_helpers.py` shared helpers and public `preflight.helpers` for plugin authors). Rendering-free by design. |
+| `tooling/` | Internal rendering layer. Hosts `render_preflight_report` (Rich today; agentic/plain/JSON modes planned via `RenderMode`), `PreflightRenderContext`. Intended to absorb the evaluation report renderer and alternative output modes over time. |
 | `results.py` | Result compilation (`make_nss_results`, `make_nss_summary`) |
 | `utils.py` | Schema prompt creation, pattern matching helpers |
 

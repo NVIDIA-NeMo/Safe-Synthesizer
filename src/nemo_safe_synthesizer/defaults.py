@@ -69,6 +69,7 @@ NUM_EVAL_BATCHES_GROUPED = 1
 # allowing unified processing of grouped and ungrouped time series.
 # It is excluded from JSONL conversion so the model never sees it.
 PSEUDO_GROUP_COLUMN = "__nss_sequence_id"
+DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
 # default LLM inference endpoint for PII column classification.
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
@@ -101,5 +102,5 @@ RUNTIME_MODEL_CONFIG_NAME = "safe-synthesizer-config"
 EPS = 1e-15
 NUM_SPECIAL_TOKENS = 2
 DEFAULT_CACHE_PREFIX = "safe-synthesizer-dataset-cache"
-DEFAULT_ATTN_IMPLEMENTATION = "kernels-community/vllm-flash-attn3"
+DEFAULT_ATTN_IMPLEMENTATION = "FLASH_ATTN"
 BACKUP_ATTN_IMPLEMENTATION = "sdpa"

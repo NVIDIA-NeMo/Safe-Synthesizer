@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Self
 
 from pydantic import Field, model_validator
@@ -10,10 +11,12 @@ from pydantic import Field, model_validator
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..observability import get_logger
+from ..telemetry import _telemetry_enabled
 from .data import DataParameters
 from .differential_privacy import DifferentialPrivacyHyperparams
 from .evaluate import EvaluationParameters
 from .generate import GenerateParameters
+from .preflight import PreflightParameters
 from .replace_pii import PiiReplacerConfig
 from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
@@ -66,6 +69,19 @@ class SafeSynthesizerParameters(Parameters):
     replace_pii: PiiReplacerConfig | None = Field(
         description="PII replacement configuration. When ``None``, PII replacement is skipped.",
         default_factory=PiiReplacerConfig.get_default_config,
+    )
+
+    preflight: PreflightParameters = Field(
+        description="Preflight validation overrides, including checks to skip via ``disabled_checks``.",
+        default_factory=PreflightParameters,
+    )
+
+    emit_telemetry: bool = Field(
+        default_factory=_telemetry_enabled,
+        description=(
+            "Whether to emit anonymous Safe Synthesizer telemetry events. "
+            "Defaults from NEMO_TELEMETRY_ENABLED when unset."
+        ),
     )
 
     @model_validator(mode="after")
@@ -127,6 +143,17 @@ class SafeSynthesizerParameters(Parameters):
             self.data.max_sequences_per_example = 10
         return self
 
+    @model_validator(mode="after")
+    def check_timeseries_group_column(self) -> Self:
+        if self.time_series is not None and self.time_series.is_timeseries:
+            if self.data.group_training_examples_by is None:
+                warnings.warn(
+                    "is_timeseries=True without group_training_examples_by: "
+                    "an internal __nss_sequence_id column will be added automatically.",
+                    stacklevel=2,
+                )
+        return self
+
     @classmethod
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
@@ -167,4 +194,8 @@ class SafeSynthesizerParameters(Parameters):
         }
         if "replace_pii" in kwargs:
             extra["replace_pii"] = kwargs["replace_pii"]
+        if "preflight" in kwargs:
+            extra["preflight"] = kwargs["preflight"]
+        if "emit_telemetry" in kwargs:
+            extra["emit_telemetry"] = kwargs["emit_telemetry"]
         return cls(**extra)

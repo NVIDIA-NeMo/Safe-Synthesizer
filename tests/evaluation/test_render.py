@@ -9,6 +9,7 @@ pytest.importorskip(
     reason="sentence_transformers is required for these tests (install with: uv sync --extra cpu)",
 )
 
+from nemo_safe_synthesizer.config.evaluate import DEFAULT_RECORD_COUNT
 from nemo_safe_synthesizer.evaluation.render import render_report
 from nemo_safe_synthesizer.evaluation.reports.multimodal.multimodal_report import MultimodalReport
 
@@ -29,8 +30,8 @@ def test_render(
         column_statistics=fixture_column_statistics,
     )
     output = render_report(report, "multi_modal_report.j2")
-    assert output is not None
     # output = render_report(report, "multi_modal_report.j2", "/tmp/test_mm_report.html")
+    assert output is not None
     assert len(output) > 0
 
     # Section headings rendered (catch wholesale template breakage)
@@ -40,7 +41,7 @@ def test_render(
 
     # Dynamic values from Pydantic models made it into HTML (catch silent blanks
     # from Jinja variable typos -- default Undefined renders as empty string)
-    assert "10000" in output
+    assert str(DEFAULT_RECORD_COUNT) in output
     assert "Missing %" in output
 
 
@@ -67,7 +68,7 @@ def test_render_dp_enabled(
     assert "Dataset Statistics" in output
     assert "Synthetic Quality Score" in output
     assert "Data Privacy Score" in output
-    assert "5000" in output
+    assert str(DEFAULT_RECORD_COUNT) in output
 
 
 @pytest.mark.slow
@@ -93,4 +94,4 @@ def test_render_dp_not_enabled(
     assert "Dataset Statistics" in output
     assert "Synthetic Quality Score" in output
     assert "Data Privacy Score" in output
-    assert "5000" in output
+    assert str(DEFAULT_RECORD_COUNT) in output

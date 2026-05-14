@@ -18,15 +18,17 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ```bash
 # With uv (recommended):
-uv pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --index https://flashinfer.ai/whl/cu128 \
-  --index https://download.pytorch.org/whl/cu128 \
+uv pip install "nemo-safe-synthesizer[cu129,engine]" \
+  --index https://flashinfer.ai/whl/cu129 \
+  --index https://download.pytorch.org/whl/cu129 \
+  --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
-pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --extra-index-url https://download.pytorch.org/whl/cu128 \
-  --extra-index-url https://flashinfer.ai/whl/cu128
+pip install "nemo-safe-synthesizer[cu129,engine]" \
+  --extra-index-url https://download.pytorch.org/whl/cu129 \
+  --extra-index-url https://flashinfer.ai/whl/cu129 \
+  --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
 ```
 
 Or install from source:
@@ -116,6 +118,8 @@ Options:
                                   via NSS_DATASET_REGISTRY env var. If both
                                   env var and CLI option are provided, the CLI
                                   option takes precedence.
+  --emit_telemetry BOOLEAN        Whether to emit anonymous Safe Synthesizer
+                                  telemetry events.
   --help                          Show this message and exit.
 
 Commands:
@@ -208,7 +212,7 @@ Controls the HuggingFace attention backend used during model loading for trainin
 ```yaml
 # config.yaml
 training:
-  attn_implementation: "kernels-community/vllm-flash-attn3"
+  attn_implementation: "sdpa"
 ```
 
 ```bash
@@ -218,13 +222,14 @@ safe-synthesizer run --training__attn_implementation sdpa --data-source my_data.
 
 | Value | Description | Requires |
 |-------|-------------|----------|
-| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub (default) | `kernels` pip package |
-| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
-| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
-| `sdpa` | PyTorch scaled dot product attention | None (built-in) |
+| `sdpa` | PyTorch scaled dot product attention (default) | None (built-in) |
 | `eager` | Standard PyTorch attention | None (built-in) |
+| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
+| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub | `kernels` pip package and compatible prebuilt kernel |
+| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
+| `flash_attention_3` | Flash Attention 3 (traditional) | `flash-attn-3` support |
 
-If the default `kernels-community/vllm-flash-attn3` is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
+If a `kernels-community/...` value is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
 
 ### Generation (`attention_backend`)
 
@@ -401,6 +406,30 @@ Passing a relative `--data-source` on the CLI will attempt to load the file rela
 Config values passed as CLI arguments always take precendence, then any overrides from the registry, and finally values from the `--config` yaml file.
 - `load_args` - Extra arguments needed by the data reader for a specific dataset.
 For example, changing the separator used by `pd.read_csv` for a `.csv` file with a different delimiter.
+
+## Telemetry & Privacy
+
+NeMo Safe Synthesizer includes an optional function to share anonymous telemetry data with NVIDIA for product improvement. Data collected is limited to run-level operational metrics (such as final run status, processing time, record and token counts, configuration parameters, top-level quality and privacy scores, base model used, deployment type, and GPU type). No user or device information is collected. This data is used to prioritize product improvements and will be shared in aggregate with the community. It is not used to track any individual user behavior.
+
+You may opt out of telemetry collection at any time. Opting out applies only to data collection by the NeMo Safe Synthesizer library itself. To disable telemetry in a YAML config, set:
+
+```yaml
+emit_telemetry: false
+```
+
+To disable telemetry for one CLI invocation, pass `--emit_telemetry false`:
+
+```bash
+safe-synthesizer run --emit_telemetry false --data-source my_data.csv
+```
+
+To disable telemetry for the current shell, set `NEMO_TELEMETRY_ENABLED=false` (other accepted disabling values: `0`, `no`) in your environment before running:
+
+```bash
+export NEMO_TELEMETRY_ENABLED=false
+```
+
+Use of third-party endpoints, including NVIDIA Build: NeMo Safe Synthesizer can be configured to use various inference endpoints, including build.nvidia.com (NVIDIA Build). If you choose to use NVIDIA Build or any other third-party endpoint, that endpoint's own terms of service and privacy practices apply independently of this library. Any opt-out you exercise within NeMo Safe Synthesizer does not extend to data collection by your chosen endpoint. NVIDIA Build is intended for evaluation and testing purposes only and may not be used in production environments. Do not submit any confidential information or personal data when using NVIDIA Build.
 
 ## License
 

@@ -327,7 +327,7 @@ class GroupedDataProcessor(Processor):
                     valid_indices = [i for i, r in enumerate(group_records) if r.is_valid]
                     valid_sorted = sorted(
                         (group_records[i] for i in valid_indices),
-                        key=lambda r: r.parsed[self.order_by],  # type: ignore[index]
+                        key=lambda r: r.parsed[self.order_by],
                     )
                     for i, record in zip(valid_indices, valid_sorted, strict=True):
                         group_records[i] = record

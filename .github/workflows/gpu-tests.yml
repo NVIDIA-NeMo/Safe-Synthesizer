@@ -23,11 +23,23 @@ name: GPU Tests
 
 on:
   schedule:
+    # Nightly at 02:00 UTC.
     - cron: '0 2 * * *'
-  push:
-    branches:
-      - "pull-request/[0-9]+"
+  # disabled for now to avoid running on PRs
+  # push:
+  #   branches:
+  #     - "pull-request/[0-9]+"
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "GPU test suite to run"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - smoke
+          - e2e
 
 defaults:
   run:
@@ -40,16 +52,12 @@ concurrency:
 jobs:
   changes:
     name: Detect changes
-    # No `if` guard here: dorny/paths-filter outputs `true` for all filters on
-    # workflow_dispatch (no base to diff against), so the E2E job always runs.
-    # Guarding this job would skip it, and a skipped `needs` dependency causes
-    # downstream jobs to be skipped even when their own `if` condition passes.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: linux-amd64-cpu4
     permissions:
       contents: read
     outputs:
-      src: ${{ steps.changes.outputs.src }}
-      test: ${{ steps.changes.outputs.test }}
+      src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
       - uses: actions/checkout@v6
       - name: Detect changes
@@ -59,66 +67,84 @@ jobs:
   gpu-smoke-test:
     name: GPU Smoke Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the selected GPU suite.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src_test_deps == 'true'
+        ) &&
+        (
+          github.event_name != 'workflow_dispatch' ||
+          inputs.suite == 'all' ||
+          inputs.suite == 'smoke'
+        )
+      }}
     timeout-minutes: 30
-    runs-on: nemo-ci-aws-gpu-x2
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11"]
+    runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install make
-        run: apt-get update && apt-get install -y --no-install-recommends make
+      - name: Setup GPU test environment
+        uses: ./.github/actions/setup-gpu-test-env
 
-      - name: Setup Python environment
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: ${{ matrix.python-version }}
-          bootstrap-tools: "true"
+      - name: Run GPU smoke tests - train only
+        timeout-minutes: 10
+        run: make test-smoke-gpu-train-only
 
-      - name: Bootstrap CUDA environment
-        run: make bootstrap-nss cu128
+      - name: Run GPU smoke tests - generation
+        timeout-minutes: 10
+        run: make test-smoke-gpu-generation
 
-      - name: Check GPU availability
-        run: |
-          uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
+      - name: Run GPU smoke tests - resume
+        timeout-minutes: 10
+        run: make test-smoke-gpu-resume
 
-      - name: Run GPU smoke tests
+      - name: Run GPU smoke tests - structured generation
+        timeout-minutes: 10
+        run: make test-smoke-gpu-structured-generation
+
+      - name: Run GPU smoke tests - timeseries
+        timeout-minutes: 10
+        run: make test-smoke-gpu-timeseries
+
+      - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
-        run: make test-smoke-gpu
+        run: make test-smoke-gpu-smollm2
 
   gpu-e2e-test:
     name: GPU E2E Tests
     needs: changes
-    if: ${{ needs.changes.outputs.src == 'true' || needs.changes.outputs.test == 'true' || github.event_name == 'workflow_dispatch' }}
-    timeout-minutes: 55
-    runs-on: nemo-ci-aws-gpu-x2
+    # `changes` is intentionally skipped on workflow_dispatch. `always()` lets
+    # manual runs bypass that skipped dependency and run the selected GPU suite.
+    if: >-
+      ${{
+        always() &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          needs.changes.outputs.src_test_deps == 'true'
+        ) &&
+        (
+          github.event_name != 'workflow_dispatch' ||
+          inputs.suite == 'all' ||
+          inputs.suite == 'e2e'
+        )
+      }}
+    timeout-minutes: 60
+    runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install make
-        run: apt-get update && apt-get install -y --no-install-recommends make
-
-      - name: Setup Python environment
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: "3.11"
-          bootstrap-tools: "true"
-
-      - name: Bootstrap CUDA environment
-        run: make bootstrap-nss cu128
-
-      - name: Check GPU availability
-        run: |
-          uv run python -c "import torch; print('cuda available:', torch.cuda.is_available()); print('device count:', torch.cuda.device_count())"
+      - name: Setup GPU test environment
+        uses: ./.github/actions/setup-gpu-test-env
 
       - name: Run GPU E2E tests
         timeout-minutes: 45

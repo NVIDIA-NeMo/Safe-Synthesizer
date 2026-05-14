@@ -82,6 +82,17 @@ class TestNSSObservabilitySettings:
         settings = NSSObservabilitySettings()
         assert settings.nss_log_file == log_file
 
+    @pytest.mark.parametrize("explicit_value", [False, True])
+    @pytest.mark.parametrize("is_tty", [False, True])
+    def test_explicit_log_color_bool_overrides_tty_default(self, explicit_value, is_tty):
+        """Explicit boolean log-color settings should not be recomputed from stdout."""
+        with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
+            stdout.isatty.return_value = is_tty
+
+            settings = NSSObservabilitySettings(nss_log_color=explicit_value)
+
+        assert settings.nss_log_color is explicit_value
+
 
 class TestCategoryFilter:
     """Tests for CategoryFilter logging filter."""
@@ -271,6 +282,15 @@ class TestRenderRichTable:
         assert "0.35" in result
         assert "0.72" in result
         assert "95.00%" in result
+
+    def test_renders_mapping_values_without_python_repr(self):
+        """Mapping values in flat tables are rendered as compact key-value lists."""
+        data = {"num_prompts": 10, "finish_reasons": {"length": 10, "stop": 2}}
+        result = _render_rich_table(data)
+
+        assert "Finish Reasons" in result
+        assert "length: 10, stop: 2" in result
+        assert "{'length': 10" not in result
 
     def test_renders_nested_dict(self):
         """Test rendering a nested statistics dictionary."""

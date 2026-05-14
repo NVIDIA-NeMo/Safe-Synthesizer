@@ -649,44 +649,6 @@ def fixture_sequential_metadata(
     )
 
 
-def test_sequential_assembler_raises_for_missing_group_column(
-    fixture_iris_dataset: Dataset,
-    fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
-    fixture_sequential_metadata: ModelMetadata,
-):
-    """Test that SequentialExampleAssembler raises for missing group column."""
-    with pytest.raises(ParameterError, match="Group by column.*not found"):
-        SequentialExampleAssembler(
-            dataset=fixture_iris_dataset,
-            tokenizer=fixture_tokenizer,
-            metadata=fixture_sequential_metadata,
-            group_training_examples_by="nonexistent_column",
-            order_training_examples_by="sepal.length",
-            cache_file_path=fixture_session_cache_dir,
-            seed=1,
-        )
-
-
-def test_sequential_assembler_raises_for_missing_order_column(
-    fixture_iris_dataset: Dataset,
-    fixture_tokenizer: PreTrainedTokenizer,
-    fixture_session_cache_dir: str,
-    fixture_sequential_metadata: ModelMetadata,
-):
-    """Test that SequentialExampleAssembler raises for missing order column."""
-    with pytest.raises(ParameterError, match="Order by column.*not found"):
-        SequentialExampleAssembler(
-            dataset=fixture_iris_dataset,
-            tokenizer=fixture_tokenizer,
-            metadata=fixture_sequential_metadata,
-            group_training_examples_by="variety",
-            order_training_examples_by="nonexistent_column",
-            cache_file_path=fixture_session_cache_dir,
-            seed=1,
-        )
-
-
 def test_sequential_assembler_reorders_columns(
     fixture_chickweight_dataset: Dataset,
     fixture_tokenizer: PreTrainedTokenizer,
@@ -704,6 +666,35 @@ def test_sequential_assembler_reorders_columns(
         seed=1,
     )
     assert assembler.schema_prompt.index("Chick") < assembler.schema_prompt.index("Time")
+
+
+@pytest.mark.parametrize(
+    ("group_by", "order_by", "missing_role"),
+    [
+        ("nonexistent_group", "Time", "Group by"),
+        ("Chick", "nonexistent_order", "Order by"),
+    ],
+)
+def test_sequential_assembler_raises_parameter_error_for_missing_required_columns(
+    fixture_chickweight_dataset: Dataset,
+    fixture_tokenizer: PreTrainedTokenizer,
+    fixture_session_cache_dir: str,
+    fixture_sequential_metadata: ModelMetadata,
+    group_by: str,
+    order_by: str,
+    missing_role: str,
+):
+    """Direct constructor callers should get actionable user-facing errors."""
+    with pytest.raises(ParameterError, match=f"{missing_role} column 'nonexistent_"):
+        SequentialExampleAssembler(
+            dataset=fixture_chickweight_dataset,
+            tokenizer=fixture_tokenizer,
+            metadata=fixture_sequential_metadata,
+            group_training_examples_by=group_by,
+            order_training_examples_by=order_by,
+            cache_file_path=fixture_session_cache_dir,
+            seed=1,
+        )
 
 
 def test_sequential_assembler_excludes_pseudo_group_from_schema(

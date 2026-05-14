@@ -8,7 +8,7 @@ import os
 import uuid
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
@@ -31,10 +31,9 @@ from ..data_processing.stats import (
     RunningStatistics,
     Statistics,
 )
-from ..data_processing.validation import validate_groupby_column, validate_orderby_column
 from ..defaults import (
     DEFAULT_CACHE_PREFIX,
-    PSEUDO_GROUP_COLUMN,
+    DEFAULT_EXCLUDE_COLUMNS,
     TRAIN_SET_SIZE_BUFFER,
 )
 from ..errors import (
@@ -44,10 +43,11 @@ from ..errors import (
 from ..holdout.holdout import grouped_train_test_split, naive_train_test_split
 from ..llm.metadata import ModelMetadata
 from ..observability import get_logger
+from .budget import NUM_SPECIAL_TOKENS, compute_max_new_tokens
 
 logger = get_logger(__name__)
 
-NUM_SPECIAL_TOKENS = 2
+
 GeneratorType = Generator[dict[str, list], None, None]
 
 
@@ -430,7 +430,7 @@ class TrainingExampleAssembler(ABC):
     @staticmethod
     def _convert_records_to_jsonl(
         records: dict[str, list],
-        exclude_columns: list[str] | None = None,
+        exclude_columns: Sequence[str] | None = None,
     ) -> dict[str, list[str]]:
         """Convert columnar records to JSONL and return newline-terminated strings.
 
@@ -481,15 +481,11 @@ class TrainingExampleAssembler(ABC):
         # Exclude pseudo-group column from JSONL so the model never sees it
         record_jsonl = self._convert_records_to_jsonl(
             dict(records),
-            exclude_columns=[PSEUDO_GROUP_COLUMN],
+            exclude_columns=DEFAULT_EXCLUDE_COLUMNS,
         )
         tokenized = self.tokenizer(record_jsonl["text"], add_special_tokens=False)
-        max_new_tokens = self.metadata.max_seq_length - len(self.schema_prompt_ids)
-        # Both the prompt and the records are enclosed by special tokens.
-        # TODO: This is no longer always accurate, sometimes only a bos token is
-        # added to the prompt, and eventually we may experiment with multi-token
-        # delimiters for each group
-        max_new_tokens -= 2 * NUM_SPECIAL_TOKENS
+
+        max_new_tokens = compute_max_new_tokens(self.schema_prompt_ids, self.metadata.max_seq_length)
         for ids in tokenized["input_ids"]:
             if len(ids) > max_new_tokens:
                 max_tokens_action = _get_max_tokens_action(self.metadata.rope_scaling_factor)
@@ -843,7 +839,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         self.group_by_column = group_training_examples_by
         self.order_by_column = order_training_examples_by
 
-        self._validate_columns(dataset)
         dataset = self._reorder_columns(dataset)
         keep_columns = self._build_keep_columns(keep_columns)
 
@@ -857,18 +852,6 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
 
         self._build_schema_prompt_excluding_pseudo_group(dataset, metadata, tokenizer)
 
-    def _validate_columns(self, dataset: Dataset) -> None:
-        """Validate that required columns exist in the dataset.
-
-        Args:
-            dataset: The dataset to validate.
-
-        Raises:
-            ParameterError: If group or order column is not found in dataset.
-        """
-        validate_groupby_column(dataset.column_names, self.group_by_column)
-        validate_orderby_column(dataset.column_names, self.order_by_column)
-
     def _reorder_columns(self, dataset: Dataset) -> Dataset:
         """Reorder columns: group_by first, order_by second, then the rest.
 
@@ -879,6 +862,9 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             Dataset with reordered columns.
         """
         current_columns = list(dataset.column_names)
+        self._require_column(current_columns, self.group_by_column, role="Group by")
+        self._require_column(current_columns, self.order_by_column, role="Order by")
+
         reordered_columns = [self.group_by_column]
         current_columns.remove(self.group_by_column)
 
@@ -888,6 +874,12 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
 
         reordered_columns.extend(current_columns)
         return dataset.select_columns(reordered_columns)
+
+    @staticmethod
+    def _require_column(columns: list[str], column: str, *, role: str) -> None:
+        """Raise a user-facing error when direct Dataset callers skip preflight."""
+        if column not in columns:
+            raise ParameterError(f"{role} column '{column}' not found in input dataset columns.")
 
     def _build_keep_columns(self, keep_columns: list[str] | None) -> list[str]:
         """Build list of columns to preserve through tokenization.
@@ -921,7 +913,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
             dataset.column_names,
             instruction=metadata.instruction,
             prompt_template=metadata.prompt_config.template,
-            exclude_columns=[PSEUDO_GROUP_COLUMN],
+            exclude_columns=list(DEFAULT_EXCLUDE_COLUMNS),
         )
         self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
 

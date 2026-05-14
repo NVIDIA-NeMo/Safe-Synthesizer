@@ -120,6 +120,14 @@ You can also run stages individually:
 - `safe-synthesizer run generate` -- generate only (use `--auto-discover-adapter` or `--run-path`)
 - SDK stepwise: `process_data()` → `train()` → `generate()` → `evaluate()`
 
+## Pre-flight Validation
+
+Use `--validate` to check your dataset and configuration before committing to
+a full run. Pre-flight catches configuration mistakes, missing columns, token
+budget overflows, and GPU issues in seconds -- before the pipeline downloads
+models or starts training. See [`run --validate`](#run---validate) in CLI
+Commands for the full reference.
+
 ---
 
 ## Using YAML Config Files
@@ -248,6 +256,141 @@ safe-synthesizer run generate \
 | `--wandb-resume-job-id` | WandB run ID to resume (or path to file containing the ID) |
 
 Accepts the same common options and synthesis parameter overrides as `run`.
+
+### `run --validate`
+
+Validate your dataset and configuration without starting training or
+downloading model weights. The tokenizer and model config may still be
+fetched from the Hugging Face cache (needed for token-budget checks).
+Available on `run` and `run train`.
+
+```bash
+safe-synthesizer run --data-source data.csv --validate
+```
+
+Pre-flight runs the following core checks, grouped by stage. Stages
+execute in order (`config` → `dataframe` → `metadata` → `advisory`).
+
+| Check name | Stage | What it validates |
+|-------|-------|-------------------|
+| `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
+| `env.inference_key` | config | `NSS_INFERENCE_KEY` is set when PII classification is enabled (warning only) |
+| `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
+| `dataset.size` | dataframe | Training split meets the hard minimum row count |
+| `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
+| `columns.orderby` | dataframe | `order_training_examples_by` column is present |
+| `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
+| `columns.constant` | dataframe | No column is constant (warning only) |
+| `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
+| `gpu.vram` | metadata | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
+| `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
+| `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
+| `training.oversampling` | advisory | Sampling fraction is not extreme (warning only) |
+
+If a non-advisory check produces an error, later checks that declare it
+as a `requires` dependency are marked `skipped`. Advisory-stage errors
+never gate other checks. For example, a missing group-by column fails
+`columns.groupby`; `token_budget` still runs (its schema and sampled-
+record branches don't depend on the group-by column), but the
+per-group budget branch is skipped automatically when the column is
+absent.
+
+Pre-flight runs against the training split produced by `Holdout`, not
+the full input dataset. Row-count, oversampling, and
+token-budget messages all report on the training partition the model
+will actually see. The runtime-info block at the top of the report shows
+both the input dataset size and the training-split size so the scope of
+each check is unambiguous.
+
+Token budget checks use the same budget computation as the training
+assembler, so the numbers pre-flight reports match what assembly will
+enforce. Pre-flight samples rows and top groups for tokenization rather
+than scanning the full dataset, so a long-tail outlier outside the
+sample can still trip a context-length error at assembly time -- see
+the best-effort caveat below.
+
+!!! warning "`--validate` is best-effort"
+
+    A clean `--validate` run does not guarantee a full run will succeed.
+    Known gaps:
+
+    - PII replacement is skipped in validate mode, so the training split
+      that preflight sees is the *pre-replacement* data; replacement text
+      can be shorter or longer than the original and shift token budgets.
+    - Token-budget checks sample rows and top groups -- a long-tail
+      outlier outside the sample can still exceed the budget at assembly.
+    - VRAM headroom is a lower bound (LoRA adapters, optimizer state, and
+      activations are not modeled); full training may still OOM.
+
+    Treat `--validate` as a quick fail-fast gate, not a full-run guarantee.
+
+#### Interpreting the Output
+
+The CLI report is split into labeled sections:
+
+- runtime info -- model, input dataset size, training-split size (the partition pre-flight actually checked)
+- validation checks -- per-check results with status indicators (`✓` pass, `✗` error, `⚠` warning) and issue codes
+- output locations -- artifact directory tree with resolved config and log file paths
+- next steps -- a ready-to-copy `safe-synthesizer run` command using the resolved config
+
+Errors block the pipeline. Warnings are informational -- review them, but they
+do not prevent a run. When all checks pass, the output includes a follow-up
+command:
+
+```text
+Run with the resolved configuration:
+  safe-synthesizer run --data-source data.csv \
+    --config ./safe-synthesizer-artifacts/<project>/<timestamp>/safe-synthesizer-config.yaml
+```
+
+The resolved config captures all auto-resolved parameters (rope scaling,
+learning rate, record sampling), so the subsequent run uses deterministic
+settings.
+
+#### SDK Equivalent
+
+In the SDK, call `process_data(check_only=True)`:
+
+```python
+from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
+
+nss = SafeSynthesizer().with_data_source("data.csv")
+try:
+    nss.process_data(check_only=True)
+except ParameterError:
+    # Preflight surfaced at least one error; the report is populated
+    # before the raise so you can inspect it either way.
+    pass
+
+report = nss.preflight_report
+if report is not None:
+    print(f"{len(report.errors)} errors, {len(report.warnings)} warnings")
+    for issue in report.errors + report.warnings:
+        print(f"[{issue.severity}] {issue.code}: {issue.message}")
+```
+
+`process_data(check_only=True)` raises `ParameterError` if any check
+produces errors. `nss.preflight_report` is assigned *before* the raise
+when the failure comes from preflight itself, so the `try` block above
+will always leave a structured report behind for the error path.
+
+Failures that happen *before* preflight runs -- for example a
+group-by column that does not exist in the input, which is checked
+up-front by `process_data` -- also raise `ParameterError` but leave
+`nss.preflight_report` as `None`; always guard on
+`report is not None` before indexing into it.
+
+On the CLI, `run --validate` wraps the same call: if preflight
+surfaces errors, the full Rich report is rendered before the process
+exits non-zero, so users see the same detail they would on a passing
+validation rather than only a traceback.
+
+#### Issue Codes
+
+Each issue carries a short code (e.g., `no_gpu`, `schema_exceeds_context`,
+`dataset_small`) for programmatic matching. The full table of codes and
+severities is in [Troubleshooting -- Pre-flight Validation Codes](troubleshooting.md#pre-flight-validation-codes).
 
 ### `artifacts clean`
 
@@ -592,15 +735,15 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
 ### Attention Backends
 
 `training.attn_implementation` controls which attention kernel is used when
-loading the model. The default uses Flash Attention 3 via the HuggingFace
-Kernels Hub and falls back to `sdpa` when the `kernels` package is not
-installed.
+loading the model. The default is `sdpa`, which uses PyTorch scaled
+dot-product attention and does not require a separate attention package.
 
 Common values:
 
-- `kernels-community/vllm-flash-attn3`: Flash Attention 3 (default, requires `kernels` package)
+- `sdpa`: PyTorch scaled dot-product attention -- default and broadest compatibility
+- `kernels-community/vllm-flash-attn3`: Flash Attention 3 (requires `kernels` package and a compatible prebuilt kernel)
 - `flash_attention_2`: Flash Attention 2 (requires `flash-attn` package)
-- `sdpa`: PyTorch scaled dot-product attention -- broadest compatibility
+- `flash_attention_3`: Flash Attention 3 (requires `flash-attn-3` support)
 - `eager`: standard PyTorch attention -- useful for debugging
 
 !!! note "Training vs generation attention backends"

@@ -1,20 +1,15 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""CLI run commands for Safe Synthesizer.
-
-This module provides the run command group for the Safe Synthesizer pipeline:
-
-- ``run`` (default): Full end-to-end pipeline
-- ``run train``: Training stage only
-- ``run generate``: Generation stage only (requires trained model)
-"""
+"""CLI run commands for Safe Synthesizer."""
 
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -23,7 +18,10 @@ from ..configurator.pydantic_click_options import (
     parse_overrides,
     pydantic_options,
 )
+from ..errors import UserError
 from ..observability import traced_user
+from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
+from ..tooling import PreflightRenderContext, render_preflight_report
 from .settings import CLISettings
 from .utils import (
     CLI_NESTED_FIELD_SEPARATOR,
@@ -32,14 +30,20 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from ..sdk.library_builder import SafeSynthesizer
+    from .artifact_structure import Workdir
 
 
 def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     """Decorator to add common options for run commands.
 
-    Note: Environment variable handling is done by CLISettings, not Click's envvar=.
-    This keeps env var logic in one place (pydantic-settings) rather than duplicating it.
+    Apply this above ``@pydantic_options`` in source order. Python applies
+    decorators bottom-up, so the shared command options are added after the
+    generated parameter options. Environment-variable handling stays in
+    ``CLISettings`` rather than Click ``envvar=`` declarations, so precedence is
+    centralized in one settings model.
     """
     options = []
     options.append(
@@ -161,14 +165,154 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     return f
 
 
+def _parse_run_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Parse generated config options plus manual run aliases into config overrides."""
+    return parse_overrides(kwargs)
+
+
+def _set_cli_deployment_type_default() -> None:
+    """Default telemetry deployment type for CLI commands without overriding Slurm or explicit settings."""
+    os.environ.setdefault("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.CLI.value)
+
+
+def _format_dataset_runtime_info(data: pd.DataFrame) -> str:
+    """Format dataset size summary for validate runtime info."""
+    return f"{len(data):,} rows, {len(data.columns):,} columns"
+
+
+def _build_validate_run_info(
+    *,
+    version: str,
+    model_name: str,
+    data: pd.DataFrame,
+    training_records: int | None = None,
+) -> dict[str, str]:
+    """Build runtime info displayed in validate output.
+
+    ``training_records`` is the size of the training split that preflight
+    actually checked; it is shown alongside the input dataset size so the
+    scope of the report is obvious.
+    """
+    info: dict[str, str] = {
+        "nemo-safe-synthesizer": version,
+        "model": model_name,
+        "input data": _format_dataset_runtime_info(data),
+    }
+    if training_records is not None:
+        info["training split"] = f"{training_records:,} rows (pre-flight scope)"
+    info["log level"] = os.environ.get("NSS_LOG_LEVEL", "INFO")
+    return info
+
+
+def _run_validate_and_render(
+    nss: "SafeSynthesizer",
+    *,
+    settings: CLISettings,
+    workdir: "Workdir",
+    config: SafeSynthesizerParameters,
+    data: pd.DataFrame,
+) -> None:
+    """Run preflight in validate mode and render the resulting report.
+
+    Shared by the ``run`` (end-to-end) and ``run train`` command paths so
+    the ``--validate`` branch in each stays a single line.
+
+    Note: ``process_data(check_only=True)`` deliberately skips PII
+    replacement, so preflight runs against the pre-replacement training
+    split. This is why ``--validate`` is documented as a best-effort
+    fail-fast gate rather than a full-run guarantee.
+    """
+    click.echo("Running pre-flight validation...", nl=False)
+    # ``process_data(check_only=True)`` raises ``UserError`` (specifically
+    # ``ParameterError``) when preflight surfaces errors, but it populates
+    # ``nss.preflight_report`` first. Catch the raise so the Rich report still
+    # renders before we propagate the failure -- otherwise the user gets only
+    # the bare traceback text.
+    error: UserError | None = None
+    try:
+        nss.process_data(check_only=True)
+    except UserError as exc:
+        error = exc
+    finally:
+        _clear_progress_line()
+
+    # intentionally deferred import to avoid delay in user startup
+    from ..package_info import __version__
+    from ..preflight import get_registry
+
+    if nss.preflight_report is not None:
+        render_preflight_report(
+            nss.preflight_report,
+            registry=get_registry(),
+            context=_build_validate_render_context(
+                config_path=nss._preflight_config_path,
+                data_source=settings.data_source,
+                artifact_dir=workdir.run_dir,
+                log_file=workdir.log_file,
+                version=__version__,
+                model_name=config.training.pretrained_model,
+                data=data,
+                training_records=len(nss._training_df) if nss._training_df is not None else None,
+            ),
+        )
+
+    if error is not None:
+        raise error
+
+
+def _clear_progress_line() -> None:
+    r"""Clear the ``Running pre-flight validation...`` progress line.
+
+    Emits the ANSI clear sequence only when stdout is a TTY so CI logs and
+    other non-terminal sinks don't show raw ``\\r\\x1b[K`` control bytes.
+    On non-TTYs, just drop to a new line.
+    """
+    if sys.stdout.isatty():
+        click.echo("\r\033[K", nl=False)
+    else:
+        click.echo()
+
+
+def _build_validate_render_context(
+    *,
+    config_path: PathT | None,
+    data_source: str | None,
+    artifact_dir: PathT | None,
+    log_file: PathT | None,
+    version: str,
+    model_name: str,
+    data: pd.DataFrame,
+    training_records: int | None = None,
+) -> PreflightRenderContext:
+    """Build display context for validate-mode preflight rendering."""
+    return PreflightRenderContext(
+        config_path=Path(config_path) if config_path is not None else None,
+        data_source=data_source,
+        artifact_dir=Path(artifact_dir) if artifact_dir is not None else None,
+        log_file=Path(log_file) if log_file is not None else None,
+        run_info=_build_validate_run_info(
+            version=version,
+            model_name=model_name,
+            data=data,
+            training_records=training_records,
+        ),
+    )
+
+
 @click.group(invoke_without_command=True)
 @click.pass_context
 @common_run_options
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--validate",
+    is_flag=True,
+    default=False,
+    help="Run pre-flight validation only, then exit without training or generating.",
+)
 def run(
     ctx: click.Context,
     config_path: PathT | None,
-    data_source: str,
+    data_source: str | None,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -179,6 +323,7 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    validate: bool = False,
     **kwargs: object,
 ) -> None:
     """Run the Safe Synthesizer end-to-end pipeline.
@@ -190,7 +335,8 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    # Create unified settings from CLI kwargs (CLI values override env vars)
+    _set_cli_deployment_type_default()
+
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -203,43 +349,66 @@ def run(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
-    # Full pipeline execution
-    os.environ["NSS_PHASE"] = "end_to_end"
+    if validate:
+        os.environ["NSS_PHASE"] = "process_data"
+    else:
+        os.environ["NSS_PHASE"] = "end_to_end"
+
     run_logger, config, df, workdir = common_setup(
         settings=settings,
-        phase="end_to_end",
+        phase="process_data" if validate else "end_to_end",
+        skip_wandb=validate,
+        quiet=validate,
+        run_name="validate" if validate else None,
     )
-    run_logger.warning("Nemo Safe Synthesizer starting")
-    run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
-    with traced_user("SafeSynthesizer"):
-        from ..sdk.library_builder import SafeSynthesizer
+    try:
+        run_logger.warning("Nemo Safe Synthesizer starting")
+        run_logger.debug("running with: ", extra={"config": config.model_dump()})
 
-        assert df is not None
-        nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
-        # nss.run() calls train + generate + evaluate + save_results. The generate step has its
-        # own try/finally, but train or evaluate failures leave the generator loaded; this guard
-        # ensures teardown on all exit paths of the full pipeline.
-        try:
-            nss.run(output_file=settings.output_file)
-            nss.results.summary.log_summary(run_logger)
-            nss.results.summary.timing.log_timing(run_logger)
-            nss.results.summary.log_wandb()
-        finally:
-            if hasattr(nss, "generator") and nss.generator is not None:
-                nss.generator.teardown()
+        with traced_user("SafeSynthesizer"):
+            from ..sdk.library_builder import SafeSynthesizer
+
+            assert df is not None
+            nss: SafeSynthesizer = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
+
+            if validate:
+                _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
+                return
+
+            try:
+                nss.run(output_file=settings.output_file)
+                nss.results.summary.log_summary(run_logger)
+                nss.results.summary.timing.log_timing(run_logger)
+                nss.results.summary.log_wandb()
+            finally:
+                if hasattr(nss, "generator") and nss.generator is not None:
+                    nss.generator.teardown()
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
 
 
 @run.command("train")
 @common_run_options
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
+@click.option(
+    "--validate",
+    is_flag=True,
+    default=False,
+    help="Run pre-flight validation only, then exit without training or generating.",
+)
 def run_train(
     config_path: PathT,
-    data_source: str,
+    data_source: str | None,
     artifact_path: PathT | None,
     run_path: PathT | None,
     output_file: PathT | None,
@@ -250,6 +419,7 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    validate: bool = False,
     **kwargs: object,
 ) -> None:
     """Run the training stage only.
@@ -257,7 +427,8 @@ def run_train(
     This command processes data and trains the model, saving the adapter to the run directory.
     Use 'run generate' afterwards to generate synthetic data from the trained adapter.
     """
-    # Create unified settings from CLI kwargs
+    _set_cli_deployment_type_default()
+
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -270,21 +441,42 @@ def run_train(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
-    os.environ["NSS_PHASE"] = "train"
+    if validate:
+        os.environ["NSS_PHASE"] = "process_data"
+    else:
+        os.environ["NSS_PHASE"] = "train"
+
     run_logger, config, df, workdir = common_setup(
         settings=settings,
-        phase="train",
+        phase="process_data" if validate else "train",
+        skip_wandb=validate,
+        quiet=validate,
+        run_name="validate" if validate else None,
     )
     from ..sdk.library_builder import SafeSynthesizer
 
-    with traced_user("SafeSynthesizer"):
-        assert df is not None
-        SafeSynthesizer(config, workdir=workdir).with_data_source(df).process_data().train()
-        run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
+    try:
+        with traced_user("SafeSynthesizer"):
+            assert df is not None
+            nss = SafeSynthesizer(
+                config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
+
+            if validate:
+                _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
+                return
+
+            nss.process_data().train()
+            run_logger.info(f"Training complete. Adapter saved to: {workdir.adapter_path}")
+    except UserError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1)
 
 
 @run.command("generate")
@@ -307,7 +499,7 @@ def run_train(
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_generate(
     config_path: PathT,
-    data_source: str,
+    data_source: str | None,
     run_path: PathT | None,
     artifact_path: PathT | None,
     output_file: PathT | None,
@@ -331,6 +523,8 @@ def run_generate(
     or use --auto-discover-adapter with --artifact-path to automatically find
     the latest trained run.
     """
+    _set_cli_deployment_type_default()
+
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
@@ -344,7 +538,7 @@ def run_generate(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -357,11 +551,15 @@ def run_generate(
         auto_discover_adapter=auto_discover_adapter,
         wandb_resume_job_id=wandb_resume_job_id,
     )
-    from ..sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        nss = SafeSynthesizer(config, workdir=workdir)
+        nss = SafeSynthesizer(
+            config,
+            workdir=workdir,
+            emit_telemetry=config.emit_telemetry,
+        )
 
         # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
@@ -376,10 +574,17 @@ def run_generate(
                 .evaluate()
                 .save_results(output_file=final_output_file)
             )
+            _emit_nss_telemetry(nss, TaskStatusEnum.COMPLETED)
             nss.results.summary.log_summary(run_logger)
             nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
             nss.results.summary.log_wandb()
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(nss, TaskStatusEnum.CANCELED)
+            raise
+        except Exception:
+            _emit_nss_telemetry(nss, TaskStatusEnum.ERROR)
+            raise
         finally:
             if hasattr(nss, "generator") and nss.generator is not None:
                 nss.generator.teardown()

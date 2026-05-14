@@ -1,13 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Builder-pattern configuration layer for Safe Synthesizer.
-
-Provides ``ConfigBuilder``, the base builder that accumulates
-per-section configuration objects (training, generation, data, etc.)
-via fluent ``with_*`` methods before resolving them into a single
-``SafeSynthesizerParameters``.
-"""
+"""Builder-pattern configuration layer for Safe Synthesizer."""
 
 from __future__ import annotations
 
@@ -28,6 +22,7 @@ from ..config import (
     TrainingHyperparams,
 )
 from ..observability import get_logger
+from ..telemetry import _telemetry_enabled
 
 logger = get_logger(__name__)
 
@@ -63,7 +58,8 @@ class ConfigBuilder(object):
     Each ``with_*`` method accepts an optional typed config object or
     a plain dict, plus ``**kwargs`` overrides.  ``kwargs`` always take
     precedence over fields in the config/dict.  All ``with_*`` methods
-    return ``self`` for chaining.
+    return ``Self`` so subclasses preserve their concrete type through
+    fluent chains.
 
     Args:
         config: Optional pre-built parameters.  When supplied, the
@@ -74,6 +70,7 @@ class ConfigBuilder(object):
     def __init__(self, config: SafeSynthesizerParameters | None = None) -> None:
         self._nss_config: SafeSynthesizerParameters | None = config
         if self._nss_config is not None:
+            self._emit_telemetry_config = self._nss_config.emit_telemetry
             self._evaluation_config = self._nss_config.evaluation
             self._replace_pii_config = self._nss_config.replace_pii
             self._privacy_config: DifferentialPrivacyHyperparams | None = self._nss_config.privacy
@@ -89,6 +86,7 @@ class ConfigBuilder(object):
             self._privacy_config: DifferentialPrivacyHyperparams = DifferentialPrivacyHyperparams()
             self._training_config: TrainingHyperparams = TrainingHyperparams()
             self._time_series_config: TimeSeriesParameters = TimeSeriesParameters()
+            self._emit_telemetry_config = _telemetry_enabled()
 
         self._data_source: DataSource | None = None
         self._classify_model_provider: str | None = None
@@ -318,7 +316,7 @@ class ConfigBuilder(object):
                     logger.debug(f"Using default values for {pg}")
                 case _:
                     raise ValueError(f"Input must be a BaseModel, dictionary, or None: {type(param)}")
-        self._nss_config = SafeSynthesizerParameters(**params_to_use)
+        self._nss_config = SafeSynthesizerParameters(**params_to_use, emit_telemetry=self._emit_telemetry_config)
 
         # Inject classify_model_provider into PII replacer config if set
         if self._classify_model_provider and self._nss_config.replace_pii:

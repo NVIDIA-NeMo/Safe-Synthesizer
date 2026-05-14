@@ -224,6 +224,22 @@ export SAFE_SYNTHESIZER_CPU_COUNT=4
 Defaults to `max(1, cpu_count - 1)` (one CPU left free), further capped so
 there are at least 1,000 records per worker.
 
+### `NEMO_TELEMETRY_ENABLED`
+
+Controls whether telemetry is sent for train/generate events.
+
+Defaults to `true`. Set it to `false` to disable telemetry for the current shell:
+
+```bash
+export NEMO_TELEMETRY_ENABLED=false
+```
+
+You can also disable telemetry in a Safe Synthesizer config file:
+
+```yaml
+emit_telemetry: false
+```
+
 ---
 
 ## Container Usage

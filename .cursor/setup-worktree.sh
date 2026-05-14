@@ -16,10 +16,10 @@ fi
 
 # Bare --frozen installs the base environment. For GPU dev work (ty, import
 # checks, GPU tests) run the full command manually after setup:
-#   uv sync --frozen --extra cu128 --extra engine --group dev
+#   uv sync --frozen --extra cu129 --extra engine --group dev
 uv sync --frozen
 echo "Venv ready: $(pwd)/.venv"
-echo "Note: for GPU extras run: uv sync --frozen --extra cu128 --extra engine --group dev"
+echo "Note: for GPU extras run: uv sync --frozen --extra cu129 --extra engine --group dev"
 
 for _envfile in .env .env.local mise.local.toml .local.envrc; do
     if [ -f "$ROOT_WORKTREE_PATH/$_envfile" ]; then

@@ -20,7 +20,13 @@ All `make` targets, grouped by scope:
 make test                  # Unit (excludes slow, e2e, and smoke)
 make test-unit-slow        # Unit tests including slow (excludes e2e and smoke)
 make test-smoke            # CPU smoke tests (~few min, no GPU required)
-make test-smoke-gpu        # GPU smoke tests (requires CUDA)
+make test-smoke-gpu        # All staged GPU smoke tests (requires CUDA)
+make test-smoke-gpu-train-only
+make test-smoke-gpu-generation
+make test-smoke-gpu-resume
+make test-smoke-gpu-structured-generation
+make test-smoke-gpu-timeseries
+make test-smoke-gpu-smollm2
 make test-e2e              # All e2e (requires CUDA) -- runs default + dp
 make test-e2e-default      # e2e default (no-DP) tests only
 make test-e2e-dp           # e2e DP tests only
@@ -59,13 +65,12 @@ make test-nss-mistral_dp-dow_jones_index-ci
 Details:
 
 - Driven by `tests/e2e/test_dataset_config.py` with YAML configs under `tests/e2e/required_configs/`
-- Each target bootstraps `cu128`, runs single-process (`-n 0`) with coverage
+- Each target bootstraps `cu129`, runs single-process (`-n 0`) with coverage
 - These are not part of `make test-e2e` -- they are standalone CI targets
 
 ## Pytest Markers
 
 Defined in `pytest.ini` (`--strict-markers` is enabled):
-
 
 | Marker         | Meaning                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------ |
@@ -93,7 +98,6 @@ Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`
 
 ## Test Data Locations
 
-
 | Location                                     | Contents                                                                                                                                                                                                                                                            |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tests/stub_datasets/`                       | Sample datasets including: `iris.csv`, `chickweight.csv`, `dow_jones_index_group_size_8.csv`, `clinc_oos.csv`, `sample-patient-events-12groups-200-records.csv`, `pems_sf_sample.csv`, `lmsys_chat_non_english_sample.jsonl`, `doc_summaries.csv` (+ `licenses.md`) |
@@ -101,7 +105,6 @@ Markers are only added if none of the 3 category markers (`unit`, `smoke`, `e2e`
 | `tests/test_data/tokenizers/`                | Full tokenizers: `tinyllama/`, `mistral7b/`, `smollm3b/`                                                                                                                                                                                                            |
 | `tests/pii_replacer/fake_people_dataset.csv` | PII test data for NER/replacement                                                                                                                                                                                                                                   |
 | `tests/e2e/required_configs/`                | 6 YAML configs: `tinyllama-nodp`, `tinyllama-dp`, `smollm3-nodp`, `smollm3-dp`, `mistral-nodp`, `mistral-dp`                                                                                                                                                        |
-
 
 Load helpers in root `conftest.py`:
 
@@ -135,24 +138,23 @@ Tokenizers are function-scoped (expensive to load). Most fixtures are function-s
 
 `ParsedResponse`: `valid_records=[...]`, `invalid_records=[...]`, `errors=[...]`, `prompt_number=int`. Use `fixture_mock_processor` or `fixture_mock_processor_without_valid_records`.
 
-Optional dependencies: use `pytest.importorskip` to gate on packages that require specific extras. E2e tests use this for `sentence_transformers` and `vllm` (require `cu128` extra).
+Optional dependencies: use `pytest.importorskip` to gate on packages that require specific extras. E2e tests use this for `sentence_transformers` and `vllm` (require `cu129` extra).
 
 Mock Workdir via `mock_workdir(tmp_path)` in `cli/conftest.py`.
 
 ## GPU Isolation Gotcha
 
-Two GPU isolation hazards require per-file process isolation (`-n 0`):
+One GPU isolation hazard requires per-file process isolation (`-n 0`):
 
-1. vLLM pre-allocates all GPU memory and never releases it within a process. Tests that call `.generate()` must run in separate processes or later tests OOM.
-2. Unsloth patches transformers at import time, poisoning Opacus/DP if they share a process.
+vLLM pre-allocates all GPU memory and never releases it within a process. Tests that call `.generate()` must run in separate processes or later tests OOM.
 
-GPU smoke tests use markers to express isolation requirements:
+GPU smoke tests use staged Make targets for process isolation and CI visibility:
 
 - `requires_gpu`: all GPU tests
 - `vllm`: tests using vLLM generation (each file gets its own process)
 - `smollm2`: marker-isolated group (auto-discovered)
 
-`make test-smoke-gpu` uses marker algebra for train-only tests (auto-discovering via `requires_gpu and not vllm and not smollm2`), explicit file paths for vLLM tests (per-file isolation), and marker selection for SmolLM2. When adding a new vLLM test file, add `pytest.mark.vllm` and also add the file to the Makefile's explicit list.
+`make test-smoke-gpu` runs staged Make targets in order. Train-only tests are auto-discovered with marker algebra (`requires_gpu and not vllm and not smollm2`), vLLM tests run through dedicated per-file stage targets for process isolation, and SmolLM2 uses marker selection. The GPU workflow runs the same stages as separate GitHub Actions steps so failures show which lane broke. When adding a new vLLM test file, add `pytest.mark.vllm`, create a dedicated `test-smoke-gpu-*` target, and include it in `test-smoke-gpu`.
 
 `make test-e2e` splits into `test-e2e-default` + `test-e2e-dp`, each single-process over `tests/e2e/`.
 

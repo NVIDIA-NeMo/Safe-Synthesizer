@@ -223,6 +223,22 @@ class TestSafeSynthesizerParameters:
         )
         assert params.data.max_sequences_per_example == expected
 
+    def test_timestamp_interval_must_be_positive(self):
+        """Negative ``timestamp_interval_seconds`` is rejected at construction time."""
+        with pytest.raises(ValueError, match="positive"):
+            TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=-1)
+
+    def test_timeseries_without_group_column_warns(self):
+        """``is_timeseries=True`` without a group column warns about the auto-injected sequence id."""
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            SafeSynthesizerParameters(
+                time_series=TimeSeriesParameters(is_timeseries=True, timestamp_interval_seconds=5),
+            )
+        assert any("group_training_examples_by" in str(warning.message) for warning in w)
+
     def test_data_validation_error_without_phantom_dp_error(self):
         """A bad data section should not produce a phantom 'DP is enabled' error when DP is disabled."""
         with pytest.raises(ValidationError) as exc_info:

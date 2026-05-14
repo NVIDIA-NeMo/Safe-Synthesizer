@@ -31,7 +31,7 @@ from ..generation.processors import Processor, TabularDataProcessor, create_proc
 from ..generation.regex_manager import build_json_based_regex
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
-from ..llm.utils import cleanup_memory, get_max_vram
+from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
@@ -41,6 +41,12 @@ if torch.cuda.is_available():
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "1")
 else:
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+
+# vLLM 0.20+ runs a deep_gemm FP8 kernel warmup during engine init that crashes
+# when the optional `deep_gemm` package isn't installed. We don't use FP8 kernels
+# for the supported NSS models, so default the warmup off; users can still opt
+# in by exporting VLLM_USE_DEEP_GEMM=1.
+os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
 
 
 def _is_redis_available() -> bool:
@@ -105,6 +111,10 @@ class VllmBackend(GeneratorBackend):
     Loads the base model with a LoRA adapter via vLLM and generates
     synthetic records in batches.  Supports optional structured
     generation (regex or JSON schema) to constrain outputs.
+
+    ``LoRARequest("lora", 1, str(adapter_path))`` is passed to
+    ``llm.generate`` when an adapter is available. The vLLM engine uses
+    ``config.training.lora_r`` as ``max_lora_rank``.
 
     Args:
         config: Pipeline configuration.
@@ -199,15 +209,17 @@ class VllmBackend(GeneratorBackend):
         structured_outputs_config = StructuredOutputsConfig(
             backend=self.config.generation.structured_generation_backend,
         )
+        model_ref = ModelRef.parse(self.config.training.pretrained_model)
 
         with heartbeat("Model loading", logger_name=__name__, model=self.config.training.pretrained_model):
             self.llm = vLLM(
-                model=self.config.training.pretrained_model,
+                model=model_ref.target(),
                 gpu_memory_utilization=max_vram,
                 enable_lora=True,
                 max_lora_rank=self.config.training.lora_r,
                 structured_outputs_config=structured_outputs_config,
                 attention_config=attention_config,
+                trust_remote_code=model_ref.trust_remote_code,
             )
 
         # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;
@@ -350,8 +362,10 @@ class VllmBackend(GeneratorBackend):
     def prepare_params(self, **kwargs) -> None:
         """Parse parameters and configure the generation method.
 
-        Parses a dictionary of parameters into SamplingParameters,
-        applying necessary transformations from our API to vLLM's API.
+        Parses a dictionary of parameters into ``SamplingParams``, applying
+        necessary transformations from the Safe Synthesizer API to vLLM's API.
+        ``num_beams`` is mapped to ``beam_width`` only when greater than 1;
+        otherwise it is omitted.
 
         Args:
             **kwargs: Sampling parameters to configure.
@@ -464,6 +478,7 @@ class VllmBackend(GeneratorBackend):
 
         for idx, output in enumerate(outputs):
             out = output.outputs[0]
+            batch.finish_reasons[str(out.finish_reason or "unknown")] += 1
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
                     f"prompt {idx}: {len(out.token_ids)} tokens, "
@@ -523,6 +538,11 @@ class VllmBackend(GeneratorBackend):
         Iterates over generation batches, applying the processor to each
         LLM output, until the configured ``num_records`` target is met or
         a stopping condition fires.
+
+        Non-tabular processors need BOS/EOS delimiters in the raw text, so
+        generation keeps special tokens for those processors and strips them
+        only for ``TabularDataProcessor``. Native EOS stopping remains enabled
+        through ``ignore_eos=False``.
 
         Args:
             data_actions_fn: Optional post-processing / validation function

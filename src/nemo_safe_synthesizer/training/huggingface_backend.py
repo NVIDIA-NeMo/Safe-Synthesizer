@@ -43,7 +43,6 @@ from ..cli.artifact_structure import BoundDir
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
-from ..data_processing.validation import validate_groupby_column, validate_orderby_column
 from ..defaults import (
     DEFAULT_VALID_RECORD_EVAL_BATCH_SIZE,
     EVAL_STEPS,
@@ -53,6 +52,7 @@ from ..defaults import (
 from ..errors import DataError, ParameterError
 from ..generation.processors import create_processor
 from ..llm.utils import (
+    ModelRef,
     add_bos_eos_tokens_to_tokenizer,
     cleanup_memory,
     get_device_map,
@@ -92,6 +92,12 @@ FIXED_RUNTIME_TRAINING_ARGS = {
     "group_by_length": False,
     "ddp_find_unused_parameters": False,
 }
+"""Training arguments fixed by Safe Synthesizer at runtime.
+
+Training duration is controlled by ``num_input_records_to_sample`` and the
+assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
+Trainer behavior stable across CLI and SDK entry points.
+"""
 
 
 class HuggingFaceBackend(TrainingBackend):
@@ -101,6 +107,11 @@ class HuggingFaceBackend(TrainingBackend):
     RoPE scaling, optional differential-privacy training via
     [`OpacusDPTrainer`][nemo_safe_synthesizer.privacy.dp_transformers.dp_utils.OpacusDPTrainer],
     and artifact persistence (adapter, schema, metadata).
+
+    Quantized training prepares the model with
+    ``prepare_model_for_kbit_training`` before applying LoRA. Non-quantized
+    training enables gradient checkpointing, input gradients, and disables
+    ``use_cache`` before wrapping the model.
     """
 
     def __init__(self, *args, **kwargs):
@@ -108,8 +119,10 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
+        self.model_ref = ModelRef.parse(self.params.training.pretrained_model)
         self.autoconfig = AutoConfig.from_pretrained(
-            self.params.training.pretrained_model, trust_remote_code=self._trust_remote_code_for_model()
+            self.model_ref.target(),
+            trust_remote_code=self.model_ref.trust_remote_code,
         )
 
     def _load_pretrained_model(self, **model_args: Any) -> None:
@@ -121,7 +134,9 @@ class HuggingFaceBackend(TrainingBackend):
 
         self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
             AutoTokenizer.from_pretrained(
-                self.params.training.pretrained_model, model_max_length=model_args.get("max_seq_length", None)
+                self.model_ref.target(),
+                trust_remote_code=self.model_ref.trust_remote_code,
+                model_max_length=model_args.get("max_seq_length", None),
             )
         )
 
@@ -192,9 +207,15 @@ class HuggingFaceBackend(TrainingBackend):
             Dictionary of parameters for ``from_pretrained``.
         """
         return dict(
-            pretrained_model_name_or_path=self.params.training.pretrained_model,
+            pretrained_model_name_or_path=self.model_ref.target(),
+            trust_remote_code=self.model_ref.trust_remote_code,
             device_map=model_kwargs.pop(
-                "device_map", get_device_map(self.params.training.pretrained_model, autoconfig=self.autoconfig)
+                "device_map",
+                get_device_map(
+                    self.model_ref.target(),
+                    autoconfig=self.autoconfig,
+                    trust_remote_code=self.model_ref.trust_remote_code,
+                ),
             ),
             attn_implementation=model_kwargs.pop(
                 "attn_implementation", self._resolve_attn_implementation(self.params.training.attn_implementation)
@@ -278,7 +299,11 @@ class HuggingFaceBackend(TrainingBackend):
         self.framework_load_params = framework_params
 
     def _prepare_quantize_base(self, **quantize_params: dict) -> None:
-        """Populate ``quant_params`` with LoRA and optional quantization settings."""
+        """Populate ``quant_params`` with LoRA and optional quantization settings.
+
+        ``peft_implementation="loftq"`` adds a ``LoftQConfig`` initialized
+        with the configured quantization bit width.
+        """
         self.quant_params = dict(
             task_type=TaskType.CAUSAL_LM,
             init_lora_weights=True,
@@ -359,6 +384,9 @@ class HuggingFaceBackend(TrainingBackend):
     def _apply_eval_dataset_overrides(self, training_args: dict) -> None:
         """Apply eval dataset-specific overrides to training args.
 
+        When an explicit eval dataset is present, evaluation is step-based and
+        includes loss for metrics with accumulation disabled.
+
         Args:
             training_args: The training arguments dictionary to modify.
         """
@@ -371,6 +399,11 @@ class HuggingFaceBackend(TrainingBackend):
 
     def _configure_dp_training(self, training_args: dict) -> DataCollatorForPrivateTokenClassification:
         """Configure differential privacy training settings.
+
+        DP uses ``DataCollatorForPrivateTokenClassification`` and
+        ``OpacusDPTrainer``. The HuggingFace ``max_grad_norm`` is set to zero
+        because Opacus handles per-sample clipping. Gradient checkpointing is
+        removed because it is not compatible with the Opacus optimizer wrapping.
 
         Args:
             training_args: The training arguments dictionary to modify.
@@ -539,24 +572,6 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer = self._create_trainer(self.train_args, data_collator)
         self._configure_trainer_callbacks(self.trainer, training_args)
 
-    def _validate_orderby_column(self, df: pd.DataFrame) -> None:
-        """Validate the orderby column exists in the dataset.
-
-        Args:
-            df: The DataFrame to validate.
-
-        Raises:
-            ParameterError: If the orderby column doesn't exist.
-        """
-        orderby_col = self.params.data.order_training_examples_by
-
-        ## For timeseries, if groupby is set without timestamp column, we will skip for now
-        ## timestamp column will be added later and orderby column will be the added timestamp column
-        if self.params.time_series.is_timeseries and self.params.time_series.timestamp_column is None:
-            return
-
-        validate_orderby_column(df, orderby_col)
-
     def _apply_preprocessing(self, df: pd.DataFrame) -> pd.DataFrame:
         """Apply action_executor preprocessing if available.
 
@@ -653,9 +668,6 @@ class HuggingFaceBackend(TrainingBackend):
         if not isinstance(training_df, pd.DataFrame):
             raise DataError("Expected DataFrame from to_pandas(), got an iterator")
 
-        # Validate groupby/orderby parameters as a preprocessing step.
-        validate_groupby_column(training_df, self.params.data.group_training_examples_by)
-        self._validate_orderby_column(training_df)
         self.params = AutoConfigResolver(training_df, self.params).resolve()
 
         # Process time series data (sort by timestamp, infer intervals, etc.)

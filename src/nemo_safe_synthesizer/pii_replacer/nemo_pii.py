@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from ..artifacts.analyzers.field_features import describe_field
 from ..artifacts.base.fields import FieldType
-from ..config.replace_pii import PiiReplacerConfig
+from ..config.replace_pii import PiiReplacerConfig, has_inference_key
 from ..defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
 from ..pii_replacer.data_editor.edit import Editor, TransformFnAccounting
 from ..pii_replacer.transform_result import ColumnStatistics, TransformResult
@@ -129,14 +129,9 @@ def _get_classify_endpoint_url() -> str:
     return url
 
 
-def _inference_key_configured() -> bool:
-    """Return whether ``NSS_INFERENCE_KEY`` is set to a non-empty value."""
-    return bool((os.environ.get("NSS_INFERENCE_KEY") or "").strip())
-
-
 def _column_classify_failure_remediation(exc: BaseException) -> str:
     """Extra log text after column classifier init or classify failures."""
-    if not _inference_key_configured():
+    if not has_inference_key():
         return (
             " Please set NSS_INFERENCE_KEY in the environment. Get an API key at https://build.nvidia.com/settings/api-keys. "
             "NSS_INFERENCE_ENDPOINT is optional when using the default NVIDIA inference API."
@@ -296,7 +291,7 @@ class NemoPII(object):
                     logging.error(
                         "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
                         _column_classify_failure_remediation(exc),
-                        exc_info=_inference_key_configured(),
+                        exc_info=has_inference_key(),
                     )
 
                 # Try to perform classification if we successfully got a classifier
@@ -316,7 +311,7 @@ class NemoPII(object):
                         logging.error(
                             "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
                             _column_classify_failure_remediation(exc),
-                            exc_info=_inference_key_configured(),
+                            exc_info=has_inference_key(),
                         )
             else:
                 logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")

@@ -1,12 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Executable pipeline for Safe Synthesizer.
-
-Extends ``ConfigBuilder`` with the ``SafeSynthesizer`` class, which
-adds artifact management (via ``Workdir``) and stepwise pipeline
-execution: ``process_data`` -> ``train`` -> ``generate`` -> ``evaluate``.
-"""
+"""Executable pipeline for Safe Synthesizer."""
 
 from __future__ import annotations
 
@@ -23,15 +18,29 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
-from ..data_processing.validation import validate_groupby_column, validate_orderby_column
+from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
+from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
+from ..package_info import __version__
 from ..pii_replacer.nemo_pii import NemoPII
+from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
+from ..telemetry import (
+    DeploymentTypeEnum,
+    NSSTrainingAndGenerationEvent,
+    TaskStatusEnum,
+    TelemetryHandler,
+    _deployment_type,
+    _telemetry_enabled,
+    bucket_columns,
+    bucket_records,
+    sanitize_model_for_telemetry,
+)
 from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
@@ -40,6 +49,70 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from ..generation.backend import GeneratorBackend
     from ..training.backend import TrainingBackend
+
+
+def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
+    """Build a telemetry event from the current pipeline state."""
+    cfg = ss._nss_config
+
+    duration = time.monotonic() - ss._total_start if ss._total_start is not None else -1.0
+
+    num_records = -1
+    sqs = -1.0
+    dps = -1.0
+    if hasattr(ss, "results") and ss.results is not None:
+        summary = ss.results.summary
+        if summary.num_valid_records is not None:
+            num_records = summary.num_valid_records
+        if summary.synthetic_data_quality_score is not None:
+            sqs = summary.synthetic_data_quality_score
+        if summary.data_privacy_score is not None:
+            dps = summary.data_privacy_score
+
+    replace_pii = cfg is not None and cfg.replace_pii is not None
+    dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
+    ts_enabled = cfg is not None and cfg.time_series.is_timeseries
+    group_by = cfg is not None and cfg.data.group_training_examples_by is not None
+    model = sanitize_model_for_telemetry(cfg.training.pretrained_model if cfg is not None else None)
+
+    records_bucket = "undefined"
+    columns_bucket = "undefined"
+    if isinstance(ss._data_source, pd.DataFrame):
+        records_bucket = bucket_records(len(ss._data_source))
+        columns_bucket = bucket_columns(len(ss._data_source.columns))
+
+    gpu = get_device_name()
+
+    return NSSTrainingAndGenerationEvent(
+        task="run",
+        task_status=status,
+        deployment_type=ss._deployment_type,
+        job_duration_sec=duration,
+        num_records_generated=num_records,
+        replace_pii_enabled=replace_pii,
+        differential_privacy_enabled=dp_enabled,
+        time_series_enabled=ts_enabled,
+        group_by_enabled=group_by,
+        input_records_bucket=records_bucket,
+        input_columns_bucket=columns_bucket,
+        synthetic_quality_score=sqs,
+        data_privacy_score=dps,
+        model=model,
+        gpu=gpu,
+    )
+
+
+def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
+    """Enqueue and immediately flush a single telemetry event. Never raises."""
+    try:
+        if not ss._emit_telemetry:
+            return
+        event = _build_telemetry_event(ss, status)
+        handler = TelemetryHandler(source_client_version=__version__)
+        handler.enqueue(event)
+        handler.stop()  # Flushes the queue and sends
+    except Exception:  # noqa: BLE001
+        pass  # Telemetry is best-effort; never disrupt the pipeline
 
 
 class SafeSynthesizer(ConfigBuilder):
@@ -53,6 +126,11 @@ class SafeSynthesizer(ConfigBuilder):
         builder.process_data().train().generate().evaluate()
         builder.save_results()
         results = builder.results
+
+    ``train()`` uses ``HuggingFaceBackend``. ``generate()`` chooses
+    ``TimeseriesBackend`` when ``config.time_series.is_timeseries`` is true and
+    ``VllmBackend`` otherwise. Stepwise callers must call ``save_results()``
+    themselves after ``evaluate()``; ``run()`` does this automatically.
 
     Args:
         config: Optional pre-built parameters that seed every
@@ -91,11 +169,16 @@ class SafeSynthesizer(ConfigBuilder):
     results: SafeSynthesizerResults
     """Final pipeline results, populated after ``evaluate()`` or ``run()``."""
 
+    _emit_telemetry: bool
+    _deployment_type: DeploymentTypeEnum
+
     def __init__(
         self,
         config: SafeSynthesizerParameters | None = None,
         workdir: Workdir | None = None,
         save_path: Path | str | None = None,
+        emit_telemetry: bool | None = None,
+        deployment_type: DeploymentTypeEnum | None = None,
     ):
         super().__init__(config=config)
         self._workdir = workdir
@@ -120,6 +203,17 @@ class SafeSynthesizer(ConfigBuilder):
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
         self._loaded_from_save_path: bool = False
+        self.preflight_report: PreflightReport | None = None
+        self._data_processed: bool = False
+        self._preflight_config_path: Path | None = None
+        self._emit_telemetry: bool = emit_telemetry if emit_telemetry is not None else self._config_emit_telemetry()
+        self._deployment_type: DeploymentTypeEnum = (
+            deployment_type if deployment_type is not None else _deployment_type()
+        )
+
+    def _config_emit_telemetry(self) -> bool:
+        """Return the current config's telemetry setting, defaulting on before resolution."""
+        return _telemetry_enabled() if self._nss_config is None else self._nss_config.emit_telemetry
 
     def _ensure_observability(self) -> None:
         """Initialize structured logging when running via the SDK.
@@ -204,7 +298,7 @@ class SafeSynthesizer(ConfigBuilder):
         return self
 
     @traced("SafeSynthesizer.process_data", category=LogCategory.RUNTIME)
-    def process_data(self) -> SafeSynthesizer:
+    def process_data(self, check_only: bool = False) -> SafeSynthesizer:
         """Perform train/test split, auto-config resolution, and optional PII replacement.
 
         Validates configured grouping/ordering columns against the input
@@ -212,6 +306,18 @@ class SafeSynthesizer(ConfigBuilder):
         ``AutoConfigResolver`` to resolve ``"auto"`` parameters, applies
         PII replacement to the training set when enabled, and persists the
         splits to the workdir.
+
+        When ``check_only`` is ``True`` (the ``--validate`` path), PII
+        replacement is intentionally skipped and CSV writes are elided; a
+        resolved config YAML is written instead. Preflight therefore sees
+        the *pre-replacement* training split, which is a known gap: PII
+        replacement can change token lengths, so a clean ``--validate``
+        does not guarantee a full run will pass token-budget checks. See
+        the "``--validate`` is best-effort" callout in
+        ``docs/user-guide/running.md``.
+
+        Args:
+            check_only: If ``True``, run preflight checks only (validation mode).
 
         Returns:
             Self for method chaining.
@@ -233,8 +339,20 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        validate_groupby_column(self._data_source, self._nss_config.data.group_training_examples_by)
-        validate_orderby_column(self._data_source, self._nss_config.data.order_training_examples_by)
+        # Run the config/dataframe stages before holdout so invalid column
+        # settings produce structured preflight issues instead of downstream
+        # pandas/sklearn errors. The later full preflight run still uses the
+        # final training split and real metadata for split-dependent checks.
+        preflight = run_preflight(
+            self._data_source,
+            self._nss_config,
+            ModelMetadata.stub(self._nss_config),
+            stages=frozenset({PreflightStage.CONFIG, PreflightStage.DATAFRAME}),
+        )
+        self.preflight_report = preflight
+        if preflight.errors:
+            summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
+            raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
 
         holdout = Holdout(self._nss_config)
         original_training_df, self._test_df = holdout.train_test_split(self._data_source)
@@ -249,7 +367,14 @@ class SafeSynthesizer(ConfigBuilder):
         resolved_config = resolver()
         self._nss_config = resolved_config
 
-        if self._nss_config.replace_pii is not None:
+        # PII replacement is skipped on the validate path (``check_only=True``).
+        # Rationale: the replacer makes network calls to the PII classifier
+        # and can take minutes on large datasets -- incompatible with the
+        # fast fail-fast semantics of ``--validate``. The consequence is
+        # that preflight sees the pre-replacement training split; replacement
+        # text can shift token lengths, so ``--validate`` is documented as
+        # best-effort rather than a guarantee (see user-guide/running.md).
+        if not check_only and self._nss_config.replace_pii is not None:
             replacer = NemoPII(self._nss_config.replace_pii)
             replacer.transform_df(original_training_df)
             assert replacer.result is not None
@@ -260,8 +385,51 @@ class SafeSynthesizer(ConfigBuilder):
             # privacy metrics are valid.
 
         # Only create new metadata if not already loaded (e.g., from load_from_save_path)
-        if self._llm_metadata is None:
-            self._llm_metadata = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+        metadata_for_preflight = self._llm_metadata
+        if metadata_for_preflight is None:
+            if check_only:
+                try:
+                    metadata_for_preflight = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                    self._llm_metadata = metadata_for_preflight
+                except Exception:
+                    logger.user.warning(
+                        "Could not load model metadata (network/cache); token budget checks will be skipped."
+                    )
+                    metadata_for_preflight = ModelMetadata.stub(self._nss_config)
+            else:
+                metadata_for_preflight = ModelMetadata.from_config(self._nss_config, workdir=self._workdir)
+                self._llm_metadata = metadata_for_preflight
+
+        # Persist the resolved config before running preflight so that on
+        # preflight failure the CLI error report can still point at the
+        # config YAML.  ``_preflight_config_path`` is set here (not after
+        # ``run_preflight``) so the error path has a valid location.
+        if check_only:
+            assert self._workdir is not None
+            self._workdir.ensure_directories()
+            config_path = self._workdir.run_dir / "safe-synthesizer-config.yaml"
+            self._nss_config.to_yaml(config_path, exclude_unset=False)
+            self._preflight_config_path = config_path
+
+        preflight = run_preflight(self._training_df, self._nss_config, metadata_for_preflight)
+        self.preflight_report = preflight
+        for issue in preflight.warnings:
+            logger.user.warning(issue.message, extra={"preflight_code": issue.code, "preflight_check": issue.check})
+        if preflight.errors:
+            summary = "\n".join(f"  {e.code}: {e.message}" for e in preflight.errors)
+            raise ParameterError(f"Pre-flight check failed with {len(preflight.errors)} error(s):\n{summary}")
+
+        # If we're in check-only mode, we don't need to process the data further and we'll end the program.
+        # ``_data_processed`` is intentionally *not* set here: the validate →
+        # full-run pattern calls ``process_data(check_only=True)`` followed
+        # by ``process_data()`` on the same instance, and the second call
+        # must rebuild real metadata and apply PII replacement (see
+        # ``TestProcessDataMetadataLifecycle.test_check_only_stub_metadata_not_persisted_for_followup_run``).
+        # Callers who repeat ``process_data(check_only=True)`` pay the
+        # (cheap) preflight cost twice on purpose.
+        if check_only:
+            return self
+
         self._data_processed = True
 
         # Always persist the original training split -- this is the version
@@ -446,8 +614,16 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        self.process_data().train().generate().evaluate()
-        self.save_results(output_file=output_file)
+        try:
+            self.process_data().train().generate().evaluate()
+            self.save_results(output_file=output_file)
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(self, TaskStatusEnum.CANCELED)
+            raise
+        except Exception:
+            _emit_nss_telemetry(self, TaskStatusEnum.ERROR)
+            raise
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> SafeSynthesizer:

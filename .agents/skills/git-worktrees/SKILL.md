@@ -1,6 +1,6 @@
+---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
----
 name: git-worktrees
 description: "Create, manage, and clean up git worktrees for isolated development, PR review, and A/B testing of agent configurations. Trigger keywords - worktree, worktrees, git worktree, parallel branches, isolated workspace, worktree cleanup, worktree prune, PR review, address PR comments, work on branch, work on PR."
 license: Apache-2.0
@@ -29,10 +29,10 @@ uv sync --frozen
 
 This creates a local `.venv` in the worktree. With uv's cache the install takes ~2-3 seconds on a warm cache.
 
-If you need different extras (e.g. `cu128` vs `cpu`), pass them explicitly:
+If you need different extras (e.g. `cu129` vs `cpu`), pass them explicitly:
 
 ```bash
-uv sync --frozen --extra cu128 --extra engine --group dev
+uv sync --frozen --extra cu129 --extra engine --group dev
 ```
 
 Never run bare `uv sync` without `--frozen` -- it re-locks `uv.lock` and creates dirty state.
