@@ -9746,7 +9746,7 @@ for the full field list. For DP error diagnostics, see
 <tr>
 <td><code>data.max_sequences_per_example</code></td>
 <td><code>"auto"</code></td>
-<td>Max sequences per example (<code>1</code> for DP, defaults to <code>10</code> otherwise)</td>
+<td>Max sequences per example (<code>1</code> for DP, <code>null</code> for time series, <code>10</code> otherwise). <code>null</code> lets each example fill the context window. DP and time-series mode cannot be enabled together.</td>
 <td>Leave at <code>"auto"</code></td>
 </tr>
 </tbody>
