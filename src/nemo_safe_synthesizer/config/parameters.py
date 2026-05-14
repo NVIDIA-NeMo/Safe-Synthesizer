@@ -125,8 +125,7 @@ class SafeSynthesizerParameters(Parameters):
                     pass
                 case invalid:
                     raise ParameterError(
-                        "When enabling DP, max_sequences_per_example must be 1, 'auto', or None. "
-                        f"Received: {invalid!r}"
+                        f"When enabling DP, max_sequences_per_example must be 1, 'auto', or None. Received: {invalid!r}"
                     )
             return self
 
