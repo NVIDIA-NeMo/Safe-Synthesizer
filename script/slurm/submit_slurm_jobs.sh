@@ -22,8 +22,8 @@ ACCOUNT="${ACCOUNT:-nemotron_data_dev}"
 TIME_LIMIT="04:00:00"
 TRAIN_TIME_LIMIT=""
 GENERATE_TIME_LIMIT=""
-# Optional handoff for external orchestrators: record the submitted array id so
-# a separate wait/resume step can monitor the exact Slurm job.
+# Optional end-to-end-mode handoff for external orchestrators: record the
+# submitted array id so a separate wait/resume step can monitor the exact Slurm job.
 JOB_ID_FILE=""
 
 # Parse flags (order-independent). Unknown flags are ignored.
@@ -70,7 +70,7 @@ while [ $# -gt 0 ]; do
       echo "    --nss-version VERSION  install nemo-safe-synthesizer==VERSION from PyPI instead of syncing the repo"
       echo "                           example: --nss-version 0.2.3"
       echo "                           if omitted, the repo at NSS_DIR is used (default behavior)"
-      echo "    --job-id-file PATH     write submitted end-to-end Slurm array job id to PATH"
+      echo "    --job-id-file PATH     write submitted Slurm array job id to PATH; only supported with --pipeline-mode end_to_end"
 
       exit 0;;
     --) shift; break;;
@@ -98,6 +98,12 @@ fi
 
 if [[ "$PIPELINE_MODE" != "two_stage" && "$PIPELINE_MODE" != "end_to_end" ]]; then
   echo "ERROR: --pipeline-mode must be one of: two_stage, end_to_end: '$PIPELINE_MODE'" >&2
+  exit 1
+fi
+
+if [[ -n "${JOB_ID_FILE:-}" && "${PIPELINE_MODE}" != "end_to_end" ]]; then
+  echo "ERROR: --job-id-file is only supported with --pipeline-mode end_to_end." >&2
+  echo "Two-stage mode submits separate train and generate arrays, which are not represented by this file." >&2
   exit 1
 fi
 
