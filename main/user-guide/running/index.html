@@ -10827,14 +10827,14 @@ precision. Set <code>training.quantize_model</code> to <code>true</code> and cho
 </div>
 <h3 id="attention-backends">Attention Backends<a class="headerlink" href="#attention-backends" title="Permanent link">&para;</a></h3>
 <p><code>training.attn_implementation</code> controls which attention kernel is used when
-loading the model. The default uses Flash Attention 3 via the HuggingFace
-Kernels Hub and falls back to <code>sdpa</code> when the <code>kernels</code> package is not
-installed.</p>
+loading the model. The default is <code>sdpa</code>, which uses PyTorch scaled
+dot-product attention and does not require a separate attention package.</p>
 <p>Common values:</p>
 <ul>
-<li><code>kernels-community/vllm-flash-attn3</code>: Flash Attention 3 (default, requires <code>kernels</code> package)</li>
+<li><code>sdpa</code>: PyTorch scaled dot-product attention -- default and broadest compatibility</li>
+<li><code>kernels-community/vllm-flash-attn3</code>: Flash Attention 3 (requires <code>kernels</code> package and a compatible prebuilt kernel)</li>
 <li><code>flash_attention_2</code>: Flash Attention 2 (requires <code>flash-attn</code> package)</li>
-<li><code>sdpa</code>: PyTorch scaled dot-product attention -- broadest compatibility</li>
+<li><code>flash_attention_3</code>: Flash Attention 3 (requires <code>flash-attn-3</code> support)</li>
 <li><code>eager</code>: standard PyTorch attention -- useful for debugging</li>
 </ul>
 <div class="admonition note">

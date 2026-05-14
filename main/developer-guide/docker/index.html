@@ -9429,7 +9429,7 @@ uses a four-stage multistage build:</p>
 
     subgraph stages [Build Stages]
         tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
-        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu128+engine"]
+        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu129+engine"]
         runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
         dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
     end
@@ -9448,7 +9448,7 @@ uses a four-stage multistage build:</p>
   Uses the <a href="https://mise.jdx.dev/mise-cookbook/docker.html">mise Docker cookbook</a>
   pattern with <code>MISE_DATA_DIR=/mise</code> for stable, copyable paths.</li>
 <li>deps: copies the uv binary from <code>tools</code>, then installs Python and all
-  cu128+engine dependencies. Uses <code>--mount=type=cache</code> to avoid
+  cu129+engine dependencies. Uses <code>--mount=type=cache</code> to avoid
   re-downloading ~10 GB of PyTorch/CUDA wheels.</li>
 <li>runtime: copies the venv and uv-managed Python into a fresh CUDA runtime
   base. Runs as non-root <code>appuser</code> (uid 1000). GPU access is declared via
@@ -9766,12 +9766,12 @@ and CUDA libraries. This is expected for a full ML inference stack.</p>
 <tbody>
 <tr>
 <td>Base</td>
-<td><code>nvidia/cuda:12.8.1-runtime-ubuntu22.04</code></td>
+<td><code>nvidia/cuda:12.9.1-runtime-ubuntu22.04</code></td>
 <td><code>python:3.11-slim</code></td>
 </tr>
 <tr>
 <td>Extras</td>
-<td><code>cu128</code> + <code>engine</code></td>
+<td><code>cu129</code> + <code>engine</code></td>
 <td><code>cpu</code> + <code>engine</code></td>
 </tr>
 <tr>
