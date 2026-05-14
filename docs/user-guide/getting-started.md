@@ -36,7 +36,8 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
         ```bash
         pip install "nemo-safe-synthesizer[cu129,engine]" \
           --extra-index-url https://download.pytorch.org/whl/cu129 \
-          --extra-index-url https://flashinfer.ai/whl/cu129
+          --extra-index-url https://flashinfer.ai/whl/cu129 \
+          --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
         ```
 
     === "uv"
@@ -45,6 +46,7 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
         uv pip install "nemo-safe-synthesizer[cu129,engine]" \
           --index https://flashinfer.ai/whl/cu129 \
           --index https://download.pytorch.org/whl/cu129 \
+          --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
           --index-strategy unsafe-best-match
         ```
 

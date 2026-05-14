@@ -113,8 +113,9 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     uv venv --python 3.11 "${PYPI_VENV}"
     source "${PYPI_VENV}/bin/activate"
     uv pip install "nemo-safe-synthesizer[cu129,engine]==${NSS_VERSION}" \
-        --extra-index-url https://download.pytorch.org/whl/cu129 \
-        --extra-index-url https://flashinfer.ai/whl/cu129 \
+        --index https://flashinfer.ai/whl/cu129 \
+        --index https://download.pytorch.org/whl/cu129 \
+        --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
         --index-strategy unsafe-best-match
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION}"
