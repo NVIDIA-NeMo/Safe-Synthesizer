@@ -13,7 +13,7 @@ NSS_ROOT_PATH := $(shell pwd)
 # Normalize architecture names
 ifeq ($(ARCH),x86_64)
 	ARCH := amd64
-	PYTORCH_DEPS := cu128
+	PYTORCH_DEPS := cu129
 	export BUILD_ARCH ?= linux/amd64
 endif
 ifeq ($(ARCH),aarch64)
@@ -82,12 +82,12 @@ verify-python-version: ## Verify Python version and install if necessary
 	uv venv --seed --allow-existing --python 3.11
 
 .PHONY: bootstrap-python
-bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu128'. Here mostly for legacy usage.
+bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu129'. Here mostly for legacy usage.
 	uv sync --frozen --extra ${PYTORCH_DEPS} --extra engine --group dev
 
 # Dynamic targets for bootstrap-nss
 # Usage: make bootstrap-nss {dev,engine,cpu,cuda}
-BOOTSTRAP_EXTRAS := dev engine cpu cuda cu128
+BOOTSTRAP_EXTRAS := dev engine cpu cuda cu129
 $(BOOTSTRAP_EXTRAS):
 	@:
 
@@ -97,9 +97,9 @@ bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss
 	@echo "~~~~~~"
 	@echo "attempting to install nss package with primary extra: $(EXTRA)"
 	@if [ "$(EXTRA)" = "cuda" ]; then \
-		uv sync --frozen --extra cu128 --extra engine --group dev; \
-	elif [ "$(EXTRA)" = "cu128" ]; then \
-		uv sync --frozen --extra cu128 --extra engine --group dev; \
+		uv sync --frozen --extra cu129 --extra engine --group dev; \
+	elif [ "$(EXTRA)" = "cu129" ]; then \
+		uv sync --frozen --extra cu129 --extra engine --group dev; \
 	elif [ "$(EXTRA)" = "cpu" ]; then \
 		uv sync --frozen --extra cpu --extra engine --group dev; \
 	elif [ "$(EXTRA)" = "engine" ]; then \
@@ -489,7 +489,7 @@ NSS_DATASETS := clinc_oos dow_jones_index
 
 define nss_combo_test
 test-nss-$(1)-$(2)-ci: ## Run pytest test for $(shell echo $(1) | tr '_' '-') config with $(shell echo $(2) | tr '_' '-') dataset
-	$(MAKE) bootstrap-nss cu128
+	$(MAKE) bootstrap-nss cu129
 	$(PYTEST_NO_XDIST_CMD) -vv $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests/e2e/test_dataset_config.py -k "test_$(2)_dataset[$(subst _,-,$(1))]"
 endef
 

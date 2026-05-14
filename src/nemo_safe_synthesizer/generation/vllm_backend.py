@@ -42,6 +42,12 @@ if torch.cuda.is_available():
 else:
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 
+# vLLM 0.20+ runs a deep_gemm FP8 kernel warmup during engine init that crashes
+# when the optional `deep_gemm` package isn't installed. We don't use FP8 kernels
+# for the supported NSS models, so default the warmup off; users can still opt
+# in by exporting VLLM_USE_DEEP_GEMM=1.
+os.environ.setdefault("VLLM_USE_DEEP_GEMM", "0")
+
 
 def _is_redis_available() -> bool:
     """Return True if the ``redis`` package is importable."""

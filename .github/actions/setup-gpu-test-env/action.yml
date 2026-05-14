@@ -27,7 +27,7 @@ inputs:
   cuda-extra:
     description: "CUDA dependency extra to bootstrap"
     required: false
-    default: "cu128"
+    default: "cu129"
 
 runs:
   using: "composite"

@@ -18,15 +18,17 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ```bash
 # With uv (recommended):
-uv pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --index https://flashinfer.ai/whl/cu128 \
-  --index https://download.pytorch.org/whl/cu128 \
+uv pip install "nemo-safe-synthesizer[cu129,engine]" \
+  --index https://flashinfer.ai/whl/cu129 \
+  --index https://download.pytorch.org/whl/cu129 \
+  --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
   --index-strategy unsafe-best-match
 
 # With pip:
-pip install "nemo-safe-synthesizer[cu128,engine]" \
-  --extra-index-url https://download.pytorch.org/whl/cu128 \
-  --extra-index-url https://flashinfer.ai/whl/cu128
+pip install "nemo-safe-synthesizer[cu129,engine]" \
+  --extra-index-url https://download.pytorch.org/whl/cu129 \
+  --extra-index-url https://flashinfer.ai/whl/cu129 \
+  --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
 ```
 
 Or install from source:
@@ -210,7 +212,7 @@ Controls the HuggingFace attention backend used during model loading for trainin
 ```yaml
 # config.yaml
 training:
-  attn_implementation: "kernels-community/vllm-flash-attn3"
+  attn_implementation: "sdpa"
 ```
 
 ```bash
@@ -220,13 +222,14 @@ safe-synthesizer run --training__attn_implementation sdpa --data-source my_data.
 
 | Value | Description | Requires |
 |-------|-------------|----------|
-| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub (default) | `kernels` pip package |
-| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
-| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
-| `sdpa` | PyTorch scaled dot product attention | None (built-in) |
+| `sdpa` | PyTorch scaled dot product attention (default) | None (built-in) |
 | `eager` | Standard PyTorch attention | None (built-in) |
+| `kernels-community/flash-attn2` | Flash Attention 2 via HuggingFace Kernels Hub | `kernels` pip package |
+| `kernels-community/vllm-flash-attn3` | Flash Attention 3 via HuggingFace Kernels Hub | `kernels` pip package and compatible prebuilt kernel |
+| `flash_attention_2` | Flash Attention 2 (traditional) | `flash-attn` pip package |
+| `flash_attention_3` | Flash Attention 3 (traditional) | `flash-attn-3` support |
 
-If the default `kernels-community/vllm-flash-attn3` is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
+If a `kernels-community/...` value is configured but the `kernels` package is not installed, the backend automatically falls back to `sdpa`.
 
 ### Generation (`attention_backend`)
 

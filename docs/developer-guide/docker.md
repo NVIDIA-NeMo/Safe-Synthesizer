@@ -24,7 +24,7 @@ flowchart TD
 
     subgraph stages [Build Stages]
         tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
-        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu128+engine"]
+        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu129+engine"]
         runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
         dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
     end
@@ -44,7 +44,7 @@ flowchart TD
   Uses the [mise Docker cookbook](https://mise.jdx.dev/mise-cookbook/docker.html)
   pattern with `MISE_DATA_DIR=/mise` for stable, copyable paths.
 - deps: copies the uv binary from `tools`, then installs Python and all
-  cu128+engine dependencies. Uses `--mount=type=cache` to avoid
+  cu129+engine dependencies. Uses `--mount=type=cache` to avoid
   re-downloading ~10 GB of PyTorch/CUDA wheels.
 - runtime: copies the venv and uv-managed Python into a fresh CUDA runtime
   base. Runs as non-root `appuser` (uid 1000). GPU access is declared via
@@ -262,8 +262,8 @@ To reduce size:
 
 | Aspect | `Dockerfile.cuda` | `Dockerfile.test_ci` |
 |--------|-------------------|----------------------|
-| Base | `nvidia/cuda:12.8.1-runtime-ubuntu22.04` | `python:3.11-slim` |
-| Extras | `cu128` + `engine` | `cpu` + `engine` |
+| Base | `nvidia/cuda:12.9.1-runtime-ubuntu22.04` | `python:3.11-slim` |
+| Extras | `cu129` + `engine` | `cpu` + `engine` |
 | GPU | Required | Not needed |
 | Stages | `tools` / `deps` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |
