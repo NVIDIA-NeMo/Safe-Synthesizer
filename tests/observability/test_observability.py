@@ -822,10 +822,13 @@ class TestHeartbeat:
         assert has_elapsed, f"elapsed_seconds not found in records: {caplog.text}"
 
     def test_heartbeat_logs_failure_on_exception(self, caplog):
+        def fail() -> None:
+            raise RuntimeError("boom")
+
         caplog.set_level(logging.INFO)
         with pytest.raises(RuntimeError):
             with heartbeat("Failing op", interval=60.0):
-                raise RuntimeError("boom")
+                fail()
 
         assert "Failing op failed" in caplog.text
         assert "Failing op complete" not in caplog.text

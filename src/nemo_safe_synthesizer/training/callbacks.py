@@ -171,8 +171,8 @@ class InferenceEvalCallback(TrainerCallback):
             duration_string = f"{duration:.1f} seconds" if duration < 120 else f"{duration / 60:.1f} minutes"
             logger.info(f"Generation time: {duration_string}")
 
-            if self.generation.status != GenerationStatus.IN_PROGRESS:
-                break
+            if self.generation.status == GenerationStatus.IN_PROGRESS:
+                continue
 
             control.should_training_stop = True
             if self.generation.status == GenerationStatus.STOP_NO_RECORDS:

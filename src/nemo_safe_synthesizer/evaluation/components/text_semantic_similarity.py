@@ -439,15 +439,11 @@ class TextSemanticSimilarity(Component):
         )
         text_semantic_similarity_overfitting_factor.notes = warning_message
 
-        try:
-            return (
-                text_semantic_similarity,
-                text_semantic_similarity_underfitting_factor,
-                text_semantic_similarity_overfitting_factor,
-            )
-        except Exception:
-            logger.exception("Failed to scale and finalize text semantic similarity.")
-        return EvaluationScore(), EvaluationScore(), EvaluationScore()
+        return (
+            text_semantic_similarity,
+            text_semantic_similarity_underfitting_factor,
+            text_semantic_similarity_overfitting_factor,
+        )
 
     ##
     ## PCA
