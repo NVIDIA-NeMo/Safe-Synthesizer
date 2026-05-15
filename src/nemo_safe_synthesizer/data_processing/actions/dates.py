@@ -370,7 +370,7 @@ def maybe_d_str_to_fmt_multiple(input_date: str) -> Iterator[str]:
     try:
         yield from d_str_to_fmt_multiple(input_date)
     except ValueError:
-        pass
+        return
 
 
 def d_str_to_fmt(input_date: str) -> Optional[str]:
@@ -432,7 +432,7 @@ def fit_and_transform_dates(
                         "min": str(min_date),
                     }
                 except (ValueError, TypeError):
-                    pass
+                    continue
     return date_min_dict, result_df
 
 

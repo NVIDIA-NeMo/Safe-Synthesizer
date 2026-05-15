@@ -147,7 +147,7 @@ class NSSObservabilitySettings(BaseSettings):
                     if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
                         return "plain"
                 except (ImportError, AttributeError):
-                    pass
+                    return "json"
                 return "json"
 
     @field_validator("nss_log_color", mode="before")

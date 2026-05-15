@@ -70,16 +70,14 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
         if t == v:
             return t
     except Exception:
-        pass
+        t = None
 
     try:
         # Convert to python float if possible
         return float(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
     except Exception:
-        pass
-
-    # Otherwise, ensure we're using a python str to avoid json encoding errors
-    return str(v)
+        # Otherwise, ensure we're using a python str to avoid json encoding errors.
+        return str(v)
 
 
 def check_enum_type(

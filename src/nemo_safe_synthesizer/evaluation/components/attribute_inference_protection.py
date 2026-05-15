@@ -192,7 +192,7 @@ class AttributeInferenceProtection(Component):
             try:
                 value = float(value)
             except (ValueError, TypeError):
-                pass
+                value = str(value)
 
         if isinstance(value, float) and math.isnan(value):
             # don't try to match something that is NaN

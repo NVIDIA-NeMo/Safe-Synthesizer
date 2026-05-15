@@ -145,13 +145,13 @@ def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series) -> 
     try:
         bins = np.histogram_bin_edges(pd.concat([training, synthetic]), bins="doane", range=(min_value, max_value))
     except Exception:
-        pass
+        bins = np.array([], dtype=np.float64)
     # If 'doane' still doesn't do the trick just force 500 bins.
     if len(bins) == 0 or len(bins) > 500:
         try:
             bins = np.histogram_bin_edges(pd.concat([training, synthetic]), bins=500, range=(min_value, max_value))
         except Exception:
-            pass
+            bins = np.array([], dtype=np.float64)
     return bins
 
 
