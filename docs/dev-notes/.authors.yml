@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+authors:
+  kendrickb:
+    name: Kendrick Boyd
+    description: Researcher at NVIDIA
+    avatar: https://github.com/kendrickb-nvidia.png
+  ahaushalter:
+    name: Alexa Haushalter
+    description: Product Manager at NVIDIA
+    avatar: https://github.com/alexahaushalter.png

@@ -78,7 +78,7 @@ hooks:
 plugins:
   - search
   - blog:
-      blog_dir: blog
+      blog_dir: dev-notes
       blog_toc: true
       post_date_format: long
       post_url_format: "{slug}"
@@ -189,5 +189,5 @@ nav:
       - Observability: developer-guide/observability.md
       - Preflight Plugins: developer-guide/preflight-plugins.md
       - API Reference: reference/
-  - Developer Notes:
-      - blog/index.md
+  - Dev Notes:
+      - dev-notes/index.md
