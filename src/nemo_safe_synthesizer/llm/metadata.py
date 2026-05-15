@@ -25,9 +25,10 @@ from ..defaults import (
     MAX_ROPE_SCALING_FACTOR,
     PROMPT_TEMPLATE,
 )
+from ..errors import ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
-from .utils import trust_remote_code_for_model
+from .utils import ModelRef
 
 logger = get_logger(__name__)
 
@@ -95,9 +96,12 @@ class LLMPromptConfig(BaseModel):
         Returns:
             A new ``LLMPromptConfig`` populated from the tokenizer.
         """
-        tokenizer = tokenizer or AutoTokenizer.from_pretrained(
-            name, trust_remote_code=trust_remote_code_for_model(name)
-        )
+        if tokenizer is None:
+            model_ref = ModelRef.parse(name)
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_ref.target(),
+                trust_remote_code=model_ref.trust_remote_code,
+            )
         bos_token = kwargs.get("bos_token", getattr(tokenizer, "bos_token", None))
         bos_token_id = kwargs.get("bos_token_id", getattr(tokenizer, "bos_token_id", None))
         eos_token = kwargs.get("eos_token", getattr(tokenizer, "eos_token", None))
@@ -161,6 +165,22 @@ def resolve_rope_scaling_factor(
             raise ValueError("autoconfig is required when factor is not a RopeScaling, dict, or int/float")
         case _, _:
             raise ValueError("Invalid input type for rope scaling factor")
+
+
+def _model_load_parameter_error(model_name_or_path: str, err: OSError) -> ParameterError:
+    """Return user-facing guidance for model metadata load failures."""
+    message = str(err)
+    if "couldn't connect to 'https://huggingface.co'" in message or "outgoing traffic has been disabled" in message:
+        return ParameterError(
+            f"Could not load model metadata for '{model_name_or_path}' from the local Hugging Face cache. "
+            "Hugging Face access appears to be offline or disabled, and the model files were not found locally. "
+            "Either pre-download the model into the Hugging Face cache, pass a local model path, or unset "
+            f"`HF_HUB_OFFLINE`/`TRANSFORMERS_OFFLINE` to allow online lookup. Original error: {message}"
+        )
+    return ParameterError(
+        f"Could not load model metadata for '{model_name_or_path}'. Ensure the model is a Transformers-compatible "
+        f"causal language model, is accessible, and has config/tokenizer files available. Original error: {message}"
+    )
 
 
 class RopeScaling(BaseModel):
@@ -345,10 +365,14 @@ class ModelMetadata(BaseModel):
         """
         if data.get("autoconfig") is None:
             model_name_or_path = data["model_name_or_path"]
-            data["autoconfig"] = AutoConfig.from_pretrained(
-                model_name_or_path,
-                trust_remote_code=trust_remote_code_for_model(model_name_or_path),
-            )
+            model_ref = ModelRef.parse(model_name_or_path)
+            try:
+                data["autoconfig"] = AutoConfig.from_pretrained(
+                    model_ref.target(),
+                    trust_remote_code=model_ref.trust_remote_code,
+                )
+            except OSError as err:
+                raise _model_load_parameter_error(model_name_or_path, err) from err
 
         if data.get("base_max_seq_length") is None:
             data["base_max_seq_length"] = get_base_max_seq_length(data["autoconfig"])
@@ -476,10 +500,18 @@ class ModelMetadata(BaseModel):
         Returns:
             A ``(config, tokenizer)`` tuple ready to pass to ``super().__init__``.
         """
-        trust = trust_remote_code_for_model(model_name_or_path)
-        config: PretrainedConfig = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=trust)
-        if tokenizer is None:
-            tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=trust)
+        model_ref = ModelRef.parse(model_name_or_path)
+        try:
+            config: PretrainedConfig = AutoConfig.from_pretrained(
+                model_ref.target(), trust_remote_code=model_ref.trust_remote_code
+            )
+            if tokenizer is None:
+                tokenizer = AutoTokenizer.from_pretrained(
+                    model_ref.target(),
+                    trust_remote_code=model_ref.trust_remote_code,
+                )
+        except OSError as err:
+            raise _model_load_parameter_error(model_name_or_path, err) from err
         return config, tokenizer
 
     @classmethod

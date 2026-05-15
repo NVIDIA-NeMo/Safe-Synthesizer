@@ -15,11 +15,11 @@ does at each stage.
 ### Prerequisites
 
 - Python 3.11–3.13 (dev tooling currently pins 3.11 via `.python-version` in the repo root; Python 3.14+ is **not** supported — see [Troubleshooting](troubleshooting.md#python-314-is-not-supported))
-- CUDA runtime 12.8+
+- CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
 !!! failure "Linux only -- macOS, Windows, and Apple Silicon are not supported"
-    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.8+
+    NeMo Safe Synthesizer requires a Linux machine with an NVIDIA GPU and CUDA 12.9+
     to run the training and generation pipeline. The [CPU install tab below](#install-the-package)
     is for development and configuration validation only -- it cannot train models or
     generate synthetic data.
@@ -29,22 +29,24 @@ does at each stage.
 The CUDA and CPU extras depend on packages (PyTorch, FlashInfer) hosted on
 indexes outside PyPI. You must pass the extra index URLs shown below.
 
-=== "CUDA 12.8 (Linux with NVIDIA GPU)"
+=== "CUDA 12.9 (Linux with NVIDIA GPU)"
 
     === "pip"
 
         ```bash
-        pip install "nemo-safe-synthesizer[cu128,engine]" \
-          --extra-index-url https://download.pytorch.org/whl/cu128 \
-          --extra-index-url https://flashinfer.ai/whl/cu128
+        pip install "nemo-safe-synthesizer[cu129,engine]" \
+          --extra-index-url https://download.pytorch.org/whl/cu129 \
+          --extra-index-url https://flashinfer.ai/whl/cu129 \
+          --extra-index-url https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129
         ```
 
     === "uv"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer[cu128,engine]" \
-          --index https://flashinfer.ai/whl/cu128 \
-          --index https://download.pytorch.org/whl/cu128 \
+        uv pip install "nemo-safe-synthesizer[cu129,engine]" \
+          --index https://flashinfer.ai/whl/cu129 \
+          --index https://download.pytorch.org/whl/cu129 \
+          --index https://wheels.vllm.ai/88d34c6409e9fb3c7b8ca0c04756f061d2099eb1/cu129 \
           --index-strategy unsafe-best-match
         ```
 
@@ -157,6 +159,23 @@ Commands:
   config     Manage Safe Synthesizer configurations.
   run        Run the Safe Synthesizer end-to-end pipeline.
 ```
+
+### Optional Agent Skill
+
+This repository includes an Agent Skill at `.agents/skills/safe-synthesizer/`.
+When working from a source checkout, no separate install step is required for
+agents that discover project skills from `.agents/skills/`.
+
+Use it by asking an agent a Safe Synthesizer usage question, or by explicitly
+invoking the skill in an agent that supports slash-style skill calls, for
+example:
+`/safe-synthesizer How do I run on a CSV with DP enabled?`
+
+The skill routes common requests to task notes for running the CLI or SDK,
+setting parameters, diagnosing failures, and finding artifacts. It points the
+agent back to this user guide and the developer guide instead of duplicating
+the full documentation. For copy-based installs into another project or a
+user-level skill directory, see `.agents/skills/safe-synthesizer/README.md`.
 
 ---
 

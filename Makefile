@@ -13,7 +13,7 @@ NSS_ROOT_PATH := $(shell pwd)
 # Normalize architecture names
 ifeq ($(ARCH),x86_64)
 	ARCH := amd64
-	PYTORCH_DEPS := cu128
+	PYTORCH_DEPS := cu129
 	export BUILD_ARCH ?= linux/amd64
 endif
 ifeq ($(ARCH),aarch64)
@@ -82,12 +82,12 @@ verify-python-version: ## Verify Python version and install if necessary
 	uv venv --seed --allow-existing --python 3.11
 
 .PHONY: bootstrap-python
-bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu128'. Here mostly for legacy usage.
+bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu129'. Here mostly for legacy usage.
 	uv sync --frozen --extra ${PYTORCH_DEPS} --extra engine --group dev
 
 # Dynamic targets for bootstrap-nss
 # Usage: make bootstrap-nss {dev,engine,cpu,cuda}
-BOOTSTRAP_EXTRAS := dev engine cpu cuda cu128
+BOOTSTRAP_EXTRAS := dev engine cpu cuda cu129
 $(BOOTSTRAP_EXTRAS):
 	@:
 
@@ -97,9 +97,9 @@ bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss
 	@echo "~~~~~~"
 	@echo "attempting to install nss package with primary extra: $(EXTRA)"
 	@if [ "$(EXTRA)" = "cuda" ]; then \
-		uv sync --frozen --extra cu128 --extra engine --group dev; \
-	elif [ "$(EXTRA)" = "cu128" ]; then \
-		uv sync --frozen --extra cu128 --extra engine --group dev; \
+		uv sync --frozen --extra cu129 --extra engine --group dev; \
+	elif [ "$(EXTRA)" = "cu129" ]; then \
+		uv sync --frozen --extra cu129 --extra engine --group dev; \
 	elif [ "$(EXTRA)" = "cpu" ]; then \
 		uv sync --frozen --extra cpu --extra engine --group dev; \
 	elif [ "$(EXTRA)" = "engine" ]; then \
@@ -206,8 +206,6 @@ test-smoke: ## Run CPU smoke tests (~few min, no GPU required)
 	$(PYTEST_CMD) -m "smoke and not requires_gpu"
 
 SMOKE_DIR := tests/smoke
-.PHONY: test-smoke-gpu
-test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
 # Uses PYTEST_NO_XDIST_CMD (-n 0) because CUDA device-side asserts poison
 # xdist workers. Groups are split for GPU memory isolation.
 #
@@ -215,16 +213,38 @@ test-smoke-gpu: ## Run GPU smoke tests (requires CUDA)
 #   - Train-only (no vLLM): add pytest.mark.requires_gpu -> auto-discovered below
 #   - Uses vLLM: also add pytest.mark.vllm -> add the file to the vLLM list below
 #   - Downloads from Hub: also add pytest.mark.smollm2 (or similar) -> auto-discovered below
-#
-# 1) Train-only tests share a process (no vLLM, safe to batch).
+
+.PHONY: test-smoke-gpu
+test-smoke-gpu: ## Run all GPU smoke test stages (requires CUDA)
+	$(MAKE) test-smoke-gpu-train-only
+	$(MAKE) test-smoke-gpu-generation
+	$(MAKE) test-smoke-gpu-resume
+	$(MAKE) test-smoke-gpu-structured-generation
+	$(MAKE) test-smoke-gpu-timeseries
+	$(MAKE) test-smoke-gpu-smollm2
+
+.PHONY: test-smoke-gpu-train-only
+test-smoke-gpu-train-only: ## Run GPU train-only smoke tests (no vLLM)
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and not vllm and not smollm2"
-# 2) Each vLLM test file gets its own process -- vLLM pre-allocates all GPU
-#    memory and never releases it within a process.
+
+.PHONY: test-smoke-gpu-generation
+test-smoke-gpu-generation: ## Run GPU generation smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_generation_gpu.py
+
+.PHONY: test-smoke-gpu-resume
+test-smoke-gpu-resume: ## Run GPU resume smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_resume_gpu.py
+
+.PHONY: test-smoke-gpu-structured-generation
+test-smoke-gpu-structured-generation: ## Run GPU structured generation smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_structured_gen_gpu.py
+
+.PHONY: test-smoke-gpu-timeseries
+test-smoke-gpu-timeseries: ## Run GPU timeseries smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/test_nss_timeseries_gpu.py
-# 3) SmolLM2 (Hub download + vLLM) is marker-isolated.
+
+.PHONY: test-smoke-gpu-smollm2
+test-smoke-gpu-smollm2: ## Run GPU SmolLM2 smoke tests
 	$(PYTEST_NO_XDIST_CMD) $(SMOKE_DIR)/ -m "requires_gpu and smollm2"
 
 
@@ -469,7 +489,7 @@ NSS_DATASETS := clinc_oos dow_jones_index
 
 define nss_combo_test
 test-nss-$(1)-$(2)-ci: ## Run pytest test for $(shell echo $(1) | tr '_' '-') config with $(shell echo $(2) | tr '_' '-') dataset
-	$(MAKE) bootstrap-nss cu128
+	$(MAKE) bootstrap-nss cu129
 	$(PYTEST_NO_XDIST_CMD) -vv $(PYTEST_CI_OPTS) $(NSS_ROOT_PATH)/tests/e2e/test_dataset_config.py -k "test_$(2)_dataset[$(subst _,-,$(1))]"
 endef
 

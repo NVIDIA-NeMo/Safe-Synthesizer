@@ -46,6 +46,17 @@ def default_config():
 
 
 @pytest.fixture
+def pretrained_config(default_config):
+    """Return a helper that updates the default pretrained model."""
+
+    def make_config(model: str) -> SafeSynthesizerParameters:
+        default_config.training.pretrained_model = model
+        return default_config
+
+    return make_config
+
+
+@pytest.fixture
 def sample_df():
     """Simple 5-column, 500-row DataFrame for testing."""
     rng = np.random.default_rng(42)

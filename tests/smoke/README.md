@@ -5,8 +5,22 @@ They use tiny or small models and run in seconds (CPU) or a few minutes (GPU).
 
 ```bash
 make test-smoke             # CPU only, no GPU needed
-make test-smoke-gpu          # GPU tests (requires CUDA)
+make test-smoke-gpu          # All staged GPU smoke tests (requires CUDA)
+make test-smoke-gpu-train-only
+make test-smoke-gpu-generation
+make test-smoke-gpu-resume
+make test-smoke-gpu-structured-generation
+make test-smoke-gpu-timeseries
+make test-smoke-gpu-smollm2
 ```
+
+Telemetry smoke is opt-in because it sends a real network request:
+
+```bash
+NSS_TELEMETRY_SMOKE_SEND=1 uv run --frozen pytest tests/smoke/test_telemetry_smoke.py -vvs -n0
+```
+
+Set `NEMO_TELEMETRY_ENDPOINT` to point at a local or controlled endpoint if you do not want to contact the default NVIDIA telemetry endpoint.
 
 ## When should I add a smoke test?
 
@@ -22,11 +36,19 @@ a real tokenizer/model).
 
 ## GPU Test Process Isolation
 
-GPU smoke tests use three marker-based isolation groups:
+GPU smoke tests use staged Make targets for process isolation and CI visibility:
 
-1. Train-only (`requires_gpu` without `vllm`/`smollm2`): share a single process, auto-discovered via marker algebra.
-2. vLLM generation (`vllm` marker): each file gets its own process because vLLM pre-allocates all GPU memory and never releases it.
-3. SmolLM2 (`smollm2` marker): gets its own process, auto-discovered via markers.
+1. `test-smoke-gpu-train-only`: `requires_gpu` without `vllm`/`smollm2`, auto-discovered via marker algebra.
+2. `test-smoke-gpu-generation`: generation vLLM tests.
+3. `test-smoke-gpu-resume`: resume + generation vLLM tests.
+4. `test-smoke-gpu-structured-generation`: structured generation vLLM tests.
+5. `test-smoke-gpu-timeseries`: timeseries generation vLLM tests.
+6. `test-smoke-gpu-smollm2`: SmolLM2 Hub download tests, auto-discovered via markers.
+
+`make test-smoke-gpu` runs all GPU smoke stages in order. vLLM stages are
+split by file because vLLM pre-allocates all GPU memory and never releases it
+within a process. CI runs the same stage targets as separate workflow steps so
+the failing smoke lane is visible in the GitHub Actions UI.
 
 When adding a new GPU smoke test, add the appropriate markers to `pytestmark`:
 
@@ -39,12 +61,13 @@ pytestmark = [
 ]
 ```
 
-If the new file uses vLLM, also add it to the explicit file list in the `test-smoke-gpu` Makefile target (vLLM files need per-file isolation).
+If the new file uses vLLM, add a dedicated `test-smoke-gpu-*` Makefile target and include it in `test-smoke-gpu` so CI shows it as its own stage.
 
 ## Things that will bite you
 
 - LoRA rank must be 8 (not 4). vLLM silently rejects rank 4. Use `lora_r=8`.
-- Iris only has 151 rows, but holdout needs >=200. Set `holdout=0, max_holdout=0` to skip it.
+- Preflight requires at least 200 training rows. GPU tests that train should use
+  `fixture_gpu_smoke_df` or `fixture_preflight_timeseries_df`.
 - Attention implementation: HuggingFaceBackend defaults to `flashinfer`, which HF doesn't recognize. The `_patch_attn_eager` fixture overrides it to `"sdpa"`.
 - Stub tokenizer vocab is 32000. If you change the tiny model config, keep `vocab_size=32000` or you'll get shape mismatches.
 - CPU tests need `optim="adamw_torch"`. The production default (`paged_adamw_32bit`) requires bitsandbytes CUDA kernels.
@@ -58,7 +81,9 @@ Session-scoped (immutable / read-only):
 - `fixture_base_smoke_config` -- default `SafeSynthesizerParameters` pointing at the local tiny model (Pydantic frozen model)
 - `_patch_attn_eager` -- the attention implementation workaround mentioned above
 - `fixture_stub_tokenizer`, `fixture_tiny_llama_config`, `fixture_local_tinyllama_dir` -- tokenizer and tiny model on disk
-- `fixture_iris_df`, `fixture_timeseries_df` -- small DataFrames for training input
+- `fixture_iris_df`, `fixture_timeseries_df` -- small DataFrames for CPU smoke paths
+- `fixture_gpu_smoke_df`, `fixture_preflight_timeseries_df` -- larger DataFrames for GPU paths
+  that run preflight
 
 Function-scoped (fresh per test):
 

@@ -9,7 +9,7 @@ import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -20,6 +20,7 @@ from ..configurator.pydantic_click_options import (
 )
 from ..errors import UserError
 from ..observability import traced_user
+from ..telemetry import DeploymentTypeEnum, TaskStatusEnum
 from ..tooling import PreflightRenderContext, render_preflight_report
 from .settings import CLISettings
 from .utils import (
@@ -162,6 +163,16 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     for option in reversed(options):
         f = option(f)
     return f
+
+
+def _parse_run_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Parse generated config options plus manual run aliases into config overrides."""
+    return parse_overrides(kwargs)
+
+
+def _set_cli_deployment_type_default() -> None:
+    """Default telemetry deployment type for CLI commands without overriding Slurm or explicit settings."""
+    os.environ.setdefault("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.CLI.value)
 
 
 def _format_dataset_runtime_info(data: pd.DataFrame) -> str:
@@ -324,6 +335,8 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
+    _set_cli_deployment_type_default()
+
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -336,7 +349,7 @@ def run(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -361,7 +374,11 @@ def run(
             from ..sdk.library_builder import SafeSynthesizer
 
             assert df is not None
-            nss: SafeSynthesizer = SafeSynthesizer(config=config, workdir=workdir).with_data_source(df)
+            nss: SafeSynthesizer = SafeSynthesizer(
+                config=config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
 
             if validate:
                 _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
@@ -410,6 +427,8 @@ def run_train(
     This command processes data and trains the model, saving the adapter to the run directory.
     Use 'run generate' afterwards to generate synthetic data from the trained adapter.
     """
+    _set_cli_deployment_type_default()
+
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
         config_path=config_path,
@@ -422,7 +441,7 @@ def run_train(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -443,7 +462,11 @@ def run_train(
     try:
         with traced_user("SafeSynthesizer"):
             assert df is not None
-            nss = SafeSynthesizer(config, workdir=workdir).with_data_source(df)
+            nss = SafeSynthesizer(
+                config,
+                workdir=workdir,
+                emit_telemetry=config.emit_telemetry,
+            ).with_data_source(df)
 
             if validate:
                 _run_validate_and_render(nss, settings=settings, workdir=workdir, config=config, data=df)
@@ -500,6 +523,8 @@ def run_generate(
     or use --auto-discover-adapter with --artifact-path to automatically find
     the latest trained run.
     """
+    _set_cli_deployment_type_default()
+
     # Create unified settings from CLI kwargs
     settings = CLISettings.from_cli_kwargs(
         data_source=data_source,
@@ -513,7 +538,7 @@ def run_generate(
         verbose=verbose,
         wandb_mode=wandb_mode,
         wandb_project=wandb_project,
-        synthesis_overrides=parse_overrides(kwargs),
+        synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
     )
 
@@ -526,11 +551,15 @@ def run_generate(
         auto_discover_adapter=auto_discover_adapter,
         wandb_resume_job_id=wandb_resume_job_id,
     )
-    from ..sdk.library_builder import SafeSynthesizer
+    from ..sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
 
     final_output_file = settings.output_file or workdir.output_file
     with traced_user("SafeSynthesizer"):
-        nss = SafeSynthesizer(config, workdir=workdir)
+        nss = SafeSynthesizer(
+            config,
+            workdir=workdir,
+            emit_telemetry=config.emit_telemetry,
+        )
 
         # Only set data source if provided via --data-source
         # Otherwise, load_from_save_path() will load from cached files
@@ -545,10 +574,17 @@ def run_generate(
                 .evaluate()
                 .save_results(output_file=final_output_file)
             )
+            _emit_nss_telemetry(nss, TaskStatusEnum.COMPLETED)
             nss.results.summary.log_summary(run_logger)
             nss.results.summary.timing.log_timing(run_logger)
             run_logger.info(f"Generation complete. Results saved to: {final_output_file}")
             nss.results.summary.log_wandb()
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(nss, TaskStatusEnum.CANCELED)
+            raise
+        except Exception:
+            _emit_nss_telemetry(nss, TaskStatusEnum.ERROR)
+            raise
         finally:
             if hasattr(nss, "generator") and nss.generator is not None:
                 nss.generator.teardown()

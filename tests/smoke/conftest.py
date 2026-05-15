@@ -34,7 +34,7 @@ def fixture_tiny_llama_config(fixture_stub_tokenizer) -> LlamaConfig:
         num_hidden_layers=2,
         num_attention_heads=2,
         num_key_value_heads=2,
-        max_position_embeddings=512,
+        max_position_embeddings=2048,
     )
 
 
@@ -98,6 +98,12 @@ def fixture_iris_df(stub_datasets_dir) -> pd.DataFrame:
 
 
 @pytest.fixture(scope="session")
+def fixture_gpu_smoke_df(stub_datasets_dir) -> pd.DataFrame:
+    """Small tabular dataset sized for GPU smoke tests that run preflight."""
+    return pd.read_csv(stub_datasets_dir / "clinc_oos.csv", nrows=210)
+
+
+@pytest.fixture(scope="session")
 def fixture_timeseries_df() -> pd.DataFrame:
     """Minimal timeseries stub: 2 groups, 5 rows each, 60s intervals."""
     return pd.DataFrame(
@@ -118,6 +124,25 @@ def fixture_timeseries_df() -> pd.DataFrame:
             "value": [10, 20, 30, 40, 50, 100, 110, 120, 130, 140],
         }
     )
+
+
+@pytest.fixture(scope="session")
+def fixture_preflight_timeseries_df() -> pd.DataFrame:
+    """Timeseries stub sized to fit the tiny GPU smoke model context window."""
+    start = pd.Timestamp("2024-01-01 00:00:00")
+    rows = []
+    for group_idx in range(4):
+        group = f"group_{group_idx:02d}"
+        offset = group_idx * 1000
+        for i in range(50):
+            rows.append(
+                {
+                    "group_id": group,
+                    "timestamp": start + pd.Timedelta(seconds=60 * i),
+                    "value": offset + i,
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 @pytest.fixture(scope="session")

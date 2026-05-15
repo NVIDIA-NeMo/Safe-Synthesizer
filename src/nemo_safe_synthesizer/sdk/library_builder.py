@@ -24,10 +24,23 @@ from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
 from ..llm.metadata import ModelMetadata
+from ..llm.utils import get_device_name
 from ..observability import LogCategory, configure_logging_from_workdir, get_logger, initialize_observability, traced
+from ..package_info import __version__
 from ..pii_replacer.nemo_pii import NemoPII
 from ..preflight import PreflightReport, PreflightStage, run_preflight
 from ..results import SafeSynthesizerResults, make_nss_results
+from ..telemetry import (
+    DeploymentTypeEnum,
+    NSSTrainingAndGenerationEvent,
+    TaskStatusEnum,
+    TelemetryHandler,
+    _deployment_type,
+    _telemetry_enabled,
+    bucket_columns,
+    bucket_records,
+    sanitize_model_for_telemetry,
+)
 from ..training.huggingface_backend import HuggingFaceBackend
 from .config_builder import ConfigBuilder
 
@@ -36,6 +49,70 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from ..generation.backend import GeneratorBackend
     from ..training.backend import TrainingBackend
+
+
+def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
+    """Build a telemetry event from the current pipeline state."""
+    cfg = ss._nss_config
+
+    duration = time.monotonic() - ss._total_start if ss._total_start is not None else -1.0
+
+    num_records = -1
+    sqs = -1.0
+    dps = -1.0
+    if hasattr(ss, "results") and ss.results is not None:
+        summary = ss.results.summary
+        if summary.num_valid_records is not None:
+            num_records = summary.num_valid_records
+        if summary.synthetic_data_quality_score is not None:
+            sqs = summary.synthetic_data_quality_score
+        if summary.data_privacy_score is not None:
+            dps = summary.data_privacy_score
+
+    replace_pii = cfg is not None and cfg.replace_pii is not None
+    dp_enabled = cfg is not None and cfg.privacy is not None and cfg.privacy.dp_enabled
+    ts_enabled = cfg is not None and cfg.time_series.is_timeseries
+    group_by = cfg is not None and cfg.data.group_training_examples_by is not None
+    model = sanitize_model_for_telemetry(cfg.training.pretrained_model if cfg is not None else None)
+
+    records_bucket = "undefined"
+    columns_bucket = "undefined"
+    if isinstance(ss._data_source, pd.DataFrame):
+        records_bucket = bucket_records(len(ss._data_source))
+        columns_bucket = bucket_columns(len(ss._data_source.columns))
+
+    gpu = get_device_name()
+
+    return NSSTrainingAndGenerationEvent(
+        task="run",
+        task_status=status,
+        deployment_type=ss._deployment_type,
+        job_duration_sec=duration,
+        num_records_generated=num_records,
+        replace_pii_enabled=replace_pii,
+        differential_privacy_enabled=dp_enabled,
+        time_series_enabled=ts_enabled,
+        group_by_enabled=group_by,
+        input_records_bucket=records_bucket,
+        input_columns_bucket=columns_bucket,
+        synthetic_quality_score=sqs,
+        data_privacy_score=dps,
+        model=model,
+        gpu=gpu,
+    )
+
+
+def _emit_nss_telemetry(ss: SafeSynthesizer, status: TaskStatusEnum) -> None:
+    """Enqueue and immediately flush a single telemetry event. Never raises."""
+    try:
+        if not ss._emit_telemetry:
+            return
+        event = _build_telemetry_event(ss, status)
+        handler = TelemetryHandler(source_client_version=__version__)
+        handler.enqueue(event)
+        handler.stop()  # Flushes the queue and sends
+    except Exception:  # noqa: BLE001
+        pass  # Telemetry is best-effort; never disrupt the pipeline
 
 
 class SafeSynthesizer(ConfigBuilder):
@@ -92,11 +169,16 @@ class SafeSynthesizer(ConfigBuilder):
     results: SafeSynthesizerResults
     """Final pipeline results, populated after ``evaluate()`` or ``run()``."""
 
+    _emit_telemetry: bool
+    _deployment_type: DeploymentTypeEnum
+
     def __init__(
         self,
         config: SafeSynthesizerParameters | None = None,
         workdir: Workdir | None = None,
         save_path: Path | str | None = None,
+        emit_telemetry: bool | None = None,
+        deployment_type: DeploymentTypeEnum | None = None,
     ):
         super().__init__(config=config)
         self._workdir = workdir
@@ -124,6 +206,14 @@ class SafeSynthesizer(ConfigBuilder):
         self.preflight_report: PreflightReport | None = None
         self._data_processed: bool = False
         self._preflight_config_path: Path | None = None
+        self._emit_telemetry: bool = emit_telemetry if emit_telemetry is not None else self._config_emit_telemetry()
+        self._deployment_type: DeploymentTypeEnum = (
+            deployment_type if deployment_type is not None else _deployment_type()
+        )
+
+    def _config_emit_telemetry(self) -> bool:
+        """Return the current config's telemetry setting, defaulting on before resolution."""
+        return _telemetry_enabled() if self._nss_config is None else self._nss_config.emit_telemetry
 
     def _ensure_observability(self) -> None:
         """Initialize structured logging when running via the SDK.
@@ -524,8 +614,16 @@ class SafeSynthesizer(ConfigBuilder):
             assert self._nss_config is not None
             assert isinstance(self._data_source, pd.DataFrame)
 
-        self.process_data().train().generate().evaluate()
-        self.save_results(output_file=output_file)
+        try:
+            self.process_data().train().generate().evaluate()
+            self.save_results(output_file=output_file)
+            _emit_nss_telemetry(self, TaskStatusEnum.COMPLETED)
+        except KeyboardInterrupt:
+            _emit_nss_telemetry(self, TaskStatusEnum.CANCELED)
+            raise
+        except Exception:
+            _emit_nss_telemetry(self, TaskStatusEnum.ERROR)
+            raise
 
     @traced("SafeSynthesizer.save_results", category=LogCategory.RUNTIME, level="INFO")
     def save_results(self, output_file: Path | str | None = None) -> SafeSynthesizer:

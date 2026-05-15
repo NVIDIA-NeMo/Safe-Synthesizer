@@ -275,7 +275,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
 | `env.inference_key` | config | `NSS_INFERENCE_KEY` is set when PII classification is enabled (warning only) |
-| `env.hf_token` | config | `HF_TOKEN` or `HUGGING_FACE_HUB_TOKEN` is set; warns unconditionally when neither is present so gated-repo downloads don't fail later (warning only) |
+| `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
 | `columns.orderby` | dataframe | `order_training_examples_by` column is present |
@@ -735,15 +735,15 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
 ### Attention Backends
 
 `training.attn_implementation` controls which attention kernel is used when
-loading the model. The default uses Flash Attention 3 via the HuggingFace
-Kernels Hub and falls back to `sdpa` when the `kernels` package is not
-installed.
+loading the model. The default is `sdpa`, which uses PyTorch scaled
+dot-product attention and does not require a separate attention package.
 
 Common values:
 
-- `kernels-community/vllm-flash-attn3`: Flash Attention 3 (default, requires `kernels` package)
+- `sdpa`: PyTorch scaled dot-product attention -- default and broadest compatibility
+- `kernels-community/vllm-flash-attn3`: Flash Attention 3 (requires `kernels` package and a compatible prebuilt kernel)
 - `flash_attention_2`: Flash Attention 2 (requires `flash-attn` package)
-- `sdpa`: PyTorch scaled dot-product attention -- broadest compatibility
+- `flash_attention_3`: Flash Attention 3 (requires `flash-attn-3` support)
 - `eager`: standard PyTorch attention -- useful for debugging
 
 !!! note "Training vs generation attention backends"

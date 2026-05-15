@@ -28,6 +28,10 @@ inputs:
     description: "Number of commits to fetch (0 for all history)"
     required: false
     default: "1"
+  checkout:
+    description: "Whether to checkout the repository before setting up Python"
+    required: false
+    default: "true"
   bootstrap-tools:
     description: "Whether to install dev tools via mise"
     required: false
@@ -42,6 +46,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout repository
+      if: inputs.checkout == 'true'
       uses: actions/checkout@v6
       with:
         ref: ${{ inputs.ref || github.ref }}
@@ -49,7 +54,7 @@ runs:
 
     - name: Get the merge base SHA
       id: get_merge_base
-      if: inputs.fetch-depth == '0'
+      if: inputs.checkout == 'true' && inputs.fetch-depth == '0'
       shell: bash
       run: |
         if [ -n "${{ github.base_ref }}" ]; then
@@ -87,3 +92,7 @@ runs:
       uses: astral-sh/setup-uv@v6
       with:
         enable-cache: true
+
+    - name: Disable telemetry in CI
+      shell: bash
+      run: echo "NEMO_TELEMETRY_ENABLED=false" >> "$GITHUB_ENV"

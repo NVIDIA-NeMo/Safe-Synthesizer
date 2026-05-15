@@ -11,8 +11,11 @@ without installing the full training or inference stack.
 from __future__ import annotations
 
 import gc
+import json
+from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from ..observability import get_logger
 
@@ -23,32 +26,376 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def trust_remote_code_for_model(model_name: str | Path) -> bool:
+@dataclass(frozen=True, slots=True)
+class ModelRef:
+    """Resolved model reference for local cache and trust policy decisions.
+
+    Intended public API:
+    - ``parse()`` normalizes a user-supplied model string or path without
+      contacting Hugging Face.
+    - ``target()`` returns the value that should be passed to
+      ``from_pretrained``-style loaders: a local snapshot path when available,
+      otherwise the original model reference.
+    - ``trust_remote_code`` reports whether the reference belongs to a trusted
+      organization after accounting for resolved local HF cache paths.
+    - ``partial_cached_snapshot()`` returns HF's local snapshot path for the
+      repo/revision, even when the snapshot is incomplete.
+    - ``missing_required_components()`` reports whether a local model directory
+      has the components this project expects before an offline load.
+    - ``missing_remote_code_components()`` reports trusted remote-code files
+      referenced by Transformers ``auto_map`` metadata but absent locally.
+
+    Deliberate Hugging Face coupling:
+    repo-id validation, cache-root resolution, cache scanning, snapshot layout,
+    artifact names, tokenizer filenames, and sharded weight index parsing mirror
+    current Hugging Face Hub and Transformers behavior. This is intentional so
+    NSS decisions match the libraries that load the model. If model loading or
+    cache preflight behavior changes after an upstream HF release, inspect this
+    class first.
+
+    Internal helpers are not a generic model-layout abstraction. They should
+    stay close to HF's implementation rather than grow compatibility shims for
+    unrelated storage formats.
+    """
+
+    original: str | Path
+    repo_id: str | None = None
+    revision: str = "main"
+    local_path: Path | None = None
+    cache_root: Path | None = None
+
+    trusted_orgs: ClassVar[frozenset[str]] = frozenset({"nvidia"})
+    tokenizer_artifact_names: ClassVar[frozenset[str]] = frozenset(
+        {
+            "tokenizer.json",
+            "tokenizer.model",
+            "sentencepiece.bpe.model",
+            "spiece.model",
+            "vocab.json",
+            "vocab.txt",
+            "merges.txt",
+        }
+    )
+
+    @classmethod
+    def parse(
+        cls,
+        model_name: str | Path,
+        *,
+        revision: str = "main",
+        cache_root: str | Path | None = None,
+    ) -> Self:
+        """Parse a model identifier or path without contacting Hugging Face.
+
+        This is safe to call in preflight and loader setup because it uses
+        Hugging Face's local cache APIs only. Cached-model hits may still cost a
+        few milliseconds because HF cache scanning walks cache metadata to
+        confirm model artifacts exist.
+        """
+        cache_root_path = Path(cache_root) if cache_root is not None else cls._default_hf_cache_root()
+        model_ref = str(model_name)
+        if not model_ref:
+            return cls(original=model_name, revision=revision, cache_root=cache_root_path)
+
+        model_path = Path(model_name)
+        if model_path.exists():
+            repo_id = cls._repo_id_from_hf_cache_path(model_path, cache_root_path)
+            return cls(
+                original=model_name,
+                repo_id=repo_id,
+                revision=revision,
+                local_path=model_path,
+                cache_root=cache_root_path,
+            )
+
+        repo_id = cls._repo_id_from_hub_identifier(model_ref)
+        local_path = cls._cached_snapshot_for_repo(repo_id, revision, cache_root_path) if repo_id else None
+        return cls(
+            original=model_name,
+            repo_id=repo_id,
+            revision=revision,
+            local_path=local_path,
+            cache_root=cache_root_path,
+        )
+
+    @staticmethod
+    def _default_hf_cache_root() -> Path:
+        """Return Hugging Face's configured Hub cache root. Their implementation
+        reads and sets this from several environment variables - HF_HOME, HF_HUB_CACHE, etc.
+        """
+        from huggingface_hub.constants import HF_HUB_CACHE
+
+        return Path(HF_HUB_CACHE)
+
+    @staticmethod
+    def _repo_id_from_hub_identifier(model_ref: str) -> str | None:
+        """Return a valid Hugging Face model repository ID, if ``model_ref`` is one."""
+        if not model_ref or model_ref.startswith(("/", ".")):
+            return None
+
+        from huggingface_hub.errors import HFValidationError
+        from huggingface_hub.utils import validate_repo_id
+
+        try:
+            validate_repo_id(model_ref)
+        except HFValidationError:
+            return None
+        return model_ref
+
+    @staticmethod
+    def _repo_id_from_hf_cache_path(path: Path, cache_root: Path) -> str | None:
+        """Return the HF repo id for a path inside the configured Hub cache.
+
+        This relies on ``huggingface_hub.scan_cache_dir`` and the current
+        ``models--org--repo/snapshots/<commit>`` cache model. It is deliberately
+        not a generic path parser.
+        """
+        path_resolved = path.resolve(strict=False)
+        from huggingface_hub import scan_cache_dir
+        from huggingface_hub.errors import CacheNotFound
+
+        try:
+            repos = scan_cache_dir(cache_root).repos
+        except (CacheNotFound, ValueError):
+            return None
+
+        for repo in repos:
+            if repo.repo_type != "model":
+                continue
+            for revision in repo.revisions:
+                snapshot_path = revision.snapshot_path.resolve(strict=False)
+                if path_resolved.is_relative_to(snapshot_path):
+                    return repo.repo_id
+        return None
+
+    @staticmethod
+    def _local_snapshot_for_repo(repo_id: str, revision: str, cache_root: Path) -> Path | None:
+        """Return HF's local snapshot path without validating completeness.
+
+        Delegates to ``snapshot_download(local_files_only=True)`` so behavior
+        stays aligned with Hugging Face cache resolution instead of duplicating
+        ref-file lookup rules.
+        """
+        from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import LocalEntryNotFoundError
+
+        try:
+            snapshot_path = Path(
+                snapshot_download(
+                    repo_id,
+                    revision=revision,
+                    cache_dir=cache_root,
+                    local_files_only=True,
+                )
+            )
+        except LocalEntryNotFoundError:
+            return None
+        return snapshot_path
+
+    @classmethod
+    def _cached_snapshot_for_repo(cls, repo_id: str, revision: str, cache_root: Path) -> Path | None:
+        snapshot_path = cls._local_snapshot_for_repo(repo_id, revision, cache_root)
+        if snapshot_path is None:
+            return None
+        if not cls._snapshot_has_model_artifacts(snapshot_path, cache_root):
+            return None
+        return snapshot_path
+
+    @classmethod
+    def _snapshot_has_model_artifacts(cls, snapshot_path: Path, cache_root: Path) -> bool:
+        """Return whether HF Hub's cache index reports weight artifacts in ``snapshot_path``."""
+        from huggingface_hub import scan_cache_dir
+        from huggingface_hub.errors import CacheNotFound
+
+        artifact_patterns = cls._model_artifact_patterns()
+        snapshot_resolved = snapshot_path.resolve(strict=False)
+
+        try:
+            repos = scan_cache_dir(cache_root).repos
+        except (CacheNotFound, ValueError):
+            return False
+
+        for repo in repos:
+            if repo.repo_type != "model":
+                continue
+            for revision in repo.revisions:
+                if revision.snapshot_path.resolve(strict=False) != snapshot_resolved:
+                    continue
+                return any(
+                    fnmatchcase(cached_file.file_name, pattern)
+                    for cached_file in revision.files
+                    for pattern in artifact_patterns
+                )
+        return False
+
+    @staticmethod
+    def _model_artifact_patterns() -> tuple[str, ...]:
+        """Return known model artifact names using HF Hub's public constants.
+
+        Keep this close to Hugging Face's weight naming conventions. New HF
+        artifact names or index formats should be reflected here.
+        """
+        from huggingface_hub.constants import (
+            FLAX_WEIGHTS_NAME,
+            PYTORCH_WEIGHTS_FILE_PATTERN,
+            PYTORCH_WEIGHTS_NAME,
+            SAFETENSORS_SINGLE_FILE,
+            SAFETENSORS_WEIGHTS_FILE_PATTERN,
+            TF2_WEIGHTS_FILE_PATTERN,
+            TF2_WEIGHTS_NAME,
+            TF_WEIGHTS_NAME,
+        )
+
+        return (
+            PYTORCH_WEIGHTS_NAME,
+            PYTORCH_WEIGHTS_FILE_PATTERN.format(suffix="*"),
+            SAFETENSORS_SINGLE_FILE,
+            SAFETENSORS_WEIGHTS_FILE_PATTERN.format(suffix="*"),
+            TF2_WEIGHTS_NAME,
+            TF2_WEIGHTS_FILE_PATTERN.format(suffix="*"),
+            TF_WEIGHTS_NAME,
+            FLAX_WEIGHTS_NAME,
+            "*.gguf",
+            "consolidated*.pth",
+        )
+
+    @classmethod
+    def _required_component_status(cls, model_dir: Path) -> dict[str, bool]:
+        """Return required local model component presence for a Transformers load.
+
+        The checks are intentionally shaped around ``from_pretrained`` layouts:
+        root ``config.json``, recognized tokenizer files, and HF-style weight
+        files or shard indexes. Revisit this if Transformers changes accepted
+        directory layouts.
+        """
+        files = [path for path in model_dir.rglob("*") if path.is_file()]
+        return {
+            "config": (model_dir / "config.json").is_file(),
+            "tokenizer": any(path.name in cls.tokenizer_artifact_names for path in files),
+            "model weights": cls._has_complete_model_artifacts(model_dir, files),
+        }
+
+    @classmethod
+    def missing_required_components(cls, model_dir: Path) -> list[str]:
+        """Return local model components missing from ``model_dir``."""
+        return [name for name, present in cls._required_component_status(model_dir).items() if not present]
+
+    @classmethod
+    def missing_remote_code_components(cls, model_dir: Path) -> list[str]:
+        """Return trusted remote-code components referenced by config but absent locally."""
+        required = cls._remote_code_components(model_dir)
+        missing: list[str] = []
+        for component, local_path in required:
+            if local_path is None or not (model_dir / local_path).is_file():
+                missing.append(component)
+        return sorted(missing)
+
+    @classmethod
+    def _remote_code_components(cls, model_dir: Path) -> list[tuple[str, Path | None]]:
+        config_path = model_dir / "config.json"
+        try:
+            data = json.loads(config_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return []
+
+        auto_map = data.get("auto_map")
+        if not isinstance(auto_map, dict):
+            return []
+
+        components: list[tuple[str, Path | None]] = []
+        for value in auto_map.values():
+            for class_ref in cls._auto_map_class_refs(value):
+                component = cls._remote_code_component(class_ref)
+                if component is not None:
+                    components.append(component)
+        return components
+
+    @staticmethod
+    def _auto_map_class_refs(value: object) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, str)]
+        return []
+
+    @staticmethod
+    def _remote_code_component(class_ref: str) -> tuple[str, Path | None] | None:
+        repo_id: str | None = None
+        module_ref = class_ref
+        if "--" in class_ref:
+            repo_id, module_ref = class_ref.split("--", 1)
+        if "." not in module_ref:
+            return None
+
+        module_name, _ = module_ref.rsplit(".", 1)
+        module_path = Path(*module_name.split(".")).with_suffix(".py")
+        if repo_id is not None:
+            return f"remote code from {repo_id} ({module_path.as_posix()})", None
+        return module_path.as_posix(), module_path
+
+    @classmethod
+    def _has_complete_model_artifacts(cls, model_dir: Path, files: list[Path]) -> bool:
+        weight_indexes = [path for path in files if path.name.endswith(".index.json")]
+        if weight_indexes:
+            return any(cls._index_references_existing_shards(model_dir, index_path) for index_path in weight_indexes)
+
+        return any(fnmatchcase(path.name, pattern) for path in files for pattern in cls._model_artifact_patterns())
+
+    @staticmethod
+    def _index_references_existing_shards(model_dir: Path, index_path: Path) -> bool:
+        """Return whether an HF weight index references shards present on disk."""
+        try:
+            data = json.loads(index_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return False
+
+        weight_map = data.get("weight_map")
+        if not isinstance(weight_map, dict) or not weight_map:
+            return False
+
+        shard_names = {name for name in weight_map.values() if isinstance(name, str)}
+        if not shard_names:
+            return False
+        return all((model_dir / name).is_file() for name in shard_names)
+
+    def partial_cached_snapshot(self) -> Path | None:
+        """Return the local HF snapshot for this repo/revision, even if it is partial."""
+        if self.repo_id is None or self.cache_root is None:
+            return None
+        return self._local_snapshot_for_repo(self.repo_id, self.revision, self.cache_root)
+
+    @classmethod
+    def is_trusted_org(cls, org: str) -> bool:
+        """Return whether an organization is allowed to load remote code."""
+        return org.casefold() in cls.trusted_orgs
+
+    @property
+    def trust_remote_code(self) -> bool:
+        """Whether loaders should pass ``trust_remote_code=True`` for this model."""
+        if not self.repo_id or "/" not in self.repo_id:
+            return False
+        org, _ = self.repo_id.split("/", 1)
+        return self.is_trusted_org(org)
+
+    def target(self) -> str:
+        """Return the local snapshot path when available, otherwise the original input."""
+        return str(self.local_path or self.original)
+
+
+def trust_remote_code_for_model(model_name: str | Path, *, cache_root: str | Path | None = None) -> bool:
     """Determine whether to trust remote code when loading a model.
 
-    Returns ``True`` for NVIDIA-owned Hub model identifiers and for paths
-    inside Hugging Face's encoded cache directory for NVIDIA models.
+    Returns ``True`` for model identifiers owned by trusted organizations,
+    including configured Hugging Face cache snapshots for those organizations.
 
     Args:
         model_name: HuggingFace model identifier or local path.
+        cache_root: Hugging Face Hub cache root. Defaults to the configured hub cache.
 
     Returns:
         Whether to set ``trust_remote_code=True`` when loading the model.
     """
-    model_ref = str(model_name).casefold()
-    if model_ref.startswith("nvidia/"):
-        return True
-
-    path_parts = Path(model_ref).parts
-    while path_parts:
-        match path_parts:
-            case ("huggingface", "hub", *cache_parts):
-                # Brittle by design: this mirrors Hugging Face's current cache path layout.
-                return any(part.startswith("models--nvidia--") for part in cache_parts)
-            case (_, *remaining):
-                path_parts = remaining
-
-    return False
+    return ModelRef.parse(model_name, cache_root=cache_root).trust_remote_code
 
 
 def cleanup_memory() -> None:
@@ -292,3 +639,13 @@ def get_quantization_config(quantization_bits: Literal[4, 8]) -> BitsAndBytesCon
         )
     else:
         raise ValueError(f"Invalid quantization bits: {quantization_bits}")
+
+
+def get_device_name() -> str:
+    """Get the name of the current device (first index). Returns 'undefined' if the device is not available."""
+    try:
+        import torch
+
+        return torch.cuda.get_device_properties(0).name
+    except Exception:
+        return "undefined"

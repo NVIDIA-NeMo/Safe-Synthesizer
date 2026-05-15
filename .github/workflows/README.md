@@ -18,9 +18,11 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | [release.yml](release.yml)                         | Push tags to `v*`           | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
 | [secrets-detector.yml](secrets-detector.yml)       | PRs                         | Scans for accidentally committed secrets                                                                   |
 
-## Pull Request Testing (copy-pr-bot)
+## Pull Request Testing
 
-GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. They use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern instead:
+GPU tests on PRs are currently disabled due to internal constraints. `gpu-tests.yml` has its `push` trigger commented out, so it runs only on the nightly schedule or manual `workflow_dispatch`.
+
+GPU tests (`gpu-tests.yml`) run on NVIDIA self-hosted runners, which block `pull_request`-triggered jobs. When PR GPU testing is re-enabled, use the [copy-pr-bot](https://docs.gha-runners.nvidia.com/platform/apps/copy-pr-bot/) pattern:
 
 1. When a PR is opened by a trusted user with trusted changes, `copy-pr-bot` automatically copies the code to a `pull-request/<number>` branch
 2. The push to `pull-request/<number>` triggers the GPU workflow
@@ -31,11 +33,11 @@ Configuration: [`.github/copy-pr-bot.yaml`](../copy-pr-bot.yaml)
 
 CPU checks (`ci-checks.yml`) run on GitHub-hosted `ubuntu-latest` runners and use standard `pull_request` triggers.
 
-### On-demand GPU test runs
+### On-demand GPU test runs for PRs
 
-To trigger a GPU test run on an open PR without waiting for the auto-sync, comment `/sync` on the PR. copy-pr-bot will push the current HEAD to `pull-request/<number>`, which fires `gpu-tests.yml` and posts the `GPU CI Status` check result back to the PR -- the same check as the automatic trigger.
+This path is disabled while the `push` trigger in `gpu-tests.yml` is commented out. When it is re-enabled, comment `/sync` on the PR to trigger a GPU test run without waiting for auto-sync. copy-pr-bot will push the current HEAD to `pull-request/<number>`, fire `gpu-tests.yml`, and post the `GPU CI Status` check result back to the PR -- the same check as the automatic trigger.
 
-Use `/sync` when:
+When this path is re-enabled, use `/sync` when:
 
 - The PR is a draft (auto-sync is disabled for drafts)
 - You want to re-run after a flaky failure without pushing a new commit
@@ -47,7 +49,7 @@ Use `/sync` when:
 flowchart LR
     subgraph triggers [Triggers]
         push[Push to main]
-        cpb[copy-pr-bot push to pull-request/*]
+        schedule[Nightly Schedule]
         pr[Pull Request event]
         manual[Manual Dispatch]
     end
@@ -90,8 +92,9 @@ flowchart LR
         publishArtifactory[Publish to Artifactory/PyPI]
     end
 
-    push --> ci & gpu
-    cpb --> gpu
+    push --> ci
+    schedule --> gpu
+    manual --> ci & gpu
     pr --> ci & conventional & secrets
     tag[Tag push v[0-9]*] --> release
 
@@ -133,29 +136,35 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 ## GPU Tests Workflow
 
-The `gpu-tests.yml` workflow runs on a schedule and using `pull-request/*` branches (via copy-pr-bot), and can also be triggered manually via `workflow_dispatch`:
+The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. The `push` trigger for `pull-request/*` branches is currently commented out due to internal blockers, so PRs do not automatically produce GPU status checks. We expect to re-enable that path as soon as those blockers are resolved. There are several key jobs:
 
-- GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. Required for merge.
-- GPU E2E Tests: End-to-end tests on a gpu runner with a 55-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
-- GPU CI Status: Aggregation job -- single required check for branch protection. Fails if smoke tests fail; warns if E2E tests fail.
+- GPU Smoke Tests: staged smoke tests on a gpu runner with a 30-minute job timeout. The train-only, generation, resume, structured generation, timeseries, and SmolLM2 lanes run as separate workflow steps. Required for merge when the workflow is part of branch protection.
+- GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
+- GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
 
-The `changes` (Detect Changes) job always runs, including on `workflow_dispatch`. `dorny/paths-filter` outputs `true` for all filters when there is no base commit to diff against, so downstream jobs always run on a manual dispatch. The job must not be conditionally skipped: a skipped `needs` dependency causes downstream jobs to be skipped even when their own `if` condition would pass.
+The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs with the `src_test_deps` output, which is true for source, test, `pytest.ini`, dependency, or CI workflow/action changes.
+
+GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: installing `make`, enabling the `uv` cache, setting up Python from `.python-version`, bootstrapping CUDA dependencies, and checking GPU availability.
 
 To trigger manually from the CLI (produces a run but not a PR status check):
 
 ```bash
-gh workflow run gpu-tests.yml --ref <branch-name>
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=all
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=smoke
+gh workflow run gpu-tests.yml --ref <branch-name> -f suite=e2e
 ```
 
-To trigger from the PR UI and get a status check result, use `/sync` -- see [On-demand GPU test runs](#on-demand-gpu-test-runs) above.
+PR status-check GPU runs are currently disabled while the workflow `push` trigger is commented out due to internal blockers. When that path is re-enabled, `/sync` will provide the PR-status flow described in [On-demand GPU test runs for PRs](#on-demand-gpu-test-runs-for-prs).
 
 ### Runners
+
+Internal runners and projects are defined in an internal repo, `nv-gha-runners/enterprise-runner-configuration`.
 
 | Workflow | Job | Runner Label | Type |
 | --- | --- | --- | --- |
 | CI Checks | All jobs | `ubuntu-latest` | GitHub-hosted |
-| GPU Tests | GPU Smoke Tests | `nemo-ci-aws-gpu-x2` | NVIDIA self-hosted GPU |
-| GPU Tests | GPU E2E Tests | `nemo-ci-aws-gpu-x2` | NVIDIA self-hosted GPU |
+| GPU Tests | GPU Smoke Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
+| GPU Tests | GPU E2E Tests | `linux-amd64-gpu-a100-latest-1` | NVIDIA self-hosted GPU |
 | GPU Tests | Detect Changes, GPU CI Status | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Dev Wheel | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |
 | Internal Release | All jobs | `linux-amd64-cpu4` | NVIDIA self-hosted CPU (4-core) |

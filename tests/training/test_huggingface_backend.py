@@ -269,8 +269,42 @@ class TestFilterModelKwargs:
 
 @patch("nemo_safe_synthesizer.training.huggingface_backend.get_device_map")
 class TestBuildBaseFrameworkParams:
+    def test_uses_cached_model_ref_target_and_trust(
+        self,
+        mock_get_device_map,
+        base_params,
+        mock_model_metadata,
+        mock_workdir,
+    ):
+        """Framework params use resolved model refs before HuggingFace model loading."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        mock_get_device_map.return_value = "auto"
+
+        with patch(
+            "nemo_safe_synthesizer.training.huggingface_backend.ModelRef.parse", return_value=model_ref
+        ) as parse:
+            backend = HuggingFaceBackend(
+                params=base_params,
+                model_metadata=mock_model_metadata,
+                workdir=mock_workdir,
+            )
+
+        result = backend._build_base_framework_params({})
+
+        parse.assert_called_once_with(base_params.training.pretrained_model)
+        assert result["pretrained_model_name_or_path"] == cached_target
+        assert result["trust_remote_code"] is True
+        mock_get_device_map.assert_called_once_with(
+            cached_target,
+            autoconfig=backend.autoconfig,
+            trust_remote_code=True,
+        )
+
     def test_builds_correct_params_with_kernels(self, mock_get_device_map, backend):
-        """Test that base framework params use kernels-community attn when kernels is available."""
+        """Test that base framework params use the configured default attention implementation."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"custom_key": "custom_value"}
         with patch.dict("sys.modules", {"kernels": MagicMock()}):
@@ -278,12 +312,12 @@ class TestBuildBaseFrameworkParams:
 
         assert result["pretrained_model_name_or_path"] == "test-model"
         assert result["device_map"] == "auto"
-        assert result["attn_implementation"] == "kernels-community/vllm-flash-attn3"
+        assert result["attn_implementation"] == "sdpa"
         assert result["dtype"] == torch.bfloat16
         assert result["custom_key"] == "custom_value"
 
     def test_builds_correct_params_without_kernels(self, mock_get_device_map, backend):
-        """Test that base framework params fall back to sdpa when kernels is not available."""
+        """Test that base framework params use the default when kernels is not available."""
         mock_get_device_map.return_value = "auto"
         model_kwargs = {"custom_key": "custom_value"}
         with patch.dict("sys.modules", {"kernels": None}):
@@ -317,7 +351,7 @@ class TestBuildBaseFrameworkParams:
         result = backend._build_base_framework_params(model_kwargs)
         assert result["attn_implementation"] == "eager"
         # Reset to default
-        backend.params.training.attn_implementation = "kernels-community/vllm-flash-attn3"
+        backend.params.training.attn_implementation = "sdpa"
 
     def test_uses_custom_dtype(self, mock_get_device_map, backend):
         """Test that custom dtype is used when provided."""
@@ -327,17 +361,78 @@ class TestBuildBaseFrameworkParams:
         assert result["dtype"] == torch.float32
 
 
+class TestResolvedModelLoading:
+    def test_init_uses_cached_model_ref_target_for_autoconfig(self, base_params, mock_model_metadata, mock_workdir):
+        """Backend initialization resolves cached model refs before loading AutoConfig."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        autoconfig = MagicMock()
+
+        with (
+            patch("nemo_safe_synthesizer.training.huggingface_backend.ModelRef.parse", return_value=model_ref) as parse,
+            patch(
+                "nemo_safe_synthesizer.training.huggingface_backend.AutoConfig.from_pretrained",
+                return_value=autoconfig,
+            ) as from_pretrained,
+        ):
+            backend = HuggingFaceBackend(
+                params=base_params,
+                model_metadata=mock_model_metadata,
+                workdir=mock_workdir,
+            )
+
+        assert backend.model_ref is model_ref
+        parse.assert_called_once_with(base_params.training.pretrained_model)
+        from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+
+    def test_load_pretrained_model_uses_cached_model_ref_target_for_tokenizer(self, backend):
+        """Tokenizer loading uses the same resolved model ref as model loading."""
+        cached_target = "/tmp/hf-cache/models--nvidia--TinyLlama/snapshots/abc123"
+        model_ref = MagicMock()
+        model_ref.target.return_value = cached_target
+        model_ref.trust_remote_code = True
+        tokenizer = MagicMock()
+        backend.model_ref = model_ref
+        backend.framework_load_params = {
+            "pretrained_model_name_or_path": cached_target,
+            "trust_remote_code": True,
+        }
+        backend.model_loader_type = MagicMock()
+        backend.model_loader_type.from_pretrained.return_value = MagicMock()
+        backend.model_metadata.max_seq_length = 2048
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.training.huggingface_backend.AutoTokenizer.from_pretrained",
+                return_value=tokenizer,
+            ) as from_pretrained,
+            patch(
+                "nemo_safe_synthesizer.training.huggingface_backend.add_bos_eos_tokens_to_tokenizer",
+                return_value=tokenizer,
+            ),
+        ):
+            backend._load_pretrained_model()
+
+        from_pretrained.assert_called_once_with(
+            cached_target,
+            trust_remote_code=True,
+            model_max_length=None,
+        )
+
+
 class TestResolveAttnImplementation:
     def test_kernels_available(self, backend):
         """Test that kernels-community path is returned when kernels is importable."""
         with patch.dict("sys.modules", {"kernels": MagicMock()}):
-            result = backend._resolve_attn_implementation("kernels-community/vllm-flash-attn3")
-        assert result == "kernels-community/vllm-flash-attn3"
+            result = backend._resolve_attn_implementation("sdpa")
+        assert result == "sdpa"
 
     def test_kernels_not_available(self, backend):
         """Test that sdpa fallback is returned when kernels is not importable."""
         with patch.dict("sys.modules", {"kernels": None}):
-            result = backend._resolve_attn_implementation("kernels-community/vllm-flash-attn3")
+            result = backend._resolve_attn_implementation("sdpa")
         assert result == "sdpa"
 
     def test_kernels_community_other_kernel(self, backend):

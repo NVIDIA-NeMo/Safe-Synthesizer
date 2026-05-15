@@ -252,8 +252,10 @@ class AutoConfigResolver:
 
         Returns:
             Dict with max_sequences_per_example resolved to a concrete value:
-            1 if DP is enabled, 10 if auto with DP disabled, or the
-            explicit value (int) if manually specified, or None if not specified.
+            ``1`` if DP is enabled, ``None`` if time-series mode is enabled
+            (lets each example fill the context window), ``10`` for the
+            default non-DP, non-time-series case, or the explicit value if
+            manually specified.
         """
         if self._dp_enabled is True:
             if self._config.data.max_sequences_per_example in [None, AUTO_STR, 1]:
@@ -264,7 +266,7 @@ class AutoConfigResolver:
             else:
                 logger.info(
                     "Parameter `max_sequences_per_example` does not allow the value of "
-                    "{self._config.data.max_sequences_per_example} when DP is enabled. Setting to 1 instead."
+                    f"{self._config.data.max_sequences_per_example} when DP is enabled. Setting to 1 instead."
                 )
             return {"max_sequences_per_example": 1}
         elif self._config.data.max_sequences_per_example != AUTO_STR:
@@ -274,6 +276,12 @@ class AutoConfigResolver:
                 )
             return {"max_sequences_per_example": self._config.data.max_sequences_per_example}
 
+        elif self._config.time_series.is_timeseries:
+            logger.info(
+                "Parameter `max_sequences_per_example` was automatically set to None for "
+                "time-series mode so each example fills the context window."
+            )
+            return {"max_sequences_per_example": None}
         else:
             logger.info(
                 "Parameter `max_sequences_per_example` was automatically set to 10 for best performance/efficiency."

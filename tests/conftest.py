@@ -7,6 +7,7 @@ Provides directory-path fixtures, stub-dataset loaders, and mock processors
 shared across unit, smoke, and e2e tests.
 """
 
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -34,6 +35,12 @@ def pytest_collection_modifyitems(config, items):
 
         if not marker_names.intersection(category_markers):
             item.add_marker(pytest.mark.unit)
+
+
+@pytest.fixture(autouse=True)
+def fixture_isolate_deployment_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests opt into deployment type instead of inheriting process state."""
+    monkeypatch.delenv("NEMO_DEPLOYMENT_TYPE", raising=False)
 
 
 @pytest.fixture()
@@ -141,6 +148,65 @@ def fixture_session_cache_dir(tmp_path_factory) -> Path:
     """Create and return a session-scoped temporary directory for test caches."""
     dir = tmp_path_factory.mktemp("nss_pytest_cache")
     return dir
+
+
+@pytest.fixture
+def model_files_factory():
+    """Return a helper that writes minimal Transformers-style model artifacts."""
+
+    def write_model_files(
+        path: Path, files: tuple[str, ...] = ("config.json", "tokenizer.json", "model.safetensors")
+    ) -> Path:
+        path.mkdir(parents=True, exist_ok=True)
+        for name in files:
+            target = path / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("cached")
+        return path
+
+    return write_model_files
+
+
+@pytest.fixture
+def hf_cached_snapshot_factory(tmp_path: Path, model_files_factory):
+    """Return a helper that writes a minimal Hugging Face cache snapshot.
+
+    The directory shape intentionally follows HF Hub internals so cache-specific
+    tests fail loudly if those internals change.
+    """
+
+    def write_cached_snapshot(
+        repo_id: str = "nvidia/Nemotron-Mini-4B-Instruct",
+        *,
+        cache_root: Path | None = None,
+        revision: str = "main",
+        commit: str = "abc123",
+        files: tuple[str, ...] = ("config.json", "tokenizer.json", "model.safetensors"),
+    ) -> tuple[Path, Path]:
+        resolved_cache_root = tmp_path / "hf-cache" if cache_root is None else cache_root
+        repo_cache = resolved_cache_root / f"models--{repo_id.replace('/', '--')}"
+        snapshot = repo_cache / "snapshots" / commit
+        model_files_factory(snapshot, files)
+        refs = repo_cache / "refs"
+        refs.mkdir(parents=True, exist_ok=True)
+        (refs / revision).write_text(commit)
+        return resolved_cache_root, snapshot
+
+    return write_cached_snapshot
+
+
+@pytest.fixture
+def hf_weight_index_factory():
+    """Return a helper that writes an HF-style sharded weight index.
+
+    The JSON shape intentionally mirrors Transformers sharded-weight metadata.
+    """
+
+    def write_weight_index(snapshot: Path, *, shards: tuple[str, ...]) -> None:
+        weight_map = {f"layer_{idx}.weight": shard for idx, shard in enumerate(shards)}
+        (snapshot / "model.safetensors.index.json").write_text(json.dumps({"metadata": {}, "weight_map": weight_map}))
+
+    return write_weight_index
 
 
 def load_test_dataset(

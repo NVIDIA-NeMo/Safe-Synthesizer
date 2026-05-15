@@ -22,6 +22,12 @@ from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
 
 @pytest.fixture
+def fixture_cached_nvidia_snapshot(hf_cached_snapshot_factory):
+    """Realistic Hugging Face cache layout for a cached trusted model."""
+    return hf_cached_snapshot_factory("nvidia/Nemotron-Mini-4B-Instruct")
+
+
+@pytest.fixture
 def mock_model_metadata(fixture_session_cache_dir):
     """Spec'd mock for ``ModelMetadata`` -- guards against signature drift on the helper."""
     metadata = MagicMock(spec=ModelMetadata)
@@ -222,6 +228,40 @@ class TestBuildStructuredOutputParams:
             mock_build_regex.assert_called_once()
             call_args, _ = mock_build_regex.call_args
             assert call_args[1].data.group_training_examples_by == "category"
+
+
+class TestInitializeModelRef:
+    """Tests intentionally tied to HF cache layout through ``ModelRef``."""
+
+    def test_initialize_passes_cached_snapshot_target_and_trust_to_vllm(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        fixture_cached_nvidia_snapshot,
+    ):
+        """Cached snapshot target selection intentionally follows HF cache design."""
+        cache_root, snapshot = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root",
+                return_value=cache_root,
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+        ):
+            backend.initialize()
+
+        assert backend.llm is mock_llm
+        assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
+        assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
 
 
 class TestResolveTemperature:

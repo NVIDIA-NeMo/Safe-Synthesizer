@@ -76,7 +76,7 @@ for the full field list.
 | `training.pretrained_model` | `"HuggingFaceTB/SmolLM3-3B"` | HuggingFace model ID or local path | See supported families below; `TinyLlama/TinyLlama-1.1B-Chat-v1.0` for fast CPU/low-VRAM iteration |
 | `training.quantize_model` | `false` | Enable quantization to reduce VRAM usage | Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit |
 | `training.quantization_bits` | `8` | Bit width (4 or 8) when `training.quantize_model` is `true` | Prefer 8 over 4 for quality |
-| `training.attn_implementation` | `"kernels-community/vllm-flash-attn3"` | Attention backend for model loading | Leave at default |
+| `training.attn_implementation` | `"sdpa"` | Attention backend for model loading | Leave at default |
 | `training.rope_scaling_factor` | `"auto"` | Scale the base model's context window via RoPE (`"auto"` or int) | Leave at `"auto"` |
 | `training.validation_ratio` | `0.0` | Fraction of training data held out for validation loss monitoring | Leave at 0.0 unless you specifically want to monitor validation loss |
 | `training.max_vram_fraction` | `0.8` | Fraction of total GPU VRAM to allocate for training. Must be in [0, 1] | Lower if other GPU consumers are active on the same device |
@@ -202,7 +202,7 @@ for the full field list. For DP error diagnostics, see
 | `data.random_state` | `null` | Random seed -- auto-generated if `null`; set an explicit integer for reproducible splits | Set to a fixed integer for reproducibility |
 | `data.group_training_examples_by` | `null` | Column to group records by | Use for multi-row entities (e.g. patient ID, session ID) |
 | `data.order_training_examples_by` | `null` | Column to order within groups (requires `data.group_training_examples_by`) | Use with a timestamp column for time series data |
-| `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, defaults to `10` otherwise) | Leave at `"auto"` |
+| `data.max_sequences_per_example` | `"auto"` | Max sequences per example (`1` for DP, `null` for time series, `10` otherwise). `null` lets each example fill the context window. DP and time-series mode cannot be enabled together. | Leave at `"auto"` |
 
 See [`DataParameters`][nemo_safe_synthesizer.config.data.DataParameters]
 for the full field list.
