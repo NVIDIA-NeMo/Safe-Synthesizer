@@ -19,18 +19,16 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import opacus
 import pandas as pd
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
-from opacus.accountants import RDPAccountant
 from peft import PeftModel
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.utils.data import Dataset as TorchDataset
 from transformers import (
     DataCollatorForLanguageModeling,
     DataCollatorForTokenClassification,
@@ -54,6 +52,10 @@ from .sampler import (
     PoissonEntitySampler,
     ShuffledEntitySampler,
 )
+
+if TYPE_CHECKING:
+    from opacus.accountants import RDPAccountant
+    from torch.utils.data import Dataset as TorchDataset
 
 if utils.is_safetensors_available():
     import safetensors.torch
@@ -616,7 +618,7 @@ class OpacusDPTrainer(Trainer):
         assert isinstance(train_dataset, Dataset)
         train_sampler = self._get_train_sampler(train_dataset)
         return DataLoader(
-            cast(TorchDataset, train_dataset),
+            cast("TorchDataset", train_dataset),
             batch_sampler=train_sampler,
             collate_fn=self.data_collator,
             drop_last=self.args.dataloader_drop_last,

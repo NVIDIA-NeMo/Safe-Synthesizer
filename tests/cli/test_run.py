@@ -3,6 +3,7 @@
 
 """Tests for the CLI run command and its options."""
 
+import importlib
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -11,12 +12,13 @@ import pytest
 from click.testing import CliRunner
 
 import nemo_safe_synthesizer.observability as obs
-import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.utils import merge_overrides
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 from nemo_safe_synthesizer.tooling import PreflightRenderContext
+
+importlib.import_module("nemo_safe_synthesizer.sdk.library_builder")  # ensure submodule is loaded for mock.patch
 
 # =============================================================================
 # Fixtures
