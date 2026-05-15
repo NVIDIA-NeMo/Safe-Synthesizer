@@ -314,6 +314,7 @@ def _try_extract_entities(
     except ValidationError:
         logger.exception("Error decoding classification JSON returned by llm")
         on_validation_error()
+        return {}
 
 
 class ColumnClassifier(ABC):

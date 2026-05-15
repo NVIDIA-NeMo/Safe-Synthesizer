@@ -97,6 +97,7 @@ class Parameter(Generic[DataT]):
                 return op(self.value, y)
             case _:
                 return NotImplemented
+        raise AssertionError("unreachable")
 
     def __ge__(self, other: "Parameter[DataT] | DataT") -> bool | None:
         return self._comp_helper(other, operator.__ge__)

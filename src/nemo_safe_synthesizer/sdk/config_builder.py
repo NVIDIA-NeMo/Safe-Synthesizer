@@ -126,6 +126,7 @@ class ConfigBuilder(object):
                 return cls(**overrides)
             case _:
                 raise TypeError(f"Unsupported config type: {type(values)}")
+        raise AssertionError("unreachable")
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.

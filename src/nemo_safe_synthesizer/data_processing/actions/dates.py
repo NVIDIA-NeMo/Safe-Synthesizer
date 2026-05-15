@@ -393,6 +393,7 @@ def infer_from_series(date_series: Iterable[str]) -> Optional[str]:
     highest_occurrence = fmt_occurrences.most_common(1)
     if highest_occurrence:
         return highest_occurrence[0][0]
+    return None
 
 
 def fit_and_transform_dates(

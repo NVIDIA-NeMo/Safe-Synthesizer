@@ -119,12 +119,14 @@ class JSONRecord(base.BaseRecord):
         for pair in self.kv_pairs:
             if pair.json_path == json_path:
                 return str(pair.value)
+        return None
 
     def value_for_value_path(self, path: base.ValuePath) -> Optional[str]:
         """Return the string value at ``path``, or None if not found."""
         for pair in self.kv_pairs:
             if pair.value_path == path:
                 return str(pair.value)
+        return None
 
     def flattened(self) -> dict[base.ValuePath, object]:
         """Return a dict mapping each ``ValuePath`` to its scalar value."""

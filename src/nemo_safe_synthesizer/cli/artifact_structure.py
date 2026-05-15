@@ -79,6 +79,7 @@ def _parse_project_name(project_name: str) -> tuple[str, str]:
             return config_name, "unknown"
         case _:
             return project_name, "unknown"
+    raise AssertionError("unreachable")
 
 
 @dataclass
@@ -170,6 +171,7 @@ class FileNode:
                 return workdir.run_dir / self.name
             case _:
                 raise TypeError(f"FileNode can only be used with BoundDir or Workdir, got {type(obj)}")
+        raise AssertionError("unreachable")
 
 
 # Covariant type parameter of ``DirNode``.
@@ -227,6 +229,7 @@ class DirNode(Generic[T_co]):
                 return BoundDir(workdir.run_dir / self.name, self.children)
             case _:
                 raise TypeError(f"DirNode can only be used with BoundDir or Workdir, got {type(obj)}")
+        raise AssertionError("unreachable")
 
 
 class BoundDir(os.PathLike[str]):
@@ -287,6 +290,7 @@ class BoundDir(os.PathLike[str]):
                 return BoundDir(self._path / dirname, children)
             case other:
                 raise TypeError(f"Unknown child type: {type(other)}")
+        raise AssertionError("unreachable")
 
 
 # ---------------------------------------------------------------------------

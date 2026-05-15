@@ -165,6 +165,7 @@ def resolve_rope_scaling_factor(
             raise ValueError("autoconfig is required when factor is not a RopeScaling, dict, or int/float")
         case _, _:
             raise ValueError("Invalid input type for rope scaling factor")
+    raise AssertionError("unreachable")
 
 
 def _model_load_parameter_error(model_name_or_path: str, err: OSError) -> ParameterError:

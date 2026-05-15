@@ -334,6 +334,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         if state.is_local_process_zero and state.global_step > self._last_log_global_step and cond:
             control.should_log = True
             return control
+        return None
 
     def on_epoch_end(
         self,

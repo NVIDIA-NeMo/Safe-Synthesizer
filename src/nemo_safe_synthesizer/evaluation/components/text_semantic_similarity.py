@@ -250,6 +250,7 @@ class TextSemanticSimilarity(Component):
                     return SentenceTransformer("distiluse-base-multilingual-cased-v2")
         except RetryError:
             return None
+        return None
 
     @staticmethod
     def _get_embedding_vectors(

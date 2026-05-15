@@ -147,7 +147,7 @@ def get_regex_predictors_from_config(config: dict) -> Optional[list[RegexPredict
 
     predictor_dicts = config.get("regex", None)
     if predictor_dicts is None:
-        return
+        return None
 
     for name, patterns in predictor_dicts.items():
         predictor_name = name.lower()
@@ -185,7 +185,7 @@ def get_phrase_predictors_from_config(config: dict) -> Optional[list[RegexPredic
 
     phrase_predictors = config.get("phrase", None)
     if phrase_predictors is None:
-        return
+        return None
 
     for predictor_name, phrase_config in phrase_predictors.items():
         predictor_name = predictor_name.lower()

@@ -9,6 +9,8 @@ handling) and deriving JSON schemas used for validating generated records.
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 import numpy as np
 import pandas as pd
 
@@ -62,15 +64,13 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
     if isinstance(v, np.bool_):
         return bool(v)
 
-    try:
+    with suppress(Exception):
         # Convert to python int if possible, but np.float32 and other float
         # types will be truncated by int(v), so check equality to make sure
         # we haven't lost precision.
         t = int(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
         if t == v:
             return t
-    except Exception:
-        t = None
 
     try:
         # Convert to python float if possible

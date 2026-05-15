@@ -149,6 +149,7 @@ class NSSObservabilitySettings(BaseSettings):
                 except (ImportError, AttributeError):
                     return "json"
                 return "json"
+        raise AssertionError("unreachable")
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
@@ -161,6 +162,7 @@ class NSSObservabilitySettings(BaseSettings):
                 return value
             case _:
                 return sys.stdout.isatty()
+        raise AssertionError("unreachable")
 
 
 with warnings.catch_warnings():
