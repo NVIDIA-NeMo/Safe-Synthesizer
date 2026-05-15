@@ -106,13 +106,22 @@ class JSONRecord(base.BaseRecord):
     Provides lookup by JSONPath or ``ValuePath``.
     """
 
-    def unpack(self):
+    def __init__(self, original):
+        super().__init__(original)
+        self._unpack_json()
+
+    def _unpack_json(self) -> None:
         flattened_dict = flatten({"": self.original} if isinstance(self.original, str) else self.original)
 
         kv_pairs = convert_flat_dict_to_kv_pairs(flattened_dict)
         for pair in kv_pairs:
             self.fields.add(pair.field)
             self.kv_pairs.append(pair)
+
+    def unpack(self):
+        self.kv_pairs = []
+        self.fields = set()
+        self._unpack_json()
 
     def value_for_json_path(self, json_path: str) -> Optional[str]:
         """Return the string value at ``json_path``, or None if not found."""
