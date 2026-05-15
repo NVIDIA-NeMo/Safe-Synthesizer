@@ -31,14 +31,12 @@ from pydantic import (
 from ..config.base import (
     pydantic_model_config,
 )
-from ..observability import get_logger
 from .parameter import (
     DataT,
 )
 
 __all__ = ["Parameters"]
 
-logger = get_logger(__name__)
 PathT = str | Path
 
 
