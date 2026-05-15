@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib
 import inspect
 import json
 import logging
@@ -13,7 +14,6 @@ import pytest
 import structlog
 from rich.table import Table
 
-import nemo_safe_synthesizer.observability as obs
 from nemo_safe_synthesizer.observability import (
     CategoryFilter,
     CategoryLogger,
@@ -32,6 +32,8 @@ from nemo_safe_synthesizer.observability import (
     initialize_observability,
     traced,
 )
+
+obs = importlib.import_module("nemo_safe_synthesizer.observability")
 
 # =============================================================================
 # NSSObservabilitySettings Tests

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from re import Pattern
 
 from ...data_processing.records.base import normalize_label, normalize_labels
 from ...observability import get_logger
@@ -31,7 +30,7 @@ class LabelEvaluator:
     One notable example is expanding wildcards from the label config (e.g. ``acme/*`` or ``*``).
     """
 
-    def __init__(self, explicit_labels: set[str], label_regexes: list[Pattern]):
+    def __init__(self, explicit_labels: set[str], label_regexes: list[re.Pattern]):
         self._explicit_labels = normalize_labels(explicit_labels)
         self._label_regexes = label_regexes
 
@@ -80,7 +79,7 @@ class LabelEvaluator:
             config_labels: Labels configured by the users.
         """
         explicit_labels = set([])
-        label_regexes: list[Pattern] = []
+        label_regexes: list[re.Pattern] = []
 
         for label in config_labels:
             if "*" not in label:

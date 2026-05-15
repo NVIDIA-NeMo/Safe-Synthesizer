@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib
 from logging import INFO
 from unittest import mock
 from unittest.mock import MagicMock
@@ -8,13 +9,12 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-import nemo_safe_synthesizer
-import nemo_safe_synthesizer.generation
-import nemo_safe_synthesizer.generation.batch
 from nemo_safe_synthesizer.data_processing.actions.utils import MetadataColumns
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
 from nemo_safe_synthesizer.generation.results import rejected_record_to_error
+
+batch_module = importlib.import_module("nemo_safe_synthesizer.generation.batch")
 
 
 # Purpose: Provides a processor mock with a heavy distribution of invalid records and categorized errors
@@ -201,7 +201,7 @@ def test_log_summary_data_config(caplog, fixture_mock_processor_rejected_records
     batch.process(prompt_number=1, text="stub text")
 
     # ensure we display data_config errors even if there's more than LOG_NUM_ERRORS
-    with mock.patch.object(nemo_safe_synthesizer.generation.batch, "LOG_NUM_ERRORS", 3):
+    with mock.patch.object(batch_module, "LOG_NUM_ERRORS", 3):
         batch.log_summary()
 
     # Extract ctx data from log records (logging passes extra data to record attributes)

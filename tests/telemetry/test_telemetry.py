@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import importlib
 import threading
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import nemo_safe_synthesizer.telemetry as telemetry_module
 from nemo_safe_synthesizer.telemetry import (
     DeploymentTypeEnum,
     NemoSourceEnum,
@@ -24,6 +24,8 @@ from nemo_safe_synthesizer.telemetry import (
     build_payload,
     sanitize_model_for_telemetry,
 )
+
+telemetry_module = importlib.import_module("nemo_safe_synthesizer.telemetry")
 
 # =============================================================================
 # Bucket helpers

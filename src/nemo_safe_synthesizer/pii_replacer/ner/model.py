@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import re
-from re import Pattern
 
 from ...data_processing.records.fragment import create_ner_api_response
 from ...pii_replacer.ner.entity import Score
@@ -72,7 +71,7 @@ class Model:
 
         return create_ner_api_response(input_data, predictions, pure_dict=True)
 
-    def add_regex(self, source: str, pattern: str | Pattern, score: Score | None = None):
+    def add_regex(self, source: str, pattern: str | re.Pattern, score: Score | None = None):
         namespace, name = _parse_custom_source(source)
         if score is None:
             score = Score.HIGH

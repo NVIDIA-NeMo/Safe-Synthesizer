@@ -31,7 +31,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from re import Pattern
 from typing import Optional
 
 import yaml
@@ -82,7 +81,7 @@ class CustomRegexPattern:
             raise CustomPredictorError("score must be one of low, med, high")
 
         self.regex_compiled = self.regex
-        if not isinstance(self.regex, Pattern):
+        if not isinstance(self.regex, re.Pattern):
             self.regex_compiled = re.compile(str(self.regex))
 
         self._load_header_patterns()
