@@ -194,12 +194,8 @@ class CacheManager:
 
         objs = {}
         for obj_ref in manifest.sources:
-            src_obj = None
             start_time = time.perf_counter()
-            for step in self.obj_from_fs:
-                src_obj = step(manifest, obj_ref, skip_pickle=skip_pickle)
-                if src_obj:
-                    break
+            src_obj = self.obj_from_fs(manifest, obj_ref, skip_pickle=skip_pickle)
             if not src_obj:
                 raise RuntimeError(f"Could note resolve manifest {manifest}. Failed to load {src_obj}")
             else:
