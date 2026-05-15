@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+import nemo_safe_synthesizer.observability as obs
 import nemo_safe_synthesizer.sdk.library_builder  # noqa: F401 - ensure submodule is loaded for mock.patch
 from nemo_safe_synthesizer.cli.run import run
 from nemo_safe_synthesizer.cli.settings import CLISettings
@@ -909,3 +910,99 @@ class TestAutoParamCliOverrides:
             resolved = getattr(resolved, key)
         assert resolved == expected
         assert type(resolved) is type(expected)
+
+
+class TestRunErrorPathExitCodes:
+    """Tests that run command error paths exit with non-zero status."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_observability(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # These tests invoke the real common_setup, which calls
+        # initialize_observability() and flips the module-level
+        # _INITIALIZED_OBSERVABILITY flag. Without this reset, get_logger()
+        # in subsequent tests on the same xdist worker returns a
+        # CategoryLogger wrapping a structlog BoundLogger, and stdlib
+        # LoggerAdapter.isEnabledFor() then fails with AttributeError.
+        monkeypatch.setattr(obs, "_INITIALIZED_OBSERVABILITY", False)
+        monkeypatch.delenv("NSS_PHASE", raising=False)
+
+    def test_run_with_no_data_source_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+    ):
+        """`run` without --data-source must fail with a ClickException."""
+        result = cli_runner.invoke(
+            run,
+            [
+                "--artifact-path",
+                str(tmp_path / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code != 0
+
+    def test_run_with_nonexistent_data_source_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+    ):
+        """`run --data-source missing.csv` must fail when the file doesn't exist."""
+        missing_csv = tmp_path / "does_not_exist.csv"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "--data-source",
+                str(missing_csv),
+                "--artifact-path",
+                str(tmp_path / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert isinstance(result.exception, FileNotFoundError)
+
+    def test_run_with_unsupported_data_source_extension_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        tmp_path: Path,
+    ):
+        """`run --data-source bad.xyz` must fail for an unsupported file extension."""
+        bad_source = tmp_path / "bad_source.xyz"
+        bad_source.write_text("irrelevant contents")
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "--data-source",
+                str(bad_source),
+                "--artifact-path",
+                str(tmp_path / "artifacts"),
+            ],
+        )
+
+        assert result.exit_code != 0
+        assert isinstance(result.exception, ValueError)
+
+    def test_generate_with_nonexistent_run_path_exits_nonzero(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        tmp_path: Path,
+    ):
+        """`run generate --run-path /nonexistent` must fail with a ClickException."""
+        missing_run = tmp_path / "no_such_run"
+
+        result = cli_runner.invoke(
+            run,
+            [
+                "generate",
+                "--data-source",
+                str(dummy_csv),
+                "--run-path",
+                str(missing_run),
+            ],
+        )
+
+        assert result.exit_code != 0
