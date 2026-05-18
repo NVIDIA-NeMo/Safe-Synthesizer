@@ -8,7 +8,7 @@ Click options, then maps Click's flat keyword arguments back to the nested
 structure Pydantic expects. It powers the CLI surfaces that expose
 `SafeSynthesizerParameters`.
 
-For general Pydantic style rules, see [STYLE_GUIDE.md](../../STYLE_GUIDE.md#data-modeling).
+For general Pydantic style rules, see [STYLE_GUIDE.md](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#data-modeling).
 This page covers repository-specific mechanics.
 
 The type system is still growing. The long-term goal is that every setting
@@ -135,9 +135,8 @@ It is used only when the string literal side is exactly `"auto"`.
 
 ## Validators and Settings
 
-General Pydantic validator style lives in
-[STYLE_GUIDE.md](../../STYLE_GUIDE.md#data-modeling). Repository-specific
-validators live in `src/nemo_safe_synthesizer/configurator/validators.py`:
+General Pydantic validator style lives in [STYLE_GUIDE.md](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#data-modeling). Repository-specific validators live in
+`src/nemo_safe_synthesizer/configurator/validators.py`:
 
 - `DependsOnValidator`: field is valid only when another field is set.
 - `ValueValidator`: validates the effective field value.

@@ -72,6 +72,11 @@ watch:
 
 strict: !ENV [MKDOCS_STRICT, false]
 
+validation:
+  links:
+    not_found: warn    # broken page links emit a warning
+    anchors: warn      # broken anchor links emit a warning (default is info)
+
 hooks:
   - docs/hooks.py
 

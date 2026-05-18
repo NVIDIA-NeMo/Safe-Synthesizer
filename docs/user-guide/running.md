@@ -125,7 +125,7 @@ You can also run stages individually:
 Use `--validate` to check your dataset and configuration before committing to
 a full run. Pre-flight catches configuration mistakes, missing columns, token
 budget overflows, and GPU issues in seconds -- before the pipeline downloads
-models or starts training. See [`run --validate`](#run---validate) in CLI
+models or starts training. See [`run --validate`](#run-validate) in CLI
 Commands for the full reference.
 
 ---

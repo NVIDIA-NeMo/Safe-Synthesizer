@@ -142,4 +142,4 @@ evaluation:
 
 ## Related Topics
 
-- [Synthetic Data Quality](evaluating-data.md): See recommendations for increasing quality and privacy scores
+- [Synthetic Data Quality](../user-guide/evaluating-data.md): See recommendations for increasing quality and privacy scores

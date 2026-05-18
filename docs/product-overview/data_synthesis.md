@@ -36,7 +36,7 @@ Three models have been extensively tested:
 | TinyLlama | `TinyLlama/TinyLlama-1.1B-Chat-v1.0` |
 | Mistral | `mistralai/Mistral-7B-Instruct-v0.3` |
 
-For information on the trade-offs with model selection, see [Training](running.md#training).
+For information on the trade-offs with model selection, see [Training](../user-guide/running.md#training).
 
 ### Supported Data Types
 
