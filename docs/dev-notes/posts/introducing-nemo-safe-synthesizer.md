@@ -36,7 +36,7 @@ That distinction matters for privacy: LLM-based synthesis is designed to maintai
 
 ## The Pipeline
 
-NeMo Safe Synthesizer runs as a multi-stage pipeline. Point it at a CSV or DataFrame, provide a config, and it produces a synthetic dataset plus a detailed evaluation report.
+NeMo Safe Synthesizer runs as a multi-stage pipeline. Point it at input data (CSV file, Parquet file, pandas DataFrame), provide a config, and it produces a synthetic dataset plus a detailed evaluation report.
 
 ```mermaid
 flowchart LR
