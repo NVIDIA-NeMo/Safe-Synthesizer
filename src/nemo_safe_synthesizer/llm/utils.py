@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 
 from ..observability import get_logger
 
@@ -568,9 +568,9 @@ def load_fast_tokenizer(model_name_or_path: Path | str, **kwargs: Any) -> PreTra
     Returns:
         Loaded ``PreTrainedTokenizer`` (Rust-backed when available).
     """
-    from transformers import AutoTokenizer
+    from transformers import AutoTokenizer, PreTrainedTokenizer
 
-    kwargs.setdefault("use_fast", True)
+    kwargs["use_fast"] = True
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, **kwargs)
     if not getattr(tokenizer, "is_fast", False):
         logger.warning(
@@ -578,7 +578,7 @@ def load_fast_tokenizer(model_name_or_path: Path | str, **kwargs: Any) -> PreTra
             "Data-prep tokenization will be ~5-10x slower than the fast path.",
             str(model_name_or_path),
         )
-    return tokenizer
+    return cast(PreTrainedTokenizer, tokenizer)
 
 
 def get_device_name() -> str:
@@ -655,11 +655,13 @@ def count_trainable_params(model: PeftModel) -> tuple[int, int]:
 
 
 def get_quantization_config(scheme: QuantizationScheme | str | Literal[4, 8]) -> QuantizationConfigMixin:
-    """Build a transformers v5 quantization config for the requested scheme.
+    """Compatibility wrapper for building a transformers v5 quantization config.
 
     Accepts a :class:`QuantizationScheme` (or its string value) for new
     callers, or an integer ``4`` / ``8`` for backward compatibility with the
     legacy ``quantization_bits`` field (4 → ``bnb-4bit``, 8 → ``bnb-8bit``).
+    New code should prefer
+    :meth:`nemo_safe_synthesizer.config.training.QuantizationScheme.to_transformers_config`.
 
     Args:
         scheme: A ``QuantizationScheme`` value, its string equivalent
@@ -676,43 +678,6 @@ def get_quantization_config(scheme: QuantizationScheme | str | Literal[4, 8]) ->
         ImportError: If the underlying quantization backend is not installed
             (e.g. torchao for NVFP4 / MXFP4).
     """
-    import torch
-
     from ..config.training import QuantizationScheme
 
-    if isinstance(scheme, int):
-        scheme = QuantizationScheme.BNB_4BIT if scheme == 4 else QuantizationScheme.BNB_8BIT
-    scheme = QuantizationScheme(scheme)  # normalize string / enum
-
-    if scheme is QuantizationScheme.BNB_4BIT:
-        from transformers import BitsAndBytesConfig
-
-        return BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
-        )
-    if scheme is QuantizationScheme.BNB_8BIT:
-        from transformers import BitsAndBytesConfig
-
-        return BitsAndBytesConfig(
-            load_in_8bit=True,
-            bnb_8bit_quant_type="nf8",
-            bnb_8bit_use_double_quant=True,
-            bnb_8bit_compute_dtype=torch.bfloat16,
-        )
-    if scheme is QuantizationScheme.FP8:
-        from transformers import FineGrainedFP8Config
-
-        return FineGrainedFP8Config()
-    if scheme is QuantizationScheme.NVFP4:
-        from torchao.prototype.mx_formats import NVFP4WeightOnlyConfig
-        from transformers import TorchAoConfig
-
-        return TorchAoConfig(quant_type=NVFP4WeightOnlyConfig())
-    if scheme is QuantizationScheme.MXFP4:
-        from transformers import Mxfp4Config  # ty:ignore[unresolved-import]
-
-        return Mxfp4Config()
-    raise ValueError(f"Unknown quantization scheme: {scheme!r}")
+    return QuantizationScheme.from_alias(scheme).to_transformers_config()

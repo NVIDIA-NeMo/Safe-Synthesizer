@@ -4,10 +4,42 @@
 """Unit tests for llm.utils helpers."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nemo_safe_synthesizer.llm.utils import ModelRef, trust_remote_code_for_model
+from nemo_safe_synthesizer.llm.utils import (
+    ModelRef,
+    get_quantization_config,
+    load_fast_tokenizer,
+    trust_remote_code_for_model,
+)
+
+
+def test_load_fast_tokenizer_forces_fast_backend() -> None:
+    tokenizer = MagicMock()
+    tokenizer.is_fast = True
+
+    with patch("transformers.AutoTokenizer.from_pretrained", return_value=tokenizer) as from_pretrained:
+        result = load_fast_tokenizer("test-model", use_fast=False, trust_remote_code=True)
+
+    assert result is tokenizer
+    from_pretrained.assert_called_once_with("test-model", use_fast=True, trust_remote_code=True)
+
+
+def test_get_quantization_config_rejects_invalid_legacy_bit_alias() -> None:
+    with pytest.raises(ValueError, match="Expected 4 or 8"):
+        get_quantization_config(5)  # ty: ignore[invalid-argument-type] -- intentionally invalid alias
+
+
+def test_get_quantization_config_8bit_uses_valid_bitsandbytes_kwargs() -> None:
+    config = MagicMock()
+
+    with patch("transformers.BitsAndBytesConfig", return_value=config) as bitsandbytes_config:
+        result = get_quantization_config(8)
+
+    assert result is config
+    bitsandbytes_config.assert_called_once_with(load_in_8bit=True)
 
 
 @pytest.mark.parametrize(

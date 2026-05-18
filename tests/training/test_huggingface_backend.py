@@ -494,6 +494,20 @@ class TestGetQuantizationConfigIfEnabled:
         mock_get_config.assert_called_once_with(QuantizationScheme.NVFP4)
 
 
+class TestPrepareQuantizeBase:
+    @pytest.mark.parametrize("scheme_name", ["FP8", "NVFP4", "MXFP4"])
+    def test_loftq_rejects_non_bitsandbytes_schemes(self, backend_with_quantization, scheme_name):
+        """LoftQ depends on bitsandbytes quantization schemes."""
+        from nemo_safe_synthesizer.config.training import QuantizationScheme
+
+        scheme = getattr(QuantizationScheme, scheme_name)
+        backend_with_quantization.params.training.quantization_scheme = scheme
+        backend_with_quantization.params.training.peft_implementation = "loftq"
+
+        with pytest.raises(ParameterError, match="requires a bitsandbytes scheme"):
+            backend_with_quantization._prepare_quantize_base()
+
+
 class TestApplyRopeScaling:
     def test_applies_rope_scaling_from_metadata(self, backend):
         """Test that rope_scaling from metadata is applied."""
@@ -619,6 +633,18 @@ class TestConfigureDpTraining:
         assert training_args["remove_unused_columns"] is False
         assert training_args["max_grad_norm"] == 0.0
         assert "gradient_checkpointing" not in training_args
+
+    def test_disables_model_gradient_checkpointing(self, backend_with_dp):
+        """Test that DP training disables model-level gradient checkpointing."""
+        model = MagicMock()
+        model.config.use_cache = True
+        backend_with_dp.model = model
+        training_args = {"gradient_checkpointing": True}
+
+        backend_with_dp._configure_dp_training(training_args)
+
+        model.gradient_checkpointing_disable.assert_called_once_with()
+        assert model.config.use_cache is False
 
     def test_raises_when_missing_data_fraction(self, backend_with_dp):
         """Test that ParameterError is raised when data_fraction is missing."""

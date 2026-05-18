@@ -387,7 +387,7 @@ class TestLLMPromptConfig:
         assert sample_prompt_config.eos_token == "</s>"
         assert sample_prompt_config.eos_token_id == 2
 
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_from_tokenizer(self, mock_auto_tokenizer, sample_prompt_config):
         """Test the from_tokenizer method creates a new config from tokenizer."""
         mock_tokenizer = MagicMock()
@@ -395,7 +395,7 @@ class TestLLMPromptConfig:
         mock_tokenizer.bos_token_id = 10
         mock_tokenizer.eos_token = "<eos>"
         mock_tokenizer.eos_token_id = 20
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
 
         new_config = sample_prompt_config.from_tokenizer("test-model")
 
@@ -407,7 +407,7 @@ class TestLLMPromptConfig:
         assert new_config.add_bos_token_to_prompt is True
         assert new_config.add_eos_token_to_prompt is True
 
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_from_tokenizer_with_kwargs_override(self, mock_auto_tokenizer, sample_prompt_config):
         """Test that kwargs can override default values in from_tokenizer."""
         mock_tokenizer = MagicMock()
@@ -415,7 +415,7 @@ class TestLLMPromptConfig:
         mock_tokenizer.bos_token_id = 10
         mock_tokenizer.eos_token = "<eos>"
         mock_tokenizer.eos_token_id = 20
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
 
         new_config = sample_prompt_config.from_tokenizer(
             "test-model",
@@ -732,7 +732,7 @@ class TestModelDetection:
     """Tests for ModelMetadata.from_str_or_path model detection."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_model_detection(
         self,
         mock_auto_tokenizer,
@@ -742,7 +742,7 @@ class TestModelDetection:
         model_detection_scenario: ModelDetectionScenario,
     ):
         """Test that models are correctly detected from their paths."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         metadata = ModelMetadata.from_str_or_path(model_detection_scenario.model_path)
@@ -754,7 +754,7 @@ class TestModelInitialization:
     """Tests for individual model class initialization."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_model_initialization(
         self,
         mock_auto_tokenizer,
@@ -764,7 +764,7 @@ class TestModelInitialization:
         model_init_scenario: ModelInitScenario,
     ):
         """Test model initialization with expected configuration values."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         # Set custom max_position_embeddings if specified
@@ -800,7 +800,7 @@ class TestFromConfig:
     """Tests for ModelMetadata.from_config method."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     @pytest.mark.parametrize(
         "rope_factor, max_seq_per_example, expected_rope_factor, expected_max_seq",
         [
@@ -821,7 +821,7 @@ class TestFromConfig:
         expected_max_seq,
     ):
         """Test from_config creates metadata from SafeSynthesizerParameters."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         mock_config = MagicMock()
@@ -839,7 +839,7 @@ class TestFromConfig:
         assert metadata.max_sequences_per_example == expected_max_seq
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_from_config_uses_cached_model_ref_target(
         self,
         mock_auto_tokenizer,
@@ -852,7 +852,7 @@ class TestFromConfig:
         model_ref = MagicMock()
         model_ref.target.return_value = cached_target
         model_ref.trust_remote_code = True
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         mock_config = MagicMock()
@@ -866,10 +866,10 @@ class TestFromConfig:
         assert isinstance(metadata, TinyLlama)
         parse.assert_called_once_with(mock_config.training.pretrained_model)
         mock_auto_config.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
-        mock_auto_tokenizer.from_pretrained.assert_called_once_with(cached_target, trust_remote_code=True)
+        mock_auto_tokenizer.assert_called_once_with(cached_target, trust_remote_code=True)
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_from_config_wraps_model_load_errors(
         self,
         mock_auto_tokenizer,
@@ -894,14 +894,14 @@ class TestFromConfig:
             ModelMetadata.from_config(mock_config)
 
         mock_auto_config.from_pretrained.assert_called_once_with(model_name, trust_remote_code=False)
-        mock_auto_tokenizer.from_pretrained.assert_not_called()
+        mock_auto_tokenizer.assert_not_called()
 
 
 class TestModelMetadataKwargsPassthrough:
     """Tests for kwargs passthrough in model classes."""
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     @pytest.mark.parametrize(
         "kwarg_name, kwarg_value, attr_name, expected_value",
         [
@@ -921,7 +921,7 @@ class TestModelMetadataKwargsPassthrough:
         expected_value,
     ):
         """Test that kwargs are correctly passed through to model metadata."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         kwargs = {kwarg_name: kwarg_value}
@@ -930,12 +930,12 @@ class TestModelMetadataKwargsPassthrough:
         assert getattr(metadata, attr_name) == expected_value
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_workdir_passthrough(
         self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj, sample_workdir
     ):
         """Test that workdir can be passed through kwargs."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         metadata = TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0", workdir=sample_workdir)
@@ -943,12 +943,12 @@ class TestModelMetadataKwargsPassthrough:
         assert metadata.workdir == sample_workdir
 
     @patch("nemo_safe_synthesizer.llm.metadata.AutoConfig")
-    @patch("nemo_safe_synthesizer.llm.metadata.AutoTokenizer")
+    @patch("nemo_safe_synthesizer.llm.metadata.load_fast_tokenizer")
     def test_rope_scaling_factor_passthrough(
         self, mock_auto_tokenizer, mock_auto_config, mock_tokenizer, mock_autoconfig_obj
     ):
         """Test that rope_scaling_factor can be passed through kwargs."""
-        mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+        mock_auto_tokenizer.return_value = mock_tokenizer
         mock_auto_config.from_pretrained.return_value = mock_autoconfig_obj
 
         metadata = TinyLlama(model_name_or_path="TinyLlama/TinyLlama-1.1B-Chat-v1.0", rope_scaling_factor=4)

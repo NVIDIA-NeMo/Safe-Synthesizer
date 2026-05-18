@@ -92,7 +92,6 @@ FIXED_RUNTIME_TRAINING_ARGS = {
     "per_device_eval_batch_size": 2,
     "optim": "paged_adamw_32bit",
     "bf16": True,
-    "group_by_length": False,
     "ddp_find_unused_parameters": False,
 }
 """Training arguments fixed by Safe Synthesizer at runtime.
@@ -427,7 +426,7 @@ class HuggingFaceBackend(TrainingBackend):
         DP uses ``DataCollatorForPrivateTokenClassification`` and
         ``OpacusDPTrainer``. The HuggingFace ``max_grad_norm`` is set to zero
         because Opacus handles per-sample clipping. Gradient checkpointing is
-        removed because it is not compatible with the Opacus optimizer wrapping.
+        disabled because it is not compatible with the Opacus optimizer wrapping.
 
         Args:
             training_args: The training arguments dictionary to modify.
@@ -451,6 +450,14 @@ class HuggingFaceBackend(TrainingBackend):
 
         training_args["remove_unused_columns"] = False  # required for DP data processing
         training_args["max_grad_norm"] = 0.0  # required for opacus optimizer
+        _ = training_args.pop("gradient_checkpointing", None)
+
+        if hasattr(self, "model"):
+            model = self.model
+            if hasattr(model, "gradient_checkpointing_disable"):
+                model.gradient_checkpointing_disable()
+            if hasattr(model, "config"):
+                model.config.use_cache = False
 
         if self.true_dataset_size is None or self.data_fraction is None:
             raise ParameterError(
@@ -469,7 +476,6 @@ class HuggingFaceBackend(TrainingBackend):
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
         )
-        _ = training_args.pop("gradient_checkpointing", None)
 
         return data_collator
 

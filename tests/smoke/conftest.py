@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -47,7 +48,7 @@ def fixture_tiny_model(fixture_tiny_llama_config) -> LlamaForCausalLM:
 @pytest.fixture(scope="session")
 def fixture_stub_tokenizer(fixture_stub_tokenizer_path) -> PreTrainedTokenizerBase:
     """Load the Llama stub tokenizer from tests/stub_tokenizer/."""
-    return AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path)
+    return cast(PreTrainedTokenizerBase, AutoTokenizer.from_pretrained(fixture_stub_tokenizer_path))
 
 
 @pytest.fixture(scope="session")

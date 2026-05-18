@@ -503,8 +503,9 @@ class OpacusDPTrainer(Trainer):
                 )
             return _num_steps
 
-    def create_optimizer(self):
+    def create_optimizer(self, model: nn.Module | None = None) -> torch.optim.Optimizer:
         """Create the base optimizer then wrap it with Opacus DPOptimizer."""
+        _ = model  # Signature matches transformers v5; base method uses self.model.
         _ = super().create_optimizer()
 
         class DPOptimizer(opacus.optimizers.DPOptimizer):
@@ -545,7 +546,7 @@ class OpacusDPTrainer(Trainer):
         self,
         model: nn.Module,
         inputs: dict[str, torch.Tensor | Any],
-        num_items_in_batch: torch.Tensor | None = None,
+        num_items_in_batch: torch.Tensor | int | None = None,
     ) -> torch.Tensor:
         """Run one training step and return the loss scaled for logging.
 
@@ -574,6 +575,8 @@ class OpacusDPTrainer(Trainer):
         inputs = self._prepare_inputs(inputs)
         with self.compute_loss_context_manager():
             loss = self.compute_loss(model, inputs, num_items_in_batch=None)
+        if isinstance(loss, tuple):
+            loss = loss[0]
         del inputs
 
         loss.backward()
@@ -657,7 +660,7 @@ class OpacusDPTrainer(Trainer):
                 )
             else:
                 logger.info("Trainer.model is not a `PreTrainedModel`, only saving its state dict.")
-                if self.args.save_safetensors:
+                if getattr(self.args, "save_safetensors", False):
                     try:
                         safetensors.torch.save_file(
                             state_dict,
@@ -674,8 +677,9 @@ class OpacusDPTrainer(Trainer):
                 state_dict=state_dict,
             )
 
-        if self.tokenizer is not None:
-            self.tokenizer.save_pretrained(output_dir)
+        processor = getattr(self, "processing_class", None) or getattr(self, "tokenizer", None)
+        if processor is not None:
+            processor.save_pretrained(output_dir)
 
         # Good practice: save your training arguments together with the trained model
         torch.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))

@@ -5,10 +5,10 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import ClassVar, Literal
 
-import torch  # noqa: F401 -- transformers v5 type hints reference `torch.*` lazily; needed for pydantic forward-ref resolution
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -996,8 +996,10 @@ class TinyLlama(ModelMetadata):
 # Pydantic 2.12 + transformers v5 + `from __future__ import annotations` interact
 # such that forward references inside `PretrainedConfig | None` and
 # `PreTrainedTokenizerBase | None` unions are only resolvable after the module
-# has fully loaded. Rebuild eagerly so callers don't trip the lazy
-# "not fully defined" guard the first time they instantiate a subclass.
+# has fully loaded. Transformers includes lazy `torch.*` references in that
+# namespace, so provide it explicitly while rebuilding instead of relying on an
+# otherwise-unused module import.
+_model_rebuild_namespace = {"torch": importlib.import_module("torch")}
 for _cls in (
     ModelMetadata,
     Granite,
@@ -1009,5 +1011,5 @@ for _cls in (
     SmolLM3,
     TinyLlama,
 ):
-    _cls.model_rebuild()
-del _cls
+    _cls.model_rebuild(_types_namespace=_model_rebuild_namespace)
+del _cls, _model_rebuild_namespace

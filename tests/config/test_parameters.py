@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
+from nemo_safe_synthesizer.config.training import QuantizationScheme
 
 
 def test_safe_synthesizer_parameters(monkeypatch):
@@ -57,6 +59,21 @@ def test_emit_telemetry_from_yaml_uses_env_when_unset(monkeypatch):
 def test_pii_replacer_default():
     with pytest.raises(ValidationError):
         PiiReplacerConfig()  # ty: ignore[missing-argument] -- intentionally testing validation error
+
+
+def test_quantization_scheme_from_alias_rejects_invalid_legacy_bit_alias() -> None:
+    with pytest.raises(ValueError, match="Expected 4 or 8"):
+        QuantizationScheme.from_alias(5)  # ty: ignore[invalid-argument-type] -- intentionally invalid alias
+
+
+def test_quantization_scheme_8bit_uses_valid_bitsandbytes_kwargs() -> None:
+    config = MagicMock()
+
+    with patch("transformers.BitsAndBytesConfig", return_value=config) as bitsandbytes_config:
+        result = QuantizationScheme.BNB_8BIT.to_transformers_config()
+
+    assert result is config
+    bitsandbytes_config.assert_called_once_with(load_in_8bit=True)
 
 
 # --- replace_pii default_factory invariants ---
