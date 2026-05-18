@@ -9,7 +9,7 @@ authors:
 
 # Private by Design: Introducing NeMo Safe Synthesizer
 
-Every organization working on AI faces the same challenge: the data that would make their models most useful is also the proprietary data with the most barriers to access. The data is right there: patient records, financial transactions, customer support logs, and other datasets full of names, account numbers, and personal details. It is rich and perfectly suited to the task, but legal and compliance teams have marked it off-limits for good reason.
+Every organization working on AI faces the same challenge: the data that would make their models most useful is also proprietary data with the highest barriers to access. The data is right there: patient records, financial transactions, customer support logs, and datasets full of names, account numbers, and personal details. It is rich and perfectly suited to the task, but legal and compliance teams have marked it off-limits for good reason.
 
 We built [NeMo Safe Synthesizer](https://github.com/NVIDIA-NeMo/Safe-Synthesizer) to break that deadlock by helping organizations create synthetic versions of sensitive tabular data.
 
