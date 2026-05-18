@@ -9086,7 +9086,7 @@
 Click options, then maps Click's flat keyword arguments back to the nested
 structure Pydantic expects. It powers the CLI surfaces that expose
 <code>SafeSynthesizerParameters</code>.</p>
-<p>For general Pydantic style rules, see <a href="../../STYLE_GUIDE.md#data-modeling">STYLE_GUIDE.md</a>.
+<p>For general Pydantic style rules, see <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#data-modeling">STYLE_GUIDE.md</a>.
 This page covers repository-specific mechanics.</p>
 <p>The type system is still growing. The long-term goal is that every setting
 that changes runtime behavior is defined in the main configuration system,
@@ -9192,9 +9192,8 @@ wrapped type.</p>
 <p><code>AutoParamType</code> lets Click accept either <code>"auto"</code> or the wrapped scalar type.
 It is used only when the string literal side is exactly <code>"auto"</code>.</p>
 <h2 id="validators-and-settings">Validators and Settings<a class="headerlink" href="#validators-and-settings" title="Permanent link">&para;</a></h2>
-<p>General Pydantic validator style lives in
-<a href="../../STYLE_GUIDE.md#data-modeling">STYLE_GUIDE.md</a>. Repository-specific
-validators live in <code>src/nemo_safe_synthesizer/configurator/validators.py</code>:</p>
+<p>General Pydantic validator style lives in <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#data-modeling">STYLE_GUIDE.md</a>. Repository-specific validators live in
+<code>src/nemo_safe_synthesizer/configurator/validators.py</code>:</p>
 <ul>
 <li><code>DependsOnValidator</code>: field is valid only when another field is set.</li>
 <li><code>ValueValidator</code>: validates the effective field value.</li>

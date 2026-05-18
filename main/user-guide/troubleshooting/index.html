@@ -9980,7 +9980,7 @@ logs (vLLM, HuggingFace, etc.):</p>
 <p>You can also set the log level via environment variable:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NSS_LOG_LEVEL</span><span class="o">=</span>DEBUG
 </span></code></pre></div>
-<p>See <a href="../running/#logging">Running -- Logging</a> for the full logging
+<p>See <a href="../running/#logging-and-experiment-tracking">Running -- Logging</a> for the full logging
 configuration reference.</p>
 <hr />
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
@@ -10353,7 +10353,7 @@ output and only resolve during an actual run:</p>
 <p>When running with <code>--validate</code> (CLI) or <code>process_data(check_only=True)</code> (SDK),
 the following codes may appear. For an overview of what pre-flight validates,
 how to interpret the output, and how to use the resolved config, see
-<a href="../running/#run---validate">Running -- <code>run --validate</code></a>.</p>
+<a href="../running/#run-validate">Running -- <code>run --validate</code></a>.</p>
 <p>The <code>Check</code> column lists the check name (as emitted in the report and
 accepted by <code>disabled_checks</code>). <code>preflight.check_crash</code> is synthesized
 by the orchestrator and appears attached to the name of whichever check
