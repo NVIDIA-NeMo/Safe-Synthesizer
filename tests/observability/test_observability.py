@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import inspect
 import json
 import logging
 import time
+from pathlib import Path
 from unittest import mock
 from unittest.mock import MagicMock
 
@@ -510,6 +512,65 @@ class TestInitializeObservability:
 class TestGetLogger:
     """Tests for get_logger function."""
 
+    @pytest.fixture
+    def callsite_test_logging(self, monkeypatch, caplog):
+        """Initialize observability while preserving caplog capture.
+
+        Leaves ``_INITIALIZED_OBSERVABILITY`` False and structlog reset on
+        teardown so the global state is internally consistent. Tests that need
+        an initialized observability stack (e.g. ``TestObservabilityIntegration``)
+        re-initialize via their own autouse fixture.
+        """
+        root_logger = logging.getLogger()
+        original_handlers = root_logger.handlers.copy()
+        original_level = root_logger.level
+
+        # Manage _INITIALIZED_OBSERVABILITY manually rather than through
+        # monkeypatch.setattr. monkeypatch restores the pre-test value AFTER
+        # this fixture's teardown runs, which would re-flip the flag back to
+        # True (set by earlier tests) while structlog has just been reset to
+        # defaults. That mismatch causes get_logger() to return a structlog
+        # BoundLoggerFilteringAtNotset wrapped in a stdlib LoggerAdapter, which
+        # blows up on isEnabledFor() in subsequent tests.
+        obs._INITIALIZED_OBSERVABILITY = False
+        monkeypatch.setenv("NSS_LOG_FORMAT", "plain")
+        monkeypatch.setenv("NSS_LOG_LEVEL", "INFO")
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        monkeypatch.delenv("NSS_LOG_FILE", raising=False)
+        monkeypatch.setattr(obs, "SETTINGS", NSSObservabilitySettings())
+        structlog.reset_defaults()
+        root_logger.handlers.clear()
+
+        yield
+
+        structlog.reset_defaults()
+        root_logger.handlers = original_handlers
+        root_logger.setLevel(original_level)
+        obs._INITIALIZED_OBSERVABILITY = False
+
+    @staticmethod
+    def _record_callsite(record: logging.LogRecord) -> tuple[str, int]:
+        match record.msg:
+            case {"filename": filename, "lineno": lineno}:
+                return str(filename), int(lineno)
+            case _:
+                return record.filename, record.lineno
+
+    @staticmethod
+    def _assert_log_record_callsite(
+        caplog,
+        *,
+        message: str,
+        expected_filename: str,
+        expected_lineno: int,
+    ) -> None:
+        records = [record for record in caplog.records if message in record.getMessage()]
+        assert len(records) == 1
+
+        filename, lineno = TestGetLogger._record_callsite(records[0])
+        assert filename == expected_filename
+        assert lineno == expected_lineno
+
     def test_returns_category_logger_by_default(self):
         """Test that get_logger returns CategoryLogger by default."""
         logger = get_logger("test_module")
@@ -568,6 +629,59 @@ class TestGetLogger:
         # Root logger configuration should be unchanged
         assert root_logger.handlers == original_handlers
         assert root_logger.level == original_level
+
+    def test_logger_created_before_observability_configuration_reports_real_callsite(
+        self,
+        callsite_test_logging,
+        caplog,
+    ):
+        """Logger created before configuration still reports the caller filename."""
+        logger = get_logger("test_callsite_before_configuration")
+
+        initialize_observability()
+        root_logger = logging.getLogger()
+        if caplog.handler not in root_logger.handlers:
+            root_logger.addHandler(caplog.handler)
+        caplog.set_level(logging.INFO, logger=logger.name)
+
+        message = "logger before configuration callsite"
+        frame = inspect.currentframe()
+        assert frame is not None
+        expected_lineno = frame.f_lineno + 1
+        logger.info(message)
+
+        self._assert_log_record_callsite(
+            caplog,
+            message=message,
+            expected_filename=Path(__file__).name,
+            expected_lineno=expected_lineno,
+        )
+
+    def test_logger_created_after_observability_configuration_reports_real_callsite(
+        self,
+        callsite_test_logging,
+        caplog,
+    ):
+        """Logger created after configuration still reports the caller filename."""
+        initialize_observability()
+        root_logger = logging.getLogger()
+        if caplog.handler not in root_logger.handlers:
+            root_logger.addHandler(caplog.handler)
+        caplog.set_level(logging.INFO)
+
+        logger = get_logger("test_callsite_after_configuration")
+        message = "logger after configuration callsite"
+        frame = inspect.currentframe()
+        assert frame is not None
+        expected_lineno = frame.f_lineno + 1
+        logger.info(message)
+
+        self._assert_log_record_callsite(
+            caplog,
+            message=message,
+            expected_filename=Path(__file__).name,
+            expected_lineno=expected_lineno,
+        )
 
 
 class TestObservabilityIntegration:
