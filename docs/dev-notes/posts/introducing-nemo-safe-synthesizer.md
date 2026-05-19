@@ -64,7 +64,7 @@ Data is then transformed into LLM-friendly samples which are used to LoRA fine-t
 - `TinyLlama/TinyLlama-1.1B-Chat-v1.0`
 - `mistralai/Mistral-7B-Instruct-v0.3`
 
-For use cases that require formal privacy assurances, [differential privacy](../../product-overview/data_synthesis/#differential-privacy) via DP-SGD is available as an opt-in training mode.
+For use cases that require formal privacy assurances, [differential privacy](../../product-overview/data_synthesis.md#differential-privacy) via DP-SGD is available as an opt-in training mode.
 
 ### Stage 3: Generation
 
@@ -81,7 +81,7 @@ Each score maps to concrete remediation guidance in the documentation. The [Prod
 
 ## Getting Started
 
-[Install](../../user-guide/getting-started/#installation) the package on a Linux machine with an NVIDIA GPU:
+[Install](../../user-guide/getting-started.md#installation) the package on a Linux machine with an NVIDIA GPU:
 
 ```bash
 pip install "nemo-safe-synthesizer[cu129,engine]" \
@@ -113,7 +113,7 @@ results = synthesizer.results
 ```
 
 The [Safe Synthesizer 101 tutorial](../../tutorials/safe-synthesizer-101.ipynb) is the fastest path from zero to a running synthetic data job using a publicly available dataset.
-For more details, read [Running Safe Synthesizer](../../user-guide/running/) or use the [Configuration Reference](../../user-guide/configuration.md) to learn about available parameters.
+For more details, read [Running Safe Synthesizer](../../user-guide/running.md) or use the [Configuration Reference](../../user-guide/configuration.md) to learn about available parameters.
 
 ## Summary
 
