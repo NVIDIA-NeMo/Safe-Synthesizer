@@ -75,7 +75,7 @@ docs/
 ├── developer-guide/    # Explanations
 ├── product-overview/   # Product feature docs
 ├── tutorials/
-└── blog/
+└── dev-notes/
 ```
 
 ## Build Commands

@@ -530,7 +530,7 @@ All documentation lives under `docs/`. The structure follows the [Diataxis](http
 | `user-guide/` | How-tos & reference | CLI, configuration, SDK |
 | `architecture/` | Explanations | Design decisions |
 | `reference/` | API reference | Auto-generated (see below) |
-| `blog/` | Dev notes | Release notes, design posts |
+| `dev-notes/` | Dev notes | Release notes, design posts |
 
 ### Adding or Editing a Page
 
