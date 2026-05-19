@@ -211,7 +211,7 @@ CLI and SDK (with the default or custom `NSS_INFERENCE_ENDPOINT`).
 ### `NIM_MODEL_ID`
 
 Model ID sent to the NIM endpoint for PII column classification. Defaults to
-`qwen/qwen2.5-coder-32b-instruct`.
+`qwen/qwen3-next-80b-a3b-instruct`.
 
 ### `SAFE_SYNTHESIZER_CPU_COUNT`
 

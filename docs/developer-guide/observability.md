@@ -5,8 +5,7 @@
 
 Safe Synthesizer centralizes structured logging and tracing in
 `src/nemo_safe_synthesizer/observability.py`. For normative code style, see
-[STYLE_GUIDE.md](../../STYLE_GUIDE.md#logging-and-observability). This page
-covers the high-level model.
+[STYLE_GUIDE.md](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#logging-and-observability). This page covers the high-level model.
 
 ## Model
 

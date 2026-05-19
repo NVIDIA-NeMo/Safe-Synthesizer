@@ -24,6 +24,7 @@ from nemo_safe_synthesizer.config import (
     DataParameters,
     DifferentialPrivacyHyperparams,
     SafeSynthesizerParameters,
+    TimeSeriesParameters,
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.config.autoconfig import POW, AutoConfigResolver
@@ -139,10 +140,33 @@ EXPLICIT = AutoConfigTestCase(
     ),
 )
 
+AUTO_TIMESERIES = AutoConfigTestCase(
+    name="auto_timeseries",
+    config=SafeSynthesizerParameters(
+        training=TrainingHyperparams(
+            rope_scaling_factor="auto",
+            num_input_records_to_sample="auto",
+            learning_rate="auto",
+        ),
+        data=DataParameters(max_sequences_per_example="auto"),
+        privacy=DifferentialPrivacyHyperparams(dp_enabled=False, delta="auto"),
+        time_series=TimeSeriesParameters(is_timeseries=True, timestamp_column="t"),
+    ),
+    expected=Expected(
+        rope_scaling_factor=None,  # Will be auto-resolved to an int
+        num_input_records_to_sample=None,  # Will be auto-resolved
+        learning_rate=None,  # Will be auto-resolved based on model name
+        delta=None,  # Not used (DP disabled)
+        dp_enabled=False,
+        max_seq=None,  # Time-series mode -> None (fills context window)
+    ),
+)
+
 ALL_TEST_CASES: list[AutoConfigTestCase] = [
     AUTO_NO_DP,
     AUTO_WITH_DP,
     EXPLICIT,
+    AUTO_TIMESERIES,
 ]
 
 
@@ -262,22 +286,34 @@ class TestAutoConfigResolver:
             assert result == {}
 
     @pytest.mark.parametrize(
-        "max_seq_input, expected_max_seq",
+        "max_seq_input, expected_dp, expected_non_dp, expected_timeseries",
         [
-            pytest.param("auto", [1, 10], id="auto_max_seq"),  # dp_enabled=True -> 1, dp_enabled=False -> 10
-            pytest.param(5, [1, 5], id="explicit_max_seq"),  # dp_enabled=True -> 1, dp_enabled=False -> 5
-            pytest.param(None, [1, None], id="none_max_seq"),  # dp_enabled=True -> 1, dp_enabled=False -> None
+            pytest.param("auto", 1, 10, None, id="auto_max_seq"),
+            pytest.param(5, 1, 5, 5, id="explicit_max_seq"),
+            pytest.param(None, 1, None, None, id="none_max_seq"),
         ],
     )
-    def test_determine_max_sequences_per_example(self, sample_data, config, max_seq_input, expected_max_seq):
-        """Max sequences should be 1 for DP regardless of input; for non-DP, auto -> 10, explicit -> explicit value, None -> None."""
+    def test_determine_max_sequences_per_example(
+        self, sample_data, config, max_seq_input, expected_dp, expected_non_dp, expected_timeseries
+    ):
+        """Max sequences resolution depends on DP, time-series, and explicit-value rules.
+
+        - DP enabled: always ``1`` regardless of input.
+        - Time-series mode (DP disabled): ``"auto"`` -> ``None``, explicit values preserved.
+        - Otherwise: ``"auto"`` -> ``10``, explicit values preserved.
+        """
         config_copy = config.model_copy(deep=True)
         config_copy.data.max_sequences_per_example = max_seq_input
         resolver = AutoConfigResolver(sample_data, config_copy)
         result = resolver._determine_max_sequences_per_example()
 
-        expected_index = 0 if config_copy.privacy.dp_enabled else 1
-        assert result == {"max_sequences_per_example": expected_max_seq[expected_index]}
+        if config_copy.privacy.dp_enabled:
+            expected = expected_dp
+        elif config_copy.time_series.is_timeseries:
+            expected = expected_timeseries
+        else:
+            expected = expected_non_dp
+        assert result == {"max_sequences_per_example": expected}
 
     def test_resolve(self, sample_data, config, expected):
         """Full resolution should produce valid SafeSynthesizerParameters.

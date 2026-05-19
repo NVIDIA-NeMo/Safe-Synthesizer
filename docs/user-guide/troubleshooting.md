@@ -59,7 +59,7 @@ You can also set the log level via environment variable:
 export NSS_LOG_LEVEL=DEBUG
 ```
 
-See [Running -- Logging](running.md#logging) for the full logging
+See [Running -- Logging](running.md#logging-and-experiment-tracking) for the full logging
 configuration reference.
 
 ---
@@ -453,7 +453,7 @@ Incompatible DP settings:
 When running with `--validate` (CLI) or `process_data(check_only=True)` (SDK),
 the following codes may appear. For an overview of what pre-flight validates,
 how to interpret the output, and how to use the resolved config, see
-[Running -- `run --validate`](running.md#run---validate).
+[Running -- `run --validate`](running.md#run-validate).
 
 The `Check` column lists the check name (as emitted in the report and
 accepted by `disabled_checks`). `preflight.check_crash` is synthesized
