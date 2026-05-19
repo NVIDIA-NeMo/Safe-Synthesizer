@@ -12,6 +12,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
   - [Branch Naming Convention](#branch-naming-convention)
   - [Conventional Commits](#conventional-commits)
   - [Branch Protection](#branch-protection)
+- [Classification and Project Tracking](#classification-and-project-tracking)
 - [Pull Request Process](#pull-request-process)
 - [Issues and Discussions](#issues-and-discussions)
 - [Developer Certificate of Origin](#developer-certificate-of-origin)
@@ -319,6 +320,94 @@ The `main` branch has the following protections:
 | Merge strategy                  | Squash only  |
 
 `GPU CI Status` is not currently a live branch-protection requirement because PR GPU runs are blocked by internal issues. We expect to re-enable it as soon as those blockers are resolved.
+
+## Classification and Project Tracking
+
+Three mechanisms classify and track work in this repo:
+
+1. GitHub issue Type field -- org-level, single value per issue.
+2. Labels -- repo-level, multiple per issue or PR; the canonical list lives below.
+3. Safe Synthesizer Development GitHub project fields -- `Priority` and `Size`.
+
+The split is intentional: the Type field handles coarse classification, labels handle granularity the Type field can't express, and the project handles backlog ordering and effort tracking.
+
+### Issue Type
+
+The GitHub Type field is set at the NVIDIA-NeMo org level (changing the value list requires an org owner). It applies to issues only -- PRs use the type labels described below.
+
+| Type | Use for |
+| --- | --- |
+| `Bug` | Defects in shipped behavior |
+| `Feature` | New user-facing capability |
+| `Question` | Questions or clarification requests; prefer [GitHub Discussions](https://github.com/NVIDIA-NeMo/safe-synthesizer/discussions) for general questions |
+| `Task` | Internal development work, refactors, infrastructure |
+
+Most internal issues will be `Task`.
+
+### Project fields: Priority and Size
+
+Issues are tracked in the Safe Synthesizer Development GitHub project. Priority and effort estimates live as project fields, not labels, so backlog and prioritization views can sort and group on them directly.
+
+- `Priority` -- relative urgency for backlog ordering. 
+- `Size` -- rough effort estimate.
+
+Set both in the [project view](https://github.com/orgs/NVIDIA-NeMo/projects/74) or expand the Projects drop-down on the right pane for PRs and issues.
+
+### Labels
+
+Labels are repo-scoped and apply to both issues and PRs. There is no required minimum set per issue or PR; apply labels that add useful signal.
+
+#### Type
+
+Roughly aligned with our Conventional Commit types. Apply when it adds signal; multiple are fine for cross-cutting work.
+
+| Label | Use for |
+| --- | --- |
+| `bug` | Defects in shipped behavior |
+| `feature` | New user-facing capability |
+| `refactor` | Internal restructuring with no behavior change |
+| `perf` | Performance improvement |
+| `security` | Security-relevant fix or hardening |
+| `docs` | Documentation-only change |
+| `test` | Test-only addition or change |
+| `chore` | Maintenance not tied to a user-visible change |
+| `breaking-change` | Backward-incompatible change (paired with another type) |
+
+#### Area
+
+Where in the codebase the work lands. Apply one or more on PRs to help routing; optional on issues.
+
+Product areas mirror the `src/nemo_safe_synthesizer/` module map in [`AGENTS.md`](AGENTS.md):
+
+`area:sdk-cli`, `area:config`, `area:data-processing`, `area:evaluation`, `area:generation`, `area:training`, `area:pii`, `area:privacy`, `area:llm`, `area:observability`.
+
+Infrastructure areas:
+
+`area:ci`, `area:tests`, `area:docs`, `area:dev-ex`, `area:build-dist`.
+
+#### Merge status
+
+| Label | Use for |
+| --- | --- |
+| `ready-to-merge` | All review and CI gates satisfied; ready for a maintainer to merge |
+| `blocked` | Cannot progress until an external dependency or upstream change is resolved |
+
+Other "who acts next" signaling on PRs is done via Assignees -- see the [Pull Request Process](#pull-request-process).
+
+#### Workflow
+
+| Label | Use for |
+| --- | --- |
+| `community-request` | Issue or PR from an external contributor or user |
+| `stale` | Auto-applied to inactive issues/PRs |
+
+#### Dependabot
+
+Dependabot manages `dependencies` and `github_actions` automatically on the PRs it opens; don't apply them manually.
+
+### Adding or changing labels
+
+This section is the canonical source. To add, rename, or remove a label, open a PR that updates this section and apply the change in the GitHub UI in the same PR. If drift becomes a problem we can switch to a `.github/labels.yml` driven by a sync action.
 
 ## Pull Request Process
 

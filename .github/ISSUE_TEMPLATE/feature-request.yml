@@ -3,21 +3,8 @@
 
 name: Feature Request
 description: Request a new feature
-labels: ["enhancement"]
+labels: ["feature"]
 body:
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority Level
-      description: How important is this feature to your workflow?
-      default: 2
-      options:
-        - Critical (Essential for use)
-        - High (Major improvement)
-        - Medium (Nice to have)
-        - Low (Minor tweak)
-    validations:
-      required: true
   - type: textarea
     id: problem
     attributes:
