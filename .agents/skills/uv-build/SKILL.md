@@ -20,9 +20,15 @@ make bootstrap-tools && make bootstrap-nss cpu
 make bootstrap-nss dev       # dev tools only
 make bootstrap-nss cpu       # runtime deps + CPU PyTorch
 make bootstrap-nss cu129     # runtime deps + CUDA 12.9 PyTorch
+make bootstrap-nss cu130     # runtime deps + CUDA 13.0 PyTorch
 ```
 
-Under the hood: `uv sync --frozen --extra <extra> --group dev`
+Under the hood:
+
+```bash
+uv sync --frozen --group dev                  # dev tools only
+uv sync --frozen --extra <runtime> --group dev # cpu, cu129, or cu130
+```
 
 ## Extras and Conflicts
 

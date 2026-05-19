@@ -22,7 +22,7 @@ Usage:
   CUDA=cpu bash install_nss.sh
 
 Environment:
-  CUDA=129|130|cpu        Runtime extra to install. Default: 129.
+  CUDA=129|130|cpu|help   Runtime extra to install. Default: 129.
   INSTALLER=uv|pip        Installer command. Default: uv.
   PACKAGE_VERSION=<spec>  Optional version specifier, for example ==0.1.0.
   CONSTRAINTS_URL=<url>   Constraints file URL. Default: repo main constraints.txt.
@@ -169,6 +169,10 @@ run_install() {
 
 main() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "help" ]]; then
+        usage
+        exit 0
+    fi
+    if [[ "$CUDA" == "-h" || "$CUDA" == "--help" || "$CUDA" == "help" ]]; then
         usage
         exit 0
     fi
