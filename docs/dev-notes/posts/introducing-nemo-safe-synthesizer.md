@@ -58,17 +58,17 @@ Safe Synthesizer uses NVIDIA's fine-tuned [GLiNER PII model](https://huggingface
 
 ### Stage 2: Fine-Tuning
 
-Records are serialized to JSON, tokenized, and used to LoRA fine-tune a pretrained LLM. Three models are supported out of the box:
+Data is then transformed into LLM-friendly samples which are used to LoRA fine-tune a pretrained LLM. Three models are supported out of the box:
 
 - `HuggingFaceTB/SmolLM3-3B` (default)
 - `TinyLlama/TinyLlama-1.1B-Chat-v1.0`
 - `mistralai/Mistral-7B-Instruct-v0.3`
 
-For use cases that require formal privacy assurances, differential privacy via DP-SGD is available as an opt-in training mode.
+For use cases that require formal privacy assurances, [differential privacy](../../product-overview/data_synthesis/#differential-privacy) via DP-SGD is available as an opt-in training mode.
 
 ### Stage 3: Generation
 
-The fine-tuned LoRA adapter is loaded onto the pretrained model and vLLM drives fast inference, sampling as many new records as you need. Each record is validated before it is accepted. Optional structured generation can constrain outputs to the expected record format when a pipeline needs stricter schema conformance.
+The fine-tuned LoRA adapter is loaded onto the pretrained model and vLLM drives novel record generation, validating each synthetic record before accepting it. Optional structured generation can constrain outputs to the expected record format when a pipeline needs stricter schema conformance.
 
 ### Stage 4: Evaluation
 

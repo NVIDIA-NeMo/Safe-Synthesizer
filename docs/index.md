@@ -64,11 +64,11 @@ NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datase
 
     [:octicons-arrow-right-24: Developer Guide](developer-guide/architecture.md)
 
--   **Developer Notes**
+-   **Dev Notes**
 
     ---
 
-    Read developer blog posts and check release notes.
+    Read developer blog posts.
 
     [:octicons-arrow-right-24: Developer Notes](dev-notes/index.md)
 
