@@ -57,6 +57,13 @@ pip install "nemo-safe-synthesizer[cu129]" \
   --extra-index-url https://download.pytorch.org/whl/cu129 \
   --extra-index-url https://flashinfer.ai/whl/cu129 \
   --extra-index-url https://pypi.nvidia.com
+
+# CUDA 13.0 with pip (requires NVIDIA Linux driver 580.65.06+):
+pip install "nemo-safe-synthesizer[cu130]" \
+  -c "$CONSTRAINTS_URL" \
+  --extra-index-url https://download.pytorch.org/whl/cu130 \
+  --extra-index-url https://flashinfer.ai/whl/cu130 \
+  --extra-index-url https://pypi.nvidia.com
 ```
 
 Or install from source:

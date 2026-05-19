@@ -9,6 +9,9 @@ from types import ModuleType
 
 import pytest
 from click.testing import CliRunner
+from packaging.requirements import InvalidRequirement
+
+pytestmark = pytest.mark.unit
 
 
 def _load_generator() -> ModuleType:
@@ -316,7 +319,7 @@ def test_load_cuda_deps_config_rejects_missing_managed_extra(tmp_path: Path) -> 
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS.replace('"cpu", "gpu-old", "cu129", "cu132"', '"cpu"'), encoding="utf-8")
 
-    with pytest.raises(Exception, match="managed_extras"):
+    with pytest.raises(GENERATOR.ValidationError, match="managed_extras"):
         GENERATOR.load_cuda_deps_config(config_path)
 
 
@@ -326,7 +329,7 @@ def test_load_cuda_deps_config_rejects_invalid_structured_specifier(tmp_path: Pa
         CUDA_DEPS.replace('{ name = "accelerate" }', '{ name = "accelerate", specifier = "=>1" }'), encoding="utf-8"
     )
 
-    with pytest.raises(Exception, match="Invalid specifier"):
+    with pytest.raises(GENERATOR.ValidationError, match="Invalid specifier"):
         GENERATOR.load_cuda_deps_config(config_path)
 
 
@@ -334,7 +337,7 @@ def test_build_cuda_pyproject_fragment_rejects_invalid_raw_requirement(tmp_path:
     config_path = tmp_path / "cuda_deps.toml"
     config_path.write_text(CUDA_DEPS.replace('"faker"', '"not @@@ invalid"'), encoding="utf-8")
 
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidRequirement):
         GENERATOR.build_cuda_pyproject_fragment(GENERATOR.load_cuda_deps_config(config_path))
 
 

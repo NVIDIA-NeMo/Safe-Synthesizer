@@ -49,7 +49,7 @@ cuda_runtime_deps = [
   # flashinfer is a bit annoying in that not all the packages are in their indices, only the jit-cache
   { name = "flashinfer-python", version = "0.6.8.post1", sys_platform = "linux", source_marker = "sys_platform=='linux'" },
   { name = "flashinfer-cubin", version = "0.6.8.post1", sys_platform = "linux", source_marker = "sys_platform=='linux'" },
-  { name = "flashinfer-jit-cache", version = "0.6.8.post1", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'", variants = ["cu129", "cu130"] },
+  { name = "flashinfer-jit-cache", version = "0.6.8.post1", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'", variants = ["cu129", "cu130"] },
   { name = "nvidia-cublas", sys_platform = "linux" },
   "nvidia-ml-py; sys_platform == 'linux'",
   "torch-c-dlpack-ext",

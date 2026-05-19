@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.11"
 # dependencies = [
 #     "click>=8",
 #     "packaging>=24",
@@ -1013,7 +1013,7 @@ def _check_generated(
             output=str(output_path),
             generated=generated,
         )
-    current = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
+    current = output_path.read_text(encoding="utf-8")
     status = GenStatus.ok if current == generated.text else GenStatus.changed
     message = "Generated CUDA dependency sections are up to date"
     if status is GenStatus.changed:

@@ -145,6 +145,9 @@ build_install_command() {
             ;;
         pip)
             require_command pip
+            if [[ "$extra" != "cpu" ]]; then
+                warn "pip prefers PyPI over extra indexes; use INSTALLER=uv for CUDA installs when possible."
+            fi
             INSTALL_CMD=(pip install "$(package_spec "$extra")")
             append_common_args
             append_index_args "--extra-index-url"
