@@ -26,18 +26,22 @@ GENERATOR = _load_generator()
 
 
 CUDA_DEPS = """
-requires_torch = [
-  { name = "accelerate" },
-]
-runtime_deps = [
+base_runtime_deps = [
   { name = "faker" },
 ]
-cuda_dependencies = [
-  { name = "flashinfer-jit-cache", version = "0.6.6", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", variants = ["cu128"] },
+torch_runtime_deps = [
+  { name = "accelerate" },
+  "vllm==0.20.0; sys_platform == 'linux'",
+]
+cuda_runtime_deps = [
+  { name = "flashinfer-python", version = "0.6.6", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
+  { name = "flashinfer-jit-cache", version = "0.6.6", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", variants = ["cu129"] },
   { name = "nvidia-cublas", sys_platform = "linux" },
+]
+torch_wheel_deps = [
   { name = "torch", version = "3.0.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
 ]
-generated_extras = ["engine", "cpu", "gpu-old", "cu128", "cu132"]
+managed_extras = ["cpu", "gpu-old", "cu129", "cu132"]
 nvidia_cuda_libraries = [
   { name = "cublas", nvidia_package_suffix = "", index = "nvidia-pypi-public" },
   "nvtx",
@@ -78,7 +82,7 @@ torch = [
 cuda_package_suffix = "cu13"
 nvidia_package_suffix = ""
 
-[variants.cu128]
+[variants.cu129]
 cuda_package_suffix = "cu12"
 """
 
@@ -88,9 +92,6 @@ PYPROJECT = """
 name = "demo"
 
 [project.optional-dependencies]
-engine = [
-  "old-engine",
-]
 cpu = [
   "old-cpu",
 ]
@@ -127,29 +128,41 @@ def test_build_cuda_pyproject_fragment_renders_cuda_variant_and_sources(tmp_path
     parsed = tomllib.loads(generated.text)
 
     assert parsed["project"]["optional-dependencies"]["cu132"] == [
-        "accelerate",
         "faker",
+        "accelerate",
+        "vllm==0.20.0; sys_platform == 'linux'",
+        "flashinfer-python==0.6.6; sys_platform == 'linux'",
         "nvidia-cublas; sys_platform == 'linux'",
         "torch==3.0.0+cu132; sys_platform == 'linux'",
     ]
-    assert parsed["tool"]["uv"]["conflicts"] == [[{"extra": "cpu"}, {"extra": "cu132"}, {"extra": "cu128"}]]
+    assert parsed["project"]["optional-dependencies"]["cpu"] == [
+        "faker",
+        "accelerate",
+        "vllm==0.20.0; sys_platform == 'linux'",
+        "torch==2.10.0+cpu; sys_platform == 'linux'",
+    ]
+    assert parsed["tool"]["uv"]["conflicts"] == [[{"extra": "cpu"}, {"extra": "cu132"}, {"extra": "cu129"}]]
     assert parsed["tool"]["uv"]["sources"]["torch"] == [
         {"index": "pytorch-cpu", "extra": "cpu", "marker": "sys_platform=='linux'"},
         {"index": "pytorch-cu132", "extra": "cu132"},
-        {"index": "pytorch-cu128", "extra": "cu128"},
+        {"index": "pytorch-cu129", "extra": "cu129"},
     ]
-    assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [{"index": "flashinfer-cu128", "extra": "cu128"}]
+    assert parsed["tool"]["uv"]["sources"]["flashinfer-python"] == [
+        {"index": "flashinfer-cu132", "extra": "cu132", "marker": "sys_platform=='linux'"},
+        {"index": "flashinfer-cu129", "extra": "cu129", "marker": "sys_platform=='linux'"},
+    ]
+    assert parsed["tool"]["uv"]["sources"]["flashinfer-jit-cache"] == [{"index": "flashinfer-cu129", "extra": "cu129"}]
     assert parsed["tool"]["uv"]["sources"]["nvidia-cublas"] == [
         {"index": "nvidia-pypi-public", "extra": "cu132"},
-        {"index": "nvidia-pypi-public", "extra": "cu128"},
+        {"index": "nvidia-pypi-public", "extra": "cu129"},
     ]
     assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx"] == [{"index": "pytorch-cu132"}]
-    assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx-cu12"] == [{"index": "pytorch-cu128"}]
+    assert parsed["tool"]["uv"]["sources"]["nvidia-nvtx-cu12"] == [{"index": "pytorch-cu129"}]
     assert [index["name"] for index in parsed["tool"]["uv"]["index"]] == [
         "pytorch-cu132",
         "flashinfer-cu132",
-        "pytorch-cu128",
-        "flashinfer-cu128",
+        "pytorch-cu129",
+        "flashinfer-cu129",
         "pytorch-cpu",
         "nvidia-pypi-public",
     ]
@@ -169,11 +182,12 @@ def test_apply_cuda_fragment_to_pyproject_splices_generated_sections(tmp_path: P
     assert "# <<< END GENERATED CUDA UV CONFLICTS - DO NOT EDIT >>>" in updated
     assert "# >>> BEGIN GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT <<<" in updated
     assert "# <<< END GENERATED CUDA UV SOURCES AND INDEXES - DO NOT EDIT >>>" in updated
-    assert "engine" not in parsed["project"]["optional-dependencies"]
     assert "gpu-old" not in parsed["project"]["optional-dependencies"]
     assert parsed["project"]["optional-dependencies"]["cu132"] == [
-        "accelerate",
         "faker",
+        "accelerate",
+        "vllm==0.20.0; sys_platform == 'linux'",
+        "flashinfer-python==0.6.6; sys_platform == 'linux'",
         "nvidia-cublas; sys_platform == 'linux'",
         "torch==3.0.0+cu132; sys_platform == 'linux'",
     ]
@@ -181,7 +195,7 @@ def test_apply_cuda_fragment_to_pyproject_splices_generated_sections(tmp_path: P
     assert parsed["tool"]["uv"]["sources"]["torch"] == [
         {"index": "pytorch-cpu", "extra": "cpu", "marker": "sys_platform=='linux'"},
         {"index": "pytorch-cu132", "extra": "cu132"},
-        {"index": "pytorch-cu128", "extra": "cu128"},
+        {"index": "pytorch-cu129", "extra": "cu129"},
     ]
 
 
@@ -280,15 +294,17 @@ def test_click_cli_writes_parseable_output_and_checks_drift(tmp_path: Path) -> N
     assert result.exit_code == 0
     parsed = tomllib.loads(output_path.read_text(encoding="utf-8"))
     assert parsed["project"]["optional-dependencies"]["cu132"] == [
-        "accelerate",
         "faker",
+        "accelerate",
+        "vllm==0.20.0; sys_platform == 'linux'",
+        "flashinfer-python==0.6.6; sys_platform == 'linux'",
         "nvidia-cublas; sys_platform == 'linux'",
         "torch==3.0.0+cu132; sys_platform == 'linux'",
     ]
     assert parsed["tool"]["uv"]["sources"]["torch"] == [
         {"index": "pytorch-cpu", "extra": "cpu", "marker": "sys_platform=='linux'"},
         {"index": "pytorch-cu132", "extra": "cu132"},
-        {"index": "pytorch-cu128", "extra": "cu128"},
+        {"index": "pytorch-cu129", "extra": "cu129"},
     ]
 
     current_result = CliRunner().invoke(GENERATOR._cli, [str(config_path), "--output", str(output_path), "--check"])
@@ -296,11 +312,11 @@ def test_click_cli_writes_parseable_output_and_checks_drift(tmp_path: Path) -> N
     assert current_result.exit_code == 0
 
 
-def test_load_cuda_deps_config_rejects_missing_generated_extra(tmp_path: Path) -> None:
+def test_load_cuda_deps_config_rejects_missing_managed_extra(tmp_path: Path) -> None:
     config_path = tmp_path / "cuda_deps.toml"
-    config_path.write_text(CUDA_DEPS.replace('"engine", "cpu", "gpu-old", "cu128", "cu132"', '"cpu"'), encoding="utf-8")
+    config_path.write_text(CUDA_DEPS.replace('"cpu", "gpu-old", "cu129", "cu132"', '"cpu"'), encoding="utf-8")
 
-    with pytest.raises(Exception, match="generated_extras"):
+    with pytest.raises(Exception, match="managed_extras"):
         GENERATOR.load_cuda_deps_config(config_path)
 
 

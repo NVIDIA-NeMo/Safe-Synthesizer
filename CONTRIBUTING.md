@@ -500,7 +500,7 @@ Dependency updates have two generated surfaces:
 
 ### CUDA and Accelerator Dependencies
 
-Edit `cuda_deps.toml` for changes to the CPU, CUDA 12.8, CUDA 13.0, PyTorch, FlashInfer, or NVIDIA package matrix. Do not hand-edit the generated `cpu`, `cu128`, `cu130`, `[tool.uv.sources]`, or `[[tool.uv.index]]` sections in `pyproject.toml`.
+Edit `cuda_deps.toml` for changes to the CPU, CUDA 12.9, CUDA 13.0, PyTorch, FlashInfer, or NVIDIA package matrix. Do not hand-edit the generated `cpu`, `cu129`, `cu130`, `[tool.uv.sources]`, or `[[tool.uv.index]]` sections in `pyproject.toml`.
 
 After editing `cuda_deps.toml`, regenerate `pyproject.toml`:
 
@@ -519,7 +519,7 @@ make lock-check
 
 When adding a new CUDA extra, update all user-facing install surfaces in the same PR:
 
-- `generated_extras` in `cuda_deps.toml`
+- `managed_extras` in `cuda_deps.toml`
 - `install_nss.sh`
 - `docs/user-guide/getting-started.md`
 - `README.md`
@@ -527,7 +527,7 @@ When adding a new CUDA extra, update all user-facing install surfaces in the sam
 Use dry runs to confirm the installer emits the expected command matrix:
 
 ```bash
-DRY_RUN=1 CUDA=128 bash install_nss.sh
+DRY_RUN=1 CUDA=129 bash install_nss.sh
 DRY_RUN=1 CUDA=130 bash install_nss.sh
 DRY_RUN=1 CUDA=cpu bash install_nss.sh
 ```
@@ -541,7 +541,7 @@ export GITHUB_TOKEN="$(gh auth token)"
 uv run tools/patch_dependabot.py
 ```
 
-The exported `constraints.txt` is intentionally not CUDA-version-specific. Runtime selection comes from the selected extra (`cpu`, `cu128`, `cu130`) and package indexes; security floors come from the shared constraints file.
+The exported `constraints.txt` is intentionally not CUDA-version-specific. Runtime selection comes from the selected extra (`cpu`, `cu129`, `cu130`) and package indexes; security floors come from the shared constraints file.
 
 If you update `[tool.uv] constraint-dependencies` by hand, regenerate `constraints.txt` before opening a PR. The simplest supported path is to run `tools/patch_dependabot.py` with a cached `dependabot.json` or an active `GITHUB_TOKEN`, then review the resulting `pyproject.toml`, `constraints.txt`, and `uv.lock` diff.
 
@@ -642,7 +642,7 @@ Before tagging a release, verify generated dependency artifacts and install inst
 uv run --script tools/gen_cuda_deps.py cuda_deps.toml --pyproject pyproject.toml --check
 uv run pytest tests/test_gen_cuda_deps.py
 make lock-check
-DRY_RUN=1 CUDA=128 bash install_nss.sh
+DRY_RUN=1 CUDA=129 bash install_nss.sh
 DRY_RUN=1 CUDA=130 bash install_nss.sh
 DRY_RUN=1 CUDA=cpu bash install_nss.sh
 ```

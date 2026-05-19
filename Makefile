@@ -82,23 +82,23 @@ verify-python-version: ## Verify Python version and install if necessary
 	uv venv --seed --allow-existing --python 3.11
 
 .PHONY: bootstrap-python
-bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu128'. Here mostly for legacy usage.
+bootstrap-python: .venv ## Bootstrap Python dependencies. Set PYTORCH_DEPS to 'cpu' or 'cu129'. Here mostly for legacy usage.
 	uv sync --frozen --extra ${PYTORCH_DEPS} --group dev
 
 # Dynamic targets for bootstrap-nss
-# Usage: make bootstrap-nss {dev,docs,cpu,cuda,cu128,cu130}
-BOOTSTRAP_EXTRAS := dev docs cpu cuda cu128 cu130
+# Usage: make bootstrap-nss {dev,docs,cpu,cuda,cu129,cu130}
+BOOTSTRAP_EXTRAS := dev docs cpu cuda cu129 cu130
 $(BOOTSTRAP_EXTRAS):
 	@:
 
 .PHONY: bootstrap-nss
-bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss {dev,docs,cpu,cuda,cu128,cu130}
+bootstrap-nss: .venv ## Bootstrap Python dependencies. Usage: make bootstrap-nss {dev,docs,cpu,cuda,cu129,cu130}
 	$(eval EXTRA := $(filter-out $@, $(MAKECMDGOALS)))
 	@echo "~~~~~~"
 	@echo "attempting to install nss package with primary extra: $(EXTRA)"
 	@if [ "$(EXTRA)" = "cuda" ]; then \
 		uv sync --frozen --extra cu129 --group dev; \
-	elif [ "$(EXTRA)" = "cu128" ]; then \
+	elif [ "$(EXTRA)" = "cu129" ]; then \
 		uv sync --frozen --extra cu129 --group dev; \
 	elif [ "$(EXTRA)" = "cpu" ]; then \
 		uv sync --frozen --extra cpu --group dev; \
@@ -346,7 +346,7 @@ test-ci-container: container-build-test ## Run CI unit tests in a Linux containe
 CONTAINER_GPU_FILE := containers/Dockerfile.cuda
 CONTAINER_GPU_IMAGE ?= nss-gpu:latest
 CONTAINER_GPU_IMAGE_DEV ?= nss-gpu-dev:latest
-CONTAINER_GPU_CUDA_EXTRA ?= cu128
+CONTAINER_GPU_CUDA_EXTRA ?= cu129
 CONTAINER_GPU_CUDA_VERSION ?= 12.8.1
 # Multi-arch: override for arm64 builds (e.g., Blackwell).
 #   make container-build-gpu CONTAINER_GPU_PLATFORM=linux/arm64

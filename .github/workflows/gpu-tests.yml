@@ -93,7 +93,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - cuda-extra: cu128
+          - cuda-extra: cu129
             required: true
           - cuda-extra: cu130
             required: false
@@ -160,7 +160,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - cuda-extra: cu128
+          - cuda-extra: cu129
             required: true
           - cuda-extra: cu130
             required: false

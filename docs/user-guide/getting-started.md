@@ -26,8 +26,8 @@ does at each stage.
 
 ### Install the Package
 
-Choose exactly one runtime extra: `cpu`, `cu128`, or `cu130`. The runtime
-extras include the CLI pipeline dependencies. Do not combine `cpu`, `cu128`,
+Choose exactly one runtime extra: `cpu`, `cu129`, or `cu130`. The runtime
+extras include the CLI pipeline dependencies. Do not combine `cpu`, `cu129`,
 and `cu130`; they conflict by design.
 
 The CUDA and Linux CPU extras depend on packages hosted on indexes outside
@@ -46,8 +46,8 @@ The installer script is the shortest published-package path. It wraps the same
 extras, index URLs, and constraints file shown in the raw commands below.
 
 ```bash
-# CUDA 12.8
-curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=128 bash
+# CUDA 12.9
+curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=129 bash
 
 # CUDA 13.0
 curl -fsSL https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/install_nss.sh | CUDA=130 bash
@@ -75,27 +75,27 @@ Use the raw commands when you want to audit or customize every installer flag.
     `--index-strategy unsafe-best-match` tells uv to consider all indexes and
     pick the best matching version.
 
-=== "CUDA 12.8 (Linux with NVIDIA GPU)"
+=== "CUDA 12.9 (Linux with NVIDIA GPU)"
 
-    Use this for CUDA 12.8 environments.
+    Use this for CUDA 12.9 environments.
 
     === "pip"
 
         ```bash
-        pip install "nemo-safe-synthesizer[cu128]" \
+        pip install "nemo-safe-synthesizer[cu129]" \
           -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
-          --extra-index-url https://download.pytorch.org/whl/cu128 \
-          --extra-index-url https://flashinfer.ai/whl/cu128 \
+          --extra-index-url https://download.pytorch.org/whl/cu129 \
+          --extra-index-url https://flashinfer.ai/whl/cu129 \
           --extra-index-url https://pypi.nvidia.com
         ```
 
     === "uv"
 
         ```bash
-        uv pip install "nemo-safe-synthesizer[cu128]" \
+        uv pip install "nemo-safe-synthesizer[cu129]" \
           -c https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt \
-          --index https://flashinfer.ai/whl/cu128 \
-          --index https://download.pytorch.org/whl/cu128 \
+          --index https://flashinfer.ai/whl/cu129 \
+          --index https://download.pytorch.org/whl/cu129 \
           --index https://pypi.nvidia.com \
           --index-strategy unsafe-best-match
         ```
@@ -103,7 +103,7 @@ Use the raw commands when you want to audit or customize every installer flag.
     === "source checkout"
 
         ```bash
-        uv sync --frozen --extra cu128
+        uv sync --frozen --extra cu129
         ```
 
 === "CUDA 13.0 (Linux with NVIDIA GPU)"

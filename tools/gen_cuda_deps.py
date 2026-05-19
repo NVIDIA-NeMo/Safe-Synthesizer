@@ -329,14 +329,19 @@ class CudaVariant(StrictModel):
 class CudaDepsConfig(StrictModel):
     """Source-of-truth CUDA dependency matrix."""
 
-    requires_torch: list[DependencyEntry] = Field(
-        description="Dependencies shared by all runtime extras that require the Torch stack."
+    base_runtime_deps: list[DependencyEntry] = Field(
+        description="Pipeline/runtime dependencies shared by all runtime extras without implying Torch wheels.",
     )
-    runtime_deps: list[DependencyEntry] = Field(
-        description="Pipeline/runtime dependencies shared by all runtime extras.",
+    torch_runtime_deps: list[DependencyEntry] = Field(
+        description="Torch-adjacent runtime dependencies shared by CPU and CUDA extras."
     )
-    cuda_dependencies: list[DependencyEntry] = Field(description="Dependency templates shared by all CUDA extras.")
-    generated_extras: list[str] = Field(description="Extras owned by this generator in pyproject.toml.")
+    cuda_runtime_deps: list[DependencyEntry] = Field(
+        description="CUDA-only runtime dependency templates shared by all CUDA extras."
+    )
+    torch_wheel_deps: list[DependencyEntry] = Field(
+        description="Torch-family dependency templates whose wheels follow the selected CUDA extra."
+    )
+    managed_extras: list[str] = Field(description="Extras owned by this generator in pyproject.toml.")
     nvidia_cuda_libraries: list[NvidiaCudaLibraryEntry] = Field(
         description="NVIDIA CUDA libraries used for uv source routing."
     )
@@ -351,10 +356,10 @@ class CudaDepsConfig(StrictModel):
     variants: dict[str, CudaVariant] = Field(description="CUDA variants keyed by extra name.")
 
     @model_validator(mode="after")
-    def _validate_generated_extras(self) -> "CudaDepsConfig":
-        missing = [extra for extra in ["cpu", *self.variants] if extra not in self.generated_extras]
+    def _validate_managed_extras(self) -> "CudaDepsConfig":
+        missing = [extra for extra in ["cpu", *self.variants] if extra not in self.managed_extras]
         if missing:
-            raise ValueError(f"generated_extras is missing generated extras: {', '.join(missing)}")
+            raise ValueError(f"managed_extras is missing generated extras: {', '.join(missing)}")
         return self
 
 
@@ -628,7 +633,7 @@ def build_cuda_pyproject_fragment(config: CudaDepsConfig) -> CudaPyprojectFragme
     return CudaPyprojectFragment(
         text=text,
         rendered_extra_names=rendered_extra_names,
-        managed_extra_names=config.generated_extras,
+        managed_extra_names=config.managed_extras,
         indexes=[index.name for index in indexes],
         source_packages=list(sources),
     )
@@ -721,12 +726,12 @@ def _build_tool_table(
 def _update_optional_dependencies(
     pyproject: TOMLDocument,
     generated: TOMLDocument,
-    generated_extras: list[str],
+    managed_extras: list[str],
 ) -> None:
     optional = _required_table(_required_table(pyproject, "project"), "optional-dependencies")
     generated_optional = _required_table(_required_table(generated, "project"), "optional-dependencies")
     for extra in list(optional):
-        if str(extra) in generated_extras:
+        if str(extra) in managed_extras:
             del optional[extra]
     for extra, dependencies in generated_optional.items():
         optional[extra] = dependencies
@@ -829,7 +834,7 @@ def _required_table(
 
 
 def _render_cpu_extra_dependencies(config: CudaDepsConfig) -> list[str]:
-    dependencies = DependencyStack.of(config.requires_torch, config.runtime_deps, config.cpu.dependencies)
+    dependencies = DependencyStack.of(config.base_runtime_deps, config.torch_runtime_deps, config.cpu.dependencies)
     return RequirementRenderer({}).render_many(dependencies)
 
 
@@ -884,21 +889,12 @@ def _add_index(indexes: dict[str, IndexSpec], index: IndexSpec) -> None:
     indexes[index.name] = index
 
 
-def _add_index(indexes: dict[str, IndexSpec], index: IndexSpec) -> None:
-    existing = indexes.get(index.name)
-    if existing is not None and existing != index:
-        raise ValueError(
-            f"Conflicting uv index definition for {index.name!r}: "
-            f"{existing.url!r} explicit={existing.explicit!r} != {index.url!r} explicit={index.explicit!r}"
-        )
-    indexes[index.name] = index
-
-
 def _cuda_dependency_stack(config: CudaDepsConfig, variant: CudaVariant) -> DependencyStack:
     return DependencyStack.of(
-        config.requires_torch,
-        config.runtime_deps,
-        config.cuda_dependencies,
+        config.base_runtime_deps,
+        config.torch_runtime_deps,
+        config.cuda_runtime_deps,
+        config.torch_wheel_deps,
         variant.dependencies,
     )
 

@@ -1,23 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-requires_torch = [
-  "accelerate",
-  "bitsandbytes==0.49.1",
-  { name = "flashinfer-python", version = "0.6.8.post1", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
-  { name = "flashinfer-cubin", version = "0.6.8.post1", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'" },
-  "gliner",
-  "kernels>=0.12.1",
-  "opacus",
-  "peft",
-  "sentence-transformers",
-  "transformers==4.57.3",
-  { name = "triton", specifier = ">=2.0.0", sys_platform = "linux", source_kind = "pytorch" },
-  "trl>=0.23.0",
-  "vllm==0.20.0; sys_platform == 'linux'",
-]
-
-runtime_deps = [
+base_runtime_deps = [
   "anyascii",
   "pycountry",
   "betterproto",
@@ -48,18 +32,37 @@ runtime_deps = [
   "wandb==0.26.1",
 ]
 
-cuda_dependencies = [
-  { name = "flashinfer-jit-cache", version = "0.6.8.post1", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'", variants = ["cu129"] },
-  { name = "nvidia-cublas", sys_platform = "linux" },
-  "nvidia-ml-py; sys_platform == 'linux'",
-  { name = "torch", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
-  "torch-c-dlpack-ext",
-  { name = "torchvision", version = "0.26.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
-  { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
+torch_runtime_deps = [
+  "accelerate",
+  "gliner",
+  "kernels>=0.12.1",
+  "opacus",
+  "peft",
+  "sentence-transformers",
+  "transformers==4.57.3",
+  "trl>=0.23.0",
   "vllm==0.20.0; sys_platform == 'linux'",
 ]
 
-generated_extras = ["engine", "cpu", "cu129", "cu130"]
+cuda_runtime_deps = [
+  "bitsandbytes==0.49.1; sys_platform == 'linux'",
+  # flashinfer is a bit annoying in that not all the packages are in their indices, only the jit-cache
+  { name = "flashinfer-python", version = "0.6.8.post1", sys_platform = "linux", source_marker = "sys_platform=='linux'" },
+  { name = "flashinfer-cubin", version = "0.6.8.post1", sys_platform = "linux", source_marker = "sys_platform=='linux'" },
+  { name = "flashinfer-jit-cache", version = "0.6.8.post1", local = "{torch_local_version}", sys_platform = "linux", source_kind = "flashinfer", source_marker = "sys_platform=='linux'", variants = ["cu129", "cu130"] },
+  { name = "nvidia-cublas", sys_platform = "linux" },
+  "nvidia-ml-py; sys_platform == 'linux'",
+  "torch-c-dlpack-ext",
+  { name = "triton", specifier = ">=2.0.0", sys_platform = "linux", source_kind = "pytorch" },
+]
+
+torch_wheel_deps = [
+  { name = "torch", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "torchvision", version = "0.26.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
+  { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
+]
+
+managed_extras = ["cpu", "cu129", "cu130"]
 
 # CUDA Python packaging context:
 # - Starting with CUDA Python 12.8, cuda-python is a metapackage that currently
@@ -95,7 +98,7 @@ dependencies = [
   { name = "torch", version = "2.11.0", sys_platform = "darwin" },
   { name = "torch", version = "2.11.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu", source_marker = "sys_platform=='linux'" },
   { name = "torchvision", version = "0.26.0", sys_platform = "darwin" },
-  { name = "torchvision", version = "0.26.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu" },
+  { name = "torchvision", version = "0.26.0", local = "cpu", sys_platform = "linux", index = "pytorch-cpu", source_marker = "sys_platform=='linux'" },
   "torchao==0.17.0",
 ]
 

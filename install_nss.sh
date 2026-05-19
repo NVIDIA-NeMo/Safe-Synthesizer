@@ -6,7 +6,7 @@ set -euo pipefail
 
 readonly PACKAGE_NAME="${PACKAGE_NAME:-nemo-safe-synthesizer}"
 readonly PACKAGE_VERSION="${PACKAGE_VERSION:-}"
-readonly CUDA="${CUDA:-128}"
+readonly CUDA="${CUDA:-129}"
 readonly INSTALLER="${INSTALLER:-uv}"
 readonly DRY_RUN="${DRY_RUN:-0}"
 readonly CONSTRAINTS_URL="${CONSTRAINTS_URL:-https://raw.githubusercontent.com/NVIDIA-NeMo/Safe-Synthesizer/main/constraints.txt}"
@@ -17,12 +17,12 @@ usage() {
 Install NeMo Safe Synthesizer with the right runtime indexes.
 
 Usage:
-  CUDA=128 bash install_nss.sh
+  CUDA=129 bash install_nss.sh
   CUDA=130 bash install_nss.sh
   CUDA=cpu bash install_nss.sh
 
 Environment:
-  CUDA=128|130|cpu        Runtime extra to install. Default: 128.
+  CUDA=129|130|cpu        Runtime extra to install. Default: 129.
   INSTALLER=uv|pip        Installer command. Default: uv.
   PACKAGE_VERSION=<spec>  Optional version specifier, for example ==0.1.0.
   CONSTRAINTS_URL=<url>   Constraints file URL. Default: repo main constraints.txt.
@@ -76,24 +76,24 @@ check_cuda_13_driver() {
 
 runtime_extra() {
     case "$CUDA" in
-        128 | cu128 | cuda12 | cuda12.8) printf 'cu128' ;;
+        129 | cu129 | cuda12 | cuda12.9) printf 'cu129' ;;
         130 | cu130 | cuda13 | cuda13.0) printf 'cu130' ;;
         cpu | CPU) printf 'cpu' ;;
         -h | --help | help)
             usage
             exit 0
             ;;
-        *) die "unsupported CUDA='${CUDA}'. Use 128, 130, or cpu." ;;
+        *) die "unsupported CUDA='${CUDA}'. Use 129, 130, or cpu." ;;
     esac
 }
 
 runtime_indexes() {
     local extra="$1"
     case "$extra" in
-        cu128)
+        cu129)
             INDEXES=(
-                "https://flashinfer.ai/whl/cu128"
-                "https://download.pytorch.org/whl/cu128"
+                "https://flashinfer.ai/whl/cu129"
+                "https://download.pytorch.org/whl/cu129"
                 "https://pypi.nvidia.com"
             )
             ;;

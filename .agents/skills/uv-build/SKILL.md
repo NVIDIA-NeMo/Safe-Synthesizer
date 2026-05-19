@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 name: uv-build
-description: "uv package management, dependency groups, PyTorch index handling, hatch build system, and versioning for this repo. Triggers on: uv, uv sync, uv lock, uv add, uv build, dependency, pyproject.toml, extras, cpu, cu128, hatch, wheel, version, publish."
+description: "uv package management, dependency groups, PyTorch index handling, hatch build system, and versioning for this repo. Triggers on: uv, uv sync, uv lock, uv add, uv build, dependency, pyproject.toml, extras, cpu, cu129, hatch, wheel, version, publish."
 license: Apache-2.0
 ---
 
@@ -17,24 +17,23 @@ Package management with uv, extras for CPU/CUDA, hatch build, and dynamic versio
 make bootstrap-tools && make bootstrap-nss cpu
 
 # Pick a variant:
-make bootstrap-nss dev       # dev tools only (no engine/torch)
-make bootstrap-nss cpu       # + engine + CPU PyTorch
-make bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
-make bootstrap-nss engine    # + engine (no torch)
+make bootstrap-nss dev       # dev tools only
+make bootstrap-nss cpu       # runtime deps + CPU PyTorch
+make bootstrap-nss cu129     # runtime deps + CUDA 12.9 PyTorch
 ```
 
-Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
+Under the hood: `uv sync --frozen --extra <extra> --group dev`
 
 ## Extras and Conflicts
 
 | Extra | What it installs |
 |-------|------------------|
-| `cpu` | PyTorch CPU, faiss-cpu, flashinfer (Linux only) |
-| `cu129` | PyTorch+CUDA 12.9, faiss-gpu, flashinfer-jit-cache |
-| `engine` | ML pipeline deps (outlines, wandb, tiktoken, etc.) -- no torch |
+| `cpu` | Runtime deps, shared Torch-adjacent deps, and CPU PyTorch |
+| `cu129` | Runtime deps, shared Torch-adjacent deps, CUDA deps, and CUDA 12.9 PyTorch |
+| `cu130` | Runtime deps, shared Torch-adjacent deps, CUDA deps, and CUDA 13.0 PyTorch |
 | `microservices` | `nemo-microservices` from local path |
 
-`cpu` and `cu129` conflict -- you must pick one, never both. Enforced in `[tool.uv] conflicts`.
+`cpu`, `cu129`, and `cu130` conflict -- pick exactly one runtime extra. Enforced in `[tool.uv] conflicts`.
 
 ## Index Management
 

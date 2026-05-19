@@ -284,17 +284,14 @@ class VRAMHeadroomCheck(MetadataCheck):
         model_name = getattr(autoconfig, "_name_or_path", None) or getattr(autoconfig, "model_type", "model")
         if method == "exact":
             logger.info(
-                "VRAM estimate: counted %.2fB parameters for %s via meta-tensor instantiation",
-                n_params / 1e9,
-                model_name,
+                f"VRAM estimate: counted {n_params / 1e9:.2f}B parameters for "
+                f"{model_name} via meta-tensor instantiation"
             )
         else:
             logger.info(
-                "VRAM estimate: meta-tensor instantiation unavailable for %s; falling back to shape "
-                "heuristic (~%.2fB parameters). This estimate is approximate; actual VRAM usage may "
-                "differ by 20-30%% or more for non-standard architectures (e.g. Nemotron, Mamba hybrids).",
-                model_name,
-                n_params / 1e9,
+                f"VRAM estimate: meta-tensor instantiation unavailable for {model_name}; falling back to shape "
+                f"heuristic (~{n_params / 1e9:.2f}B parameters). This estimate is approximate; actual VRAM usage "
+                "may differ by 20-30% or more for non-standard architectures (e.g. Nemotron, Mamba hybrids)."
             )
 
         bytes_per_param = bytes_per_base_weight(config.training)
