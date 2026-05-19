@@ -173,6 +173,7 @@ version = "4.44.1"
 backend = "aqua:mikefarah/yq"
 
 [tools.yq."platforms.linux-arm64"]
+checksum = "blake3:0c0d030630fb4cd88ebe2675aabcdc7c21c721e534d5cbfa94521d36d0ab592f"
 url = "https://github.com/mikefarah/yq/releases/download/v4.44.1/yq_linux_arm64"
 
 [tools.yq."platforms.linux-x64"]

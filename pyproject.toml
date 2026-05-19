@@ -107,7 +107,10 @@ cpu = [
     "transformers==4.57.3",
     "triton>=2.0.0; sys_platform == 'linux'",
     "trl>=0.23.0",
+<<<<<<< HEAD
     "vllm==0.20.0; sys_platform == 'linux'",
+=======
+>>>>>>> 71b18be6 (fix: clean run on dgx spark)
     "anyascii",
     "pycountry",
     "betterproto",
@@ -155,7 +158,10 @@ cu129 = [
     "transformers==4.57.3",
     "triton>=2.0.0; sys_platform == 'linux'",
     "trl>=0.23.0",
+<<<<<<< HEAD
     "vllm==0.20.0; sys_platform == 'linux'",
+=======
+>>>>>>> 71b18be6 (fix: clean run on dgx spark)
     "anyascii",
     "pycountry",
     "betterproto",
@@ -187,10 +193,19 @@ cu129 = [
     "flashinfer-jit-cache==0.6.8.post1+cu129; sys_platform == 'linux'",
     "nvidia-cublas; sys_platform == 'linux'",
     "nvidia-ml-py; sys_platform == 'linux'",
+<<<<<<< HEAD
     "torch==2.11.0+cu129; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
     "torchvision==0.26.0+cu129; sys_platform == 'linux'",
     "torchao==0.16.0+cu129; sys_platform == 'linux' and platform_machine == 'x86_64'",
+=======
+    "torch==2.11.0+cu128; sys_platform == 'linux'",
+    "torch-c-dlpack-ext",
+    "torchvision==0.26.0+cu128; sys_platform == 'linux'",
+    "torchao==0.17.0+cu128; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "xformers==v0.0.34; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "vllm==0.20.0; sys_platform == 'linux'",
+>>>>>>> 71b18be6 (fix: clean run on dgx spark)
 ]
 cu130 = [
     "accelerate",
@@ -205,7 +220,10 @@ cu130 = [
     "transformers==4.57.3",
     "triton>=2.0.0; sys_platform == 'linux'",
     "trl>=0.23.0",
+<<<<<<< HEAD
     "vllm==0.20.0; sys_platform == 'linux'",
+=======
+>>>>>>> 71b18be6 (fix: clean run on dgx spark)
     "anyascii",
     "pycountry",
     "betterproto",
@@ -239,7 +257,13 @@ cu130 = [
     "torch==2.11.0+cu130; sys_platform == 'linux'",
     "torch-c-dlpack-ext",
     "torchvision==0.26.0+cu130; sys_platform == 'linux'",
+<<<<<<< HEAD
     "torchao==0.16.0+cu130; sys_platform == 'linux' and platform_machine == 'x86_64'",
+=======
+    "torchao==0.17.0+cu130; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "xformers==v0.0.34; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "vllm==0.20.0; sys_platform == 'linux'",
+>>>>>>> 71b18be6 (fix: clean run on dgx spark)
 ]
 # <<< END GENERATED CUDA RUNTIME EXTRAS - DO NOT EDIT >>>
 
