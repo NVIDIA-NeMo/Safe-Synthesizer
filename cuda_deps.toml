@@ -14,10 +14,7 @@ requires_torch = [
   "transformers==4.57.3",
   { name = "triton", specifier = ">=2.0.0", sys_platform = "linux", source_kind = "pytorch" },
   "trl>=0.23.0",
-<<<<<<< HEAD
   "vllm==0.20.0; sys_platform == 'linux'",
-=======
->>>>>>> 71b18be6 (fix: clean run on dgx spark)
 ]
 
 runtime_deps = [
@@ -58,13 +55,8 @@ cuda_dependencies = [
   { name = "torch", version = "2.11.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
   "torch-c-dlpack-ext",
   { name = "torchvision", version = "0.26.0", local = "{torch_local_version}", sys_platform = "linux", source_kind = "pytorch" },
-<<<<<<< HEAD
-  { name = "torchao", version = "0.16.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
-=======
   { name = "torchao", version = "0.17.0", local = "{torch_local_version}", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
-  { name = "xformers", version = "v0.0.34", sys_platform = "linux", arch = "x86_64", source_kind = "pytorch" },
   "vllm==0.20.0; sys_platform == 'linux'",
->>>>>>> 71b18be6 (fix: clean run on dgx spark)
 ]
 
 generated_extras = ["engine", "cpu", "cu129", "cu130"]
