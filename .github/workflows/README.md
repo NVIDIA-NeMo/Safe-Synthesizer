@@ -12,7 +12,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | Workflow                                           | Trigger                     | Description                                                                                                |
 | -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, lock/generated dependency checks, typecheck, unit tests, and CPU smoke tests                       |
-| [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
+| [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (intended to be required when PR GPU checks are re-enabled) and E2E tests                   |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
 | [release.yml](release.yml)                         | Push tags to `v*`           | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
@@ -138,7 +138,7 @@ All jobs run on `ubuntu-latest` (GitHub-hosted).
 
 The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggered manually via `workflow_dispatch`. Manual dispatch includes a `suite` dropdown with `all`, `smoke`, and `e2e` options. The `push` trigger for `pull-request/*` branches is currently commented out due to internal blockers, so PRs do not automatically produce GPU status checks. We expect to re-enable that path as soon as those blockers are resolved. There are several key jobs:
 
-- GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. Required for merge.
+- GPU Smoke Tests: Quick smoke tests on a gpu runner with a 30-minute job timeout and 20-minute step timeout. These are intended to be required for merge when PR GPU status checks are re-enabled.
 - GPU E2E Tests: End-to-end tests on a gpu runner with a 60-minute job timeout and 45-minute step timeout. Informational -- failures produce a warning but don't block merge.
 - GPU CI Status: Aggregation job for the GPU workflow. It is not currently a live branch-protection requirement while PR GPU runs are disabled; when re-enabled, it is intended to be the required GPU check. It fails if smoke tests fail and warns if E2E tests fail.
 

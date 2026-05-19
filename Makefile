@@ -347,7 +347,7 @@ CONTAINER_GPU_FILE := containers/Dockerfile.cuda
 CONTAINER_GPU_IMAGE ?= nss-gpu:latest
 CONTAINER_GPU_IMAGE_DEV ?= nss-gpu-dev:latest
 CONTAINER_GPU_CUDA_EXTRA ?= cu129
-CONTAINER_GPU_CUDA_VERSION ?= 12.8.1
+CONTAINER_GPU_CUDA_VERSION ?= 12.9.1
 # Multi-arch: override for arm64 builds (e.g., Blackwell).
 #   make container-build-gpu CONTAINER_GPU_PLATFORM=linux/arm64
 CONTAINER_GPU_PLATFORM ?= linux/amd64
@@ -395,12 +395,23 @@ CONTAINER_GPU_BUILD_DEV := --platform $(CONTAINER_GPU_PLATFORM) \
 	--progress=plain \
 	-f $(CONTAINER_GPU_FILE)
 
+define validate_cuda_pair
+	@case "$(CONTAINER_GPU_CUDA_EXTRA):$(CONTAINER_GPU_CUDA_VERSION)" in \
+		cu129:12.9.*|cu130:13.0.*) ;; \
+		cu129:*) echo "Error: cu129 requires CONTAINER_GPU_CUDA_VERSION=12.9.x (got $(CONTAINER_GPU_CUDA_VERSION))" >&2; exit 1 ;; \
+		cu130:*) echo "Error: cu130 requires CONTAINER_GPU_CUDA_VERSION=13.0.x (got $(CONTAINER_GPU_CUDA_VERSION))" >&2; exit 1 ;; \
+		*) echo "Error: unsupported CONTAINER_GPU_CUDA_EXTRA='$(CONTAINER_GPU_CUDA_EXTRA)'. Use cu129 or cu130." >&2; exit 1 ;; \
+	esac
+endef
+
 .PHONY: container-build-gpu
 container-build-gpu: ## Build CUDA runtime container (CLI wrapper)
+	$(call validate_cuda_pair)
 	$(CONTAINER_CMD) build $(CONTAINER_GPU_BUILD_RUNTIME) .
 
 .PHONY: container-build-gpu-dev
 container-build-gpu-dev: ## Build CUDA dev container (tools + test deps)
+	$(call validate_cuda_pair)
 	$(CONTAINER_CMD) build $(CONTAINER_GPU_BUILD_DEV) .
 
 .PHONY: container-run-gpu
@@ -427,6 +438,7 @@ endif
 ifeq (,$(shell command -v docker 2>/dev/null))
 	$(error Multi-arch builds require Docker with buildx. Podman does not support buildx.)
 endif
+	$(call validate_cuda_pair)
 	docker buildx build \
 		--platform linux/amd64,linux/arm64 \
 		--tag $(CONTAINER_GPU_REGISTRY)/$(CONTAINER_GPU_IMAGE) \
