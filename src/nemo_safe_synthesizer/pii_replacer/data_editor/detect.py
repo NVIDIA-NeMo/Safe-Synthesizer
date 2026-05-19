@@ -37,7 +37,7 @@ class DefaultLLMConfig:
 
     Attributes:
         CONFIG_ID: Model identifier for the LLM. From env ``NIM_MODEL_ID``, or
-            ``qwen/qwen2.5-coder-32b-instruct`` if unset.
+            ``qwen/qwen3-next-80b-a3b-instruct`` if unset.
         SYSTEM_PROMPT: System message describing the column-type annotation task
             sent to the LLM.
         MAX_OUTPUT_TOKENS: Maximum number of tokens allowed in the LLM response
@@ -46,7 +46,7 @@ class DefaultLLMConfig:
             Lower values give more deterministic output.
     """
 
-    CONFIG_ID = os.environ.get("NIM_MODEL_ID", "qwen/qwen2.5-coder-32b-instruct")
+    CONFIG_ID = os.environ.get("NIM_MODEL_ID", "qwen/qwen3-next-80b-a3b-instruct")
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
     MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2

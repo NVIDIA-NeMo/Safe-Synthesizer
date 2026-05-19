@@ -11,11 +11,10 @@ import pandas as pd
 
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import NemoPII
 
-# Currently use env variables to configure various pieces
-# Inferenc endpoint for classify:
+# Currently use env variables to configure the endpoint and model for column classification.
 # export NSS_INFERENCE_KEY=<...>
 # export NSS_INFERENCE_ENDPOINT=https://integrate.api.nvidia.com/v1
-# export NIM_MODEL_ID=qwen/qwen2.5-coder-32b-instruct
+# export NIM_MODEL_ID=qwen/qwen3-next-80b-a3b-instruct
 
 
 def main():
