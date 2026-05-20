@@ -23,22 +23,22 @@ reviews:
   sequence_diagrams: false
 
   labeling_instructions:
-    - label: python
-      instructions: Apply when the PR changes Python source or tests.
-    - label: tests
-      instructions: Apply when the PR changes test code, fixtures, pytest config, or test documentation.
-    - label: documentation
-      instructions: Apply when the PR changes README, docs, markdown guides, or API documentation.
-    - label: ci
-      instructions: Apply when the PR changes GitHub Actions, CODEOWNERS, Dependabot, CodeQL, Codecov, or CI scripts.
-    - label: dependencies
-      instructions: Apply when the PR changes pyproject.toml, constraints.txt, .mise.toml, or dependency/tooling configuration.
-    - label: containers
-      instructions: Apply when the PR changes Dockerfiles, container docs, or container build scripts.
-    - label: shell
-      instructions: Apply when the PR changes shell scripts, Makefile targets, or command-line tooling.
-    - label: tooling
-      instructions: Apply when the PR changes tools/, script/, developer automation, codestyle wrappers, or release/build helpers.
+    - label: bug
+      instructions: Apply when the PR fixes a defect in shipped behavior.
+    - label: feature
+      instructions: Apply when the PR adds a new user-facing capability.
+    - label: refactor
+      instructions: Apply when the PR restructures internals with no behavior change.
+    - label: perf
+      instructions: Apply when the PR improves performance with no behavior change.
+    - label: security
+      instructions: Apply when the PR addresses a security-relevant fix or hardening.
+    - label: docs
+      instructions: Apply when the PR makes documentation-only changes.
+    - label: test
+      instructions: Apply when the PR makes test-only additions or changes.
+    - label: chore
+      instructions: Apply when the PR is maintenance not tied to a user-visible change.
 
   path_filters:
     - "!uv.lock"
