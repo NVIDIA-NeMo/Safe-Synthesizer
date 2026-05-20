@@ -5,19 +5,6 @@ name: Bug Report
 description: Report a bug
 labels: ["bug"]
 body:
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority Level
-      description: How urgent is this issue?
-      default: 2
-      options:
-        - Critical (Total blocker)
-        - High (Major functionality broken)
-        - Medium (Annoying but has workaround)
-        - Low (Cosmetic / Minor)
-    validations:
-      required: true
   - type: textarea
     id: description
     attributes:
