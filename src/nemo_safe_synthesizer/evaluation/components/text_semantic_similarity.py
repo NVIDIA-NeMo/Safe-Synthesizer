@@ -244,7 +244,7 @@ class TextSemanticSimilarity(Component):
                 # Retry timings: 1, 2, 4, 8, 16, 32, 64, 120, 120, 120. Total wait max: 367 seconds.
                 stop=stop_after_attempt(10),
                 wait=wait_exponential(max=120),
-                before_sleep=before_sleep_log(logger, logging.WARNING),  # type: ignore[invalid-argument-type]
+                before_sleep=before_sleep_log(logger, logging.WARNING),
             ):
                 with attempt:
                     return SentenceTransformer("distiluse-base-multilingual-cased-v2")
