@@ -77,8 +77,11 @@ compatible with its runtime. Keep vLLM's exclusions intact and resolve to a
 newer transformers v5 release.
 
 ```toml
-transformers>=5.6,<6
-vllm==0.20.0
+[project]
+dependencies = [
+  "transformers>=5.6,<6",
+  "vllm==0.20.0",
+]
 ```
 
 If you've vendored or copied parts of `pyproject.toml` into another project,
