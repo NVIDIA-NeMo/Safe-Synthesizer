@@ -158,7 +158,7 @@ def bucket_columns(n: int) -> str:
 
 class NSSTrainingAndGenerationEvent(BaseModel):
     _event_name: ClassVar[str] = "train_and_generation_event"
-    _schema_version: ClassVar[str] = "1.4"
+    _schema_version: ClassVar[str] = "1.7"
 
     nemo_source: NemoSourceEnum = Field(
         default=NemoSourceEnum.SAFE_SYNTHESIZER,
