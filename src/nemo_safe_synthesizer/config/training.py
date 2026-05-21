@@ -337,10 +337,11 @@ class TrainingHyperparams(Parameters):
         Literal[4, 8],
         Field(
             title="quantization_bits",
+            deprecated=True,
             description=(
-                "Bit width for bitsandbytes quantization. Used only when "
-                "``quantization_scheme`` is not set (back-compat alias: 4 → bnb-4bit, "
-                "8 → bnb-8bit). Prefer ``quantization_scheme`` for new configs."
+                "Deprecated: use ``quantization_scheme`` instead. Bit width for "
+                "bitsandbytes quantization when ``quantization_scheme`` is not set "
+                "(back-compat alias: 4 → bnb-4bit, 8 → bnb-8bit)."
             ),
         ),
     ] = 8
