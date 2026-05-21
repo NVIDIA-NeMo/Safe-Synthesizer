@@ -525,7 +525,7 @@ class DatetimeCol(ColAction):
         dt_format: Optional[str]
 
     def _infer_col_dt_format(self, col: pd.Series) -> Optional[str]:
-        dt_formats = col.apply(lambda x: guess_datetime_format(x))
+        dt_formats = col.apply(guess_datetime_format)
         if len(dt_formats.unique()) > 1:
             logger.warning("Multiple time formats found: %s", dt_formats.unique())
 
