@@ -407,14 +407,20 @@ class HFModelAvailabilityCheck(ConfigCheck):
 
         missing = ModelRef.missing_required_components(snapshot_path)
         if missing:
-            collector.error(
-                "hf_model_cache_incomplete",
-                (
-                    f"Cached Hugging Face model '{model_ref.repo_id}' at '{snapshot_path}' is missing "
-                    f"{', '.join(missing)}. Pre-download the full model snapshot before running offline "
-                    "or rate-limited jobs."
-                ),
+            message = (
+                f"Cached Hugging Face model '{model_ref.repo_id}' at '{snapshot_path}' is missing {', '.join(missing)}."
             )
+            if _hf_offline_enabled():
+                collector.error(
+                    "hf_model_cache_incomplete",
+                    f"{message} Offline Hugging Face mode is enabled, so model loading will fail.",
+                )
+                return
+            collector.warning(
+                "hf_model_cache_incomplete",
+                f"{message} Model loading will contact Hugging Face unless the full model snapshot is pre-downloaded.",
+            )
+            self._report_missing_hf_token(collector)
         self._report_missing_remote_code(model_ref, snapshot_path, collector)
 
     @staticmethod
