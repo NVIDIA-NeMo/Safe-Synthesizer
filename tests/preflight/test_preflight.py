@@ -356,7 +356,7 @@ class TestHFModelAvailabilityCheck:
         assert any(i.code == "hf_model_not_cached" and i.severity == "warning" for i in issues)
         assert any(i.code == "hf_token_missing" and i.severity == "warning" for i in issues)
 
-    def test_partial_cached_snapshot_errors(
+    def test_partial_cached_snapshot_warns(
         self, hf_cached_snapshot_factory, pretrained_config, ctx_factory, monkeypatch
     ):
         """Partial HF snapshot validation intentionally tracks Transformers load needs."""
@@ -368,10 +368,10 @@ class TestHFModelAvailabilityCheck:
             ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
         )
 
-        assert any(i.code == "hf_model_cache_incomplete" and i.severity == "error" for i in issues)
+        assert any(i.code == "hf_model_cache_incomplete" and i.severity == "warning" for i in issues)
         assert "model weights" in _issue_by_code(issues, "hf_model_cache_incomplete").message
 
-    def test_incomplete_sharded_cached_snapshot_errors(
+    def test_incomplete_sharded_cached_snapshot_warns(
         self, hf_cached_snapshot_factory, hf_weight_index_factory, pretrained_config, ctx_factory, monkeypatch
     ):
         """Sharded snapshot validation intentionally tracks HF weight-index design."""
@@ -389,7 +389,23 @@ class TestHFModelAvailabilityCheck:
             ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
         )
 
+        assert any(i.code == "hf_model_cache_incomplete" and i.severity == "warning" for i in issues)
+
+    @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
+    def test_partial_cached_snapshot_errors_when_offline(
+        self, hf_cached_snapshot_factory, offline_var, pretrained_config, ctx_factory, monkeypatch
+    ):
+        """Offline incomplete-cache severity intentionally tracks HF offline env-var semantics."""
+        cache_root, _ = hf_cached_snapshot_factory(files=("config.json", "tokenizer.json"))
+        self._use_cache_root(monkeypatch, cache_root)
+        monkeypatch.setenv(offline_var, "1")
+
+        issues = HFModelAvailabilityCheck().run(
+            ctx_factory(config=pretrained_config("nvidia/Nemotron-Mini-4B-Instruct"))
+        )
+
         assert any(i.code == "hf_model_cache_incomplete" and i.severity == "error" for i in issues)
+        assert not any(i.code == "hf_token_missing" for i in issues)
 
     @pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
     def test_missing_trusted_remote_code_errors_when_offline(
