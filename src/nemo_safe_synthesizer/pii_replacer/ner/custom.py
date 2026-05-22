@@ -140,13 +140,13 @@ def _namespace_from_config(config: dict) -> str:
 #####################
 
 
-def get_regex_predictors_from_config(config: dict) -> Optional[list[RegexPredictor]]:
+def get_regex_predictors_from_config(config: dict) -> list[RegexPredictor]:
     out_predictors = []
     namespace = _namespace_from_config(config)
 
     predictor_dicts = config.get("regex", None)
     if predictor_dicts is None:
-        return None
+        return []
 
     for name, patterns in predictor_dicts.items():
         predictor_name = name.lower()
@@ -178,13 +178,13 @@ def _process_phrase_list_file(config: dict, builder: PhraseMatcherBuilder) -> Ph
     return builder
 
 
-def get_phrase_predictors_from_config(config: dict) -> Optional[list[RegexPredictor]]:
+def get_phrase_predictors_from_config(config: dict) -> list[RegexPredictor]:
     out_predictors = []
     namespace = _namespace_from_config(config)
 
     phrase_predictors = config.get("phrase", None)
     if phrase_predictors is None:
-        return None
+        return []
 
     for predictor_name, phrase_config in phrase_predictors.items():
         predictor_name = predictor_name.lower()

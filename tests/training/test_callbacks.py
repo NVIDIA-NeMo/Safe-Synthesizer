@@ -60,18 +60,24 @@ def _build_tokenizer(model_max_length: int, prompt_token_ids: list[int]) -> Magi
     return tokenizer
 
 
-def _invoke_on_evaluate(callback: InferenceEvalCallback, model: MagicMock, tokenizer: MagicMock) -> None:
+def _invoke_on_evaluate(
+    callback: InferenceEvalCallback,
+    model: MagicMock,
+    tokenizer: MagicMock,
+) -> tuple[MagicMock, MagicMock]:
     """Drive ``on_evaluate`` with world-process-zero state."""
     state = MagicMock()
     state.is_world_process_zero = True
     state.log_history = []
+    control = MagicMock()
     callback.on_evaluate(
         args=MagicMock(),
         state=state,
-        control=MagicMock(),
+        control=control,
         model=model,
         tokenizer=tokenizer,
     )
+    return state, control
 
 
 class TestInferenceEvalCallbackMaxNewTokens:
@@ -155,3 +161,32 @@ class TestInferenceEvalCallbackMaxNewTokens:
 
         assert fixture_mock_model.generate.call_args.kwargs["max_new_tokens"] == model_max_length - prompt_length
         fixture_mock_metadata.generation_max_tokens_for.assert_called_once_with(prompt_length)
+
+
+class TestInferenceEvalCallbackTerminalStatus:
+    """Ensure terminal generation states stop the evaluation loop immediately."""
+
+    def test_callback_stops_after_no_records_status(
+        self,
+        fixture_mock_metadata,
+        fixture_mock_processor,
+        fixture_mock_model,
+    ):
+        """A no-records batch should not trigger extra generation batches."""
+        fixture_mock_processor.return_value = ParsedResponse(records=[], prompt_number=0)
+        fixture_mock_metadata.generation_max_tokens_for.return_value = 500
+        tokenizer = _build_tokenizer(model_max_length=5000, prompt_token_ids=list(range(10)))
+
+        callback = InferenceEvalCallback(
+            schema={"properties": {"col_a": {"type": "string"}}},
+            metadata=fixture_mock_metadata,
+            processor=fixture_mock_processor,
+            num_prompts_per_batch=1,
+            num_batches=3,
+        )
+
+        state, control = _invoke_on_evaluate(callback, fixture_mock_model, tokenizer)
+
+        assert fixture_mock_model.generate.call_count == 1
+        assert control.should_training_stop is True
+        assert state.log_history == [{"training_incomplete": "no_records"}]

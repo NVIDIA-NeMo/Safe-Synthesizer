@@ -64,7 +64,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
     if isinstance(v, np.bool_):
         return bool(v)
 
-    with suppress(Exception):
+    with suppress(TypeError, ValueError, OverflowError):
         # Convert to python int if possible, but np.float32 and other float
         # types will be truncated by int(v), so check equality to make sure
         # we haven't lost precision.
@@ -75,7 +75,7 @@ def _handle_enum_value(v: object) -> None | int | float | bool | str:
     try:
         # Convert to python float if possible
         return float(v)  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         # Otherwise, ensure we're using a python str to avoid json encoding errors.
         return str(v)
 

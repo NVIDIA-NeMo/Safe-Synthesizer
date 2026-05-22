@@ -191,7 +191,7 @@ class InferenceEvalCallback(TrainerCallback):
                     f"fraction of {stop_frac:.2%}",
                 )
                 state.log_history.append({"training_incomplete": "stopping_condition_reached"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
-                break
+            break
 
 
 class ProgressBarCallback(TrainerCallback):

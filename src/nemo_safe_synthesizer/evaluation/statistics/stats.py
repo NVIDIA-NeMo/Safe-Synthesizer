@@ -59,8 +59,8 @@ def count_memorized_lines(training_df: pd.DataFrame, synthetic_df: pd.DataFrame)
                     try:
                         l = l.astype({col: "float"})  # noqa: E741
                         r = r.astype({col: "float"})  # noqa: E741
-                    except Exception:
-                        # In particular ValueErrors if the non-numeric is not convertible, but catch everything.
+                    except (TypeError, ValueError, OverflowError):
+                        # Keep non-convertible mixed columns in their original dtype.
                         pass
         return l, r
 
@@ -144,13 +144,13 @@ def get_numeric_distribution_bins(training: pd.Series, synthetic: pd.Series) -> 
     # We also bin across the training and synthetic Series combined since we are binning across the combined range, otherwise we can see OOM's or sigkill's.
     try:
         bins = np.histogram_bin_edges(pd.concat([training, synthetic]), bins="doane", range=(min_value, max_value))
-    except Exception:
+    except (TypeError, ValueError):
         bins = np.array([], dtype=np.float64)
     # If 'doane' still doesn't do the trick just force 500 bins.
     if len(bins) == 0 or len(bins) > 500:
         try:
             bins = np.histogram_bin_edges(pd.concat([training, synthetic]), bins=500, range=(min_value, max_value))
-        except Exception:
+        except (TypeError, ValueError):
             bins = np.array([], dtype=np.float64)
     return bins
 
