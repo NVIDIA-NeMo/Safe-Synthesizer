@@ -82,6 +82,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+DEFAULT_ROPE_THETA = 10000.0
 
 FIXED_RUNTIME_TRAINING_ARGS = {
     # the training time is set by the number of training records
@@ -132,6 +133,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.autoconfig.max_position_embeddings = (
             model_args.pop("max_seq_length", None) or self.model_metadata.max_seq_length
         )
+        self._normalize_rope_parameters()
         self.model = self.model_loader_type.from_pretrained(**self.framework_load_params, config=self.autoconfig)
 
         self.tokenizer: PreTrainedTokenizer = add_bos_eos_tokens_to_tokenizer(
@@ -255,6 +257,23 @@ class HuggingFaceBackend(TrainingBackend):
         scheme = self._resolve_quantization_scheme()
         logger.info(f"Quantizing model with scheme={scheme.value}")
         return get_quantization_config(scheme)
+
+    def _normalize_rope_parameters(self) -> None:
+        """Ensure Transformers v5 ``rope_parameters`` includes ``rope_theta``."""
+        rope_parameters = getattr(self.autoconfig, "rope_parameters", None)
+        if not isinstance(rope_parameters, dict) or "rope_theta" in rope_parameters:
+            return
+
+        theta = rope_parameters.get("theta")
+        if not isinstance(theta, (int, float)):
+            rope_scaling = getattr(self.model_metadata, "rope_scaling", None)
+            theta = getattr(rope_scaling, "theta", None)
+        if not isinstance(theta, (int, float)):
+            theta = getattr(self.autoconfig, "rope_theta", DEFAULT_ROPE_THETA)
+        if not isinstance(theta, (int, float)):
+            theta = DEFAULT_ROPE_THETA
+
+        rope_parameters["rope_theta"] = float(theta)
 
     def _apply_rope_scaling(self, framework_params: dict, **kwargs: Any) -> None:
         """Apply rope scaling from model_metadata to the config.
