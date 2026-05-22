@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import opacus
 import pandas as pd
+import safetensors.torch  # transformers v5 makes safetensors a hard dep
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
@@ -45,6 +46,7 @@ from transformers import (
 )
 from transformers.trainer import TRAINING_ARGS_NAME
 
+from ...observability import get_logger
 from . import linear  # imported for side effects  # noqa
 from .privacy_args import (
     PrivacyArguments,
@@ -54,10 +56,6 @@ from .sampler import (
     PoissonEntitySampler,
     ShuffledEntitySampler,
 )
-
-if utils.is_safetensors_available():
-    import safetensors.torch
-from ...observability import get_logger
 
 logger = get_logger(__name__)
 
@@ -505,8 +503,9 @@ class OpacusDPTrainer(Trainer):
                 )
             return _num_steps
 
-    def create_optimizer(self):
+    def create_optimizer(self, model: nn.Module | None = None) -> torch.optim.Optimizer:
         """Create the base optimizer then wrap it with Opacus DPOptimizer."""
+        _ = model  # Signature matches transformers v5; base method uses self.model.
         _ = super().create_optimizer()
 
         class DPOptimizer(opacus.optimizers.DPOptimizer):
@@ -547,7 +546,7 @@ class OpacusDPTrainer(Trainer):
         self,
         model: nn.Module,
         inputs: dict[str, torch.Tensor | Any],
-        num_items_in_batch: torch.Tensor | None = None,
+        num_items_in_batch: torch.Tensor | int | None = None,
     ) -> torch.Tensor:
         """Run one training step and return the loss scaled for logging.
 
@@ -570,16 +569,14 @@ class OpacusDPTrainer(Trainer):
         model.train()
         getattr(self.optimizer, "train", lambda: None)()
 
-        # Compared to the original HF implementation (as of 4.48), we use
-        # `num_items_in_batch=None` to avoid any extra scaling, since Opacus
-        # already does it; we only divide the loss by the number of gradient
-        # accumulation steps after loss.backward(), to get correct logging
+        # Pass `num_items_in_batch=None` so the HF Trainer skips its built-in
+        # per-token scaling; Opacus already applies per-sample gradient scaling
+        # and we divide the logged loss by gradient_accumulation_steps below.
         inputs = self._prepare_inputs(inputs)
         with self.compute_loss_context_manager():
-            try:
-                loss = self.compute_loss(model, inputs, num_items_in_batch=None)
-            except TypeError:  # older transformers
-                loss = self.compute_loss(model, inputs)
+            loss = self.compute_loss(model, inputs, num_items_in_batch=None)
+        if isinstance(loss, tuple):
+            loss = loss[0]
         del inputs
 
         loss.backward()
@@ -660,11 +657,10 @@ class OpacusDPTrainer(Trainer):
                 unwrapped_model.save_pretrained(
                     output_dir,
                     state_dict=state_dict,
-                    safe_serialization=self.args.save_safetensors,
                 )
             else:
                 logger.info("Trainer.model is not a `PreTrainedModel`, only saving its state dict.")
-                if self.args.save_safetensors:
+                if getattr(self.args, "save_safetensors", False):
                     try:
                         safetensors.torch.save_file(
                             state_dict,
@@ -679,11 +675,11 @@ class OpacusDPTrainer(Trainer):
             model_to_save.save_pretrained(
                 output_dir,
                 state_dict=state_dict,
-                safe_serialization=self.args.save_safetensors,
             )
 
-        if self.tokenizer is not None:
-            self.tokenizer.save_pretrained(output_dir)
+        processor = getattr(self, "processing_class", None) or getattr(self, "tokenizer", None)
+        if processor is not None:
+            processor.save_pretrained(output_dir)
 
         # Good practice: save your training arguments together with the trained model
         torch.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))

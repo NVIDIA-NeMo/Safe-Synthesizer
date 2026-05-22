@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import ClassVar, Literal
 
@@ -16,7 +17,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from transformers import AutoConfig, AutoTokenizer, PretrainedConfig, PreTrainedTokenizerBase
+from transformers import AutoConfig, PretrainedConfig, PreTrainedTokenizerBase
 
 from ..cli.artifact_structure import Workdir
 from ..config.parameters import SafeSynthesizerParameters
@@ -28,7 +29,7 @@ from ..defaults import (
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..utils import load_json, write_json
-from .utils import ModelRef
+from .utils import ModelRef, load_fast_tokenizer
 
 logger = get_logger(__name__)
 
@@ -98,7 +99,7 @@ class LLMPromptConfig(BaseModel):
         """
         if tokenizer is None:
             model_ref = ModelRef.parse(name)
-            tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer = load_fast_tokenizer(
                 model_ref.target(),
                 trust_remote_code=model_ref.trust_remote_code,
             )
@@ -506,7 +507,7 @@ class ModelMetadata(BaseModel):
                 model_ref.target(), trust_remote_code=model_ref.trust_remote_code
             )
             if tokenizer is None:
-                tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer = load_fast_tokenizer(
                     model_ref.target(),
                     trust_remote_code=model_ref.trust_remote_code,
                 )
@@ -990,3 +991,25 @@ class TinyLlama(ModelMetadata):
             tokenizer=tokenizer,
             **kwargs,
         )
+
+
+# Pydantic 2.12 + transformers v5 + `from __future__ import annotations` interact
+# such that forward references inside `PretrainedConfig | None` and
+# `PreTrainedTokenizerBase | None` unions are only resolvable after the module
+# has fully loaded. Transformers includes lazy `torch.*` references in that
+# namespace, so provide it explicitly while rebuilding instead of relying on an
+# otherwise-unused module import.
+_model_rebuild_namespace = {"torch": importlib.import_module("torch")}
+for _cls in (
+    ModelMetadata,
+    Granite,
+    Llama32,
+    Mistral,
+    Nemotron,
+    Qwen,
+    SmolLM2,
+    SmolLM3,
+    TinyLlama,
+):
+    _cls.model_rebuild(_types_namespace=_model_rebuild_namespace)
+del _cls, _model_rebuild_namespace

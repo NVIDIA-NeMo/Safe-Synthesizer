@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import importlib
+from enum import StrEnum
 from typing import (
+    TYPE_CHECKING,
     Annotated,
     Literal,
 )
@@ -25,9 +28,125 @@ from .types import (
     OptionalAutoInt,
 )
 
+if TYPE_CHECKING:
+    from transformers.utils.quantization_config import QuantizationConfigMixin
+
 __all__ = [
+    "QuantizationScheme",
     "TrainingHyperparams",
 ]
+
+
+class QuantizationScheme(StrEnum):
+    """Quantization schemes supported when ``quantize_model=True``.
+
+    Members are string values so they serialize cleanly through pydantic
+    and JSON configs. The enum also owns construction of the corresponding
+    transformers ``quantization_config`` object; optional ML dependencies stay
+    locally imported in that construction path.
+
+    Selection guide:
+    - ``bnb-4bit`` / ``bnb-8bit``: bitsandbytes NF4 / int8. Widest hardware
+      support (Ampere+), works with QLoRA and LoftQ. Default for training.
+    - ``fp8``: transformers ``FineGrainedFP8Config``. Float8 with block-wise
+      scaling. Requires Hopper (sm_90+) or Blackwell. Inference-leaning.
+    - ``nvfp4``: NVIDIA FP4 via ``torchao.prototype.mx_formats.NVFP4WeightOnlyConfig``
+      wrapped in ``TorchAoConfig``. Requires Blackwell (sm_100+). Weight-only.
+    - ``mxfp4``: OCP Microscaling FP4 via transformers ``Mxfp4Config``.
+      Hardware support varies by torch/torchao version.
+    """
+
+    BNB_4BIT = "bnb-4bit"
+    BNB_8BIT = "bnb-8bit"
+    FP8 = "fp8"
+    NVFP4 = "nvfp4"
+    MXFP4 = "mxfp4"
+
+    @property
+    def effective_bits(self) -> int:
+        """Per-parameter bit width for memory estimation."""
+        return {
+            QuantizationScheme.BNB_4BIT: 4,
+            QuantizationScheme.BNB_8BIT: 8,
+            QuantizationScheme.FP8: 8,
+            QuantizationScheme.NVFP4: 4,
+            QuantizationScheme.MXFP4: 4,
+        }[self]
+
+    @property
+    def is_bitsandbytes(self) -> bool:
+        """Whether the scheme is implemented via bitsandbytes (QLoRA-compatible)."""
+        return self in (QuantizationScheme.BNB_4BIT, QuantizationScheme.BNB_8BIT)
+
+    @classmethod
+    def from_alias(cls, scheme: QuantizationScheme | str | Literal[4, 8]) -> QuantizationScheme:
+        """Normalize string and legacy bit-count aliases to a scheme."""
+        if isinstance(scheme, int):
+            legacy_aliases = {
+                4: cls.BNB_4BIT,
+                8: cls.BNB_8BIT,
+            }
+            try:
+                return legacy_aliases[scheme]
+            except KeyError as exc:
+                raise ValueError(f"Unknown quantization bit-count alias: {scheme!r}. Expected 4 or 8.") from exc
+        return cls(scheme)
+
+    def to_transformers_config(self) -> QuantizationConfigMixin:
+        """Build the transformers quantization config for this scheme."""
+        match self:
+            case QuantizationScheme.BNB_4BIT:
+                return self._bnb_4bit_config()
+            case QuantizationScheme.BNB_8BIT:
+                return self._bnb_8bit_config()
+            case QuantizationScheme.FP8:
+                return self._fp8_config()
+            case QuantizationScheme.NVFP4:
+                return self._nvfp4_config()
+            case QuantizationScheme.MXFP4:
+                return self._mxfp4_config()
+        raise ValueError(f"Unknown quantization scheme: {self!r}")
+
+    @staticmethod
+    def _bnb_4bit_config() -> QuantizationConfigMixin:
+        import torch
+        from transformers import BitsAndBytesConfig
+
+        return BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+
+    @staticmethod
+    def _bnb_8bit_config() -> QuantizationConfigMixin:
+        from transformers import BitsAndBytesConfig
+
+        return BitsAndBytesConfig(load_in_8bit=True)
+
+    @staticmethod
+    def _fp8_config() -> QuantizationConfigMixin:
+        from transformers import FineGrainedFP8Config
+
+        return FineGrainedFP8Config()
+
+    @staticmethod
+    def _nvfp4_config() -> QuantizationConfigMixin:
+        from transformers import TorchAoConfig
+
+        # Keep this dynamic because the experimental torchao module is runtime-only
+        # in some type-checker environments.
+        torchao_mx_formats = importlib.import_module("torchao.prototype.mx_formats")
+        nvfp4_weight_only_config = torchao_mx_formats.NVFP4WeightOnlyConfig
+        return TorchAoConfig(quant_type=nvfp4_weight_only_config())
+
+    @staticmethod
+    def _mxfp4_config() -> QuantizationConfigMixin:
+        from transformers.utils.quantization_config import Mxfp4Config
+
+        return Mxfp4Config()
+
 
 ValueGTZero = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
 
@@ -218,9 +337,28 @@ class TrainingHyperparams(Parameters):
         Literal[4, 8],
         Field(
             title="quantization_bits",
-            description="The number of bits to use for quantization if ``quantize_model`` is ``True``. Accepts 8 or 4.",
+            deprecated=True,
+            description=(
+                "Deprecated: use ``quantization_scheme`` instead. Bit width for "
+                "bitsandbytes quantization when ``quantization_scheme`` is not set "
+                "(back-compat alias: 4 → bnb-4bit, 8 → bnb-8bit)."
+            ),
         ),
     ] = 8
+
+    quantization_scheme: Annotated[
+        QuantizationScheme | None,
+        Field(
+            title="quantization_scheme",
+            description=(
+                "Quantization scheme to use when ``quantize_model=True``. Accepts "
+                "``bnb-4bit``, ``bnb-8bit``, ``fp8``, ``nvfp4``, or ``mxfp4``. "
+                "If unset, falls back to ``quantization_bits`` for backward "
+                "compatibility. Non-bitsandbytes schemes are incompatible with "
+                "``peft_implementation='loftq'``."
+            ),
+        ),
+    ] = None
 
     peft_implementation: Annotated[
         str,

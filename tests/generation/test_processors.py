@@ -3,6 +3,7 @@
 
 import copy
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -44,7 +45,7 @@ def fixture_over_tokenizers(request, tokenizers_dir) -> tuple[str, PreTrainedTok
     # so that both AutoTokenizer and AutoConfig can load without network access.
     local_path = str(tokenizers_dir / request.param)
     tokenizer = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
-    return local_path, tokenizer
+    return local_path, cast(PreTrainedTokenizer, tokenizer)
 
 
 # Purpose: Builds training metadata for tests, using the local SmolLM3 tokenizer directory.
@@ -459,6 +460,7 @@ def _check_assembler_to_processor(
         completion_input_ids = [id for id, label in zip(input_ids, labels) if label != -100]
 
         text = tokenizer.decode(completion_input_ids)
+        assert isinstance(text, str)
         response = processor(idx, text)
 
         assert len(response.valid_records) > 0

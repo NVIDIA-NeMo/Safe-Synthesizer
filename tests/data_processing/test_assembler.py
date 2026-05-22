@@ -965,6 +965,7 @@ def test_sequential_assembler_end_to_end(
     for i in range(examples.train.num_rows):
         input_ids = examples.train[i]["input_ids"]
         text = fixture_tokenizer.decode(input_ids, skip_special_tokens=True)
+        assert isinstance(text, str)
         record_strings = extract_records_from_jsonl_string(text)
         records = [json.loads(r) for r in record_strings]
 
@@ -1040,6 +1041,7 @@ def test_sequential_assembler_single_group_with_pseudo_column(
     for i in range(examples.train.num_rows):
         input_ids = examples.train[i]["input_ids"]
         text = fixture_tokenizer.decode(input_ids, skip_special_tokens=True)
+        assert isinstance(text, str)
         record_strings = extract_records_from_jsonl_string(text)
         records = [json.loads(r) for r in record_strings]
 
