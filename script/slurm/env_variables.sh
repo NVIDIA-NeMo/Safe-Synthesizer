@@ -19,7 +19,7 @@ CONFIGS=(
     mistral-nodp
     mistral-dp
 ) # the jobs will run all datasets with these configs
-export NSS_DIR="${LUSTRE_DIR}/Safe-Synthesizer" # where the nss repo is located
+export NSS_DIR="${NSS_DIR:-${LUSTRE_DIR}/Safe-Synthesizer}" # where the nss repo is located
 export NSS_SLURM_DIR="${NSS_DIR}/script/slurm" # slurm scripts location (inside repo)
 export CONFIG_DIR="${NSS_SLURM_DIR}/configs" # where the config files are located
 export BASE_LOG_DIR="${LUSTRE_DIR}/nss_results" # where you want the slurm logs to be saved, each job will have err and out files
