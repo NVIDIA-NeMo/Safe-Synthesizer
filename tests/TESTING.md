@@ -156,7 +156,7 @@ GPU smoke tests use staged mise tasks for process isolation and CI visibility:
 
 `mise run test:smoke:gpu` runs staged mise tasks in order. Train-only tests are auto-discovered with marker algebra (`requires_gpu and not vllm and not smollm2`), vLLM tests run through dedicated per-file stage tasks for process isolation, and SmolLM2 uses marker selection. The GPU workflow runs the same stages as separate GitHub Actions steps so failures show which lane broke. When adding a new vLLM test file, add `pytest.mark.vllm`, create a dedicated `test:smoke:gpu:*` task, and include it in `test:smoke:gpu`.
 
-`mise run test:e2e` splits into `test:e2e:default` + `test:e2e:dp`, each single-process over `tests/e2e/`.
+`mise run test:e2e` splits into `test:e2e:default` + `test:e2e:dp`, each single-process over `tests/e2e/test_safe_synthesizer.py`.
 
 See [tests/smoke/README.md](smoke/README.md) for additional smoke-specific gotchas.
 

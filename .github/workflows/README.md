@@ -107,7 +107,7 @@ flowchart LR
 
 ## CI Checks Workflow
 
-The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task. Short task definitions live in `tasks/*.toml`; bash-heavy tasks live as executable file tasks in `.mise/tasks/`.
+The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`.
 
 | Job | mise task | What it checks |
 | --- | --- | --- |
@@ -117,7 +117,7 @@ The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. 
 | Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
 | Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
-The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, or CI path changes. Smoke tests run only when `src/**`, `tests/**`, `pytest.ini`, `pyproject.toml`, or `uv.lock` changes.
+The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, CI, or mise task path changes. Smoke tests run when source, test, `pytest.ini`, or dependency paths change.
 
 On manual dispatch, `changes` is intentionally skipped and the test jobs explicitly bypass that skipped dependency. Manual dispatch runs unit tests and CPU smoke tests even when there is no changed-file signal to inspect.
 
@@ -128,7 +128,7 @@ To replicate CI locally:
 ```bash
 mise run check        # format-check + typecheck
 mise run lock-check   # verify uv.lock
-mise run test         # unit tests
+mise run test:ci      # CI unit tests with coverage selectors
 mise run test:smoke   # CPU smoke tests
 ```
 

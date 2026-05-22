@@ -69,10 +69,10 @@ gh run view $RUN_ID --log-failed > /tmp/ci-failure.log
 Match the failed CI job to its local equivalent (see CI job table in SKILL.md). For full CI parity in a container:
 
 ```bash
-make test-ci-container
+mise run test:ci-container
 ```
 
-When CI jobs are skipped (path filtering): the `changes` job skips format, typecheck, and unit-test when only non-source files are modified. To get CI to run: make a trivial Python change (e.g. docstring) or run `make check` and `make test` locally and note in the PR.
+When CI jobs are skipped (path filtering): the `changes` job skips format, typecheck, and unit-test when only non-source files are modified. To get CI to run: make a trivial Python change (e.g. docstring) or run `mise run check` and `mise run test` locally and note in the PR.
 
 ### Step 4: Fix and Re-run
 
@@ -196,7 +196,7 @@ gh pr diff && gh pr view --json files -q '[.files[].path]'
 ### Step 3: Run Local Checks
 
 ```bash
-make format && make check && make test
+mise run format && mise run check && mise run test
 ```
 
 ### Step 4a: Push Fixes (if contributing to the PR)

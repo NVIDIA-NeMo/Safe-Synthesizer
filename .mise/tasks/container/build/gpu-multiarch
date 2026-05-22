@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Build multi-arch GPU image (requires docker + registry)"
+#MISE description="Build and push a multi-arch GPU image manifest. Requires Docker buildx and CONTAINER_GPU_REGISTRY."
 #MISE alias="container-build-gpu-multiarch"
 
 set -euo pipefail
@@ -13,6 +13,11 @@ fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Multi-arch builds require Docker with buildx. Podman does not support buildx." >&2
+  exit 1
+fi
+
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "Docker buildx is required for multi-arch builds. Please install or enable buildx." >&2
   exit 1
 fi
 

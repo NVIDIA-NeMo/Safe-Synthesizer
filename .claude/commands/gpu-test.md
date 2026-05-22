@@ -6,6 +6,7 @@ description: Run GPU integration and e2e tests
 Run GPU-dependent tests. Requires CUDA.
 
 * GPU smoke tests: `mise run test:smoke:gpu`
+* GPU integration tests: `mise run test:gpu-integration`
 * All e2e tests: `mise run test:e2e`
 * Default e2e only: `mise run test:e2e:default`
 * DP e2e only: `mise run test:e2e:dp`

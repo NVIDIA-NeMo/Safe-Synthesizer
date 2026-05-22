@@ -824,8 +824,7 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 ### Mise Tasks
 
 - Root task include lives in `.mise.toml` under `[task_config]`.
-- Use `tasks/*.toml` for short declarative tasks, task graphs, and generated task references.
-- Use executable file tasks in `.mise/tasks/` for bash-heavy tasks.
+- Keep all tasks under `.mise/tasks/`: `*.toml` for declarative tasks and task graphs; executable scripts for bash-heavy tasks.
 - Put shared shell helpers in `.mise/tasks/_lib.sh`; keep it non-executable so mise does not list it as a task.
 - Use `#MISE description=...` on public file tasks and `description` on public TOML tasks so `mise tasks` is useful.
 - Use `#USAGE` comments in file tasks, or `usage` in TOML tasks, for arguments that need validation or help text.

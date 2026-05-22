@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Bootstrap Python dependencies"
+#MISE description="Install project Python dependencies for a selected profile: dev, engine, cpu, cuda, or cu129. Modifies the project virtualenv."
 #USAGE arg "<extra>" help="Python dependency profile" {
-#USAGE   choices "dev" "engine" "cpu" "cuda" "cu128"
+#USAGE   choices "dev" "engine" "cpu" "cuda" "cu129"
 #USAGE }
 
 set -euo pipefail
@@ -14,8 +14,8 @@ echo "~~~~~~"
 echo "attempting to install nss package with primary extra: ${usage_extra?}"
 
 case "${usage_extra?}" in
-  cuda|cu128)
-    uv sync --frozen --extra cu128 --extra engine --group dev
+  cuda|cu129)
+    uv sync --frozen --extra cu129 --extra engine --group dev
     ;;
   cpu)
     uv sync --frozen --extra cpu --extra engine --group dev
@@ -27,7 +27,7 @@ case "${usage_extra?}" in
     uv sync --frozen --group dev
     ;;
   *)
-    echo "Error: Invalid extra '${usage_extra?}'. Use one of: dev engine cpu cuda cu128" >&2
+    echo "Error: Invalid extra '${usage_extra?}'. Use one of: dev engine cpu cuda cu129" >&2
     exit 1
     ;;
 esac

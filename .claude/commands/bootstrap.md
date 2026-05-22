@@ -6,11 +6,13 @@ description: Bootstrap development environment
 Set up the development environment from scratch.
 
 1. Install development tools (uv, ruff, ty, yq, etc.):
+
    ```bash
-   mise run setup
+   make setup
    ```
 
 2. Install Python dependencies (choose one):
+
    ```bash
    mise run bootstrap-nss cpu    # CPU-only (macOS or Linux without GPU)
    mise run bootstrap-nss cuda   # CUDA 12.9 (Linux with NVIDIA GPU)

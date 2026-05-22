@@ -60,6 +60,8 @@ export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
 mise run bootstrap-nss cu129
 ```
 
+`cu129` and `cuda` select the same CUDA 12.9 dependency profile.
+
 #### Nice to have
 
 - Passwordless login See https://confluence.nvidia.com/display/HWINFCSSUP/Setting+Up+Passwordless+SSH+Key+Authentication?src=contextnavpagetreemode

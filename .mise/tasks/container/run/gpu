@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Run command in GPU container"
+#MISE description="Build nss-gpu if needed, then run a command in the GPU runtime container. Requires Docker or Podman with GPU support."
 #MISE alias="container-run-gpu"
 #MISE depends=["container:build:gpu"]
 #USAGE arg "[cmd]" var=#true double_dash="optional" help="Command to run in the container"
@@ -11,7 +11,7 @@ source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 container_cmd="$(resolve_container_cmd)"
 hf_cache="$(ensure_hf_cache)"
-repo_root="$(pwd -P)"
+repo_root="$(git -C "${MISE_CONFIG_ROOT}" rev-parse --show-toplevel)"
 
 extra_mounts=()
 gpu_flags=()

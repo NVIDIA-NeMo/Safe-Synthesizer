@@ -6,5 +6,7 @@ description: Format code
 Format code using ruff (formatting + import sorting + copyright headers).
 
 * Run with: `mise run format`
-* Underlying command: `bash tools/codestyle/format.sh`
+* Underlying commands:
+  * `bash tools/codestyle/format.sh`
+  * `uv run --script tools/codestyle/copyright_fixer.py .`
 * Always run this before committing

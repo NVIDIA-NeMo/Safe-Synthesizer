@@ -5,15 +5,14 @@ SHELL := /bin/bash
 export PATH := $(HOME)/.local/share/mise/shims:$(HOME)/.local/bin:$(PATH)
 
 MISE_GPG_KEY := 24853EC9F655CE80B48E6C3A8B81C9D17413A06D
-MISE_VERSION := v2026.5.2
 
 .PHONY: help
 help: ## Show mise tasks
 	@mise tasks
 
 .PHONY: install-mise
-install-mise: ## Install mise $(MISE_VERSION) (GPG-verified when gpg + gpg-agent + dirmngr are all available)
-	@MISE_VERSION=$(MISE_VERSION) MISE_GPG_KEY=$(MISE_GPG_KEY) bash tools/install-mise.sh
+install-mise: ## Install mise (version from .mise.toml min_version; GPG-verified when gpg + gpg-agent + dirmngr are all available)
+	@MISE_GPG_KEY=$(MISE_GPG_KEY) bash tools/install-mise.sh
 
 .PHONY: setup
 setup: install-mise ## Install dev tools and create the virtual environment via mise
@@ -31,14 +30,35 @@ run: ## Run a mise task. Usage: make run TASK=format-check [MISE_ARGS="..."] [AR
 define deprecated_target
 .PHONY: $(1)
 $(1):
-	@printf '%s\n' 'deprecated; use `mise run $(2)`' >&2
-	@exit 1
+	@printf '%s\n' 'deprecated; forwarding to `mise run $(2)`' >&2
+	@mise run $(2)
 endef
 
-$(eval $(call deprecated_target,bootstrap-nss,bootstrap-nss <extra>))
+BOOTSTRAP_EXTRAS := dev engine cpu cuda cu129
+$(BOOTSTRAP_EXTRAS):
+	@:
+
+.PHONY: bootstrap-nss
+bootstrap-nss:
+	$(eval EXTRA := $(filter-out $@, $(MAKECMDGOALS)))
+	@if [ -z "$(EXTRA)" ]; then \
+		echo 'usage: mise run bootstrap-nss <extra>' >&2; \
+		exit 1; \
+	fi
+	@printf '%s\n' 'deprecated; forwarding to `mise run bootstrap-nss $(EXTRA)`' >&2
+	@mise run bootstrap-nss "$(EXTRA)"
+
+$(eval $(call deprecated_target,verify-python-version,verify-python-version))
+$(eval $(call deprecated_target,.venv,venv))
+
+.PHONY: bootstrap-python
+bootstrap-python:
+	@extra="$${PYTORCH_DEPS:-cpu}"; \
+		printf '%s\n' "deprecated; forwarding to \`mise run bootstrap-nss $$extra\`" >&2; \
+		mise run bootstrap-nss "$$extra"
+
 $(eval $(call deprecated_target,bootstrap-tools,bootstrap-tools))
 $(eval $(call deprecated_target,bootstrap-tools-ci,bootstrap-tools-ci))
-$(eval $(call deprecated_target,bootstrap-python,bootstrap-python))
 $(eval $(call deprecated_target,build-wheel,build-wheel))
 $(eval $(call deprecated_target,check,check))
 $(eval $(call deprecated_target,clean-cache,clean-cache))
@@ -82,5 +102,5 @@ $(eval $(call deprecated_target,typecheck,typecheck))
 
 .PHONY: test-nss-%-ci
 test-nss-%-ci:
-	@printf '%s\n' 'deprecated; use `mise run $@`' >&2
-	@exit 1
+	@printf '%s\n' 'deprecated; forwarding to `mise run $@`' >&2
+	@mise run "$@"

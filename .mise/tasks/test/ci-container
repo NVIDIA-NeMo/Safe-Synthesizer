@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Run CI unit tests in a Linux container"
+#MISE description="Build the local CI test container and run test:ci inside it. Requires Docker or Podman; produces coverage.json in the container."
 #MISE alias="test-ci-container"
 #MISE depends=["container:build:test"]
 
@@ -9,12 +9,13 @@ set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
 
 container_cmd="$(resolve_container_cmd)"
-repo_root="$(pwd -P)"
+repo_root="$(git -C "${MISE_CONFIG_ROOT}" rev-parse --show-toplevel)"
 
 "${container_cmd}" run \
   --rm \
   --platform "${CONTAINER_TEST_PLATFORM:-linux/amd64}" \
   --mount "type=bind,source=${repo_root},target=/workspace" \
+  -w /workspace \
   -e DEBIAN_FRONTEND=noninteractive \
   "${CONTAINER_TEST_IMAGE:-nss-test:latest}" \
   mise run test:ci

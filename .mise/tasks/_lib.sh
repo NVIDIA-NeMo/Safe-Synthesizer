@@ -25,23 +25,17 @@ resolve_python_version() {
 resolve_venv_path() {
   local venv_path="${UV_PROJECT_ENVIRONMENT:-${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT is required}/.venv}"
 
-  if [[ -z "${venv_path}" || "${venv_path}" == "/" ]]; then
+  if [[ -z "${venv_path}" \
+    || "${venv_path}" == "/" \
+    || "${venv_path}" == "." \
+    || "${venv_path}" == ".." \
+    || "${venv_path}" == "${MISE_CONFIG_ROOT}" \
+    || "${venv_path}" == "${MISE_CONFIG_ROOT}/" ]]; then
     echo "Error: refusing to use invalid virtualenv path: '${venv_path}'" >&2
     return 1
   fi
 
   printf '%s\n' "${venv_path}"
-}
-
-default_pytorch_deps() {
-  case "$(uname -m)" in
-    x86_64|amd64)
-      printf '%s\n' "cu128"
-      ;;
-    *)
-      printf '%s\n' "cpu"
-      ;;
-  esac
 }
 
 resolve_container_cmd() {

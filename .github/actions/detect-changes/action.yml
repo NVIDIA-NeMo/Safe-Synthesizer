@@ -46,13 +46,13 @@ outputs:
     description: "'true' if source or test files changed"
     value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' }}
   src_test_deps:
-    description: "'true' if source, test, dependency, or CI files changed"
+    description: "'true' if source, test, dependency, CI, or task files changed"
     value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
   ci:
-    description: "'true' if any CI workflow or action files changed"
+    description: "'true' if CI workflow, action, or mise task files changed"
     value: ${{ steps.filter.outputs.ci }}
   any:
-    description: "'true' if any source, docs source, test, dependency, or CI file changed"
+    description: "'true' if any source, docs source, test, dependency, CI, or task file changed"
     value: ${{ steps.filter.outputs.src == 'true' || steps.filter.outputs.docs_src == 'true' || steps.filter.outputs.tests == 'true' || steps.filter.outputs.pytest_ini == 'true' || steps.filter.outputs.pyproject == 'true' || steps.filter.outputs.uv_lock == 'true' || steps.filter.outputs.ci == 'true' }}
 
 runs:
@@ -83,3 +83,5 @@ runs:
           ci:
             - '.github/workflows/**'
             - '.github/actions/**'
+            - '.mise.toml'
+            - '.mise/tasks/**'

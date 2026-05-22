@@ -6,5 +6,5 @@ description: Build documentation site
 Build the MkDocs Material documentation site.
 
 * Run with: `mise run docs:build`
-* Underlying command: `uv run --frozen --no-project --group docs mkdocs build`
+* Underlying command: `uv run --frozen --group docs mkdocs build`
 * Output: `site/` directory

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Verify mise-managed tools install correctly in a container"
+#MISE description="Build the test setup container and verify mise-managed tools are installed. Requires Docker or Podman."
 #MISE alias="test-tool-install"
 #MISE depends=["container:build:test-setup"]
 

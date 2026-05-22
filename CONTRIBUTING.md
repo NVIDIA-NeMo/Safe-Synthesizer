@@ -32,7 +32,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
 
-> Note on mise itself: the mise version is pinned in `Makefile` (`MISE_VERSION`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when the full toolchain (`gpg`, `gpg-agent`, and `dirmngr`) is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
+> Note on mise itself: the mise version is pinned in `.mise.toml` (`min_version`). The first run of `make setup` installs exactly that version via `tools/install-mise.sh`, preferring the GPG-verified installer when the full toolchain (`gpg`, `gpg-agent`, and `dirmngr`) is available and falling back to `https://mise.run` otherwise (with a warning). If you already have a different mise version on `PATH`, `make setup` will stop and tell you -- either run `mise self-update <pinned>` or uninstall the existing mise and rerun. It will not silently replace your install.
 
 ### Setup
 
@@ -496,7 +496,7 @@ mise run test
 # Run all unit tests including slow tests (excludes smoke and e2e)
 mise run test:unit-slow
 
-# Run CPU smoke tests (~10 seconds, no GPU required)
+# Run CPU smoke tests (~few min, no GPU required)
 mise run test:smoke
 
 # Run GPU smoke tests (requires CUDA)
@@ -512,7 +512,7 @@ mise run test-nss-tinyllama_nodp-clinc_oos-ci
 mise run test:ci-container
 
 # Run specific test files directly
-uv run pytest tests/cli/test_run.py
+uv run --frozen pytest tests/cli/test_run.py
 ```
 
 ### GPU Tests (CI)
@@ -550,15 +550,24 @@ Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned 
 
 ```bash
 mise run format   # auto-fix: ruff format + import sorting + copyright headers
-mise run check    # read-only: all CI checks (format + lint + typecheck + copyright)
+mise run check    # read-only local quality checks (format + lint + typecheck + copyright)
 mise run test     # unit tests
 # or just
-mise run format check test
+mise run format && mise run check && mise run test
 ```
 
 We use `ruff` and `ty` for the majority of this work, wrapped with settings for consistency.
 
-CI calls the same tools through atomic read-only mise tasks. Short task definitions live in `tasks/*.toml`; bash-heavy tasks live as executable file tasks in `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` replicates all CI code-quality checks locally (format-check + typecheck). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
+CI calls the same tools through atomic read-only mise tasks. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`. Shared shell helpers live in `.mise/tasks/_lib.sh`, which is sourced by file tasks but is not executable and does not appear in `mise tasks`. `mise run check` replicates format-check + typecheck locally; `mise run validate` runs the broader pre-PR graph (`check`, `lock-check`, and `test:ci`). Pre-commit hooks (`pre-commit install`) provide faster feedback by checking only staged files, but are not a substitute for the mise tasks.
+
+Useful task graph commands:
+
+```bash
+mise tasks                # public tasks
+mise tasks --hidden       # helper and legacy alias tasks
+mise tasks deps check     # inspect the quality-check graph
+mise tasks deps validate  # inspect the pre-PR validation graph
+```
 
 You can also run tools directly on specific files:
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Build only the setup stage (tools, no Python deps)"
+#MISE description="Build nss-test-setup with pinned mise tools only. Requires Docker or Podman; useful for validating tool installation."
 #MISE alias="container-build-test-setup"
 
 set -euo pipefail

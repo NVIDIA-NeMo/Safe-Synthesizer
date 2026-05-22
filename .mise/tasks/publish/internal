@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Build and publish wheel to NVIDIA Artifactory"
+#MISE description="Build and upload dist/*.whl to NVIDIA Artifactory. Requires TWINE_REPOSITORY_URL, TWINE_USERNAME, and TWINE_PASSWORD."
 #MISE alias="publish-internal"
-#MISE depends=["build-wheel"]
+#MISE depends=["publish:check:internal-env", "build-wheel"]
 
 set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
@@ -13,7 +13,7 @@ require_env TWINE_USERNAME "TWINE_USERNAME is not set. Set it to the username fo
 require_env TWINE_PASSWORD "TWINE_PASSWORD is not set. Set it to the password for the Artifactory repository."
 
 echo "~~~~~~"
-echo "uploading to Artifactory: ${TWINE_REPOSITORY_URL}"
+echo "uploading to Artifactory"
 uvx twine upload \
   --repository-url "${TWINE_REPOSITORY_URL}" \
   --non-interactive \

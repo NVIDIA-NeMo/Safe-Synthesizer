@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Build CUDA dev container (tools + test deps)"
+#MISE description="Build nss-gpu-dev CUDA image with dev tools and test dependencies. Requires Docker or Podman; image is large."
 #MISE alias="container-build-gpu-dev"
 
 set -euo pipefail

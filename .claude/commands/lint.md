@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 description: Check code quality
 ---
-Run all read-only CI checks (formatting, lint rules, type checking, copyright).
+Run read-only local quality checks (formatting, lint rules, type checking, copyright).
 
 * Run with: `mise run check`
 * Runs `mise run format-check` (ruff format + ruff check + copyright) + `mise run typecheck` (ty)

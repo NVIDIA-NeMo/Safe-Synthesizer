@@ -10,7 +10,7 @@ Dockerfiles for running and testing Safe-Synthesizer in containers.
 | File | Base | Purpose |
 |------|------|---------|
 | `Dockerfile.cuda` | `nvidia/cuda:12.8.1-runtime-ubuntu22.04` | GPU runtime and dev images for training, generation, and evaluation |
-| `Dockerfile.test_ci` | `python:3.11-slim` | CPU-only test image (`mise run test:ci-container`) |
+| `Dockerfile.test_ci` | `python:3.11.13-slim` | CPU-only test image (`mise run test:ci-container`) |
 | `entrypoint.sh` | -- | Wrapper entrypoint for the runtime image (mount/GPU checks) |
 
 ## CUDA Image
@@ -168,7 +168,7 @@ mise run test:ci-container
 mise run test:tool-install
 ```
 
-### Mise Tasks
+### CPU Test Mise Tasks
 
 | Task | Description |
 |--------|-------------|

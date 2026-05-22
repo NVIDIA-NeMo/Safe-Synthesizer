@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Build and publish wheel to PyPI"
+#MISE description="Build and upload dist/*.whl to PyPI. Requires TWINE_USERNAME=__token__ and TWINE_PASSWORD with a PyPI token."
 #MISE alias="publish-pypi"
-#MISE depends=["build-wheel"]
+#MISE depends=["publish:check:pypi-env", "build-wheel"]
 
 set -euo pipefail
 source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"

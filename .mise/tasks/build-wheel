@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#MISE description="Build wheel (version from git tag via uv-dynamic-versioning)"
+#MISE description="Build dist/*.whl with uv. Removes existing dist/ first; version comes from git tags via uv-dynamic-versioning."
 
 set -euo pipefail
 

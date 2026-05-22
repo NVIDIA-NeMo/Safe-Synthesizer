@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [setup]
-description = "Install dev tools via mise"
+description = "Install pinned mise-managed tools and create the project virtualenv. Modifies the mise tool cache and .venv or UV_PROJECT_ENVIRONMENT."
 run = [
   "MISE_YES=1 mise trust",
   "MISE_YES=1 mise install",
@@ -12,18 +12,20 @@ run = [
 
 ["bootstrap-tools"]
 description = "(legacy alias) Bootstrap tools via mise"
+hide = true
 depends = ["setup"]
 run = "true"
 
 ["bootstrap-tools-ci"]
 description = "(legacy alias) Bootstrap tools via mise"
+hide = true
 depends = ["setup"]
 run = "true"
 
 ["clean-uv"]
-description = "Remove uv cache files"
+description = "Remove uv cache files. Frees disk space; future uv operations will re-download packages."
 run = "uv cache clear"
 
 ["clean-cache"]
-description = "Remove cache files from uv and other tools"
+description = "Remove uv cache files and the Python virtualenv. Frees disk space; future setup/bootstrap tasks recreate state."
 run = [{ task = "clean-uv" }, { task = "clean-python" }]

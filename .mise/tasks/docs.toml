@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ["docs:serve"]
-description = "Serve the documentation site locally with live reload"
+description = "Serve the MkDocs site locally with live reload at http://127.0.0.1:8000. Requires docs dependencies."
 alias = "docs-serve"
 run = "uv run --frozen --group docs mkdocs serve --livereload"
 
 ["docs:build"]
-description = "Build the documentation site"
+description = "Build the MkDocs site into site/. Read-only for source files; overwrites generated site output."
 alias = "docs-build"
 run = "uv run --frozen --group docs mkdocs build"
 
 ["docs:deploy"]
-description = "Deploy the documentation site to GitHub Pages"
+description = "Deploy the latest docs to GitHub Pages with mike. Requires git push permission and docs dependencies."
 alias = "docs-deploy"
 run = [
   "uv run --frozen --group docs mike deploy --push --update-aliases main latest",

@@ -2,31 +2,31 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [test]
-description = "Run unit tests excluding slow tests"
+description = "Run unit tests excluding slow, e2e, and smoke tests. Requires Python dependencies; exits non-zero on test failure."
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv -m "unit and not slow"'
 
 ["test:unit-slow"]
-description = "Run unit tests including slow tests (excludes e2e and smoke)"
+description = "Run all unit tests including slow tests, excluding e2e and smoke. Requires Python dependencies; may take longer than test."
 alias = "test-unit-slow"
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv tests -m "unit"'
 
 ["test:ci"]
-description = "Run CI unit tests excluding slow, GPU, and smoke tests"
+description = "Run CI unit tests with coverage, excluding slow, e2e, GPU, and smoke tests. Produces coverage.json."
 alias = "test-ci"
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv --cov --cov-report json:coverage.json tests -m "not e2e and not requires_gpu and not slow and not smoke"'
 
 ["test:ci-slow"]
-description = "Run slow tests in CI with coverage"
+description = "Run slow tests with coverage for CI. Produces coverage.json and can take longer than normal unit tests."
 alias = "test-ci-slow"
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv --cov --cov-report json:coverage.json tests -m "slow"'
 
 ["test:smoke"]
-description = "Run CPU smoke tests"
+description = "Run CPU smoke tests for training/generation hot paths. No GPU required; exits non-zero on smoke failure."
 alias = "test-smoke"
 run = 'uv run --frozen pytest -n auto --dist loadscope -vv -m "smoke and not requires_gpu"'
 
 ["test:smoke:gpu"]
-description = "Run all GPU smoke test stages"
+description = "Run all GPU smoke test stages sequentially. Requires CUDA and GPU dependencies; use before GPU-impacting changes."
 alias = "test-smoke-gpu"
 run = [
   { task = "test:smoke:gpu:train-only" },
@@ -68,15 +68,15 @@ alias = "test-smoke-gpu-smollm2"
 run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/ -m "requires_gpu and smollm2"'
 
 ["test:gpu-integration"]
-description = "Run GPU e2e tests (default + DP configs)"
+description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load."
 alias = "test-gpu-integration"
 run = [
-  "uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default",
-  "uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp",
+  "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default",
+  "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp",
 ]
 
 ["test:e2e"]
-description = "Run all e2e tests (requires CUDA)"
+description = "Run all GPU e2e tests: default then DP. Requires CUDA; stages are sequential to control GPU load."
 alias = "test-e2e"
 run = [{ task = "test:e2e:default" }, { task = "test:e2e:dp" }]
 
@@ -91,7 +91,7 @@ alias = "test-e2e-dp"
 run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
 
 ["test:e2e:collect"]
-description = "Dry-run: show which tests e2e/gpu targets select"
+description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
 alias = "test-e2e-collect"
 run = '''
 #!/usr/bin/env bash
@@ -119,7 +119,7 @@ arg "<dataset>" {
 }
 '''
 run = [
-  { task = "bootstrap-nss", args = ["cu128"] },
+  { task = "bootstrap-nss", args = ["cu129"] },
   '''
 #!/usr/bin/env bash
 set -euo pipefail
