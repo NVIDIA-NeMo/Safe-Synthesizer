@@ -280,6 +280,9 @@ fi
 
 write_job_id_file() {
   local array_id="$1"
+  if [[ -n "${array_id:-}" ]]; then
+    printf '%s\n' "${array_id}"
+  fi
   if [[ -n "${JOB_ID_FILE:-}" && -n "${array_id:-}" && -z "${DRY_RUN:-}" ]]; then
     mkdir -p "$(dirname "${JOB_ID_FILE}")"
     printf '%s\n' "${array_id}" > "${JOB_ID_FILE}"
@@ -306,9 +309,6 @@ if [[ "${PIPELINE_MODE}" == "two_stage" ]]; then
       --export=ALL,NSS_PHASE=generate \
       ${NSS_SLURM_DIR}/slurm_srun.sh )
 
-  if [[ -n "${gen_array_id:-}" ]]; then
-    printf '%s\n' "${gen_array_id}"
-  fi
   write_job_id_file "${gen_array_id}"
 else
   end_to_end_array_id=$( \
@@ -317,9 +317,6 @@ else
     --job-name nss_end_to_end \
     --export=ALL,NSS_PHASE=end_to_end \
     ${NSS_SLURM_DIR}/slurm_srun.sh )
-  if [[ -n "${end_to_end_array_id:-}" ]]; then
-    printf '%s\n' "${end_to_end_array_id}"
-  fi
   write_job_id_file "${end_to_end_array_id}"
 fi
 
