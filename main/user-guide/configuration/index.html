@@ -1197,6 +1197,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quantization-schemes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quantization schemes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -9051,6 +9068,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Training">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quantization-schemes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quantization schemes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -9390,10 +9424,16 @@ for the full field list.</p>
 <td>Enable if VRAM is limited; 8-bit has lower quality impact than 4-bit</td>
 </tr>
 <tr>
+<td><code>training.quantization_scheme</code></td>
+<td><code>null</code></td>
+<td>Quantization scheme: <code>bnb-4bit</code>, <code>bnb-8bit</code>, <code>fp8</code>, <code>nvfp4</code>, <code>mxfp4</code></td>
+<td>See <a href="#quantization-schemes">Quantization schemes</a> below; leave unset to fall back to <code>quantization_bits</code></td>
+</tr>
+<tr>
 <td><code>training.quantization_bits</code></td>
 <td><code>8</code></td>
-<td>Bit width (4 or 8) when <code>training.quantize_model</code> is <code>true</code></td>
-<td>Prefer 8 over 4 for quality</td>
+<td>Legacy bit width (4 or 8) used when <code>quantization_scheme</code> is unset</td>
+<td>Prefer setting <code>quantization_scheme</code> explicitly for new configs</td>
 </tr>
 <tr>
 <td><code>training.attn_implementation</code></td>
@@ -9460,6 +9500,73 @@ validated. To understand the trade-offs with model selection, see <a href="../ru
 <div class="admonition warning">
 <p class="admonition-title">Security Note: Pretrained models from Hugging Face Hub</p>
 <p>Loading and using pretrained models from Hugging Face Hub (or any public source) can expose your environment to significant risks, including arbitrary code execution (ACE) or remote code execution (RCE) vulnerabilities. Only use models you have reviewed yourself or from organizations and authors you explicitly trust. Malicious or modified models may contain embedded code, backdoors, or privacy-leaking mechanisms.</p>
+</div>
+<h3 id="quantization-schemes">Quantization schemes<a class="headerlink" href="#quantization-schemes" title="Permanent link">&para;</a></h3>
+<p>When <code>training.quantize_model: true</code>, Safe Synthesizer applies one of the
+following quantization schemes via transformers v5's
+<code>quantization_config=</code> interface:</p>
+<table>
+<thead>
+<tr>
+<th>Scheme</th>
+<th>Backend</th>
+<th style="text-align: right;">Bits/param</th>
+<th>Hardware</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bnb-4bit</code></td>
+<td>bitsandbytes NF4 + bf16 compute</td>
+<td style="text-align: right;">4</td>
+<td>Ampere+ (sm_80+)</td>
+<td>Default for QLoRA fine-tuning. LoftQ-compatible.</td>
+</tr>
+<tr>
+<td><code>bnb-8bit</code></td>
+<td>bitsandbytes int8</td>
+<td style="text-align: right;">8</td>
+<td>Ampere+ (sm_80+)</td>
+<td>Higher quality than 4-bit; uses ~2x the VRAM. LoftQ-compatible.</td>
+</tr>
+<tr>
+<td><code>fp8</code></td>
+<td><code>FineGrainedFP8Config</code></td>
+<td style="text-align: right;">8</td>
+<td>Hopper (sm_90+) / Blackwell</td>
+<td>Float8 with block-wise scaling. Inference-leaning.</td>
+</tr>
+<tr>
+<td><code>nvfp4</code></td>
+<td><code>TorchAoConfig(NVFP4WeightOnlyConfig())</code></td>
+<td style="text-align: right;">4</td>
+<td>Blackwell (sm_100+)</td>
+<td>Weight-only NVIDIA FP4. Requires recent torchao.</td>
+</tr>
+<tr>
+<td><code>mxfp4</code></td>
+<td><code>Mxfp4Config</code></td>
+<td style="text-align: right;">4</td>
+<td>Varies by torch/torchao version</td>
+<td>OCP Microscaling FP4.</td>
+</tr>
+</tbody>
+</table>
+<p>Select a scheme with <code>training.quantization_scheme</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">training</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">quantize_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">quantization_scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nvfp4</span><span class="w">   </span><span class="c1"># or bnb-4bit / bnb-8bit / fp8 / mxfp4</span>
+</span></code></pre></div>
+<p>If <code>quantization_scheme</code> is unset, Safe Synthesizer falls back to
+<code>quantization_bits</code> for backward compatibility (<code>4</code> → <code>bnb-4bit</code>,
+<code>8</code> → <code>bnb-8bit</code>).</p>
+<div class="admonition note">
+<p class="admonition-title">LoftQ + non-BNB schemes</p>
+<p><code>peft_implementation: loftq</code> is incompatible with <code>fp8</code>, <code>nvfp4</code>, and
+<code>mxfp4</code> — LoftQ requires the bitsandbytes runtime. Setting both will
+raise a <code>ParameterError</code> at startup. Use <code>qlora</code> or <code>lora</code> with the
+non-BNB schemes.</p>
 </div>
 <hr />
 <h2 id="generation">Generation<a class="headerlink" href="#generation" title="Permanent link">&para;</a></h2>
@@ -9894,8 +10001,8 @@ for the full API reference.</p>
 <h2 id="validate-and-modify-configuration">Validate and Modify Configuration<a class="headerlink" href="#validate-and-modify-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="config-validate"><code>config validate</code><a class="headerlink" href="#config-validate" title="Permanent link">&para;</a></h3>
 <p>Check your config for errors and display the merged parameters:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001
 </span></code></pre></div>
 <p>Fields set to <code>"auto"</code> remain as <code>"auto"</code> in the output -- auto-resolution
 happens at runtime during <code>process_data()</code>, not at validation time. To see
@@ -9903,7 +10010,7 @@ resolved values, check <code>safe-synthesizer-config.json</code> in the run dire
 after a pipeline run.</p>
 <h3 id="config-modify"><code>config modify</code><a class="headerlink" href="#config-modify" title="Permanent link">&para;</a></h3>
 <p>Modify a configuration and optionally save the result:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>modify<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span>--output<span class="w"> </span>modified.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>modify<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span>--output<span class="w"> </span>modified.yaml
 </span></code></pre></div>
 <table>
 <thead>
@@ -9925,8 +10032,8 @@ after a pipeline run.</p>
 </table>
 <h3 id="config-create"><code>config create</code><a class="headerlink" href="#config-create" title="Permanent link">&para;</a></h3>
 <p>Create a new configuration from defaults:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--output<span class="w"> </span>config.yaml
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--training__pretrained_model<span class="w"> </span><span class="s2">&quot;HuggingFaceTB/SmolLM3-3B&quot;</span><span class="w"> </span>--output<span class="w"> </span>config.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--output<span class="w"> </span>config.yaml
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--training__pretrained_model<span class="w"> </span><span class="s2">&quot;HuggingFaceTB/SmolLM3-3B&quot;</span><span class="w"> </span>--output<span class="w"> </span>config.yaml
 </span></code></pre></div>
 <table>
 <thead>
@@ -9944,10 +10051,10 @@ after a pipeline run.</p>
 </table>
 <h3 id="cli-override-syntax">CLI Override Syntax<a class="headerlink" href="#cli-override-syntax" title="Permanent link">&para;</a></h3>
 <p>Use double underscores to address nested fields:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--data__holdout<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">5000</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--data__holdout<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">5000</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Override precedence</p>

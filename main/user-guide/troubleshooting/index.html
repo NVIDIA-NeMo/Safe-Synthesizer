@@ -1096,6 +1096,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#transformers-v5-vllm-version-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transformers v5 + vLLM Version Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slow-tokenizer-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slow Tokenizer Warning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#python-314-is-not-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9334,6 +9356,28 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#transformers-v5-vllm-version-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transformers v5 + vLLM Version Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slow-tokenizer-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slow Tokenizer Warning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#python-314-is-not-supported" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9984,6 +10028,41 @@ logs (vLLM, HuggingFace, etc.):</p>
 configuration reference.</p>
 <hr />
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
+<h3 id="transformers-v5-vllm-version-selection">Transformers v5 + vLLM Version Selection<a class="headerlink" href="#transformers-v5-vllm-version-selection" title="Permanent link">&para;</a></h3>
+<p><code>uv sync</code> fails with an error mentioning incompatible <code>transformers</code> and
+<code>vllm</code> requirements.</p>
+<p>Safe Synthesizer requires <code>transformers&gt;=5.6,&lt;6</code>. vLLM 0.20.0 accepts
+transformers v5, but excludes several early 5.x releases that are not
+compatible with its runtime. Keep vLLM's exclusions intact and resolve to a
+newer transformers v5 release.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="s2">&quot;transformers&gt;=5.6,&lt;6&quot;</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="s2">&quot;vllm==0.20.0&quot;</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>If you've vendored or copied parts of <code>pyproject.toml</code> into another project,
+avoid adding a broad <code>transformers&gt;=5.0,&lt;6</code> override for vLLM. That can erase
+vLLM's explicit exclusions and allow incompatible early v5 releases.</p>
+<h3 id="slow-tokenizer-warning">Slow Tokenizer Warning<a class="headerlink" href="#slow-tokenizer-warning" title="Permanent link">&para;</a></h3>
+<p>After upgrading to transformers v5 you may see a log line like:</p>
+<blockquote>
+<p>Loaded slow (Python) tokenizer for <code>&lt;model&gt;</code> — no Rust backend available.</p>
+</blockquote>
+<p>This means the model's tokenizer has no Rust (<code>tokenizers</code> crate)
+implementation and v5 fell back to the SentencePiece/Python backend. Data
+prep continues to work but tokenization is ~5–10× slower than the fast
+path. Common causes:</p>
+<ul>
+<li>Local cached tokenizer is missing <code>tokenizer.json</code> — re-download
+  with <code>huggingface-cli download &lt;model&gt;</code></li>
+<li>Model ships only a SentencePiece vocab (<code>tokenizer.model</code>) with no Rust
+  <code>tokenizer.json</code> — common on older checkpoints; fast conversion may land upstream.</li>
+<li><code>trust_remote_code=True</code> model with a custom slow tokenizer class.</li>
+</ul>
+<p>The warning is informational. To suppress it, switch to a model with a
+fast tokenizer (most popular models do; check
+<code>AutoTokenizer.from_pretrained(model).is_fast</code>).</p>
 <h3 id="python-314-is-not-supported">Python 3.14 Is Not Supported<a class="headerlink" href="#python-314-is-not-supported" title="Permanent link">&para;</a></h3>
 <p>Safe Synthesizer requires <strong>Python 3.11, 3.12, or 3.13</strong>. Python 3.14+ is not
 supported because <a href="https://github.com/ray-project/ray">ray</a> (a transitive
@@ -9991,8 +10070,8 @@ dependency of vLLM) does not publish <code>cp314</code> wheels. Attempting to in
 Python 3.14 fails with an unresolvable dependency error during <code>pip install</code> or
 <code>uv pip install</code>.</p>
 <p>To fix, create a virtual environment with a supported interpreter:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>venv<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.13
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>venv<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.13
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
 </span></code></pre></div>
 <p>The project's <code>pyproject.toml</code> enforces <code>requires-python = "&gt;=3.11, &lt;3.14"</code>, so
 package managers will reject the install on unsupported versions. This upper
@@ -10005,11 +10084,15 @@ bound will be raised once all transitive dependencies ship <code>cp314</code> wh
 stack traces. If you see <code>torch.cuda.OutOfMemoryError</code>:</p>
 <ol>
 <li>Enable 4-bit quantization -- the single largest memory saver. Set
-   <code>training.quantize_model: true</code> and <code>training.quantization_bits: 4</code>. QLoRA
-   stores the frozen base model in 4-bit NF4 while training LoRA adapters in
-   full precision, cutting model weight memory by ~4x. Quantization reduces
+   <code>training.quantize_model: true</code> and <code>training.quantization_scheme: bnb-4bit</code>
+   (or for back-compat, <code>training.quantization_bits: 4</code>). QLoRA stores the
+   frozen base model in 4-bit NF4 while training LoRA adapters in full
+   precision, cutting model weight memory by ~4x. Quantization reduces
    precision in the frozen weights; in practice QLoRA typically produces
-   results close to full-precision LoRA, but verify with your evaluation report</li>
+   results close to full-precision LoRA, but verify with your evaluation
+   report. On Blackwell hardware, <code>nvfp4</code> and <code>mxfp4</code> schemes offer similar
+   4-bit footprint with hardware-accelerated matmul — see
+   <a href="../configuration/#quantization-schemes">Quantization schemes</a></li>
 <li>Reduce the context window -- see
    <a href="#context-length-and-record-fitting">Context Length and Record Fitting</a> for
    how to lower <code>training.rope_scaling_factor</code>, truncate records, or simplify
@@ -10063,11 +10146,11 @@ fit within this window. If it doesn't, data assembly fails with a
 <code>GenerationError</code> before training even starts.</p>
 <h4 id="when-records-dont-fit">When Records Don't Fit<a class="headerlink" href="#when-records-dont-fit" title="Permanent link">&para;</a></h4>
 <p>Two error messages indicate context-length problems during data assembly:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>The number of tokens in an example exceeds the available context length
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>The number of tokens in an example exceeds the available context length
 </span></code></pre></div>
 <p>A single training example (schema prompt + records) exceeds
 <code>max_seq_length</code>.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>The dataset schema requires more tokens than the max length of the model
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The dataset schema requires more tokens than the max length of the model
 </span></code></pre></div>
 <p>The schema prompt alone is wider than <code>max_seq_length</code> -- typically
 because the table has too many columns for the model's context window.</p>
@@ -10119,7 +10202,7 @@ a 200-record dataset with 12 groups can compress into as few as 2 training
 examples. Combined with <code>gradient_accumulation_steps=8</code> (default), this
 yields only 1 gradient step -- effectively no training.</p>
 <p>The training log confirms this pattern:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Num examples = 2 | Num Epochs = 1 | Total steps = 1
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Num examples = 2 | Num Epochs = 1 | Total steps = 1
 </span></code></pre></div>
 <p>Training duration is controlled by <code>training.num_input_records_to_sample</code>,
 not epochs. The internal <code>data_fraction</code> is computed as
@@ -10200,7 +10283,7 @@ training or an overly tight output-token budget (see
 <h3 id="generationerror">GenerationError<a class="headerlink" href="#generationerror" title="Permanent link">&para;</a></h3>
 <p>Generation failures during synthetic data production. The two most common:</p>
 <dl>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Generation stopped prematurely due to no valid records
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Generation stopped prematurely due to no valid records
 </span></code></pre></div></dt>
 <dd>
 <p>The first batch produced zero valid records. The model may be underfitting
@@ -10212,7 +10295,7 @@ training or an overly tight output-token budget (see
   grouped/time-series prefill length before treating it as model quality
   alone.</p>
 </dd>
-<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
+<dt><div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Generation stopped prematurely because the average fraction of invalid records was higher than...
 </span></code></pre></div></dt>
 <dd>
 <p>Too many invalid records across <code>generation.patience</code> consecutive batches.
@@ -10304,7 +10387,7 @@ your configuration. Note that some <code>"auto"</code> fields (such as
 <code>training.rope_scaling_factor</code> and <code>training.num_input_records_to_sample</code>)
 require a dataset to resolve -- they will remain <code>"auto"</code> in the validate
 output and only resolve during an actual run:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
 </span></code></pre></div>
 <h3 id="common-validation-errors">Common Validation Errors<a class="headerlink" href="#common-validation-errors" title="Permanent link">&para;</a></h3>
 <dl>
@@ -10320,9 +10403,9 @@ output and only resolve during an actual run:</p>
   single string <code>"col1,col2"</code>, not as two separate columns. The pipeline will
   fail with a <code>ParameterError</code> when it tries to find a column literally named
   <code>"col1,col2"</code> in your data:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ParameterError: Group by column &#39;patient_id,event_id&#39; not found in the input data.
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>The column name contains a comma -- multi-column grouping is not supported.
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>Use a single column name.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ParameterError: Group by column &#39;patient_id,event_id&#39; not found in the input data.
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>The column name contains a comma -- multi-column grouping is not supported.
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Use a single column name.
 </span></code></pre></div>
 </dd>
 </dl>
@@ -10523,13 +10606,13 @@ optionally reduce CPU parallelism so each worker has more resources.</p>
 <h3 id="authentication-failures">Authentication Failures<a class="headerlink" href="#authentication-failures" title="Permanent link">&para;</a></h3>
 <p>WandB requires an API key when running in <code>online</code> mode. If the key is missing
 or invalid, training will fail when the WandB run is initialized.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>wandb: ERROR api_key not configured (no-auth)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>wandb: ERROR api_key not configured (no-auth)
 </span></code></pre></div>
 <p>Set the API key before running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">WANDB_API_KEY</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="w">  </span><span class="c1"># pragma: allowlist secret</span>
 </span></code></pre></div>
 <p>Or switch to offline mode to avoid network access entirely:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--wandb-mode<span class="w"> </span>disabled<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 <p>See <a href="../running/#wandb-integration">Running Safe Synthesizer -- WandB Integration</a> for the full WandB setup.</p>
 <h3 id="resume-errors">Resume Errors<a class="headerlink" href="#resume-errors" title="Permanent link">&para;</a></h3>
@@ -10551,8 +10634,8 @@ For configuration examples, see <a href="../configuration/#time-series">Configur
 <dd>
 <p>Any <code>NaN</code> or <code>null</code> values in the timestamp column raise a <code>DataError</code>.
   Clean your data before running the pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">subset</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;group_column&quot;</span><span class="p">,</span> <span class="s2">&quot;timestamp&quot;</span><span class="p">])</span>
 </span></code></pre></div>
 </dd>
 <dt>Interval mismatch:</dt>
@@ -10586,12 +10669,12 @@ groups.</p>
 <p>Safe Synthesizer uses a structured error hierarchy. Understanding which error
 class you received helps narrow down the cause and write targeted <code>except</code> clauses.</p>
 <p>Inheritance:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>SafeSynthesizerError
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>├── InternalError (also RuntimeError)
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>└── UserError
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    ├── DataError (also ValueError)
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    ├── ParameterError (also ValueError)
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    └── GenerationError (also RuntimeError)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>SafeSynthesizerError
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>├── InternalError (also RuntimeError)
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>└── UserError
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    ├── DataError (also ValueError)
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    ├── ParameterError (also ValueError)
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    └── GenerationError (also RuntimeError)
 </span></code></pre></div>
 <p>SDK callers can catch <a class="autorefs autorefs-internal" title="            UserError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.UserError"><code>UserError</code></a> to handle all user-facing errors, or
 <a class="autorefs autorefs-internal" title="            SafeSynthesizerError" href="../../reference/nemo_safe_synthesizer/errors/#nemo_safe_synthesizer.errors.SafeSynthesizerError"><code>SafeSynthesizerError</code></a> to also catch internal errors. Catching the built-in
