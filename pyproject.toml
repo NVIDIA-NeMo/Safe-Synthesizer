@@ -119,7 +119,7 @@ engine = [
 cpu = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.46.1",
-  "flashinfer-python==0.6.8.post1; sys_platform=='linux'",
+  "flashinfer-python==0.6.11.post3; sys_platform=='linux'",
   "flashinfer-cubin==0.6.8.post1; sys_platform=='linux'",
   "gliner",
   "kernels>=0.12.1",
