@@ -314,6 +314,7 @@ def _try_extract_entities(
     except ValidationError:
         logger.exception("Error decoding classification JSON returned by llm")
         on_validation_error()
+        return {}
 
 
 class ColumnClassifier(ABC):
@@ -651,7 +652,6 @@ class EntityExtractorGliner(EntityExtractor):
                     "ctx": {"nchunks": nchunks, "misses": n_cache_miss},
                 },
             )
-            last_log = monotonic()
         entities_to_delete = []
         for idx, ent in enumerate(entities):
             has_superset = any(

@@ -22,8 +22,6 @@ DataT = TypeVar(
     "DataT", bound=(int | float | str | bytes | bool | None | Sequence[int | float | str | bytes | bool | BaseModel])
 )
 
-ParameterT = TypeVar("ParameterT", bound="Parameter")
-
 
 @dataclass(eq=False, order=False)
 class Parameter(Generic[DataT]):

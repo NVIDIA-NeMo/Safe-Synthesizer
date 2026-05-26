@@ -205,10 +205,10 @@ def _build_validate_run_info(
 
 
 def _run_validate_and_render(
-    nss: "SafeSynthesizer",
+    nss: SafeSynthesizer,
     *,
     settings: CLISettings,
-    workdir: "Workdir",
+    workdir: Workdir,
     config: SafeSynthesizerParameters,
     data: pd.DataFrame,
 ) -> None:

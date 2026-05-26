@@ -370,7 +370,7 @@ def maybe_d_str_to_fmt_multiple(input_date: str) -> Iterator[str]:
     try:
         yield from d_str_to_fmt_multiple(input_date)
     except ValueError:
-        pass
+        return
 
 
 def d_str_to_fmt(input_date: str) -> Optional[str]:
@@ -393,6 +393,7 @@ def infer_from_series(date_series: Iterable[str]) -> Optional[str]:
     highest_occurrence = fmt_occurrences.most_common(1)
     if highest_occurrence:
         return highest_occurrence[0][0]
+    return None
 
 
 def fit_and_transform_dates(
@@ -432,7 +433,7 @@ def fit_and_transform_dates(
                         "min": str(min_date),
                     }
                 except (ValueError, TypeError):
-                    pass
+                    continue
     return date_min_dict, result_df
 
 

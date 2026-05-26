@@ -21,9 +21,9 @@ See ``Workdir`` for the full structure.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
+from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic, Self, TypeVar, overload
 
@@ -229,7 +229,7 @@ class DirNode(Generic[T_co]):
                 raise TypeError(f"DirNode can only be used with BoundDir or Workdir, got {type(obj)}")
 
 
-class BoundDir(os.PathLike[str]):
+class BoundDir(PathLike[str]):
     """Runtime class representing a bound directory path.
 
     Provides access to child FileNode and DirNode descriptors as attributes.

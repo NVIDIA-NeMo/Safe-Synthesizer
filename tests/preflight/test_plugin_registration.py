@@ -5,12 +5,12 @@
 
 from __future__ import annotations
 
+import importlib
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
-import nemo_safe_synthesizer.preflight as pf_mod
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.preflight import PreflightParameters
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
@@ -31,6 +31,8 @@ from nemo_safe_synthesizer.preflight import (
 from nemo_safe_synthesizer.preflight.orchestrator import _run_registry
 
 from .conftest import make_ctx
+
+pf_mod = importlib.import_module("nemo_safe_synthesizer.preflight")
 
 
 @pytest.fixture(autouse=True)

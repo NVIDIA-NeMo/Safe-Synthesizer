@@ -166,7 +166,6 @@ class BaseRecord(ABC):
         self.original = original
         self.kv_pairs = []
         self.fields = set()
-        self.unpack()
 
     @abstractmethod
     def unpack(self):  # pragma: no cover

@@ -95,7 +95,7 @@ def get_max_token_count(data: pd.DataFrame, group_by: str | None) -> int:
         counts["num_rows"] = 1
 
     counts["content_text"] = counts["content"].apply(lambda x: re.sub(r"\d.", "", x))
-    counts["content_text_char_count"] = counts["content_text"].apply(lambda x: len(x))
+    counts["content_text_char_count"] = counts["content_text"].apply(len)
     counts["content_num_char_count"] = counts.apply(lambda x: len(x["content"]) - len(x["content_text"]), axis=1)
 
     # Estimate the token count from the character count

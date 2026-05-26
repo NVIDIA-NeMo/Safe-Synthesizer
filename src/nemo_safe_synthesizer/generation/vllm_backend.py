@@ -99,7 +99,7 @@ def _install_noop_remote_cache_backends() -> None:
         RemoteAutotuneCache.backend_override_cls = _NoopRemoteCacheBackend  # ty: ignore[invalid-assignment]
         logger.debug("Installed no-op backend for RemoteAutotuneCache (redis unavailable)")
     except ImportError:
-        pass
+        logger.debug("RemoteAutotuneCache is unavailable; skipping no-op backend patch", exc_info=True)
 
 
 _install_noop_remote_cache_backends()
@@ -185,7 +185,7 @@ class VllmBackend(GeneratorBackend):
         try:
             self.teardown()
         except Exception:
-            pass
+            logger.debug("VllmBackend teardown failed during garbage collection", exc_info=True)
 
     def initialize(self, **kwargs) -> None:
         """Initialize and load the model into memory.
@@ -447,6 +447,8 @@ class VllmBackend(GeneratorBackend):
                     case _:
                         raise ValueError("input_ids are not a tensor, list, or None!")
 
+                if result is None:
+                    raise ValueError("input_ids are not a tensor, list, or None!")
                 return result
             case _:
                 raise ValueError("input ids are not a tensor or list!")

@@ -166,7 +166,7 @@ class DPCallback(TrainerCallback):
         if not self.accountant.use_prv:
             # Use RDPAccountant, which uses `.step()` to increment number of
             # steps, required for accurate epsilon calculation.
-            acct = cast("RDPAccountant", self.accountant.accountant)
+            acct = cast(RDPAccountant, self.accountant.accountant)
             acct.step(
                 noise_multiplier=self.noise_multiplier,
                 sample_rate=self.sampling_probability,

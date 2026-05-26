@@ -12,11 +12,8 @@ from pydantic import Field, field_validator, model_validator
 from ..configurator.parameters import (
     Parameters,
 )
-from ..observability import get_logger
 from .base import NSSBaseModel
 from .types import OptionalListOrInt, OptionalListOrStr, OptionalStrList
-
-logger = get_logger(__name__)
 
 __all__ = [
     "PiiReplacerConfig",

@@ -17,7 +17,6 @@ from nemo_safe_synthesizer.config import (
 from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
-from nemo_safe_synthesizer.generation.vllm_backend import VllmBackend  # noqa: F401
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
 

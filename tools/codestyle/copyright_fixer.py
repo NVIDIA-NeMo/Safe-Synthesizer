@@ -199,7 +199,8 @@ def _get_header_for_ext(ext: str) -> str:
 def _add_header(filepath: str) -> bool:
     """Add the copyright header to *filepath*. Returns True if modified."""
     try:
-        content = open(filepath, "r", encoding="utf-8").read()  # noqa: SIM115
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
     except (OSError, UnicodeDecodeError):
         return False
 

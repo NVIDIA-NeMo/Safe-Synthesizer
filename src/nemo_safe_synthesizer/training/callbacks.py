@@ -121,8 +121,6 @@ class InferenceEvalCallback(TrainerCallback):
         model = kwargs["model"]
         tokenizer = kwargs["tokenizer"]
 
-        was_stopped = False
-
         logger.info(
             f"🔮 Starting inference-based evaluation with the '{self.processor.name}'",
         )
@@ -173,28 +171,27 @@ class InferenceEvalCallback(TrainerCallback):
             duration_string = f"{duration:.1f} seconds" if duration < 120 else f"{duration / 60:.1f} minutes"
             logger.info(f"Generation time: {duration_string}")
 
-            if self.generation.status != GenerationStatus.IN_PROGRESS:
-                was_stopped = True
-                break
+            if self.generation.status == GenerationStatus.IN_PROGRESS:
+                continue
 
-            if was_stopped:
-                control.should_training_stop = True
-                if self.generation.status == GenerationStatus.STOP_NO_RECORDS:
-                    logger.error(
-                        "🛑 Stopping generation prematurely. No records were generated. "
-                        "Please consider adjusting the sampling parameters.",
-                    )
-                    state.log_history.append({"training_incomplete": "no_records"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
-                elif self.generation.status == GenerationStatus.STOP_METRIC_REACHED:
-                    stop_frac = (
-                        (self.generation.stop_condition.last_value or 0.0) if self.generation.stop_condition else 0.0
-                    )
-                    logger.error(
-                        "🛑 Stopping generation prematurely. The stopping "
-                        "condition was reached with a running average invalid "
-                        f"fraction of {stop_frac:.2%}",
-                    )
-                    state.log_history.append({"training_incomplete": "stopping_condition_reached"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
+            control.should_training_stop = True
+            if self.generation.status == GenerationStatus.STOP_NO_RECORDS:
+                logger.error(
+                    "🛑 Stopping generation prematurely. No records were generated. "
+                    "Please consider adjusting the sampling parameters.",
+                )
+                state.log_history.append({"training_incomplete": "no_records"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
+            elif self.generation.status == GenerationStatus.STOP_METRIC_REACHED:
+                stop_frac = (
+                    (self.generation.stop_condition.last_value or 0.0) if self.generation.stop_condition else 0.0
+                )
+                logger.error(
+                    "🛑 Stopping generation prematurely. The stopping "
+                    "condition was reached with a running average invalid "
+                    f"fraction of {stop_frac:.2%}",
+                )
+                state.log_history.append({"training_incomplete": "stopping_condition_reached"})  # ty: ignore[invalid-argument-type] -- HF Trainer expects dict[str, float] but we use str values for stop signals
+            break
 
 
 class ProgressBarCallback(TrainerCallback):
@@ -334,6 +331,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         if state.is_local_process_zero and state.global_step > self._last_log_global_step and cond:
             control.should_log = True
             return control
+        return None
 
     def on_epoch_end(
         self,

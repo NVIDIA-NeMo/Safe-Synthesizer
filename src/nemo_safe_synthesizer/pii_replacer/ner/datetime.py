@@ -125,8 +125,8 @@ def _parse_dates(value: str | int | float, scalar_type: Optional[str] = None) ->
         #  original value was a number.
         try:
             value = float(value)
-        except Exception:
-            pass
+        except (ValueError, TypeError):
+            value = str(value)
 
     if isinstance(value, float) and math.isnan(value):
         # don't try to match something that is NaN

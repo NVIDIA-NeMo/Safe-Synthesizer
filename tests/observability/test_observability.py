@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib
 import inspect
 import json
 import logging
@@ -13,7 +14,6 @@ import pytest
 import structlog
 from rich.table import Table
 
-import nemo_safe_synthesizer.observability as obs
 from nemo_safe_synthesizer.observability import (
     CategoryFilter,
     CategoryLogger,
@@ -32,6 +32,8 @@ from nemo_safe_synthesizer.observability import (
     initialize_observability,
     traced,
 )
+
+obs = importlib.import_module("nemo_safe_synthesizer.observability")
 
 # =============================================================================
 # NSSObservabilitySettings Tests
@@ -820,10 +822,13 @@ class TestHeartbeat:
         assert has_elapsed, f"elapsed_seconds not found in records: {caplog.text}"
 
     def test_heartbeat_logs_failure_on_exception(self, caplog):
+        def fail() -> None:
+            raise RuntimeError("boom")
+
         caplog.set_level(logging.INFO)
         with pytest.raises(RuntimeError):
             with heartbeat("Failing op", interval=60.0):
-                raise RuntimeError("boom")
+                fail()
 
         assert "Failing op failed" in caplog.text
         assert "Failing op complete" not in caplog.text

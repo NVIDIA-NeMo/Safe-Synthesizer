@@ -14,11 +14,6 @@ from dataclasses import dataclass, field
 
 from flashtext import KeywordProcessor
 
-try:
-    from re import Pattern
-except ImportError:
-    from re import Pattern
-
 from ...data_processing.records.base import KVPair, tokenize_header
 from ...data_processing.records.json_record import JSONRecord
 from .entity import Entity, Score
@@ -50,7 +45,7 @@ TOKEN_REGEX = re.compile(r"\b(?!\d)\w+", re.IGNORECASE)
 MAX_STR_LEN = 64
 
 
-def build_name_only_headers(others: Iterable[str]) -> list[Pattern]:
+def build_name_only_headers(others: Iterable[str]) -> list[re.Pattern]:
     out = []
     for other in others:
         out.append(r"{}.?{}".format("name", other))
@@ -67,7 +62,7 @@ class WordList:
     word_list: KeywordProcessor = field(default_factory=frozenset)
     """The master list of actual names"""
 
-    headers: Pattern = None  # NOTE: init'd as a FrozenSet then converted
+    headers: re.Pattern | None = None  # NOTE: init'd as a FrozenSet then converted
     """The list of partial header names that can trigger the prediction flow"""
 
     headers_neg: KeywordProcessor = None  # NOTE: init'd as a FrozenSet then converted
