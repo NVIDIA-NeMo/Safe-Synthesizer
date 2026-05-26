@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
+from nemo_safe_synthesizer.config import DifferentialPrivacyHyperparams, GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,
     PiiReplacerConfig,
@@ -197,6 +197,14 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
 def test_builder_validates_privacy_kwargs_applied_to_dict_config(fixture_base_builder):
     with pytest.raises(ValidationError):
         fixture_base_builder.with_differential_privacy({}, grad_sample_mode="invalid")
+
+
+def test_builder_validates_privacy_kwargs_applied_to_model_config(fixture_base_builder):
+    with pytest.raises(ValidationError):
+        fixture_base_builder.with_differential_privacy(
+            DifferentialPrivacyHyperparams(),
+            grad_sample_mode="invalid",
+        )
 
 
 def test_pii_replacer_with_default_config_object(fixture_base_builder):

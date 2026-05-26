@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -18,7 +19,10 @@ from nemo_safe_synthesizer.config import (
     SafeSynthesizerParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.config.training import ResolvedTrainingBatching
+from nemo_safe_synthesizer.config.types import AUTO_STR
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import OpacusDPTrainer
 from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
@@ -623,84 +627,31 @@ class TestBuildBaseTrainingArgs:
         assert result["eval_strategy"] == IntervalStrategy.STEPS
         assert result["do_eval"] is True
 
-    def test_resolves_max_physical_batch_size(self, backend):
-        """A physical cap should split the configured logical batch."""
-        backend.params.training.batch_size = 8
-        backend.params.training.gradient_accumulation_steps = 2
-        backend.params.training.max_physical_batch_size = 4
-
-        result = backend._build_base_training_args()
-
-        assert result["per_device_train_batch_size"] == 4
-        assert result["gradient_accumulation_steps"] == 4
-        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
-            backend.params.training.effective_batch_size
+    def test_forwards_resolved_batching_to_trainer_args(self, backend):
+        """Trainer arguments should use the batching resolver output."""
+        resolved = ResolvedTrainingBatching(
+            per_device_train_batch_size=3,
+            gradient_accumulation_steps=5,
+            effective_batch_size=15,
         )
 
-    def test_resolves_auto_gradient_accumulation_steps_with_physical_cap(self, backend):
-        """Auto accumulation should derive Trainer args from the physical cap."""
-        backend.params.training.batch_size = 8
-        backend.params.training.gradient_accumulation_steps = "auto"
-        backend.params.training.max_physical_batch_size = 4
-
-        result = backend._build_base_training_args()
-
-        assert result["per_device_train_batch_size"] == 4
-        assert result["gradient_accumulation_steps"] == 2
-        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
-            backend.params.training.effective_batch_size
-        )
-
-    def test_resolves_auto_gradient_accumulation_steps_without_physical_cap(self, backend):
-        """Auto accumulation without a cap should emit a single Trainer accumulation step."""
-        backend.params.training.batch_size = 8
-        backend.params.training.gradient_accumulation_steps = "auto"
-        backend.params.training.max_physical_batch_size = "auto"
-
-        result = backend._build_base_training_args()
-
-        assert result["per_device_train_batch_size"] == 8
-        assert result["gradient_accumulation_steps"] == 1
-
-    @pytest.mark.parametrize("max_physical_batch_size", ["auto", None, 8, 12])
-    def test_ignores_inactive_max_physical_batch_size(self, backend, max_physical_batch_size):
-        """Unset or non-binding caps should preserve configured Trainer batching."""
-        backend.params.training.batch_size = 8
-        backend.params.training.gradient_accumulation_steps = 2
-        backend.params.training.max_physical_batch_size = max_physical_batch_size
-
-        result = backend._build_base_training_args()
-
-        assert result["per_device_train_batch_size"] == 8
-        assert result["gradient_accumulation_steps"] == 2
-
-    def test_resolves_non_divisible_max_physical_batch_size(self, backend):
-        """A non-divisible cap should use the largest divisor under the cap."""
-        backend.params.training.batch_size = 9
-        backend.params.training.gradient_accumulation_steps = 2
-        backend.params.training.max_physical_batch_size = 5
-
-        result = backend._build_base_training_args()
+        with patch.object(TrainingHyperparams, "resolve_batching", return_value=resolved) as resolve_batching:
+            result = backend._build_base_training_args()
 
         assert result["per_device_train_batch_size"] == 3
-        assert result["gradient_accumulation_steps"] == 6
-        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
-            backend.params.training.effective_batch_size
-        )
+        assert result["gradient_accumulation_steps"] == 5
+        resolve_batching.assert_called_once_with()
 
-    def test_dp_batch_accounting_product_is_preserved(self, backend_with_dp):
-        """DP accounting should not change when only the physical batch is capped."""
+    def test_dp_training_args_use_resolved_batching(self, backend_with_dp):
+        """DP Trainer args should preserve the logical batch when a cap is applied."""
         backend_with_dp.params.training.batch_size = 8
-        backend_with_dp.params.training.gradient_accumulation_steps = 2
+        backend_with_dp.params.training.gradient_accumulation_steps = AUTO_STR
         backend_with_dp.params.training.max_physical_batch_size = 4
 
         result = backend_with_dp._build_base_training_args()
 
         assert result["per_device_train_batch_size"] == 4
-        assert result["gradient_accumulation_steps"] == 4
-        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
-            backend_with_dp.params.training.effective_batch_size
-        )
+        assert result["gradient_accumulation_steps"] == 2
 
 
 # =============================================================================
@@ -746,15 +697,28 @@ class TestConfigureDpTraining:
         assert training_args["max_grad_norm"] == 0.0
         assert "gradient_checkpointing" not in training_args
 
+    def test_sampling_probability_uses_effective_batch_size(self):
+        """DP sampling probability should use physical batch x accumulation steps."""
+        trainer = object.__new__(OpacusDPTrainer)
+        trainer.train_args = SimpleNamespace(per_device_train_batch_size=4, gradient_accumulation_steps=4)
+        trainer.true_dataset_size = 100
+
+        assert trainer.sampling_probability == pytest.approx(0.16)
+
     def test_passes_grad_sample_mode_to_dp_trainer(self, backend_with_dp):
         """Test that DP grad_sample_mode is passed to the Opacus trainer."""
         backend_with_dp.params.privacy.grad_sample_mode = "ghost"
         training_args = {}
 
-        backend_with_dp._configure_dp_training(training_args)
+        with patch("nemo_safe_synthesizer.training.huggingface_backend.OpacusDPTrainer") as trainer_cls:
+            backend_with_dp._configure_dp_training(training_args)
+            backend_with_dp.trainer_type(
+                model=MagicMock(),
+                args=MagicMock(),
+                train_dataset=MagicMock(),
+            )
 
-        assert backend_with_dp.trainer_type.keywords["grad_sample_mode"] == "ghost"
-        assert "bf16" not in training_args
+        assert trainer_cls.call_args.kwargs["grad_sample_mode"] == "ghost"
 
     def test_disables_model_gradient_checkpointing(self, backend_with_dp):
         """Test that DP training disables model-level gradient checkpointing."""

@@ -28,6 +28,25 @@ from nemo_safe_synthesizer.configurator.parameters import Parameters
 from nemo_safe_synthesizer.errors import ParameterError
 
 
+def _assert_resolved_batching(
+    training: TrainingHyperparams,
+    *,
+    physical_batch_size: int,
+    accumulation_steps: int,
+) -> None:
+    resolved = training.resolve_batching()
+
+    assert resolved.per_device_train_batch_size == physical_batch_size
+    assert resolved.gradient_accumulation_steps == accumulation_steps
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+def _assert_largest_divisor_at_most(value: int, *, limit: int, divisor: int) -> None:
+    assert value % divisor == 0
+    assert divisor <= limit
+    assert not any(value % candidate == 0 for candidate in range(divisor + 1, limit + 1))
+
+
 def test_safe_synthesizer_parameters(monkeypatch):
     monkeypatch.delenv("NEMO_TELEMETRY_ENABLED", raising=False)
     config = SafeSynthesizerParameters(
@@ -82,11 +101,7 @@ def test_max_physical_batch_size_absent_value_is_noop(max_physical_batch_size):
         max_physical_batch_size=max_physical_batch_size,
     )
 
-    resolved = training.resolve_batching()
-
-    assert resolved.per_device_train_batch_size == 8
-    assert resolved.gradient_accumulation_steps == 2
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=8, accumulation_steps=2)
 
 
 @pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
@@ -97,12 +112,8 @@ def test_auto_gradient_accumulation_without_physical_cap_uses_one_step(max_physi
         max_physical_batch_size=max_physical_batch_size,
     )
 
-    resolved = training.resolve_batching()
-
     assert training.effective_batch_size == 8
-    assert resolved.per_device_train_batch_size == 8
-    assert resolved.gradient_accumulation_steps == 1
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=8, accumulation_steps=1)
 
 
 def test_auto_gradient_accumulation_with_physical_cap_preserves_batch_size_target():
@@ -112,12 +123,8 @@ def test_auto_gradient_accumulation_with_physical_cap_preserves_batch_size_targe
         max_physical_batch_size=4,
     )
 
-    resolved = training.resolve_batching()
-
     assert training.effective_batch_size == 8
-    assert resolved.per_device_train_batch_size == 4
-    assert resolved.gradient_accumulation_steps == 2
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=4, accumulation_steps=2)
 
 
 def test_auto_gradient_accumulation_with_non_divisible_physical_cap_uses_largest_divisor():
@@ -127,12 +134,9 @@ def test_auto_gradient_accumulation_with_non_divisible_physical_cap_uses_largest
         max_physical_batch_size=5,
     )
 
-    resolved = training.resolve_batching()
-
     assert training.effective_batch_size == 9
-    assert resolved.per_device_train_batch_size == 3
-    assert resolved.gradient_accumulation_steps == 3
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=3, accumulation_steps=3)
+    _assert_largest_divisor_at_most(training.effective_batch_size, limit=5, divisor=3)
 
 
 @pytest.mark.parametrize("max_physical_batch_size", [8, 12])
@@ -143,11 +147,7 @@ def test_max_physical_batch_size_at_or_above_batch_size_is_noop(max_physical_bat
         max_physical_batch_size=max_physical_batch_size,
     )
 
-    resolved = training.resolve_batching()
-
-    assert resolved.per_device_train_batch_size == 8
-    assert resolved.gradient_accumulation_steps == 2
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=8, accumulation_steps=2)
 
 
 def test_max_physical_batch_size_resolver_preserves_effective_batch_size():
@@ -157,12 +157,8 @@ def test_max_physical_batch_size_resolver_preserves_effective_batch_size():
         max_physical_batch_size=4,
     )
 
-    resolved = training.resolve_batching()
-
     assert training.effective_batch_size == 16
-    assert resolved.per_device_train_batch_size == 4
-    assert resolved.gradient_accumulation_steps == 4
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=4, accumulation_steps=4)
 
 
 def test_max_physical_batch_size_uses_largest_divisor_under_cap():
@@ -172,13 +168,9 @@ def test_max_physical_batch_size_uses_largest_divisor_under_cap():
         max_physical_batch_size=5,
     )
 
-    resolved = training.resolve_batching()
-
     assert training.effective_batch_size == 18
-    assert resolved.per_device_train_batch_size == 3
-    assert resolved.gradient_accumulation_steps == 6
-    assert resolved.per_device_train_batch_size <= 5
-    assert resolved.effective_batch_size == training.effective_batch_size
+    _assert_resolved_batching(training, physical_batch_size=3, accumulation_steps=6)
+    _assert_largest_divisor_at_most(training.effective_batch_size, limit=5, divisor=3)
 
 
 @pytest.mark.parametrize(

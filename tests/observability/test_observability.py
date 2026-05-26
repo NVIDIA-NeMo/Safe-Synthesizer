@@ -297,11 +297,17 @@ class TestRenderRichTable:
 
     def test_per_second_suffix_not_formatted_as_percentage(self):
         """Per-second rates are rendered as rates even when values are less than 1."""
-        data = {"records_per_second": 0.01, "tokens_per_second": 0.5, "progress_fraction": 0.003}
+        data = {
+            "records_per_second": 0.01,
+            "tokens_per_second": 0.5,
+            "examples_per_sec": 0.25,
+            "progress_fraction": 0.003,
+        }
         result = _render_rich_table(data)
 
         assert "0.01" in result
         assert "0.50" in result
+        assert "0.25" in result
         assert "0.30%" in result
         assert "1.00%" not in result
         assert "50.00%" not in result

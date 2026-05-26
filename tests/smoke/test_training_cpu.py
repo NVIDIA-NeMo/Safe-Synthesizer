@@ -10,7 +10,7 @@ All tests run on CPU with max_steps=1. The point is catching dep breakage
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from datasets import Dataset
@@ -43,6 +43,49 @@ def _cpu_training_args(tmp_path, **overrides):
     )
     defaults.update(overrides)
     return TrainingArguments(**defaults)
+
+
+def _privacy_args() -> PrivacyArguments:
+    return PrivacyArguments(
+        target_epsilon=100.0,
+        target_delta=1e-5,
+        per_sample_max_grad_norm=1.0,
+    )
+
+
+def _private_data_collator(fixture_stub_tokenizer) -> DataCollatorForPrivateTokenClassification:
+    return DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
+
+
+def _dp_trainer(
+    *,
+    model,
+    tokenizer,
+    train_dataset,
+    tmp_path,
+    grad_sample_mode: Literal["hooks", "ghost"] = "hooks",
+) -> OpacusDPTrainer:
+    return OpacusDPTrainer(
+        model=model,
+        args=_cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0),
+        train_dataset=train_dataset,
+        data_collator=_private_data_collator(tokenizer),
+        privacy_args=_privacy_args(),
+        grad_sample_mode=grad_sample_mode,
+        true_dataset_size=8,
+        data_fraction=1.0,
+    )
+
+
+def _tiny_lora_model(base_model):
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=8,
+        target_modules=["q_proj", "v_proj"],
+        task_type=TaskType.CAUSAL_LM,
+        bias="none",
+    )
+    return get_peft_model(base_model, lora_config)
 
 
 @dataclass
@@ -110,21 +153,11 @@ def test_dp_training_one_step(
     fixture_tiny_model, fixture_stub_tokenizer, fixture_tiny_training_dataset_with_position_ids, tmp_path
 ):
     """Exercises: OpacusDPTrainer + PrivacyArguments + DataCollatorForPrivateTokenClassification."""
-    privacy_args = PrivacyArguments(
-        target_epsilon=100.0,
-        target_delta=1e-5,
-        per_sample_max_grad_norm=1.0,
-    )
-    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
-    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
-    trainer = OpacusDPTrainer(
+    trainer = _dp_trainer(
         model=fixture_tiny_model,
-        args=args,
+        tokenizer=fixture_stub_tokenizer,
         train_dataset=fixture_tiny_training_dataset_with_position_ids,
-        data_collator=data_collator,
-        privacy_args=privacy_args,
-        true_dataset_size=8,
-        data_fraction=1.0,
+        tmp_path=tmp_path,
     )
     trainer.train()
     assert len(trainer.state.log_history) > 0
@@ -139,24 +172,14 @@ def test_dp_ghost_clipping_requires_opacus_1_6(
 ):
     """Ghost clipping is gated on the Opacus release with causal-LM ignore-index fixes."""
     monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.5.4"))
-    privacy_args = PrivacyArguments(
-        target_epsilon=100.0,
-        target_delta=1e-5,
-        per_sample_max_grad_norm=1.0,
-    )
-    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
-    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
 
     with pytest.raises(RuntimeError, match="opacus>=1.6.0"):
-        OpacusDPTrainer(
+        _dp_trainer(
             model=fixture_tiny_model,
-            args=args,
+            tokenizer=fixture_stub_tokenizer,
             train_dataset=fixture_tiny_training_dataset_with_position_ids,
-            data_collator=data_collator,
-            privacy_args=privacy_args,
+            tmp_path=tmp_path,
             grad_sample_mode="ghost",
-            true_dataset_size=8,
-            data_fraction=1.0,
         )
 
 
@@ -169,60 +192,35 @@ def test_dp_ghost_clipping_training_one_step(
 ):
     """Exercises: OpacusDPTrainer Fast/Ghost Gradient Clipping path."""
     monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
-    privacy_args = PrivacyArguments(
-        target_epsilon=100.0,
-        target_delta=1e-5,
-        per_sample_max_grad_norm=1.0,
-    )
-    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
-    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
-    trainer = OpacusDPTrainer(
+    trainer = _dp_trainer(
         model=fixture_tiny_model,
-        args=args,
+        tokenizer=fixture_stub_tokenizer,
         train_dataset=fixture_tiny_training_dataset_with_position_ids,
-        data_collator=data_collator,
-        privacy_args=privacy_args,
+        tmp_path=tmp_path,
         grad_sample_mode="ghost",
-        true_dataset_size=8,
-        data_fraction=1.0,
     )
     trainer.train()
     assert len(trainer.state.log_history) > 0
 
 
-def test_dp_ghost_clipping_save_writes_peft_adapter(
+@pytest.mark.parametrize("grad_sample_mode", ["hooks", "ghost"])
+def test_dp_clipping_save_writes_peft_adapter(
     fixture_tiny_model,
     fixture_stub_tokenizer,
     fixture_tiny_training_dataset_with_position_ids,
     tmp_path,
     monkeypatch,
+    grad_sample_mode,
 ):
-    """Ghost clipping should unwrap the Opacus wrapper before saving adapters."""
-    monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
-    lora_config = LoraConfig(
-        r=8,
-        lora_alpha=8,
-        target_modules=["q_proj", "v_proj"],
-        task_type=TaskType.CAUSAL_LM,
-        bias="none",
-    )
-    model = get_peft_model(fixture_tiny_model, lora_config)
-    privacy_args = PrivacyArguments(
-        target_epsilon=100.0,
-        target_delta=1e-5,
-        per_sample_max_grad_norm=1.0,
-    )
-    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
-    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
-    trainer = OpacusDPTrainer(
-        model=model,
-        args=args,
+    """DP clipping wrappers should save PEFT adapters, not wrapper weights."""
+    if grad_sample_mode == "ghost":
+        monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
+    trainer = _dp_trainer(
+        model=_tiny_lora_model(fixture_tiny_model),
+        tokenizer=fixture_stub_tokenizer,
         train_dataset=fixture_tiny_training_dataset_with_position_ids,
-        data_collator=data_collator,
-        privacy_args=privacy_args,
-        grad_sample_mode="ghost",
-        true_dataset_size=8,
-        data_fraction=1.0,
+        tmp_path=tmp_path,
+        grad_sample_mode=grad_sample_mode,
     )
 
     output_dir = tmp_path / "adapter"
