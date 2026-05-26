@@ -35,6 +35,7 @@ from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
 from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
+from ..cli.wandb_setup import log_cell_observability
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_observability import (
     CellObservability,
@@ -774,5 +775,10 @@ class VllmBackend(GeneratorBackend):
                 flag_did_not_engage=False,
             )
             logger.runtime.info("vllm.cell.complete", extra={"ctx": cell_event.model_dump()})
+            # Also log to the active wandb run when one exists (no-op
+            # when ``WANDB_MODE=disabled`` or ``initialize_wandb_run``
+            # hasn't been called). Best-effort; wandb failures don't
+            # propagate.
+            log_cell_observability(cell_event)
 
         return self.gen_results

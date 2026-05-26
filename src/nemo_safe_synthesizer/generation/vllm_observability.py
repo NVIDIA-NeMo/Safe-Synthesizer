@@ -164,6 +164,51 @@ class CellObservability(BaseModel):
         ),
     )
 
+    def to_wandb_payload(self, prefix: str = "vllm_cell") -> dict[str, Any]:
+        """Flatten this event into a wandb-friendly ``wandb.log(...)`` dict.
+
+        Wandb plots scalars cleanly but renders tuples/dicts as opaque
+        blobs, so this method:
+
+        - Drops ``None`` values (wandb would drop them anyway; explicit
+          here for documentation).
+        - Unpacks ``loadavg_pre`` / ``loadavg_post`` 3-tuples to per-
+          duration scalars (``loadavg_pre_1m`` / ``_5m`` / ``_15m``).
+        - Flattens ``engine_runtime_config`` to ``engine_runtime/<key>``
+          scalars (mirrors the existing flattening pattern in the
+          benchmark harness).
+
+        All keys are namespaced under ``prefix`` so production cell
+        events don't collide with other wandb metrics in the same run.
+        """
+        payload: dict[str, Any] = {}
+        for scalar_field in (
+            "peak_vram_gb",
+            "kv_cache_usage_perc",
+            "prefix_cache_hit_rate",
+            "spec_accept_rate",
+            "flag_did_not_engage",
+        ):
+            value = getattr(self, scalar_field)
+            if value is not None:
+                payload[f"{prefix}/{scalar_field}"] = value
+        for side in ("pre", "post"):
+            tup = getattr(self, f"loadavg_{side}")
+            if tup is None:
+                continue
+            for label, value in zip(_LOADAVG_HORIZON_LABELS, tup, strict=False):
+                payload[f"{prefix}/loadavg_{side}_{label}"] = value
+        for key, value in self.engine_runtime_config.items():
+            payload[f"{prefix}/engine_runtime/{key}"] = value
+        return payload
+
+
+_LOADAVG_HORIZON_LABELS: tuple[str, str, str] = ("1m", "5m", "15m")
+"""Labels for unpacked ``/proc/loadavg`` triples on the wandb side.
+
+Used by :meth:`CellObservability.to_wandb_payload`.
+"""
+
 
 # ---------------------------------------------------------------------------
 # NVML peak sampler

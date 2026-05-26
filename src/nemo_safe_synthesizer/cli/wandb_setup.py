@@ -263,3 +263,30 @@ def initialize_wandb_run(
     logger.info(f"Wandb run id: {wandb.run.id if wandb.run else 'None'}")
     if settings.wandb_mode != WandbMode.DISABLED:
         logger.info(f"Wandb run url: {wandb.run.url if wandb.run else 'None'}")
+
+
+def log_cell_observability(event: Any, prefix: str = "vllm_cell") -> None:
+    """Log a ``CellObservability`` event to the currently active wandb run.
+
+    No-op when no wandb run is active (``WANDB_MODE=disabled`` or the
+    pipeline hasn't called :func:`initialize_wandb_run`). Errors during
+    ``wandb.log`` are swallowed at warning level — observability is
+    best-effort, and a wandb failure must not break generation.
+
+    Accepts ``Any`` typing for ``event`` to avoid a hard import of
+    ``CellObservability`` at module load time (keeps this CLI module
+    importable without the generation subpackage). Callers must pass a
+    ``CellObservability`` instance (anything with a
+    ``to_wandb_payload(prefix)`` method works at runtime).
+    """
+    if wandb.run is None:
+        return
+    try:
+        payload = event.to_wandb_payload(prefix=prefix)
+    except Exception as exc:  # noqa: BLE001 — degraded mode
+        logger.warning(f"observability event has no to_wandb_payload: {exc}")
+        return
+    try:
+        wandb.log(payload)
+    except Exception as exc:  # noqa: BLE001 — degraded mode
+        logger.warning(f"failed to log cell observability to wandb: {exc}")
