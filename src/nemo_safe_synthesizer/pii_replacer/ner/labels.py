@@ -67,7 +67,7 @@ class LabelEvaluator:
     def _matches_any_regex(self, label: str):
         return any(regex.match(label) for regex in self._label_regexes)
 
-    def explicit_lables(self) -> set[str]:
+    def explicit_labels(self) -> set[str]:
         return self._explicit_labels
 
     @classmethod

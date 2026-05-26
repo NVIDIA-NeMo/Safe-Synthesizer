@@ -283,7 +283,11 @@ def update_license_headers(
         return filepath
 
     if check:
-        missing = [f for f in files if _read_head(f) and not _has_header(_read_head(f))]
+        missing: list[str] = []
+        for f in files:
+            head = _read_head(f)
+            if head and not _has_header(head):
+                missing.append(f)
         if missing:
             typer.echo(f"Found {len(missing)} file(s) missing copyright headers:")
             for f in missing:
