@@ -92,13 +92,16 @@ def _secure_outlines_cache_dir() -> None:
         os.environ["OUTLINES_CACHE_DIR"] = str(cache_dir)
 
     try:
+        # Set the umask to 077 to prevent other principals from writing to the
+        # cache directory between the mkdir and chmod calls.
         old_umask = os.umask(0o077)
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
         finally:
             os.umask(old_umask)
+        # Also explicitly set permissions to 0700 for the situation where the
+        # directory already exists and is not 0700.
         cache_dir.chmod(0o700)
-    except OSError as exc:
     except OSError as exc:
         logger.warning(
             "Could not enforce 0700 permissions on outlines cache dir %s: %s. "
