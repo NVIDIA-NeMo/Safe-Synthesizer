@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import logging
 import math
+import os
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -475,6 +476,12 @@ class HuggingFaceBackend(TrainingBackend):
         training_args["remove_unused_columns"] = False  # required for DP data processing
         training_args["max_grad_norm"] = 0.0  # required for opacus optimizer
         _ = training_args.pop("gradient_checkpointing", None)
+        if os.getenv("NSS_DISABLE_DP_BF16") == "1":
+            training_args["bf16"] = False
+            logger.warning(
+                "Disabled Trainer bf16/autocast for DP because NSS_DISABLE_DP_BF16=1 "
+                "requires model outputs to stay in their original dtype."
+            )
 
         if hasattr(self, "model"):
             model = self.model
@@ -497,6 +504,7 @@ class HuggingFaceBackend(TrainingBackend):
         self.trainer_type = partial(  # ty: ignore[invalid-assignment] -- partial is assignable at runtime
             OpacusDPTrainer,
             privacy_args=privacy_args,
+            grad_sample_mode=privacy.grad_sample_mode,
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
         )

@@ -667,6 +667,16 @@ class TestConfigureDpTraining:
         assert training_args["max_grad_norm"] == 0.0
         assert "gradient_checkpointing" not in training_args
 
+    def test_passes_grad_sample_mode_to_dp_trainer(self, backend_with_dp):
+        """Test that DP grad_sample_mode is passed to the Opacus trainer."""
+        backend_with_dp.params.privacy.grad_sample_mode = "ghost"
+        training_args = {}
+
+        backend_with_dp._configure_dp_training(training_args)
+
+        assert backend_with_dp.trainer_type.keywords["grad_sample_mode"] == "ghost"
+        assert "bf16" not in training_args
+
     def test_disables_model_gradient_checkpointing(self, backend_with_dp):
         """Test that DP training disables model-level gradient checkpointing."""
         model = MagicMock()

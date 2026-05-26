@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import (
     Annotated,
+    Literal,
 )
 
 from pydantic import (
@@ -73,3 +74,16 @@ class DifferentialPrivacyHyperparams(Parameters):
             description="Maximum L2 norm for per-sample gradient clipping. Must be > 0.",
         ),
     ] = 1.0
+
+    grad_sample_mode: Annotated[
+        Literal["hooks", "ghost"],
+        Field(
+            title="grad_sample_mode",
+            description=(
+                "Opacus per-sample gradient mode for DP training. "
+                "'hooks' uses standard Opacus GradSampleModule behavior. "
+                "'ghost' uses Opacus Fast/Ghost Gradient Clipping to reduce "
+                "per-sample gradient memory for supported layers."
+            ),
+        ),
+    ] = "hooks"

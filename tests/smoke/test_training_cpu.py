@@ -12,12 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import pytest
 from datasets import Dataset
+from packaging.version import Version
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import DataCollatorForTokenClassification, Trainer, TrainingArguments
 
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
 from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION, PROMPT_TEMPLATE
+from nemo_safe_synthesizer.privacy.dp_transformers import dp_utils
 from nemo_safe_synthesizer.privacy.dp_transformers.dp_utils import (
     DataCollatorForPrivateTokenClassification,
     OpacusDPTrainer,
@@ -120,6 +123,66 @@ def test_dp_training_one_step(
         train_dataset=fixture_tiny_training_dataset_with_position_ids,
         data_collator=data_collator,
         privacy_args=privacy_args,
+        true_dataset_size=8,
+        data_fraction=1.0,
+    )
+    trainer.train()
+    assert len(trainer.state.log_history) > 0
+
+
+def test_dp_ghost_clipping_requires_opacus_1_6(
+    fixture_tiny_model,
+    fixture_stub_tokenizer,
+    fixture_tiny_training_dataset_with_position_ids,
+    tmp_path,
+    monkeypatch,
+):
+    """Ghost clipping is gated on the Opacus release with causal-LM ignore-index fixes."""
+    monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.5.4"))
+    privacy_args = PrivacyArguments(
+        target_epsilon=100.0,
+        target_delta=1e-5,
+        per_sample_max_grad_norm=1.0,
+    )
+    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
+    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
+
+    with pytest.raises(RuntimeError, match="opacus>=1.6.0"):
+        OpacusDPTrainer(
+            model=fixture_tiny_model,
+            args=args,
+            train_dataset=fixture_tiny_training_dataset_with_position_ids,
+            data_collator=data_collator,
+            privacy_args=privacy_args,
+            grad_sample_mode="ghost",
+            true_dataset_size=8,
+            data_fraction=1.0,
+        )
+
+
+def test_dp_ghost_clipping_training_one_step(
+    fixture_tiny_model,
+    fixture_stub_tokenizer,
+    fixture_tiny_training_dataset_with_position_ids,
+    tmp_path,
+    monkeypatch,
+):
+    """Exercises: OpacusDPTrainer Fast/Ghost Gradient Clipping path."""
+    monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
+    privacy_args = PrivacyArguments(
+        target_epsilon=100.0,
+        target_delta=1e-5,
+        per_sample_max_grad_norm=1.0,
+    )
+    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
+    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
+    trainer = OpacusDPTrainer(
+        model=fixture_tiny_model,
+        args=args,
+        train_dataset=fixture_tiny_training_dataset_with_position_ids,
+        data_collator=data_collator,
+        privacy_args=privacy_args,
+        grad_sample_mode="ghost",
         true_dataset_size=8,
         data_fraction=1.0,
     )
