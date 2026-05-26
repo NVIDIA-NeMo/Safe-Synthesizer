@@ -218,6 +218,7 @@ constraint-dependencies = [
     "python-multipart>=0.0.27",
     "requests>=2.33.0",
     "tornado>=6.5.5",
+    "jsonpath-ng>=1.8.0",
 ]
 
 
