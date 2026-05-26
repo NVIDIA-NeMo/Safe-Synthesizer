@@ -894,7 +894,7 @@ class OpacusDPTrainer(Trainer):
         GradSampleModule we save the inner PEFT model, not the wrapper.
         TODO: When updating transformers, check for changes to this function.
         """
-        if isinstance(self.model, GradSampleModule) and hasattr(self.model, "_module"):
+        if self.grad_sample_mode in ("hooks", "ghost") and hasattr(self.model, "_module"):
             model_to_save = self.model._module
             if not isinstance(model_to_save, PeftModel):
                 raise ValueError(f"Error saving model with type {type(model_to_save)}. Expected PeftModel.")

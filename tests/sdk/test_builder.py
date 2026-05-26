@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from nemo_safe_synthesizer.config import GenerateParameters, SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import (
@@ -191,6 +192,11 @@ def test_builder_change_generation_params_with_kwargs(fixture_base_builder):
     assert builder._nss_config.generation.patience == 42
     assert builder._nss_config.training.num_input_records_to_sample == "auto"
     assert builder._nss_config.generation.num_records == 10000
+
+
+def test_builder_validates_privacy_kwargs_applied_to_dict_config(fixture_base_builder):
+    with pytest.raises(ValidationError):
+        fixture_base_builder.with_differential_privacy({}, grad_sample_mode="invalid")
 
 
 def test_pii_replacer_with_default_config_object(fixture_base_builder):

@@ -295,6 +295,17 @@ class TestRenderRichTable:
         assert "0.72" in result
         assert "95.00%" in result
 
+    def test_per_second_suffix_not_formatted_as_percentage(self):
+        """Per-second rates are rendered as rates even when values are less than 1."""
+        data = {"records_per_second": 0.01, "tokens_per_second": 0.5, "progress_fraction": 0.003}
+        result = _render_rich_table(data)
+
+        assert "0.01" in result
+        assert "0.50" in result
+        assert "0.30%" in result
+        assert "1.00%" not in result
+        assert "50.00%" not in result
+
     def test_renders_mapping_values_without_python_repr(self):
         """Mapping values in flat tables are rendered as compact key-value lists."""
         data = {"num_prompts": 10, "finish_reasons": {"length": 10, "stop": 2}}

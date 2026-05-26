@@ -213,21 +213,22 @@ class TrainingHyperparams(Parameters):
                 "Optional cap for the physical per-device microbatch sent to the Trainer. "
                 "Set to 'auto' or None to leave physical batching unchanged. "
                 "When set below batch_size, the configured logical batch "
-                "batch_size * gradient_accumulation_steps is preserved by increasing "
-                "gradient_accumulation_steps."
+                "is preserved by increasing gradient_accumulation_steps."
             ),
         ),
     ] = AUTO_STR
 
     gradient_accumulation_steps: Annotated[
-        int,
-        ValueValidator(value_func=lambda v: v >= 1),
+        AutoIntParam,
+        ValueValidator(value_func=lambda v: v == AUTO_STR or v >= 1),
         Field(
             title="gradient_accumulation_steps",
             description=(
                 "Number of update steps to accumulate the gradients for, before "
                 "performing a backward/update pass. This technique increases "
-                "the effective batch size that will fit into GPU memory. Must be >= 1."
+                "the effective batch size that will fit into GPU memory. Must be >= 1 "
+                "or 'auto'. When set to 'auto', batch_size is treated as the logical "
+                "per-device batch target and accumulation is derived from max_physical_batch_size."
             ),
         ),
     ] = 8
@@ -430,20 +431,24 @@ class TrainingHyperparams(Parameters):
 
     @property
     def effective_batch_size(self) -> int:
-        """Effective batch size = ``batch_size * gradient_accumulation_steps``.
+        """Effective per-device batch size after resolving accumulation semantics.
 
         This is the number of examples that contribute to each optimizer
         update (the "global" batch seen by the loss curve). Canonical
         source for any caller that needs this product -- used by preflight
         checks and logged by the training callbacks.
         """
+        if self.gradient_accumulation_steps == AUTO_STR:
+            return self.batch_size
         return self.batch_size * self.gradient_accumulation_steps
 
     def resolve_batching(self) -> ResolvedTrainingBatching:
         """Resolve Trainer batch args while preserving configured logical batch size.
 
         ``batch_size`` and ``gradient_accumulation_steps`` define the logical
-        batch used for optimizer updates and DP accounting. ``max_physical_batch_size``
+        batch used for optimizer updates and DP accounting. When
+        ``gradient_accumulation_steps`` is ``"auto"``, ``batch_size`` is the
+        logical target and accumulation is derived. ``max_physical_batch_size``
         only caps the physical microbatch passed to the Trainer.
         """
         effective_batch_size = self.effective_batch_size

@@ -190,6 +190,48 @@ def test_dp_ghost_clipping_training_one_step(
     assert len(trainer.state.log_history) > 0
 
 
+def test_dp_ghost_clipping_save_writes_peft_adapter(
+    fixture_tiny_model,
+    fixture_stub_tokenizer,
+    fixture_tiny_training_dataset_with_position_ids,
+    tmp_path,
+    monkeypatch,
+):
+    """Ghost clipping should unwrap the Opacus wrapper before saving adapters."""
+    monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
+    lora_config = LoraConfig(
+        r=8,
+        lora_alpha=8,
+        target_modules=["q_proj", "v_proj"],
+        task_type=TaskType.CAUSAL_LM,
+        bias="none",
+    )
+    model = get_peft_model(fixture_tiny_model, lora_config)
+    privacy_args = PrivacyArguments(
+        target_epsilon=100.0,
+        target_delta=1e-5,
+        per_sample_max_grad_norm=1.0,
+    )
+    args = _cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0)
+    data_collator = DataCollatorForPrivateTokenClassification(tokenizer=fixture_stub_tokenizer)
+    trainer = OpacusDPTrainer(
+        model=model,
+        args=args,
+        train_dataset=fixture_tiny_training_dataset_with_position_ids,
+        data_collator=data_collator,
+        privacy_args=privacy_args,
+        grad_sample_mode="ghost",
+        true_dataset_size=8,
+        data_fraction=1.0,
+    )
+
+    output_dir = tmp_path / "adapter"
+    trainer._save(str(output_dir))
+
+    assert (output_dir / "adapter_model.safetensors").exists()
+    assert not (output_dir / "model.safetensors").exists()
+
+
 def test_training_example_assembler(fixture_iris_df, fixture_stub_tokenizer, tmp_path):
     """Exercises: NSS data preparation pipeline (TrainingExampleAssembler)."""
     from nemo_safe_synthesizer.config import SafeSynthesizerParameters

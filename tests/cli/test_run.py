@@ -841,6 +841,8 @@ class TestAutoParamCliOverrides:
             ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
             ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
             ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
+            ("--training__gradient_accumulation_steps", "auto", ("training", "gradient_accumulation_steps"), "auto"),
+            ("--training__gradient_accumulation_steps", "4", ("training", "gradient_accumulation_steps"), 4),
             ("--training__max_physical_batch_size", "auto", ("training", "max_physical_batch_size"), "auto"),
             ("--training__max_physical_batch_size", "4", ("training", "max_physical_batch_size"), 4),
             ("--data__max_sequences_per_example", "auto", ("data", "max_sequences_per_example"), "auto"),
@@ -897,6 +899,8 @@ class TestAutoParamCliOverrides:
             ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
             ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
             ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
+            ("--training__gradient_accumulation_steps", "auto", ("training", "gradient_accumulation_steps"), "auto"),
+            ("--training__gradient_accumulation_steps", "4", ("training", "gradient_accumulation_steps"), 4),
             ("--training__max_physical_batch_size", "auto", ("training", "max_physical_batch_size"), "auto"),
             ("--training__max_physical_batch_size", "4", ("training", "max_physical_batch_size"), 4),
             ("--privacy__delta", "auto", ("privacy", "delta"), "auto"),
@@ -929,6 +933,27 @@ class TestAutoParamCliOverrides:
             resolved = getattr(resolved, key)
         assert resolved == expected
         assert type(resolved) is type(expected)
+
+    def test_privacy_grad_sample_mode_override_reaches_params_object(
+        self,
+        cli_runner: CliRunner,
+        dummy_csv: Path,
+        patched_run_dependencies: dict,
+    ):
+        """Literal privacy overrides should parse through CLI and validate into the config object."""
+        result = cli_runner.invoke(
+            run,
+            ["--data-source", str(dummy_csv), "--privacy__grad_sample_mode", "ghost"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        settings: CLISettings = patched_run_dependencies["common_setup"].call_args.kwargs["settings"]
+        assert settings.synthesis_overrides["privacy"]["grad_sample_mode"] == "ghost"
+
+        params = merge_overrides(None, settings.synthesis_overrides)
+        assert params.privacy is not None
+        assert params.privacy.grad_sample_mode == "ghost"
 
 
 class TestRunErrorPathExitCodes:

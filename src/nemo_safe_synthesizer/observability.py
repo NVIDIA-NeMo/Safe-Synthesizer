@@ -209,7 +209,11 @@ def _move_category_for_column(logger: logging.Logger, method_name: str, event_di
 def _format_table_value(key: str, value: object) -> str:
     """Format values for user-facing Rich tables."""
     if isinstance(value, float):
-        is_fraction = 0 < value < 1 and key not in ("loss", "eval_loss") and not key.endswith(("_sec", "_seconds"))
+        is_fraction = (
+            0 < value < 1
+            and key not in ("loss", "eval_loss")
+            and not key.endswith(("_sec", "_seconds", "_per_sec", "_per_second"))
+        )
         return f"{value:.2%}" if is_fraction else f"{value:.2f}"
     if isinstance(value, Mapping):
         return ", ".join(f"{mapping_key}: {value[mapping_key]}" for mapping_key in sorted(value))

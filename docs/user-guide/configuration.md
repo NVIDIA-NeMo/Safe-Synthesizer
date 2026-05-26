@@ -142,8 +142,9 @@ for the full field list.
 | Field | Default | Description | Guidance |
 |-------|---------|-------------|----------|
 | `training.learning_rate` | `"auto"` | Initial learning rate for the `AdamW` optimizer. `"auto"` selects a model-specific default (Mistral: 1e-4, others: 5e-4) | Leave at `"auto"` for most cases; override with a float in (0, 1) to tune manually |
-| `training.batch_size` | `1` | Per-device batch size | Leave at 1; increase `gradient_accumulation_steps` for a larger effective batch |
-| `training.gradient_accumulation_steps` | `8` | Steps to accumulate before a backward pass; effective batch size = `batch_size` x this value | 8--32 typical |
+| `training.batch_size` | `1` | Per-device batch target. With integer `gradient_accumulation_steps`, effective batch size is `batch_size` x `gradient_accumulation_steps`; with `"auto"` accumulation, `batch_size` is the logical target | Leave at 1 for memory-constrained runs; increase only when VRAM headroom is available |
+| `training.max_physical_batch_size` | `"auto"` | Optional cap on the physical per-device microbatch sent to the Trainer. A numeric cap preserves the logical effective batch by increasing accumulation when possible | Use 1--4 to recover from activation OOMs while preserving the configured logical batch; leave `"auto"` otherwise |
+| `training.gradient_accumulation_steps` | `8` | Steps to accumulate before a backward pass; accepts an integer or `"auto"`. `"auto"` derives accumulation from `batch_size` and `max_physical_batch_size` | 8--32 typical for integer values; use `"auto"` with `max_physical_batch_size` for OOM triage |
 | `training.num_input_records_to_sample` | `"auto"` | Records the model sees during training -- proxy for training time (`"auto"` or int) | First knob to increase if quality is low |
 | `training.lora_r` | `32` | LoRA rank; lower values produce fewer trainable parameters | 16--64 typical; 32 is a reasonable default |
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |
@@ -288,6 +289,7 @@ learn about any individual record. Safe Synthesizer implements DP-SGD
 | `privacy.epsilon` | `8.0` | Privacy budget -- lower values give stronger privacy | 4.0--12.0 typical; values below 4.0 may make convergence difficult |
 | `privacy.delta` | `"auto"` | Privacy failure probability (`"auto"` or float) | Leave at `"auto"` |
 | `privacy.per_sample_max_grad_norm` | `1.0` | Max L2 norm for per-sample gradients | Leave at 1.0 |
+| `privacy.grad_sample_mode` | `"hooks"` | Opacus per-sample gradient mode: `"hooks"` for standard GradSampleModule behavior, `"ghost"` for Fast/Ghost Gradient Clipping | Use `"ghost"` when DP training OOMs from per-sample gradient memory on supported layers |
 
 Compatibility constraints:
 

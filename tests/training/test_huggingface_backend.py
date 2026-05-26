@@ -637,6 +637,31 @@ class TestBuildBaseTrainingArgs:
             backend.params.training.effective_batch_size
         )
 
+    def test_resolves_auto_gradient_accumulation_steps_with_physical_cap(self, backend):
+        """Auto accumulation should derive Trainer args from the physical cap."""
+        backend.params.training.batch_size = 8
+        backend.params.training.gradient_accumulation_steps = "auto"
+        backend.params.training.max_physical_batch_size = 4
+
+        result = backend._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 4
+        assert result["gradient_accumulation_steps"] == 2
+        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
+            backend.params.training.effective_batch_size
+        )
+
+    def test_resolves_auto_gradient_accumulation_steps_without_physical_cap(self, backend):
+        """Auto accumulation without a cap should emit a single Trainer accumulation step."""
+        backend.params.training.batch_size = 8
+        backend.params.training.gradient_accumulation_steps = "auto"
+        backend.params.training.max_physical_batch_size = "auto"
+
+        result = backend._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 8
+        assert result["gradient_accumulation_steps"] == 1
+
     @pytest.mark.parametrize("max_physical_batch_size", ["auto", None, 8, 12])
     def test_ignores_inactive_max_physical_batch_size(self, backend, max_physical_batch_size):
         """Unset or non-binding caps should preserve configured Trainer batching."""

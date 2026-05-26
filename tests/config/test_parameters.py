@@ -51,6 +51,29 @@ def test_max_physical_batch_size_from_params_must_be_positive_when_set(invalid_v
         SafeSynthesizerParameters.from_params(max_physical_batch_size=invalid_value)
 
 
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_gradient_accumulation_steps_must_be_positive_or_auto(invalid_value):
+    with pytest.raises(ValidationError):
+        TrainingHyperparams(gradient_accumulation_steps=invalid_value)
+
+
+def test_grad_sample_mode_from_params_accepts_supported_values():
+    params = SafeSynthesizerParameters.from_params(grad_sample_mode="ghost")
+
+    assert params.privacy is not None
+    assert params.privacy.grad_sample_mode == "ghost"
+
+
+def test_grad_sample_mode_from_params_rejects_invalid_value():
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_params(grad_sample_mode="invalid")
+
+
+def test_grad_sample_mode_from_yaml_rejects_invalid_value():
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_yaml_str("privacy:\n  grad_sample_mode: invalid\n")
+
+
 @pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
 def test_max_physical_batch_size_absent_value_is_noop(max_physical_batch_size):
     training = TrainingHyperparams(
@@ -63,6 +86,52 @@ def test_max_physical_batch_size_absent_value_is_noop(max_physical_batch_size):
 
     assert resolved.per_device_train_batch_size == 8
     assert resolved.gradient_accumulation_steps == 2
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+@pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
+def test_auto_gradient_accumulation_without_physical_cap_uses_one_step(max_physical_batch_size):
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=AUTO_STR,
+        max_physical_batch_size=max_physical_batch_size,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert training.effective_batch_size == 8
+    assert resolved.per_device_train_batch_size == 8
+    assert resolved.gradient_accumulation_steps == 1
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+def test_auto_gradient_accumulation_with_physical_cap_preserves_batch_size_target():
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=AUTO_STR,
+        max_physical_batch_size=4,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert training.effective_batch_size == 8
+    assert resolved.per_device_train_batch_size == 4
+    assert resolved.gradient_accumulation_steps == 2
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+def test_auto_gradient_accumulation_with_non_divisible_physical_cap_uses_largest_divisor():
+    training = TrainingHyperparams(
+        batch_size=9,
+        gradient_accumulation_steps=AUTO_STR,
+        max_physical_batch_size=5,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert training.effective_batch_size == 9
+    assert resolved.per_device_train_batch_size == 3
+    assert resolved.gradient_accumulation_steps == 3
     assert resolved.effective_batch_size == training.effective_batch_size
 
 
@@ -118,6 +187,8 @@ def test_max_physical_batch_size_uses_largest_divisor_under_cap():
         ("max_physical_batch_size", "auto", AUTO_STR),
         ("max_physical_batch_size", "4", 4),
         ("max_physical_batch_size", "null", None),
+        ("gradient_accumulation_steps", "auto", AUTO_STR),
+        ("gradient_accumulation_steps", "4", 4),
     ],
 )
 def test_batching_auto_parameters_from_yaml(field_name, raw_value, expected):
