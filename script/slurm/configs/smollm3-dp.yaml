@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 training:
-  batch_size: 8  # DP is not constrained to batch size of 1
+  batch_size: 4
+  gradient_accumulation_steps: 16
   pretrained_model: HuggingFaceTB/SmolLM3-3B
 privacy:
   dp_enabled: true
