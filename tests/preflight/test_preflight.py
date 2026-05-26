@@ -258,6 +258,52 @@ class TestVRAMHeadroomCheck:
             VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         mock_gmv.assert_called_once_with(max_vram_fraction=fraction)
 
+    def test_qlora_without_quantize_model_uses_unquantized_vram(self, default_config):
+        """QLoRA should reduce the estimate only when model quantization is enabled."""
+        metadata = MagicMock(spec=ModelMetadata, autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=8 * 1024**3)
+
+        def run_check(*, quantize_model: bool) -> list[PreflightIssue]:
+            config = default_config.model_copy(deep=True)
+            config.training.peft_implementation = "QLORA"
+            config.training.quantize_model = quantize_model
+            config.training.quantization_bits = 4
+            with (
+                patch("torch.cuda.is_available", return_value=True),
+                patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+                patch("torch.cuda.get_device_properties", return_value=fake_props),
+            ):
+                return VRAMHeadroomCheck().run(make_ctx(config=config, metadata=metadata))
+
+        unquantized_issues = run_check(quantize_model=False)
+        quantized_issues = run_check(quantize_model=True)
+
+        assert any(i.code == "low_vram" for i in unquantized_issues)
+        assert not any(i.code == "low_vram" for i in quantized_issues)
+
+    def test_qlora_without_quantize_model_uses_unquantized_vram(self, default_config):
+        """QLoRA should reduce the estimate only when model quantization is enabled."""
+        metadata = MagicMock(spec=ModelMetadata, autoconfig=self._autoconfig())
+        fake_props = MagicMock(total_memory=8 * 1024**3)
+
+        def run_check(*, quantize_model: bool) -> list[PreflightIssue]:
+            config = default_config.model_copy(deep=True)
+            config.training.peft_implementation = "QLORA"
+            config.training.quantize_model = quantize_model
+            config.training.quantization_bits = 4
+            with (
+                patch("torch.cuda.is_available", return_value=True),
+                patch("nemo_safe_synthesizer.llm.utils.get_max_vram", return_value={0: 1.0}),
+                patch("torch.cuda.get_device_properties", return_value=fake_props),
+            ):
+                return VRAMHeadroomCheck().run(make_ctx(config=config, metadata=metadata))
+
+        unquantized_issues = run_check(quantize_model=False)
+        quantized_issues = run_check(quantize_model=True)
+
+        assert any(i.code == "low_vram" for i in unquantized_issues)
+        assert not any(i.code == "low_vram" for i in quantized_issues)
+
     def test_stub_metadata_skips_silently(self, default_config):
         """Stubbed metadata (autoconfig=None) must skip without raising."""
         metadata = MagicMock(spec=ModelMetadata, autoconfig=None)

@@ -191,7 +191,7 @@ def estimate_base_model_params(autoconfig: PretrainedConfig) -> tuple[int, Liter
 
 
 def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
-    r"""Return expected bytes/param for the base model load mode.
+    r"""Return expected bytes/param for the base model.
 
     NSS always trains via LoRA-style adapters, so the base model's storage
     precision dominates VRAM (LoRA adapter params, gradients, and
@@ -217,15 +217,16 @@ def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
           scales; the \(+0.1\) term accounts for these scales and the
           dequant workspace. <https://arxiv.org/abs/2305.14314>
     """
-    if training_cfg.quantize_model:
-        # Prefer the explicit scheme if set; otherwise fall back to the legacy
-        # bits-based field. Both routes yield bits/param for memory estimation.
-        if training_cfg.quantization_scheme is not None:
-            bits = training_cfg.quantization_scheme.effective_bits
-        else:
-            bits = training_cfg.quantization_bits
-        return bits / 8 + 0.1
-    return 2.0
+    if not training_cfg.quantize_model:
+        return 2.0
+
+    # Prefer the explicit scheme if set; otherwise fall back to the legacy
+    # bits-based field. Both routes yield bits/param for memory estimation.
+    if training_cfg.quantization_scheme is not None:
+        bits = training_cfg.quantization_scheme.effective_bits
+    else:
+        bits = training_cfg.quantization_bits
+    return bits / 8 + 0.1
 
 
 _VRAM_LEGACY_OVERHEAD_GIB = 2.0
@@ -388,14 +389,14 @@ class VRAMHeadroomCheck(MetadataCheck):
         model_name = getattr(autoconfig, "_name_or_path", None) or getattr(autoconfig, "model_type", "model")
         if method == "exact":
             logger.info(
-                "VRAM estimate: counted %.2fB parameters for %s via meta-tensor instantiation",
+                "VRAM estimate: counted %.2f billion parameters for %s via meta-tensor instantiation.",
                 n_params / 1e9,
                 model_name,
             )
         else:
             logger.info(
                 "VRAM estimate: meta-tensor instantiation unavailable for %s; falling back to shape "
-                "heuristic (~%.2fB parameters). This estimate is approximate; actual VRAM usage may "
+                "heuristic (~%.2f billion parameters). This estimate is approximate; actual VRAM usage may "
                 "differ by 20-30%% or more for non-standard architectures (e.g. Nemotron, Mamba hybrids).",
                 model_name,
                 n_params / 1e9,
