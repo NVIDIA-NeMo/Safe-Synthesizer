@@ -3253,7 +3253,7 @@ requires-dist = [
     { name = "opacus", marker = "extra == 'cu129'" },
     { name = "outlines", marker = "extra == 'engine'", specifier = ">=1.0.0" },
     { name = "pandas", specifier = ">=2.1.3" },
-    { name = "pandas", marker = "extra == 'engine'", specifier = ">=2.1.3,<3" },
+    { name = "pandas", marker = "extra == 'engine'", specifier = ">=2.1.3,<4" },
     { name = "peft", marker = "extra == 'cpu'", specifier = ">=0.18.0" },
     { name = "peft", marker = "extra == 'cu129'", specifier = ">=0.18.0" },
     { name = "plotly", marker = "extra == 'engine'" },
