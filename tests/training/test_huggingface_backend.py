@@ -570,6 +570,8 @@ class TestApplyRopeScaling:
             "factor": 5.0,
         }
 
+
+class TestNormalizeRopeParameters:
     def test_normalizes_rope_parameters_theta_key(self, backend):
         """Test that legacy theta is copied to Transformers v5 rope_theta."""
         backend.model_metadata.rope_scaling = None

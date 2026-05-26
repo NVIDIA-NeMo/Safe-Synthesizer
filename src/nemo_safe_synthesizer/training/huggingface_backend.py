@@ -270,8 +270,6 @@ class HuggingFaceBackend(TrainingBackend):
             theta = getattr(rope_scaling, "theta", None)
         if not isinstance(theta, (int, float)):
             theta = getattr(self.autoconfig, "rope_theta", DEFAULT_ROPE_THETA)
-        if not isinstance(theta, (int, float)):
-            theta = DEFAULT_ROPE_THETA
 
         rope_parameters["rope_theta"] = float(theta)
 
