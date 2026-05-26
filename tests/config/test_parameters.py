@@ -13,7 +13,8 @@ from pydantic import Field, ValidationError, model_validator
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
-from nemo_safe_synthesizer.config.training import QuantizationScheme
+from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
+from nemo_safe_synthesizer.config.types import AUTO_STR
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
     ParameterFieldKind,
@@ -34,7 +35,97 @@ def test_safe_synthesizer_parameters(monkeypatch):
     )
     assert config.replace_pii is None
     assert config.training.batch_size == 1
+    assert config.training.max_physical_batch_size == AUTO_STR
     assert config.emit_telemetry is True
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_max_physical_batch_size_must_be_positive_when_set(invalid_value):
+    with pytest.raises(ValidationError):
+        TrainingHyperparams(max_physical_batch_size=invalid_value)
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_max_physical_batch_size_from_params_must_be_positive_when_set(invalid_value):
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_params(max_physical_batch_size=invalid_value)
+
+
+@pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])
+def test_max_physical_batch_size_absent_value_is_noop(max_physical_batch_size):
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=max_physical_batch_size,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert resolved.per_device_train_batch_size == 8
+    assert resolved.gradient_accumulation_steps == 2
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+@pytest.mark.parametrize("max_physical_batch_size", [8, 12])
+def test_max_physical_batch_size_at_or_above_batch_size_is_noop(max_physical_batch_size):
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=max_physical_batch_size,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert resolved.per_device_train_batch_size == 8
+    assert resolved.gradient_accumulation_steps == 2
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+def test_max_physical_batch_size_resolver_preserves_effective_batch_size():
+    training = TrainingHyperparams(
+        batch_size=8,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=4,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert training.effective_batch_size == 16
+    assert resolved.per_device_train_batch_size == 4
+    assert resolved.gradient_accumulation_steps == 4
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+def test_max_physical_batch_size_uses_largest_divisor_under_cap():
+    training = TrainingHyperparams(
+        batch_size=9,
+        gradient_accumulation_steps=2,
+        max_physical_batch_size=5,
+    )
+
+    resolved = training.resolve_batching()
+
+    assert training.effective_batch_size == 18
+    assert resolved.per_device_train_batch_size == 3
+    assert resolved.gradient_accumulation_steps == 6
+    assert resolved.per_device_train_batch_size <= 5
+    assert resolved.effective_batch_size == training.effective_batch_size
+
+
+@pytest.mark.parametrize(
+    ("field_name", "raw_value", "expected"),
+    [
+        ("max_physical_batch_size", "auto", AUTO_STR),
+        ("max_physical_batch_size", "4", 4),
+        ("max_physical_batch_size", "null", None),
+    ],
+)
+def test_batching_auto_parameters_from_yaml(field_name, raw_value, expected):
+    params = SafeSynthesizerParameters.from_yaml_str(
+        f"training:\n  batch_size: 8\n  gradient_accumulation_steps: 2\n  {field_name}: {raw_value}\n"
+    )
+
+    assert getattr(params.training, field_name) == expected
 
 
 def test_emit_telemetry_can_be_disabled_from_yaml():

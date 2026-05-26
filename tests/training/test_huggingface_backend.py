@@ -623,6 +623,60 @@ class TestBuildBaseTrainingArgs:
         assert result["eval_strategy"] == IntervalStrategy.STEPS
         assert result["do_eval"] is True
 
+    def test_resolves_max_physical_batch_size(self, backend):
+        """A physical cap should split the configured logical batch."""
+        backend.params.training.batch_size = 8
+        backend.params.training.gradient_accumulation_steps = 2
+        backend.params.training.max_physical_batch_size = 4
+
+        result = backend._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 4
+        assert result["gradient_accumulation_steps"] == 4
+        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
+            backend.params.training.effective_batch_size
+        )
+
+    @pytest.mark.parametrize("max_physical_batch_size", ["auto", None, 8, 12])
+    def test_ignores_inactive_max_physical_batch_size(self, backend, max_physical_batch_size):
+        """Unset or non-binding caps should preserve configured Trainer batching."""
+        backend.params.training.batch_size = 8
+        backend.params.training.gradient_accumulation_steps = 2
+        backend.params.training.max_physical_batch_size = max_physical_batch_size
+
+        result = backend._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 8
+        assert result["gradient_accumulation_steps"] == 2
+
+    def test_resolves_non_divisible_max_physical_batch_size(self, backend):
+        """A non-divisible cap should use the largest divisor under the cap."""
+        backend.params.training.batch_size = 9
+        backend.params.training.gradient_accumulation_steps = 2
+        backend.params.training.max_physical_batch_size = 5
+
+        result = backend._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 3
+        assert result["gradient_accumulation_steps"] == 6
+        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
+            backend.params.training.effective_batch_size
+        )
+
+    def test_dp_batch_accounting_product_is_preserved(self, backend_with_dp):
+        """DP accounting should not change when only the physical batch is capped."""
+        backend_with_dp.params.training.batch_size = 8
+        backend_with_dp.params.training.gradient_accumulation_steps = 2
+        backend_with_dp.params.training.max_physical_batch_size = 4
+
+        result = backend_with_dp._build_base_training_args()
+
+        assert result["per_device_train_batch_size"] == 4
+        assert result["gradient_accumulation_steps"] == 4
+        assert result["per_device_train_batch_size"] * result["gradient_accumulation_steps"] == (
+            backend_with_dp.params.training.effective_batch_size
+        )
+
 
 # =============================================================================
 # Tests for _apply_eval_dataset_overrides

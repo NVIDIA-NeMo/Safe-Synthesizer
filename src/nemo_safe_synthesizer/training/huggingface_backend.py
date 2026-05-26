@@ -414,10 +414,11 @@ class HuggingFaceBackend(TrainingBackend):
         evaluation_strategy = (
             IntervalStrategy.STEPS if self.params.training.validation_ratio > 0 else IntervalStrategy.NO
         )
+        batching = self.params.training.resolve_batching()
         return dict(
             output_dir=Path(self.workdir.train.cache),
-            per_device_train_batch_size=self.params.training.batch_size,
-            gradient_accumulation_steps=self.params.training.gradient_accumulation_steps,
+            per_device_train_batch_size=batching.per_device_train_batch_size,
+            gradient_accumulation_steps=batching.gradient_accumulation_steps,
             lr_scheduler_type=self.params.training.lr_scheduler,
             learning_rate=self.params.training.learning_rate,
             eval_strategy=evaluation_strategy,

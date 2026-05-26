@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "QuantizationScheme",
+    "ResolvedTrainingBatching",
     "TrainingHyperparams",
 ]
 
@@ -151,6 +153,23 @@ class QuantizationScheme(StrEnum):
 ValueGTZero = ValueValidator(lambda p: range_validator(p, lambda v: v >= 0))
 
 
+@dataclass(frozen=True)
+class ResolvedTrainingBatching:
+    """Trainer batch arguments resolved from configured logical batch semantics."""
+
+    per_device_train_batch_size: int
+    gradient_accumulation_steps: int
+    effective_batch_size: int
+
+
+def _largest_divisor_at_most(value: int, limit: int) -> int:
+    """Return the largest positive divisor of ``value`` that is no larger than ``limit``."""
+    for candidate in range(min(value, limit), 0, -1):
+        if value % candidate == 0:
+            return candidate
+    return 1
+
+
 class TrainingHyperparams(Parameters):
     """Hyperparameters that control the training process behavior.
 
@@ -184,6 +203,21 @@ class TrainingHyperparams(Parameters):
             description="The batch size per device for training. Must be >= 1.",
         ),
     ] = 1
+
+    max_physical_batch_size: Annotated[
+        OptionalAutoInt,
+        ValueValidator(value_func=lambda v: v == AUTO_STR or v is None or v >= 1),
+        Field(
+            title="max_physical_batch_size",
+            description=(
+                "Optional cap for the physical per-device microbatch sent to the Trainer. "
+                "Set to 'auto' or None to leave physical batching unchanged. "
+                "When set below batch_size, the configured logical batch "
+                "batch_size * gradient_accumulation_steps is preserved by increasing "
+                "gradient_accumulation_steps."
+            ),
+        ),
+    ] = AUTO_STR
 
     gradient_accumulation_steps: Annotated[
         int,
@@ -404,3 +438,28 @@ class TrainingHyperparams(Parameters):
         checks and logged by the training callbacks.
         """
         return self.batch_size * self.gradient_accumulation_steps
+
+    def resolve_batching(self) -> ResolvedTrainingBatching:
+        """Resolve Trainer batch args while preserving configured logical batch size.
+
+        ``batch_size`` and ``gradient_accumulation_steps`` define the logical
+        batch used for optimizer updates and DP accounting. ``max_physical_batch_size``
+        only caps the physical microbatch passed to the Trainer.
+        """
+        effective_batch_size = self.effective_batch_size
+        max_physical_batch_size = self.max_physical_batch_size
+        if max_physical_batch_size in (AUTO_STR, None):
+            physical_batch_size = self.batch_size
+        elif self.batch_size <= max_physical_batch_size:
+            physical_batch_size = self.batch_size
+        else:
+            physical_batch_size = _largest_divisor_at_most(
+                value=effective_batch_size,
+                limit=max_physical_batch_size,
+            )
+
+        return ResolvedTrainingBatching(
+            per_device_train_batch_size=physical_batch_size,
+            gradient_accumulation_steps=effective_batch_size // physical_batch_size,
+            effective_batch_size=effective_batch_size,
+        )

@@ -841,6 +841,8 @@ class TestAutoParamCliOverrides:
             ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
             ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
             ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
+            ("--training__max_physical_batch_size", "auto", ("training", "max_physical_batch_size"), "auto"),
+            ("--training__max_physical_batch_size", "4", ("training", "max_physical_batch_size"), 4),
             ("--data__max_sequences_per_example", "auto", ("data", "max_sequences_per_example"), "auto"),
             ("--data__max_sequences_per_example", "5", ("data", "max_sequences_per_example"), 5),
             # AutoFloatParam
@@ -895,6 +897,8 @@ class TestAutoParamCliOverrides:
             ("--training__rope_scaling_factor", "2", ("training", "rope_scaling_factor"), 2),
             ("--training__num_input_records_to_sample", "auto", ("training", "num_input_records_to_sample"), "auto"),
             ("--training__num_input_records_to_sample", "100", ("training", "num_input_records_to_sample"), 100),
+            ("--training__max_physical_batch_size", "auto", ("training", "max_physical_batch_size"), "auto"),
+            ("--training__max_physical_batch_size", "4", ("training", "max_physical_batch_size"), 4),
             ("--privacy__delta", "auto", ("privacy", "delta"), "auto"),
             ("--privacy__delta", "0.001", ("privacy", "delta"), 0.001),
         ],
