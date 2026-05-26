@@ -311,7 +311,7 @@ def prv_find_noise_multiplier(
         try:
             eps_R = compute_epsilon(mu_R)[2]
         except (OverflowError, RuntimeError):
-            eps_R = float("inf")
+            pass
         if mu_R > mu_max:
             raise RuntimeError(
                 "Unable to automatically determine a noise multiplier for DP optimizer. "

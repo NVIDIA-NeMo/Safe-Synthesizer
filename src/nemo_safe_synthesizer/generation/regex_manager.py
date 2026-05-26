@@ -287,7 +287,6 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             return NULL
         case _:
             raise NotImplementedError(f"Unsupported type={instance_type}")
-    raise AssertionError("unreachable")
 
 
 def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
@@ -320,7 +319,6 @@ def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) ->
             return _type_regex(instance, whitespace_pattern, **kwargs)
         case _:
             raise NotImplementedError()
-    raise AssertionError("unreachable")
 
 
 def build_json_based_regex(

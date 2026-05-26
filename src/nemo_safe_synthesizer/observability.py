@@ -147,9 +147,8 @@ class NSSObservabilitySettings(BaseSettings):
                     if get_ipython().__class__.__name__ == "ZMQInteractiveShell":
                         return "plain"
                 except (ImportError, AttributeError):
-                    return "json"
+                    pass
                 return "json"
-        raise AssertionError("unreachable")
 
     @field_validator("nss_log_color", mode="before")
     @classmethod
@@ -162,7 +161,6 @@ class NSSObservabilitySettings(BaseSettings):
                 return value
             case _:
                 return sys.stdout.isatty()
-        raise AssertionError("unreachable")
 
 
 with warnings.catch_warnings():

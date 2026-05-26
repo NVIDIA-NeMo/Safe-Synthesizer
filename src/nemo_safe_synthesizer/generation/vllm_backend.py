@@ -311,7 +311,6 @@ class VllmBackend(GeneratorBackend):
                     f"Temperature undefined; Setting temperature={DEFAULT_SAMPLING_PARAMETERS['temperature']}."
                 )
                 return DEFAULT_SAMPLING_PARAMETERS["temperature"]
-        raise AssertionError("unreachable")
 
     def _get_api_param_mapping(self, resolved_temperature: float) -> dict[str, Any]:
         """Get the mapping from our API parameters to vLLM parameters.
@@ -453,7 +452,6 @@ class VllmBackend(GeneratorBackend):
                 return result
             case _:
                 raise ValueError("input ids are not a tensor or list!")
-        raise AssertionError("unreachable")
 
     def _generate_batch(
         self,
