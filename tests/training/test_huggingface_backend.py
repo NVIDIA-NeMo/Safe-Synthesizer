@@ -571,6 +571,38 @@ class TestApplyRopeScaling:
         }
 
 
+class TestNormalizeRopeParameters:
+    def test_normalizes_rope_parameters_theta_key(self, backend):
+        """Test that legacy theta is copied to Transformers v5 rope_theta."""
+        backend.model_metadata.rope_scaling = None
+        backend.autoconfig.rope_scaling = None
+        backend.autoconfig.rope_parameters = {"rope_type": "default", "theta": 50000.0}
+
+        backend._normalize_rope_parameters()
+
+        assert backend.autoconfig.rope_parameters == {
+            "rope_type": "default",
+            "theta": 50000.0,
+            "rope_theta": 50000.0,
+        }
+
+    def test_normalizes_rope_parameters_from_metadata(self, backend):
+        """Test that model metadata supplies theta when rope_parameters lacks it."""
+        from nemo_safe_synthesizer.llm.metadata import RopeScaling
+
+        backend.model_metadata.rope_scaling = RopeScaling(rope_type="yarn", factor=4.0, theta=1500000.0)
+        backend.autoconfig.rope_scaling = {"rope_type": "yarn", "factor": 4.0}
+        backend.autoconfig.rope_parameters = {"rope_type": "yarn", "factor": 4.0}
+
+        backend._normalize_rope_parameters()
+
+        assert backend.autoconfig.rope_parameters == {
+            "rope_type": "yarn",
+            "factor": 4.0,
+            "rope_theta": 1500000.0,
+        }
+
+
 class TestBuildBaseTrainingArgs:
     def test_builds_correct_args_no_validation(self, backend):
         """Test that training args are built correctly without validation."""
