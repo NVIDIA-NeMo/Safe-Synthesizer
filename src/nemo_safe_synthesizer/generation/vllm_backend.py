@@ -92,8 +92,13 @@ def _secure_outlines_cache_dir() -> None:
         os.environ["OUTLINES_CACHE_DIR"] = str(cache_dir)
 
     try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        old_umask = os.umask(0o077)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+        finally:
+            os.umask(old_umask)
         cache_dir.chmod(0o700)
+    except OSError as exc:
     except OSError as exc:
         logger.warning(
             "Could not enforce 0700 permissions on outlines cache dir %s: %s. "
