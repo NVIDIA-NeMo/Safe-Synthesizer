@@ -185,6 +185,131 @@ def default_matrix(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
     return out
 
 
+DEFAULT_BRACKETED_AB_N: int = 6
+"""Cells per condition in :func:`bracketed_ab`.
+
+N=6 is the methodology-critic-recommended compromise between N=4 (~20%
+statistical power for detecting +5% effects under the stack's observed
+~3% in-cluster CoV) and N=8 (busts the 24h × $350 envelope on a
+4-dataset × 4-condition matrix).
+"""
+
+
+def bracketed_ab(
+    base: BenchmarkEngineConfig,
+    *,
+    candidate_engine_overrides: dict[str, Any] | None = None,
+    candidate_sampling_overrides: dict[str, Any] | None = None,
+    candidate_batch_dispatch_mode: str | None = None,
+    condition_label: str,
+    n_samples_per_condition: int = DEFAULT_BRACKETED_AB_N,
+) -> list[BenchmarkCandidate]:
+    """Emit an interleaved baseline-candidate cell sequence for bracketed A/B.
+
+    Returns ``2 * n_samples_per_condition`` cells: ``n`` baselines
+    interleaved with ``n`` candidate cells. ``bracket_position`` is set
+    on each cell so the cluster-conditioned analyzer can align
+    candidate cells with their bracketing baselines for drift detection.
+
+    Both baselines and candidates pin
+    ``SamplingParams.seed=DEFAULT_BENCHMARK_SEED``. The seed-pin
+    verification (2026-05-26) showed this does NOT collapse acceptance
+    variance to <0.5% CoV on long-output workloads but DOES eliminate
+    the per-request RNG portion — residual ~5% pooled CoV is structural
+    non-RNG variance that the cluster-conditioned analyzer partitions
+    out post-hoc.
+    """
+    engine_overrides = candidate_engine_overrides or {}
+    sampling_extra = candidate_sampling_overrides or {}
+    cells: list[BenchmarkCandidate] = []
+    for i in range(n_samples_per_condition):
+        cells.append(
+            BenchmarkCandidate(
+                name=f"bracket_baseline_{i}",
+                engine_config=_with_default_max_model_len(base),
+                sampling_overrides=_seeded_overrides(),
+                condition_label="baseline",
+                bracket_position=2 * i,
+            ),
+        )
+        cand_kwargs: dict[str, Any] = {
+            "name": f"bracket_{condition_label}_{i}",
+            "engine_config": _with_default_max_model_len(base).model_copy(update=engine_overrides),
+            "sampling_overrides": _seeded_overrides(extra=sampling_extra),
+            "condition_label": condition_label,
+            "bracket_position": 2 * i + 1,
+        }
+        if candidate_batch_dispatch_mode is not None:
+            cand_kwargs["batch_dispatch_mode"] = candidate_batch_dispatch_mode
+        cells.append(BenchmarkCandidate(**cand_kwargs))
+    return cells
+
+
+# Phase B matrix-condition wrappers. Each yields a 2N-cell sequence
+# (N baselines + N condition-specific candidates, interleaved).
+
+
+def bracketed_ab_baseline_pool(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
+    """N baseline cells with bracket_position labels — the shared baseline pool."""
+    return [
+        BenchmarkCandidate(
+            name=f"bracket_baseline_pool_{i}",
+            engine_config=_with_default_max_model_len(base),
+            sampling_overrides=_seeded_overrides(),
+            condition_label="baseline",
+            bracket_position=i,
+        )
+        for i in range(DEFAULT_BRACKETED_AB_N)
+    ]
+
+
+def bracketed_ab_n_fanout(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
+    """N baselines + N n_fanout candidates, interleaved.
+
+    n_fanout uses vLLM's ``SamplingParams.n=N`` so a single prompt
+    forks the decode state across N samples sharing the prefill KV
+    cache. Speculative win only when num_prompts > max_num_seqs.
+    """
+    return bracketed_ab(
+        base,
+        candidate_batch_dispatch_mode="n_fanout",
+        condition_label="n_fanout",
+    )
+
+
+def bracketed_ab_spec_ngram(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
+    """N baselines + N spec_ngram candidates, interleaved.
+
+    Speculative-decoding overlay: ``speculative_config={'method': 'ngram',
+    'num_speculative_tokens': 4, 'prompt_lookup_max': 4}``. Prior triage
+    measured +8.1% effective throughput on Mistral-7B + tabular.
+    """
+    return bracketed_ab(
+        base,
+        candidate_engine_overrides={
+            "speculative_config": {
+                "method": "ngram",
+                "num_speculative_tokens": 4,
+                "prompt_lookup_max": 4,
+            },
+        },
+        condition_label="spec_ngram",
+    )
+
+
+def bracketed_ab_fp8(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
+    """N baselines + N fp8 KV-cache candidates, interleaved.
+
+    Forces ``kv_cache_dtype='fp8'`` to halve KV cache memory footprint
+    at a per-token quality cost vLLM characterises as small.
+    """
+    return bracketed_ab(
+        base,
+        candidate_engine_overrides={"kv_cache_dtype": "fp8"},
+        condition_label="fp8",
+    )
+
+
 # Map of preset name → callable used by the CLI to resolve ``--candidates``.
 PRESETS: dict[str, object] = {
     "baseline": lambda base: [baseline(base)],
@@ -194,4 +319,8 @@ PRESETS: dict[str, object] = {
     "structured_backend_sweep": structured_backend_sweep,
     "max_model_len_sweep": max_model_len_sweep,
     "default_matrix": default_matrix,
+    "bracketed_ab_baseline_pool": bracketed_ab_baseline_pool,
+    "bracketed_ab_n_fanout": bracketed_ab_n_fanout,
+    "bracketed_ab_spec_ngram": bracketed_ab_spec_ngram,
+    "bracketed_ab_fp8": bracketed_ab_fp8,
 }

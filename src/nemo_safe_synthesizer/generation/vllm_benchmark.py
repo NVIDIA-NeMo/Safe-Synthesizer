@@ -308,6 +308,26 @@ class BenchmarkCandidate(BaseModel):
         default="replicate",
         description="See :data:`BatchDispatchMode` module-level doc.",
     )
+    condition_label: str = Field(
+        default="",
+        description=(
+            "Sweep-level condition this candidate measures, e.g. "
+            "``'baseline'``, ``'n_fanout'``, ``'spec_ngram'``, ``'fp8'``. "
+            "Set by the ``bracketed_ab`` preset family. Used by the "
+            "cluster-conditioned analyzer to group cells by condition "
+            "regardless of per-cell name suffixes."
+        ),
+    )
+    bracket_position: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Sequence index within a ``bracketed_ab`` cell stream "
+            "(baseline_0=0, candidate_0=1, baseline_1=2, candidate_1=3, "
+            "etc.). Used by the analyzer to align candidate cells with "
+            "their bracketing baselines for drift detection."
+        ),
+    )
 
 
 class CandidateMetrics(BaseModel):
@@ -367,6 +387,19 @@ class CandidateMetrics(BaseModel):
     finish_reason_distribution: dict[str, int] = Field(
         default_factory=dict,
         description="Counts of vLLM finish reasons (``stop``, ``length``, etc.) across replays.",
+    )
+
+    # Sweep grouping — copied from BenchmarkCandidate so the analyzer
+    # can read them off CandidateMetrics without re-joining to the
+    # BenchmarkCandidate by name.
+    condition_label: str = Field(
+        default="",
+        description="Copied from :attr:`BenchmarkCandidate.condition_label`.",
+    )
+    bracket_position: int = Field(
+        default=0,
+        ge=0,
+        description="Copied from :attr:`BenchmarkCandidate.bracket_position`.",
     )
 
     # Composed observability (PR-A's schema). The runner builds this from
@@ -715,6 +748,8 @@ def run_benchmark(
         simulate_training_overlap_seconds=overlap,
         startup_overlap_savings_seconds=startup_overlap_savings_seconds,
         finish_reason_distribution=finish_reasons,
+        condition_label=candidate.condition_label,
+        bracket_position=candidate.bracket_position,
         observability=observability,
     )
 
