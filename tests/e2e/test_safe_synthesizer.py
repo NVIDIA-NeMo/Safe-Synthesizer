@@ -72,7 +72,7 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 @pytest.mark.requires_gpu
 @pytest.mark.timeout(900)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
-def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
+def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path, pretrained_model):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,

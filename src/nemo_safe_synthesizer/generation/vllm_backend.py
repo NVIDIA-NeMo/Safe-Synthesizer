@@ -30,7 +30,7 @@ from ..errors import InternalError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
-from ..generation.regex_manager import build_json_based_regex
+from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
@@ -337,6 +337,15 @@ class VllmBackend(GeneratorBackend):
             params["regex"] = regex
         elif self.config.generation.structured_generation_schema_method == "json_schema":
             params["json"] = self.schema
+        elif self.config.generation.structured_generation_schema_method == "structural_tag":
+            logger.info("Structured generation is enabled, using an XGrammar Structural Tag")
+            pc = self.model_metadata.prompt_config
+            params["structural_tag"] = build_json_structural_tag(
+                self.schema,
+                self.config,
+                bos_token=pc.bos_token,
+                eos_token=pc.eos_token,
+            )
 
         return StructuredOutputsParams(**params)
 
