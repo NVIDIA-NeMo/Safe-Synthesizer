@@ -34,6 +34,9 @@ models; the subprocess wrapper + single-run entry point are split into
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -62,6 +65,9 @@ logger = get_logger(__name__)
 # the merge so the harness's SamplingParams constructor doesn't reject
 # capture-time-only metadata.
 _NON_SAMPLING_FIELDS: tuple[str, ...] = ("structured_outputs",)
+
+SUBPROCESS_STDERR_LIMIT: int = 500
+"""Maximum bytes of captured stderr to record on a subprocess failure."""
 
 PromptAssemblyMode = Literal["multi_record", "per_record"]
 """Prompt-assembly regime — controls how max_tokens partitions the budget."""
@@ -706,3 +712,96 @@ def run_benchmark(
         finish_reason_distribution=finish_reasons,
         observability=observability,
     )
+
+
+# ---------------------------------------------------------------------------
+# Subprocess isolation
+# ---------------------------------------------------------------------------
+
+
+class SubprocessRunResult(BaseModel):
+    """Outcome of one subprocess-isolated candidate run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metrics: CandidateMetrics | None = Field(default=None, description="Populated when the child exited successfully.")
+    error: str | None = Field(default=None, description="Captured stderr summary; populated on non-zero exit.")
+    error_class: str | None = Field(default=None, description="Best-effort exception class name parsed from stderr.")
+
+
+def _truncate_stderr(stderr: str, limit: int = SUBPROCESS_STDERR_LIMIT) -> str:
+    """Trim ``stderr`` to ``limit`` bytes, keeping the tail."""
+    stderr = stderr.strip()
+    if len(stderr) <= limit:
+        return stderr
+    head = "...[truncated]..."
+    return head + stderr[-(limit - len(head)) :]
+
+
+def _parse_error_class(stderr: str) -> str:
+    """Best-effort parse of the exception class name from a Python traceback."""
+    for line in reversed(stderr.strip().splitlines()):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        head = stripped.split(":", 1)[0]
+        if head.isidentifier() or "." in head:
+            return head
+        return "Error"
+    return "Error"
+
+
+def run_benchmark_in_subprocess(
+    candidate: BenchmarkCandidate,
+    corpus_path: str | Path,
+    simulate_training_overlap_seconds: float = 0.0,
+) -> SubprocessRunResult:
+    """Run one candidate in a child process the OS reclaims on exit.
+
+    Spawns ``python -m nemo_safe_synthesizer.generation.vllm_benchmark_single_run``
+    with the candidate JSON-encoded as argv. Child writes
+    ``CandidateMetrics`` JSON to a temp file; parent reads it back.
+
+    Subprocess isolation is what makes a multi-candidate matrix
+    reliable on this stack: vLLM holds significant CUDA + DRAM state
+    in module-level globals that the in-process Python runtime can't
+    clean up between candidates. Each candidate runs in a fresh
+    interpreter; the OS reclaims everything on child exit.
+    """
+    candidate_json = candidate.model_dump_json()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as result_fh:
+        result_path = Path(result_fh.name)
+    try:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "nemo_safe_synthesizer.generation.vllm_benchmark_single_run",
+                "--candidate",
+                candidate_json,
+                "--corpus",
+                str(corpus_path),
+                "--result-out",
+                str(result_path),
+                "--simulate-training-overlap-seconds",
+                str(simulate_training_overlap_seconds),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = _truncate_stderr(completed.stderr or completed.stdout)
+            return SubprocessRunResult(
+                error=stderr or f"subprocess exit {completed.returncode}",
+                error_class=_parse_error_class(completed.stderr or completed.stdout),
+            )
+        if not result_path.exists() or result_path.stat().st_size == 0:
+            return SubprocessRunResult(
+                error="subprocess exited 0 but produced no result file",
+                error_class="RuntimeError",
+            )
+        metrics = CandidateMetrics.model_validate_json(result_path.read_text(encoding="utf-8"))
+        return SubprocessRunResult(metrics=metrics)
+    finally:
+        result_path.unlink(missing_ok=True)
