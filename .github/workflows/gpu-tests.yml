@@ -59,7 +59,7 @@ jobs:
     outputs:
       src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Detect changes
         id: changes
         uses: ./.github/actions/detect-changes
@@ -86,7 +86,7 @@ jobs:
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -139,7 +139,7 @@ jobs:
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 

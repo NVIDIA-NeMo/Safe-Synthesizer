@@ -18,10 +18,10 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(ci)"
+    ignore:
+      # FW-CI reusable workflows are pinned to immutable commits.
+      - dependency-name: "NVIDIA-NeMo/FW-CI-templates"
     groups:
-      fw-ci-templates:
-        patterns:
-          - "NVIDIA-NeMo/FW-CI-templates"
       github-actions:
         patterns:
           - "actions/*"
