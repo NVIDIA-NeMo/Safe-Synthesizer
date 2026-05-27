@@ -24,6 +24,7 @@ from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 
 from .. import utils
 from ..cli.artifact_structure import Workdir
+from ..cli.wandb_setup import log_cell_observability
 from ..config import SafeSynthesizerParameters
 from ..config.generate import (
     resolve_structured_generation_schema_method,
@@ -35,7 +36,6 @@ from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
 from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
-from ..cli.wandb_setup import log_cell_observability
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_observability import (
     CellObservability,

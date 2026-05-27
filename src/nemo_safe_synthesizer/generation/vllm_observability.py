@@ -256,9 +256,7 @@ class NvmlPeakSampler:
             logger.warning("nvml-sampler: init failed; peak VRAM will be None: %s", exc)
             self._pynvml = None
             return self
-        self._thread = threading.Thread(
-            target=self._run, daemon=True, name=f"nvml-sampler[{self._device_index}]"
-        )
+        self._thread = threading.Thread(target=self._run, daemon=True, name=f"nvml-sampler[{self._device_index}]")
         self._thread.start()
         return self
 

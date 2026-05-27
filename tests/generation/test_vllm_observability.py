@@ -33,7 +33,6 @@ from nemo_safe_synthesizer.generation.vllm_observability import (
     read_vllm_runtime_metrics,
 )
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
@@ -352,9 +351,7 @@ class TestLogCellObservability:
         from nemo_safe_synthesizer.cli import wandb_setup
 
         fake_run = MagicMock()
-        with patch.object(wandb_setup.wandb, "run", fake_run), patch.object(
-            wandb_setup.wandb, "log"
-        ) as mock_log:
+        with patch.object(wandb_setup.wandb, "run", fake_run), patch.object(wandb_setup.wandb, "log") as mock_log:
             wandb_setup.log_cell_observability(populated_event)
             mock_log.assert_called_once()
             (call_args,) = mock_log.call_args.args
@@ -366,8 +363,9 @@ class TestLogCellObservability:
         from nemo_safe_synthesizer.cli import wandb_setup
 
         fake_run = MagicMock()
-        with patch.object(wandb_setup.wandb, "run", fake_run), patch.object(
-            wandb_setup.wandb, "log", side_effect=RuntimeError("wandb down")
+        with (
+            patch.object(wandb_setup.wandb, "run", fake_run),
+            patch.object(wandb_setup.wandb, "log", side_effect=RuntimeError("wandb down")),
         ):
             # Should not raise.
             wandb_setup.log_cell_observability(populated_event)
