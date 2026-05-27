@@ -3,6 +3,7 @@
 
 """Unit tests for the VllmBackend class private methods and module-level side effects."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -550,6 +551,39 @@ class TestNoopRemoteCacheBackend:
         fake_redis = MagicMock()
         with patch.dict("sys.modules", {"redis": fake_redis}):
             assert _is_redis_available() is True
+
+
+class TestSecureOutlinesCacheDir:
+    """Tests for the CVE-2025-69872 outlines diskcache hardening."""
+
+    def test_chmods_existing_cache_dir_to_0700(self, tmp_path, monkeypatch):
+        """``_secure_outlines_cache_dir`` tightens permissions on a permissive dir.
+
+        Exercises the explicit-OUTLINES_CACHE_DIR branch: simulates a co-tenant-
+        writable cache directory (mode 0777) and asserts the helper locks it down
+        to 0700, which is the precondition CVE-2025-69872 needs to fail.
+        """
+        import stat
+
+        from nemo_safe_synthesizer.generation.vllm_backend import _secure_outlines_cache_dir
+
+        cache_dir = tmp_path / "outlines-cache"
+        cache_dir.mkdir()
+        cache_dir.chmod(0o777)
+        assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o777, "precondition: dir starts world-writable"
+
+        monkeypatch.setenv("OUTLINES_CACHE_DIR", str(cache_dir))
+
+        _secure_outlines_cache_dir()
+
+        assert stat.S_IMODE(cache_dir.stat().st_mode) == 0o700
+        assert os.environ["OUTLINES_CACHE_DIR"] == str(cache_dir)
+
+    def test_vllm_outlines_diskcache_is_disabled(self):
+        """Module import must hard-disable the vLLM opt-in diskcache."""
+        from nemo_safe_synthesizer.generation import vllm_backend  # noqa: F401  -- ensure module is imported
+
+        assert os.environ.get("VLLM_V1_USE_OUTLINES_CACHE") == "0"
 
 
 class TestGroupedGenerationStopKwargs:
