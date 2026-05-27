@@ -581,7 +581,7 @@ class TestSecureOutlinesCacheDir:
 
     def test_vllm_outlines_diskcache_is_disabled(self):
         """Module import must hard-disable the vLLM opt-in diskcache."""
-        import nemo_safe_synthesizer.generation.vllm_backend  # noqa: F401  -- ensure module is imported
+        from nemo_safe_synthesizer.generation import vllm_backend  # noqa: F401  -- ensure module is imported
 
         assert os.environ.get("VLLM_V1_USE_OUTLINES_CACHE") == "0"
 
