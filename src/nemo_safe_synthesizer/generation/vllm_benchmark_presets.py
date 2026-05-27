@@ -62,7 +62,9 @@ MAX_MODEL_LEN_STEPS: tuple[int, ...] = (2048, 4096, 8192)
 """``max_model_len`` steps for the max-model-len sweep."""
 
 
-def _seeded_overrides(seed: int | None = DEFAULT_BENCHMARK_SEED, *, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+def _seeded_overrides(
+    seed: int | None = DEFAULT_BENCHMARK_SEED, *, extra: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Build a ``sampling_overrides`` dict that pins seed + optional extras.
 
     Returns a fresh dict so callers can mutate without affecting other
@@ -115,8 +117,7 @@ def baseline(base: BenchmarkEngineConfig) -> BenchmarkCandidate:
 def attention_backend_sweep(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
     """One candidate per attention backend in :data:`ATTENTION_BACKENDS`."""
     return [
-        _named_copy(base, f"attention_backend={backend}", attention_backend=backend)
-        for backend in ATTENTION_BACKENDS
+        _named_copy(base, f"attention_backend={backend}", attention_backend=backend) for backend in ATTENTION_BACKENDS
     ]
 
 

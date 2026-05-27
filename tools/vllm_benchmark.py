@@ -53,7 +53,7 @@ console = Console()
 
 @click.group()
 def cli() -> None:
-    """vLLM benchmark harness CLI."""
+    """VLLM benchmark harness CLI."""
 
 
 @cli.command("list")
@@ -186,7 +186,17 @@ def compare_cmd(output_path: Path) -> None:
     output = BenchmarkOutput.model_validate_json(output_path.read_text(encoding="utf-8"))
     sorted_candidates = sorted(output.candidates, key=lambda c: c.effective_tok_s, reverse=True)
     table = Table(title=f"BenchmarkOutput ({output.corpus_run_id}, n={output.corpus_size})")
-    for col in ("candidate", "eff tok/s", "raw tok/s", "accept", "ttft p50 ms", "ttft p99 ms", "peak vram GiB", "startup s", "ok/tried"):
+    for col in (
+        "candidate",
+        "eff tok/s",
+        "raw tok/s",
+        "accept",
+        "ttft p50 ms",
+        "ttft p99 ms",
+        "peak vram GiB",
+        "startup s",
+        "ok/tried",
+    ):
         table.add_column(col, justify="right" if col != "candidate" else "left", overflow="fold")
     for m in sorted_candidates:
         table.add_row(

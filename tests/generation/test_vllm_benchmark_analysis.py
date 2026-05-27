@@ -11,7 +11,6 @@ effect-size CI brackets behave correctly, JSON output round-trips.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -20,9 +19,7 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
     CandidateMetrics,
 )
 from nemo_safe_synthesizer.generation.vllm_benchmark_analysis import (
-    MIN_CELLS_PER_CONDITION,
     AnalysisReport,
-    _effect_size,
     _welch_ttest_ci,
     analyze,
 )
@@ -58,9 +55,15 @@ def synthetic_sweep_dir(tmp_path: Path) -> Path:
     """6 baselines + 6 spec_ngram cells, both with realistic-noise spread."""
     cells = [
         # Baselines: ~1500 eff_tok_s, ~0.99 acceptance.
-        *(_metric(f"baseline_{i}", "baseline", eff=1500 + i * 5, accept=0.99, wall=130.0, bracket=2 * i) for i in range(6)),
+        *(
+            _metric(f"baseline_{i}", "baseline", eff=1500 + i * 5, accept=0.99, wall=130.0, bracket=2 * i)
+            for i in range(6)
+        ),
         # spec_ngram: ~1700 eff_tok_s (+~13%), similar acceptance.
-        *(_metric(f"spec_{i}", "spec_ngram", eff=1700 + i * 5, accept=0.99, wall=115.0, bracket=2 * i + 1) for i in range(6)),
+        *(
+            _metric(f"spec_{i}", "spec_ngram", eff=1700 + i * 5, accept=0.99, wall=115.0, bracket=2 * i + 1)
+            for i in range(6)
+        ),
     ]
     return _write_output_dir(tmp_path, cells)
 

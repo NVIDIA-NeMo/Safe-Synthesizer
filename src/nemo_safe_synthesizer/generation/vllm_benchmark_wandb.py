@@ -91,11 +91,7 @@ def init_cell_run(
         logger.warning("wandb not installed; skipping wandb integration for this cell")
         return None
 
-    condition_label = (
-        candidate_condition_label
-        or os.environ.get("BENCHMARK_CONDITION_LABEL")
-        or candidate_name
-    )
+    condition_label = candidate_condition_label or os.environ.get("BENCHMARK_CONDITION_LABEL") or candidate_name
     dataset = os.environ.get("BENCHMARK_DATASET", "unknown")
     bracket_position = (
         candidate_bracket_position

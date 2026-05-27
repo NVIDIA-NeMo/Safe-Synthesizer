@@ -20,7 +20,6 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
     BenchmarkCorpus,
     BenchmarkEngineConfig,
     BenchmarkOutput,
-    BenchmarkPrompt,
     CandidateMetrics,
     SubprocessRunResult,
     TraceHeader,
@@ -34,7 +33,6 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
 from nemo_safe_synthesizer.generation.vllm_benchmark_presets import (
     DEFAULT_BENCHMARK_SEED,
     DEFAULT_BRACKETED_AB_N,
-    PRESETS,
     attention_backend_sweep,
     baseline,
     bracketed_ab,
@@ -42,7 +40,6 @@ from nemo_safe_synthesizer.generation.vllm_benchmark_presets import (
     default_matrix,
 )
 from nemo_safe_synthesizer.generation.vllm_observability import CellObservability
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -73,9 +70,15 @@ class TestSchemaContracts:
     def test_candidate_metrics_composes_observability(self) -> None:
         """``CandidateMetrics`` embeds ``CellObservability`` rather than re-declaring its fields."""
         m = CandidateMetrics(
-            name="t", raw_tok_s=1.0, acceptance_rate=0.9, effective_tok_s=0.9,
-            ttft_p50_ms=0.0, ttft_p99_ms=0.0,
-            prompts_attempted=10, prompts_accepted=9, total_output_tokens=100,
+            name="t",
+            raw_tok_s=1.0,
+            acceptance_rate=0.9,
+            effective_tok_s=0.9,
+            ttft_p50_ms=0.0,
+            ttft_p99_ms=0.0,
+            prompts_attempted=10,
+            prompts_accepted=9,
+            total_output_tokens=100,
             total_wall_seconds=1.0,
             observability=CellObservability(peak_vram_gb=64.5),
         )
@@ -88,9 +91,15 @@ class TestSchemaContracts:
             corpus_size=10,
             candidates=[
                 CandidateMetrics(
-                    name="t", raw_tok_s=1.0, acceptance_rate=0.9, effective_tok_s=0.9,
-                    ttft_p50_ms=0.0, ttft_p99_ms=0.0,
-                    prompts_attempted=10, prompts_accepted=9, total_output_tokens=100,
+                    name="t",
+                    raw_tok_s=1.0,
+                    acceptance_rate=0.9,
+                    effective_tok_s=0.9,
+                    ttft_p50_ms=0.0,
+                    ttft_p99_ms=0.0,
+                    prompts_attempted=10,
+                    prompts_accepted=9,
+                    total_output_tokens=100,
                     total_wall_seconds=1.0,
                     observability=CellObservability(peak_vram_gb=64.5, loadavg_pre=(1.0, 2.0, 3.0)),
                 ),
@@ -201,8 +210,10 @@ class TestBuildVllmKwargs:
         assert kwargs["max_lora_rank"] == 32  # from header
         assert kwargs["max_model_len"] == 4096  # from cfg
 
-    def test_translates_attention_backend_to_attention_config(self, header: TraceHeader, empty_base: BenchmarkEngineConfig) -> None:
-        """vLLM's public API takes an ``attention_config`` dict, not a bare backend string."""
+    def test_translates_attention_backend_to_attention_config(
+        self, header: TraceHeader, empty_base: BenchmarkEngineConfig
+    ) -> None:
+        """VLLM's public API takes an ``attention_config`` dict, not a bare backend string."""
         cfg = empty_base.model_copy(update={"attention_backend": "FLASHINFER"})
         kwargs = _build_vllm_kwargs(header, cfg)
         assert kwargs["attention_config"] == {"backend": "FLASHINFER"}
@@ -214,7 +225,9 @@ class TestBuildVllmKwargs:
         assert "enable_prefix_caching" not in kwargs
         assert "max_num_seqs" not in kwargs
 
-    def test_auto_attention_backend_is_treated_as_unset(self, header: TraceHeader, empty_base: BenchmarkEngineConfig) -> None:
+    def test_auto_attention_backend_is_treated_as_unset(
+        self, header: TraceHeader, empty_base: BenchmarkEngineConfig
+    ) -> None:
         """``attention_backend='auto'`` means "let vLLM pick" — no attention_config kwarg should appear."""
         cfg = empty_base.model_copy(update={"attention_backend": "auto"})
         kwargs = _build_vllm_kwargs(header, cfg)
@@ -286,9 +299,15 @@ class TestBracketedAb:
 class TestSubprocessRunResult:
     def test_success_shape(self) -> None:
         m = CandidateMetrics(
-            name="t", raw_tok_s=1.0, acceptance_rate=0.9, effective_tok_s=0.9,
-            ttft_p50_ms=0.0, ttft_p99_ms=0.0,
-            prompts_attempted=10, prompts_accepted=9, total_output_tokens=100,
+            name="t",
+            raw_tok_s=1.0,
+            acceptance_rate=0.9,
+            effective_tok_s=0.9,
+            ttft_p50_ms=0.0,
+            ttft_p99_ms=0.0,
+            prompts_attempted=10,
+            prompts_accepted=9,
+            total_output_tokens=100,
             total_wall_seconds=1.0,
         )
         r = SubprocessRunResult(metrics=m)

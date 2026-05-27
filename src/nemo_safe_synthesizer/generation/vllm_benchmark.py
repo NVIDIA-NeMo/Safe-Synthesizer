@@ -227,7 +227,9 @@ class BenchmarkEngineConfig(BaseModel):
         ),
     )
     max_num_seqs: int | None = Field(default=None, description="vLLM scheduler ``max_num_seqs`` cap.")
-    max_num_batched_tokens: int | None = Field(default=None, description="vLLM scheduler ``max_num_batched_tokens`` cap.")
+    max_num_batched_tokens: int | None = Field(
+        default=None, description="vLLM scheduler ``max_num_batched_tokens`` cap."
+    )
     enable_chunked_prefill: bool | None = Field(default=None, description="Chunked-prefill engagement.")
     kv_cache_dtype: str | None = Field(
         default=None,
@@ -631,9 +633,7 @@ def run_benchmark(
             raise init_result["exception"]
         llm: LLM = init_result["llm"]
 
-        startup_overlap_savings_seconds = (
-            min(overlap, startup_seconds + overlap) if overlap > 0.0 else 0.0
-        )
+        startup_overlap_savings_seconds = min(overlap, startup_seconds + overlap) if overlap > 0.0 else 0.0
 
         # Probe the engine's effective runtime config + check for
         # candidate-intent / engine-actual disagreements.
@@ -652,9 +652,7 @@ def run_benchmark(
             tokenizer=None,
         )
         lora_request = (
-            LoRARequest("lora", 1, str(corpus.header.lora_path))
-            if corpus.header.lora_path is not None
-            else None
+            LoRARequest("lora", 1, str(corpus.header.lora_path)) if corpus.header.lora_path is not None else None
         )
 
         # Build SamplingParams from corpus default + candidate overrides.
@@ -670,9 +668,11 @@ def run_benchmark(
         # Dispatch.
         prompts: list[str] = [p.prompt for p in corpus.prompts]
         gen_start = time.perf_counter()
-        outputs: list[Any] = list(
-            llm.generate(prompts=prompts, sampling_params=sampling_params, lora_request=lora_request)
-        ) if prompts else []
+        outputs: list[Any] = (
+            list(llm.generate(prompts=prompts, sampling_params=sampling_params, lora_request=lora_request))
+            if prompts
+            else []
+        )
         total_wall = max(time.perf_counter() - gen_start, 0.0)
 
         # Process outputs.
@@ -682,7 +682,7 @@ def run_benchmark(
         total_valid = 0
         total_invalid = 0
         prompts_accepted = 0
-        for output in outputs:
+        for prompt_idx, output in enumerate(outputs):
             ttft = _extract_ttft_ms(output)
             if ttft is not None:
                 ttft_ms_samples.append(ttft)
@@ -693,9 +693,12 @@ def run_benchmark(
             finish_reason = str(getattr(best, "finish_reason", None) or "unknown")
             finish_reasons[finish_reason] = finish_reasons.get(finish_reason, 0) + 1
             text = getattr(best, "text", "") or ""
-            parsed = processor.process(text)
-            valid_records = getattr(parsed, "valid_records", None) or []
-            invalid_records = getattr(parsed, "invalid_records", None) or []
+            # ``Processor.__call__(prompt_number, text) -> ParsedResponse`` is
+            # the actual interface — see ``processors.py``. ``valid_records``
+            # and ``invalid_records`` are properties on ``ParsedResponse``.
+            parsed = processor(prompt_idx, text)
+            valid_records = parsed.valid_records
+            invalid_records = parsed.invalid_records
             total_valid += len(valid_records)
             total_invalid += len(invalid_records)
             if valid_records:
