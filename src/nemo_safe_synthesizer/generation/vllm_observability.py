@@ -415,7 +415,7 @@ METRIC_SPEC_NUM_DRAFT_TOKENS = "vllm:spec_decode_num_draft_tokens"
 METRIC_SPEC_NUM_ACCEPTED_TOKENS = "vllm:spec_decode_num_accepted_tokens"
 
 
-def read_vllm_runtime_metrics(llm: LLM) -> dict[str, float | None]:
+def read_vllm_runtime_metrics(llm: LLM | None) -> dict[str, float | None]:
     """Snapshot ``llm.get_metrics()`` for known metrics; degraded-mode on failure.
 
     Returns a dict with stable keys regardless of which metrics were
@@ -440,6 +440,8 @@ def read_vllm_runtime_metrics(llm: LLM) -> dict[str, float | None]:
         "prefix_cache_hit_rate": None,
         "spec_accept_rate": None,
     }
+    if llm is None:
+        return out
     try:
         metrics = llm.get_metrics()
     except Exception as exc:  # noqa: BLE001 — degraded mode
