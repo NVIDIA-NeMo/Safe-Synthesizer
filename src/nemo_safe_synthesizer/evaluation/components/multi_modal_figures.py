@@ -202,14 +202,37 @@ def histogram(
 
 
 def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
-    """Get common bin edges for the training and synthetic principal components."""
-    data = pd.concat([x1, x2]).to_numpy()
-    edges = np.histogram_bin_edges(data, bins="auto")
+    """Get common histogram bins for training/synthetic PCA projections.
 
-    # Bin start, end, and size
-    start = edges[0]
-    end = edges[-1]
-    bin_size = edges[1] - edges[0]
+    NumPy ``bins="auto"`` is adaptive, but for some pathological distributions
+    (very small IQR with wide range/outliers) it can request an extreme number
+    of bins and raise. We cap to at most 100 bins for report stability.
+    """
+    max_bins = 100
+    data = pd.concat([x1, x2]).to_numpy()
+    finite_data = data[np.isfinite(data)]
+
+    if finite_data.size == 0:
+        return dict(start=0.0, end=1.0, size=1.0)
+
+    try:
+        edges = np.histogram_bin_edges(finite_data, bins="auto")
+        start = float(edges[0])
+        end = float(edges[-1])
+        auto_bin_count = max(len(edges) - 1, 1)
+        bin_count = min(auto_bin_count, max_bins)
+    except ValueError:
+        # Fallback for edge cases where numpy "auto" overestimates bin count.
+        start = float(np.nanmin(finite_data))
+        end = float(np.nanmax(finite_data))
+        bin_count = max_bins
+
+    if not np.isfinite(start) or not np.isfinite(end) or start == end:
+        return dict(start=0.0, end=1.0, size=1.0)
+
+    bin_size = (end - start) / float(bin_count)
+    if not np.isfinite(bin_size) or bin_size <= 0:
+        return dict(start=0.0, end=1.0, size=1.0)
 
     return dict(start=start, end=end, size=bin_size)
 
