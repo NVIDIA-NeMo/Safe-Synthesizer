@@ -72,11 +72,16 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 @pytest.mark.requires_gpu
 @pytest.mark.timeout(900)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
-def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
+@pytest.mark.parametrize(
+    "pretrained_model",
+    ["mistralai/Mistral-7B-Instruct-v0.3", "HuggingFaceTB/SmolLM2-135M", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"],
+)
+def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path, pretrained_model):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
         num_input_records_to_sample=5000,
+        pretrained_model=pretrained_model,
     )
     logger.info(f"Running test_train_and_generate_defaults with config: {config}")
 
