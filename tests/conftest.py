@@ -264,7 +264,6 @@ def load_test_dataframe(filename: str, datasets_dir: Path) -> pd.DataFrame:
 
         case _:
             raise ValueError(f"Unknown dataset format: {dataset_path.suffix}")
-    raise AssertionError("unreachable")
 
 
 @pytest.fixture(scope="session")

@@ -416,7 +416,7 @@ def fit_and_transform_dates(
         ``transform_dates`` for reversal.
     """
     date_min_dict = {}
-    object_cols = [col for col, col_type in df.dtypes.iteritems() if col_type == "object"]
+    object_cols = [col for col, col_type in df.dtypes.items() if col_type == "object"]
     result_df = df.copy() if not inplace else df
     for object_col in object_cols:
         no_nans = result_df[object_col].dropna(axis=0).reset_index(drop=True)
@@ -425,7 +425,7 @@ def fit_and_transform_dates(
             if inferred_format:
                 try:
                     inferred_format = inferred_format.replace("!", "")
-                    dates = pd.to_datetime(result_df.loc[:, object_col], format=inferred_format)
+                    dates = pd.to_datetime(result_df[object_col], format=inferred_format)
                     min_date = dates.min()
                     result_df[object_col] = (dates - min_date).dt.total_seconds()
                     date_min_dict[object_col] = {
