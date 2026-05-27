@@ -197,9 +197,14 @@ class BenchmarkEngineConfig(BaseModel):
     construction lives in ``VllmBackend.initialize``. Eventually if PR-1's
     ``vllm_engine_factory.VllmEngineParameters`` lands, this can compose
     against that; for now it stands alone.
+
+    ``extra='ignore'`` so the CLI can validate a corpus header's raw
+    ``engine_parameters`` dict into this model — header dicts may carry
+    capture-time kwargs we don't expose as typed fields (those flow
+    through ``_build_vllm_kwargs`` as the base layer regardless).
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     attention_backend: str | None = Field(
         default=None,
