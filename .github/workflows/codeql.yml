@@ -24,6 +24,10 @@ on:
     - cron: "0 6 * * 0"  # Weekly on Sunday at 06:00 UTC
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze (Python)
