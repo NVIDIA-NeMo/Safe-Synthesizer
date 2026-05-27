@@ -147,16 +147,17 @@ class GenerateParameters(Parameters, BaseModel):
     ] = "auto"
 
     structured_generation_schema_method: Annotated[
-        Literal["regex", "json_schema"],
+        Literal["regex", "json_schema", "structural_tag"],
         Field(
             title="structured_generation_schema_method",
             description=(
                 "The method used to generate the schema from your dataset and pass it to the generation backend. "
                 "'regex' uses a custom regex construction method that tends to be more comprehensive "
-                "than 'json_schema' at the cost of speed."
+                "than 'json_schema' at the cost of speed. 'structural_tag' uses XGrammar Structural Tag "
+                "to compose schema-constrained JSONL output."
             ),
         ),
-    ] = "regex"
+    ] = "structural_tag"
 
     structured_generation_use_single_sequence: Annotated[
         bool,

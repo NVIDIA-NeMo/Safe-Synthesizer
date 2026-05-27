@@ -115,6 +115,15 @@ def params_with_structured_generation_json(base_params):
 
 
 @pytest.fixture
+def params_with_structured_generation_structural_tag(base_params):
+    """Create params with structured generation enabled using structural_tag."""
+    base_params.generation.use_structured_generation = True
+    base_params.generation.structured_generation_schema_method = "structural_tag"
+    base_params.generation.structured_generation_backend = "xgrammar"
+    return base_params
+
+
+@pytest.fixture
 def mock_schema():
     """Create a mock JSON schema."""
     return {
@@ -207,6 +216,35 @@ class TestBuildStructuredOutputParams:
 
         assert result is not None
         assert result.json == mock_schema
+
+    def test_returns_params_with_structural_tag_when_structural_tag_method(
+        self,
+        params_with_structured_generation_structural_tag,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+    ):
+        """Test that structural_tag uses vLLM's Structural Tag constraint."""
+        backend = create_backend(
+            params_with_structured_generation_structural_tag,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
+
+        with patch(
+            "nemo_safe_synthesizer.generation.vllm_backend.build_json_structural_tag",
+            return_value='{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}',
+        ) as mock_build_structural_tag:
+            result = backend._build_structured_output_params()
+            mock_build_structural_tag.assert_called_once_with(
+                mock_schema,
+                params_with_structured_generation_structural_tag,
+                bos_token=mock_model_metadata.prompt_config.bos_token,
+                eos_token=mock_model_metadata.prompt_config.eos_token,
+            )
+            assert result is not None
+            assert result.structural_tag == '{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}'
 
     def test_config_with_grouping_passed_to_build_regex(
         self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir

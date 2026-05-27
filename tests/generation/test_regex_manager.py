@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import re
 from io import StringIO
 
@@ -11,6 +12,7 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
 from nemo_safe_synthesizer.generation.regex_manager import (
     build_json_based_regex,
+    build_json_structural_tag,
 )
 
 BOS_TOKEN = "<s>"
@@ -66,6 +68,98 @@ def test_build_json_based_regex(fixture_valid_iris_dataset_jsonl_and_schema, fix
         )
         is None
     )
+
+
+def test_build_json_structural_tag_uses_schema_constrained_jsonl(fixture_safe_synthesizer_config):
+    """Structural Tag composes schema-constrained JSON records with JSONL newlines."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag == {
+        "type": "structural_tag",
+        "format": {
+            "type": "plus",
+            "content": {
+                "type": "sequence",
+                "elements": [
+                    {"type": "json_schema", "json_schema": schema},
+                    {"type": "const_string", "value": "\n"},
+                ],
+            },
+        },
+    }
+
+
+def test_build_json_structural_tag_with_single_sequence(fixture_safe_synthesizer_config):
+    """Single-sequence Structural Tag emits exactly one schema-constrained object."""
+    fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
+    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {"type": "json_schema", "json_schema": schema}
+
+
+def test_build_json_structural_tag_with_groupby(fixture_safe_synthesizer_config):
+    """Grouped Structural Tag keeps BOS/EOS framing around repeated JSONL records."""
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {
+        "type": "plus",
+        "content": {
+            "type": "sequence",
+            "elements": [
+                {
+                    "type": "sequence",
+                    "elements": [
+                        {"type": "const_string", "value": BOS_TOKEN},
+                        {
+                            "type": "plus",
+                            "content": {
+                                "type": "sequence",
+                                "elements": [
+                                    {"type": "json_schema", "json_schema": schema},
+                                    {"type": "const_string", "value": "\n"},
+                                ],
+                            },
+                        },
+                        {"type": "const_string", "value": EOS_TOKEN},
+                    ],
+                },
+                {"type": "const_string", "value": "\n"},
+            ],
+        },
+    }
 
 
 # Purpose: Ensures keys with special chars (e.g., '.') are escaped and string length bounds enforced.
