@@ -211,5 +211,51 @@ def compare_cmd(output_path: Path) -> None:
         console.print(skip_table)
 
 
+@cli.command("analyze")
+@click.argument("output_dir", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option(
+    "--cluster-signal",
+    type=click.Choice(["wall_seconds", "acceptance_rate", "auto"]),
+    default="auto",
+    show_default=True,
+    help="Which per-cell metric to partition cells on. Use 'wall_seconds' for short-context (load-driven bimodality), 'acceptance_rate' for long-output (RNG/scheduler driven), 'auto' to pick whichever has higher pooled CoV.",
+)
+@click.option(
+    "--min-cells-per-condition",
+    type=int,
+    default=None,
+    show_default="MIN_CELLS_PER_CONDITION (6)",
+    help="Refuse aggregates for conditions below this N. Brief mandates N≥6.",
+)
+@click.option(
+    "--json-out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional path to write the full AnalysisReport as JSON.",
+)
+def analyze_cmd(
+    output_dir: Path,
+    cluster_signal: str,
+    min_cells_per_condition: int | None,
+    json_out: Path | None,
+) -> None:
+    """Cluster-conditioned analysis across every BenchmarkOutput JSON in OUTPUT_DIR."""
+    from nemo_safe_synthesizer.generation.vllm_benchmark_analysis import (
+        MIN_CELLS_PER_CONDITION,
+        analyze,
+    )
+
+    report = analyze(
+        output_dir,
+        cluster_signal=cluster_signal,  # ty: ignore[invalid-argument-type]
+        min_cells_per_condition=MIN_CELLS_PER_CONDITION if min_cells_per_condition is None else min_cells_per_condition,
+    )
+    console.print(report.to_markdown_summary())
+    if json_out is not None:
+        json_out.parent.mkdir(parents=True, exist_ok=True)
+        json_out.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+        console.print(f"[green]wrote[/green] {json_out}")
+
+
 if __name__ == "__main__":
     cli()
