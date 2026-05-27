@@ -34,13 +34,34 @@ models; the subprocess wrapper + single-run entry point are split into
 from __future__ import annotations
 
 import json
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..generation.vllm_observability import CellObservability
+from ..generation.vllm_observability import (
+    CellObservability,
+    NvmlPeakSampler,
+    flag_engagement_mismatches,
+    probe_engine_runtime_config,
+    read_loadavg,
+    read_vllm_runtime_metrics,
+)
+from ..observability import get_logger
+
+if TYPE_CHECKING:
+    from vllm import LLM
+
+logger = get_logger(__name__)
+
+# Fields the corpus carries on each prompt's ``original_sampling_params``
+# that aren't valid kwargs to ``vllm.SamplingParams``. Stripped during
+# the merge so the harness's SamplingParams constructor doesn't reject
+# capture-time-only metadata.
+_NON_SAMPLING_FIELDS: tuple[str, ...] = ("structured_outputs",)
 
 PromptAssemblyMode = Literal["multi_record", "per_record"]
 """Prompt-assembly regime — controls how max_tokens partitions the budget."""
@@ -383,4 +404,305 @@ class BenchmarkOutput(BaseModel):
     skipped_candidates: list[SkipRecord] = Field(
         default_factory=list,
         description="Candidates that exited non-zero or produced no result file.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sampling-params + percentile helpers
+# ---------------------------------------------------------------------------
+
+
+def _merge_sampling_kwargs(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Compose ``SamplingParams`` kwargs from corpus default + candidate overrides.
+
+    The corpus's captured ``original_sampling_params`` may carry fields
+    that ``vllm.SamplingParams`` doesn't accept (e.g. structured-output
+    presence summaries). Strip those unless the override explicitly
+    provides them. Overrides win on conflict.
+    """
+    merged: dict[str, Any] = {**base, **overrides}
+    for field in _NON_SAMPLING_FIELDS:
+        if field not in overrides:
+            merged.pop(field, None)
+    return merged
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    """Linear-interpolation percentile (``pct`` in [0, 100]); ``0.0`` on empty input."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = (len(ordered) - 1) * (pct / 100.0)
+    lo = int(rank)
+    hi = min(lo + 1, len(ordered) - 1)
+    if lo == hi:
+        return ordered[lo]
+    return ordered[lo] + (rank - lo) * (ordered[hi] - ordered[lo])
+
+
+def _extract_ttft_ms(output: Any) -> float | None:
+    """Read TTFT (ms) off a ``RequestOutput``; ``None`` when the engine omits metrics.
+
+    vLLM 0.18+ exposes per-request first-token latency through
+    ``RequestOutput.metrics.first_token_latency`` (seconds, populated
+    only when the engine is built with ``disable_log_stats=False``).
+    Older paths populated separate ``first_token_time`` / ``arrival_time``
+    timestamps; fall through to those when the modern field is absent
+    so corpus captures from older vLLM versions still produce TTFT.
+    """
+    metrics = getattr(output, "metrics", None)
+    if metrics is None:
+        return None
+    latency_s = getattr(metrics, "first_token_latency", None)
+    if latency_s is not None:
+        return max(0.0, float(latency_s) * 1000.0)
+    first = getattr(metrics, "first_token_time", None)
+    arrival = getattr(metrics, "arrival_time", None)
+    if first is None or arrival is None:
+        return None
+    return max(0.0, (float(first) - float(arrival)) * 1000.0)
+
+
+# ---------------------------------------------------------------------------
+# Engine construction
+# ---------------------------------------------------------------------------
+
+
+def _build_vllm_kwargs(header: TraceHeader, engine_config: BenchmarkEngineConfig) -> dict[str, Any]:
+    """Compose ``vllm.LLM(...)`` kwargs from corpus header + candidate overlay.
+
+    The corpus header pins the model + LoRA + dataset_schema. The
+    candidate's ``engine_config`` overlays sparse engine-side overrides
+    (attention backend, prefix caching, scheduler caps, etc.). Unset
+    candidate fields fall through to the header's ``engine_parameters``
+    when those are populated, or to vLLM's own defaults otherwise.
+
+    Drops ``None``-valued candidate fields explicitly so vLLM treats
+    them as "not configured" rather than "override to None".
+    """
+    overlay = engine_config.model_dump(exclude_none=True)
+    base = dict(header.engine_parameters)
+    base.update(overlay)
+    # Required-positional kwargs that aren't in BenchmarkEngineConfig:
+    base["model"] = header.pretrained_model
+    base.setdefault("enable_lora", header.lora_path is not None)
+    # ``attention_backend`` → ``attention_config`` translation. vLLM's
+    # public API takes a config dict rather than a bare string.
+    attention_backend = base.pop("attention_backend", None)
+    if attention_backend not in (None, "auto"):
+        base["attention_config"] = {"backend": attention_backend}
+    # ``structured_generation_backend`` → ``structured_outputs_config``.
+    from vllm.config import StructuredOutputsConfig  # noqa: PLC0415 — lazy, vLLM is heavy
+
+    sg_backend = base.pop("structured_generation_backend", None)
+    if sg_backend is not None:
+        base["structured_outputs_config"] = StructuredOutputsConfig(backend=sg_backend)
+    return base
+
+
+def _build_engine_async(
+    header: TraceHeader,
+    engine_config: BenchmarkEngineConfig,
+) -> tuple[threading.Thread, threading.Event, dict[str, Any]]:
+    """Start ``vllm.LLM(...)`` in a daemon thread.
+
+    Returns ``(thread, ready_event, result_dict)``. The result dict has
+    keys ``llm`` (set on success) and ``exception`` (set on failure).
+    The runner can sleep for the simulated-training-overlap window
+    before joining via ``ready_event.wait()``, measuring how much of
+    the engine-init cost can be hidden behind concurrent training.
+    """
+    from vllm import LLM as vLLM  # noqa: PLC0415 — lazy
+
+    kwargs = _build_vllm_kwargs(header, engine_config)
+    ready = threading.Event()
+    result: dict[str, Any] = {"llm": None, "exception": None}
+
+    def worker() -> None:
+        try:
+            result["llm"] = vLLM(**kwargs)
+        except BaseException as exc:  # noqa: BLE001 — surface via the result dict
+            result["exception"] = exc
+        finally:
+            ready.set()
+
+    thread = threading.Thread(target=worker, name="vllm-benchmark-engine-init", daemon=True)
+    thread.start()
+    return thread, ready, result
+
+
+# ---------------------------------------------------------------------------
+# The runner
+# ---------------------------------------------------------------------------
+
+
+def run_benchmark(
+    candidate: BenchmarkCandidate,
+    corpus: BenchmarkCorpus,
+    simulate_training_overlap_seconds: float = 0.0,
+) -> CandidateMetrics:
+    """Replay ``corpus`` against one ``candidate`` and report measured metrics.
+
+    Builds a fresh vLLM engine per candidate so engine-construction
+    knobs (attention backend, prefix caching, scheduler limits, ...)
+    actually take effect. The engine build runs in a background thread
+    so the runner can sleep for ``simulate_training_overlap_seconds``
+    before joining; this measures how much of the cold-start cost can
+    be hidden inside a training phase.
+
+    All corpus prompts are submitted in one concurrent ``LLM.generate``
+    call (matching ``VllmBackend.generate()``'s production dispatch
+    shape) so the shared schema-prefix KV cache amortises across the
+    batch and prefix caching can actually fire.
+
+    Wraps the entire body in PR-A's :class:`NvmlPeakSampler` context and
+    emits a composed :class:`CellObservability` on the returned
+    :class:`CandidateMetrics`. The ``flag_did_not_engage`` bit is set
+    when the engine's effective runtime config disagrees with the
+    candidate's intended ``engine_config`` on any checked field.
+    """
+    # Lazy imports — keep this module CPU-importable.
+    from vllm.lora.request import LoRARequest  # noqa: PLC0415
+    from vllm.sampling_params import SamplingParams  # noqa: PLC0415
+
+    from ..config.generate import ValidationParameters  # noqa: PLC0415
+    from .processors import TabularDataProcessor  # noqa: PLC0415
+
+    loadavg_pre = read_loadavg()
+    vram_sampler = NvmlPeakSampler()
+    vram_sampler.__enter__()
+    try:
+        overlap = max(0.0, simulate_training_overlap_seconds)
+        _init_thread, engine_ready, init_result = _build_engine_async(
+            corpus.header,
+            candidate.engine_config,
+        )
+        if overlap > 0.0:
+            time.sleep(overlap)
+
+        wait_start = time.monotonic()
+        engine_ready.wait()
+        startup_seconds = max(0.0, time.monotonic() - wait_start)
+        if init_result["exception"] is not None:
+            raise init_result["exception"]
+        llm: LLM = init_result["llm"]
+
+        startup_overlap_savings_seconds = (
+            min(overlap, startup_seconds + overlap) if overlap > 0.0 else 0.0
+        )
+
+        # Probe the engine's effective runtime config + check for
+        # candidate-intent / engine-actual disagreements.
+        engine_runtime_config = probe_engine_runtime_config(llm)
+        intended = candidate.engine_config.model_dump(exclude_none=True)
+        mismatches = flag_engagement_mismatches(intended, engine_runtime_config)
+        if mismatches:
+            logger.runtime.warning(
+                "vllm_benchmark.flag_did_not_engage",
+                extra={"ctx": {"candidate": candidate.name, "mismatches": mismatches}},
+            )
+
+        processor = TabularDataProcessor(
+            corpus.header.dataset_schema,
+            config=ValidationParameters(),
+            tokenizer=None,
+        )
+        lora_request = (
+            LoRARequest("lora", 1, str(corpus.header.lora_path))
+            if corpus.header.lora_path is not None
+            else None
+        )
+
+        # Build SamplingParams from corpus default + candidate overrides.
+        if corpus.prompts:
+            base_sampling = corpus.prompts[0].original_sampling_params
+        else:
+            base_sampling = {}
+        sampling_kwargs = _merge_sampling_kwargs(base_sampling, candidate.sampling_overrides)
+        # n=1 unless the caller's override sets it (n_fanout sets it explicitly).
+        sampling_kwargs.setdefault("n", 1)
+        sampling_params = SamplingParams(**sampling_kwargs)
+
+        # Dispatch.
+        prompts: list[str] = [p.prompt for p in corpus.prompts]
+        gen_start = time.perf_counter()
+        outputs: list[Any] = list(
+            llm.generate(prompts=prompts, sampling_params=sampling_params, lora_request=lora_request)
+        ) if prompts else []
+        total_wall = max(time.perf_counter() - gen_start, 0.0)
+
+        # Process outputs.
+        ttft_ms_samples: list[float] = []
+        finish_reasons: dict[str, int] = {}
+        total_output_tokens = 0
+        total_valid = 0
+        total_invalid = 0
+        prompts_accepted = 0
+        for output in outputs:
+            ttft = _extract_ttft_ms(output)
+            if ttft is not None:
+                ttft_ms_samples.append(ttft)
+            best = output.outputs[0] if getattr(output, "outputs", None) else None
+            if best is None:
+                continue
+            total_output_tokens += len(getattr(best, "token_ids", []) or [])
+            finish_reason = str(getattr(best, "finish_reason", None) or "unknown")
+            finish_reasons[finish_reason] = finish_reasons.get(finish_reason, 0) + 1
+            text = getattr(best, "text", "") or ""
+            parsed = processor.process(text)
+            valid_records = getattr(parsed, "valid_records", None) or []
+            invalid_records = getattr(parsed, "invalid_records", None) or []
+            total_valid += len(valid_records)
+            total_invalid += len(invalid_records)
+            if valid_records:
+                prompts_accepted += 1
+
+        total_records = total_valid + total_invalid
+        acceptance = (total_valid / total_records) if total_records > 0 else 0.0
+        raw_tok_s = (total_output_tokens / total_wall) if total_wall > 0 else 0.0
+        records_per_second = (total_valid / total_wall) if total_wall > 0 else 0.0
+    finally:
+        # Cleanup runs regardless of whether the body raised. Sampler
+        # always shuts down; observability event always builds (with
+        # whatever measurements were captured up to the failure).
+        vram_sampler.__exit__(None, None, None)
+
+    # Read end-of-generation metrics + post-load and assemble the event.
+    try:
+        vllm_metrics = read_vllm_runtime_metrics(llm)
+    except Exception as exc:  # noqa: BLE001 — degraded mode
+        logger.runtime.warning(
+            "vllm_benchmark.metrics_read_failed",
+            extra={"ctx": {"error": str(exc)}},
+        )
+        vllm_metrics = {"kv_cache_usage_perc": None, "prefix_cache_hit_rate": None, "spec_accept_rate": None}
+
+    observability = CellObservability(
+        peak_vram_gb=vram_sampler.peak_gb,
+        kv_cache_usage_perc=vllm_metrics["kv_cache_usage_perc"],
+        prefix_cache_hit_rate=vllm_metrics["prefix_cache_hit_rate"],
+        spec_accept_rate=vllm_metrics["spec_accept_rate"],
+        loadavg_pre=loadavg_pre,
+        loadavg_post=read_loadavg(),
+        engine_runtime_config=engine_runtime_config,
+        flag_did_not_engage=bool(mismatches),
+    )
+
+    return CandidateMetrics(
+        name=candidate.name,
+        raw_tok_s=raw_tok_s,
+        acceptance_rate=acceptance,
+        effective_tok_s=raw_tok_s * acceptance,
+        ttft_p50_ms=_percentile(ttft_ms_samples, 50),
+        ttft_p99_ms=_percentile(ttft_ms_samples, 99),
+        prompts_attempted=len(corpus.prompts),
+        prompts_accepted=prompts_accepted,
+        total_output_tokens=total_output_tokens,
+        total_wall_seconds=total_wall,
+        records_per_second=records_per_second,
+        startup_seconds=startup_seconds,
+        simulate_training_overlap_seconds=overlap,
+        startup_overlap_savings_seconds=startup_overlap_savings_seconds,
+        finish_reason_distribution=finish_reasons,
+        observability=observability,
     )
