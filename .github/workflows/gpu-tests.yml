@@ -45,6 +45,9 @@ defaults:
   run:
     shell: bash -x -e -u -o pipefail {0}
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -54,8 +57,6 @@ jobs:
     name: Detect changes
     if: github.event_name != 'workflow_dispatch'
     runs-on: linux-amd64-cpu4
-    permissions:
-      contents: read
     outputs:
       src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
