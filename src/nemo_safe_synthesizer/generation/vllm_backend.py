@@ -224,6 +224,10 @@ class VllmBackend(GeneratorBackend):
         )
         self.llm: vLLM | None = None
         self._prompt_token_count: int | None = None
+        # Populated in ``initialize()`` after engine build; pre-declared
+        # here so ``generate()`` can always read it (tests that mock the
+        # backend without calling ``initialize()`` see the empty dict).
+        self._engine_runtime_config: dict[str, Any] = {}
 
         # Do not generate detailed error messages in production to avoid leaking sensitive data.
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
