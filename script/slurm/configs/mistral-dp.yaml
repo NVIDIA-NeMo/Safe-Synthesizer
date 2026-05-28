@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 training:
-  batch_size: 4
+  batch_size: 2
   gradient_accumulation_steps: 16
   pretrained_model: mistralai/Mistral-7B-Instruct-v0.3
 privacy:
