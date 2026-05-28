@@ -225,9 +225,9 @@ class TestCLISettings:
 
     def test_nim_api_key_from_nss_inference_env(self, monkeypatch):
         """NSS_INFERENCE_KEY loads into nim_api_key."""
-        monkeypatch.setenv("NSS_INFERENCE_KEY", "secret-key")
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
         settings = CLISettings()
-        assert settings.nim_api_key == "secret-key"
+        assert settings.nim_api_key == "token-from-env"  # pragma: allowlist secret
 
     def test_nim_endpoint_url_cli_overrides_env(self, monkeypatch):
         """CLI --nim-endpoint-url takes precedence over NSS_INFERENCE_ENDPOINT."""
@@ -237,23 +237,23 @@ class TestCLISettings:
 
     def test_nim_api_key_cli_overrides_env(self, monkeypatch):
         """CLI --nim-api-key takes precedence over NSS_INFERENCE_KEY."""
-        monkeypatch.setenv("NSS_INFERENCE_KEY", "env-key")
-        settings = CLISettings.from_cli_kwargs(nim_api_key="cli-key")
-        assert settings.nim_api_key == "cli-key"
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
+        settings = CLISettings.from_cli_kwargs(nim_api_key="token-from-cli")  # pragma: allowlist secret
+        assert settings.nim_api_key == "token-from-cli"  # pragma: allowlist secret
 
     def test_nim_api_key_prefers_nss_over_nim_alias_when_both_set(self, monkeypatch):
         """Canonical NSS_INFERENCE_KEY wins when both NSS and NIM aliases are set."""
-        monkeypatch.setenv("NSS_INFERENCE_KEY", "nss-key")
-        monkeypatch.setenv("NIM_API_KEY", "nim-key")
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-nss")
+        monkeypatch.setenv("NIM_API_KEY", "token-from-nim")
         settings = CLISettings()
-        assert settings.nim_api_key == "nss-key"
+        assert settings.nim_api_key == "token-from-nss"  # pragma: allowlist secret
 
     def test_nim_api_key_falls_back_to_nim_alias(self, monkeypatch):
         """Legacy NIM_API_KEY loads when NSS_INFERENCE_KEY is unset."""
         monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
-        monkeypatch.setenv("NIM_API_KEY", "nim-only")
+        monkeypatch.setenv("NIM_API_KEY", "token-from-nim")
         settings = CLISettings()
-        assert settings.nim_api_key == "nim-only"
+        assert settings.nim_api_key == "token-from-nim"  # pragma: allowlist secret
 
     def test_log_color_from_nss_log_color_env(self, monkeypatch):
         """NSS_LOG_COLOR loads into CLISettings.log_color."""

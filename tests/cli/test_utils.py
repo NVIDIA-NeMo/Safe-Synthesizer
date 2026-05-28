@@ -337,12 +337,12 @@ class TestPropagateRuntimeSettingsToEnv:
 
         settings = CLISettings.from_cli_kwargs(
             nim_endpoint_url="https://cli.example/v1",
-            nim_api_key="cli-secret",
+            nim_api_key="token-propagated-cli",  # pragma: allowlist secret
         )
         _propagate_runtime_settings_to_env(settings)
 
         assert os.environ["NSS_INFERENCE_ENDPOINT"] == "https://cli.example/v1"
-        assert os.environ["NSS_INFERENCE_KEY"] == "cli-secret"
+        assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-cli"
 
     def test_propagates_remaining_runtime_settings(self, monkeypatch):
         """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
@@ -367,7 +367,7 @@ class TestPropagateRuntimeSettingsToEnv:
 
         settings = CLISettings.from_cli_kwargs(
             data_source=str(dummy_csv),
-            nim_api_key="setup-secret",
+            nim_api_key="token-propagated-setup",  # pragma: allowlist secret
         )
 
         with (
@@ -381,7 +381,7 @@ class TestPropagateRuntimeSettingsToEnv:
 
             common_setup(settings)
 
-        assert os.environ["NSS_INFERENCE_KEY"] == "setup-secret"
+        assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-setup"
 
 
 class TestCommonSetupReturnValues:
