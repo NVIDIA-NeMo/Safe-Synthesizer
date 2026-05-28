@@ -230,6 +230,12 @@ def common_setup(
         Tuple of (logger, config, dataframe, workdir). For generate-only runs with
         cached datasets, dataframe may be None (loaded from cached files by SafeSynthesizer).
     """
+    # 0. Propagate CLI-resolved runtime settings back to os.environ. This must
+    # run before any deferred pii_replacer imports so that module-level reads
+    # of NIM_MODEL_ID, LOCAL_FILES_ONLY, and SAFE_SYNTHESIZER_CPU_COUNT see
+    # the CLI-overridden values.
+    _propagate_runtime_settings_to_env(settings)
+
     # 1. Create workdir FIRST - this establishes all artifact paths
     workdir = _create_workdir(
         settings.artifact_path,
@@ -312,6 +318,35 @@ def _set_wandb_env_vars(
         os.environ["WANDB_PROJECT"] = wandb_project
     if wandb_run_name:
         os.environ["WANDB_RUN_NAME"] = wandb_run_name
+
+
+def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
+    """Materialize CLI-resolved runtime settings back to ``os.environ``.
+
+    The downstream readers for these settings live deep in ``pii_replacer``
+    (NER, GLiNER, column classification) and historically read directly from
+    the process environment. Rather than thread a ``CLISettings`` handle
+    through every callsite, we propagate the resolved values back to
+    ``os.environ`` here so that CLI flag precedence -- which ``CLISettings``
+    handles via ``from_cli_kwargs`` -- carries through to those readers
+    unchanged.
+
+    ``CLISettings`` values are already env-aware (via ``AliasChoices``); when
+    no CLI flag is provided, the field carries the env var's existing value
+    and writing it back is a no-op. When a CLI flag overrides the env var,
+    this overwrites ``os.environ`` so the deferred imports in the runtime
+    pipeline see the CLI value.
+    """
+    if settings.nim_endpoint_url is not None:
+        os.environ["NIM_ENDPOINT_URL"] = settings.nim_endpoint_url
+    if settings.nim_api_key is not None:
+        os.environ["NIM_API_KEY"] = settings.nim_api_key
+    if settings.nim_model_id is not None:
+        os.environ["NIM_MODEL_ID"] = settings.nim_model_id
+    if settings.local_files_only is not None:
+        os.environ["LOCAL_FILES_ONLY"] = "true" if settings.local_files_only else "false"
+    if settings.cpu_count is not None:
+        os.environ["SAFE_SYNTHESIZER_CPU_COUNT"] = str(settings.cpu_count)
 
 
 def _initialize_logging_for_cli_from_settings(

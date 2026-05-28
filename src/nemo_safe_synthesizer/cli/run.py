@@ -159,6 +159,59 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             "If both env var and CLI option are provided, the CLI option takes precedence.",
         )
     )
+    options.append(
+        click.option(
+            "--nim-endpoint-url",
+            type=str,
+            required=False,
+            default=None,
+            help="NIM/OpenAI-compatible endpoint URL for PII column classification. "
+            "Can also be set via NIM_ENDPOINT_URL env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--nim-api-key",
+            type=str,
+            required=False,
+            default=None,
+            help="API key for the NIM endpoint used in PII column classification. "
+            "Can also be set via NIM_API_KEY env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--nim-model-id",
+            type=str,
+            required=False,
+            default=None,
+            help="Model ID sent to the NIM endpoint for PII column classification. "
+            "Can also be set via NIM_MODEL_ID env var. "
+            "[default: qwen/qwen3-next-80b-a3b-instruct]",
+        )
+    )
+    options.append(
+        click.option(
+            "--local-files-only/--no-local-files-only",
+            "local_files_only",
+            type=click.BOOL,
+            required=False,
+            default=None,
+            help="If set, GLiNER skips network downloads and uses only local files. "
+            "Can also be set via LOCAL_FILES_ONLY env var.",
+        )
+    )
+    options.append(
+        click.option(
+            "--cpu-count",
+            type=int,
+            required=False,
+            default=None,
+            help="Number of CPU worker processes used for NER (PII replacement). "
+            "Can also be set via SAFE_SYNTHESIZER_CPU_COUNT env var. "
+            "[default: max(1, cpu_count - 1)]",
+        )
+    )
     # Apply each option decorator in reverse order (decorators apply bottom-up)
     for option in reversed(options):
         f = option(f)
@@ -323,6 +376,11 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    nim_endpoint_url: str | None = None,
+    nim_api_key: str | None = None,
+    nim_model_id: str | None = None,
+    local_files_only: bool | None = None,
+    cpu_count: int | None = None,
     validate: bool = False,
     **kwargs: object,
 ) -> None:
@@ -351,6 +409,11 @@ def run(
         wandb_project=wandb_project,
         synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
+        nim_endpoint_url=nim_endpoint_url,
+        nim_api_key=nim_api_key,
+        nim_model_id=nim_model_id,
+        local_files_only=local_files_only,
+        cpu_count=cpu_count,
     )
 
     if validate:
@@ -419,6 +482,11 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
+    nim_endpoint_url: str | None = None,
+    nim_api_key: str | None = None,
+    nim_model_id: str | None = None,
+    local_files_only: bool | None = None,
+    cpu_count: int | None = None,
     validate: bool = False,
     **kwargs: object,
 ) -> None:
@@ -443,6 +511,11 @@ def run_train(
         wandb_project=wandb_project,
         synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
+        nim_endpoint_url=nim_endpoint_url,
+        nim_api_key=nim_api_key,
+        nim_model_id=nim_model_id,
+        local_files_only=local_files_only,
+        cpu_count=cpu_count,
     )
 
     if validate:
@@ -512,6 +585,11 @@ def run_generate(
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
     dataset_registry: str | None = None,
+    nim_endpoint_url: str | None = None,
+    nim_api_key: str | None = None,
+    nim_model_id: str | None = None,
+    local_files_only: bool | None = None,
+    cpu_count: int | None = None,
     **kwargs: object,
 ) -> None:
     """Run the generation stage only.
@@ -540,6 +618,11 @@ def run_generate(
         wandb_project=wandb_project,
         synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
+        nim_endpoint_url=nim_endpoint_url,
+        nim_api_key=nim_api_key,
+        nim_model_id=nim_model_id,
+        local_files_only=local_files_only,
+        cpu_count=cpu_count,
     )
 
     os.environ["NSS_PHASE"] = "generate"

@@ -164,6 +164,42 @@ class CLISettings(BaseSettings):
     )
     """URL or path to a dataset registry YAML file (env: ``NSS_DATASET_REGISTRY``)."""
 
+    nim_endpoint_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("nim_endpoint_url", "NIM_ENDPOINT_URL"),
+        description="NIM/OpenAI-compatible endpoint URL for PII column classification",
+    )
+    """NIM/OpenAI-compatible endpoint URL for PII column classification (env: ``NIM_ENDPOINT_URL``)."""
+
+    nim_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("nim_api_key", "NIM_API_KEY"),
+        description="API key for the NIM endpoint used in PII column classification",
+    )
+    """API key for the NIM endpoint used in PII column classification (env: ``NIM_API_KEY``)."""
+
+    nim_model_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("nim_model_id", "NIM_MODEL_ID"),
+        description="Model ID sent to the NIM endpoint for PII column classification",
+    )
+    """Model ID sent to the NIM endpoint for PII column classification (env: ``NIM_MODEL_ID``)."""
+
+    local_files_only: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("local_files_only", "LOCAL_FILES_ONLY"),
+        description="Whether GLiNER should skip network downloads and use only local files",
+    )
+    """Whether GLiNER should skip network downloads and use only local files (env: ``LOCAL_FILES_ONLY``)."""
+
+    cpu_count: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("cpu_count", "SAFE_SYNTHESIZER_CPU_COUNT"),
+        description="Number of CPU worker processes used for NER (PII replacement)",
+    )
+    """Number of CPU worker processes used for NER (PII replacement)
+    (env: ``SAFE_SYNTHESIZER_CPU_COUNT``)."""
+
     @field_validator("wandb_mode", mode="before")
     @classmethod
     def validate_wandb_mode(cls, v: str | WandbMode | None) -> WandbMode | None:
