@@ -21,6 +21,7 @@ from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from ...observability import get_logger
+from ...utils import env_flag_is_true
 from ..ner import ner_mp
 from ..ner.factory import LabelSetPredictorFilter, NERFactory
 from ..ner.ner import NERPrediction
@@ -575,7 +576,7 @@ class EntityExtractorGliner(EntityExtractor):
         extractor._model = GLiNER.from_pretrained(
             clsfy_cfg.gliner_model,
             map_location=map_location,
-            local_files_only=os.environ.get("LOCAL_FILES_ONLY") in ["true", "True"],
+            local_files_only=env_flag_is_true("LOCAL_FILES_ONLY"),
         )
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:

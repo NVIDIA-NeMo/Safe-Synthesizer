@@ -1233,7 +1233,7 @@ Pre-cache models by running once with internet access, then set
 `HF_HUB_OFFLINE=1` in your target environment. For detailed cache setup
 and environment variables (`HF_HOME`, `HF_HUB_OFFLINE`, `LOCAL_FILES_ONLY`,
 `VLLM_CACHE_ROOT`), see
-[Environment Variables -- Hugging Face Cache](environment.md#hugging-face-cache).
+[Environment Variables -- Hugging Face cache and offline](environment.md#hugging-face-cache-and-offline).
 
 For offline-specific errors, see [Program Runtime](troubleshooting.md).
 

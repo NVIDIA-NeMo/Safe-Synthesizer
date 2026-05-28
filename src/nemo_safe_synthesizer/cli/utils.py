@@ -232,8 +232,8 @@ def common_setup(
     """
     # 0. Propagate CLI-resolved runtime settings back to os.environ. This must
     # run before any deferred pii_replacer imports so that module-level reads
-    # of NIM_MODEL_ID, LOCAL_FILES_ONLY, and SAFE_SYNTHESIZER_CPU_COUNT see
-    # the CLI-overridden values.
+    # of NSS_INFERENCE_*, NIM_MODEL_ID, LOCAL_FILES_ONLY, and
+    # SAFE_SYNTHESIZER_CPU_COUNT see the CLI-overridden values.
     _propagate_runtime_settings_to_env(settings)
 
     # 1. Create workdir FIRST - this establishes all artifact paths
@@ -338,9 +338,9 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
     pipeline see the CLI value.
     """
     if settings.nim_endpoint_url is not None:
-        os.environ["NIM_ENDPOINT_URL"] = settings.nim_endpoint_url
+        os.environ["NSS_INFERENCE_ENDPOINT"] = settings.nim_endpoint_url
     if settings.nim_api_key is not None:
-        os.environ["NIM_API_KEY"] = settings.nim_api_key
+        os.environ["NSS_INFERENCE_KEY"] = settings.nim_api_key
     if settings.nim_model_id is not None:
         os.environ["NIM_MODEL_ID"] = settings.nim_model_id
     if settings.local_files_only is not None:

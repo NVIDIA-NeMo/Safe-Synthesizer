@@ -27,10 +27,11 @@ Usage:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..defaults import DEFAULT_ARTIFACTS_PATH
@@ -38,6 +39,30 @@ from ..observability import NSSObservabilitySettings
 from .wandb_setup import WandbMode, WandbSettings
 
 __all__ = ["CLISettings"]
+
+# (settings field, canonical env var, legacy env alias from issue #155)
+_INFERENCE_ENV_ALIASES: tuple[tuple[str, str, str], ...] = (
+    ("nim_endpoint_url", "NSS_INFERENCE_ENDPOINT", "NIM_ENDPOINT_URL"),
+    ("nim_api_key", "NSS_INFERENCE_KEY", "NIM_API_KEY"),
+)
+
+
+def _apply_inference_env_precedence(
+    data: dict[str, Any],
+    field: str,
+    canonical_env: str,
+    legacy_env: str,
+) -> None:
+    """Prefer ``canonical_env`` over ``legacy_env`` when both are set."""
+    canonical = os.environ.get(canonical_env)
+    legacy = os.environ.get(legacy_env)
+    match (field in data, data.get(field), canonical, legacy):
+        case (True, leg, str() as canon, str() as leg_env) if leg == leg_env and canon != leg_env:
+            data[field] = canon
+        case (False, _, str() as canon, _):
+            data[field] = canon
+        case (False, _, None, str() as leg_env):
+            data[field] = leg_env
 
 
 class CLISettings(BaseSettings):
@@ -118,9 +143,10 @@ class CLISettings(BaseSettings):
 
     log_color: bool | None = Field(
         default=None,
+        validation_alias=AliasChoices("log_color", "NSS_LOG_COLOR"),
         description="Whether to colorize console output",
     )
-    """Whether to colorize console output."""
+    """Whether to colorize console output (env variable: ``NSS_LOG_COLOR``)."""
 
     log_file: str | None = Field(
         default=None,
@@ -166,17 +192,19 @@ class CLISettings(BaseSettings):
 
     nim_endpoint_url: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("nim_endpoint_url", "NIM_ENDPOINT_URL"),
+        validation_alias=AliasChoices("nim_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
         description="NIM/OpenAI-compatible endpoint URL for PII column classification",
     )
-    """NIM/OpenAI-compatible endpoint URL for PII column classification (env: ``NIM_ENDPOINT_URL``)."""
+    """NIM/OpenAI-compatible endpoint URL for PII column classification
+    (env: ``NSS_INFERENCE_ENDPOINT``; alias: ``NIM_ENDPOINT_URL``)."""
 
     nim_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("nim_api_key", "NIM_API_KEY"),
+        validation_alias=AliasChoices("nim_api_key", "NSS_INFERENCE_KEY"),
         description="API key for the NIM endpoint used in PII column classification",
     )
-    """API key for the NIM endpoint used in PII column classification (env: ``NIM_API_KEY``)."""
+    """API key for the NIM endpoint used in PII column classification
+    (env: ``NSS_INFERENCE_KEY``; alias: ``NIM_API_KEY``)."""
 
     nim_model_id: str | None = Field(
         default=None,
@@ -199,6 +227,19 @@ class CLISettings(BaseSettings):
     )
     """Number of CPU worker processes used for NER (PII replacement)
     (env: ``SAFE_SYNTHESIZER_CPU_COUNT``)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_inference_env_aliases(cls, data: Any) -> Any:
+        """Prefer ``NSS_INFERENCE_*`` over legacy ``NIM_*`` env aliases."""
+        match data:
+            case dict() as payload:
+                resolved = dict(payload)
+            case _:
+                return data
+        for field, canonical_env, legacy_env in _INFERENCE_ENV_ALIASES:
+            _apply_inference_env_precedence(resolved, field, canonical_env, legacy_env)
+        return resolved
 
     @field_validator("wandb_mode", mode="before")
     @classmethod

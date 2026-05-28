@@ -27,6 +27,20 @@ from .observability import get_logger
 
 logger = get_logger(__name__)
 
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def env_flag_is_true(name: str, *, default: bool = False) -> bool:
+    """Return whether ``name`` is set to a truthy env value.
+
+    Accepts common boolean spellings used across NSS and pydantic-settings:
+    ``1``, ``true``, ``yes``, and ``on`` (case-insensitive).
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
 
 def _get_num_items_pattern(min_items: int | None, max_items: int | None, whitespace_pattern: str) -> str | None:
     """Return a regex quantifier for JSON array/object item counts.

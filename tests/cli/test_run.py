@@ -304,6 +304,19 @@ class TestPathOptions:
         assert "--run-path" in result.output
         assert "Explicit path for this run" in result.output
 
+    def test_run_help_shows_runtime_settings_options(self, cli_runner: CliRunner):
+        """Verify runtime PII/NER settings appear in run command help."""
+        result = cli_runner.invoke(run, ["--help"])
+
+        assert result.exit_code == 0
+        assert "--nim-endpoint-url" in result.output
+        assert "--nim-api-key" in result.output
+        assert "--nim-model-id" in result.output
+        assert "--local-files-only" in result.output
+        assert "--cpu-count" in result.output
+        assert "NSS_INFERENCE_ENDPOINT" in result.output
+        assert "NSS_INFERENCE_KEY" in result.output
+
     def test_run_with_artifact_path_only(
         self,
         cli_runner: CliRunner,

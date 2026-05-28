@@ -217,6 +217,68 @@ class TestCLISettings:
         settings = CLISettings.from_cli_kwargs(dataset_registry="path/to/registry.yaml")
         assert settings.dataset_registry == "path/to/registry.yaml"
 
+    def test_nim_endpoint_url_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_ENDPOINT loads into nim_endpoint_url."""
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://custom.example/v1")
+        settings = CLISettings()
+        assert settings.nim_endpoint_url == "https://custom.example/v1"
+
+    def test_nim_api_key_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_KEY loads into nim_api_key."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "secret-key")
+        settings = CLISettings()
+        assert settings.nim_api_key == "secret-key"
+
+    def test_nim_endpoint_url_cli_overrides_env(self, monkeypatch):
+        """CLI --nim-endpoint-url takes precedence over NSS_INFERENCE_ENDPOINT."""
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
+        settings = CLISettings.from_cli_kwargs(nim_endpoint_url="https://cli.example/v1")
+        assert settings.nim_endpoint_url == "https://cli.example/v1"
+
+    def test_nim_api_key_cli_overrides_env(self, monkeypatch):
+        """CLI --nim-api-key takes precedence over NSS_INFERENCE_KEY."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "env-key")
+        settings = CLISettings.from_cli_kwargs(nim_api_key="cli-key")
+        assert settings.nim_api_key == "cli-key"
+
+    def test_nim_api_key_prefers_nss_over_nim_alias_when_both_set(self, monkeypatch):
+        """Canonical NSS_INFERENCE_KEY wins when both NSS and NIM aliases are set."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "nss-key")
+        monkeypatch.setenv("NIM_API_KEY", "nim-key")
+        settings = CLISettings()
+        assert settings.nim_api_key == "nss-key"
+
+    def test_nim_api_key_falls_back_to_nim_alias(self, monkeypatch):
+        """Legacy NIM_API_KEY loads when NSS_INFERENCE_KEY is unset."""
+        monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
+        monkeypatch.setenv("NIM_API_KEY", "nim-only")
+        settings = CLISettings()
+        assert settings.nim_api_key == "nim-only"
+
+    def test_log_color_from_nss_log_color_env(self, monkeypatch):
+        """NSS_LOG_COLOR loads into CLISettings.log_color."""
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        settings = CLISettings()
+        assert settings.log_color is False
+        assert settings.effective_log_color is False
+
+    def test_log_color_cli_overrides_nss_log_color_env(self, monkeypatch):
+        """CLI --log-color takes precedence over NSS_LOG_COLOR."""
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        settings = CLISettings.from_cli_kwargs(log_color=True)
+        assert settings.effective_log_color is True
+
+    def test_runtime_settings_from_env(self, monkeypatch):
+        """Remaining runtime settings load from their documented env vars."""
+        monkeypatch.setenv("NIM_MODEL_ID", "custom/model")
+        monkeypatch.setenv("LOCAL_FILES_ONLY", "true")
+        monkeypatch.setenv("SAFE_SYNTHESIZER_CPU_COUNT", "4")
+
+        settings = CLISettings()
+        assert settings.nim_model_id == "custom/model"
+        assert settings.local_files_only is True
+        assert settings.cpu_count == 4
+
 
 class TestCLISettingsIntegration:
     """Integration tests for CLISettings with env vars."""

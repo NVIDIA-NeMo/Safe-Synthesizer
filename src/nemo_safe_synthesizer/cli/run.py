@@ -166,7 +166,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             default=None,
             help="NIM/OpenAI-compatible endpoint URL for PII column classification. "
-            "Can also be set via NIM_ENDPOINT_URL env var.",
+            "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
     options.append(
@@ -176,7 +176,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             default=None,
             help="API key for the NIM endpoint used in PII column classification. "
-            "Can also be set via NIM_API_KEY env var.",
+            "Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
     options.append(

@@ -67,6 +67,27 @@ def test_gliner_batch_predict_config():
         entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
 
+@pytest.mark.parametrize("env_value", ["1", "yes", "on"])
+def test_gliner_local_files_only_accepts_common_truthy_env_values(env_value, monkeypatch):
+    """GLiNER offline mode accepts the same truthy spellings as env_flag_is_true."""
+    cfg = ClassifyConfig(
+        valid_entities={"name"},
+        ner_threshold=0.8,
+        ner_regexps_enabled=False,
+        ner_entities=None,
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=False,
+        gliner_batch_mode_chunk_length=10,
+        gliner_batch_mode_batch_size=20,
+        gliner_model="nvidia/gliner-PII",
+    )
+    monkeypatch.setenv("LOCAL_FILES_ONLY", env_value)
+
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        EntityExtractorGliner.get_entity_extractor(cfg)
+        assert mock_gliner.from_pretrained.call_args.kwargs["local_files_only"] is True
+
+
 def test_gliner_pii_detection_recall():
     # Tests GLiNER’s PII detection on a short text, ensuring it finds a reasonable number of entities without over- or under-detecting.
 
