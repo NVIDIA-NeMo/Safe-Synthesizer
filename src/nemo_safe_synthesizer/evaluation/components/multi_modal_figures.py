@@ -206,9 +206,9 @@ def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
 
     NumPy ``bins="auto"`` is adaptive, but for some pathological distributions
     (very small IQR with wide range/outliers) it can request an extreme number
-    of bins and raise. We cap to at most 100 bins for report stability.
+    of bins and raise. We cap to at most 1000 bins for report stability.
     """
-    max_bins = 100
+    max_bins = 1000
     data = pd.concat([x1, x2]).to_numpy()
     finite_data = data[np.isfinite(data)]
 

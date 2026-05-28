@@ -200,7 +200,7 @@ class TestGetAutoBins:
         assert bins["start"] <= 1
         assert bins["end"] >= 5
 
-    def test_get_auto_bins_caps_at_100_bins_for_pathological_distribution(self):
+    def test_get_auto_bins_caps_at_1000_bins_for_pathological_distribution(self):
         # Tiny IQR + very large range can make numpy "auto" request huge bin counts.
         x1 = pd.Series(np.concatenate([np.full(5000, 1.0), np.array([1e9])]))
         x2 = pd.Series(np.full(5000, 1.0000001))
@@ -208,7 +208,7 @@ class TestGetAutoBins:
 
         assert bins["size"] > 0
         approx_bin_count = (bins["end"] - bins["start"]) / bins["size"]
-        assert approx_bin_count == pytest.approx(100.0, abs=1e-6)
+        assert approx_bin_count == pytest.approx(1000.0, abs=1e-6)
 
     def test_get_auto_bins_returns_safe_defaults_when_all_values_non_finite(self):
         x1 = pd.Series([np.nan, np.inf, -np.inf])
