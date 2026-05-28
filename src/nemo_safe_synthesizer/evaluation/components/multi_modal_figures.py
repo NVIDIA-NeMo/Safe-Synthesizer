@@ -212,8 +212,14 @@ def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
     data = pd.concat([x1, x2]).to_numpy()
     finite_data = data[np.isfinite(data)]
 
+    def _single_value_fallback(value: float) -> dict:
+        """Build a one-bin range anchored at the observed value."""
+        return dict(start=value, end=value + 1.0, size=1.0)
+
     if finite_data.size == 0:
         return dict(start=0.0, end=1.0, size=1.0)
+    if np.nanmin(finite_data) == np.nanmax(finite_data):
+        return _single_value_fallback(float(np.nanmin(finite_data)))
 
     try:
         edges = np.histogram_bin_edges(finite_data, bins="auto")
@@ -221,14 +227,17 @@ def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
         end = float(edges[-1])
         auto_bin_count = max(len(edges) - 1, 1)
         bin_count = min(auto_bin_count, max_bins)
-    except ValueError:
-        # Fallback for edge cases where numpy "auto" overestimates bin count.
+    except Exception:
+        # Fallback for edge cases where numpy "auto" overestimates bin count
+        # and can raise ValueError/MemoryError before returning edges.
         start = float(np.nanmin(finite_data))
         end = float(np.nanmax(finite_data))
         bin_count = max_bins
 
-    if not np.isfinite(start) or not np.isfinite(end) or start == end:
+    if not np.isfinite(start) or not np.isfinite(end):
         return dict(start=0.0, end=1.0, size=1.0)
+    if start == end:
+        return _single_value_fallback(start)
 
     bin_size = (end - start) / float(bin_count)
     if not np.isfinite(bin_size) or bin_size <= 0:

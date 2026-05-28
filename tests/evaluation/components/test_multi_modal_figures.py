@@ -200,6 +200,30 @@ class TestGetAutoBins:
         assert bins["start"] <= 1
         assert bins["end"] >= 5
 
+    def test_get_auto_bins_caps_at_100_bins_for_pathological_distribution(self):
+        # Tiny IQR + very large range can make numpy "auto" request huge bin counts.
+        x1 = pd.Series(np.concatenate([np.full(5000, 1.0), np.array([1e9])]))
+        x2 = pd.Series(np.full(5000, 1.0000001))
+        bins = get_auto_bins(x1, x2)
+
+        assert bins["size"] > 0
+        approx_bin_count = (bins["end"] - bins["start"]) / bins["size"]
+        assert approx_bin_count == pytest.approx(100.0, abs=1e-6)
+
+    def test_get_auto_bins_returns_safe_defaults_when_all_values_non_finite(self):
+        x1 = pd.Series([np.nan, np.inf, -np.inf])
+        x2 = pd.Series([np.nan, np.inf, -np.inf])
+        bins = get_auto_bins(x1, x2)
+
+        assert bins == {"start": 0.0, "end": 1.0, "size": 1.0}
+
+    def test_get_auto_bins_anchors_single_value_range_when_degenerate(self):
+        x1 = pd.Series([5.0, 5.0, 5.0])
+        x2 = pd.Series([5.0, 5.0, 5.0])
+        bins = get_auto_bins(x1, x2)
+
+        assert bins == {"start": 5.0, "end": 6.0, "size": 1.0}
+
 
 class TestGenerateMiaFigure:
     """Tests for generate_mia_figure function."""
