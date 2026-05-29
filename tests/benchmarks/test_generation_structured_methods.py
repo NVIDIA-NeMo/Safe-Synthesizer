@@ -7,9 +7,25 @@ This benchmark intentionally invokes the CLI in subprocesses. It is meant for
 comparing real generation runs against an already-trained adapter, not for unit
 testing the private backend helpers.
 
-Run with the defaults used during local SmolLM3 DP experiments:
+Adapter setup:
+
+The benchmark expects `NSS_GENERATION_BENCHMARK_RUN_PATH` to point at a trained
+run directory containing adapter layers. It does not train adapters before
+benchmarking. To create the default local SmolLM3 DP adapter/run path, train on
+one of the benchmark input datasets:
+
+    uv run safe-synthesizer run train \
+      --data-source cleaned/amazon_reviews_25k.csv \
+      --config script/slurm/configs/smollm3-dp.yaml \
+      --run-path local_runs/smollm3-dp_amazon_reviews_25k_1_5609622_1
+
+Benchmark run:
 
     uv run --frozen pytest tests/benchmarks/test_generation_structured_methods.py -m benchmark -n0 -s
+
+The default `cleaned/amazon_reviews_25k.csv` data source above is one of the
+benchmark input datasets. Use a different input CSV/config/run-path trio by
+setting the environment variables below.
 
 Override inputs with:
 
@@ -31,6 +47,8 @@ from pathlib import Path
 
 import pytest
 
+# Keep these defaults aligned with the adapter setup command in the module
+# docstring so the benchmark can run without additional environment overrides.
 DEFAULT_DATA_SOURCE = "cleaned/amazon_reviews_25k.csv"
 DEFAULT_CONFIG = "script/slurm/configs/smollm3-dp.yaml"
 DEFAULT_RUN_PATH = "local_runs/smollm3-dp_amazon_reviews_25k_1_5609622_1"
