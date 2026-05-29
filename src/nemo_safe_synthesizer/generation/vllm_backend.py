@@ -26,7 +26,7 @@ from .. import utils
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
-from ..errors import InternalError
+from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
@@ -338,6 +338,13 @@ class VllmBackend(GeneratorBackend):
         elif self.config.generation.structured_generation_schema_method == "json_schema":
             params["json"] = self.schema
         elif self.config.generation.structured_generation_schema_method == "structural_tag":
+            backend = self.config.generation.structured_generation_backend
+            if backend not in {"auto", "xgrammar"}:
+                raise ParameterError(
+                    "Invalid structured generation configuration: "
+                    "`structured_generation_schema_method='structural_tag'` requires "
+                    f"`structured_generation_backend` to be 'xgrammar' or 'auto', got {backend!r}."
+                )
             logger.info("Structured generation is enabled, using an XGrammar Structural Tag")
             pc = self.model_metadata.prompt_config
             params["structural_tag"] = build_json_structural_tag(
