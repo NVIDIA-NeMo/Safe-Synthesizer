@@ -53,7 +53,7 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
         epsilon=100.0,
         num_records=100,
         use_structured_generation=True,
-        structured_generation_backend="outlines",
+        structured_generation_backend="xgrammar",
     )
     logger.info(f"Running DP test with config: {config}")
 
@@ -72,7 +72,7 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 @pytest.mark.requires_gpu
 @pytest.mark.timeout(900)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
-def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path, pretrained_model):
+def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
