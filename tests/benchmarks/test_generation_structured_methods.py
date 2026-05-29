@@ -30,7 +30,6 @@ from importlib import metadata
 from pathlib import Path
 
 import pytest
-from packaging.version import Version
 
 DEFAULT_DATA_SOURCE = "cleaned/amazon_reviews_25k.csv"
 DEFAULT_CONFIG = "script/slurm/configs/smollm3-dp.yaml"
@@ -74,18 +73,6 @@ def _package_version(package: str) -> str:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
         return "not installed"
-
-
-def _require_xgrammar2(method: GenerationMethod) -> None:
-    if not method.use_structured_generation:
-        return
-
-    xgrammar_version = _package_version("xgrammar")
-    if xgrammar_version == "not installed" or Version(xgrammar_version) < Version("0.2.0"):
-        pytest.fail(
-            f"{method.name} benchmark requires xgrammar>=0.2.0, found {xgrammar_version}. "
-            "Run `uv sync --frozen --extra cu129 --extra engine --group dev` before benchmarking."
-        )
 
 
 def _configured_path(env_name: str, default: str, root: Path) -> Path:
@@ -179,8 +166,6 @@ def test_generation_structured_method_benchmark(
     pytestconfig: pytest.Config,
 ) -> None:
     """Benchmark one generation structured-output method."""
-    _require_xgrammar2(method)
-
     root = Path(pytestconfig.rootpath)
     for env_name, default in (
         ("NSS_GENERATION_BENCHMARK_DATA_SOURCE", DEFAULT_DATA_SOURCE),

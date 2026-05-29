@@ -17,6 +17,7 @@ from nemo_safe_synthesizer.config import (
 )
 from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
@@ -245,6 +246,27 @@ class TestBuildStructuredOutputParams:
             )
             assert result is not None
             assert result.structural_tag == '{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}'
+
+    @pytest.mark.parametrize("backend", ["guidance", "outlines", "lm-format-enforcer"])
+    def test_structural_tag_rejects_non_xgrammar_backends(
+        self,
+        params_with_structured_generation_structural_tag,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        backend,
+    ):
+        """Structural Tag requires vLLM's xgrammar backend."""
+        params_with_structured_generation_structural_tag.generation.structured_generation_backend = backend
+        backend_instance = create_backend(
+            params_with_structured_generation_structural_tag,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
+
+        with pytest.raises(ParameterError, match="requires `structured_generation_backend`"):
+            backend_instance._build_structured_output_params()
 
     def test_config_with_grouping_passed_to_build_regex(
         self, params_with_structured_generation_regex, mock_model_metadata, mock_schema, mock_workdir

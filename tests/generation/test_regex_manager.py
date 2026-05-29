@@ -162,6 +162,41 @@ def test_build_json_structural_tag_with_groupby(fixture_safe_synthesizer_config)
     }
 
 
+def test_build_json_structural_tag_with_groupby_single_sequence(fixture_safe_synthesizer_config):
+    """Grouped single-sequence Structural Tag emits exactly one BOS/EOS-wrapped sequence."""
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
+    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {
+        "type": "sequence",
+        "elements": [
+            {"type": "const_string", "value": BOS_TOKEN},
+            {
+                "type": "plus",
+                "content": {
+                    "type": "sequence",
+                    "elements": [
+                        {"type": "json_schema", "json_schema": schema},
+                        {"type": "const_string", "value": "\n"},
+                    ],
+                },
+            },
+            {"type": "const_string", "value": EOS_TOKEN},
+        ],
+    }
+
+
 # Purpose: Ensures keys with special chars (e.g., '.') are escaped and string length bounds enforced.
 # Data: Object with required key 'full.name', minLength=3, maxLength=10.
 # Asserts: Equality against expected regex and behavioral matches via re.fullmatch for valid/invalid cases.
