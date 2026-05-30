@@ -31,7 +31,7 @@ defaults:
     shell: bash -x -e -u -o pipefail {0}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   publish-wheel:
@@ -44,6 +44,7 @@ jobs:
       - name: Checkout at release ref
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -103,10 +104,13 @@ jobs:
     name: Create GitHub release
     needs: publish-wheel
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout at release ref
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Download wheel artifact
@@ -137,6 +141,8 @@ jobs:
     needs: publish-wheel
     if: ${{ needs.publish-wheel.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout at release ref
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -147,7 +153,7 @@ jobs:
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
         with:
-          fetch-depth: 0
+          checkout: "false"
           bootstrap-tools: "true"
 
       - name: Install docs dependencies

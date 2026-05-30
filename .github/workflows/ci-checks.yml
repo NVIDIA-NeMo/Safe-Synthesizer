@@ -55,6 +55,8 @@ jobs:
       any: ${{ steps.changes.outputs.any }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Detect changes
         id: changes
         uses: ./.github/actions/detect-changes
@@ -68,13 +70,14 @@ jobs:
       - name: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
-          fetch-depth: 0
+          checkout: "false"
           bootstrap-tools: "true"
 
       - name: Bootstrap
@@ -95,13 +98,14 @@ jobs:
       - name: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
-          fetch-depth: 0
+          checkout: "false"
           bootstrap-tools: "true"
 
       - name: Bootstrap
@@ -135,12 +139,14 @@ jobs:
       - name: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
+          checkout: "false"
           bootstrap-tools: "true"
 
       - name: Bootstrap
@@ -188,11 +194,13 @@ jobs:
       - name: checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
         with:
+          checkout: "false"
           bootstrap-tools: "true"
 
       - name: Run CPU smoke tests
