@@ -63,7 +63,7 @@ runs:
     # (b) dorny/paths-filter can diff against git history on push events.
     - name: Detect changed paths
       id: filter
-      uses: dorny/paths-filter@v3
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
       with:
         filters: |
           src:

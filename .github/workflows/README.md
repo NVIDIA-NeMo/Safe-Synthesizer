@@ -226,7 +226,7 @@ The workflow performs the following steps:
 
 ## Reusable Workflows
 
-All compliance and release workflows reuse templates from [NVIDIA-NeMo/FW-CI-templates](https://github.com/NVIDIA-NeMo/FW-CI-templates) (pinned to `v0.66.6`):
+Compliance workflows reuse templates from [NVIDIA-NeMo/FW-CI-templates](https://github.com/NVIDIA-NeMo/FW-CI-templates), pinned to immutable commit SHAs in the workflow files:
 
 - `_semantic_pull_request.yml` - Conventional commit validation
 - `_secrets-detector.yml` - Secrets scanning
