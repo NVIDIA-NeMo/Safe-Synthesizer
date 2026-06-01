@@ -21,7 +21,7 @@ from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
 from ...observability import get_logger
-from ...utils import env_flag_is_true
+from ...utils import hf_offline_enabled
 from ..ner import ner_mp
 from ..ner.factory import LabelSetPredictorFilter, NERFactory
 from ..ner.ner import NERPrediction
@@ -33,12 +33,10 @@ logger = get_logger(__name__)
 class DefaultLLMConfig:
     """Default settings for the LLM used in column classification.
 
-    All attributes are class-level. Used by ``classify_columns`` when calling the
-    inference API for column-type classification.
+    Used by ``classify_columns`` when calling the inference API for column-type
+    classification.
 
     Attributes:
-        CONFIG_ID: Model identifier for the LLM. From env ``NSS_INFERENCE_MODEL``, or
-            ``qwen/qwen3-next-80b-a3b-instruct`` if unset.
         SYSTEM_PROMPT: System message describing the column-type annotation task
             sent to the LLM.
         MAX_OUTPUT_TOKENS: Maximum number of tokens allowed in the LLM response
@@ -47,10 +45,21 @@ class DefaultLLMConfig:
             Lower values give more deterministic output.
     """
 
-    CONFIG_ID = os.environ.get("NSS_INFERENCE_MODEL", "qwen/qwen3-next-80b-a3b-instruct")
+    DEFAULT_CONFIG_ID = "qwen/qwen3-next-80b-a3b-instruct"
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
     MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2
+
+    @classmethod
+    def config_id(cls) -> str:
+        """Model identifier for the LLM, read from env at call-time.
+
+        Reads ``NSS_INFERENCE_MODEL`` on each call (falling back to
+        ``DEFAULT_CONFIG_ID``) so a value set after this module is imported still
+        takes effect, matching the call-time env handling used elsewhere in this
+        module.
+        """
+        return os.environ.get("NSS_INFERENCE_MODEL", cls.DEFAULT_CONFIG_ID)
 
 
 DEFAULT_ENTITIES: set[str] = {
@@ -250,7 +259,7 @@ def classify_columns(
 
     llm_start = timer()
     response = client.chat.completions.create(
-        model=DefaultLLMConfig.CONFIG_ID,
+        model=DefaultLLMConfig.config_id(),
         messages=[
             {"role": "system", "content": DefaultLLMConfig.SYSTEM_PROMPT},
             {"role": "user", "content": formatted_prompt},
@@ -576,7 +585,7 @@ class EntityExtractorGliner(EntityExtractor):
         extractor._model = GLiNER.from_pretrained(
             clsfy_cfg.gliner_model,
             map_location=map_location,
-            local_files_only=env_flag_is_true("NSS_LOCAL_FILES_ONLY"),
+            local_files_only=hf_offline_enabled(),
         )
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:

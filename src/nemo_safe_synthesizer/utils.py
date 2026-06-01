@@ -15,19 +15,26 @@ import os
 import time
 from collections.abc import Callable, Generator, Iterable
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 import pandas as pd
-from datasets import Dataset
 from pandas import DataFrame
 
 from .data_processing.stats import Statistics
 from .observability import get_logger
 
+if TYPE_CHECKING:
+    # Annotation-only. Imported here to keep the CLI import chain free of
+    # `datasets` (which pulls huggingface_hub, caching HF_HUB_OFFLINE at import
+    # time). See cli.utils._propagate_runtime_settings_to_env.
+    from datasets import Dataset
+
 logger = get_logger(__name__)
 
 _TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+_HF_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
 
 
 def env_flag_is_true(name: str, *, default: bool = False) -> bool:
@@ -40,6 +47,16 @@ def env_flag_is_true(name: str, *, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in _TRUTHY_ENV_VALUES
+
+
+def hf_offline_enabled() -> bool:
+    """Return whether Hugging Face offline mode is enabled.
+
+    True when ``HF_HUB_OFFLINE`` or ``TRANSFORMERS_OFFLINE`` is set to a truthy
+    value. huggingface_hub honors these globally, so when enabled both the base
+    model and GLiNER skip network downloads and resolve from the local cache.
+    """
+    return any(env_flag_is_true(name) for name in _HF_OFFLINE_ENV_VARS)
 
 
 def _get_num_items_pattern(min_items: int | None, max_items: int | None, whitespace_pattern: str) -> str | None:

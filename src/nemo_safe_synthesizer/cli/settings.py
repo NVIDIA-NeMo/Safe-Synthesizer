@@ -189,12 +189,17 @@ class CLISettings(BaseSettings):
     """Model ID sent to the inference endpoint for PII column classification
     (env: ``NSS_INFERENCE_MODEL``)."""
 
-    local_files_only: bool | None = Field(
+    huggingface_remote: bool | None = Field(
         default=None,
-        validation_alias=AliasChoices("local_files_only", "NSS_LOCAL_FILES_ONLY"),
-        description="Whether GLiNER should skip network downloads and use only local files",
+        validation_alias=AliasChoices("huggingface_remote"),
+        description="Whether to allow Hugging Face remote downloads (base model and GLiNER)",
     )
-    """Whether GLiNER should skip network downloads and use only local files (env: ``NSS_LOCAL_FILES_ONLY``)."""
+    """Whether to allow Hugging Face remote downloads for the base model and GLiNER.
+
+    ``None`` leaves the environment untouched. ``True`` / ``False`` is propagated
+    to the standard ``HF_HUB_OFFLINE`` and ``TRANSFORMERS_OFFLINE`` variables (the
+    canonical env switch) by ``_propagate_runtime_settings_to_env``; there is no
+    separate NSS env var."""
 
     cpu_count: int | None = Field(
         default=None,

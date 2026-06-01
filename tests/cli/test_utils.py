@@ -347,19 +347,32 @@ class TestPropagateRuntimeSettingsToEnv:
     def test_propagates_remaining_runtime_settings(self, monkeypatch):
         """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
         monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
-        monkeypatch.delenv("NSS_LOCAL_FILES_ONLY", raising=False)
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
         monkeypatch.delenv("NSS_PII_REPLACER_CPU_COUNT", raising=False)
 
         settings = CLISettings.from_cli_kwargs(
             inference_model_id="custom/model",
-            local_files_only=True,
+            huggingface_remote=False,
             cpu_count=3,
         )
         _propagate_runtime_settings_to_env(settings)
 
         assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
-        assert os.environ["NSS_LOCAL_FILES_ONLY"] == "true"
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
         assert os.environ["NSS_PII_REPLACER_CPU_COUNT"] == "3"
+
+    def test_enabling_huggingface_remote_disables_offline_env(self, monkeypatch):
+        """--enable-huggingface-remote sets the HF offline vars to 0, overriding inherited offline env."""
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+        monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+        settings = CLISettings.from_cli_kwargs(huggingface_remote=True)
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["HF_HUB_OFFLINE"] == "0"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "0"
 
     def test_common_setup_propagates_before_workdir(self, monkeypatch, dummy_csv: Path):
         """common_setup writes resolved runtime settings before downstream imports."""

@@ -50,11 +50,10 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 | `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
 | `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
 | `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `qwen/qwen3-next-80b-a3b-instruct` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_LOCAL_FILES_ONLY` | nss | `--local-files-only` / `--no-local-files-only` | GLiNER (PII) | unset | Skip GLiNER network downloads | Partial offline; see [HF appendix](#hugging-face-cache-and-offline) |
 | `NSS_PII_REPLACER_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
 | `NEMO_TELEMETRY_ENABLED` | telemetry | `--emit_telemetry` | telemetry | `true` | Enable anonymous usage telemetry | Also `emit_telemetry` in YAML; see [Telemetry](#telemetry) |
 | `HF_HOME` | third-party | -- | Hugging Face Hub | platform cache dir | Root directory for HF downloads | [HF appendix](#hugging-face-cache-and-offline) |
-| `HF_HUB_OFFLINE` | third-party | -- | Hugging Face Hub | unset | Fail if a model is not cached | Preferred offline gate |
+| `HF_HUB_OFFLINE` | third-party | `--enable-huggingface-remote` / `--disable-huggingface-remote` | Hugging Face Hub | unset | Fail if a model is not cached (covers base model and GLiNER) | Preferred offline gate; CLI flag also sets `TRANSFORMERS_OFFLINE` |
 | `VLLM_CACHE_ROOT` | third-party | -- | vLLM | `~/.cache/vllm` | vLLM model cache directory | [vLLM appendix](#vllm-and-attention) |
 | `VLLM_ATTENTION_BACKEND` | third-party | -- | vLLM | auto | Override attention implementation | [vLLM appendix](#vllm-and-attention) |
 | `WANDB_MODE` | third-party | `--wandb-mode` | WandB | `disabled` | WandB run mode | Same as `NSS_WANDB_MODE` |
@@ -74,7 +73,8 @@ Grouped by the `Category` column -- `nss`-native settings first, then
 ### Infrastructure (CLISettings)
 
 For artifact paths, logging, WandB overrides, and the five runtime flags
-(`--inference-*`, `--local-files-only`, `--cpu-count`):
+(`--inference-*`, `--enable-huggingface-remote` / `--disable-huggingface-remote`,
+`--cpu-count`):
 
 1. CLI flags
 2. Environment variables
@@ -115,29 +115,41 @@ export HF_HOME=/shared/cache/huggingface
 
 ### `HF_HUB_OFFLINE`
 
-When set to `1`, Hugging Face Hub refuses network access. Use with a
-pre-populated `HF_HOME` for reliable offline runs.
+`HF_HUB_OFFLINE=1` tells Hugging Face Hub to refuse network access. It is the
+canonical offline switch: huggingface_hub honors it globally, so a single
+setting covers both the base model and GLiNER. Pair it with a pre-populated
+`HF_HOME`.
 
 ```bash
 export HF_HUB_OFFLINE=1
 ```
 
-Prefer this over `NSS_LOCAL_FILES_ONLY` for end-to-end offline behavior.
+Set it before the process starts. huggingface_hub reads the value once, when it
+is first imported, and caches it -- changing it later has no effect for that
+process. For the CLI, export it before launching `safe-synthesizer`. When
+driving the pipeline programmatically, set it before importing
+`nemo_safe_synthesizer`.
 
-### `NSS_LOCAL_FILES_ONLY`
+### `--enable-huggingface-remote` / `--disable-huggingface-remote`
 
-Skips network downloads for GLiNER only. Not respected by the HuggingFace
-training backend or vLLM. Override on the CLI with `--local-files-only` or
-`--no-local-files-only`.
+CLI shorthand for the switch above, with no separate NSS env var:
+
+- `--disable-huggingface-remote` -- offline run; sets `HF_HUB_OFFLINE=1` and
+  `TRANSFORMERS_OFFLINE=1`.
+- `--enable-huggingface-remote` -- online run; sets both to `0`, overriding any
+  inherited offline environment.
+
+The CLI applies the flag before huggingface_hub loads, so the flag always wins
+over an inherited environment value. For env-based control, set `HF_HUB_OFFLINE`
+directly.
 
 ```bash
-export NSS_LOCAL_FILES_ONLY=true
+safe-synthesizer run --disable-huggingface-remote ...
 ```
 
-!!! warning "Partial offline support"
-    For the most reliable offline experience, set `HF_HUB_OFFLINE=1` with a
-    pre-populated `HF_HOME` cache instead of relying on `NSS_LOCAL_FILES_ONLY`
-    alone.
+!!! warning "Models must be cached"
+    Offline mode requires the base model and GLiNER to already be present in
+    `HF_HOME`. Loading fails if a required model is not cached.
 
 ### Pre-caching models
 

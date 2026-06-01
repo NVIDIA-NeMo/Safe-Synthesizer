@@ -232,8 +232,8 @@ def common_setup(
     """
     # 0. Propagate CLI-resolved runtime settings back to os.environ. This must
     # run before any deferred pii_replacer imports so that module-level reads
-    # of NSS_INFERENCE_*, NSS_LOCAL_FILES_ONLY, and NSS_PII_REPLACER_CPU_COUNT
-    # see the CLI-overridden values.
+    # of NSS_INFERENCE_*, HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE, and
+    # NSS_PII_REPLACER_CPU_COUNT see the CLI-overridden values.
     _propagate_runtime_settings_to_env(settings)
 
     # 1. Create workdir FIRST - this establishes all artifact paths
@@ -336,6 +336,20 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
     and writing it back is a no-op. When a CLI flag overrides the env var,
     this overwrites ``os.environ`` so the deferred imports in the runtime
     pipeline see the CLI value.
+
+    ``huggingface_remote`` is the exception: it has no NSS env var and instead
+    maps to the standard Hugging Face offline switches (``HF_HUB_OFFLINE`` and
+    ``TRANSFORMERS_OFFLINE``). ``--disable-huggingface-remote`` sets them to
+    ``1``; ``--enable-huggingface-remote`` sets them to ``0`` (overriding any
+    inherited offline env).
+
+    ``huggingface_hub`` caches ``HF_HUB_OFFLINE`` at import time, so this write
+    is only effective if it runs before the first ``huggingface_hub`` import.
+    The CLI import chain is kept hub-free for exactly this reason --
+    ``telemetry`` defers its ``huggingface_hub`` import (see
+    ``sanitize_model_for_telemetry``) -- so ``huggingface_hub`` first loads
+    during the pipeline, after this propagation. ``tests/cli/test_cli_import``
+    guards the hub-free import invariant.
     """
     if settings.inference_endpoint_url is not None:
         os.environ["NSS_INFERENCE_ENDPOINT"] = settings.inference_endpoint_url
@@ -343,8 +357,10 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
         os.environ["NSS_INFERENCE_KEY"] = settings.inference_api_key
     if settings.inference_model_id is not None:
         os.environ["NSS_INFERENCE_MODEL"] = settings.inference_model_id
-    if settings.local_files_only is not None:
-        os.environ["NSS_LOCAL_FILES_ONLY"] = "true" if settings.local_files_only else "false"
+    if settings.huggingface_remote is not None:
+        offline = "0" if settings.huggingface_remote else "1"
+        os.environ["HF_HUB_OFFLINE"] = offline
+        os.environ["TRANSFORMERS_OFFLINE"] = offline
     if settings.cpu_count is not None:
         os.environ["NSS_PII_REPLACER_CPU_COUNT"] = str(settings.cpu_count)
 

@@ -8,10 +8,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
+from urllib.parse import urlparse
 
-from ...config.replace_pii import has_inference_key
 from ...llm.utils import ModelRef
 from ...observability import get_logger
+from ...utils import hf_offline_enabled
 from ..base import ConfigCheck, IssueCollector, MetadataCheck
 from ..helpers import require_import
 from ..types import ConfigView, MetadataView
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 __all__ = [
     "CUDAAvailabilityCheck",
     "HFModelAvailabilityCheck",
-    "InferenceKeyCheck",
+    "InferenceModelCheck",
     "VRAMHeadroomCheck",
     "bytes_per_base_weight",
     "estimate_base_model_params",
@@ -325,33 +326,70 @@ class VRAMHeadroomCheck(MetadataCheck):
             )
 
 
-class InferenceKeyCheck(ConfigCheck):
-    """Check NSS_INFERENCE_KEY environment variable."""
+def _is_blank(value: str | None) -> bool:
+    """Whether ``value`` is set but contains only whitespace (an empty override)."""
+    return value is not None and not value.strip()
 
-    name = "env.inference_key"
-    label = "Inference key"
+
+def _is_valid_http_url(value: str | None) -> bool:
+    """Whether ``value`` parses as an ``http(s)`` URL with a network location."""
+    if value is None:
+        return False
+    parsed = urlparse(value.strip())
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+
+class InferenceModelCheck(ConfigCheck):
+    """Validate the inference configuration used for PII column classification.
+
+    When classification is enabled, the runtime calls an OpenAI-compatible
+    inference endpoint configured by ``NSS_INFERENCE_KEY``,
+    ``NSS_INFERENCE_MODEL``, and ``NSS_INFERENCE_ENDPOINT`` (set directly or via
+    the matching CLI flags, which are propagated to the environment before
+    preflight runs). This check reads those env vars -- not ``config`` -- because
+    the inference settings live in ``CLISettings``/the environment rather than in
+    ``SafeSynthesizerParameters``. All findings are warnings: classification
+    degrades or fails at call time rather than blocking the run outright.
+
+    The body uses a single-dispatch ``match`` over ``(model, key, endpoint)``,
+    so at most one warning is emitted per run -- the highest-priority problem.
+    Priority order: missing key, then blank model id, then invalid endpoint.
+    """
+
+    name = "env.inference"
+    label = "Inference configuration"
     category = "environment"
 
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         config = ctx.config
-        if config.replace_pii is not None and config.replace_pii.globals.classify.enable_classify is not False:
-            if not has_inference_key():
+        if config.replace_pii is None or config.replace_pii.globals.classify.enable_classify is False:
+            return
+
+        model = os.environ.get("NSS_INFERENCE_MODEL")
+        key = os.environ.get("NSS_INFERENCE_KEY")
+        endpoint = os.environ.get("NSS_INFERENCE_ENDPOINT")
+
+        # Single-dispatch: the first matching case wins, so cases are ordered by
+        # priority. A missing key (degraded mode) is reported before a blank
+        # model id or an invalid endpoint (hard failures at call time).
+        match model, key, endpoint:
+            case _, k, _ if not (k or "").strip():
                 collector.warning(
                     "inference_key_missing",
                     "NSS_INFERENCE_KEY is not set. PII column classification will run in degraded mode.",
                 )
-
-
-_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
-
-
-def _env_flag_enabled(name: str) -> bool:
-    value = os.environ.get(name)
-    return value is not None and value.casefold() in {"1", "true", "yes", "on"}
-
-
-def _hf_offline_enabled() -> bool:
-    return any(_env_flag_enabled(name) for name in _OFFLINE_ENV_VARS)
+            case m, _, _ if _is_blank(m):
+                collector.warning(
+                    "inference_model_blank",
+                    "NSS_INFERENCE_MODEL is set but empty. PII column classification will send an "
+                    "empty model id and fail. Unset it to use the default, or provide a model id.",
+                )
+            case _, _, e if e is not None and not _is_valid_http_url(e):
+                collector.warning(
+                    "inference_endpoint_invalid",
+                    f"NSS_INFERENCE_ENDPOINT '{e}' is not a valid http(s) URL. "
+                    "PII column classification requests will fail.",
+                )
 
 
 def _has_hf_token() -> bool:
@@ -410,7 +448,7 @@ class HFModelAvailabilityCheck(ConfigCheck):
             message = (
                 f"Cached Hugging Face model '{model_ref.repo_id}' at '{snapshot_path}' is missing {', '.join(missing)}."
             )
-            if _hf_offline_enabled():
+            if hf_offline_enabled():
                 collector.error(
                     "hf_model_cache_incomplete",
                     f"{message} Offline Hugging Face mode is enabled, so model loading will fail.",
@@ -445,7 +483,7 @@ class HFModelAvailabilityCheck(ConfigCheck):
         message = (
             f"Hugging Face model '{model_ref.repo_id}' is not present in the local cache at '{model_ref.cache_root}'."
         )
-        if _hf_offline_enabled():
+        if hf_offline_enabled():
             collector.error(
                 "hf_model_not_cached",
                 f"{message} Offline Hugging Face mode is enabled, so model loading will fail.",
@@ -470,7 +508,7 @@ class HFModelAvailabilityCheck(ConfigCheck):
             f"Trusted Hugging Face model '{model_ref.repo_id}' at '{model_path}' references remote code "
             f"that is not cached locally: {', '.join(missing)}."
         )
-        if _hf_offline_enabled():
+        if hf_offline_enabled():
             collector.error(
                 "hf_remote_code_not_cached",
                 f"{message} Offline Hugging Face mode is enabled, so Transformers cannot fetch it.",

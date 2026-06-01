@@ -260,13 +260,16 @@ class TestCLISettings:
     def test_runtime_settings_from_env(self, monkeypatch):
         """Remaining runtime settings load from their documented env vars."""
         monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
-        monkeypatch.setenv("NSS_LOCAL_FILES_ONLY", "true")
         monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", "4")
 
         settings = CLISettings()
         assert settings.inference_model_id == "custom/model"
-        assert settings.local_files_only is True
         assert settings.cpu_count == 4
+
+    def test_huggingface_remote_is_cli_only(self, monkeypatch):
+        """huggingface_remote is set via the CLI flag, not a parallel NSS env var."""
+        settings = CLISettings.from_cli_kwargs(huggingface_remote=False)
+        assert settings.huggingface_remote is False
 
     @pytest.mark.parametrize("bad_value", ["0", "-1"])
     def test_cpu_count_rejects_non_positive(self, monkeypatch, bad_value):

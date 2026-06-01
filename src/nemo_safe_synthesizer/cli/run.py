@@ -192,12 +192,14 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     )
     options.append(
         click.option(
-            "--local-files-only/--no-local-files-only",
-            "local_files_only",
+            "--enable-huggingface-remote/--disable-huggingface-remote",
+            "huggingface_remote",
             required=False,
             default=None,
-            help="If set, GLiNER skips network downloads and uses only local files. "
-            "Can also be set via NSS_LOCAL_FILES_ONLY env var.",
+            help="Allow or block Hugging Face remote downloads for both the base model "
+            "and GLiNER. --disable-huggingface-remote forces a fully offline run by "
+            "setting HF_HUB_OFFLINE and TRANSFORMERS_OFFLINE; both must already be "
+            "cached. Equivalent to setting HF_HUB_OFFLINE in the environment.",
         )
     )
     options.append(

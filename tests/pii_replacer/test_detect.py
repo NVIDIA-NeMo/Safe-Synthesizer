@@ -67,9 +67,10 @@ def test_gliner_batch_predict_config():
         entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
 
 
+@pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
 @pytest.mark.parametrize("env_value", ["1", "yes", "on"])
-def test_gliner_local_files_only_accepts_common_truthy_env_values(env_value, monkeypatch):
-    """GLiNER offline mode accepts the same truthy spellings as env_flag_is_true."""
+def test_gliner_local_files_only_follows_hf_offline_env(env_value, offline_var, monkeypatch):
+    """GLiNER offline mode follows the standard Hugging Face offline env vars."""
     cfg = ClassifyConfig(
         valid_entities={"name"},
         ner_threshold=0.8,
@@ -81,7 +82,9 @@ def test_gliner_local_files_only_accepts_common_truthy_env_values(env_value, mon
         gliner_batch_mode_batch_size=20,
         gliner_model="nvidia/gliner-PII",
     )
-    monkeypatch.setenv("NSS_LOCAL_FILES_ONLY", env_value)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+    monkeypatch.setenv(offline_var, env_value)
 
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
         EntityExtractorGliner.get_entity_extractor(cfg)

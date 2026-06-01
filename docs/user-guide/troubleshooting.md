@@ -513,7 +513,9 @@ check of its own.
 | `torch_missing` | error | `gpu.cuda` | PyTorch not installed; cannot verify GPU availability |
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
-| `inference_key_missing` | warning | `env.inference_key` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
+| `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
+| `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; classification would send an empty model id and fail |
+| `inference_endpoint_invalid` | warning | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
@@ -545,7 +547,29 @@ The PII replacer downloads the GLiNER NER model on first use. If the download
 fails, it raises an exception immediately.
 
 Pre-download the model by running PII replacement once in an environment
-with internet access, or set `NSS_LOCAL_FILES_ONLY=true` after the model is cached.
+with internet access. To force offline use after the model is cached, set
+`HF_HUB_OFFLINE=1` or pass `--disable-huggingface-remote`.
+
+### Offline Mode Not Taking Effect
+
+Symptom: `HF_HUB_OFFLINE=1` (or `--disable-huggingface-remote`) is set, yet the
+run still attempts a download, or `--enable-huggingface-remote` does not
+re-enable downloads.
+
+Cause: huggingface_hub reads `HF_HUB_OFFLINE` once, at import time, and caches
+it. If the variable is changed after huggingface_hub has been imported in the
+process, the change is ignored.
+
+Fixes:
+
+- CLI: export `HF_HUB_OFFLINE` before launching `safe-synthesizer`, or use
+  `--enable-huggingface-remote` / `--disable-huggingface-remote`. The CLI
+  applies the flag before huggingface_hub loads, so the flag always wins over
+  an inherited environment value.
+- Programmatic / SDK: set `HF_HUB_OFFLINE` before importing
+  `nemo_safe_synthesizer` (or any library that imports huggingface_hub, such as
+  `transformers` or `datasets`). Setting it afterward has no effect for that
+  process.
 
 ### NER Processing Timeouts
 

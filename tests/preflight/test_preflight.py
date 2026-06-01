@@ -29,7 +29,7 @@ from nemo_safe_synthesizer.preflight import (
     DatasetSizeCheck,
     GroupbyColumnCheck,
     HFModelAvailabilityCheck,
-    InferenceKeyCheck,
+    InferenceModelCheck,
     OrderbyColumnCheck,
     OversamplingCheck,
     PreflightContext,
@@ -243,22 +243,85 @@ class TestVRAMHeadroomCheck:
 
 
 @pytest.mark.unit
-class TestInferenceKeyCheck:
-    def test_empty_env_emits_warning(self, default_config):
+class TestInferenceModelCheck:
+    def test_empty_env_emits_key_warning(self, default_config):
         with patch.dict("os.environ", {}, clear=True):
-            issues = InferenceKeyCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert any(i.code == "inference_key_missing" and i.severity == "warning" for i in issues)
 
     def test_inference_key_present_is_silent(self, default_config):
         with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key", "HF_TOKEN": "hf_xxx"}):
-            issues = InferenceKeyCheck().run(make_ctx(config=default_config))
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
         assert not any(i.code == "inference_key_missing" for i in issues)
 
-    def test_pii_disabled_skips_key_requirement(self):
+    def test_pii_disabled_skips_all_checks(self):
         config = SafeSynthesizerParameters(replace_pii=None)
-        with patch.dict("os.environ", {"HF_TOKEN": "hf_xxx"}, clear=True):
-            issues = InferenceKeyCheck().run(make_ctx(config=config))
-        assert not any(i.code == "inference_key_missing" for i in issues)
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
+            clear=True,
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=config))
+        assert issues == []
+
+    def test_blank_model_emits_warning(self, default_config):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "   "},
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        assert any(i.code == "inference_model_blank" and i.severity == "warning" for i in issues)
+
+    def test_unset_model_is_silent(self, default_config):
+        with patch.dict("os.environ", {"NSS_INFERENCE_KEY": "test-key"}, clear=True):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        assert not any(i.code == "inference_model_blank" for i in issues)
+
+    def test_valid_model_is_silent(self, default_config):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "qwen/qwen3-next-80b-a3b-instruct"},
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        assert not any(i.code == "inference_model_blank" for i in issues)
+
+    @pytest.mark.parametrize("endpoint", ["not-a-url", "ftp://example.com", "http://"])
+    def test_invalid_endpoint_emits_warning(self, default_config, endpoint):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": endpoint},
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        assert any(i.code == "inference_endpoint_invalid" and i.severity == "warning" for i in issues)
+
+    def test_valid_endpoint_is_silent(self, default_config):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_ENDPOINT": "https://integrate.api.nvidia.com/v1"},
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        assert not any(i.code == "inference_endpoint_invalid" for i in issues)
+
+    def test_missing_key_takes_priority_over_other_problems(self, default_config):
+        # Single-dispatch match: the first matching case wins, so a missing key
+        # is reported even when the model id and endpoint are also bad.
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_MODEL": "", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
+            clear=True,
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        codes = {i.code for i in issues}
+        assert codes == {"inference_key_missing"}
+
+    def test_blank_model_takes_priority_over_invalid_endpoint(self, default_config):
+        with patch.dict(
+            "os.environ",
+            {"NSS_INFERENCE_KEY": "test-key", "NSS_INFERENCE_MODEL": "   ", "NSS_INFERENCE_ENDPOINT": "not-a-url"},
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+        codes = {i.code for i in issues}
+        assert codes == {"inference_model_blank"}
 
 
 @pytest.mark.unit
@@ -725,6 +788,15 @@ class TestOversamplingCheck:
 
 @pytest.mark.unit
 class TestRunPreflight:
+    @pytest.fixture(autouse=True)
+    def _isolate_hf_offline_env(self, monkeypatch):
+        # run_preflight invokes HFModelAvailabilityCheck, which escalates
+        # hf_model_not_cached to an error when HF offline mode is enabled. Clear
+        # the ambient offline vars so these tests do not fail when the developer
+        # (or CI) has HF_HUB_OFFLINE set and the model is not cached.
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+
     def test_clean_dataset_has_no_errors(self, sample_df, default_config):
         resolved_config = default_config.model_copy(
             update={

@@ -27,7 +27,7 @@ from .dataframe import (
 from .environment import (
     CUDAAvailabilityCheck,
     HFModelAvailabilityCheck,
-    InferenceKeyCheck,
+    InferenceModelCheck,
     VRAMHeadroomCheck,
 )
 from .metadata import TokenBudgetCheck
@@ -39,7 +39,7 @@ __all__ = [
     "DatasetSizeCheck",
     "GroupbyColumnCheck",
     "HFModelAvailabilityCheck",
-    "InferenceKeyCheck",
+    "InferenceModelCheck",
     "OrderbyColumnCheck",
     "OversamplingCheck",
     "PseudoColumnCheck",
@@ -57,7 +57,7 @@ __all__ = [
 _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     # CONFIG
     CUDAAvailabilityCheck(),
-    InferenceKeyCheck(),
+    InferenceModelCheck(),
     HFModelAvailabilityCheck(),
     # DATAFRAME
     DatasetSizeCheck(),

@@ -274,7 +274,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | Check name | Stage | What it validates |
 |-------|-------|-------------------|
 | `gpu.cuda` | config | PyTorch is importable and a CUDA GPU is visible |
-| `env.inference_key` | config | `NSS_INFERENCE_KEY` is set when PII classification is enabled (warning only) |
+| `env.inference` | config | Inference config for PII classification: `NSS_INFERENCE_KEY` is set, `NSS_INFERENCE_MODEL` is non-empty, and `NSS_INFERENCE_ENDPOINT` is a valid http(s) URL (warnings only) |
 | `env.hf_model_availability` | config | The pretrained model reference is usable locally or can be fetched from Hugging Face; warns about a missing HF token only when online HF access may be needed |
 | `dataset.size` | dataframe | Training split meets the hard minimum row count |
 | `columns.groupby` | dataframe | `group_training_examples_by` column is present and has no nulls |
@@ -1230,9 +1230,11 @@ See [`artifacts clean`](#artifacts-clean) in the CLI Commands section for option
 ## Running in Offline Environments
 
 Pre-cache models by running once with internet access, then set
-`HF_HUB_OFFLINE=1` in your target environment. For detailed cache setup
-and environment variables (`HF_HOME`, `HF_HUB_OFFLINE`, `NSS_LOCAL_FILES_ONLY`,
-`VLLM_CACHE_ROOT`), see
+`HF_HUB_OFFLINE=1` in your target environment. Export it before launching
+`safe-synthesizer` (or pass `--disable-huggingface-remote`) -- huggingface_hub
+reads the value once at import time, so setting it after the process starts has
+no effect. For detailed cache setup and environment variables (`HF_HOME`,
+`HF_HUB_OFFLINE`, `VLLM_CACHE_ROOT`), see
 [Environment Variables -- Hugging Face cache and offline](environment.md#hugging-face-cache-and-offline).
 
 For offline-specific errors, see [Program Runtime](troubleshooting.md).
