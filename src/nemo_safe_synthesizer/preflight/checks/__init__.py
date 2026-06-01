@@ -30,7 +30,6 @@ from .environment import (
     InferenceKeyCheck,
     VRAMHeadroomCheck,
 )
-from .generation import StructuralTagBackendCheck
 from .metadata import TokenBudgetCheck
 
 __all__ = [
@@ -44,7 +43,6 @@ __all__ = [
     "OrderbyColumnCheck",
     "OversamplingCheck",
     "PseudoColumnCheck",
-    "StructuralTagBackendCheck",
     "TimestampColumnCheck",
     "TokenBudgetCheck",
     "VRAMHeadroomCheck",
@@ -61,7 +59,6 @@ _CORE_CHECKS: tuple[PreflightCheck, ...] = (
     CUDAAvailabilityCheck(),
     InferenceKeyCheck(),
     HFModelAvailabilityCheck(),
-    StructuralTagBackendCheck(),
     # DATAFRAME
     DatasetSizeCheck(),
     GroupbyColumnCheck(),

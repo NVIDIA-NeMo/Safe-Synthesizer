@@ -98,6 +98,14 @@ def base_params():
 
 
 @pytest.fixture
+def params_with_structured_generation_auto(base_params):
+    """Create params with structured generation enabled using auto schema method."""
+    base_params.generation.use_structured_generation = True
+    base_params.generation.structured_generation_schema_method = "auto"
+    return base_params
+
+
+@pytest.fixture
 def params_with_structured_generation_regex(base_params):
     """Create params with structured generation enabled using regex."""
     base_params.generation.use_structured_generation = True
@@ -246,6 +254,60 @@ class TestBuildStructuredOutputParams:
             )
             assert result is not None
             assert result.structural_tag == '{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}'
+
+    @pytest.mark.parametrize("backend", ["auto", "xgrammar"])
+    def test_auto_resolves_to_structural_tag_on_xgrammar_backends(
+        self,
+        params_with_structured_generation_auto,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        backend,
+    ):
+        """Auto schema method uses structural_tag on xgrammar-capable backends."""
+        params_with_structured_generation_auto.generation.structured_generation_backend = backend
+        backend_instance = create_backend(
+            params_with_structured_generation_auto,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
+
+        with patch(
+            "nemo_safe_synthesizer.generation.vllm_backend.build_json_structural_tag",
+            return_value='{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}',
+        ) as mock_build_structural_tag:
+            result = backend_instance._build_structured_output_params()
+            mock_build_structural_tag.assert_called_once()
+            assert result is not None
+            assert result.structural_tag is not None
+
+    @pytest.mark.parametrize("backend", ["guidance", "outlines", "lm-format-enforcer"])
+    def test_auto_resolves_to_regex_on_other_backends(
+        self,
+        params_with_structured_generation_auto,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        backend,
+    ):
+        """Auto schema method falls back to regex on non-xgrammar backends."""
+        params_with_structured_generation_auto.generation.structured_generation_backend = backend
+        backend_instance = create_backend(
+            params_with_structured_generation_auto,
+            mock_model_metadata,
+            mock_schema,
+            mock_workdir,
+        )
+
+        with patch(
+            "nemo_safe_synthesizer.generation.vllm_backend.build_json_based_regex",
+            return_value="test_regex_pattern",
+        ) as mock_build_regex:
+            result = backend_instance._build_structured_output_params()
+            mock_build_regex.assert_called_once()
+            assert result is not None
+            assert result.regex == "test_regex_pattern"
 
     @pytest.mark.parametrize("backend", ["guidance", "outlines", "lm-format-enforcer"])
     def test_structural_tag_rejects_non_xgrammar_backends(

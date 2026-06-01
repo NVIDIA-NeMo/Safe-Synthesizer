@@ -17,8 +17,6 @@ from nemo_safe_synthesizer.generation.regex_manager import (
 
 from .structural_tag_helpers import structural_tag_accepts_text
 
-pytest.importorskip("xgrammar", reason="xgrammar is required for structural tag acceptance tests")
-
 BOS_TOKEN = "<s>"
 EOS_TOKEN = "</s>"
 

@@ -39,7 +39,6 @@ from nemo_safe_synthesizer.preflight import (
     PreflightStage,
     PseudoColumnCheck,
     SmallDatasetCheck,
-    StructuralTagBackendCheck,
     TimestampColumnCheck,
     TokenBudgetCheck,
     VRAMHeadroomCheck,
@@ -260,52 +259,6 @@ class TestInferenceKeyCheck:
         with patch.dict("os.environ", {"HF_TOKEN": "hf_xxx"}, clear=True):
             issues = InferenceKeyCheck().run(make_ctx(config=config))
         assert not any(i.code == "inference_key_missing" for i in issues)
-
-
-@pytest.mark.unit
-class TestStructuralTagBackendCheck:
-    @staticmethod
-    def _structured_tag_config(default_config, *, backend: str):
-        return default_config.model_copy(
-            update={
-                "generation": default_config.generation.model_copy(
-                    update={
-                        "use_structured_generation": True,
-                        "structured_generation_schema_method": "structural_tag",
-                        "structured_generation_backend": backend,
-                    }
-                )
-            }
-        )
-
-    def test_compatible_backends_pass(self, default_config):
-        for backend in ("xgrammar", "auto"):
-            config = self._structured_tag_config(default_config, backend=backend)
-            issues = StructuralTagBackendCheck().run(make_ctx(config=config))
-            assert issues == []
-
-    def test_incompatible_backend_errors(self, default_config):
-        config = self._structured_tag_config(default_config, backend="outlines")
-        issues = StructuralTagBackendCheck().run(make_ctx(config=config))
-        assert any(i.code == "structured_tag_backend_incompatible" and i.severity == "error" for i in issues)
-        assert "outlines" in issues[0].message
-
-    def test_disabled_when_structured_generation_off(self, default_config):
-        assert StructuralTagBackendCheck().enabled(make_ctx(config=default_config)) is False
-
-    def test_disabled_for_non_structural_tag_methods(self, default_config):
-        config = default_config.model_copy(
-            update={
-                "generation": default_config.generation.model_copy(
-                    update={
-                        "use_structured_generation": True,
-                        "structured_generation_schema_method": "regex",
-                        "structured_generation_backend": "outlines",
-                    }
-                )
-            }
-        )
-        assert StructuralTagBackendCheck().enabled(make_ctx(config=config)) is False
 
 
 @pytest.mark.unit

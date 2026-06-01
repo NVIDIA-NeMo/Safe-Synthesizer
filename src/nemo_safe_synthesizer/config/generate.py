@@ -20,14 +20,39 @@ from ..configurator.validators import (
 )
 from ..errors import ParameterError
 
+StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "structural_tag"]
+ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
+StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
+
 STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
 
 __all__ = [
     "GenerateParameters",
+    "ResolvedStructuredGenerationSchemaMethod",
     "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
+    "StructuredGenerationBackend",
+    "StructuredGenerationSchemaMethod",
     "ValidationParameters",
+    "resolve_structured_generation_schema_method",
     "structural_tag_backend_error_message",
 ]
+
+
+def resolve_structured_generation_schema_method(
+    schema_method: StructuredGenerationSchemaMethod,
+    backend: StructuredGenerationBackend | str,
+) -> ResolvedStructuredGenerationSchemaMethod:
+    """Resolve ``auto`` schema method from the configured structured-output backend.
+
+    ``auto`` picks ``structural_tag`` on xgrammar-capable backends and ``regex``
+    elsewhere, preserving legacy behavior for outlines/guidance configs that omit
+    an explicit schema method.
+    """
+    if schema_method != "auto":
+        return schema_method
+    if backend in STRUCTURAL_TAG_COMPATIBLE_BACKENDS:
+        return "structural_tag"
+    return "regex"
 
 
 def structural_tag_backend_error_message(backend: str) -> str | None:
@@ -172,17 +197,18 @@ class GenerateParameters(Parameters, BaseModel):
     ] = "auto"
 
     structured_generation_schema_method: Annotated[
-        Literal["regex", "json_schema", "structural_tag"],
+        StructuredGenerationSchemaMethod,
         Field(
             title="structured_generation_schema_method",
             description=(
                 "The method used to generate the schema from your dataset and pass it to the generation backend. "
+                "'auto' picks 'structural_tag' on xgrammar-capable backends and 'regex' otherwise. "
                 "'regex' uses a custom regex construction method that tends to be more comprehensive "
                 "than 'json_schema' at the cost of speed. 'structural_tag' uses XGrammar Structural Tag "
                 "to compose schema-constrained JSONL output."
             ),
         ),
-    ] = "structural_tag"
+    ] = "auto"
 
     structured_generation_use_single_sequence: Annotated[
         bool,

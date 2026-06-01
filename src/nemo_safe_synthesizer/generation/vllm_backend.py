@@ -25,7 +25,10 @@ from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 from .. import utils
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
-from ..config.generate import structural_tag_backend_error_message
+from ..config.generate import (
+    resolve_structured_generation_schema_method,
+    structural_tag_backend_error_message,
+)
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
 from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
@@ -325,8 +328,12 @@ class VllmBackend(GeneratorBackend):
             return None
 
         params: dict[str, Any] = {}
+        schema_method = resolve_structured_generation_schema_method(
+            self.config.generation.structured_generation_schema_method,
+            self.config.generation.structured_generation_backend,
+        )
 
-        if self.config.generation.structured_generation_schema_method == "regex":
+        if schema_method == "regex":
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
             pc = self.model_metadata.prompt_config
             regex = build_json_based_regex(
@@ -336,9 +343,9 @@ class VllmBackend(GeneratorBackend):
                 eos_token=pc.eos_token,
             )
             params["regex"] = regex
-        elif self.config.generation.structured_generation_schema_method == "json_schema":
+        elif schema_method == "json_schema":
             params["json"] = self.schema
-        elif self.config.generation.structured_generation_schema_method == "structural_tag":
+        elif schema_method == "structural_tag":
             backend = self.config.generation.structured_generation_backend
             if message := structural_tag_backend_error_message(backend):
                 raise ParameterError(message)
