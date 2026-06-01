@@ -15,6 +15,10 @@ from nemo_safe_synthesizer.generation.regex_manager import (
     build_json_structural_tag,
 )
 
+from .structural_tag_helpers import structural_tag_accepts_text
+
+pytest.importorskip("xgrammar", reason="xgrammar is required for structural tag acceptance tests")
+
 BOS_TOKEN = "<s>"
 EOS_TOKEN = "</s>"
 
@@ -553,6 +557,51 @@ def test_property_regex(fixture_safe_synthesizer_config):
     assert re.fullmatch(regex, '{"c":3}\n') is None
     assert re.fullmatch(regex, '{"c":3,"b":2}\n') is None
     assert re.fullmatch(regex, '{"b":2,"a":1}\n') is None
+
+
+# Purpose: Round-trip regression: DataFrame -> schema -> structural tag must match the original JSONL rows.
+# Data: First 5 rows of Iris dataset serialized to JSONL; same schema used to build the tag.
+# Asserts: Non-grouped JSONL matches; grouped (BOS/EOS-wrapped) matches when group_by=True.
+@pytest.mark.parametrize("group_by", [False, True])
+def test_round_trip_dataframe_schema_structural_tag_matches_iris(
+    group_by,
+    fixture_iris_dataset,
+    fixture_safe_synthesizer_config,
+    fixture_tokenizer,
+):
+    if group_by:
+        fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+
+    sample_df = pd.DataFrame(fixture_iris_dataset[:5])
+    buf = StringIO()
+    sample_df.to_json(buf, orient="records", lines=True)
+    jsonl_str = buf.getvalue()
+
+    schema = make_json_schema(sample_df)
+    structural_tag = build_json_structural_tag(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+    )
+
+    text = f"{BOS_TOKEN}{jsonl_str}{EOS_TOKEN}\n" if group_by else jsonl_str
+    assert structural_tag_accepts_text(text, structural_tag, fixture_tokenizer) is True
+
+
+def test_round_trip_structural_tag_rejects_invalid_jsonl(fixture_safe_synthesizer_config, fixture_tokenizer):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+    structural_tag = build_json_structural_tag(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+    )
+    assert structural_tag_accepts_text('{"name":123}\n', structural_tag, fixture_tokenizer) is False
 
 
 # Purpose: Round-trip regression: DataFrame -> schema -> regex must match the original JSONL rows.

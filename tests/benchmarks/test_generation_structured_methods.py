@@ -27,6 +27,11 @@ The default `cleaned/amazon_reviews_25k.csv` data source above is one of the
 benchmark input datasets. Use a different input CSV/config/run-path trio by
 setting the environment variables below.
 
+By default, this compares unstructured generation, XGrammar JSON schema,
+XGrammar Structural Tag, and JSON schema through the outlines, guidance, and
+lm-format-enforcer backends. Override `NSS_GENERATION_BENCHMARK_METHODS` with a
+comma-separated subset when you only need specific cases.
+
 Override inputs with:
 
     NSS_GENERATION_BENCHMARK_DATA_SOURCE=cleaned/amazon_reviews_25k.csv
@@ -52,7 +57,16 @@ import pytest
 DEFAULT_DATA_SOURCE = "cleaned/amazon_reviews_25k.csv"
 DEFAULT_CONFIG = "script/slurm/configs/smollm3-dp.yaml"
 DEFAULT_RUN_PATH = "local_runs/smollm3-dp_amazon_reviews_25k_1_5609622_1"
-DEFAULT_METHODS = ("unstructured", "regex", "json_schema", "structural_tag")
+DEFAULT_METHODS = (
+    "unstructured",
+    "regex",
+    "json_schema",
+    "structural_tag",
+    "outlines",
+    "outlines_regex",
+    "guidance",
+    "lm_format_enforcer",
+)
 DEFAULT_TIMEOUT_SECONDS = 1800
 
 
@@ -65,11 +79,14 @@ class GenerationMethod:
     name: str
     use_structured_generation: bool
     schema_method: str | None = None
+    backend: str = "xgrammar"
 
 
 @dataclass(frozen=True)
 class GenerationBenchmarkResult:
     method: str
+    backend: str | None
+    schema_method: str | None
     command: list[str]
     duration_seconds: float
     output_file: str
@@ -107,6 +124,30 @@ def _selected_methods() -> list[GenerationMethod]:
             "structural_tag",
             use_structured_generation=True,
             schema_method="structural_tag",
+        ),
+        "outlines_regex": GenerationMethod(
+            "outlines_regex",
+            use_structured_generation=True,
+            schema_method="regex",
+            backend="outlines",
+        ),
+        "outlines": GenerationMethod(
+            "outlines",
+            use_structured_generation=True,
+            schema_method="json_schema",
+            backend="outlines",
+        ),
+        "guidance": GenerationMethod(
+            "guidance",
+            use_structured_generation=True,
+            schema_method="json_schema",
+            backend="guidance",
+        ),
+        "lm_format_enforcer": GenerationMethod(
+            "lm_format_enforcer",
+            use_structured_generation=True,
+            schema_method="json_schema",
+            backend="lm-format-enforcer",
         ),
     }
     requested = os.environ.get("NSS_GENERATION_BENCHMARK_METHODS")
@@ -163,7 +204,7 @@ def _build_command(method: GenerationMethod, output_file: Path, root: Path) -> l
         command.extend(
             [
                 "--generation__structured_generation_backend",
-                "xgrammar",
+                method.backend,
                 "--generation__structured_generation_schema_method",
                 method.schema_method or "regex",
             ]
@@ -231,6 +272,8 @@ def test_generation_structured_method_benchmark(
 
     result = GenerationBenchmarkResult(
         method=method.name,
+        backend=method.backend if method.use_structured_generation else None,
+        schema_method=method.schema_method,
         command=command,
         duration_seconds=duration,
         output_file=str(output_file),

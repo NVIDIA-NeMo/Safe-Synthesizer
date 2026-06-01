@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     BaseModel,
     Field,
+    model_validator,
 )
 
 from ..configurator.parameters import (
@@ -17,8 +18,32 @@ from ..configurator.validators import (
     ValueValidator,
     range_validator,
 )
+from ..errors import ParameterError
 
-__all__ = ["GenerateParameters", "ValidationParameters"]
+STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
+
+__all__ = [
+    "GenerateParameters",
+    "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
+    "ValidationParameters",
+    "structural_tag_backend_error_message",
+]
+
+
+def structural_tag_backend_error_message(backend: str) -> str | None:
+    """Return an error message when *backend* cannot serve ``structural_tag``.
+
+    vLLM only supports XGrammar Structural Tag constraints when the guided
+    decoding backend is ``xgrammar`` or ``auto`` (which selects xgrammar for
+    this schema method).
+    """
+    if backend in STRUCTURAL_TAG_COMPATIBLE_BACKENDS:
+        return None
+    return (
+        "Invalid structured generation configuration: "
+        "`structured_generation_schema_method='structural_tag'` requires "
+        f"`structured_generation_backend` to be 'xgrammar' or 'auto', got {backend!r}."
+    )
 
 
 class ValidationParameters(Parameters, BaseModel):
@@ -192,3 +217,13 @@ class GenerateParameters(Parameters, BaseModel):
             ),
         ),
     ] = "auto"
+
+    @model_validator(mode="after")
+    def _validate_structural_tag_backend(self) -> Self:
+        if not self.use_structured_generation:
+            return self
+        if self.structured_generation_schema_method != "structural_tag":
+            return self
+        if message := structural_tag_backend_error_message(self.structured_generation_backend):
+            raise ParameterError(message)
+        return self
