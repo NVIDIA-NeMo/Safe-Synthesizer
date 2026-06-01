@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
+from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
@@ -42,6 +44,7 @@ from ..telemetry import (
     sanitize_model_for_telemetry,
 )
 from ..training.huggingface_backend import HuggingFaceBackend
+from ..utils import merge_dicts
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
@@ -49,6 +52,62 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from ..generation.backend import GeneratorBackend
     from ..training.backend import TrainingBackend
+
+
+def _merge_runtime_config_overrides(
+    saved_config: SafeSynthesizerParameters,
+    runtime_config: SafeSynthesizerParameters,
+) -> SafeSynthesizerParameters:
+    """Apply only explicit resume-time generation/evaluation overrides."""
+    updates: dict[str, object] = {}
+
+    generation_overrides = runtime_config.generation.model_dump(exclude_unset=True)
+    if generation_overrides:
+        generation_values = merge_dicts(saved_config.generation.model_dump(exclude_unset=False), generation_overrides)
+        updates["generation"] = type(saved_config.generation).model_validate(generation_values)
+
+    evaluation_overrides = runtime_config.evaluation.model_dump(exclude_unset=True)
+    if evaluation_overrides:
+        evaluation_values = merge_dicts(saved_config.evaluation.model_dump(exclude_unset=False), evaluation_overrides)
+        updates["evaluation"] = type(saved_config.evaluation).model_validate(evaluation_values)
+
+    if "emit_telemetry" in runtime_config.__pydantic_fields_set__:
+        updates["emit_telemetry"] = runtime_config.emit_telemetry
+
+    if not updates:
+        return saved_config
+    return saved_config.model_copy(update=updates)
+
+
+def _direct_parameter_values(params: Parameters) -> Iterator[tuple[str, object]]:
+    for item in params._iter_parameters(recursive=False):
+        yield next(iter(item.items()))
+
+
+def _default_drift_paths(saved_model: Parameters, default_model: Parameters, prefix: str = "") -> list[str]:
+    paths: list[str] = []
+    default_values = dict(_direct_parameter_values(default_model))
+    for field_name, saved_value in _direct_parameter_values(saved_model):
+        default_value = default_values[field_name]
+        field_path = f"{prefix}.{field_name}" if prefix else field_name
+
+        saved_attr = saved_model.__dict__[field_name]
+        default_attr = default_model.__dict__[field_name]
+        if isinstance(saved_attr, Parameters) and isinstance(default_attr, Parameters):
+            paths.extend(_default_drift_paths(saved_attr, default_attr, field_path))
+        elif saved_value != default_value:
+            paths.append(field_path)
+    return paths
+
+
+def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> None:
+    """Warn when saved materialized values differ from current defaults."""
+    current_defaults = SafeSynthesizerParameters()
+    for path in _default_drift_paths(saved_config, current_defaults):
+        logger.user.warning(
+            f"Saved run config value at {path} differs from the current package default; preserving saved value.",
+            extra={"config_path": path},
+        )
 
 
 def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
@@ -260,14 +319,9 @@ class SafeSynthesizer(ConfigBuilder):
         config_file = self._workdir.source_config
 
         saved_config = SafeSynthesizerParameters.from_json(config_file)
+        _warn_for_saved_default_drift(saved_config)
         if runtime_config is not None:
-            saved_config = saved_config.model_copy(
-                update={
-                    "generation": runtime_config.generation,
-                    "evaluation": runtime_config.evaluation,
-                    "emit_telemetry": runtime_config.emit_telemetry,
-                },
-            )
+            saved_config = _merge_runtime_config_overrides(saved_config, runtime_config)
         self._nss_config = saved_config
         self._generation_config = self._nss_config.generation
         self._evaluation_config = self._nss_config.evaluation
