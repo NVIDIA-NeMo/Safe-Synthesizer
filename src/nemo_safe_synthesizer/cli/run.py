@@ -222,6 +222,31 @@ def _parse_run_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
     return parse_overrides(kwargs)
 
 
+# CLISettings fields populated from common_run_options flags. ``synthesis_overrides``
+# is excluded -- it is derived from the leftover pydantic_options kwargs, not bound
+# to a single flag. ``observability``/``wandb`` are nested sub-settings with no CLI
+# flag, so they never appear in command kwargs.
+_CLI_SETTINGS_FIELDS: frozenset[str] = frozenset(CLISettings.model_fields) - {"synthesis_overrides"}
+
+
+def _settings_from_run_kwargs(kwargs: dict[str, Any]) -> CLISettings:
+    """Build ``CLISettings`` from a run command's ``**kwargs``.
+
+    ``common_run_options`` binds each infrastructure flag to a kwarg whose name
+    matches a ``CLISettings`` field; those are pulled out here. Everything left
+    (the ``pydantic_options`` ``--section__field`` options) becomes synthesis
+    overrides. This keeps the three run commands from re-listing the shared flag
+    set in both their signature and their settings construction -- adding a flag
+    now means editing ``common_run_options`` and ``CLISettings`` only.
+
+    ``kwargs`` is mutated: matched settings keys are popped before the remainder
+    is parsed into overrides.
+    """
+    settings_kwargs = {name: kwargs.pop(name) for name in _CLI_SETTINGS_FIELDS if name in kwargs}
+    settings_kwargs["synthesis_overrides"] = _parse_run_overrides(kwargs)
+    return CLISettings.from_cli_kwargs(**settings_kwargs)
+
+
 def _set_cli_deployment_type_default() -> None:
     """Default telemetry deployment type for CLI commands without overriding Slurm or explicit settings."""
     os.environ.setdefault("NEMO_DEPLOYMENT_TYPE", DeploymentTypeEnum.CLI.value)
@@ -363,25 +388,8 @@ def _build_validate_render_context(
 )
 def run(
     ctx: click.Context,
-    config_path: PathT | None,
-    data_source: str | None,
-    artifact_path: PathT | None,
-    run_path: PathT | None,
-    output_file: PathT | None,
-    log_file: PathT | None,
-    log_color: bool | None,
-    log_format: str | None,
-    verbose: int = 0,
-    wandb_mode: str | None = None,
-    wandb_project: str | None = None,
-    dataset_registry: str | None = None,
-    inference_endpoint_url: str | None = None,
-    inference_api_key: str | None = None,
-    inference_model_id: str | None = None,
-    local_files_only: bool | None = None,
-    cpu_count: int | None = None,
     validate: bool = False,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> None:
     """Run the Safe Synthesizer end-to-end pipeline.
 
@@ -394,26 +402,7 @@ def run(
 
     _set_cli_deployment_type_default()
 
-    settings = CLISettings.from_cli_kwargs(
-        data_source=data_source,
-        config_path=config_path,
-        artifact_path=artifact_path,
-        run_path=run_path,
-        output_file=output_file,
-        log_file=log_file,
-        log_color=log_color,
-        log_format=log_format,
-        verbose=verbose,
-        wandb_mode=wandb_mode,
-        wandb_project=wandb_project,
-        synthesis_overrides=_parse_run_overrides(kwargs),
-        dataset_registry=dataset_registry,
-        inference_endpoint_url=inference_endpoint_url,
-        inference_api_key=inference_api_key,
-        inference_model_id=inference_model_id,
-        local_files_only=local_files_only,
-        cpu_count=cpu_count,
-    )
+    settings = _settings_from_run_kwargs(kwargs)
 
     if validate:
         os.environ["NSS_PHASE"] = "process_data"
@@ -469,25 +458,8 @@ def run(
     help="Run pre-flight validation only, then exit without training or generating.",
 )
 def run_train(
-    config_path: PathT,
-    data_source: str | None,
-    artifact_path: PathT | None,
-    run_path: PathT | None,
-    output_file: PathT | None,
-    log_format: str | None,
-    log_color: bool | None,
-    log_file: PathT | None,
-    verbose: int,
-    wandb_mode: str | None = None,
-    wandb_project: str | None = None,
-    dataset_registry: str | None = None,
-    inference_endpoint_url: str | None = None,
-    inference_api_key: str | None = None,
-    inference_model_id: str | None = None,
-    local_files_only: bool | None = None,
-    cpu_count: int | None = None,
     validate: bool = False,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> None:
     """Run the training stage only.
 
@@ -496,26 +468,7 @@ def run_train(
     """
     _set_cli_deployment_type_default()
 
-    settings = CLISettings.from_cli_kwargs(
-        data_source=data_source,
-        config_path=config_path,
-        artifact_path=artifact_path,
-        run_path=run_path,
-        output_file=output_file,
-        log_file=log_file,
-        log_color=log_color,
-        log_format=log_format,
-        verbose=verbose,
-        wandb_mode=wandb_mode,
-        wandb_project=wandb_project,
-        synthesis_overrides=_parse_run_overrides(kwargs),
-        dataset_registry=dataset_registry,
-        inference_endpoint_url=inference_endpoint_url,
-        inference_api_key=inference_api_key,
-        inference_model_id=inference_model_id,
-        local_files_only=local_files_only,
-        cpu_count=cpu_count,
-    )
+    settings = _settings_from_run_kwargs(kwargs)
 
     if validate:
         os.environ["NSS_PHASE"] = "process_data"
@@ -570,26 +523,9 @@ def run_train(
 )
 @pydantic_options(SafeSynthesizerParameters, field_separator=CLI_NESTED_FIELD_SEPARATOR)
 def run_generate(
-    config_path: PathT,
-    data_source: str | None,
-    run_path: PathT | None,
-    artifact_path: PathT | None,
-    output_file: PathT | None,
-    log_format: str | None,
-    log_color: bool | None,
-    log_file: PathT | None,
-    verbose: int,
-    wandb_mode: str | None = None,
-    wandb_project: str | None = None,
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
-    dataset_registry: str | None = None,
-    inference_endpoint_url: str | None = None,
-    inference_api_key: str | None = None,
-    inference_model_id: str | None = None,
-    local_files_only: bool | None = None,
-    cpu_count: int | None = None,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> None:
     """Run the generation stage only.
 
@@ -603,26 +539,7 @@ def run_generate(
     _set_cli_deployment_type_default()
 
     # Create unified settings from CLI kwargs
-    settings = CLISettings.from_cli_kwargs(
-        data_source=data_source,
-        config_path=config_path,
-        artifact_path=artifact_path,
-        run_path=run_path,
-        output_file=output_file,
-        log_file=log_file,
-        log_color=log_color,
-        log_format=log_format,
-        verbose=verbose,
-        wandb_mode=wandb_mode,
-        wandb_project=wandb_project,
-        synthesis_overrides=_parse_run_overrides(kwargs),
-        dataset_registry=dataset_registry,
-        inference_endpoint_url=inference_endpoint_url,
-        inference_api_key=inference_api_key,
-        inference_model_id=inference_model_id,
-        local_files_only=local_files_only,
-        cpu_count=cpu_count,
-    )
+    settings = _settings_from_run_kwargs(kwargs)
 
     os.environ["NSS_PHASE"] = "generate"
     # Generation always resumes from an existing workdir with a trained model

@@ -1019,3 +1019,23 @@ class TestRunErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
+
+
+def test_common_run_options_map_to_settings_fields() -> None:
+    """Every shared run flag must be backed by a CLISettings field.
+
+    ``_settings_from_run_kwargs`` splits a command's kwargs by matching names
+    against ``CLISettings.model_fields``; anything unmatched is routed to
+    synthesis overrides. A shared flag whose name is not a settings field would
+    therefore be silently misrouted instead of populating settings.
+    """
+    from nemo_safe_synthesizer.cli.run import common_run_options
+
+    def _target(**kwargs: object) -> None: ...
+
+    decorated = common_run_options(_target)
+    option_names = {param.name for param in getattr(decorated, "__click_params__", [])}
+    assert option_names, "common_run_options registered no Click options"
+
+    unmapped = option_names - set(CLISettings.model_fields)
+    assert not unmapped, f"common_run_options flags not backed by CLISettings fields: {sorted(unmapped)}"
