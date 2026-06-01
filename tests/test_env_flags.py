@@ -25,11 +25,11 @@ from nemo_safe_synthesizer.utils import env_flag_is_true
     ],
 )
 def test_env_flag_is_true(value: str, expected: bool, monkeypatch):
-    monkeypatch.setenv("LOCAL_FILES_ONLY", value)
-    assert env_flag_is_true("LOCAL_FILES_ONLY") is expected
+    monkeypatch.setenv("NSS_LOCAL_FILES_ONLY", value)
+    assert env_flag_is_true("NSS_LOCAL_FILES_ONLY") is expected
 
 
 def test_env_flag_is_true_unset_uses_default(monkeypatch):
-    monkeypatch.delenv("LOCAL_FILES_ONLY", raising=False)
-    assert env_flag_is_true("LOCAL_FILES_ONLY") is False
-    assert env_flag_is_true("LOCAL_FILES_ONLY", default=True) is True
+    monkeypatch.delenv("NSS_LOCAL_FILES_ONLY", raising=False)
+    assert env_flag_is_true("NSS_LOCAL_FILES_ONLY") is False
+    assert env_flag_is_true("NSS_LOCAL_FILES_ONLY", default=True) is True

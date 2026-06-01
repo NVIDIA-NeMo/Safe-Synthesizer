@@ -81,7 +81,7 @@ def test_gliner_local_files_only_accepts_common_truthy_env_values(env_value, mon
         gliner_batch_mode_batch_size=20,
         gliner_model="nvidia/gliner-PII",
     )
-    monkeypatch.setenv("LOCAL_FILES_ONLY", env_value)
+    monkeypatch.setenv("NSS_LOCAL_FILES_ONLY", env_value)
 
     with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
         EntityExtractorGliner.get_entity_extractor(cfg)

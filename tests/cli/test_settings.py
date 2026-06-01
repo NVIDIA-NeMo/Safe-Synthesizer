@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.wandb_setup import WandbMode
 
@@ -217,43 +220,29 @@ class TestCLISettings:
         settings = CLISettings.from_cli_kwargs(dataset_registry="path/to/registry.yaml")
         assert settings.dataset_registry == "path/to/registry.yaml"
 
-    def test_nim_endpoint_url_from_nss_inference_env(self, monkeypatch):
-        """NSS_INFERENCE_ENDPOINT loads into nim_endpoint_url."""
+    def test_inference_endpoint_url_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_ENDPOINT loads into inference_endpoint_url."""
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://custom.example/v1")
         settings = CLISettings()
-        assert settings.nim_endpoint_url == "https://custom.example/v1"
+        assert settings.inference_endpoint_url == "https://custom.example/v1"
 
-    def test_nim_api_key_from_nss_inference_env(self, monkeypatch):
-        """NSS_INFERENCE_KEY loads into nim_api_key."""
+    def test_inference_api_key_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_KEY loads into inference_api_key."""
         monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
         settings = CLISettings()
-        assert settings.nim_api_key == "token-from-env"  # pragma: allowlist secret
+        assert settings.inference_api_key == "token-from-env"  # pragma: allowlist secret
 
-    def test_nim_endpoint_url_cli_overrides_env(self, monkeypatch):
-        """CLI --nim-endpoint-url takes precedence over NSS_INFERENCE_ENDPOINT."""
+    def test_inference_endpoint_url_cli_overrides_env(self, monkeypatch):
+        """CLI --inference-endpoint-url takes precedence over NSS_INFERENCE_ENDPOINT."""
         monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
-        settings = CLISettings.from_cli_kwargs(nim_endpoint_url="https://cli.example/v1")
-        assert settings.nim_endpoint_url == "https://cli.example/v1"
+        settings = CLISettings.from_cli_kwargs(inference_endpoint_url="https://cli.example/v1")
+        assert settings.inference_endpoint_url == "https://cli.example/v1"
 
-    def test_nim_api_key_cli_overrides_env(self, monkeypatch):
-        """CLI --nim-api-key takes precedence over NSS_INFERENCE_KEY."""
+    def test_inference_api_key_cli_overrides_env(self, monkeypatch):
+        """CLI --inference-api-key takes precedence over NSS_INFERENCE_KEY."""
         monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
-        settings = CLISettings.from_cli_kwargs(nim_api_key="token-from-cli")  # pragma: allowlist secret
-        assert settings.nim_api_key == "token-from-cli"  # pragma: allowlist secret
-
-    def test_nim_api_key_prefers_nss_over_nim_alias_when_both_set(self, monkeypatch):
-        """Canonical NSS_INFERENCE_KEY wins when both NSS and NIM aliases are set."""
-        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-nss")
-        monkeypatch.setenv("NIM_API_KEY", "token-from-nim")
-        settings = CLISettings()
-        assert settings.nim_api_key == "token-from-nss"  # pragma: allowlist secret
-
-    def test_nim_api_key_falls_back_to_nim_alias(self, monkeypatch):
-        """Legacy NIM_API_KEY loads when NSS_INFERENCE_KEY is unset."""
-        monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
-        monkeypatch.setenv("NIM_API_KEY", "token-from-nim")
-        settings = CLISettings()
-        assert settings.nim_api_key == "token-from-nim"  # pragma: allowlist secret
+        settings = CLISettings.from_cli_kwargs(inference_api_key="token-from-cli")  # pragma: allowlist secret
+        assert settings.inference_api_key == "token-from-cli"  # pragma: allowlist secret
 
     def test_log_color_from_nss_log_color_env(self, monkeypatch):
         """NSS_LOG_COLOR loads into CLISettings.log_color."""
@@ -270,14 +259,27 @@ class TestCLISettings:
 
     def test_runtime_settings_from_env(self, monkeypatch):
         """Remaining runtime settings load from their documented env vars."""
-        monkeypatch.setenv("NIM_MODEL_ID", "custom/model")
-        monkeypatch.setenv("LOCAL_FILES_ONLY", "true")
-        monkeypatch.setenv("SAFE_SYNTHESIZER_CPU_COUNT", "4")
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
+        monkeypatch.setenv("NSS_LOCAL_FILES_ONLY", "true")
+        monkeypatch.setenv("NSS_CPU_COUNT", "4")
 
         settings = CLISettings()
-        assert settings.nim_model_id == "custom/model"
+        assert settings.inference_model_id == "custom/model"
         assert settings.local_files_only is True
         assert settings.cpu_count == 4
+
+    @pytest.mark.parametrize("bad_value", ["0", "-1"])
+    def test_cpu_count_rejects_non_positive(self, monkeypatch, bad_value):
+        """cpu_count must be >= 1; 0 or negative fails fast at parse time."""
+        monkeypatch.setenv("NSS_CPU_COUNT", bad_value)
+        with pytest.raises(ValidationError):
+            CLISettings()
+
+    @pytest.mark.parametrize("bad_value", [0, -1])
+    def test_cpu_count_rejects_non_positive_from_cli(self, bad_value):
+        """A non-positive --cpu-count is rejected when passed via CLI kwargs."""
+        with pytest.raises(ValidationError):
+            CLISettings.from_cli_kwargs(cpu_count=bad_value)
 
 
 class TestCLISettingsIntegration:

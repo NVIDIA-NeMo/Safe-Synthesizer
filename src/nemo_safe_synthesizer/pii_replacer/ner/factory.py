@@ -147,7 +147,7 @@ class NERFactory(NERFactoryBase):
         # system tries to run another process and not enough memory workers will
         # start getting killed. So I'm setting an env here that allows an override
         # of the num CPUs when we need to explicitly control it.
-        num_proc_env = os.getenv("SAFE_SYNTHESIZER_CPU_COUNT")
+        num_proc_env = os.getenv("NSS_CPU_COUNT")
         if num_proc_env:
             try:
                 num_proc = int(num_proc_env)

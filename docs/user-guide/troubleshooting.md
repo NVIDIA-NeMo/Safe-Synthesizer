@@ -545,7 +545,7 @@ The PII replacer downloads the GLiNER NER model on first use. If the download
 fails, it raises an exception immediately.
 
 Pre-download the model by running PII replacement once in an environment
-with internet access, or set `LOCAL_FILES_ONLY=true` after the model is cached.
+with internet access, or set `NSS_LOCAL_FILES_ONLY=true` after the model is cached.
 
 ### NER Processing Timeouts
 

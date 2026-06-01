@@ -37,7 +37,7 @@ class DefaultLLMConfig:
     inference API for column-type classification.
 
     Attributes:
-        CONFIG_ID: Model identifier for the LLM. From env ``NIM_MODEL_ID``, or
+        CONFIG_ID: Model identifier for the LLM. From env ``NSS_INFERENCE_MODEL``, or
             ``qwen/qwen3-next-80b-a3b-instruct`` if unset.
         SYSTEM_PROMPT: System message describing the column-type annotation task
             sent to the LLM.
@@ -47,7 +47,7 @@ class DefaultLLMConfig:
             Lower values give more deterministic output.
     """
 
-    CONFIG_ID = os.environ.get("NIM_MODEL_ID", "qwen/qwen3-next-80b-a3b-instruct")
+    CONFIG_ID = os.environ.get("NSS_INFERENCE_MODEL", "qwen/qwen3-next-80b-a3b-instruct")
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
     MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2
@@ -576,7 +576,7 @@ class EntityExtractorGliner(EntityExtractor):
         extractor._model = GLiNER.from_pretrained(
             clsfy_cfg.gliner_model,
             map_location=map_location,
-            local_files_only=env_flag_is_true("LOCAL_FILES_ONLY"),
+            local_files_only=env_flag_is_true("NSS_LOCAL_FILES_ONLY"),
         )
         entity_types = DEFAULT_ENTITIES
         if clsfy_cfg.ner_entities:

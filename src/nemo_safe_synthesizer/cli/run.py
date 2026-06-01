@@ -161,32 +161,32 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
     )
     options.append(
         click.option(
-            "--nim-endpoint-url",
+            "--inference-endpoint-url",
             type=str,
             required=False,
             default=None,
-            help="NIM/OpenAI-compatible endpoint URL for PII column classification. "
+            help="OpenAI-compatible inference endpoint URL for PII column classification. "
             "Can also be set via NSS_INFERENCE_ENDPOINT env var.",
         )
     )
     options.append(
         click.option(
-            "--nim-api-key",
+            "--inference-api-key",
             type=str,
             required=False,
             default=None,
-            help="API key for the NIM endpoint used in PII column classification. "
+            help="API key for the inference endpoint used in PII column classification. "
             "Can also be set via NSS_INFERENCE_KEY env var.",
         )
     )
     options.append(
         click.option(
-            "--nim-model-id",
+            "--inference-model-id",
             type=str,
             required=False,
             default=None,
-            help="Model ID sent to the NIM endpoint for PII column classification. "
-            "Can also be set via NIM_MODEL_ID env var. "
+            help="Model ID sent to the inference endpoint for PII column classification. "
+            "Can also be set via NSS_INFERENCE_MODEL env var. "
             "[default: qwen/qwen3-next-80b-a3b-instruct]",
         )
     )
@@ -194,11 +194,10 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
         click.option(
             "--local-files-only/--no-local-files-only",
             "local_files_only",
-            type=click.BOOL,
             required=False,
             default=None,
             help="If set, GLiNER skips network downloads and uses only local files. "
-            "Can also be set via LOCAL_FILES_ONLY env var.",
+            "Can also be set via NSS_LOCAL_FILES_ONLY env var.",
         )
     )
     options.append(
@@ -208,7 +207,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             default=None,
             help="Number of CPU worker processes used for NER (PII replacement). "
-            "Can also be set via SAFE_SYNTHESIZER_CPU_COUNT env var. "
+            "Can also be set via NSS_CPU_COUNT env var. "
             "[default: max(1, cpu_count - 1)]",
         )
     )
@@ -376,9 +375,9 @@ def run(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
-    nim_endpoint_url: str | None = None,
-    nim_api_key: str | None = None,
-    nim_model_id: str | None = None,
+    inference_endpoint_url: str | None = None,
+    inference_api_key: str | None = None,
+    inference_model_id: str | None = None,
     local_files_only: bool | None = None,
     cpu_count: int | None = None,
     validate: bool = False,
@@ -409,9 +408,9 @@ def run(
         wandb_project=wandb_project,
         synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
-        nim_endpoint_url=nim_endpoint_url,
-        nim_api_key=nim_api_key,
-        nim_model_id=nim_model_id,
+        inference_endpoint_url=inference_endpoint_url,
+        inference_api_key=inference_api_key,
+        inference_model_id=inference_model_id,
         local_files_only=local_files_only,
         cpu_count=cpu_count,
     )
@@ -482,9 +481,9 @@ def run_train(
     wandb_mode: str | None = None,
     wandb_project: str | None = None,
     dataset_registry: str | None = None,
-    nim_endpoint_url: str | None = None,
-    nim_api_key: str | None = None,
-    nim_model_id: str | None = None,
+    inference_endpoint_url: str | None = None,
+    inference_api_key: str | None = None,
+    inference_model_id: str | None = None,
     local_files_only: bool | None = None,
     cpu_count: int | None = None,
     validate: bool = False,
@@ -511,9 +510,9 @@ def run_train(
         wandb_project=wandb_project,
         synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
-        nim_endpoint_url=nim_endpoint_url,
-        nim_api_key=nim_api_key,
-        nim_model_id=nim_model_id,
+        inference_endpoint_url=inference_endpoint_url,
+        inference_api_key=inference_api_key,
+        inference_model_id=inference_model_id,
         local_files_only=local_files_only,
         cpu_count=cpu_count,
     )
@@ -585,9 +584,9 @@ def run_generate(
     auto_discover_adapter: bool = False,
     wandb_resume_job_id: str | None = None,
     dataset_registry: str | None = None,
-    nim_endpoint_url: str | None = None,
-    nim_api_key: str | None = None,
-    nim_model_id: str | None = None,
+    inference_endpoint_url: str | None = None,
+    inference_api_key: str | None = None,
+    inference_model_id: str | None = None,
     local_files_only: bool | None = None,
     cpu_count: int | None = None,
     **kwargs: object,
@@ -618,9 +617,9 @@ def run_generate(
         wandb_project=wandb_project,
         synthesis_overrides=_parse_run_overrides(kwargs),
         dataset_registry=dataset_registry,
-        nim_endpoint_url=nim_endpoint_url,
-        nim_api_key=nim_api_key,
-        nim_model_id=nim_model_id,
+        inference_endpoint_url=inference_endpoint_url,
+        inference_api_key=inference_api_key,
+        inference_model_id=inference_model_id,
         local_files_only=local_files_only,
         cpu_count=cpu_count,
     )

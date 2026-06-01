@@ -33,6 +33,9 @@ For output quality and evaluation metrics, see
 
 ## Master reference table
 
+Grouped by the `Category` column -- `nss`-native settings first, then
+`telemetry`, `third-party`, `container`, and `internal`.
+
 | Variable | Category | CLI flag | Read by | Default | Purpose | Details |
 |----------|----------|----------|---------|---------|---------|---------|
 | `NSS_CONFIG` | nss | `--config` | CLI | -- | Path to YAML config file | [Configuration Reference](configuration.md) |
@@ -44,11 +47,11 @@ For output quality and evaluation metrics, see
 | `NSS_DATASET_REGISTRY` | nss | `--dataset-registry` | CLI | -- | Dataset registry YAML path or URL | [Running -- Dataset Registry](running.md#dataset-registry) |
 | `NSS_WANDB_MODE` | nss | `--wandb-mode` | WandB | `disabled` | WandB run mode | Alias for `WANDB_MODE` |
 | `NSS_WANDB_PROJECT` | nss | `--wandb-project` | WandB | -- | WandB project name | Alias for `WANDB_PROJECT` |
-| `NSS_INFERENCE_ENDPOINT` | nss | `--nim-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
-| `NSS_INFERENCE_KEY` | nss | `--nim-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
-| `NIM_MODEL_ID` | nss | `--nim-model-id` | PII column classifier | `qwen/qwen3-next-80b-a3b-instruct` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
-| `LOCAL_FILES_ONLY` | nss | `--local-files-only` / `--no-local-files-only` | GLiNER (PII) | unset | Skip GLiNER network downloads | Partial offline; see [HF appendix](#hugging-face-cache-and-offline) |
-| `SAFE_SYNTHESIZER_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_ENDPOINT` | nss | `--inference-endpoint-url` | PII column classifier | NVIDIA integrate URL | OpenAI-compatible endpoint for column classification | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_INFERENCE_KEY` | nss | `--inference-api-key` | PII column classifier | -- | API key for `NSS_INFERENCE_ENDPOINT` | Required for LLM column classification |
+| `NSS_INFERENCE_MODEL` | nss | `--inference-model-id` | PII column classifier | `qwen/qwen3-next-80b-a3b-instruct` | Model ID sent to the inference endpoint | [PII appendix](#pii-ner-and-column-classification) |
+| `NSS_LOCAL_FILES_ONLY` | nss | `--local-files-only` / `--no-local-files-only` | GLiNER (PII) | unset | Skip GLiNER network downloads | Partial offline; see [HF appendix](#hugging-face-cache-and-offline) |
+| `NSS_CPU_COUNT` | nss | `--cpu-count` | NER worker pool | `max(1, cpu_count - 1)` | CPU processes for PII NER | [PII appendix](#pii-ner-and-column-classification) |
 | `NEMO_TELEMETRY_ENABLED` | telemetry | `--emit_telemetry` | telemetry | `true` | Enable anonymous usage telemetry | Also `emit_telemetry` in YAML; see [Telemetry](#telemetry) |
 | `HF_HOME` | third-party | -- | Hugging Face Hub | platform cache dir | Root directory for HF downloads | [HF appendix](#hugging-face-cache-and-offline) |
 | `HF_HUB_OFFLINE` | third-party | -- | Hugging Face Hub | unset | Fail if a model is not cached | Preferred offline gate |
@@ -66,12 +69,12 @@ For output quality and evaluation metrics, see
 
 ---
 
-## Precedence {#precedence}
+## Precedence
 
 ### Infrastructure (CLISettings)
 
 For artifact paths, logging, WandB overrides, and the five runtime flags
-(`--nim-*`, `--local-files-only`, `--cpu-count`):
+(`--inference-*`, `--local-files-only`, `--cpu-count`):
 
 1. CLI flags
 2. Environment variables
@@ -93,7 +96,7 @@ when explicitly set. When unset, the env var defaults to enabled.
 
 ---
 
-## Hugging Face cache and offline {#hugging-face-cache-and-offline}
+## Hugging Face cache and offline
 
 Downloads go through
 [Hugging Face Hub](https://huggingface.co/docs/huggingface_hub/guides/manage-cache).
@@ -119,24 +122,24 @@ pre-populated `HF_HOME` for reliable offline runs.
 export HF_HUB_OFFLINE=1
 ```
 
-Prefer this over `LOCAL_FILES_ONLY` for end-to-end offline behavior.
+Prefer this over `NSS_LOCAL_FILES_ONLY` for end-to-end offline behavior.
 
-### `LOCAL_FILES_ONLY`
+### `NSS_LOCAL_FILES_ONLY`
 
 Skips network downloads for GLiNER only. Not respected by the HuggingFace
 training backend or vLLM. Override on the CLI with `--local-files-only` or
 `--no-local-files-only`.
 
 ```bash
-export LOCAL_FILES_ONLY=true
+export NSS_LOCAL_FILES_ONLY=true
 ```
 
 !!! warning "Partial offline support"
     For the most reliable offline experience, set `HF_HUB_OFFLINE=1` with a
-    pre-populated `HF_HOME` cache instead of relying on `LOCAL_FILES_ONLY`
+    pre-populated `HF_HOME` cache instead of relying on `NSS_LOCAL_FILES_ONLY`
     alone.
 
-### Pre-caching models {#pre-caching-models}
+### Pre-caching models
 
 Run once with network access, then copy or mount the populated cache. Typical
 first-run downloads include training weights, GLiNER, evaluation embeddings,
@@ -151,7 +154,7 @@ for the full pre-cache checklist.
 
 ---
 
-## PII, NER, and column classification {#pii-ner-and-column-classification}
+## PII, NER, and column classification
 
 Controls LLM-based column classification and CPU parallelism for NER-based PII
 replacement. For setup examples and NER-only fallback behavior, see
@@ -167,30 +170,31 @@ export NSS_INFERENCE_ENDPOINT="https://your-llm-inference-endpoint"
 export NSS_INFERENCE_KEY="your-api-key"  # pragma: allowlist secret
 ```
 
-On the CLI, use `--nim-api-key` and optionally `--nim-endpoint-url` instead of
-exporting these variables.
+On the CLI, can also use `--inference-api-key` and optionally
+`--inference-endpoint-url` instead of exporting these variables.
 
 To disable column classification entirely, set
 `replace_pii.globals.classify.enable_classify: false` in YAML or use the SDK.
 See [Configuration Reference -- Replacing PII](configuration.md#replacing-pii).
 
-### `NIM_MODEL_ID`
+### `NSS_INFERENCE_MODEL`
 
-Model ID sent to the inference endpoint. Override with `--nim-model-id`.
+Model ID sent to the inference endpoint. Defaults to
+`qwen/qwen3-next-80b-a3b-instruct`. Override with `--inference-model-id`.
 
-### `SAFE_SYNTHESIZER_CPU_COUNT`
+### `NSS_CPU_COUNT`
 
 Number of CPU worker processes for NER. Override with `--cpu-count`. Defaults
 to `max(1, cpu_count - 1)`, capped so each worker handles at least 1,000
 records.
 
 ```bash
-export SAFE_SYNTHESIZER_CPU_COUNT=4
+export NSS_CPU_COUNT=4
 ```
 
 ---
 
-## vLLM and attention {#vllm-and-attention}
+## vLLM and attention
 
 ### `VLLM_CACHE_ROOT`
 
@@ -215,7 +219,7 @@ Common values: `FLASHINFER`, `FLASH_ATTN`, `TORCH_SDPA`, `TRITON_ATTN`,
 
 ---
 
-## Telemetry {#telemetry}
+## Telemetry
 
 ### `NEMO_TELEMETRY_ENABLED`
 
@@ -235,7 +239,7 @@ equivalent. Intended for controlled test environments.
 
 ---
 
-## Containers {#containers}
+## Containers
 
 Common bind-mount targets when running in Docker:
 
@@ -253,7 +257,7 @@ shortcuts.
 
 ---
 
-## Internal and cluster {#internal-and-cluster}
+## Internal and cluster
 
 Advanced env-only settings without CLI equivalents:
 

@@ -232,8 +232,8 @@ def common_setup(
     """
     # 0. Propagate CLI-resolved runtime settings back to os.environ. This must
     # run before any deferred pii_replacer imports so that module-level reads
-    # of NSS_INFERENCE_*, NIM_MODEL_ID, LOCAL_FILES_ONLY, and
-    # SAFE_SYNTHESIZER_CPU_COUNT see the CLI-overridden values.
+    # of NSS_INFERENCE_*, NSS_LOCAL_FILES_ONLY, and NSS_CPU_COUNT see the
+    # CLI-overridden values.
     _propagate_runtime_settings_to_env(settings)
 
     # 1. Create workdir FIRST - this establishes all artifact paths
@@ -337,16 +337,16 @@ def _propagate_runtime_settings_to_env(settings: "CLISettings") -> None:
     this overwrites ``os.environ`` so the deferred imports in the runtime
     pipeline see the CLI value.
     """
-    if settings.nim_endpoint_url is not None:
-        os.environ["NSS_INFERENCE_ENDPOINT"] = settings.nim_endpoint_url
-    if settings.nim_api_key is not None:
-        os.environ["NSS_INFERENCE_KEY"] = settings.nim_api_key
-    if settings.nim_model_id is not None:
-        os.environ["NIM_MODEL_ID"] = settings.nim_model_id
+    if settings.inference_endpoint_url is not None:
+        os.environ["NSS_INFERENCE_ENDPOINT"] = settings.inference_endpoint_url
+    if settings.inference_api_key is not None:
+        os.environ["NSS_INFERENCE_KEY"] = settings.inference_api_key
+    if settings.inference_model_id is not None:
+        os.environ["NSS_INFERENCE_MODEL"] = settings.inference_model_id
     if settings.local_files_only is not None:
-        os.environ["LOCAL_FILES_ONLY"] = "true" if settings.local_files_only else "false"
+        os.environ["NSS_LOCAL_FILES_ONLY"] = "true" if settings.local_files_only else "false"
     if settings.cpu_count is not None:
-        os.environ["SAFE_SYNTHESIZER_CPU_COUNT"] = str(settings.cpu_count)
+        os.environ["NSS_CPU_COUNT"] = str(settings.cpu_count)
 
 
 def _initialize_logging_for_cli_from_settings(

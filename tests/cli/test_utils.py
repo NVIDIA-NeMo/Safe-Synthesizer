@@ -336,8 +336,8 @@ class TestPropagateRuntimeSettingsToEnv:
         monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
 
         settings = CLISettings.from_cli_kwargs(
-            nim_endpoint_url="https://cli.example/v1",
-            nim_api_key="token-propagated-cli",  # pragma: allowlist secret
+            inference_endpoint_url="https://cli.example/v1",
+            inference_api_key="token-propagated-cli",  # pragma: allowlist secret
         )
         _propagate_runtime_settings_to_env(settings)
 
@@ -346,20 +346,20 @@ class TestPropagateRuntimeSettingsToEnv:
 
     def test_propagates_remaining_runtime_settings(self, monkeypatch):
         """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
-        monkeypatch.delenv("NIM_MODEL_ID", raising=False)
-        monkeypatch.delenv("LOCAL_FILES_ONLY", raising=False)
-        monkeypatch.delenv("SAFE_SYNTHESIZER_CPU_COUNT", raising=False)
+        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
+        monkeypatch.delenv("NSS_LOCAL_FILES_ONLY", raising=False)
+        monkeypatch.delenv("NSS_CPU_COUNT", raising=False)
 
         settings = CLISettings.from_cli_kwargs(
-            nim_model_id="custom/model",
+            inference_model_id="custom/model",
             local_files_only=True,
             cpu_count=3,
         )
         _propagate_runtime_settings_to_env(settings)
 
-        assert os.environ["NIM_MODEL_ID"] == "custom/model"
-        assert os.environ["LOCAL_FILES_ONLY"] == "true"
-        assert os.environ["SAFE_SYNTHESIZER_CPU_COUNT"] == "3"
+        assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
+        assert os.environ["NSS_LOCAL_FILES_ONLY"] == "true"
+        assert os.environ["NSS_CPU_COUNT"] == "3"
 
     def test_common_setup_propagates_before_workdir(self, monkeypatch, dummy_csv: Path):
         """common_setup writes resolved runtime settings before downstream imports."""
@@ -367,7 +367,7 @@ class TestPropagateRuntimeSettingsToEnv:
 
         settings = CLISettings.from_cli_kwargs(
             data_source=str(dummy_csv),
-            nim_api_key="token-propagated-setup",  # pragma: allowlist secret
+            inference_api_key="token-propagated-setup",  # pragma: allowlist secret
         )
 
         with (

@@ -27,11 +27,10 @@ Usage:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..defaults import DEFAULT_ARTIFACTS_PATH
@@ -39,30 +38,6 @@ from ..observability import NSSObservabilitySettings
 from .wandb_setup import WandbMode, WandbSettings
 
 __all__ = ["CLISettings"]
-
-# (settings field, canonical env var, legacy env alias from issue #155)
-_INFERENCE_ENV_ALIASES: tuple[tuple[str, str, str], ...] = (
-    ("nim_endpoint_url", "NSS_INFERENCE_ENDPOINT", "NIM_ENDPOINT_URL"),
-    ("nim_api_key", "NSS_INFERENCE_KEY", "NIM_API_KEY"),
-)
-
-
-def _apply_inference_env_precedence(
-    data: dict[str, Any],
-    field: str,
-    canonical_env: str,
-    legacy_env: str,
-) -> None:
-    """Prefer ``canonical_env`` over ``legacy_env`` when both are set."""
-    canonical = os.environ.get(canonical_env)
-    legacy = os.environ.get(legacy_env)
-    match (field in data, data.get(field), canonical, legacy):
-        case (True, leg, str() as canon, str() as leg_env) if leg == leg_env and canon != leg_env:
-            data[field] = canon
-        case (False, _, str() as canon, _):
-            data[field] = canon
-        case (False, _, None, str() as leg_env):
-            data[field] = leg_env
 
 
 class CLISettings(BaseSettings):
@@ -190,56 +165,45 @@ class CLISettings(BaseSettings):
     )
     """URL or path to a dataset registry YAML file (env: ``NSS_DATASET_REGISTRY``)."""
 
-    nim_endpoint_url: str | None = Field(
+    inference_endpoint_url: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("nim_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
-        description="NIM/OpenAI-compatible endpoint URL for PII column classification",
+        validation_alias=AliasChoices("inference_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
+        description="OpenAI-compatible inference endpoint URL for PII column classification",
     )
-    """NIM/OpenAI-compatible endpoint URL for PII column classification
-    (env: ``NSS_INFERENCE_ENDPOINT``; alias: ``NIM_ENDPOINT_URL``)."""
+    """OpenAI-compatible inference endpoint URL for PII column classification
+    (env: ``NSS_INFERENCE_ENDPOINT``)."""
 
-    nim_api_key: str | None = Field(
+    inference_api_key: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("nim_api_key", "NSS_INFERENCE_KEY"),
-        description="API key for the NIM endpoint used in PII column classification",
+        validation_alias=AliasChoices("inference_api_key", "NSS_INFERENCE_KEY"),
+        description="API key for the inference endpoint used in PII column classification",
     )
-    """API key for the NIM endpoint used in PII column classification
-    (env: ``NSS_INFERENCE_KEY``; alias: ``NIM_API_KEY``)."""
+    """API key for the inference endpoint used in PII column classification
+    (env: ``NSS_INFERENCE_KEY``)."""
 
-    nim_model_id: str | None = Field(
+    inference_model_id: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("nim_model_id", "NIM_MODEL_ID"),
-        description="Model ID sent to the NIM endpoint for PII column classification",
+        validation_alias=AliasChoices("inference_model_id", "NSS_INFERENCE_MODEL"),
+        description="Model ID sent to the inference endpoint for PII column classification",
     )
-    """Model ID sent to the NIM endpoint for PII column classification (env: ``NIM_MODEL_ID``)."""
+    """Model ID sent to the inference endpoint for PII column classification
+    (env: ``NSS_INFERENCE_MODEL``)."""
 
     local_files_only: bool | None = Field(
         default=None,
-        validation_alias=AliasChoices("local_files_only", "LOCAL_FILES_ONLY"),
+        validation_alias=AliasChoices("local_files_only", "NSS_LOCAL_FILES_ONLY"),
         description="Whether GLiNER should skip network downloads and use only local files",
     )
-    """Whether GLiNER should skip network downloads and use only local files (env: ``LOCAL_FILES_ONLY``)."""
+    """Whether GLiNER should skip network downloads and use only local files (env: ``NSS_LOCAL_FILES_ONLY``)."""
 
     cpu_count: int | None = Field(
         default=None,
-        validation_alias=AliasChoices("cpu_count", "SAFE_SYNTHESIZER_CPU_COUNT"),
+        ge=1,
+        validation_alias=AliasChoices("cpu_count", "NSS_CPU_COUNT"),
         description="Number of CPU worker processes used for NER (PII replacement)",
     )
     """Number of CPU worker processes used for NER (PII replacement)
-    (env: ``SAFE_SYNTHESIZER_CPU_COUNT``)."""
-
-    @model_validator(mode="before")
-    @classmethod
-    def resolve_inference_env_aliases(cls, data: Any) -> Any:
-        """Prefer ``NSS_INFERENCE_*`` over legacy ``NIM_*`` env aliases."""
-        match data:
-            case dict() as payload:
-                resolved = dict(payload)
-            case _:
-                return data
-        for field, canonical_env, legacy_env in _INFERENCE_ENV_ALIASES:
-            _apply_inference_env_precedence(resolved, field, canonical_env, legacy_env)
-        return resolved
+    (env: ``NSS_CPU_COUNT``)."""
 
     @field_validator("wandb_mode", mode="before")
     @classmethod

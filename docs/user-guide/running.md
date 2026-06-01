@@ -1231,7 +1231,7 @@ See [`artifacts clean`](#artifacts-clean) in the CLI Commands section for option
 
 Pre-cache models by running once with internet access, then set
 `HF_HUB_OFFLINE=1` in your target environment. For detailed cache setup
-and environment variables (`HF_HOME`, `HF_HUB_OFFLINE`, `LOCAL_FILES_ONLY`,
+and environment variables (`HF_HOME`, `HF_HUB_OFFLINE`, `NSS_LOCAL_FILES_ONLY`,
 `VLLM_CACHE_ROOT`), see
 [Environment Variables -- Hugging Face cache and offline](environment.md#hugging-face-cache-and-offline).
 
