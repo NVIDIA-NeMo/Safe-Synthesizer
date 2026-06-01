@@ -261,7 +261,7 @@ class TestCLISettings:
         """Remaining runtime settings load from their documented env vars."""
         monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
         monkeypatch.setenv("NSS_LOCAL_FILES_ONLY", "true")
-        monkeypatch.setenv("NSS_CPU_COUNT", "4")
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", "4")
 
         settings = CLISettings()
         assert settings.inference_model_id == "custom/model"
@@ -271,7 +271,7 @@ class TestCLISettings:
     @pytest.mark.parametrize("bad_value", ["0", "-1"])
     def test_cpu_count_rejects_non_positive(self, monkeypatch, bad_value):
         """cpu_count must be >= 1; 0 or negative fails fast at parse time."""
-        monkeypatch.setenv("NSS_CPU_COUNT", bad_value)
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", bad_value)
         with pytest.raises(ValidationError):
             CLISettings()
 

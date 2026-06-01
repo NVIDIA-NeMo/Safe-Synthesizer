@@ -348,7 +348,7 @@ class TestPropagateRuntimeSettingsToEnv:
         """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
         monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
         monkeypatch.delenv("NSS_LOCAL_FILES_ONLY", raising=False)
-        monkeypatch.delenv("NSS_CPU_COUNT", raising=False)
+        monkeypatch.delenv("NSS_PII_REPLACER_CPU_COUNT", raising=False)
 
         settings = CLISettings.from_cli_kwargs(
             inference_model_id="custom/model",
@@ -359,7 +359,7 @@ class TestPropagateRuntimeSettingsToEnv:
 
         assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
         assert os.environ["NSS_LOCAL_FILES_ONLY"] == "true"
-        assert os.environ["NSS_CPU_COUNT"] == "3"
+        assert os.environ["NSS_PII_REPLACER_CPU_COUNT"] == "3"
 
     def test_common_setup_propagates_before_workdir(self, monkeypatch, dummy_csv: Path):
         """common_setup writes resolved runtime settings before downstream imports."""

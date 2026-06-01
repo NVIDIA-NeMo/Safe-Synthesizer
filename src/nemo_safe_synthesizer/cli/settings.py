@@ -199,11 +199,11 @@ class CLISettings(BaseSettings):
     cpu_count: int | None = Field(
         default=None,
         ge=1,
-        validation_alias=AliasChoices("cpu_count", "NSS_CPU_COUNT"),
+        validation_alias=AliasChoices("cpu_count", "NSS_PII_REPLACER_CPU_COUNT"),
         description="Number of CPU worker processes used for NER (PII replacement)",
     )
     """Number of CPU worker processes used for NER (PII replacement)
-    (env: ``NSS_CPU_COUNT``)."""
+    (env: ``NSS_PII_REPLACER_CPU_COUNT``)."""
 
     @field_validator("wandb_mode", mode="before")
     @classmethod

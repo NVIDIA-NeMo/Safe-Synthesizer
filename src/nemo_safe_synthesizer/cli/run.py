@@ -207,7 +207,7 @@ def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
             required=False,
             default=None,
             help="Number of CPU worker processes used for NER (PII replacement). "
-            "Can also be set via NSS_CPU_COUNT env var. "
+            "Can also be set via NSS_PII_REPLACER_CPU_COUNT env var. "
             "[default: max(1, cpu_count - 1)]",
         )
     )
