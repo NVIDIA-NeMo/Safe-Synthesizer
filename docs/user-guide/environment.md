@@ -89,7 +89,7 @@ YAML fields, CLI `--section__field` overrides, and SDK builder calls follow
 [Configuration Precedence](configuration.md#configuration-precedence) -- not
 the order above.
 
-### Telemetry
+### Telemetry precedence
 
 `--emit_telemetry` / `emit_telemetry` in YAML override `NEMO_TELEMETRY_ENABLED`
 when explicitly set. When unset, the env var defaults to enabled.
