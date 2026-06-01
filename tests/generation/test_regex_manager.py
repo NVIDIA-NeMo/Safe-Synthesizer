@@ -559,33 +559,55 @@ def test_property_regex(fixture_safe_synthesizer_config):
     assert re.fullmatch(regex, '{"b":2,"a":1}\n') is None
 
 
-# Purpose: Round-trip regression: DataFrame -> schema -> structural tag must match the original JSONL rows.
-# Data: First 5 rows of Iris dataset serialized to JSONL; same schema used to build the tag.
-# Asserts: Non-grouped JSONL matches; grouped (BOS/EOS-wrapped) matches when group_by=True.
-@pytest.mark.parametrize("group_by", [False, True])
-def test_round_trip_dataframe_schema_structural_tag_matches_iris(
-    group_by,
-    fixture_iris_dataset,
+# Purpose: XGrammar Structural Tag round-trip via GrammarMatcher for each output shape.
+@pytest.mark.parametrize(
+    ("config_updates", "text"),
+    [
+        ({}, '{"name":"alice"}\n{"name":"bob"}\n'),
+        (
+            {"max_sequences_per_example": 1, "structured_generation_use_single_sequence": True},
+            '{"name":"alice"}',
+        ),
+        (
+            {"group_training_examples_by": "id"},
+            '<s>{"name":"alice"}\n</s>\n<s>{"name":"bob"}\n</s>\n',
+        ),
+        (
+            {
+                "group_training_examples_by": "id",
+                "max_sequences_per_example": 1,
+                "structured_generation_use_single_sequence": True,
+            },
+            '<s>{"name":"alice"}\n</s>',
+        ),
+    ],
+    ids=["jsonl", "single_sequence", "grouped_jsonl", "grouped_single_sequence"],
+)
+def test_structural_tag_accepts_training_jsonl_shapes(
+    config_updates,
+    text,
     fixture_safe_synthesizer_config,
     fixture_tokenizer,
 ):
-    if group_by:
-        fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    for key, value in config_updates.items():
+        if key == "group_training_examples_by":
+            fixture_safe_synthesizer_config.data.group_training_examples_by = value
+        elif key == "max_sequences_per_example":
+            fixture_safe_synthesizer_config.data.max_sequences_per_example = value
+        elif key == "structured_generation_use_single_sequence":
+            fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = value
 
-    sample_df = pd.DataFrame(fixture_iris_dataset[:5])
-    buf = StringIO()
-    sample_df.to_json(buf, orient="records", lines=True)
-    jsonl_str = buf.getvalue()
-
-    schema = make_json_schema(sample_df)
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
     structural_tag = build_json_structural_tag(
         schema,
         config=fixture_safe_synthesizer_config,
         bos_token=BOS_TOKEN,
         eos_token=EOS_TOKEN,
     )
-
-    text = f"{BOS_TOKEN}{jsonl_str}{EOS_TOKEN}\n" if group_by else jsonl_str
     assert structural_tag_accepts_text(text, structural_tag, fixture_tokenizer) is True
 
 

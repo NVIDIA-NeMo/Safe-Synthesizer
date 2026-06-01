@@ -440,43 +440,6 @@ class TestLoadFromSavePath:
         pd.testing.assert_frame_equal(builder._original_training_df, train_split)
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
-    def test_load_applies_runtime_generation_and_evaluation_config(
-        self,
-        mock_metadata_cls,
-        tmp_path,
-        fixture_sample_patient_dataframe,
-        fixture_sample_patient_redacted_dataframe,
-    ):
-        """Resume keeps train config from disk while honoring generation overrides."""
-        workdir, _, _ = self._prepare_workdir(
-            tmp_path,
-            fixture_sample_patient_dataframe,
-            fixture_sample_patient_redacted_dataframe,
-        )
-        saved_config = SafeSynthesizerParameters()
-        saved_config.training.batch_size = 8
-        saved_config.generation.num_records = 3000
-        saved_config.generation.use_structured_generation = True
-        saved_config.generation.structured_generation_schema_method = "regex"
-        workdir.config.write_text(saved_config.model_dump_json())
-
-        runtime_config = SafeSynthesizerParameters()
-        runtime_config.training.batch_size = 32
-        runtime_config.generation.num_records = 100
-        runtime_config.generation.structured_generation_schema_method = "structural_tag"
-        runtime_config.evaluation.enabled = False
-        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
-
-        builder = SafeSynthesizer(config=runtime_config, workdir=workdir)
-        builder.load_from_save_path(runtime_config=runtime_config)
-
-        assert builder._nss_config is not None
-        assert builder._nss_config.training.batch_size == 8
-        assert builder._nss_config.generation.num_records == 100
-        assert builder._nss_config.generation.structured_generation_schema_method == "structural_tag"
-        assert builder._nss_config.evaluation.enabled is False
-
-    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_process_data_skips_when_cached_splits_loaded(
         self,
         mock_metadata_cls,

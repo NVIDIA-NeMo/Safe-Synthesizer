@@ -568,7 +568,7 @@ def run_generate(
 
         try:
             nss = (
-                nss.load_from_save_path(runtime_config=config)
+                nss.load_from_save_path()
                 .process_data()
                 .generate()
                 .evaluate()

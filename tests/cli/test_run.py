@@ -620,7 +620,6 @@ class TestRunGenerateOptions:
         dummy_csv: Path,
         tmp_path: Path,
         patched_run_dependencies: dict,
-        mock_common_setup_return: tuple,
     ):
         """Verify generate with --run-path calls common_setup correctly."""
         run_dir = tmp_path / "trained-run"
@@ -647,7 +646,6 @@ class TestRunGenerateOptions:
         settings: CLISettings = call_kwargs["settings"]
         assert settings.run_path == str(run_dir)
         mock_ss = patched_run_dependencies["safe_synthesizer"]
-        mock_ss.load_from_save_path.assert_called_once_with(runtime_config=mock_common_setup_return[1])
         mock_ss.evaluate.assert_called_once_with()
         patched_run_dependencies["emit_telemetry"].assert_called_once_with(mock_ss, TaskStatusEnum.COMPLETED)
 
