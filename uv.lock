@@ -3230,7 +3230,7 @@ requires-dist = [
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.8.post1" },
     { name = "flashinfer-cubin", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.8.post1", index = "https://flashinfer.ai/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
     { name = "flashinfer-jit-cache", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.8.post1+cu129", index = "https://flashinfer.ai/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
-    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.8.post1" },
+    { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cpu'", specifier = "==0.6.12" },
     { name = "flashinfer-python", marker = "sys_platform == 'linux' and extra == 'cu129'", specifier = "==0.6.8.post1", index = "https://flashinfer.ai/whl/cu129", conflict = { package = "nemo-safe-synthesizer", extra = "cu129" } },
     { name = "flashtext", marker = "extra == 'engine'" },
     { name = "gliner", marker = "extra == 'cpu'" },
