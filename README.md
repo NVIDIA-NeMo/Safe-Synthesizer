@@ -14,8 +14,6 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 - NVIDIA GPU (A100 or larger) for training and generation
 - Linux only -- macOS, Windows, and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
 
-> Contributor note: although the default development/runtime interpreter is Python 3.13, source code must remain Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax such as PEP 695 `type` statements or bracketed generic class/function parameters in shared package code yet.
-
 ### Installation
 
 ```bash

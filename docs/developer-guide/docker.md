@@ -263,7 +263,7 @@ To reduce size:
 | Aspect | `Dockerfile.cuda` | `Dockerfile.test_ci` |
 |--------|-------------------|----------------------|
 | Base | `nvidia/cuda:12.9.1-runtime-ubuntu22.04` | `python:3.13-slim` |
-| Extras | `cu128` + `engine` | `cpu` + `engine` |
+| Extras | `cu129` + `engine` | `cpu` + `engine` |
 | GPU | Required | Not needed |
 | Stages | `tools` / `deps` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |

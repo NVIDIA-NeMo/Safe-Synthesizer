@@ -544,6 +544,10 @@ Before submitting a PR:
 
 For detailed style guidelines covering Python, markdown, Dockerfiles, shell scripts, testing, and docstrings, see [STYLE_GUIDE.md](STYLE_GUIDE.md).
 
+### Python Version Compatibility
+
+Although the default development/runtime interpreter is Python 3.13, source code must remain Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax such as PEP 695 `type` statements or bracketed generic class/function parameters in shared package code yet.
+
 ### Formatting, Linting, and Type Checking
 
 Use mise tasks instead of running `ruff` or `ty` directly. The tasks use pinned tool versions from `.mise.[toml|lock]` (installed via `make setup`) and check all tracked files.
