@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     UNKNOWN_ENTITY,
     ClassifyConfig,
     ColumnClassifierLLM,
+    DefaultLLMConfig,
     EntityExtractorGliner,
     _format_prompt,
     merge_subsume,
@@ -26,6 +27,25 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
 )
 from nemo_safe_synthesizer.pii_replacer.data_editor.environment import redact_entities_fn
 from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
+
+
+class TestDefaultLLMConfigId:
+    def test_uses_env_override(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
+        assert DefaultLLMConfig.config_id() == "custom/model"
+
+    def test_falls_back_when_unset(self, monkeypatch):
+        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
+        assert DefaultLLMConfig.config_id() == DefaultLLMConfig.DEFAULT_CONFIG_ID
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_blank_value_falls_back(self, monkeypatch, blank):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", blank)
+        assert DefaultLLMConfig.config_id() == DefaultLLMConfig.DEFAULT_CONFIG_ID
+
+    def test_strips_surrounding_whitespace(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "  custom/model  ")
+        assert DefaultLLMConfig.config_id() == "custom/model"
 
 
 def test_gliner_batch_predict_config():

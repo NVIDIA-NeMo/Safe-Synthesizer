@@ -348,12 +348,15 @@ class InferenceModelCheck(ConfigCheck):
     the matching CLI flags, which are propagated to the environment before
     preflight runs). This check reads those env vars -- not ``config`` -- because
     the inference settings live in ``CLISettings``/the environment rather than in
-    ``SafeSynthesizerParameters``. All findings are warnings: classification
-    degrades or fails at call time rather than blocking the run outright.
+    ``SafeSynthesizerParameters``.
 
     The body uses a single-dispatch ``match`` over ``(model, key, endpoint)``,
-    so at most one warning is emitted per run -- the highest-priority problem.
-    Priority order: missing key, then blank model id, then invalid endpoint.
+    so at most one finding is emitted per run -- the highest-priority problem.
+    Priority order: invalid endpoint, then missing key, then blank model id. The
+    invalid endpoint is an error (a non-http(s) endpoint cannot succeed, so the
+    run must not pass ``--validate``); the key and model findings are warnings
+    (classification degrades or falls back rather than failing the run). The
+    error is checked first so a lower-severity warning never masks it.
     """
 
     name = "env.inference"
@@ -370,9 +373,16 @@ class InferenceModelCheck(ConfigCheck):
         endpoint = os.environ.get("NSS_INFERENCE_ENDPOINT")
 
         # Single-dispatch: the first matching case wins, so cases are ordered by
-        # priority. A missing key (degraded mode) is reported before a blank
-        # model id or an invalid endpoint (hard failures at call time).
+        # severity then priority. The invalid endpoint is a hard error and is
+        # checked first so it is never masked by the missing-key or blank-model
+        # warnings.
         match model, key, endpoint:
+            case _, _, e if e is not None and e.strip() and not _is_valid_http_url(e):
+                collector.error(
+                    "inference_endpoint_invalid",
+                    f"NSS_INFERENCE_ENDPOINT '{e}' is not a valid http(s) URL. "
+                    "PII column classification requests will fail.",
+                )
             case _, k, _ if not (k or "").strip():
                 collector.warning(
                     "inference_key_missing",
@@ -381,14 +391,8 @@ class InferenceModelCheck(ConfigCheck):
             case m, _, _ if _is_blank(m):
                 collector.warning(
                     "inference_model_blank",
-                    "NSS_INFERENCE_MODEL is set but empty. PII column classification will send an "
-                    "empty model id and fail. Unset it to use the default, or provide a model id.",
-                )
-            case _, _, e if e is not None and not _is_valid_http_url(e):
-                collector.warning(
-                    "inference_endpoint_invalid",
-                    f"NSS_INFERENCE_ENDPOINT '{e}' is not a valid http(s) URL. "
-                    "PII column classification requests will fail.",
+                    "NSS_INFERENCE_MODEL is set but empty. The blank value is ignored and the "
+                    "default model id is used. Set a non-empty model id to override the default.",
                 )
 
 

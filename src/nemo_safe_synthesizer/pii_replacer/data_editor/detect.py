@@ -57,9 +57,12 @@ class DefaultLLMConfig:
         Reads ``NSS_INFERENCE_MODEL`` on each call (falling back to
         ``DEFAULT_CONFIG_ID``) so a value set after this module is imported still
         takes effect, matching the call-time env handling used elsewhere in this
-        module.
+        module. A blank or whitespace-only value is treated as unset, so it falls
+        back to ``DEFAULT_CONFIG_ID`` rather than sending an empty model id to the
+        inference API.
         """
-        return os.environ.get("NSS_INFERENCE_MODEL", cls.DEFAULT_CONFIG_ID)
+        model = os.environ.get("NSS_INFERENCE_MODEL", "").strip()
+        return model or cls.DEFAULT_CONFIG_ID
 
 
 DEFAULT_ENTITIES: set[str] = {

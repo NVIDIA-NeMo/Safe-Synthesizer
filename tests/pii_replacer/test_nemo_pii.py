@@ -10,8 +10,35 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
+from nemo_safe_synthesizer.defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import TransformFnAccounting
-from nemo_safe_synthesizer.pii_replacer.nemo_pii import ColumnClassification, NemoPII, _build_column_statistics
+from nemo_safe_synthesizer.pii_replacer.nemo_pii import (
+    ColumnClassification,
+    NemoPII,
+    _build_column_statistics,
+    _get_classify_endpoint_url,
+)
+
+
+class TestGetClassifyEndpointUrl:
+    def test_configured_value_is_used(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://custom.example/v1")
+        assert _get_classify_endpoint_url() == "https://custom.example/v1"
+
+    def test_configured_value_is_stripped(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "  https://custom.example/v1  ")
+        assert _get_classify_endpoint_url() == "https://custom.example/v1"
+
+    def test_unset_falls_back_to_default(self, monkeypatch):
+        monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
+        assert _get_classify_endpoint_url() == DEFAULT_NSS_INFERENCE_ENDPOINT
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_blank_falls_back_to_default(self, monkeypatch, blank):
+        # A blank endpoint must resolve to the default, never reach the OpenAI
+        # client as an empty base_url. Mirrors the preflight blank-endpoint rule.
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", blank)
+        assert _get_classify_endpoint_url() == DEFAULT_NSS_INFERENCE_ENDPOINT
 
 
 @pytest.fixture

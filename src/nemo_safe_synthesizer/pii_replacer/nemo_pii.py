@@ -103,8 +103,11 @@ def build_entity_extractor(clsfy_cfg: ClassifyConfig) -> EntityExtractor:
 def _get_classify_endpoint_url() -> str:
     """Resolve the NIM/OpenAI-compatible base URL for PII column classification.
 
-    If ``NSS_INFERENCE_ENDPOINT`` is present in the environment, that value is used.
-    If the variable is unset, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT`` from ``defaults``.
+    If ``NSS_INFERENCE_ENDPOINT`` holds a non-blank value, that value is used.
+    If the variable is unset or blank, uses ``DEFAULT_NSS_INFERENCE_ENDPOINT``
+    from ``defaults``. A blank value is treated as unset so it never reaches the
+    OpenAI client as an empty ``base_url`` (which would fail every request),
+    matching the preflight ``env.inference`` check that ignores a blank endpoint.
 
     Note:
         Emits an INFO log indicating whether the default or configured URL applies.
@@ -112,8 +115,8 @@ def _get_classify_endpoint_url() -> str:
     Returns:
         inference endpoint for PII column classification.
     """
-    configured = os.environ.get("NSS_INFERENCE_ENDPOINT")
-    if configured is None:
+    configured = os.environ.get("NSS_INFERENCE_ENDPOINT", "").strip()
+    if not configured:
         url = DEFAULT_NSS_INFERENCE_ENDPOINT
         logging.info(
             "PII column classification will call the default NVIDIA inference API at %s. "

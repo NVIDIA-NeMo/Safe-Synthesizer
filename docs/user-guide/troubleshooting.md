@@ -514,8 +514,8 @@ check of its own.
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
 | `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
-| `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; classification would send an empty model id and fail |
-| `inference_endpoint_invalid` | warning | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
+| `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
+| `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
 | `hf_token_missing` | warning | `env.hf_model_availability` | Neither `HF_TOKEN` nor `HUGGING_FACE_HUB_TOKEN` set, and model loading may need online Hugging Face access |
 | `hf_model_not_cached` | warning/error | `env.hf_model_availability` | Hugging Face model is not present in the local cache; severity is error when HF offline mode is enabled |
 | `hf_model_cache_incomplete` | warning/error | `env.hf_model_availability` | Cached Hugging Face model snapshot is missing required config, tokenizer, weights, or shards; severity is error when HF offline mode is enabled |
