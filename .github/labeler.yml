@@ -86,6 +86,7 @@
       - any-glob-to-any-file:
           - "tests/**"
           - "pytest.ini"
+          - "script/slurm/**"
 
 "area:docs":
   - changed-files:
@@ -103,14 +104,7 @@
 "area:ci":
   - changed-files:
       - any-glob-to-any-file:
-          - ".github/workflows/**"
-          - ".github/actions/**"
-          - ".github/dependabot.yml"
-          - ".github/copy-pr-bot.yaml"
-          - ".github/labeler.yml"
-          - ".github/CODEOWNERS"
-          - ".github/ISSUE_TEMPLATE/**"
-          - ".github/PULL_REQUEST_TEMPLATE.md"
+          - ".github/**"
 
 "area:dev-ex":
   - changed-files:
@@ -126,6 +120,8 @@
           - "Makefile"
           - "tools/**"
           - "ruff.toml"
+          - ".mise.toml"
+          - "mise.lock"
 
 "area:build-dist":
   - changed-files:
@@ -133,6 +129,5 @@
           - "pyproject.toml"
           - "uv.lock"
           - "constraints.txt"
-          - "mise.lock"
           - "containers/**"
           - "src/nemo_safe_synthesizer/package_info.py"
