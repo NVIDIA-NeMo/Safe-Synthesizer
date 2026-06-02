@@ -138,6 +138,9 @@ CLI shorthand for the switch above, with no separate NSS env var:
   `TRANSFORMERS_OFFLINE=1`.
 - `--enable-huggingface-remote` -- online run; sets both to `0`, overriding any
   inherited offline environment.
+- Default (neither flag) -- the environment is left untouched: the run inherits
+  `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE` if set, and otherwise allows remote
+  downloads. The effective default is `--enable-huggingface-remote`.
 
 The CLI applies the flag before huggingface_hub loads, so the flag always wins
 over an inherited environment value. For env-based control, set `HF_HUB_OFFLINE`
