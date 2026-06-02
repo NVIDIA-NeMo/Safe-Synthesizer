@@ -278,7 +278,12 @@ class TestBuildStructuredOutputParams:
             return_value='{"type":"structural_tag","format":{"type":"json_schema","json_schema":{}}}',
         ) as mock_build_structural_tag:
             result = backend_instance._build_structured_output_params()
-            mock_build_structural_tag.assert_called_once()
+            mock_build_structural_tag.assert_called_once_with(
+                mock_schema,
+                params_with_structured_generation_auto,
+                bos_token=mock_model_metadata.prompt_config.bos_token,
+                eos_token=mock_model_metadata.prompt_config.eos_token,
+            )
             assert result is not None
             assert result.structural_tag is not None
 
@@ -305,7 +310,12 @@ class TestBuildStructuredOutputParams:
             return_value="test_regex_pattern",
         ) as mock_build_regex:
             result = backend_instance._build_structured_output_params()
-            mock_build_regex.assert_called_once()
+            mock_build_regex.assert_called_once_with(
+                mock_schema,
+                params_with_structured_generation_auto,
+                bos_token=mock_model_metadata.prompt_config.bos_token,
+                eos_token=mock_model_metadata.prompt_config.eos_token,
+            )
             assert result is not None
             assert result.regex == "test_regex_pattern"
 

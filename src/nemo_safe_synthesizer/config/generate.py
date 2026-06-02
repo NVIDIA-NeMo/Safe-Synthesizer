@@ -29,9 +29,9 @@ STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
 __all__ = [
     "GenerateParameters",
     "ResolvedStructuredGenerationSchemaMethod",
-    "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
     "StructuredGenerationBackend",
     "StructuredGenerationSchemaMethod",
+    "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
     "ValidationParameters",
     "resolve_structured_generation_schema_method",
     "structural_tag_backend_error_message",
