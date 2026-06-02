@@ -237,12 +237,15 @@ class SafeSynthesizer(ConfigBuilder):
         initialize_observability()
 
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
-    def load_from_save_path(self) -> SafeSynthesizer:
+    def load_from_save_path(self, runtime_config: SafeSynthesizerParameters | None = None) -> SafeSynthesizer:
         """Load the Safe Synthesizer configuration from the save path.
 
         Loads the configuration from the source run directory's config file.
         When resuming from a trained model for generation, the source paths
         point to the parent workdir that contains the trained adapter.
+        Optional ``runtime_config`` values for generation and evaluation are
+        applied after loading the saved training-run config so resume-time CLI
+        overrides work without mutating the persisted train config.
 
         Always prefers cached train/test splits from the training run to ensure
         evaluation metrics are consistent and privacy guarantees are maintained.
@@ -256,7 +259,19 @@ class SafeSynthesizer(ConfigBuilder):
         # Use source paths which point to parent workdir when resuming for generation
         config_file = self._workdir.source_config
 
-        self._nss_config = SafeSynthesizerParameters.from_json(config_file)
+        saved_config = SafeSynthesizerParameters.from_json(config_file)
+        if runtime_config is not None:
+            saved_config = saved_config.model_copy(
+                update={
+                    "generation": runtime_config.generation,
+                    "evaluation": runtime_config.evaluation,
+                    "emit_telemetry": runtime_config.emit_telemetry,
+                },
+            )
+        self._nss_config = saved_config
+        self._generation_config = self._nss_config.generation
+        self._evaluation_config = self._nss_config.evaluation
+        self._emit_telemetry_config = self._nss_config.emit_telemetry
 
         # Load model metadata from saved file (contains initial_prefill for timeseries)
         # rather than creating new metadata from config
