@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from nemo_safe_synthesizer.cli.settings import CLISettings
 from nemo_safe_synthesizer.cli.wandb_setup import WandbMode
 
@@ -216,6 +219,70 @@ class TestCLISettings:
         monkeypatch.setenv("NSS_DATASET_REGISTRY", "/other/registry.yaml")
         settings = CLISettings.from_cli_kwargs(dataset_registry="path/to/registry.yaml")
         assert settings.dataset_registry == "path/to/registry.yaml"
+
+    def test_inference_endpoint_url_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_ENDPOINT loads into inference_endpoint_url."""
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://custom.example/v1")
+        settings = CLISettings()
+        assert settings.inference_endpoint_url == "https://custom.example/v1"
+
+    def test_inference_api_key_from_nss_inference_env(self, monkeypatch):
+        """NSS_INFERENCE_KEY loads into inference_api_key."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
+        settings = CLISettings()
+        assert settings.inference_api_key == "token-from-env"  # pragma: allowlist secret
+
+    def test_inference_endpoint_url_cli_overrides_env(self, monkeypatch):
+        """CLI --inference-endpoint-url takes precedence over NSS_INFERENCE_ENDPOINT."""
+        monkeypatch.setenv("NSS_INFERENCE_ENDPOINT", "https://env.example/v1")
+        settings = CLISettings.from_cli_kwargs(inference_endpoint_url="https://cli.example/v1")
+        assert settings.inference_endpoint_url == "https://cli.example/v1"
+
+    def test_inference_api_key_cli_overrides_env(self, monkeypatch):
+        """CLI --inference-api-key takes precedence over NSS_INFERENCE_KEY."""
+        monkeypatch.setenv("NSS_INFERENCE_KEY", "token-from-env")
+        settings = CLISettings.from_cli_kwargs(inference_api_key="token-from-cli")  # pragma: allowlist secret
+        assert settings.inference_api_key == "token-from-cli"  # pragma: allowlist secret
+
+    def test_log_color_from_nss_log_color_env(self, monkeypatch):
+        """NSS_LOG_COLOR loads into CLISettings.log_color."""
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        settings = CLISettings()
+        assert settings.log_color is False
+        assert settings.effective_log_color is False
+
+    def test_log_color_cli_overrides_nss_log_color_env(self, monkeypatch):
+        """CLI --log-color takes precedence over NSS_LOG_COLOR."""
+        monkeypatch.setenv("NSS_LOG_COLOR", "false")
+        settings = CLISettings.from_cli_kwargs(log_color=True)
+        assert settings.effective_log_color is True
+
+    def test_runtime_settings_from_env(self, monkeypatch):
+        """Remaining runtime settings load from their documented env vars."""
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", "4")
+
+        settings = CLISettings()
+        assert settings.inference_model_id == "custom/model"
+        assert settings.cpu_count == 4
+
+    def test_huggingface_remote_is_cli_only(self, monkeypatch):
+        """huggingface_remote is set via the CLI flag, not a parallel NSS env var."""
+        settings = CLISettings.from_cli_kwargs(huggingface_remote=False)
+        assert settings.huggingface_remote is False
+
+    @pytest.mark.parametrize("bad_value", ["0", "-1"])
+    def test_cpu_count_rejects_non_positive(self, monkeypatch, bad_value):
+        """cpu_count must be >= 1; 0 or negative fails fast at parse time."""
+        monkeypatch.setenv("NSS_PII_REPLACER_CPU_COUNT", bad_value)
+        with pytest.raises(ValidationError):
+            CLISettings()
+
+    @pytest.mark.parametrize("bad_value", [0, -1])
+    def test_cpu_count_rejects_non_positive_from_cli(self, bad_value):
+        """A non-positive --cpu-count is rejected when passed via CLI kwargs."""
+        with pytest.raises(ValidationError):
+            CLISettings.from_cli_kwargs(cpu_count=bad_value)
 
 
 class TestCLISettingsIntegration:

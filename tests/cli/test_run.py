@@ -304,6 +304,19 @@ class TestPathOptions:
         assert "--run-path" in result.output
         assert "Explicit path for this run" in result.output
 
+    def test_run_help_shows_runtime_settings_options(self, cli_runner: CliRunner):
+        """Verify runtime PII/NER settings appear in run command help."""
+        result = cli_runner.invoke(run, ["--help"])
+
+        assert result.exit_code == 0
+        assert "--inference-endpoint-url" in result.output
+        assert "--inference-api-key" in result.output
+        assert "--inference-model-id" in result.output
+        assert "--disable-huggingface-remote" in result.output
+        assert "--cpu-count" in result.output
+        assert "NSS_INFERENCE_ENDPOINT" in result.output
+        assert "NSS_INFERENCE_KEY" in result.output
+
     def test_run_with_artifact_path_only(
         self,
         cli_runner: CliRunner,
@@ -1006,3 +1019,23 @@ class TestRunErrorPathExitCodes:
         )
 
         assert result.exit_code != 0
+
+
+def test_common_run_options_map_to_settings_fields() -> None:
+    """Every shared run flag must be backed by a CLISettings field.
+
+    ``_settings_from_run_kwargs`` splits a command's kwargs by matching names
+    against ``CLISettings.model_fields``; anything unmatched is routed to
+    synthesis overrides. A shared flag whose name is not a settings field would
+    therefore be silently misrouted instead of populating settings.
+    """
+    from nemo_safe_synthesizer.cli.run import common_run_options
+
+    def _target(**kwargs: object) -> None: ...
+
+    decorated = common_run_options(_target)
+    option_names = {param.name for param in getattr(decorated, "__click_params__", [])}
+    assert option_names, "common_run_options registered no Click options"
+
+    unmapped = option_names - set(CLISettings.model_fields)
+    assert not unmapped, f"common_run_options flags not backed by CLISettings fields: {sorted(unmapped)}"

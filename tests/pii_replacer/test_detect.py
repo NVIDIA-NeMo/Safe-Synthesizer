@@ -18,6 +18,7 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     UNKNOWN_ENTITY,
     ClassifyConfig,
     ColumnClassifierLLM,
+    DefaultLLMConfig,
     EntityExtractorGliner,
     _format_prompt,
     merge_subsume,
@@ -26,6 +27,25 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
 )
 from nemo_safe_synthesizer.pii_replacer.data_editor.environment import redact_entities_fn
 from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
+
+
+class TestDefaultLLMConfigId:
+    def test_uses_env_override(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "custom/model")
+        assert DefaultLLMConfig.config_id() == "custom/model"
+
+    def test_falls_back_when_unset(self, monkeypatch):
+        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
+        assert DefaultLLMConfig.config_id() == DefaultLLMConfig.DEFAULT_CONFIG_ID
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t"])
+    def test_blank_value_falls_back(self, monkeypatch, blank):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", blank)
+        assert DefaultLLMConfig.config_id() == DefaultLLMConfig.DEFAULT_CONFIG_ID
+
+    def test_strips_surrounding_whitespace(self, monkeypatch):
+        monkeypatch.setenv("NSS_INFERENCE_MODEL", "  custom/model  ")
+        assert DefaultLLMConfig.config_id() == "custom/model"
 
 
 def test_gliner_batch_predict_config():
@@ -65,6 +85,30 @@ def test_gliner_batch_predict_config():
         entity_extractor.batch_update_cache(["abc"], None)
         assert entity_extractor._model is not None
         entity_extractor._model.batch_predict_entities.assert_called()  # ty: ignore[call-non-callable, unresolved-attribute] -- mock object
+
+
+@pytest.mark.parametrize("offline_var", ["HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"])
+@pytest.mark.parametrize("env_value", ["1", "yes", "on"])
+def test_gliner_local_files_only_follows_hf_offline_env(env_value, offline_var, monkeypatch):
+    """GLiNER offline mode follows the standard Hugging Face offline env vars."""
+    cfg = ClassifyConfig(
+        valid_entities={"name"},
+        ner_threshold=0.8,
+        ner_regexps_enabled=False,
+        ner_entities=None,
+        gliner_enabled=True,
+        gliner_batch_mode_enabled=False,
+        gliner_batch_mode_chunk_length=10,
+        gliner_batch_mode_batch_size=20,
+        gliner_model="nvidia/gliner-PII",
+    )
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+    monkeypatch.setenv(offline_var, env_value)
+
+    with patch("nemo_safe_synthesizer.pii_replacer.data_editor.detect.GLiNER") as mock_gliner:
+        EntityExtractorGliner.get_entity_extractor(cfg)
+        assert mock_gliner.from_pretrained.call_args.kwargs["local_files_only"] is True
 
 
 def test_gliner_pii_detection_recall():

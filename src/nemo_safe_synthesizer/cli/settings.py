@@ -118,9 +118,10 @@ class CLISettings(BaseSettings):
 
     log_color: bool | None = Field(
         default=None,
+        validation_alias=AliasChoices("log_color", "NSS_LOG_COLOR"),
         description="Whether to colorize console output",
     )
-    """Whether to colorize console output."""
+    """Whether to colorize console output (env variable: ``NSS_LOG_COLOR``)."""
 
     log_file: str | None = Field(
         default=None,
@@ -163,6 +164,51 @@ class CLISettings(BaseSettings):
         description="URL or path to a dataset registry YAML file",
     )
     """URL or path to a dataset registry YAML file (env: ``NSS_DATASET_REGISTRY``)."""
+
+    inference_endpoint_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_endpoint_url", "NSS_INFERENCE_ENDPOINT"),
+        description="OpenAI-compatible inference endpoint URL for PII column classification",
+    )
+    """OpenAI-compatible inference endpoint URL for PII column classification
+    (env: ``NSS_INFERENCE_ENDPOINT``)."""
+
+    inference_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_api_key", "NSS_INFERENCE_KEY"),
+        description="API key for the inference endpoint used in PII column classification",
+    )
+    """API key for the inference endpoint used in PII column classification
+    (env: ``NSS_INFERENCE_KEY``)."""
+
+    inference_model_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("inference_model_id", "NSS_INFERENCE_MODEL"),
+        description="Model ID sent to the inference endpoint for PII column classification",
+    )
+    """Model ID sent to the inference endpoint for PII column classification
+    (env: ``NSS_INFERENCE_MODEL``)."""
+
+    huggingface_remote: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("huggingface_remote"),
+        description="Whether to allow Hugging Face remote downloads (base model and GLiNER)",
+    )
+    """Whether to allow Hugging Face remote downloads for the base model and GLiNER.
+
+    ``None`` leaves the environment untouched. ``True`` / ``False`` is propagated
+    to the standard ``HF_HUB_OFFLINE`` and ``TRANSFORMERS_OFFLINE`` variables (the
+    canonical env switch) by ``_propagate_runtime_settings_to_env``; there is no
+    separate NSS env var."""
+
+    cpu_count: int | None = Field(
+        default=None,
+        ge=1,
+        validation_alias=AliasChoices("cpu_count", "NSS_PII_REPLACER_CPU_COUNT"),
+        description="Number of CPU worker processes used for NER (PII replacement)",
+    )
+    """Number of CPU worker processes used for NER (PII replacement)
+    (env: ``NSS_PII_REPLACER_CPU_COUNT``)."""
 
     @field_validator("wandb_mode", mode="before")
     @classmethod

@@ -25,7 +25,6 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, ClassVar
 from urllib.parse import urlsplit, urlunsplit
 
-from huggingface_hub.utils import HFValidationError, validate_repo_id
 from pydantic import BaseModel, Field
 
 from .observability import get_logger
@@ -111,6 +110,13 @@ def sanitize_model_for_telemetry(model: str | None) -> str:
         return LOCAL_MODEL_LABEL
     if Path(model).expanduser().exists():
         return LOCAL_MODEL_LABEL
+
+    # Imported lazily: huggingface_hub caches HF_HUB_OFFLINE at import time, and
+    # this module loads during CLI startup (cli.cli -> cli.run -> telemetry),
+    # before common_setup propagates the --(enable|disable)-huggingface-remote
+    # flag. Deferring the import keeps cli.cli hub-free so that propagation runs
+    # first. See cli.utils._propagate_runtime_settings_to_env.
+    from huggingface_hub.utils import HFValidationError, validate_repo_id
 
     try:
         validate_repo_id(model)

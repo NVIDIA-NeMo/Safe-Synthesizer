@@ -244,7 +244,7 @@ docker run --gpus all --shm-size=1g \
   nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv
 ```
 
-See [Environment Variables -- Hugging Face Cache](environment.md#hugging-face-cache)
+See [Environment Variables -- Hugging Face cache and offline](environment.md#hugging-face-cache-and-offline)
 for details on `HF_HOME`, `HF_HUB_OFFLINE`, and `VLLM_CACHE_ROOT`.
 
 ---

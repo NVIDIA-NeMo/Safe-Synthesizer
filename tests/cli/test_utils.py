@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +13,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.cli.settings import CLISettings
-from nemo_safe_synthesizer.cli.utils import common_setup
+from nemo_safe_synthesizer.cli.utils import _propagate_runtime_settings_to_env, common_setup
 
 
 @pytest.fixture
@@ -324,6 +325,76 @@ class TestCommonSetupWithoutRegistry:
 
         assert config.generation.num_records == 100
         assert config.generation.temperature == 0.7
+
+
+class TestPropagateRuntimeSettingsToEnv:
+    """Tests for materializing CLISettings runtime fields back to os.environ."""
+
+    def test_propagates_nss_inference_settings(self, monkeypatch):
+        """Endpoint and key propagate to NSS_INFERENCE_* env vars read by pii_replacer."""
+        monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
+        monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
+
+        settings = CLISettings.from_cli_kwargs(
+            inference_endpoint_url="https://cli.example/v1",
+            inference_api_key="token-propagated-cli",  # pragma: allowlist secret
+        )
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["NSS_INFERENCE_ENDPOINT"] == "https://cli.example/v1"
+        assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-cli"
+
+    def test_propagates_remaining_runtime_settings(self, monkeypatch):
+        """Model ID, offline mode, and CPU count propagate to their runtime env vars."""
+        monkeypatch.delenv("NSS_INFERENCE_MODEL", raising=False)
+        monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+        monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+        monkeypatch.delenv("NSS_PII_REPLACER_CPU_COUNT", raising=False)
+
+        settings = CLISettings.from_cli_kwargs(
+            inference_model_id="custom/model",
+            huggingface_remote=False,
+            cpu_count=3,
+        )
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["NSS_INFERENCE_MODEL"] == "custom/model"
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+        assert os.environ["NSS_PII_REPLACER_CPU_COUNT"] == "3"
+
+    def test_enabling_huggingface_remote_disables_offline_env(self, monkeypatch):
+        """--enable-huggingface-remote sets the HF offline vars to 0, overriding inherited offline env."""
+        monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+        monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+
+        settings = CLISettings.from_cli_kwargs(huggingface_remote=True)
+        _propagate_runtime_settings_to_env(settings)
+
+        assert os.environ["HF_HUB_OFFLINE"] == "0"
+        assert os.environ["TRANSFORMERS_OFFLINE"] == "0"
+
+    def test_common_setup_propagates_before_workdir(self, monkeypatch, dummy_csv: Path):
+        """common_setup writes resolved runtime settings before downstream imports."""
+        monkeypatch.delenv("NSS_INFERENCE_KEY", raising=False)
+
+        settings = CLISettings.from_cli_kwargs(
+            data_source=str(dummy_csv),
+            inference_api_key="token-propagated-setup",  # pragma: allowlist secret
+        )
+
+        with (
+            patch("nemo_safe_synthesizer.cli.utils._create_workdir") as mock_create_workdir,
+            patch("nemo_safe_synthesizer.cli.utils.initialize_wandb_run"),
+            patch("nemo_safe_synthesizer.cli.utils._initialize_logging_for_cli_from_settings") as mock_init_logging,
+        ):
+            mock_workdir = MagicMock()
+            mock_create_workdir.return_value = mock_workdir
+            mock_init_logging.return_value = MagicMock()
+
+            common_setup(settings)
+
+        assert os.environ["NSS_INFERENCE_KEY"] == "token-propagated-setup"
 
 
 class TestCommonSetupReturnValues:
