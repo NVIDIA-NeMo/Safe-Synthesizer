@@ -5522,6 +5522,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" DefaultLLMConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.config_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;config_id
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -9437,6 +9454,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" DefaultLLMConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.config_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;config_id
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -10456,8 +10490,8 @@
 
 
         <p>Default settings for the LLM used in column classification.</p>
-<p>All attributes are class-level. Used by <code>classify_columns</code> when calling the
-inference API for column-type classification.</p>
+<p>Used by <code>classify_columns</code> when calling the inference API for column-type
+classification.</p>
 
 
 <p><span class="doc-section-title">Attributes:</span></p>
@@ -10470,17 +10504,6 @@ inference API for column-type classification.</p>
         </tr>
       </thead>
       <tbody>
-          <tr class="doc-section-item">
-            <td><code><span title="nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.CONFIG_ID">CONFIG_ID</span></code></td>
-            <td>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Model identifier for the LLM. From env <code>NIM_MODEL_ID</code>, or
-<code>qwen/qwen3-next-80b-a3b-instruct</code> if unset.</p>
-              </div>
-            </td>
-          </tr>
           <tr class="doc-section-item">
             <td><code><span title="nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.SYSTEM_PROMPT">SYSTEM_PROMPT</span></code></td>
             <td>
@@ -10528,6 +10551,31 @@ Lower values give more deterministic output.</p>
 
 
 
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            config_id()
+
+  
+      classmethod
+   (nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.config_id)" href="#nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.config_id">config_id</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Model identifier for the LLM, read from env at call-time.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
 
 
 
@@ -10542,6 +10590,63 @@ Lower values give more deterministic output.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.config_id" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">config_id</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.pii_replacer.data_editor.detect.DefaultLLMConfig.config_id" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Model identifier for the LLM, read from env at call-time.</p>
+<p>Reads <code>NSS_INFERENCE_MODEL</code> on each call (falling back to
+<code>DEFAULT_CONFIG_ID</code>) so a value set after this module is imported still
+takes effect, matching the call-time env handling used elsewhere in this
+module. A blank or whitespace-only value is treated as unset, so it falls
+back to <code>DEFAULT_CONFIG_ID</code> rather than sending an empty model id to the
+inference API.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span>
+<span class="normal"><a href="#__codelineno-0-56">56</a></span>
+<span class="normal"><a href="#__codelineno-0-57">57</a></span>
+<span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="k">def</span><span class="w"> </span><span class="nf">config_id</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Model identifier for the LLM, read from env at call-time.</span>
+</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56"></a>
+</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57"></a><span class="sd">    Reads ``NSS_INFERENCE_MODEL`` on each call (falling back to</span>
+</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="sd">    ``DEFAULT_CONFIG_ID``) so a value set after this module is imported still</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="sd">    takes effect, matching the call-time env handling used elsewhere in this</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a><span class="sd">    module. A blank or whitespace-only value is treated as unset, so it falls</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">    back to ``DEFAULT_CONFIG_ID`` rather than sending an empty model id to the</span>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    inference API.</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a>    <span class="n">model</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;NSS_INFERENCE_MODEL&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="k">return</span> <span class="n">model</span> <span class="ow">or</span> <span class="bp">cls</span><span class="o">.</span><span class="n">DEFAULT_CONFIG_ID</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 
@@ -10693,35 +10798,35 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-323">323</a></span>
-<span class="normal"><a href="#__codelineno-0-324">324</a></span>
-<span class="normal"><a href="#__codelineno-0-325">325</a></span>
-<span class="normal"><a href="#__codelineno-0-326">326</a></span>
-<span class="normal"><a href="#__codelineno-0-327">327</a></span>
-<span class="normal"><a href="#__codelineno-0-328">328</a></span>
-<span class="normal"><a href="#__codelineno-0-329">329</a></span>
-<span class="normal"><a href="#__codelineno-0-330">330</a></span>
-<span class="normal"><a href="#__codelineno-0-331">331</a></span>
-<span class="normal"><a href="#__codelineno-0-332">332</a></span>
-<span class="normal"><a href="#__codelineno-0-333">333</a></span>
-<span class="normal"><a href="#__codelineno-0-334">334</a></span>
-<span class="normal"><a href="#__codelineno-0-335">335</a></span>
-<span class="normal"><a href="#__codelineno-0-336">336</a></span>
-<span class="normal"><a href="#__codelineno-0-337">337</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="nd">@abstractmethod</span>
-</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="k">def</span><span class="w"> </span><span class="nf">detect_types</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-</span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Classify each column into one of the given entity types.</span>
-</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a>
-</span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">    Implementations may sample column values and use an LLM, lookup table, or</span>
-</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">    other backend to assign exactly one entity type per column. Columns that</span>
-</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">    cannot be classified or are not in ``entities`` should be mapped to</span>
-</span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a><span class="sd">    ``UNKNOWN_ENTITY``.</span>
-</span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>
-</span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-333"><a id="__codelineno-0-333" name="__codelineno-0-333"></a><span class="sd">        df: DataFrame whose columns are to be classified.</span>
-</span><span id="__span-0-334"><a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">        entities: Set of valid entity type names to assign; may be ``None``</span>
-</span><span id="__span-0-335"><a id="__codelineno-0-335" name="__codelineno-0-335"></a><span class="sd">            for implementations that use a fixed or default set.</span>
-</span><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a>    <span class="o">...</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#__codelineno-0-349">349</a></span>
+<span class="normal"><a href="#__codelineno-0-350">350</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a><span class="nd">@abstractmethod</span>
+</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a><span class="k">def</span><span class="w"> </span><span class="nf">detect_types</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+</span><span id="__span-0-338"><a id="__codelineno-0-338" name="__codelineno-0-338"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Classify each column into one of the given entity types.</span>
+</span><span id="__span-0-339"><a id="__codelineno-0-339" name="__codelineno-0-339"></a>
+</span><span id="__span-0-340"><a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">    Implementations may sample column values and use an LLM, lookup table, or</span>
+</span><span id="__span-0-341"><a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">    other backend to assign exactly one entity type per column. Columns that</span>
+</span><span id="__span-0-342"><a id="__codelineno-0-342" name="__codelineno-0-342"></a><span class="sd">    cannot be classified or are not in ``entities`` should be mapped to</span>
+</span><span id="__span-0-343"><a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">    ``UNKNOWN_ENTITY``.</span>
+</span><span id="__span-0-344"><a id="__codelineno-0-344" name="__codelineno-0-344"></a>
+</span><span id="__span-0-345"><a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-346"><a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">        df: DataFrame whose columns are to be classified.</span>
+</span><span id="__span-0-347"><a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="sd">        entities: Set of valid entity type names to assign; may be ``None``</span>
+</span><span id="__span-0-348"><a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">            for implementations that use a fixed or default set.</span>
+</span><span id="__span-0-349"><a id="__codelineno-0-349" name="__codelineno-0-349"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-350"><a id="__codelineno-0-350" name="__codelineno-0-350"></a>    <span class="o">...</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11060,11 +11165,11 @@ for implementations that use a fixed or default set.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-372">372</a></span>
-<span class="normal"><a href="#__codelineno-0-373">373</a></span>
-<span class="normal"><a href="#__codelineno-0-374">374</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_llm</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_num_samples</span> <span class="o">=</span> <span class="kc">None</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-385">385</a></span>
+<span class="normal"><a href="#__codelineno-0-386">386</a></span>
+<span class="normal"><a href="#__codelineno-0-387">387</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-385"><a id="__codelineno-0-385" name="__codelineno-0-385"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-386"><a id="__codelineno-0-386" name="__codelineno-0-386"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_llm</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-387"><a id="__codelineno-0-387" name="__codelineno-0-387"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_num_samples</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -11097,31 +11202,31 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-376">376</a></span>
-<span class="normal"><a href="#__codelineno-0-377">377</a></span>
-<span class="normal"><a href="#__codelineno-0-378">378</a></span>
-<span class="normal"><a href="#__codelineno-0-379">379</a></span>
-<span class="normal"><a href="#__codelineno-0-380">380</a></span>
-<span class="normal"><a href="#__codelineno-0-381">381</a></span>
-<span class="normal"><a href="#__codelineno-0-382">382</a></span>
-<span class="normal"><a href="#__codelineno-0-383">383</a></span>
-<span class="normal"><a href="#__codelineno-0-384">384</a></span>
-<span class="normal"><a href="#__codelineno-0-385">385</a></span>
-<span class="normal"><a href="#__codelineno-0-386">386</a></span>
-<span class="normal"><a href="#__codelineno-0-387">387</a></span>
-<span class="normal"><a href="#__codelineno-0-388">388</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-376"><a id="__codelineno-0-376" name="__codelineno-0-376"></a><span class="k">def</span><span class="w"> </span><span class="nf">detect_types</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-</span><span id="__span-0-377"><a id="__codelineno-0-377" name="__codelineno-0-377"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sample column data and call the inference API to classify columns into entity types.&quot;&quot;&quot;</span>
-</span><span id="__span-0-378"><a id="__codelineno-0-378" name="__codelineno-0-378"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_llm</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-379"><a id="__codelineno-0-379" name="__codelineno-0-379"></a>        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;InferenceAPI classifier not initialized. Use get_classifier() method.&quot;</span><span class="p">)</span>
-</span><span id="__span-0-380"><a id="__codelineno-0-380" name="__codelineno-0-380"></a>
-</span><span id="__span-0-381"><a id="__codelineno-0-381" name="__codelineno-0-381"></a>    <span class="k">return</span> <span class="n">classify_columns</span><span class="p">(</span>
-</span><span id="__span-0-382"><a id="__codelineno-0-382" name="__codelineno-0-382"></a>        <span class="n">df</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
-</span><span id="__span-0-383"><a id="__codelineno-0-383" name="__codelineno-0-383"></a>        <span class="n">entities</span><span class="o">=</span><span class="n">entities</span><span class="p">,</span>
-</span><span id="__span-0-384"><a id="__codelineno-0-384" name="__codelineno-0-384"></a>        <span class="n">num_samples</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_num_samples</span><span class="p">,</span>
-</span><span id="__span-0-385"><a id="__codelineno-0-385" name="__codelineno-0-385"></a>        <span class="n">client</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_llm</span><span class="p">,</span>
-</span><span id="__span-0-386"><a id="__codelineno-0-386" name="__codelineno-0-386"></a>        <span class="n">on_validation_error</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_validation_error</span><span class="p">,</span>
-</span><span id="__span-0-387"><a id="__codelineno-0-387" name="__codelineno-0-387"></a>        <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">,</span>
-</span><span id="__span-0-388"><a id="__codelineno-0-388" name="__codelineno-0-388"></a>    <span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-389">389</a></span>
+<span class="normal"><a href="#__codelineno-0-390">390</a></span>
+<span class="normal"><a href="#__codelineno-0-391">391</a></span>
+<span class="normal"><a href="#__codelineno-0-392">392</a></span>
+<span class="normal"><a href="#__codelineno-0-393">393</a></span>
+<span class="normal"><a href="#__codelineno-0-394">394</a></span>
+<span class="normal"><a href="#__codelineno-0-395">395</a></span>
+<span class="normal"><a href="#__codelineno-0-396">396</a></span>
+<span class="normal"><a href="#__codelineno-0-397">397</a></span>
+<span class="normal"><a href="#__codelineno-0-398">398</a></span>
+<span class="normal"><a href="#__codelineno-0-399">399</a></span>
+<span class="normal"><a href="#__codelineno-0-400">400</a></span>
+<span class="normal"><a href="#__codelineno-0-401">401</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-389"><a id="__codelineno-0-389" name="__codelineno-0-389"></a><span class="k">def</span><span class="w"> </span><span class="nf">detect_types</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+</span><span id="__span-0-390"><a id="__codelineno-0-390" name="__codelineno-0-390"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sample column data and call the inference API to classify columns into entity types.&quot;&quot;&quot;</span>
+</span><span id="__span-0-391"><a id="__codelineno-0-391" name="__codelineno-0-391"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_llm</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-392"><a id="__codelineno-0-392" name="__codelineno-0-392"></a>        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;InferenceAPI classifier not initialized. Use get_classifier() method.&quot;</span><span class="p">)</span>
+</span><span id="__span-0-393"><a id="__codelineno-0-393" name="__codelineno-0-393"></a>
+</span><span id="__span-0-394"><a id="__codelineno-0-394" name="__codelineno-0-394"></a>    <span class="k">return</span> <span class="n">classify_columns</span><span class="p">(</span>
+</span><span id="__span-0-395"><a id="__codelineno-0-395" name="__codelineno-0-395"></a>        <span class="n">df</span><span class="o">=</span><span class="n">df</span><span class="p">,</span>
+</span><span id="__span-0-396"><a id="__codelineno-0-396" name="__codelineno-0-396"></a>        <span class="n">entities</span><span class="o">=</span><span class="n">entities</span><span class="p">,</span>
+</span><span id="__span-0-397"><a id="__codelineno-0-397" name="__codelineno-0-397"></a>        <span class="n">num_samples</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_num_samples</span><span class="p">,</span>
+</span><span id="__span-0-398"><a id="__codelineno-0-398" name="__codelineno-0-398"></a>        <span class="n">client</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_llm</span><span class="p">,</span>
+</span><span id="__span-0-399"><a id="__codelineno-0-399" name="__codelineno-0-399"></a>        <span class="n">on_validation_error</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_validation_error</span><span class="p">,</span>
+</span><span id="__span-0-400"><a id="__codelineno-0-400" name="__codelineno-0-400"></a>        <span class="n">logger</span><span class="o">=</span><span class="n">logger</span><span class="p">,</span>
+</span><span id="__span-0-401"><a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11654,11 +11759,11 @@ for implementations that use a fixed or default set.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-450">450</a></span>
-<span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -11695,13 +11800,13 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-433">433</a></span>
-<span class="normal"><a href="#__codelineno-0-434">434</a></span>
-<span class="normal"><a href="#__codelineno-0-435">435</a></span>
-<span class="normal"><a href="#__codelineno-0-436">436</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-433"><a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="nd">@abstractmethod</span>
-</span><span id="__span-0-434"><a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_entity_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
-</span><span id="__span-0-435"><a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a list of dicts with ``entity`` and ``value`` keys for each detection.&quot;&quot;&quot;</span>
-</span><span id="__span-0-436"><a id="__codelineno-0-436" name="__codelineno-0-436"></a>    <span class="o">...</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#__codelineno-0-447">447</a></span>
+<span class="normal"><a href="#__codelineno-0-448">448</a></span>
+<span class="normal"><a href="#__codelineno-0-449">449</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-446"><a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="nd">@abstractmethod</span>
+</span><span id="__span-0-447"><a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_entity_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+</span><span id="__span-0-448"><a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a list of dicts with ``entity`` and ``value`` keys for each detection.&quot;&quot;&quot;</span>
+</span><span id="__span-0-449"><a id="__codelineno-0-449" name="__codelineno-0-449"></a>    <span class="o">...</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11728,13 +11833,13 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-438">438</a></span>
-<span class="normal"><a href="#__codelineno-0-439">439</a></span>
-<span class="normal"><a href="#__codelineno-0-440">440</a></span>
-<span class="normal"><a href="#__codelineno-0-441">441</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-438"><a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="nd">@abstractmethod</span>
-</span><span id="__span-0-439"><a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_ner_predictions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
-</span><span id="__span-0-440"><a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return NER predictions with spans and labels for dedup/merge across extractors.&quot;&quot;&quot;</span>
-</span><span id="__span-0-441"><a id="__codelineno-0-441" name="__codelineno-0-441"></a>    <span class="o">...</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-451">451</a></span>
+<span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="nd">@abstractmethod</span>
+</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_ner_predictions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
+</span><span id="__span-0-453"><a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return NER predictions with spans and labels for dedup/merge across extractors.&quot;&quot;&quot;</span>
+</span><span id="__span-0-454"><a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="o">...</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11757,37 +11862,37 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-454">454</a></span>
-<span class="normal"><a href="#__codelineno-0-455">455</a></span>
-<span class="normal"><a href="#__codelineno-0-456">456</a></span>
-<span class="normal"><a href="#__codelineno-0-457">457</a></span>
-<span class="normal"><a href="#__codelineno-0-458">458</a></span>
-<span class="normal"><a href="#__codelineno-0-459">459</a></span>
-<span class="normal"><a href="#__codelineno-0-460">460</a></span>
-<span class="normal"><a href="#__codelineno-0-461">461</a></span>
-<span class="normal"><a href="#__codelineno-0-462">462</a></span>
-<span class="normal"><a href="#__codelineno-0-463">463</a></span>
-<span class="normal"><a href="#__codelineno-0-464">464</a></span>
-<span class="normal"><a href="#__codelineno-0-465">465</a></span>
-<span class="normal"><a href="#__codelineno-0-466">466</a></span>
-<span class="normal"><a href="#__codelineno-0-467">467</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-467">467</a></span>
 <span class="normal"><a href="#__codelineno-0-468">468</a></span>
-<span class="normal"><a href="#__codelineno-0-469">469</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-454"><a id="__codelineno-0-454" name="__codelineno-0-454"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_and_replace_entities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">redact_fn</span><span class="p">:</span> <span class="n">RedactFn</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-455"><a id="__codelineno-0-455" name="__codelineno-0-455"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Run NER, merge/dedupe predictions, update ``column_report``, and replace spans with ``redact_fn``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-456"><a id="__codelineno-0-456" name="__codelineno-0-456"></a>    <span class="c1"># Ensure text is a string - Jinja templates may pass non-string types (e.g., float/NaN)</span>
-</span><span id="__span-0-457"><a id="__codelineno-0-457" name="__codelineno-0-457"></a>    <span class="n">text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
-</span><span id="__span-0-458"><a id="__codelineno-0-458" name="__codelineno-0-458"></a>
-</span><span id="__span-0-459"><a id="__codelineno-0-459" name="__codelineno-0-459"></a>    <span class="n">detected</span> <span class="o">=</span> <span class="n">merge_subsume</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extract_ner_predictions</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">entities</span><span class="p">))</span>
-</span><span id="__span-0-460"><a id="__codelineno-0-460" name="__codelineno-0-460"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">detected</span><span class="p">:</span>
-</span><span id="__span-0-461"><a id="__codelineno-0-461" name="__codelineno-0-461"></a>        <span class="k">return</span> <span class="n">text</span>
-</span><span id="__span-0-462"><a id="__codelineno-0-462" name="__codelineno-0-462"></a>
-</span><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a>    <span class="n">report</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_column</span><span class="p">,</span> <span class="p">{})</span>
-</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">detected</span><span class="p">:</span>
-</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>        <span class="n">report</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">entity</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">EntityReport</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">set</span><span class="p">()))</span>
-</span><span id="__span-0-466"><a id="__codelineno-0-466" name="__codelineno-0-466"></a>        <span class="n">report</span><span class="p">[</span><span class="n">entity</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">.</span><span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
-</span><span id="__span-0-467"><a id="__codelineno-0-467" name="__codelineno-0-467"></a>        <span class="n">report</span><span class="p">[</span><span class="n">entity</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">entity</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
-</span><span id="__span-0-468"><a id="__codelineno-0-468" name="__codelineno-0-468"></a>
-</span><span id="__span-0-469"><a id="__codelineno-0-469" name="__codelineno-0-469"></a>    <span class="k">return</span> <span class="n">redact_from_entities</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">detected</span><span class="p">,</span> <span class="n">redact_fn</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-469">469</a></span>
+<span class="normal"><a href="#__codelineno-0-470">470</a></span>
+<span class="normal"><a href="#__codelineno-0-471">471</a></span>
+<span class="normal"><a href="#__codelineno-0-472">472</a></span>
+<span class="normal"><a href="#__codelineno-0-473">473</a></span>
+<span class="normal"><a href="#__codelineno-0-474">474</a></span>
+<span class="normal"><a href="#__codelineno-0-475">475</a></span>
+<span class="normal"><a href="#__codelineno-0-476">476</a></span>
+<span class="normal"><a href="#__codelineno-0-477">477</a></span>
+<span class="normal"><a href="#__codelineno-0-478">478</a></span>
+<span class="normal"><a href="#__codelineno-0-479">479</a></span>
+<span class="normal"><a href="#__codelineno-0-480">480</a></span>
+<span class="normal"><a href="#__codelineno-0-481">481</a></span>
+<span class="normal"><a href="#__codelineno-0-482">482</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-467"><a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_and_replace_entities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">redact_fn</span><span class="p">:</span> <span class="n">RedactFn</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-0-468"><a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Run NER, merge/dedupe predictions, update ``column_report``, and replace spans with ``redact_fn``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-469"><a id="__codelineno-0-469" name="__codelineno-0-469"></a>    <span class="c1"># Ensure text is a string - Jinja templates may pass non-string types (e.g., float/NaN)</span>
+</span><span id="__span-0-470"><a id="__codelineno-0-470" name="__codelineno-0-470"></a>    <span class="n">text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+</span><span id="__span-0-471"><a id="__codelineno-0-471" name="__codelineno-0-471"></a>
+</span><span id="__span-0-472"><a id="__codelineno-0-472" name="__codelineno-0-472"></a>    <span class="n">detected</span> <span class="o">=</span> <span class="n">merge_subsume</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">extract_ner_predictions</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">entities</span><span class="p">))</span>
+</span><span id="__span-0-473"><a id="__codelineno-0-473" name="__codelineno-0-473"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">detected</span><span class="p">:</span>
+</span><span id="__span-0-474"><a id="__codelineno-0-474" name="__codelineno-0-474"></a>        <span class="k">return</span> <span class="n">text</span>
+</span><span id="__span-0-475"><a id="__codelineno-0-475" name="__codelineno-0-475"></a>
+</span><span id="__span-0-476"><a id="__codelineno-0-476" name="__codelineno-0-476"></a>    <span class="n">report</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">current_column</span><span class="p">,</span> <span class="p">{})</span>
+</span><span id="__span-0-477"><a id="__codelineno-0-477" name="__codelineno-0-477"></a>    <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">detected</span><span class="p">:</span>
+</span><span id="__span-0-478"><a id="__codelineno-0-478" name="__codelineno-0-478"></a>        <span class="n">report</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">entity</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">EntityReport</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">set</span><span class="p">()))</span>
+</span><span id="__span-0-479"><a id="__codelineno-0-479" name="__codelineno-0-479"></a>        <span class="n">report</span><span class="p">[</span><span class="n">entity</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">.</span><span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span id="__span-0-480"><a id="__codelineno-0-480" name="__codelineno-0-480"></a>        <span class="n">report</span><span class="p">[</span><span class="n">entity</span><span class="o">.</span><span class="n">label</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">entity</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+</span><span id="__span-0-481"><a id="__codelineno-0-481" name="__codelineno-0-481"></a>
+</span><span id="__span-0-482"><a id="__codelineno-0-482" name="__codelineno-0-482"></a>    <span class="k">return</span> <span class="n">redact_from_entities</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">detected</span><span class="p">,</span> <span class="n">redact_fn</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -11834,11 +11939,11 @@ for implementations that use a fixed or default set.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-450">450</a></span>
-<span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -12070,11 +12175,11 @@ for implementations that use a fixed or default set.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-450">450</a></span>
-<span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -12107,21 +12212,21 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-504">504</a></span>
-<span class="normal"><a href="#__codelineno-0-505">505</a></span>
-<span class="normal"><a href="#__codelineno-0-506">506</a></span>
-<span class="normal"><a href="#__codelineno-0-507">507</a></span>
-<span class="normal"><a href="#__codelineno-0-508">508</a></span>
-<span class="normal"><a href="#__codelineno-0-509">509</a></span>
-<span class="normal"><a href="#__codelineno-0-510">510</a></span>
-<span class="normal"><a href="#__codelineno-0-511">511</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-504"><a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="k">def</span><span class="w"> </span><span class="nf">pipeline_from_entities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Pipeline</span><span class="p">]:</span>
-</span><span id="__span-0-505"><a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a pipeline factory for the given entity set (or ``_entity_types`` if empty).&quot;&quot;&quot;</span>
-</span><span id="__span-0-506"><a id="__codelineno-0-506" name="__codelineno-0-506"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">entities</span><span class="p">:</span>
-</span><span id="__span-0-507"><a id="__codelineno-0-507" name="__codelineno-0-507"></a>        <span class="n">entities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_entity_types</span>
-</span><span id="__span-0-508"><a id="__codelineno-0-508" name="__codelineno-0-508"></a>    <span class="n">predictor_filter</span> <span class="o">=</span> <span class="n">LabelSetPredictorFilter</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span>
-</span><span id="__span-0-509"><a id="__codelineno-0-509" name="__codelineno-0-509"></a>    <span class="n">factory</span> <span class="o">=</span> <span class="n">NERFactory</span><span class="p">(</span><span class="n">regex_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-0-510"><a id="__codelineno-0-510" name="__codelineno-0-510"></a>    <span class="n">ner</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">predictor_filter</span><span class="o">=</span><span class="n">predictor_filter</span><span class="p">)</span>
-</span><span id="__span-0-511"><a id="__codelineno-0-511" name="__codelineno-0-511"></a>    <span class="k">return</span> <span class="n">ner</span><span class="o">.</span><span class="n">pipeline_factory</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-517">517</a></span>
+<span class="normal"><a href="#__codelineno-0-518">518</a></span>
+<span class="normal"><a href="#__codelineno-0-519">519</a></span>
+<span class="normal"><a href="#__codelineno-0-520">520</a></span>
+<span class="normal"><a href="#__codelineno-0-521">521</a></span>
+<span class="normal"><a href="#__codelineno-0-522">522</a></span>
+<span class="normal"><a href="#__codelineno-0-523">523</a></span>
+<span class="normal"><a href="#__codelineno-0-524">524</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-517"><a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="k">def</span><span class="w"> </span><span class="nf">pipeline_from_entities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Pipeline</span><span class="p">]:</span>
+</span><span id="__span-0-518"><a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a pipeline factory for the given entity set (or ``_entity_types`` if empty).&quot;&quot;&quot;</span>
+</span><span id="__span-0-519"><a id="__codelineno-0-519" name="__codelineno-0-519"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">entities</span><span class="p">:</span>
+</span><span id="__span-0-520"><a id="__codelineno-0-520" name="__codelineno-0-520"></a>        <span class="n">entities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_entity_types</span>
+</span><span id="__span-0-521"><a id="__codelineno-0-521" name="__codelineno-0-521"></a>    <span class="n">predictor_filter</span> <span class="o">=</span> <span class="n">LabelSetPredictorFilter</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span>
+</span><span id="__span-0-522"><a id="__codelineno-0-522" name="__codelineno-0-522"></a>    <span class="n">factory</span> <span class="o">=</span> <span class="n">NERFactory</span><span class="p">(</span><span class="n">regex_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-523"><a id="__codelineno-0-523" name="__codelineno-0-523"></a>    <span class="n">ner</span> <span class="o">=</span> <span class="n">factory</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">predictor_filter</span><span class="o">=</span><span class="n">predictor_filter</span><span class="p">)</span>
+</span><span id="__span-0-524"><a id="__codelineno-0-524" name="__codelineno-0-524"></a>    <span class="k">return</span> <span class="n">ner</span><span class="o">.</span><span class="n">pipeline_factory</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12148,29 +12253,29 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-530">530</a></span>
-<span class="normal"><a href="#__codelineno-0-531">531</a></span>
-<span class="normal"><a href="#__codelineno-0-532">532</a></span>
-<span class="normal"><a href="#__codelineno-0-533">533</a></span>
-<span class="normal"><a href="#__codelineno-0-534">534</a></span>
-<span class="normal"><a href="#__codelineno-0-535">535</a></span>
-<span class="normal"><a href="#__codelineno-0-536">536</a></span>
-<span class="normal"><a href="#__codelineno-0-537">537</a></span>
-<span class="normal"><a href="#__codelineno-0-538">538</a></span>
-<span class="normal"><a href="#__codelineno-0-539">539</a></span>
-<span class="normal"><a href="#__codelineno-0-540">540</a></span>
-<span class="normal"><a href="#__codelineno-0-541">541</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-530"><a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="nd">@classmethod</span>
-</span><span id="__span-0-531"><a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_entity_extractor</span><span class="p">(</span>
-</span><span id="__span-0-532"><a id="__codelineno-0-532" name="__codelineno-0-532"></a>    <span class="bp">cls</span><span class="p">,</span>
-</span><span id="__span-0-533"><a id="__codelineno-0-533" name="__codelineno-0-533"></a>    <span class="n">clsfy_cfg</span><span class="p">:</span> <span class="n">ClassifyConfig</span><span class="p">,</span>
-</span><span id="__span-0-534"><a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntityExtractor</span><span class="p">:</span>
-</span><span id="__span-0-535"><a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a regex extractor with entity types from ``clsfy_cfg`` (or ``DEFAULT_ENTITIES``).&quot;&quot;&quot;</span>
-</span><span id="__span-0-536"><a id="__codelineno-0-536" name="__codelineno-0-536"></a>    <span class="n">entity_types</span> <span class="o">=</span> <span class="n">DEFAULT_ENTITIES</span>
-</span><span id="__span-0-537"><a id="__codelineno-0-537" name="__codelineno-0-537"></a>    <span class="k">if</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span><span class="p">:</span>
-</span><span id="__span-0-538"><a id="__codelineno-0-538" name="__codelineno-0-538"></a>        <span class="n">entity_types</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span>
-</span><span id="__span-0-539"><a id="__codelineno-0-539" name="__codelineno-0-539"></a>    <span class="bp">self</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
-</span><span id="__span-0-540"><a id="__codelineno-0-540" name="__codelineno-0-540"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_entity_types</span> <span class="o">=</span> <span class="n">entity_types</span>
-</span><span id="__span-0-541"><a id="__codelineno-0-541" name="__codelineno-0-541"></a>    <span class="k">return</span> <span class="bp">self</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-543">543</a></span>
+<span class="normal"><a href="#__codelineno-0-544">544</a></span>
+<span class="normal"><a href="#__codelineno-0-545">545</a></span>
+<span class="normal"><a href="#__codelineno-0-546">546</a></span>
+<span class="normal"><a href="#__codelineno-0-547">547</a></span>
+<span class="normal"><a href="#__codelineno-0-548">548</a></span>
+<span class="normal"><a href="#__codelineno-0-549">549</a></span>
+<span class="normal"><a href="#__codelineno-0-550">550</a></span>
+<span class="normal"><a href="#__codelineno-0-551">551</a></span>
+<span class="normal"><a href="#__codelineno-0-552">552</a></span>
+<span class="normal"><a href="#__codelineno-0-553">553</a></span>
+<span class="normal"><a href="#__codelineno-0-554">554</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-543"><a id="__codelineno-0-543" name="__codelineno-0-543"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-544"><a id="__codelineno-0-544" name="__codelineno-0-544"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_entity_extractor</span><span class="p">(</span>
+</span><span id="__span-0-545"><a id="__codelineno-0-545" name="__codelineno-0-545"></a>    <span class="bp">cls</span><span class="p">,</span>
+</span><span id="__span-0-546"><a id="__codelineno-0-546" name="__codelineno-0-546"></a>    <span class="n">clsfy_cfg</span><span class="p">:</span> <span class="n">ClassifyConfig</span><span class="p">,</span>
+</span><span id="__span-0-547"><a id="__codelineno-0-547" name="__codelineno-0-547"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntityExtractor</span><span class="p">:</span>
+</span><span id="__span-0-548"><a id="__codelineno-0-548" name="__codelineno-0-548"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a regex extractor with entity types from ``clsfy_cfg`` (or ``DEFAULT_ENTITIES``).&quot;&quot;&quot;</span>
+</span><span id="__span-0-549"><a id="__codelineno-0-549" name="__codelineno-0-549"></a>    <span class="n">entity_types</span> <span class="o">=</span> <span class="n">DEFAULT_ENTITIES</span>
+</span><span id="__span-0-550"><a id="__codelineno-0-550" name="__codelineno-0-550"></a>    <span class="k">if</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span><span class="p">:</span>
+</span><span id="__span-0-551"><a id="__codelineno-0-551" name="__codelineno-0-551"></a>        <span class="n">entity_types</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span>
+</span><span id="__span-0-552"><a id="__codelineno-0-552" name="__codelineno-0-552"></a>    <span class="bp">self</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+</span><span id="__span-0-553"><a id="__codelineno-0-553" name="__codelineno-0-553"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_entity_types</span> <span class="o">=</span> <span class="n">entity_types</span>
+</span><span id="__span-0-554"><a id="__codelineno-0-554" name="__codelineno-0-554"></a>    <span class="k">return</span> <span class="bp">self</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12243,11 +12348,11 @@ for implementations that use a fixed or default set.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-450">450</a></span>
-<span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -12284,20 +12389,7 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-561">561</a></span>
-<span class="normal"><a href="#__codelineno-0-562">562</a></span>
-<span class="normal"><a href="#__codelineno-0-563">563</a></span>
-<span class="normal"><a href="#__codelineno-0-564">564</a></span>
-<span class="normal"><a href="#__codelineno-0-565">565</a></span>
-<span class="normal"><a href="#__codelineno-0-566">566</a></span>
-<span class="normal"><a href="#__codelineno-0-567">567</a></span>
-<span class="normal"><a href="#__codelineno-0-568">568</a></span>
-<span class="normal"><a href="#__codelineno-0-569">569</a></span>
-<span class="normal"><a href="#__codelineno-0-570">570</a></span>
-<span class="normal"><a href="#__codelineno-0-571">571</a></span>
-<span class="normal"><a href="#__codelineno-0-572">572</a></span>
-<span class="normal"><a href="#__codelineno-0-573">573</a></span>
-<span class="normal"><a href="#__codelineno-0-574">574</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-574">574</a></span>
 <span class="normal"><a href="#__codelineno-0-575">575</a></span>
 <span class="normal"><a href="#__codelineno-0-576">576</a></span>
 <span class="normal"><a href="#__codelineno-0-577">577</a></span>
@@ -12317,40 +12409,53 @@ for implementations that use a fixed or default set.</p>
 <span class="normal"><a href="#__codelineno-0-591">591</a></span>
 <span class="normal"><a href="#__codelineno-0-592">592</a></span>
 <span class="normal"><a href="#__codelineno-0-593">593</a></span>
-<span class="normal"><a href="#__codelineno-0-594">594</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-561"><a id="__codelineno-0-561" name="__codelineno-0-561"></a><span class="nd">@classmethod</span>
-</span><span id="__span-0-562"><a id="__codelineno-0-562" name="__codelineno-0-562"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_entity_extractor</span><span class="p">(</span>
-</span><span id="__span-0-563"><a id="__codelineno-0-563" name="__codelineno-0-563"></a>    <span class="bp">cls</span><span class="p">,</span>
-</span><span id="__span-0-564"><a id="__codelineno-0-564" name="__codelineno-0-564"></a>    <span class="n">clsfy_cfg</span><span class="p">:</span> <span class="n">ClassifyConfig</span><span class="p">,</span>
-</span><span id="__span-0-565"><a id="__codelineno-0-565" name="__codelineno-0-565"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntityExtractorGliner</span><span class="p">:</span>
-</span><span id="__span-0-566"><a id="__codelineno-0-566" name="__codelineno-0-566"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load GLiNER model and return extractor configured from ``clsfy_cfg``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-567"><a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="n">extractor</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
-</span><span id="__span-0-568"><a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-569"><a id="__codelineno-0-569" name="__codelineno-0-569"></a>
-</span><span id="__span-0-570"><a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="n">map_location</span> <span class="o">=</span> <span class="s2">&quot;cuda:0&quot;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">&quot;cpu&quot;</span>
-</span><span id="__span-0-571"><a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
-</span><span id="__span-0-572"><a id="__codelineno-0-572" name="__codelineno-0-572"></a>        <span class="sa">f</span><span class="s2">&quot;Loading NER model from filesystem to </span><span class="si">{</span><span class="n">map_location</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-</span><span id="__span-0-573"><a id="__codelineno-0-573" name="__codelineno-0-573"></a>    <span class="p">)</span>
-</span><span id="__span-0-574"><a id="__codelineno-0-574" name="__codelineno-0-574"></a>
-</span><span id="__span-0-575"><a id="__codelineno-0-575" name="__codelineno-0-575"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">GLiNER</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
-</span><span id="__span-0-576"><a id="__codelineno-0-576" name="__codelineno-0-576"></a>        <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_model</span><span class="p">,</span>
-</span><span id="__span-0-577"><a id="__codelineno-0-577" name="__codelineno-0-577"></a>        <span class="n">map_location</span><span class="o">=</span><span class="n">map_location</span><span class="p">,</span>
-</span><span id="__span-0-578"><a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="n">local_files_only</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;LOCAL_FILES_ONLY&quot;</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;true&quot;</span><span class="p">,</span> <span class="s2">&quot;True&quot;</span><span class="p">],</span>
-</span><span id="__span-0-579"><a id="__codelineno-0-579" name="__codelineno-0-579"></a>    <span class="p">)</span>
-</span><span id="__span-0-580"><a id="__codelineno-0-580" name="__codelineno-0-580"></a>    <span class="n">entity_types</span> <span class="o">=</span> <span class="n">DEFAULT_ENTITIES</span>
-</span><span id="__span-0-581"><a id="__codelineno-0-581" name="__codelineno-0-581"></a>    <span class="k">if</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span><span class="p">:</span>
-</span><span id="__span-0-582"><a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="n">entity_types</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span>
-</span><span id="__span-0-583"><a id="__codelineno-0-583" name="__codelineno-0-583"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_entity_types</span> <span class="o">=</span> <span class="n">entity_types</span>
-</span><span id="__span-0-584"><a id="__codelineno-0-584" name="__codelineno-0-584"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_ner_threshold</span> <span class="o">=</span> <span class="mf">0.3</span>
-</span><span id="__span-0-585"><a id="__codelineno-0-585" name="__codelineno-0-585"></a>    <span class="k">if</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_threshold</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-586"><a id="__codelineno-0-586" name="__codelineno-0-586"></a>        <span class="n">extractor</span><span class="o">.</span><span class="n">_ner_threshold</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_threshold</span>
-</span><span id="__span-0-587"><a id="__codelineno-0-587" name="__codelineno-0-587"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_batch_mode_enabled</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_batch_mode_enabled</span>
-</span><span id="__span-0-588"><a id="__codelineno-0-588" name="__codelineno-0-588"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_length</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_batch_mode_chunk_length</span>
-</span><span id="__span-0-589"><a id="__codelineno-0-589" name="__codelineno-0-589"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_overlap</span> <span class="o">=</span> <span class="mi">128</span>
-</span><span id="__span-0-590"><a id="__codelineno-0-590" name="__codelineno-0-590"></a>    <span class="k">if</span> <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_length</span> <span class="o">&lt;=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_overlap</span><span class="p">:</span>
-</span><span id="__span-0-591"><a id="__codelineno-0-591" name="__codelineno-0-591"></a>        <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_overlap</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-0-592"><a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_entity_cache</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-593"><a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_batch_size</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_batch_mode_batch_size</span>
-</span><span id="__span-0-594"><a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="k">return</span> <span class="n">extractor</span>
+<span class="normal"><a href="#__codelineno-0-594">594</a></span>
+<span class="normal"><a href="#__codelineno-0-595">595</a></span>
+<span class="normal"><a href="#__codelineno-0-596">596</a></span>
+<span class="normal"><a href="#__codelineno-0-597">597</a></span>
+<span class="normal"><a href="#__codelineno-0-598">598</a></span>
+<span class="normal"><a href="#__codelineno-0-599">599</a></span>
+<span class="normal"><a href="#__codelineno-0-600">600</a></span>
+<span class="normal"><a href="#__codelineno-0-601">601</a></span>
+<span class="normal"><a href="#__codelineno-0-602">602</a></span>
+<span class="normal"><a href="#__codelineno-0-603">603</a></span>
+<span class="normal"><a href="#__codelineno-0-604">604</a></span>
+<span class="normal"><a href="#__codelineno-0-605">605</a></span>
+<span class="normal"><a href="#__codelineno-0-606">606</a></span>
+<span class="normal"><a href="#__codelineno-0-607">607</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-574"><a id="__codelineno-0-574" name="__codelineno-0-574"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-575"><a id="__codelineno-0-575" name="__codelineno-0-575"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_entity_extractor</span><span class="p">(</span>
+</span><span id="__span-0-576"><a id="__codelineno-0-576" name="__codelineno-0-576"></a>    <span class="bp">cls</span><span class="p">,</span>
+</span><span id="__span-0-577"><a id="__codelineno-0-577" name="__codelineno-0-577"></a>    <span class="n">clsfy_cfg</span><span class="p">:</span> <span class="n">ClassifyConfig</span><span class="p">,</span>
+</span><span id="__span-0-578"><a id="__codelineno-0-578" name="__codelineno-0-578"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntityExtractorGliner</span><span class="p">:</span>
+</span><span id="__span-0-579"><a id="__codelineno-0-579" name="__codelineno-0-579"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Load GLiNER model and return extractor configured from ``clsfy_cfg``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-580"><a id="__codelineno-0-580" name="__codelineno-0-580"></a>    <span class="n">extractor</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+</span><span id="__span-0-581"><a id="__codelineno-0-581" name="__codelineno-0-581"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-582"><a id="__codelineno-0-582" name="__codelineno-0-582"></a>
+</span><span id="__span-0-583"><a id="__codelineno-0-583" name="__codelineno-0-583"></a>    <span class="n">map_location</span> <span class="o">=</span> <span class="s2">&quot;cuda:0&quot;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s2">&quot;cpu&quot;</span>
+</span><span id="__span-0-584"><a id="__codelineno-0-584" name="__codelineno-0-584"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+</span><span id="__span-0-585"><a id="__codelineno-0-585" name="__codelineno-0-585"></a>        <span class="sa">f</span><span class="s2">&quot;Loading NER model from filesystem to </span><span class="si">{</span><span class="n">map_location</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-0-586"><a id="__codelineno-0-586" name="__codelineno-0-586"></a>    <span class="p">)</span>
+</span><span id="__span-0-587"><a id="__codelineno-0-587" name="__codelineno-0-587"></a>
+</span><span id="__span-0-588"><a id="__codelineno-0-588" name="__codelineno-0-588"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">GLiNER</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
+</span><span id="__span-0-589"><a id="__codelineno-0-589" name="__codelineno-0-589"></a>        <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_model</span><span class="p">,</span>
+</span><span id="__span-0-590"><a id="__codelineno-0-590" name="__codelineno-0-590"></a>        <span class="n">map_location</span><span class="o">=</span><span class="n">map_location</span><span class="p">,</span>
+</span><span id="__span-0-591"><a id="__codelineno-0-591" name="__codelineno-0-591"></a>        <span class="n">local_files_only</span><span class="o">=</span><span class="n">hf_offline_enabled</span><span class="p">(),</span>
+</span><span id="__span-0-592"><a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="p">)</span>
+</span><span id="__span-0-593"><a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="n">entity_types</span> <span class="o">=</span> <span class="n">DEFAULT_ENTITIES</span>
+</span><span id="__span-0-594"><a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="k">if</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span><span class="p">:</span>
+</span><span id="__span-0-595"><a id="__codelineno-0-595" name="__codelineno-0-595"></a>        <span class="n">entity_types</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_entities</span>
+</span><span id="__span-0-596"><a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_entity_types</span> <span class="o">=</span> <span class="n">entity_types</span>
+</span><span id="__span-0-597"><a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_ner_threshold</span> <span class="o">=</span> <span class="mf">0.3</span>
+</span><span id="__span-0-598"><a id="__codelineno-0-598" name="__codelineno-0-598"></a>    <span class="k">if</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_threshold</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-599"><a id="__codelineno-0-599" name="__codelineno-0-599"></a>        <span class="n">extractor</span><span class="o">.</span><span class="n">_ner_threshold</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">ner_threshold</span>
+</span><span id="__span-0-600"><a id="__codelineno-0-600" name="__codelineno-0-600"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_batch_mode_enabled</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_batch_mode_enabled</span>
+</span><span id="__span-0-601"><a id="__codelineno-0-601" name="__codelineno-0-601"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_length</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_batch_mode_chunk_length</span>
+</span><span id="__span-0-602"><a id="__codelineno-0-602" name="__codelineno-0-602"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_overlap</span> <span class="o">=</span> <span class="mi">128</span>
+</span><span id="__span-0-603"><a id="__codelineno-0-603" name="__codelineno-0-603"></a>    <span class="k">if</span> <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_length</span> <span class="o">&lt;=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_overlap</span><span class="p">:</span>
+</span><span id="__span-0-604"><a id="__codelineno-0-604" name="__codelineno-0-604"></a>        <span class="n">extractor</span><span class="o">.</span><span class="n">_chunk_overlap</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-605"><a id="__codelineno-0-605" name="__codelineno-0-605"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_entity_cache</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-606"><a id="__codelineno-0-606" name="__codelineno-0-606"></a>    <span class="n">extractor</span><span class="o">.</span><span class="n">_batch_size</span> <span class="o">=</span> <span class="n">clsfy_cfg</span><span class="o">.</span><span class="n">gliner_batch_mode_batch_size</span>
+</span><span id="__span-0-607"><a id="__codelineno-0-607" name="__codelineno-0-607"></a>    <span class="k">return</span> <span class="n">extractor</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12446,11 +12551,11 @@ for implementations that use a fixed or default set.</p>
 
                   <details class="mkdocstrings-source">
                     <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-450">450</a></span>
-<span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">column_report</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">current_column</span> <span class="o">=</span> <span class="s2">&quot;unknown&quot;</span>
 </span></code></pre></div></td></tr></table></div>
                   </details>
 
@@ -12483,17 +12588,17 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-744">744</a></span>
-<span class="normal"><a href="#__codelineno-0-745">745</a></span>
-<span class="normal"><a href="#__codelineno-0-746">746</a></span>
-<span class="normal"><a href="#__codelineno-0-747">747</a></span>
-<span class="normal"><a href="#__codelineno-0-748">748</a></span>
-<span class="normal"><a href="#__codelineno-0-749">749</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-744"><a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_entity_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
-</span><span id="__span-0-745"><a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return combined entity/value dicts from all sub-extractors.&quot;&quot;&quot;</span>
-</span><span id="__span-0-746"><a id="__codelineno-0-746" name="__codelineno-0-746"></a>    <span class="n">retval</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-747"><a id="__codelineno-0-747" name="__codelineno-0-747"></a>    <span class="k">for</span> <span class="n">extractor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span><span class="p">:</span>
-</span><span id="__span-0-748"><a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="n">retval</span> <span class="o">+=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_entity_values</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">entities</span><span class="p">)</span>
-</span><span id="__span-0-749"><a id="__codelineno-0-749" name="__codelineno-0-749"></a>    <span class="k">return</span> <span class="n">retval</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-757">757</a></span>
+<span class="normal"><a href="#__codelineno-0-758">758</a></span>
+<span class="normal"><a href="#__codelineno-0-759">759</a></span>
+<span class="normal"><a href="#__codelineno-0-760">760</a></span>
+<span class="normal"><a href="#__codelineno-0-761">761</a></span>
+<span class="normal"><a href="#__codelineno-0-762">762</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-757"><a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_entity_values</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+</span><span id="__span-0-758"><a id="__codelineno-0-758" name="__codelineno-0-758"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return combined entity/value dicts from all sub-extractors.&quot;&quot;&quot;</span>
+</span><span id="__span-0-759"><a id="__codelineno-0-759" name="__codelineno-0-759"></a>    <span class="n">retval</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-760"><a id="__codelineno-0-760" name="__codelineno-0-760"></a>    <span class="k">for</span> <span class="n">extractor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span><span class="p">:</span>
+</span><span id="__span-0-761"><a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="n">retval</span> <span class="o">+=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_entity_values</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">entities</span><span class="p">)</span>
+</span><span id="__span-0-762"><a id="__codelineno-0-762" name="__codelineno-0-762"></a>    <span class="k">return</span> <span class="n">retval</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12516,17 +12621,17 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-751">751</a></span>
-<span class="normal"><a href="#__codelineno-0-752">752</a></span>
-<span class="normal"><a href="#__codelineno-0-753">753</a></span>
-<span class="normal"><a href="#__codelineno-0-754">754</a></span>
-<span class="normal"><a href="#__codelineno-0-755">755</a></span>
-<span class="normal"><a href="#__codelineno-0-756">756</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-751"><a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_ner_predictions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
-</span><span id="__span-0-752"><a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return merged NER predictions from all sub-extractors.&quot;&quot;&quot;</span>
-</span><span id="__span-0-753"><a id="__codelineno-0-753" name="__codelineno-0-753"></a>    <span class="n">predictions</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-754"><a id="__codelineno-0-754" name="__codelineno-0-754"></a>    <span class="k">for</span> <span class="n">extractor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span><span class="p">:</span>
-</span><span id="__span-0-755"><a id="__codelineno-0-755" name="__codelineno-0-755"></a>        <span class="n">predictions</span> <span class="o">+=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_ner_predictions</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">entities</span><span class="p">)</span>
-</span><span id="__span-0-756"><a id="__codelineno-0-756" name="__codelineno-0-756"></a>    <span class="k">return</span> <span class="n">predictions</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-764">764</a></span>
+<span class="normal"><a href="#__codelineno-0-765">765</a></span>
+<span class="normal"><a href="#__codelineno-0-766">766</a></span>
+<span class="normal"><a href="#__codelineno-0-767">767</a></span>
+<span class="normal"><a href="#__codelineno-0-768">768</a></span>
+<span class="normal"><a href="#__codelineno-0-769">769</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-764"><a id="__codelineno-0-764" name="__codelineno-0-764"></a><span class="k">def</span><span class="w"> </span><span class="nf">extract_ner_predictions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
+</span><span id="__span-0-765"><a id="__codelineno-0-765" name="__codelineno-0-765"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return merged NER predictions from all sub-extractors.&quot;&quot;&quot;</span>
+</span><span id="__span-0-766"><a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="n">predictions</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-767"><a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="k">for</span> <span class="n">extractor</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span><span class="p">:</span>
+</span><span id="__span-0-768"><a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="n">predictions</span> <span class="o">+=</span> <span class="n">extractor</span><span class="o">.</span><span class="n">extract_ner_predictions</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">entities</span><span class="p">)</span>
+</span><span id="__span-0-769"><a id="__codelineno-0-769" name="__codelineno-0-769"></a>    <span class="k">return</span> <span class="n">predictions</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12553,17 +12658,17 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-758">758</a></span>
-<span class="normal"><a href="#__codelineno-0-759">759</a></span>
-<span class="normal"><a href="#__codelineno-0-760">760</a></span>
-<span class="normal"><a href="#__codelineno-0-761">761</a></span>
-<span class="normal"><a href="#__codelineno-0-762">762</a></span>
-<span class="normal"><a href="#__codelineno-0-763">763</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-758"><a id="__codelineno-0-758" name="__codelineno-0-758"></a><span class="nd">@classmethod</span>
-</span><span id="__span-0-759"><a id="__codelineno-0-759" name="__codelineno-0-759"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_entity_extractor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">clsfy_cfg</span><span class="p">:</span> <span class="n">ClassifyConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntityExtractorMulti</span><span class="p">:</span>
-</span><span id="__span-0-760"><a id="__codelineno-0-760" name="__codelineno-0-760"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return an empty composite; add extractors with ``add_entity_extractor``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-761"><a id="__codelineno-0-761" name="__codelineno-0-761"></a>    <span class="bp">self</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
-</span><span id="__span-0-762"><a id="__codelineno-0-762" name="__codelineno-0-762"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-763"><a id="__codelineno-0-763" name="__codelineno-0-763"></a>    <span class="k">return</span> <span class="bp">self</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-771">771</a></span>
+<span class="normal"><a href="#__codelineno-0-772">772</a></span>
+<span class="normal"><a href="#__codelineno-0-773">773</a></span>
+<span class="normal"><a href="#__codelineno-0-774">774</a></span>
+<span class="normal"><a href="#__codelineno-0-775">775</a></span>
+<span class="normal"><a href="#__codelineno-0-776">776</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-771"><a id="__codelineno-0-771" name="__codelineno-0-771"></a><span class="nd">@classmethod</span>
+</span><span id="__span-0-772"><a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_entity_extractor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">clsfy_cfg</span><span class="p">:</span> <span class="n">ClassifyConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EntityExtractorMulti</span><span class="p">:</span>
+</span><span id="__span-0-773"><a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return an empty composite; add extractors with ``add_entity_extractor``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-774"><a id="__codelineno-0-774" name="__codelineno-0-774"></a>    <span class="bp">self</span> <span class="o">=</span> <span class="bp">cls</span><span class="p">()</span>
+</span><span id="__span-0-775"><a id="__codelineno-0-775" name="__codelineno-0-775"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-776"><a id="__codelineno-0-776" name="__codelineno-0-776"></a>    <span class="k">return</span> <span class="bp">self</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12586,11 +12691,11 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-769">769</a></span>
-<span class="normal"><a href="#__codelineno-0-770">770</a></span>
-<span class="normal"><a href="#__codelineno-0-771">771</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-769"><a id="__codelineno-0-769" name="__codelineno-0-769"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_entity_extractor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">extractor</span><span class="p">:</span> <span class="n">EntityExtractor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-770"><a id="__codelineno-0-770" name="__codelineno-0-770"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Append an extractor to the composite.&quot;&quot;&quot;</span>
-</span><span id="__span-0-771"><a id="__codelineno-0-771" name="__codelineno-0-771"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">extractor</span><span class="p">)</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-782">782</a></span>
+<span class="normal"><a href="#__codelineno-0-783">783</a></span>
+<span class="normal"><a href="#__codelineno-0-784">784</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-782"><a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="k">def</span><span class="w"> </span><span class="nf">add_entity_extractor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">extractor</span><span class="p">:</span> <span class="n">EntityExtractor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-783"><a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Append an extractor to the composite.&quot;&quot;&quot;</span>
+</span><span id="__span-0-784"><a id="__codelineno-0-784" name="__codelineno-0-784"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">extractors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">extractor</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12756,20 +12861,7 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-225">225</a></span>
-<span class="normal"><a href="#__codelineno-0-226">226</a></span>
-<span class="normal"><a href="#__codelineno-0-227">227</a></span>
-<span class="normal"><a href="#__codelineno-0-228">228</a></span>
-<span class="normal"><a href="#__codelineno-0-229">229</a></span>
-<span class="normal"><a href="#__codelineno-0-230">230</a></span>
-<span class="normal"><a href="#__codelineno-0-231">231</a></span>
-<span class="normal"><a href="#__codelineno-0-232">232</a></span>
-<span class="normal"><a href="#__codelineno-0-233">233</a></span>
-<span class="normal"><a href="#__codelineno-0-234">234</a></span>
-<span class="normal"><a href="#__codelineno-0-235">235</a></span>
-<span class="normal"><a href="#__codelineno-0-236">236</a></span>
-<span class="normal"><a href="#__codelineno-0-237">237</a></span>
-<span class="normal"><a href="#__codelineno-0-238">238</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-238">238</a></span>
 <span class="normal"><a href="#__codelineno-0-239">239</a></span>
 <span class="normal"><a href="#__codelineno-0-240">240</a></span>
 <span class="normal"><a href="#__codelineno-0-241">241</a></span>
@@ -12803,54 +12895,67 @@ for implementations that use a fixed or default set.</p>
 <span class="normal"><a href="#__codelineno-0-269">269</a></span>
 <span class="normal"><a href="#__codelineno-0-270">270</a></span>
 <span class="normal"><a href="#__codelineno-0-271">271</a></span>
-<span class="normal"><a href="#__codelineno-0-272">272</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="k">def</span><span class="w"> </span><span class="nf">classify_columns</span><span class="p">(</span>
-</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
-</span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a>    <span class="n">entities</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
-</span><span id="__span-0-228"><a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="n">num_samples</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
-</span><span id="__span-0-229"><a id="__codelineno-0-229" name="__codelineno-0-229"></a>    <span class="n">client</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OpenAI</span><span class="p">],</span>
-</span><span id="__span-0-230"><a id="__codelineno-0-230" name="__codelineno-0-230"></a>    <span class="n">on_validation_error</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">],</span>
-</span><span id="__span-0-231"><a id="__codelineno-0-231" name="__codelineno-0-231"></a>    <span class="n">logger</span><span class="p">:</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span><span class="p">,</span>
-</span><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-</span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Classify DataFrame columns to entity types via LLM and return column-to-entity map.</span>
-</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>
-</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">        df: DataFrame to classify.</span>
-</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">        entities: Set of valid entity type names.</span>
-</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">        num_samples: Number of value samples per column for the prompt.</span>
-</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">        client: OpenAI client for chat completions.</span>
-</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">        on_validation_error: Callback invoked when LLM output is invalid JSON.</span>
-</span><span id="__span-0-241"><a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">        logger: Logger for timing and context.</span>
-</span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>
-</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">        Map of column name to entity type (or ``UNKNOWN_ENTITY``).</span>
-</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a>    <span class="n">formatted_prompt</span> <span class="o">=</span> <span class="n">_format_prompt</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">entities</span><span class="p">,</span> <span class="n">num_samples</span><span class="p">)</span>
-</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">formatted_prompt</span><span class="p">:</span>
-</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a>        <span class="k">return</span> <span class="p">{}</span>
-</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a>
-</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>    <span class="n">llm_start</span> <span class="o">=</span> <span class="n">timer</span><span class="p">()</span>
-</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
-</span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a>        <span class="n">model</span><span class="o">=</span><span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">CONFIG_ID</span><span class="p">,</span>
-</span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a>        <span class="n">messages</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a>            <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">SYSTEM_PROMPT</span><span class="p">},</span>
-</span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>            <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">formatted_prompt</span><span class="p">},</span>
-</span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a>        <span class="p">],</span>
-</span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a>        <span class="n">temperature</span><span class="o">=</span><span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">TEMPERATURE</span><span class="p">,</span>
-</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>        <span class="n">max_tokens</span><span class="o">=</span><span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">MAX_OUTPUT_TOKENS</span><span class="p">,</span>
-</span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="p">)</span>
-</span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">entities_str</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">content</span>
-</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="n">llm_elapsed</span> <span class="o">=</span> <span class="n">timer</span><span class="p">()</span> <span class="o">-</span> <span class="n">llm_start</span>
-</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="sa">f</span><span class="s2">&quot;LLM column classification took </span><span class="si">{</span><span class="n">llm_elapsed</span><span class="si">}</span><span class="s2"> seconds.&quot;</span><span class="p">,</span>
-</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>            <span class="s2">&quot;ctx&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>                <span class="s2">&quot;llm_elapsed&quot;</span><span class="p">:</span> <span class="n">llm_elapsed</span><span class="p">,</span>
-</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>            <span class="p">},</span>
-</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>        <span class="p">},</span>
-</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="p">)</span>
-</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>
-</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="n">col_entities</span> <span class="o">=</span> <span class="n">_try_extract_entities</span><span class="p">(</span><span class="n">entities_str</span><span class="p">,</span> <span class="n">on_validation_error</span><span class="p">)</span>
-</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="k">return</span> <span class="p">{</span><span class="n">col</span><span class="p">:</span> <span class="n">ent</span> <span class="k">if</span> <span class="n">ent</span> <span class="ow">in</span> <span class="n">entities</span> <span class="k">else</span> <span class="n">UNKNOWN_ENTITY</span> <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">ent</span> <span class="ow">in</span> <span class="n">col_entities</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="k">def</span><span class="w"> </span><span class="nf">classify_columns</span><span class="p">(</span>
+</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>    <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
+</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a>    <span class="n">entities</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+</span><span id="__span-0-241"><a id="__codelineno-0-241" name="__codelineno-0-241"></a>    <span class="n">num_samples</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+</span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>    <span class="n">client</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">OpenAI</span><span class="p">],</span>
+</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a>    <span class="n">on_validation_error</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">],</span>
+</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>    <span class="n">logger</span><span class="p">:</span> <span class="n">logging</span><span class="o">.</span><span class="n">Logger</span><span class="p">,</span>
+</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Classify DataFrame columns to entity types via LLM and return column-to-entity map.</span>
+</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>
+</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">        df: DataFrame to classify.</span>
+</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">        entities: Set of valid entity type names.</span>
+</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        num_samples: Number of value samples per column for the prompt.</span>
+</span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">        client: OpenAI client for chat completions.</span>
+</span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">        on_validation_error: Callback invoked when LLM output is invalid JSON.</span>
+</span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">        logger: Logger for timing and context.</span>
+</span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>
+</span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">        Map of column name to entity type (or ``UNKNOWN_ENTITY``).</span>
+</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">formatted_prompt</span> <span class="o">=</span> <span class="n">_format_prompt</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">entities</span><span class="p">,</span> <span class="n">num_samples</span><span class="p">)</span>
+</span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">formatted_prompt</span><span class="p">:</span>
+</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>        <span class="k">return</span> <span class="p">{}</span>
+</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>
+</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="n">llm_start</span> <span class="o">=</span> <span class="n">timer</span><span class="p">()</span>
+</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="n">model</span><span class="o">=</span><span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">config_id</span><span class="p">(),</span>
+</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>        <span class="n">messages</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>            <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">SYSTEM_PROMPT</span><span class="p">},</span>
+</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>            <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">formatted_prompt</span><span class="p">},</span>
+</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="p">],</span>
+</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>        <span class="n">temperature</span><span class="o">=</span><span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">TEMPERATURE</span><span class="p">,</span>
+</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>        <span class="n">max_tokens</span><span class="o">=</span><span class="n">DefaultLLMConfig</span><span class="o">.</span><span class="n">MAX_OUTPUT_TOKENS</span><span class="p">,</span>
+</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="p">)</span>
+</span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="n">entities_str</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">message</span><span class="o">.</span><span class="n">content</span>
+</span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="n">llm_elapsed</span> <span class="o">=</span> <span class="n">timer</span><span class="p">()</span> <span class="o">-</span> <span class="n">llm_start</span>
+</span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a>        <span class="sa">f</span><span class="s2">&quot;LLM column classification took </span><span class="si">{</span><span class="n">llm_elapsed</span><span class="si">}</span><span class="s2"> seconds.&quot;</span><span class="p">,</span>
+</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>        <span class="n">extra</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>            <span class="s2">&quot;ctx&quot;</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>                <span class="s2">&quot;llm_elapsed&quot;</span><span class="p">:</span> <span class="n">llm_elapsed</span><span class="p">,</span>
+</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="p">},</span>
+</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="p">},</span>
+</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>    <span class="p">)</span>
+</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>
+</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>    <span class="n">col_entities</span> <span class="o">=</span> <span class="n">_try_extract_entities</span><span class="p">(</span><span class="n">entities_str</span><span class="p">,</span> <span class="n">on_validation_error</span><span class="p">)</span>
+</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a>    <span class="k">return</span> <span class="p">{</span><span class="n">col</span><span class="p">:</span> <span class="n">ent</span> <span class="k">if</span> <span class="n">ent</span> <span class="ow">in</span> <span class="n">entities</span> <span class="k">else</span> <span class="n">UNKNOWN_ENTITY</span> <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">ent</span> <span class="ow">in</span> <span class="n">col_entities</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12873,29 +12978,29 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-275">275</a></span>
-<span class="normal"><a href="#__codelineno-0-276">276</a></span>
-<span class="normal"><a href="#__codelineno-0-277">277</a></span>
-<span class="normal"><a href="#__codelineno-0-278">278</a></span>
-<span class="normal"><a href="#__codelineno-0-279">279</a></span>
-<span class="normal"><a href="#__codelineno-0-280">280</a></span>
-<span class="normal"><a href="#__codelineno-0-281">281</a></span>
-<span class="normal"><a href="#__codelineno-0-282">282</a></span>
-<span class="normal"><a href="#__codelineno-0-283">283</a></span>
-<span class="normal"><a href="#__codelineno-0-284">284</a></span>
-<span class="normal"><a href="#__codelineno-0-285">285</a></span>
-<span class="normal"><a href="#__codelineno-0-286">286</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="k">def</span><span class="w"> </span><span class="nf">sample_columns</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">num_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
-</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sample up to ``num_samples`` unique values per non-empty column for classification prompts.&quot;&quot;&quot;</span>
-</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>    <span class="n">nonempty_columns</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">&quot;columns&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span>
-</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>    <span class="n">col_samples</span> <span class="o">=</span> <span class="p">{}</span>
-</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">nonempty_columns</span><span class="p">:</span>
-</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="n">filtered</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">][</span><span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">&lt;</span> <span class="n">MAX_COL_STR_LEN</span><span class="p">)]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
-</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="k">if</span> <span class="n">filtered</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
-</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>            <span class="k">continue</span>
-</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="n">col_samples</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>            <span class="n">filtered</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">frac</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">)</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">index</span><span class="p">[:</span><span class="n">num_samples</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
-</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="p">)</span>
-</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="k">return</span> <span class="n">col_samples</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="k">def</span><span class="w"> </span><span class="nf">sample_columns</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">num_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">random_state</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">]:</span>
+</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Sample up to ``num_samples`` unique values per non-empty column for classification prompts.&quot;&quot;&quot;</span>
+</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="n">nonempty_columns</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">dropna</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="s2">&quot;columns&quot;</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">columns</span>
+</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a>    <span class="n">col_samples</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">nonempty_columns</span><span class="p">:</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="n">filtered</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">][</span><span class="n">df</span><span class="p">[</span><span class="n">col</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">&lt;</span> <span class="n">MAX_COL_STR_LEN</span><span class="p">)]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>        <span class="k">if</span> <span class="n">filtered</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+</span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>            <span class="k">continue</span>
+</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="n">col_samples</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>            <span class="n">filtered</span><span class="o">.</span><span class="n">sample</span><span class="p">(</span><span class="n">frac</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">)</span><span class="o">.</span><span class="n">value_counts</span><span class="p">()</span><span class="o">.</span><span class="n">index</span><span class="p">[:</span><span class="n">num_samples</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span>
+</span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="p">)</span>
+</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>    <span class="k">return</span> <span class="n">col_samples</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -12918,11 +13023,11 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-777">777</a></span>
-<span class="normal"><a href="#__codelineno-0-778">778</a></span>
-<span class="normal"><a href="#__codelineno-0-779">779</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-777"><a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="k">def</span><span class="w"> </span><span class="nf">redact_from_entities</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">detected</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">],</span> <span class="n">redact_fn</span><span class="p">:</span> <span class="n">RedactFn</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-778"><a id="__codelineno-0-778" name="__codelineno-0-778"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Replace each detected span in ``text`` with the result of ``redact_fn(prediction)``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-779"><a id="__codelineno-0-779" name="__codelineno-0-779"></a>    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="n">traverse_redact</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">detected</span><span class="p">,</span> <span class="n">redact_fn</span><span class="p">)))</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-790">790</a></span>
+<span class="normal"><a href="#__codelineno-0-791">791</a></span>
+<span class="normal"><a href="#__codelineno-0-792">792</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-790"><a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="k">def</span><span class="w"> </span><span class="nf">redact_from_entities</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">detected</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">],</span> <span class="n">redact_fn</span><span class="p">:</span> <span class="n">RedactFn</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-0-791"><a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Replace each detected span in ``text`` with the result of ``redact_fn(prediction)``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-792"><a id="__codelineno-0-792" name="__codelineno-0-792"></a>    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="n">traverse_redact</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">detected</span><span class="p">,</span> <span class="n">redact_fn</span><span class="p">)))</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13037,20 +13142,7 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-782">782</a></span>
-<span class="normal"><a href="#__codelineno-0-783">783</a></span>
-<span class="normal"><a href="#__codelineno-0-784">784</a></span>
-<span class="normal"><a href="#__codelineno-0-785">785</a></span>
-<span class="normal"><a href="#__codelineno-0-786">786</a></span>
-<span class="normal"><a href="#__codelineno-0-787">787</a></span>
-<span class="normal"><a href="#__codelineno-0-788">788</a></span>
-<span class="normal"><a href="#__codelineno-0-789">789</a></span>
-<span class="normal"><a href="#__codelineno-0-790">790</a></span>
-<span class="normal"><a href="#__codelineno-0-791">791</a></span>
-<span class="normal"><a href="#__codelineno-0-792">792</a></span>
-<span class="normal"><a href="#__codelineno-0-793">793</a></span>
-<span class="normal"><a href="#__codelineno-0-794">794</a></span>
-<span class="normal"><a href="#__codelineno-0-795">795</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-795">795</a></span>
 <span class="normal"><a href="#__codelineno-0-796">796</a></span>
 <span class="normal"><a href="#__codelineno-0-797">797</a></span>
 <span class="normal"><a href="#__codelineno-0-798">798</a></span>
@@ -13058,28 +13150,41 @@ for implementations that use a fixed or default set.</p>
 <span class="normal"><a href="#__codelineno-0-800">800</a></span>
 <span class="normal"><a href="#__codelineno-0-801">801</a></span>
 <span class="normal"><a href="#__codelineno-0-802">802</a></span>
-<span class="normal"><a href="#__codelineno-0-803">803</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-782"><a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="k">def</span><span class="w"> </span><span class="nf">traverse_redact</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">],</span> <span class="n">redact_fn</span><span class="p">:</span> <span class="n">RedactFn</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
-</span><span id="__span-0-783"><a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Yield iterables of text segments and redacted spans for assembly via ``chain()``.</span>
-</span><span id="__span-0-784"><a id="__codelineno-0-784" name="__codelineno-0-784"></a>
-</span><span id="__span-0-785"><a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">    Entities must be sorted by span; yields alternating slices of ``text`` and</span>
-</span><span id="__span-0-786"><a id="__codelineno-0-786" name="__codelineno-0-786"></a><span class="sd">    ``redact_fn(entity)`` so that ``chain(*traverse_redact(...))`` gives the full string.</span>
-</span><span id="__span-0-787"><a id="__codelineno-0-787" name="__codelineno-0-787"></a>
-</span><span id="__span-0-788"><a id="__codelineno-0-788" name="__codelineno-0-788"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-789"><a id="__codelineno-0-789" name="__codelineno-0-789"></a><span class="sd">        text: Source text.</span>
-</span><span id="__span-0-790"><a id="__codelineno-0-790" name="__codelineno-0-790"></a><span class="sd">        entities: NER predictions with ``start``/``end`` indices (sorted by span).</span>
-</span><span id="__span-0-791"><a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="sd">        redact_fn: Function mapping each prediction to its replacement string.</span>
-</span><span id="__span-0-792"><a id="__codelineno-0-792" name="__codelineno-0-792"></a>
-</span><span id="__span-0-793"><a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="sd">    Yields:</span>
-</span><span id="__span-0-794"><a id="__codelineno-0-794" name="__codelineno-0-794"></a><span class="sd">        Iterables of strings (text slices and redaction results).</span>
-</span><span id="__span-0-795"><a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-796"><a id="__codelineno-0-796" name="__codelineno-0-796"></a>    <span class="n">prev</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-0-797"><a id="__codelineno-0-797" name="__codelineno-0-797"></a>    <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">e</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">):</span>
-</span><span id="__span-0-798"><a id="__codelineno-0-798" name="__codelineno-0-798"></a>        <span class="c1"># Yes this is an iterator which yields iterators. It allows a</span>
-</span><span id="__span-0-799"><a id="__codelineno-0-799" name="__codelineno-0-799"></a>        <span class="c1"># single pass, and single copy, across text, which may be very large.</span>
-</span><span id="__span-0-800"><a id="__codelineno-0-800" name="__codelineno-0-800"></a>        <span class="k">yield</span> <span class="n">islice</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">prev</span><span class="p">,</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
-</span><span id="__span-0-801"><a id="__codelineno-0-801" name="__codelineno-0-801"></a>        <span class="k">yield</span> <span class="n">redact_fn</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
-</span><span id="__span-0-802"><a id="__codelineno-0-802" name="__codelineno-0-802"></a>        <span class="n">prev</span> <span class="o">=</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span>
-</span><span id="__span-0-803"><a id="__codelineno-0-803" name="__codelineno-0-803"></a>    <span class="k">yield</span> <span class="n">islice</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">prev</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-803">803</a></span>
+<span class="normal"><a href="#__codelineno-0-804">804</a></span>
+<span class="normal"><a href="#__codelineno-0-805">805</a></span>
+<span class="normal"><a href="#__codelineno-0-806">806</a></span>
+<span class="normal"><a href="#__codelineno-0-807">807</a></span>
+<span class="normal"><a href="#__codelineno-0-808">808</a></span>
+<span class="normal"><a href="#__codelineno-0-809">809</a></span>
+<span class="normal"><a href="#__codelineno-0-810">810</a></span>
+<span class="normal"><a href="#__codelineno-0-811">811</a></span>
+<span class="normal"><a href="#__codelineno-0-812">812</a></span>
+<span class="normal"><a href="#__codelineno-0-813">813</a></span>
+<span class="normal"><a href="#__codelineno-0-814">814</a></span>
+<span class="normal"><a href="#__codelineno-0-815">815</a></span>
+<span class="normal"><a href="#__codelineno-0-816">816</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-795"><a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="k">def</span><span class="w"> </span><span class="nf">traverse_redact</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">],</span> <span class="n">redact_fn</span><span class="p">:</span> <span class="n">RedactFn</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+</span><span id="__span-0-796"><a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Yield iterables of text segments and redacted spans for assembly via ``chain()``.</span>
+</span><span id="__span-0-797"><a id="__codelineno-0-797" name="__codelineno-0-797"></a>
+</span><span id="__span-0-798"><a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">    Entities must be sorted by span; yields alternating slices of ``text`` and</span>
+</span><span id="__span-0-799"><a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">    ``redact_fn(entity)`` so that ``chain(*traverse_redact(...))`` gives the full string.</span>
+</span><span id="__span-0-800"><a id="__codelineno-0-800" name="__codelineno-0-800"></a>
+</span><span id="__span-0-801"><a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-802"><a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="sd">        text: Source text.</span>
+</span><span id="__span-0-803"><a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">        entities: NER predictions with ``start``/``end`` indices (sorted by span).</span>
+</span><span id="__span-0-804"><a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">        redact_fn: Function mapping each prediction to its replacement string.</span>
+</span><span id="__span-0-805"><a id="__codelineno-0-805" name="__codelineno-0-805"></a>
+</span><span id="__span-0-806"><a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="sd">    Yields:</span>
+</span><span id="__span-0-807"><a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">        Iterables of strings (text slices and redaction results).</span>
+</span><span id="__span-0-808"><a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-809"><a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="n">prev</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-810"><a id="__codelineno-0-810" name="__codelineno-0-810"></a>    <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">e</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">):</span>
+</span><span id="__span-0-811"><a id="__codelineno-0-811" name="__codelineno-0-811"></a>        <span class="c1"># Yes this is an iterator which yields iterators. It allows a</span>
+</span><span id="__span-0-812"><a id="__codelineno-0-812" name="__codelineno-0-812"></a>        <span class="c1"># single pass, and single copy, across text, which may be very large.</span>
+</span><span id="__span-0-813"><a id="__codelineno-0-813" name="__codelineno-0-813"></a>        <span class="k">yield</span> <span class="n">islice</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">prev</span><span class="p">,</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span><span class="p">)</span>
+</span><span id="__span-0-814"><a id="__codelineno-0-814" name="__codelineno-0-814"></a>        <span class="k">yield</span> <span class="n">redact_fn</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
+</span><span id="__span-0-815"><a id="__codelineno-0-815" name="__codelineno-0-815"></a>        <span class="n">prev</span> <span class="o">=</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span>
+</span><span id="__span-0-816"><a id="__codelineno-0-816" name="__codelineno-0-816"></a>    <span class="k">yield</span> <span class="n">islice</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">prev</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13102,25 +13207,25 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-806">806</a></span>
-<span class="normal"><a href="#__codelineno-0-807">807</a></span>
-<span class="normal"><a href="#__codelineno-0-808">808</a></span>
-<span class="normal"><a href="#__codelineno-0-809">809</a></span>
-<span class="normal"><a href="#__codelineno-0-810">810</a></span>
-<span class="normal"><a href="#__codelineno-0-811">811</a></span>
-<span class="normal"><a href="#__codelineno-0-812">812</a></span>
-<span class="normal"><a href="#__codelineno-0-813">813</a></span>
-<span class="normal"><a href="#__codelineno-0-814">814</a></span>
-<span class="normal"><a href="#__codelineno-0-815">815</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-806"><a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_best</span><span class="p">(</span><span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">NERPrediction</span><span class="p">:</span>
-</span><span id="__span-0-807"><a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the prediction with the largest span (used when merging overlapping spans).&quot;&quot;&quot;</span>
-</span><span id="__span-0-808"><a id="__codelineno-0-808" name="__codelineno-0-808"></a>    <span class="n">span_max</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-0-809"><a id="__codelineno-0-809" name="__codelineno-0-809"></a>    <span class="n">best</span> <span class="o">=</span> <span class="n">entities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-0-810"><a id="__codelineno-0-810" name="__codelineno-0-810"></a>    <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
-</span><span id="__span-0-811"><a id="__codelineno-0-811" name="__codelineno-0-811"></a>        <span class="n">span</span> <span class="o">=</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span> <span class="o">-</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span>
-</span><span id="__span-0-812"><a id="__codelineno-0-812" name="__codelineno-0-812"></a>        <span class="k">if</span> <span class="n">span</span> <span class="o">&gt;</span> <span class="n">span_max</span><span class="p">:</span>
-</span><span id="__span-0-813"><a id="__codelineno-0-813" name="__codelineno-0-813"></a>            <span class="n">best</span> <span class="o">=</span> <span class="n">entity</span>
-</span><span id="__span-0-814"><a id="__codelineno-0-814" name="__codelineno-0-814"></a>            <span class="n">span_max</span> <span class="o">=</span> <span class="n">span</span>
-</span><span id="__span-0-815"><a id="__codelineno-0-815" name="__codelineno-0-815"></a>    <span class="k">return</span> <span class="n">best</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-819">819</a></span>
+<span class="normal"><a href="#__codelineno-0-820">820</a></span>
+<span class="normal"><a href="#__codelineno-0-821">821</a></span>
+<span class="normal"><a href="#__codelineno-0-822">822</a></span>
+<span class="normal"><a href="#__codelineno-0-823">823</a></span>
+<span class="normal"><a href="#__codelineno-0-824">824</a></span>
+<span class="normal"><a href="#__codelineno-0-825">825</a></span>
+<span class="normal"><a href="#__codelineno-0-826">826</a></span>
+<span class="normal"><a href="#__codelineno-0-827">827</a></span>
+<span class="normal"><a href="#__codelineno-0-828">828</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-819"><a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="k">def</span><span class="w"> </span><span class="nf">find_best</span><span class="p">(</span><span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">NERPrediction</span><span class="p">:</span>
+</span><span id="__span-0-820"><a id="__codelineno-0-820" name="__codelineno-0-820"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the prediction with the largest span (used when merging overlapping spans).&quot;&quot;&quot;</span>
+</span><span id="__span-0-821"><a id="__codelineno-0-821" name="__codelineno-0-821"></a>    <span class="n">span_max</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-822"><a id="__codelineno-0-822" name="__codelineno-0-822"></a>    <span class="n">best</span> <span class="o">=</span> <span class="n">entities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-0-823"><a id="__codelineno-0-823" name="__codelineno-0-823"></a>    <span class="k">for</span> <span class="n">entity</span> <span class="ow">in</span> <span class="n">entities</span><span class="p">:</span>
+</span><span id="__span-0-824"><a id="__codelineno-0-824" name="__codelineno-0-824"></a>        <span class="n">span</span> <span class="o">=</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span> <span class="o">-</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span>
+</span><span id="__span-0-825"><a id="__codelineno-0-825" name="__codelineno-0-825"></a>        <span class="k">if</span> <span class="n">span</span> <span class="o">&gt;</span> <span class="n">span_max</span><span class="p">:</span>
+</span><span id="__span-0-826"><a id="__codelineno-0-826" name="__codelineno-0-826"></a>            <span class="n">best</span> <span class="o">=</span> <span class="n">entity</span>
+</span><span id="__span-0-827"><a id="__codelineno-0-827" name="__codelineno-0-827"></a>            <span class="n">span_max</span> <span class="o">=</span> <span class="n">span</span>
+</span><span id="__span-0-828"><a id="__codelineno-0-828" name="__codelineno-0-828"></a>    <span class="k">return</span> <span class="n">best</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13143,20 +13248,7 @@ for implementations that use a fixed or default set.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/pii_replacer/data_editor/detect.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-818">818</a></span>
-<span class="normal"><a href="#__codelineno-0-819">819</a></span>
-<span class="normal"><a href="#__codelineno-0-820">820</a></span>
-<span class="normal"><a href="#__codelineno-0-821">821</a></span>
-<span class="normal"><a href="#__codelineno-0-822">822</a></span>
-<span class="normal"><a href="#__codelineno-0-823">823</a></span>
-<span class="normal"><a href="#__codelineno-0-824">824</a></span>
-<span class="normal"><a href="#__codelineno-0-825">825</a></span>
-<span class="normal"><a href="#__codelineno-0-826">826</a></span>
-<span class="normal"><a href="#__codelineno-0-827">827</a></span>
-<span class="normal"><a href="#__codelineno-0-828">828</a></span>
-<span class="normal"><a href="#__codelineno-0-829">829</a></span>
-<span class="normal"><a href="#__codelineno-0-830">830</a></span>
-<span class="normal"><a href="#__codelineno-0-831">831</a></span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-831">831</a></span>
 <span class="normal"><a href="#__codelineno-0-832">832</a></span>
 <span class="normal"><a href="#__codelineno-0-833">833</a></span>
 <span class="normal"><a href="#__codelineno-0-834">834</a></span>
@@ -13177,41 +13269,54 @@ for implementations that use a fixed or default set.</p>
 <span class="normal"><a href="#__codelineno-0-849">849</a></span>
 <span class="normal"><a href="#__codelineno-0-850">850</a></span>
 <span class="normal"><a href="#__codelineno-0-851">851</a></span>
-<span class="normal"><a href="#__codelineno-0-852">852</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-818"><a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="k">def</span><span class="w"> </span><span class="nf">merge_subsume</span><span class="p">(</span><span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
-</span><span id="__span-0-819"><a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Merge overlapping NER spans into a single prediction per span using ``find_best``.&quot;&quot;&quot;</span>
-</span><span id="__span-0-820"><a id="__codelineno-0-820" name="__codelineno-0-820"></a>    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
-</span><span id="__span-0-821"><a id="__codelineno-0-821" name="__codelineno-0-821"></a>    <span class="n">entities</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">e</span><span class="p">:</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">end</span><span class="p">))</span>
-</span><span id="__span-0-822"><a id="__codelineno-0-822" name="__codelineno-0-822"></a>    <span class="k">while</span> <span class="n">entities</span><span class="p">:</span>
-</span><span id="__span-0-823"><a id="__codelineno-0-823" name="__codelineno-0-823"></a>        <span class="n">entity</span> <span class="o">=</span> <span class="n">entities</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-0-824"><a id="__codelineno-0-824" name="__codelineno-0-824"></a>        <span class="k">if</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span><span class="p">:</span>
-</span><span id="__span-0-825"><a id="__codelineno-0-825" name="__codelineno-0-825"></a>            <span class="k">continue</span>
-</span><span id="__span-0-826"><a id="__codelineno-0-826" name="__codelineno-0-826"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">entities</span><span class="p">:</span>
-</span><span id="__span-0-827"><a id="__codelineno-0-827" name="__codelineno-0-827"></a>            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
-</span><span id="__span-0-828"><a id="__codelineno-0-828" name="__codelineno-0-828"></a>            <span class="k">break</span>
-</span><span id="__span-0-829"><a id="__codelineno-0-829" name="__codelineno-0-829"></a>
-</span><span id="__span-0-830"><a id="__codelineno-0-830" name="__codelineno-0-830"></a>        <span class="n">peek</span> <span class="o">=</span> <span class="n">entities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-0-831"><a id="__codelineno-0-831" name="__codelineno-0-831"></a>        <span class="k">if</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="n">peek</span><span class="o">.</span><span class="n">start</span><span class="p">:</span>
-</span><span id="__span-0-832"><a id="__codelineno-0-832" name="__codelineno-0-832"></a>            <span class="c1"># No overlap</span>
-</span><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a>            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
-</span><span id="__span-0-834"><a id="__codelineno-0-834" name="__codelineno-0-834"></a>            <span class="k">continue</span>
-</span><span id="__span-0-835"><a id="__codelineno-0-835" name="__codelineno-0-835"></a>
-</span><span id="__span-0-836"><a id="__codelineno-0-836" name="__codelineno-0-836"></a>        <span class="c1"># Note - sorting prevents:</span>
-</span><span id="__span-0-837"><a id="__codelineno-0-837" name="__codelineno-0-837"></a>        <span class="c1"># entity.start &gt; peek.start</span>
-</span><span id="__span-0-838"><a id="__codelineno-0-838" name="__codelineno-0-838"></a>        <span class="c1"># entity.end &gt; peek.end when starts are equal</span>
-</span><span id="__span-0-839"><a id="__codelineno-0-839" name="__codelineno-0-839"></a>
-</span><span id="__span-0-840"><a id="__codelineno-0-840" name="__codelineno-0-840"></a>        <span class="c1"># subsume greedily</span>
-</span><span id="__span-0-841"><a id="__codelineno-0-841" name="__codelineno-0-841"></a>        <span class="n">start</span> <span class="o">=</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span>
-</span><span id="__span-0-842"><a id="__codelineno-0-842" name="__codelineno-0-842"></a>        <span class="n">end</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">entity</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">peek</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
-</span><span id="__span-0-843"><a id="__codelineno-0-843" name="__codelineno-0-843"></a>        <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">entity</span><span class="p">]</span>
-</span><span id="__span-0-844"><a id="__codelineno-0-844" name="__codelineno-0-844"></a>
-</span><span id="__span-0-845"><a id="__codelineno-0-845" name="__codelineno-0-845"></a>        <span class="k">while</span> <span class="n">entities</span> <span class="ow">and</span> <span class="n">peek</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;</span> <span class="n">end</span><span class="p">:</span>
-</span><span id="__span-0-846"><a id="__codelineno-0-846" name="__codelineno-0-846"></a>            <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entities</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
-</span><span id="__span-0-847"><a id="__codelineno-0-847" name="__codelineno-0-847"></a>            <span class="n">end</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="n">peek</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
-</span><span id="__span-0-848"><a id="__codelineno-0-848" name="__codelineno-0-848"></a>            <span class="k">if</span> <span class="n">entities</span><span class="p">:</span>
-</span><span id="__span-0-849"><a id="__codelineno-0-849" name="__codelineno-0-849"></a>                <span class="n">peek</span> <span class="o">=</span> <span class="n">entities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-</span><span id="__span-0-850"><a id="__codelineno-0-850" name="__codelineno-0-850"></a>        <span class="n">best</span> <span class="o">=</span> <span class="n">find_best</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span>
-</span><span id="__span-0-851"><a id="__codelineno-0-851" name="__codelineno-0-851"></a>        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">NERPrediction</span><span class="p">(</span><span class="n">best</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">best</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">best</span><span class="o">.</span><span class="n">source</span><span class="p">,</span> <span class="n">best</span><span class="o">.</span><span class="n">score</span><span class="p">))</span>
-</span><span id="__span-0-852"><a id="__codelineno-0-852" name="__codelineno-0-852"></a>    <span class="k">return</span> <span class="n">result</span>
+<span class="normal"><a href="#__codelineno-0-852">852</a></span>
+<span class="normal"><a href="#__codelineno-0-853">853</a></span>
+<span class="normal"><a href="#__codelineno-0-854">854</a></span>
+<span class="normal"><a href="#__codelineno-0-855">855</a></span>
+<span class="normal"><a href="#__codelineno-0-856">856</a></span>
+<span class="normal"><a href="#__codelineno-0-857">857</a></span>
+<span class="normal"><a href="#__codelineno-0-858">858</a></span>
+<span class="normal"><a href="#__codelineno-0-859">859</a></span>
+<span class="normal"><a href="#__codelineno-0-860">860</a></span>
+<span class="normal"><a href="#__codelineno-0-861">861</a></span>
+<span class="normal"><a href="#__codelineno-0-862">862</a></span>
+<span class="normal"><a href="#__codelineno-0-863">863</a></span>
+<span class="normal"><a href="#__codelineno-0-864">864</a></span>
+<span class="normal"><a href="#__codelineno-0-865">865</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-831"><a id="__codelineno-0-831" name="__codelineno-0-831"></a><span class="k">def</span><span class="w"> </span><span class="nf">merge_subsume</span><span class="p">(</span><span class="n">entities</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">NERPrediction</span><span class="p">]:</span>
+</span><span id="__span-0-832"><a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Merge overlapping NER spans into a single prediction per span using ``find_best``.&quot;&quot;&quot;</span>
+</span><span id="__span-0-833"><a id="__codelineno-0-833" name="__codelineno-0-833"></a>    <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-834"><a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="n">entities</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">entities</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">e</span><span class="p">:</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">end</span><span class="p">))</span>
+</span><span id="__span-0-835"><a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="k">while</span> <span class="n">entities</span><span class="p">:</span>
+</span><span id="__span-0-836"><a id="__codelineno-0-836" name="__codelineno-0-836"></a>        <span class="n">entity</span> <span class="o">=</span> <span class="n">entities</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-0-837"><a id="__codelineno-0-837" name="__codelineno-0-837"></a>        <span class="k">if</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span><span class="p">:</span>
+</span><span id="__span-0-838"><a id="__codelineno-0-838" name="__codelineno-0-838"></a>            <span class="k">continue</span>
+</span><span id="__span-0-839"><a id="__codelineno-0-839" name="__codelineno-0-839"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">entities</span><span class="p">:</span>
+</span><span id="__span-0-840"><a id="__codelineno-0-840" name="__codelineno-0-840"></a>            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
+</span><span id="__span-0-841"><a id="__codelineno-0-841" name="__codelineno-0-841"></a>            <span class="k">break</span>
+</span><span id="__span-0-842"><a id="__codelineno-0-842" name="__codelineno-0-842"></a>
+</span><span id="__span-0-843"><a id="__codelineno-0-843" name="__codelineno-0-843"></a>        <span class="n">peek</span> <span class="o">=</span> <span class="n">entities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-0-844"><a id="__codelineno-0-844" name="__codelineno-0-844"></a>        <span class="k">if</span> <span class="n">entity</span><span class="o">.</span><span class="n">end</span> <span class="o">&lt;=</span> <span class="n">peek</span><span class="o">.</span><span class="n">start</span><span class="p">:</span>
+</span><span id="__span-0-845"><a id="__codelineno-0-845" name="__codelineno-0-845"></a>            <span class="c1"># No overlap</span>
+</span><span id="__span-0-846"><a id="__codelineno-0-846" name="__codelineno-0-846"></a>            <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entity</span><span class="p">)</span>
+</span><span id="__span-0-847"><a id="__codelineno-0-847" name="__codelineno-0-847"></a>            <span class="k">continue</span>
+</span><span id="__span-0-848"><a id="__codelineno-0-848" name="__codelineno-0-848"></a>
+</span><span id="__span-0-849"><a id="__codelineno-0-849" name="__codelineno-0-849"></a>        <span class="c1"># Note - sorting prevents:</span>
+</span><span id="__span-0-850"><a id="__codelineno-0-850" name="__codelineno-0-850"></a>        <span class="c1"># entity.start &gt; peek.start</span>
+</span><span id="__span-0-851"><a id="__codelineno-0-851" name="__codelineno-0-851"></a>        <span class="c1"># entity.end &gt; peek.end when starts are equal</span>
+</span><span id="__span-0-852"><a id="__codelineno-0-852" name="__codelineno-0-852"></a>
+</span><span id="__span-0-853"><a id="__codelineno-0-853" name="__codelineno-0-853"></a>        <span class="c1"># subsume greedily</span>
+</span><span id="__span-0-854"><a id="__codelineno-0-854" name="__codelineno-0-854"></a>        <span class="n">start</span> <span class="o">=</span> <span class="n">entity</span><span class="o">.</span><span class="n">start</span>
+</span><span id="__span-0-855"><a id="__codelineno-0-855" name="__codelineno-0-855"></a>        <span class="n">end</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">entity</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">peek</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+</span><span id="__span-0-856"><a id="__codelineno-0-856" name="__codelineno-0-856"></a>        <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">entity</span><span class="p">]</span>
+</span><span id="__span-0-857"><a id="__codelineno-0-857" name="__codelineno-0-857"></a>
+</span><span id="__span-0-858"><a id="__codelineno-0-858" name="__codelineno-0-858"></a>        <span class="k">while</span> <span class="n">entities</span> <span class="ow">and</span> <span class="n">peek</span><span class="o">.</span><span class="n">start</span> <span class="o">&lt;</span> <span class="n">end</span><span class="p">:</span>
+</span><span id="__span-0-859"><a id="__codelineno-0-859" name="__codelineno-0-859"></a>            <span class="n">candidates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entities</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-0-860"><a id="__codelineno-0-860" name="__codelineno-0-860"></a>            <span class="n">end</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="n">peek</span><span class="o">.</span><span class="n">end</span><span class="p">)</span>
+</span><span id="__span-0-861"><a id="__codelineno-0-861" name="__codelineno-0-861"></a>            <span class="k">if</span> <span class="n">entities</span><span class="p">:</span>
+</span><span id="__span-0-862"><a id="__codelineno-0-862" name="__codelineno-0-862"></a>                <span class="n">peek</span> <span class="o">=</span> <span class="n">entities</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</span><span id="__span-0-863"><a id="__codelineno-0-863" name="__codelineno-0-863"></a>        <span class="n">best</span> <span class="o">=</span> <span class="n">find_best</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span>
+</span><span id="__span-0-864"><a id="__codelineno-0-864" name="__codelineno-0-864"></a>        <span class="n">result</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">NERPrediction</span><span class="p">(</span><span class="n">best</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">best</span><span class="o">.</span><span class="n">label</span><span class="p">,</span> <span class="n">best</span><span class="o">.</span><span class="n">source</span><span class="p">,</span> <span class="n">best</span><span class="o">.</span><span class="n">score</span><span class="p">))</span>
+</span><span id="__span-0-865"><a id="__codelineno-0-865" name="__codelineno-0-865"></a>    <span class="k">return</span> <span class="n">result</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

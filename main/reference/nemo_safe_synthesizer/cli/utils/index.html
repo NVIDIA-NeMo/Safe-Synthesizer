@@ -9586,7 +9586,13 @@ When set, replaces the auto-generated timestamp so repeated runs reuse the same 
 <span class="normal"><a href="#__codelineno-0-297">297</a></span>
 <span class="normal"><a href="#__codelineno-0-298">298</a></span>
 <span class="normal"><a href="#__codelineno-0-299">299</a></span>
-<span class="normal"><a href="#__codelineno-0-300">300</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-198"><a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="k">def</span><span class="w"> </span><span class="nf">common_setup</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span>
+<span class="normal"><a href="#__codelineno-0-303">303</a></span>
+<span class="normal"><a href="#__codelineno-0-304">304</a></span>
+<span class="normal"><a href="#__codelineno-0-305">305</a></span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-198"><a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="k">def</span><span class="w"> </span><span class="nf">common_setup</span><span class="p">(</span>
 </span><span id="__span-0-199"><a id="__codelineno-0-199" name="__codelineno-0-199"></a>    <span class="n">settings</span><span class="p">:</span> <span class="s2">&quot;CLISettings&quot;</span><span class="p">,</span>
 </span><span id="__span-0-200"><a id="__codelineno-0-200" name="__codelineno-0-200"></a>    <span class="n">resume</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-201"><a id="__codelineno-0-201" name="__codelineno-0-201"></a>    <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -9621,74 +9627,80 @@ When set, replaces the auto-generated timestamp so repeated runs reuse the same 
 </span><span id="__span-0-230"><a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">        Tuple of (logger, config, dataframe, workdir). For generate-only runs with</span>
 </span><span id="__span-0-231"><a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">        cached datasets, dataframe may be None (loaded from cached files by SafeSynthesizer).</span>
 </span><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a>    <span class="c1"># 1. Create workdir FIRST - this establishes all artifact paths</span>
-</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="n">workdir</span> <span class="o">=</span> <span class="n">_create_workdir</span><span class="p">(</span>
-</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">artifact_path</span><span class="p">,</span>
-</span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">run_path</span><span class="p">,</span>
-</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">data_source</span><span class="p">,</span>
-</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">config_path</span><span class="p">,</span>
-</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>        <span class="n">resume</span><span class="o">=</span><span class="n">resume</span><span class="p">,</span>
-</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a>        <span class="n">phase</span><span class="o">=</span><span class="n">phase</span><span class="p">,</span>
-</span><span id="__span-0-241"><a id="__codelineno-0-241" name="__codelineno-0-241"></a>        <span class="n">auto_discover_adapter</span><span class="o">=</span><span class="n">auto_discover_adapter</span><span class="p">,</span>
-</span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>        <span class="n">run_name</span><span class="o">=</span><span class="n">run_name</span> <span class="k">if</span> <span class="n">run_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
-</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a>    <span class="p">)</span>
-</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>
-</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a>    <span class="c1"># Ensure directories exist</span>
-</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a>    <span class="n">workdir</span><span class="o">.</span><span class="n">ensure_directories</span><span class="p">()</span>
-</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>
-</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a>    <span class="c1"># 2. Initialize logging using the workdir structure and settings</span>
-</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a>    <span class="n">run_logger</span> <span class="o">=</span> <span class="n">_initialize_logging_for_cli_from_settings</span><span class="p">(</span>
-</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>        <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span>
-</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a>        <span class="n">workdir</span><span class="o">=</span><span class="n">workdir</span><span class="p">,</span>
-</span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a>        <span class="n">quiet</span><span class="o">=</span><span class="n">quiet</span><span class="p">,</span>
-</span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a>    <span class="p">)</span>
-</span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a>
-</span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="c1"># 3. Create DatasetRegistry</span>
-</span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">dataset_registry</span><span class="p">:</span>
-</span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a>        <span class="n">dataset_registry</span> <span class="o">=</span> <span class="n">DatasetRegistry</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">dataset_registry</span><span class="p">)</span>
-</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>        <span class="n">dataset_registry</span> <span class="o">=</span> <span class="n">DatasetRegistry</span><span class="p">()</span>
+</span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a>    <span class="c1"># 0. Propagate CLI-resolved runtime settings back to os.environ. This must</span>
+</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="c1"># run before any deferred pii_replacer imports so that module-level reads</span>
+</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a>    <span class="c1"># of NSS_INFERENCE_*, HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE, and</span>
+</span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a>    <span class="c1"># NSS_PII_REPLACER_CPU_COUNT see the CLI-overridden values.</span>
+</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="n">_propagate_runtime_settings_to_env</span><span class="p">(</span><span class="n">settings</span><span class="p">)</span>
+</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>
+</span><span id="__span-0-239"><a id="__codelineno-0-239" name="__codelineno-0-239"></a>    <span class="c1"># 1. Create workdir FIRST - this establishes all artifact paths</span>
+</span><span id="__span-0-240"><a id="__codelineno-0-240" name="__codelineno-0-240"></a>    <span class="n">workdir</span> <span class="o">=</span> <span class="n">_create_workdir</span><span class="p">(</span>
+</span><span id="__span-0-241"><a id="__codelineno-0-241" name="__codelineno-0-241"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">artifact_path</span><span class="p">,</span>
+</span><span id="__span-0-242"><a id="__codelineno-0-242" name="__codelineno-0-242"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">run_path</span><span class="p">,</span>
+</span><span id="__span-0-243"><a id="__codelineno-0-243" name="__codelineno-0-243"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">data_source</span><span class="p">,</span>
+</span><span id="__span-0-244"><a id="__codelineno-0-244" name="__codelineno-0-244"></a>        <span class="n">settings</span><span class="o">.</span><span class="n">config_path</span><span class="p">,</span>
+</span><span id="__span-0-245"><a id="__codelineno-0-245" name="__codelineno-0-245"></a>        <span class="n">resume</span><span class="o">=</span><span class="n">resume</span><span class="p">,</span>
+</span><span id="__span-0-246"><a id="__codelineno-0-246" name="__codelineno-0-246"></a>        <span class="n">phase</span><span class="o">=</span><span class="n">phase</span><span class="p">,</span>
+</span><span id="__span-0-247"><a id="__codelineno-0-247" name="__codelineno-0-247"></a>        <span class="n">auto_discover_adapter</span><span class="o">=</span><span class="n">auto_discover_adapter</span><span class="p">,</span>
+</span><span id="__span-0-248"><a id="__codelineno-0-248" name="__codelineno-0-248"></a>        <span class="n">run_name</span><span class="o">=</span><span class="n">run_name</span> <span class="k">if</span> <span class="n">run_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-249"><a id="__codelineno-0-249" name="__codelineno-0-249"></a>    <span class="p">)</span>
+</span><span id="__span-0-250"><a id="__codelineno-0-250" name="__codelineno-0-250"></a>
+</span><span id="__span-0-251"><a id="__codelineno-0-251" name="__codelineno-0-251"></a>    <span class="c1"># Ensure directories exist</span>
+</span><span id="__span-0-252"><a id="__codelineno-0-252" name="__codelineno-0-252"></a>    <span class="n">workdir</span><span class="o">.</span><span class="n">ensure_directories</span><span class="p">()</span>
+</span><span id="__span-0-253"><a id="__codelineno-0-253" name="__codelineno-0-253"></a>
+</span><span id="__span-0-254"><a id="__codelineno-0-254" name="__codelineno-0-254"></a>    <span class="c1"># 2. Initialize logging using the workdir structure and settings</span>
+</span><span id="__span-0-255"><a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">run_logger</span> <span class="o">=</span> <span class="n">_initialize_logging_for_cli_from_settings</span><span class="p">(</span>
+</span><span id="__span-0-256"><a id="__codelineno-0-256" name="__codelineno-0-256"></a>        <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span>
+</span><span id="__span-0-257"><a id="__codelineno-0-257" name="__codelineno-0-257"></a>        <span class="n">workdir</span><span class="o">=</span><span class="n">workdir</span><span class="p">,</span>
+</span><span id="__span-0-258"><a id="__codelineno-0-258" name="__codelineno-0-258"></a>        <span class="n">quiet</span><span class="o">=</span><span class="n">quiet</span><span class="p">,</span>
+</span><span id="__span-0-259"><a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="p">)</span>
 </span><span id="__span-0-260"><a id="__codelineno-0-260" name="__codelineno-0-260"></a>
-</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="c1"># 4. Load dataset (or check for cached dataset in resume mode)</span>
-</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>
-</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="c1"># synthesis_overrides collects config overrides from dataset registry and</span>
-</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="c1"># CLI, which is then combined with the config file when calling</span>
-</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="c1"># merge_overrides(). CLI takes top precedence, then dataset registry, and</span>
-</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="c1"># finally the config file. See test_utils.py and especially</span>
-</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="c1"># test_overrides_config_registry_and_cli for examples of how the resolution</span>
-</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="c1"># is expected to work.</span>
-</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="n">synthesis_overrides</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
-</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">data_source</span><span class="p">:</span>
-</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>        <span class="n">dataset_info</span> <span class="o">=</span> <span class="n">dataset_registry</span><span class="o">.</span><span class="n">get_dataset</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">data_source</span><span class="p">)</span>
-</span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a>        <span class="n">synthesis_overrides</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">synthesis_overrides</span><span class="p">,</span> <span class="n">dataset_info</span><span class="o">.</span><span class="n">overrides</span> <span class="ow">or</span> <span class="nb">dict</span><span class="p">())</span>
-</span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">dataset_info</span><span class="o">.</span><span class="n">fetch</span><span class="p">()</span>
-</span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="k">elif</span> <span class="n">resume</span><span class="p">:</span>
-</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a>        <span class="c1"># For generate-only runs without --data-source, verify cached dataset exists.</span>
-</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>        <span class="c1"># test.csv may legitimately be absent when holdout=0.</span>
-</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="n">cached_training</span> <span class="o">=</span> <span class="n">workdir</span><span class="o">.</span><span class="n">source_dataset</span><span class="o">.</span><span class="n">training</span>
-</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cached_training</span><span class="p">,</span> <span class="n">Path</span><span class="p">)</span>
-</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">cached_training</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
-</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a>            <span class="k">raise</span> <span class="n">click</span><span class="o">.</span><span class="n">ClickException</span><span class="p">(</span>
-</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>                <span class="sa">f</span><span class="s2">&quot;No cached dataset found in workdir: </span><span class="si">{</span><span class="n">workdir</span><span class="o">.</span><span class="n">source_dataset</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
-</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>                <span class="s2">&quot;Either provide --data-source to load a dataset, or ensure the workdir &quot;</span>
-</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>                <span class="s2">&quot;contains cached training data from a previous run.&quot;</span>
-</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a>            <span class="p">)</span>
-</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="n">run_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using cached dataset from: </span><span class="si">{</span><span class="n">workdir</span><span class="o">.</span><span class="n">source_dataset</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a>        <span class="c1"># df is None - SafeSynthesizer.load_from_save_path() will load from cached files</span>
-</span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="c1"># Should not happen - _create_workdir already validates this</span>
-</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>        <span class="k">raise</span> <span class="n">click</span><span class="o">.</span><span class="n">ClickException</span><span class="p">(</span><span class="s2">&quot;--data-source is required for new runs&quot;</span><span class="p">)</span>
-</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a>
-</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="c1"># 5. Load config with overrides from settings</span>
-</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">synthesis_overrides</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">synthesis_overrides</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">synthesis_overrides</span><span class="p">)</span>
-</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">merge_overrides</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">config_path</span><span class="p">,</span> <span class="n">synthesis_overrides</span><span class="p">)</span>
-</span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>
-</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>    <span class="c1"># 6. Initialize wandb (uses workdir for run ID files)</span>
-</span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">skip_wandb</span><span class="p">:</span>
-</span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="n">initialize_wandb_run</span><span class="p">(</span><span class="n">workdir</span><span class="p">,</span> <span class="n">resume_job_id</span><span class="o">=</span><span class="n">wandb_resume_job_id</span><span class="p">,</span> <span class="n">cfg</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
-</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>
-</span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="k">return</span> <span class="n">run_logger</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">workdir</span>
+</span><span id="__span-0-261"><a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="c1"># 3. Create DatasetRegistry</span>
+</span><span id="__span-0-262"><a id="__codelineno-0-262" name="__codelineno-0-262"></a>    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">dataset_registry</span><span class="p">:</span>
+</span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="n">dataset_registry</span> <span class="o">=</span> <span class="n">DatasetRegistry</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">dataset_registry</span><span class="p">)</span>
+</span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="n">dataset_registry</span> <span class="o">=</span> <span class="n">DatasetRegistry</span><span class="p">()</span>
+</span><span id="__span-0-266"><a id="__codelineno-0-266" name="__codelineno-0-266"></a>
+</span><span id="__span-0-267"><a id="__codelineno-0-267" name="__codelineno-0-267"></a>    <span class="c1"># 4. Load dataset (or check for cached dataset in resume mode)</span>
+</span><span id="__span-0-268"><a id="__codelineno-0-268" name="__codelineno-0-268"></a>
+</span><span id="__span-0-269"><a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="c1"># synthesis_overrides collects config overrides from dataset registry and</span>
+</span><span id="__span-0-270"><a id="__codelineno-0-270" name="__codelineno-0-270"></a>    <span class="c1"># CLI, which is then combined with the config file when calling</span>
+</span><span id="__span-0-271"><a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="c1"># merge_overrides(). CLI takes top precedence, then dataset registry, and</span>
+</span><span id="__span-0-272"><a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="c1"># finally the config file. See test_utils.py and especially</span>
+</span><span id="__span-0-273"><a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="c1"># test_overrides_config_registry_and_cli for examples of how the resolution</span>
+</span><span id="__span-0-274"><a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="c1"># is expected to work.</span>
+</span><span id="__span-0-275"><a id="__codelineno-0-275" name="__codelineno-0-275"></a>    <span class="n">synthesis_overrides</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+</span><span id="__span-0-276"><a id="__codelineno-0-276" name="__codelineno-0-276"></a>    <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-277"><a id="__codelineno-0-277" name="__codelineno-0-277"></a>    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">data_source</span><span class="p">:</span>
+</span><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a>        <span class="n">dataset_info</span> <span class="o">=</span> <span class="n">dataset_registry</span><span class="o">.</span><span class="n">get_dataset</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">data_source</span><span class="p">)</span>
+</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="n">synthesis_overrides</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">synthesis_overrides</span><span class="p">,</span> <span class="n">dataset_info</span><span class="o">.</span><span class="n">overrides</span> <span class="ow">or</span> <span class="nb">dict</span><span class="p">())</span>
+</span><span id="__span-0-280"><a id="__codelineno-0-280" name="__codelineno-0-280"></a>        <span class="n">df</span> <span class="o">=</span> <span class="n">dataset_info</span><span class="o">.</span><span class="n">fetch</span><span class="p">()</span>
+</span><span id="__span-0-281"><a id="__codelineno-0-281" name="__codelineno-0-281"></a>    <span class="k">elif</span> <span class="n">resume</span><span class="p">:</span>
+</span><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="c1"># For generate-only runs without --data-source, verify cached dataset exists.</span>
+</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="c1"># test.csv may legitimately be absent when holdout=0.</span>
+</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="n">cached_training</span> <span class="o">=</span> <span class="n">workdir</span><span class="o">.</span><span class="n">source_dataset</span><span class="o">.</span><span class="n">training</span>
+</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a>        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">cached_training</span><span class="p">,</span> <span class="n">Path</span><span class="p">)</span>
+</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">cached_training</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+</span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a>            <span class="k">raise</span> <span class="n">click</span><span class="o">.</span><span class="n">ClickException</span><span class="p">(</span>
+</span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a>                <span class="sa">f</span><span class="s2">&quot;No cached dataset found in workdir: </span><span class="si">{</span><span class="n">workdir</span><span class="o">.</span><span class="n">source_dataset</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="se">\n\n</span><span class="s2">&quot;</span>
+</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a>                <span class="s2">&quot;Either provide --data-source to load a dataset, or ensure the workdir &quot;</span>
+</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>                <span class="s2">&quot;contains cached training data from a previous run.&quot;</span>
+</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a>            <span class="p">)</span>
+</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a>        <span class="n">run_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Using cached dataset from: </span><span class="si">{</span><span class="n">workdir</span><span class="o">.</span><span class="n">source_dataset</span><span class="o">.</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="c1"># df is None - SafeSynthesizer.load_from_save_path() will load from cached files</span>
+</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="c1"># Should not happen - _create_workdir already validates this</span>
+</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>        <span class="k">raise</span> <span class="n">click</span><span class="o">.</span><span class="n">ClickException</span><span class="p">(</span><span class="s2">&quot;--data-source is required for new runs&quot;</span><span class="p">)</span>
+</span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>
+</span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>    <span class="c1"># 5. Load config with overrides from settings</span>
+</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>    <span class="n">synthesis_overrides</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span><span class="n">synthesis_overrides</span><span class="p">,</span> <span class="n">settings</span><span class="o">.</span><span class="n">synthesis_overrides</span><span class="p">)</span>
+</span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="n">config</span> <span class="o">=</span> <span class="n">merge_overrides</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">config_path</span><span class="p">,</span> <span class="n">synthesis_overrides</span><span class="p">)</span>
+</span><span id="__span-0-301"><a id="__codelineno-0-301" name="__codelineno-0-301"></a>
+</span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="c1"># 6. Initialize wandb (uses workdir for run ID files)</span>
+</span><span id="__span-0-303"><a id="__codelineno-0-303" name="__codelineno-0-303"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">skip_wandb</span><span class="p">:</span>
+</span><span id="__span-0-304"><a id="__codelineno-0-304" name="__codelineno-0-304"></a>        <span class="n">initialize_wandb_run</span><span class="p">(</span><span class="n">workdir</span><span class="p">,</span> <span class="n">resume_job_id</span><span class="o">=</span><span class="n">wandb_resume_job_id</span><span class="p">,</span> <span class="n">cfg</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
+</span><span id="__span-0-305"><a id="__codelineno-0-305" name="__codelineno-0-305"></a>
+</span><span id="__span-0-306"><a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="k">return</span> <span class="n">run_logger</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">workdir</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -9788,55 +9800,55 @@ Otherwise, merge the overrides into the config file.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/nemo_safe_synthesizer/cli/utils.py</code></summary>
-              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-382">382</a></span>
-<span class="normal"><a href="#__codelineno-0-383">383</a></span>
-<span class="normal"><a href="#__codelineno-0-384">384</a></span>
-<span class="normal"><a href="#__codelineno-0-385">385</a></span>
-<span class="normal"><a href="#__codelineno-0-386">386</a></span>
-<span class="normal"><a href="#__codelineno-0-387">387</a></span>
-<span class="normal"><a href="#__codelineno-0-388">388</a></span>
-<span class="normal"><a href="#__codelineno-0-389">389</a></span>
-<span class="normal"><a href="#__codelineno-0-390">390</a></span>
-<span class="normal"><a href="#__codelineno-0-391">391</a></span>
-<span class="normal"><a href="#__codelineno-0-392">392</a></span>
-<span class="normal"><a href="#__codelineno-0-393">393</a></span>
-<span class="normal"><a href="#__codelineno-0-394">394</a></span>
-<span class="normal"><a href="#__codelineno-0-395">395</a></span>
-<span class="normal"><a href="#__codelineno-0-396">396</a></span>
-<span class="normal"><a href="#__codelineno-0-397">397</a></span>
-<span class="normal"><a href="#__codelineno-0-398">398</a></span>
-<span class="normal"><a href="#__codelineno-0-399">399</a></span>
-<span class="normal"><a href="#__codelineno-0-400">400</a></span>
-<span class="normal"><a href="#__codelineno-0-401">401</a></span>
-<span class="normal"><a href="#__codelineno-0-402">402</a></span>
-<span class="normal"><a href="#__codelineno-0-403">403</a></span>
-<span class="normal"><a href="#__codelineno-0-404">404</a></span>
-<span class="normal"><a href="#__codelineno-0-405">405</a></span>
-<span class="normal"><a href="#__codelineno-0-406">406</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-382"><a id="__codelineno-0-382" name="__codelineno-0-382"></a><span class="k">def</span><span class="w"> </span><span class="nf">merge_overrides</span><span class="p">(</span><span class="n">config_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">overrides</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SafeSynthesizerParameters</span><span class="p">:</span>
-</span><span id="__span-0-383"><a id="__codelineno-0-383" name="__codelineno-0-383"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Merge overrides into a SafeSynthesizerParameters object.</span>
-</span><span id="__span-0-384"><a id="__codelineno-0-384" name="__codelineno-0-384"></a>
-</span><span id="__span-0-385"><a id="__codelineno-0-385" name="__codelineno-0-385"></a><span class="sd">    If config_path is None, use the overrides to create a new SafeSynthesizerParameters object.</span>
-</span><span id="__span-0-386"><a id="__codelineno-0-386" name="__codelineno-0-386"></a><span class="sd">    Otherwise, merge the overrides into the config file.</span>
-</span><span id="__span-0-387"><a id="__codelineno-0-387" name="__codelineno-0-387"></a>
-</span><span id="__span-0-388"><a id="__codelineno-0-388" name="__codelineno-0-388"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-389"><a id="__codelineno-0-389" name="__codelineno-0-389"></a><span class="sd">        config_path: Path to config file (YAML)</span>
-</span><span id="__span-0-390"><a id="__codelineno-0-390" name="__codelineno-0-390"></a><span class="sd">        overrides: Dictionary of override values</span>
-</span><span id="__span-0-391"><a id="__codelineno-0-391" name="__codelineno-0-391"></a>
-</span><span id="__span-0-392"><a id="__codelineno-0-392" name="__codelineno-0-392"></a><span class="sd">    Returns:</span>
-</span><span id="__span-0-393"><a id="__codelineno-0-393" name="__codelineno-0-393"></a><span class="sd">        Merged SafeSynthesizerParameters</span>
-</span><span id="__span-0-394"><a id="__codelineno-0-394" name="__codelineno-0-394"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-395"><a id="__codelineno-0-395" name="__codelineno-0-395"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-396"><a id="__codelineno-0-396" name="__codelineno-0-396"></a>        <span class="k">if</span> <span class="n">config_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-397"><a id="__codelineno-0-397" name="__codelineno-0-397"></a>            <span class="n">my_config</span> <span class="o">=</span> <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">overrides</span><span class="p">)</span>
-</span><span id="__span-0-398"><a id="__codelineno-0-398" name="__codelineno-0-398"></a>        <span class="k">else</span><span class="p">:</span>
-</span><span id="__span-0-399"><a id="__codelineno-0-399" name="__codelineno-0-399"></a>            <span class="n">params</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span>
-</span><span id="__span-0-400"><a id="__codelineno-0-400" name="__codelineno-0-400"></a>                <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">config_path</span><span class="p">)</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">exclude_unset</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span> <span class="n">overrides</span>
-</span><span id="__span-0-401"><a id="__codelineno-0-401" name="__codelineno-0-401"></a>            <span class="p">)</span>
-</span><span id="__span-0-402"><a id="__codelineno-0-402" name="__codelineno-0-402"></a>            <span class="n">my_config</span> <span class="o">=</span> <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
-</span><span id="__span-0-403"><a id="__codelineno-0-403" name="__codelineno-0-403"></a>    <span class="k">except</span> <span class="n">ValidationError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-0-404"><a id="__codelineno-0-404" name="__codelineno-0-404"></a>        <span class="n">click</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">config_path</span><span class="si">}</span><span class="s2"> is invalid:</span><span class="se">\n</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-0-405"><a id="__codelineno-0-405" name="__codelineno-0-405"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-</span><span id="__span-0-406"><a id="__codelineno-0-406" name="__codelineno-0-406"></a>    <span class="k">return</span> <span class="n">my_config</span>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-433">433</a></span>
+<span class="normal"><a href="#__codelineno-0-434">434</a></span>
+<span class="normal"><a href="#__codelineno-0-435">435</a></span>
+<span class="normal"><a href="#__codelineno-0-436">436</a></span>
+<span class="normal"><a href="#__codelineno-0-437">437</a></span>
+<span class="normal"><a href="#__codelineno-0-438">438</a></span>
+<span class="normal"><a href="#__codelineno-0-439">439</a></span>
+<span class="normal"><a href="#__codelineno-0-440">440</a></span>
+<span class="normal"><a href="#__codelineno-0-441">441</a></span>
+<span class="normal"><a href="#__codelineno-0-442">442</a></span>
+<span class="normal"><a href="#__codelineno-0-443">443</a></span>
+<span class="normal"><a href="#__codelineno-0-444">444</a></span>
+<span class="normal"><a href="#__codelineno-0-445">445</a></span>
+<span class="normal"><a href="#__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#__codelineno-0-447">447</a></span>
+<span class="normal"><a href="#__codelineno-0-448">448</a></span>
+<span class="normal"><a href="#__codelineno-0-449">449</a></span>
+<span class="normal"><a href="#__codelineno-0-450">450</a></span>
+<span class="normal"><a href="#__codelineno-0-451">451</a></span>
+<span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span>
+<span class="normal"><a href="#__codelineno-0-456">456</a></span>
+<span class="normal"><a href="#__codelineno-0-457">457</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-433"><a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="k">def</span><span class="w"> </span><span class="nf">merge_overrides</span><span class="p">(</span><span class="n">config_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">overrides</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SafeSynthesizerParameters</span><span class="p">:</span>
+</span><span id="__span-0-434"><a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Merge overrides into a SafeSynthesizerParameters object.</span>
+</span><span id="__span-0-435"><a id="__codelineno-0-435" name="__codelineno-0-435"></a>
+</span><span id="__span-0-436"><a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">    If config_path is None, use the overrides to create a new SafeSynthesizerParameters object.</span>
+</span><span id="__span-0-437"><a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">    Otherwise, merge the overrides into the config file.</span>
+</span><span id="__span-0-438"><a id="__codelineno-0-438" name="__codelineno-0-438"></a>
+</span><span id="__span-0-439"><a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-440"><a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">        config_path: Path to config file (YAML)</span>
+</span><span id="__span-0-441"><a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">        overrides: Dictionary of override values</span>
+</span><span id="__span-0-442"><a id="__codelineno-0-442" name="__codelineno-0-442"></a>
+</span><span id="__span-0-443"><a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">    Returns:</span>
+</span><span id="__span-0-444"><a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">        Merged SafeSynthesizerParameters</span>
+</span><span id="__span-0-445"><a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-446"><a id="__codelineno-0-446" name="__codelineno-0-446"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-447"><a id="__codelineno-0-447" name="__codelineno-0-447"></a>        <span class="k">if</span> <span class="n">config_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-448"><a id="__codelineno-0-448" name="__codelineno-0-448"></a>            <span class="n">my_config</span> <span class="o">=</span> <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">overrides</span><span class="p">)</span>
+</span><span id="__span-0-449"><a id="__codelineno-0-449" name="__codelineno-0-449"></a>        <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-0-450"><a id="__codelineno-0-450" name="__codelineno-0-450"></a>            <span class="n">params</span> <span class="o">=</span> <span class="n">merge_dicts</span><span class="p">(</span>
+</span><span id="__span-0-451"><a id="__codelineno-0-451" name="__codelineno-0-451"></a>                <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">config_path</span><span class="p">)</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">exclude_unset</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span> <span class="n">overrides</span>
+</span><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a>            <span class="p">)</span>
+</span><span id="__span-0-453"><a id="__codelineno-0-453" name="__codelineno-0-453"></a>            <span class="n">my_config</span> <span class="o">=</span> <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+</span><span id="__span-0-454"><a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="k">except</span> <span class="n">ValidationError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-0-455"><a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="n">click</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">config_path</span><span class="si">}</span><span class="s2"> is invalid:</span><span class="se">\n</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-456"><a id="__codelineno-0-456" name="__codelineno-0-456"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-0-457"><a id="__codelineno-0-457" name="__codelineno-0-457"></a>    <span class="k">return</span> <span class="n">my_config</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

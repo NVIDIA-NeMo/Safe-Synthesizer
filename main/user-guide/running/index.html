@@ -10316,9 +10316,9 @@ execute in order (<code>config</code> → <code>dataframe</code> → <code>metad
 <td>PyTorch is importable and a CUDA GPU is visible</td>
 </tr>
 <tr>
-<td><code>env.inference_key</code></td>
+<td><code>env.inference</code></td>
 <td>config</td>
-<td><code>NSS_INFERENCE_KEY</code> is set when PII classification is enabled (warning only)</td>
+<td>Inference config for PII classification: <code>NSS_INFERENCE_KEY</code> is set, <code>NSS_INFERENCE_MODEL</code> is non-empty, and <code>NSS_INFERENCE_ENDPOINT</code> is a valid http(s) URL (warnings only)</td>
 </tr>
 <tr>
 <td><code>env.hf_model_availability</code></td>
@@ -11269,10 +11269,12 @@ and <code>evaluation_metrics.json</code> to the artifacts directory unless an
 <hr />
 <h2 id="running-in-offline-environments">Running in Offline Environments<a class="headerlink" href="#running-in-offline-environments" title="Permanent link">&para;</a></h2>
 <p>Pre-cache models by running once with internet access, then set
-<code>HF_HUB_OFFLINE=1</code> in your target environment. For detailed cache setup
-and environment variables (<code>HF_HOME</code>, <code>HF_HUB_OFFLINE</code>, <code>LOCAL_FILES_ONLY</code>,
-<code>VLLM_CACHE_ROOT</code>), see
-<a href="../environment/#hugging-face-cache">Environment Variables -- Hugging Face Cache</a>.</p>
+<code>HF_HUB_OFFLINE=1</code> in your target environment. Export it before launching
+<code>safe-synthesizer</code> (or pass <code>--disable-huggingface-remote</code>) -- huggingface_hub
+reads the value once at import time, so setting it after the process starts has
+no effect. For detailed cache setup and environment variables (<code>HF_HOME</code>,
+<code>HF_HUB_OFFLINE</code>, <code>VLLM_CACHE_ROOT</code>), see
+<a href="../environment/#hugging-face-cache-and-offline">Environment Variables -- Hugging Face cache and offline</a>.</p>
 <p>For offline-specific errors, see <a href="../troubleshooting/">Program Runtime</a>.</p>
 <hr />
 <h2 id="logging-and-experiment-tracking">Logging and Experiment Tracking<a class="headerlink" href="#logging-and-experiment-tracking" title="Permanent link">&para;</a></h2>

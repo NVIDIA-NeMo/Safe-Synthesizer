@@ -1385,6 +1385,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#offline-mode-not-taking-effect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline Mode Not Taking Effect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ner-processing-timeouts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9645,6 +9656,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#offline-mode-not-taking-effect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offline Mode Not Taking Effect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ner-processing-timeouts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -10473,8 +10495,20 @@ check of its own.</p>
 <tr>
 <td><code>inference_key_missing</code></td>
 <td>warning</td>
-<td><code>env.inference_key</code></td>
+<td><code>env.inference</code></td>
 <td><code>NSS_INFERENCE_KEY</code> not set; PII classification degraded</td>
+</tr>
+<tr>
+<td><code>inference_model_blank</code></td>
+<td>warning</td>
+<td><code>env.inference</code></td>
+<td><code>NSS_INFERENCE_MODEL</code> set but empty; the blank value is ignored and the default model id is used</td>
+</tr>
+<tr>
+<td><code>inference_endpoint_invalid</code></td>
+<td>error</td>
+<td><code>env.inference</code></td>
+<td><code>NSS_INFERENCE_ENDPOINT</code> set but not a valid http(s) URL; classification requests will fail</td>
 </tr>
 <tr>
 <td><code>hf_token_missing</code></td>
@@ -10593,7 +10627,26 @@ check of its own.</p>
 <p>The PII replacer downloads the GLiNER NER model on first use. If the download
 fails, it raises an exception immediately.</p>
 <p>Pre-download the model by running PII replacement once in an environment
-with internet access, or set <code>LOCAL_FILES_ONLY=true</code> after the model is cached.</p>
+with internet access. To force offline use after the model is cached, set
+<code>HF_HUB_OFFLINE=1</code> or pass <code>--disable-huggingface-remote</code>.</p>
+<h3 id="offline-mode-not-taking-effect">Offline Mode Not Taking Effect<a class="headerlink" href="#offline-mode-not-taking-effect" title="Permanent link">&para;</a></h3>
+<p>Symptom: <code>HF_HUB_OFFLINE=1</code> (or <code>--disable-huggingface-remote</code>) is set, yet the
+run still attempts a download, or <code>--enable-huggingface-remote</code> does not
+re-enable downloads.</p>
+<p>Cause: huggingface_hub reads <code>HF_HUB_OFFLINE</code> once, at import time, and caches
+it. If the variable is changed after huggingface_hub has been imported in the
+process, the change is ignored.</p>
+<p>Fixes:</p>
+<ul>
+<li>CLI: export <code>HF_HUB_OFFLINE</code> before launching <code>safe-synthesizer</code>, or use
+  <code>--enable-huggingface-remote</code> / <code>--disable-huggingface-remote</code>. The CLI
+  applies the flag before huggingface_hub loads, so the flag always wins over
+  an inherited environment value.</li>
+<li>Programmatic / SDK: set <code>HF_HUB_OFFLINE</code> before importing
+  <code>nemo_safe_synthesizer</code> (or any library that imports huggingface_hub, such as
+  <code>transformers</code> or <code>datasets</code>). Setting it afterward has no effect for that
+  process.</li>
+</ul>
 <h3 id="ner-processing-timeouts">NER Processing Timeouts<a class="headerlink" href="#ner-processing-timeouts" title="Permanent link">&para;</a></h3>
 <p>NER uses an internal <code>max_runtime_seconds</code> timeout. If processing a chunk takes
 too long, it is dropped with a warning in the logs.</p>
