@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from nemo_safe_synthesizer.cli.settings import CLISettings
-from nemo_safe_synthesizer.cli.utils import _propagate_runtime_settings_to_env, common_setup
+from nemo_safe_synthesizer.cli.utils import _propagate_runtime_settings_to_env, common_setup, merge_overrides
 
 
 @pytest.fixture
@@ -230,6 +230,29 @@ class TestCommonSetupDatasetRegistry:
         assert config.training.batch_size == 8
         assert config.data.holdout == 0.1
 
+    def test_resume_uses_registry_data_without_registry_config_overrides(
+        self,
+        registry_with_base_url: Path,
+        patched_common_setup_dependencies: dict,
+    ):
+        """Resume treats dataset registry overrides as default-like, not runtime overrides."""
+        settings = CLISettings.from_cli_kwargs(
+            data_source="test-data",
+            dataset_registry=str(registry_with_base_url),
+            synthesis_overrides={
+                "generation": {
+                    "temperature": 0.7,
+                },
+            },
+        )
+
+        _, config, df, _ = common_setup(settings, resume=True)
+
+        assert df is not None
+        assert list(df.columns) == ["x", "y", "z"]
+        assert config.generation.num_records == 1000
+        assert config.generation.temperature == 0.7
+
     def test_overrides_config_registry_and_cli(
         self,
         registry_with_dataset: Path,
@@ -325,6 +348,24 @@ class TestCommonSetupWithoutRegistry:
 
         assert config.generation.num_records == 100
         assert config.generation.temperature == 0.7
+
+
+class TestMergeOverrides:
+    """Tests for config-file and CLI override merging."""
+
+    def test_partial_config_preserves_explicit_field_metadata(self, tmp_path: Path):
+        """Partial config files should not make default values look explicit."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("""
+generation:
+  num_records: 77
+""")
+
+        config = merge_overrides(config_file, {})
+
+        assert config.generation.num_records == 77
+        assert config.generation.use_structured_generation is False
+        assert config.model_dump(exclude_unset=True) == {"generation": {"num_records": 77}}
 
 
 class TestPropagateRuntimeSettingsToEnv:

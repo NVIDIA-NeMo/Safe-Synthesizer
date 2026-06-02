@@ -473,8 +473,109 @@ class TestLoadFromSavePath:
         assert builder._nss_config is not None
         assert builder._nss_config.training.batch_size == 8
         assert builder._nss_config.generation.num_records == 100
+        # Saved value not re-specified at runtime is preserved (field-level merge).
+        assert builder._nss_config.generation.use_structured_generation is True
         assert builder._nss_config.generation.structured_generation_schema_method == "json_schema"
         assert builder._nss_config.evaluation.enabled is False
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_preserves_saved_generation_when_runtime_config_has_no_overrides(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """Default runtime config must not reset saved generation settings."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters()
+        saved_config.generation.num_records = 3000
+        saved_config.generation.use_structured_generation = True
+        saved_config.generation.structured_generation_schema_method = "json_schema"
+        saved_config.evaluation.enabled = True
+        workdir.config.write_text(saved_config.model_dump_json())
+
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+        builder.load_from_save_path(runtime_config=SafeSynthesizerParameters())
+
+        assert builder._nss_config is not None
+        assert builder._nss_config.generation.num_records == 3000
+        assert builder._nss_config.generation.use_structured_generation is True
+        assert builder._nss_config.generation.structured_generation_schema_method == "json_schema"
+        assert builder._nss_config.evaluation.enabled is True
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_full_runtime_config_replaces_supported_runtime_sections(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """A fully materialized generate-time config replaces generation/evaluation sections."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters()
+        saved_config.training.batch_size = 8
+        saved_config.generation.num_records = 3000
+        saved_config.generation.use_structured_generation = True
+        saved_config.generation.structured_generation_schema_method = "json_schema"
+        saved_config.evaluation.enabled = True
+        workdir.config.write_text(saved_config.model_dump_json())
+
+        # model_validate(model_dump(...)) marks every field as explicitly set, so
+        # the whole generation/evaluation sections override the saved values.
+        runtime_config = SafeSynthesizerParameters.model_validate(SafeSynthesizerParameters().model_dump(mode="json"))
+        runtime_config.generation.num_records = 100
+        runtime_config.evaluation.enabled = False
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=runtime_config, workdir=workdir)
+        builder.load_from_save_path(runtime_config=runtime_config)
+
+        assert builder._nss_config is not None
+        assert builder._nss_config.training.batch_size == 8
+        assert builder._nss_config.generation.num_records == 100
+        assert builder._nss_config.generation.use_structured_generation is False
+        assert builder._nss_config.generation.structured_generation_schema_method == "regex"
+        assert builder._nss_config.evaluation.enabled is False
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_warns_when_saved_values_differ_from_current_defaults(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """Default drift warnings fire because saved configs carry no provenance metadata."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters()
+        saved_config.generation.num_records = 3000
+        workdir.config.write_text(saved_config.model_dump_json())
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=workdir)
+        with patch("nemo_safe_synthesizer.sdk.library_builder.logger") as mock_logger:
+            builder.load_from_save_path()
+
+        warning_messages = [call.args[0] for call in mock_logger.user.warning.call_args_list]
+        assert any("generation.num_records" in message for message in warning_messages)
+        assert builder._nss_config is not None
+        assert builder._nss_config.generation.num_records == 3000
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_process_data_skips_when_cached_splits_loaded(
