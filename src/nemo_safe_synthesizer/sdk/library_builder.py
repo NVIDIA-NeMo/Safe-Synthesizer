@@ -105,7 +105,7 @@ def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> No
     current_defaults = SafeSynthesizerParameters()
     for path in _default_drift_paths(saved_config, current_defaults):
         logger.user.warning(
-            f"Saved run config value at {path} differs from the current package default; preserving saved value.",
+            f"Saved run config value at {path} is non-default; preserving saved value.",
             extra={"config_path": path},
         )
 
