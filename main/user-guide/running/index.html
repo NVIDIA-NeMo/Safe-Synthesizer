@@ -10291,7 +10291,16 @@ for the full syntax, examples, and precedence rules.</p>
 </tr>
 </tbody>
 </table>
-<p>Accepts the same common options and synthesis parameter overrides as <code>run</code>.</p>
+<p>Accepts the same common options and synthesis parameter override syntax as <code>run</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Override scope on resume</p>
+<p><code>run generate</code> reloads the trained run's saved configuration. Only
+<code>generation</code> and <code>evaluation</code> overrides (and <code>emit_telemetry</code>) supplied via
+<code>--config</code> or <code>--section__field</code> flags take effect; fields you do not set
+keep their saved values. <code>training</code>, <code>data</code>, <code>privacy</code>, and <code>time_series</code>
+are always inherited from the trained run and cannot be changed at generate
+time, since they describe how the adapter was produced.</p>
+</div>
 <h3 id="run-validate"><code>run --validate</code><a class="headerlink" href="#run-validate" title="Permanent link">&para;</a></h3>
 <p>Validate your dataset and configuration without starting training or
 downloading model weights. The tokenizer and model config may still be

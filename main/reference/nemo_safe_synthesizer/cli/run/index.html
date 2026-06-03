@@ -10052,7 +10052,7 @@ the latest trained run.</p>
 </span><span id="__span-0-572"><a id="__codelineno-0-572" name="__codelineno-0-572"></a>
 </span><span id="__span-0-573"><a id="__codelineno-0-573" name="__codelineno-0-573"></a>        <span class="k">try</span><span class="p">:</span>
 </span><span id="__span-0-574"><a id="__codelineno-0-574" name="__codelineno-0-574"></a>            <span class="n">nss</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-0-575"><a id="__codelineno-0-575" name="__codelineno-0-575"></a>                <span class="n">nss</span><span class="o">.</span><span class="n">load_from_save_path</span><span class="p">()</span>
+</span><span id="__span-0-575"><a id="__codelineno-0-575" name="__codelineno-0-575"></a>                <span class="n">nss</span><span class="o">.</span><span class="n">load_from_save_path</span><span class="p">(</span><span class="n">runtime_config</span><span class="o">=</span><span class="n">config</span><span class="p">)</span>
 </span><span id="__span-0-576"><a id="__codelineno-0-576" name="__codelineno-0-576"></a>                <span class="o">.</span><span class="n">process_data</span><span class="p">()</span>
 </span><span id="__span-0-577"><a id="__codelineno-0-577" name="__codelineno-0-577"></a>                <span class="o">.</span><span class="n">generate</span><span class="p">()</span>
 </span><span id="__span-0-578"><a id="__codelineno-0-578" name="__codelineno-0-578"></a>                <span class="o">.</span><span class="n">evaluate</span><span class="p">()</span>
