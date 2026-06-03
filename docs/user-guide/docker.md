@@ -13,13 +13,14 @@ for training, generation, and evaluation.
 
 - Docker 20.10+ (BuildKit enabled by default in 23.0+)
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) installed and configured
-- NVIDIA driver compatible with CUDA 12.9
+- NVIDIA driver compatible with the CUDA libraries installed by the image
+  variant (`cu129` today)
 - NVIDIA GPU (A100 or better recommended)
 
 Verify GPU access works:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.8.1-runtime-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
 ```
 
 ---
@@ -258,12 +259,14 @@ mise run container:build:gpu       # runtime image
 mise run container:build:gpu-dev   # dev image with test tooling
 ```
 
-Override build arguments for different CUDA or Python versions:
+Override build arguments for a different package extra, image variant, or
+Python slim base version:
 
 ```bash
 docker build -f containers/Dockerfile.cuda \
-  --build-arg CUDA_VERSION=12.6.3 \
-  --build-arg PYTHON_VERSION=3.12.10 \
+  --build-arg CONTAINER_EXTRA=cu129 \
+  --build-arg CONTAINER_VARIANT=cu129 \
+  --build-arg PYTHON_VERSION=3.12 \
   --target runtime -t nss-gpu:custom .
 ```
 

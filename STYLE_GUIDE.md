@@ -765,7 +765,7 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 Two Dockerfiles live in `containers/`:
 
-- [containers/Dockerfile.cuda](containers/Dockerfile.cuda) -- CUDA GPU image (deps/runtime/dev stages). The production reference for these conventions.
+- [containers/Dockerfile.cuda](containers/Dockerfile.cuda) -- CUDA GPU image (uv/runtime/dev stages). The production reference for these conventions.
 - [containers/Dockerfile.test_ci](containers/Dockerfile.test_ci) -- CPU-only CI image (`mise run test:ci-container`).
 
 See [containers/README.md](containers/README.md) for build arguments and mise tasks.

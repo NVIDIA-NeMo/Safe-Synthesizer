@@ -13,6 +13,7 @@ All workflows that use `.github/actions/setup-python-env` now default to the ver
 | -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | [ci-checks.yml](ci-checks.yml)                     | Push to `main`, PRs, manual | Format, typecheck, unit tests, and CPU smoke tests                                                         |
 | [gpu-tests.yml](gpu-tests.yml)                     | Nightly, manual             | GPU smoke tests (required) and E2E tests                                                                   |
+| [container-build.yml](container-build.yml)         | Container/dependency PRs, `v*`, manual | Builds the extra-driven GPU container image and publishes GHCR tags for release tags and same-repo PRs     |
 | [conventional-commit.yml](conventional-commit.yml) | PRs                         | Validates PR titles follow conventional commit format                                                      |
 | [docs.yml](docs.yml)                               | Push to `main` (docs paths) | Publishes `main` docs as the `latest` GitHub Pages version                                                 |
 | [release.yml](release.yml)                         | Push tags to `v*`           | Builds and publishes package to Test PyPI/PyPI, creates a GitHub release, and publishes versioned docs     |
@@ -87,6 +88,11 @@ flowchart LR
         slackNotify[Slack Notification]
     end
 
+    subgraph containers [Container Build]
+        buildContainer[Build cu129 Image]
+        publishGhcr[Publish GHCR Tags]
+    end
+
     subgraph internalRelease [Internal Release]
         buildWheelInt[Build Wheel]
         publishArtifactory[Publish to Artifactory/PyPI]
@@ -95,10 +101,11 @@ flowchart LR
     push --> ci
     schedule --> gpu
     manual --> ci & gpu
-    pr --> ci & conventional & secrets
-    tag[Tag push v[0-9]*] --> release
+    pr --> ci & conventional & secrets & containers
+    tag[Tag push v[0-9]*] --> release & containers
 
     buildWheel --> publishPyPI --> ghRelease --> slackNotify
+    buildContainer --> publishGhcr
     buildWheelInt --> publishArtifactory
 
     conventional -.->|reuses| FW-CI-templates
