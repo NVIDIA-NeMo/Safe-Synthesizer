@@ -62,7 +62,10 @@ split_words() {
 ensure_hf_cache() {
   local hf_cache="${CONTAINER_HF_CACHE:-${HOME}/.cache/huggingface}"
 
-  mkdir -p "${hf_cache}"
+  if ! mkdir -p "${hf_cache}"; then
+    echo "Error: failed to create Hugging Face cache directory: '${hf_cache}'" >&2
+    return 1
+  fi
   printf '%s\n' "${hf_cache}"
 }
 
