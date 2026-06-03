@@ -891,9 +891,11 @@ records. Use it when the pipeline struggles to produce valid records.
     ```yaml
     generation:
       use_structured_generation: true
-      structured_generation_schema_method: "regex"
+      structured_generation_schema_method: "auto"
     ```
 
+- `"auto"`: picks `"structural_tag"` when `structured_generation_backend` is `"auto"` or `"xgrammar"`, otherwise `"regex"`.
+- `"structural_tag"`: uses XGrammar Structural Tag to compose schema-constrained JSONL output.
 - `"regex"`: constructs a custom regex from the dataset schema. More comprehensive but slower.
 - `"json_schema"`: passes a JSON Schema to the backend. Faster, but may miss edge cases.
 
