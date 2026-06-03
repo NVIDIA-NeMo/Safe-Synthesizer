@@ -231,3 +231,19 @@ class TestWithRuntimeOverrides:
         saved = _saved_config()
         saved.with_runtime_overrides(_runtime_num_records())
         assert saved.generation.num_records == 3000
+
+    def test_returned_config_is_independent_of_saved(self):
+        """Mutating the returned config must not affect the original (no shared references)."""
+        saved = _saved_config()
+        merged = saved.with_runtime_overrides(_runtime_num_records())
+
+        # Inherited section, overridden section, and an unchanged section.
+        merged.data.holdout = 0.42
+        merged.training.batch_size = 99
+        merged.generation.use_structured_generation = False
+
+        assert merged.data is not saved.data
+        assert merged.training is not saved.training
+        assert saved.data.holdout != 0.42
+        assert saved.training.batch_size == 8
+        assert saved.generation.use_structured_generation is True

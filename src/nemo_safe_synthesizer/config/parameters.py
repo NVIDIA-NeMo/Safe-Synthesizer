@@ -251,14 +251,23 @@ class SafeSynthesizerParameters(Parameters):
                 sparse -- only the fields the caller set are applied.
 
         Returns:
-            A new ``SafeSynthesizerParameters`` with overrides applied.
+            A new ``SafeSynthesizerParameters`` with overrides applied. The
+            result is fully independent of ``self``: sections that are not
+            overridden are deep-copied, so later mutation of either object does
+            not affect the other.
         """
-        updates: dict[str, object] = {
-            "generation": _overlay_set_fields(self.generation, runtime.generation),
-            "evaluation": _overlay_set_fields(self.evaluation, runtime.evaluation),
-        }
+        updates: dict[str, object] = {}
+        # Only record sections that actually changed; unchanged sections are
+        # deep-copied by ``model_copy(deep=True)`` below so the returned config
+        # never shares mutable sub-objects with ``self``.
+        generation = _overlay_set_fields(self.generation, runtime.generation)
+        if generation is not self.generation:
+            updates["generation"] = generation
+        evaluation = _overlay_set_fields(self.evaluation, runtime.evaluation)
+        if evaluation is not self.evaluation:
+            updates["evaluation"] = evaluation
         # emit_telemetry is a top-level scalar: detect explicit assignment,
         # since there is no sub-model to inspect for set fields.
         if "emit_telemetry" in runtime.__pydantic_fields_set__:
             updates["emit_telemetry"] = runtime.emit_telemetry
-        return self.model_copy(update=updates)
+        return self.model_copy(update=updates, deep=True)
