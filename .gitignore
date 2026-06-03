@@ -10,6 +10,7 @@ ai/tmp/
 venv*/
 env*/
 *.env
+*.env.local
 *.envrc
 mise.local.toml
 .mise.local.toml
