@@ -101,8 +101,8 @@ path. Common causes:
 
 - Local cached tokenizer is missing `tokenizer.json` — re-download
   with `huggingface-cli download <model>`
-- Model ships only a SentencePiece vocab (``tokenizer.model``) with no Rust
-  ``tokenizer.json`` — common on older checkpoints; fast conversion may land upstream.
+- Model ships only a SentencePiece vocab (`tokenizer.model`) with no Rust
+  `tokenizer.json` — common on older checkpoints; fast conversion may land upstream.
 - `trust_remote_code=True` model with a custom slow tokenizer class.
 
 The warning is informational. To suppress it, switch to a model with a

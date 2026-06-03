@@ -465,7 +465,8 @@ def _get_vram_allocations(max_vram_fraction: float | None = None) -> dict[int, _
             memory_gib = memory_bytes / (1024**3)
             allocations[i] = _VRAMAllocation(utilization=gpu_memory_utilization, memory_bytes=memory_bytes)
             logger.info(
-                f"GPU {i}: Will allocate {memory_gib:.2f}GiB ({max_vram_fraction * 100}% of {total / (1024**3):.2f}GiB)"
+                f"GPU {i}: Will allocate {memory_gib:.2f}GiB "
+                f"({gpu_memory_utilization * 100:.1f}% of {total / (1024**3):.2f}GiB)"
             )
 
     return allocations
@@ -602,11 +603,15 @@ def load_fast_tokenizer(model_name_or_path: Path | str, **kwargs: Any) -> PreTra
 
 def get_device_name() -> str:
     """Get the name of the current device (first index). Returns 'undefined' if the device is not available."""
+    # torch may be absent (CPU-only install); CUDA/driver problems surface as
+    # RuntimeError/AssertionError from get_device_properties. Anything else is
+    # unexpected and should propagate rather than masquerade as 'undefined'.
     try:
         import torch
 
         return torch.cuda.get_device_properties(0).name
-    except Exception:
+    except (ImportError, RuntimeError, AssertionError):
+        logger.debug("Could not resolve CUDA device name; reporting 'undefined'.", exc_info=True)
         return "undefined"
 
 
