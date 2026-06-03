@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlparse
@@ -28,10 +29,12 @@ __all__ = [
     "CUDAAvailabilityCheck",
     "HFModelAvailabilityCheck",
     "InferenceModelCheck",
+    "VRAMComponentEstimate",
     "VRAMHeadroomCheck",
     "bytes_per_base_weight",
     "estimate_base_model_params",
     "estimate_params_from_shape",
+    "estimate_training_vram_components",
     "param_count_from_empty_model",
 ]
 
@@ -185,16 +188,21 @@ def estimate_base_model_params(autoconfig: PretrainedConfig) -> tuple[int, Liter
 
 
 def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
-    r"""Return expected bytes/param for the base model given PEFT mode.
+    r"""Return expected bytes/param for the base model load mode.
 
-    NSS always trains via LoRA or QLoRA, so the base model's storage
+    NSS always trains via LoRA-style adapters, so the base model's storage
     precision dominates VRAM (LoRA adapter params, gradients, and
     optimizer state are comparatively negligible).
 
-    - QLoRA: \(\text{bits}/8 + 0.1\) to cover quant state (absmax / block
-      scales) and dequant workspace. Yields \(\approx 0.6\) for 4-bit,
+    Runtime quantization is controlled by ``training.quantize_model``. The
+    PEFT type string alone is not enough: with ``quantize_model=False`` the
+    base weights are loaded as bf16 even when ``peft_implementation`` is
+    configured as ``"QLORA"``.
+
+    - Quantized load: \(\text{bits}/8 + 0.1\) to cover quant state (absmax /
+      block scales) and dequant workspace. Yields \(\approx 0.6\) for 4-bit,
       \(\approx 1.1\) for 8-bit.
-    - LoRA (unquantized): \(2\) bytes (bf16/fp16 base weights).
+    - Unquantized load: \(2\) bytes (bf16/fp16 base weights).
 
     References:
         - Hu, E. J. et al. "LoRA: Low-Rank Adaptation of Large Language
@@ -206,7 +214,7 @@ def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
           scales; the \(+0.1\) term accounts for these scales and the
           dequant workspace. <https://arxiv.org/abs/2305.14314>
     """
-    if training_cfg.peft_implementation.upper() == "QLORA":
+    if training_cfg.quantize_model:
         # Prefer the explicit scheme if set; otherwise fall back to the legacy
         # bits-based field. Both routes yield bits/param for memory estimation.
         if training_cfg.quantization_scheme is not None:
@@ -217,15 +225,11 @@ def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
     return 2.0
 
 
-_VRAM_FIXED_OVERHEAD_GIB = 2.0
-r"""CUDA kernels, activations (under gradient checkpointing), and runtime fudge.
+_VRAM_LEGACY_OVERHEAD_GIB = 2.0
+r"""Legacy overhead when activation memory cannot be modeled.
 
-Intentionally a single constant: activation memory scales like
-\(\mathcal{O}(B \cdot S \cdot H \cdot \sqrt{L})\) (Megatron-style, where
-\(B\) is batch, \(S\) sequence length, \(H\) hidden size, \(L\) layers),
-which adds another axis of estimation error for marginal gain versus the
-order-of-magnitude correction this heuristic is already making over the
-previous \(6 H L\) formula. Tune if we see systematic false negatives.
+Covers CUDA context, unchecked activations (under gradient checkpointing),
+kernels, LoRA adapters, and optimizer footprint at a coarse level.
 
 References:
     - Korthikanti, V. et al. "Reducing Activation Recomputation in Large
@@ -234,34 +238,123 @@ References:
       <https://arxiv.org/abs/2205.05198>
 """
 
+_VRAM_KERNEL_RESERVED_GIB = 0.5
+"""Small reservation when activation memory is modeled explicitly (kernels, graphs)."""
+
+_VRAM_HARD_FAIL_RATIO = 1.5
+"""Error instead of warning when the estimate is this many times available VRAM."""
+
+
+@dataclass(frozen=True)
+class VRAMComponentEstimate:
+    """Per-device training VRAM components for ``gpu.vram`` preflight."""
+
+    base_weights_gib: float
+    overhead_gib: float
+    activation_gib: float | None
+    total_gib: float
+
+
+def _positive_int_scalar(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if value > 0 else None
+
+
+def activation_memory_gib(
+    *,
+    batch_size: int,
+    seq_len: int,
+    hidden_size: int,
+    num_hidden_layers: int,
+    bytes_per_activation_element: float = 2.0,
+) -> float:
+    r"""Rough activation VRAM on one device given micro-batch geometry.
+
+    Uses ``training.batch_size`` (HF ``per_device_train_batch_size``), not
+    ``gradient_accumulation_steps``. Matches bf16-ish training tensors at
+    2 bytes/element:
+
+    \[
+        M_\text{act} \approx B \cdot S \cdot H \cdot L \cdot 2\text{ bytes}
+    \]
+
+    Omit attention \(O(B S^2)\) blocks and recomputation specifics; goal is
+    order-of-magnitude headroom versus absurd ``batch_size`` values.
+
+    References:
+        - Korthikanti, V. et al. (2022) -- recomputation vs stored activations.
+          <https://arxiv.org/abs/2205.05198>
+    """
+    nbytes = batch_size * seq_len * hidden_size * num_hidden_layers * bytes_per_activation_element
+    return nbytes / (1024**3)
+
+
+def estimate_training_vram_components(
+    *,
+    n_params: int,
+    training_cfg: TrainingHyperparams,
+    batch_size: int,
+    seq_len: int | None,
+    hidden_size: int | None,
+    num_hidden_layers: int | None,
+    bytes_per_activation_element: float = 2.0,
+) -> VRAMComponentEstimate:
+    """Compose base weights, overhead, and optional activation estimate (GiB)."""
+    bpw = bytes_per_base_weight(training_cfg)
+    base_weights_gib = (n_params * bpw) / (1024**3)
+
+    b_sz = _positive_int_scalar(batch_size)
+    seq = _positive_int_scalar(seq_len) if seq_len is not None else None
+    h_sz = _positive_int_scalar(hidden_size) if hidden_size is not None else None
+    n_layers = _positive_int_scalar(num_hidden_layers) if num_hidden_layers is not None else None
+
+    activation_gib: float | None
+    overhead_gib: float
+    if b_sz is not None and seq is not None and h_sz is not None and n_layers is not None:
+        activation_gib = activation_memory_gib(
+            batch_size=b_sz,
+            seq_len=seq,
+            hidden_size=h_sz,
+            num_hidden_layers=n_layers,
+            bytes_per_activation_element=bytes_per_activation_element,
+        )
+        overhead_gib = _VRAM_KERNEL_RESERVED_GIB
+    else:
+        activation_gib = None
+        overhead_gib = _VRAM_LEGACY_OVERHEAD_GIB
+
+    total_gib = base_weights_gib + overhead_gib + (activation_gib if activation_gib is not None else 0.0)
+
+    return VRAMComponentEstimate(
+        base_weights_gib=base_weights_gib,
+        overhead_gib=overhead_gib,
+        activation_gib=activation_gib,
+        total_gib=total_gib,
+    )
+
 
 class VRAMHeadroomCheck(MetadataCheck):
     r"""Estimate whether GPU VRAM is sufficient for training.
 
-    The estimate is intentionally a *lower bound*:
+    The estimate is intentionally *conservative/heuristic*, not worst-case-accurate.
 
-    \[
-        \text{VRAM}_\text{est} = N \cdot b + C
-    \]
+    Parameter counts come from ``estimate_base_model_params`` via meta tensors
+    when possible.
 
-    where \(N\) is the base-model parameter count (see
-    [estimate_base_model_params][nemo_safe_synthesizer.preflight.checks.environment.estimate_base_model_params];
-    exact via the meta-tensor path, or the shape-heuristic fallback),
-    \(b\) is the bytes-per-param for the selected PEFT mode (see
-    [bytes_per_base_weight][nemo_safe_synthesizer.preflight.checks.environment.bytes_per_base_weight]),
-    and \(C\) is a fixed overhead for CUDA kernels and checkpointed
-    activations. The expression excludes the fine-grained activation
-    term \(\mathcal{O}(B \cdot S \cdot H \cdot L)\), LoRA adapter
-    parameters, gradients, and optimizer state. Those are typically
-    small compared to the base weights for parameter-efficient
-    fine-tuning, but not zero. Passing this check does not guarantee
-    training will fit in VRAM; failing it is a strong signal that it
-    will OOM.
+    Activation memory uses ``estimate_training_vram_components`` when
+    ``metadata.max_seq_length`` and transformer shape fields resolve to
+    positive integers; missing inputs leave activations unspecified and revert
+    to a legacy lumped overhead. Per-device VRAM compares against
+    ``get_max_vram(max_vram_fraction=training.max_vram_fraction)`` headroom.
+
+    LoRA adapters, full optimizer footprint, \(O(B S^2)\) attention material,
+    and quantization workspace are partially covered only by residual overhead --
+    passing does not guarantee a fit; failing is a strong signal of OOM risk.
 
     References:
-        - EleutherAI, "Transformer Math 101" -- grounds the rule of thumb
-          that inference adds ~20% over raw weights; training adds
-          considerably more. <https://blog.eleuther.ai/transformer-math/>
+        - EleutherAI, "Transformer Math 101".
+          <https://blog.eleuther.ai/transformer-math/>
     """
 
     name = "gpu.vram"
@@ -275,7 +368,7 @@ class VRAMHeadroomCheck(MetadataCheck):
         from ...llm.utils import get_max_vram
 
         config = ctx.config
-        vram_map = get_max_vram()
+        vram_map = get_max_vram(max_vram_fraction=config.training.max_vram_fraction)
         # ModelMetadata.autoconfig is populated by ``from_config`` but set to
         # ``None`` by ``ModelMetadata.stub`` (used on ``--validate`` when the
         # model is not cached / no network). Skip in that case: without the
@@ -304,26 +397,53 @@ class VRAMHeadroomCheck(MetadataCheck):
                 n_params / 1e9,
             )
 
-        bytes_per_param = bytes_per_base_weight(config.training)
-        # VRAM_est = N·b + C  (EleutherAI, "Transformer Math 101" https://blog.eleuther.ai/transformer-math/)
-        # N·b: base-weight bytes; C: fixed overhead for kernels + checkpointed activations
-        estimated_gib = (n_params * bytes_per_param) / (1024**3) + _VRAM_FIXED_OVERHEAD_GIB
+        seq_len = getattr(ctx.metadata, "max_seq_length", None)
+        comp = estimate_training_vram_components(
+            n_params=n_params,
+            training_cfg=config.training,
+            batch_size=config.training.batch_size,
+            seq_len=seq_len,
+            hidden_size=getattr(autoconfig, "hidden_size", None),
+            num_hidden_layers=getattr(autoconfig, "num_hidden_layers", None),
+        )
+        estimated_gib = comp.total_gib
         # frac is the usable fraction of device memory (gpu_memory_utilization);
         # take the best single-device headroom — multi-GPU tensor-parallel splits are not modelled here
         max_free_gib = max(
             frac * torch.cuda.get_device_properties(dev).total_memory / (1024**3) for dev, frac in vram_map.items()
         )
         if max_free_gib < estimated_gib:
-            qualifier = "" if method == "exact" else " (approximate; shape-heuristic fallback)"
-            collector.warning(
-                "low_vram",
-                (
-                    f"Estimated required VRAM (~{estimated_gib:.1f} GiB){qualifier} "
-                    f"exceeds available ~{max_free_gib:.1f} GiB. "
-                    "Training may OOM. This is an estimate -- actual usage depends on "
-                    "batch size, sequence length, and activation checkpointing."
-                ),
-            )
+            qualifier = "" if method == "exact" else " (approximate base param count; shape-heuristic fallback)"
+            ratio = estimated_gib / max_free_gib if max_free_gib > 0 else float("inf")
+            hard_fail = ratio >= _VRAM_HARD_FAIL_RATIO
+            report_issue = collector.error if hard_fail else collector.warning
+            issue_code = "vram_exceeds_capacity" if hard_fail else "low_vram"
+            oom_risk = "Training is expected to OOM" if hard_fail else "Training may OOM"
+            if comp.activation_gib is not None:
+                report_issue(
+                    issue_code,
+                    (
+                        f"Estimated required VRAM ~{estimated_gib:.1f} GiB total"
+                        f" (~{comp.base_weights_gib:.1f} GiB base weights, "
+                        f"~{comp.activation_gib:.1f} GiB bf16 compute activations, "
+                        f"~{comp.overhead_gib:.1f} GiB reserved){qualifier} "
+                        f"exceeds available ~{max_free_gib:.1f} GiB "
+                        f"(training.max_vram_fraction={config.training.max_vram_fraction:.2g}). "
+                        f"Per-device batch_size={config.training.batch_size}. {oom_risk}. "
+                        "This remains an estimate -- attention blocks, adapters, optimizer state, and "
+                        "checkpointing materially affect real usage."
+                    ),
+                )
+            else:
+                report_issue(
+                    issue_code,
+                    (
+                        f"Estimated required VRAM (~{estimated_gib:.1f} GiB){qualifier} "
+                        f"exceeds available ~{max_free_gib:.1f} GiB. "
+                        f"{oom_risk}. This is an estimate -- actual usage depends on "
+                        "batch size, sequence length, activation checkpointing, and quantization."
+                    ),
+                )
 
 
 def _is_blank(value: str | None) -> bool:

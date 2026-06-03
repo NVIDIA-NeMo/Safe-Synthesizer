@@ -55,7 +55,7 @@ from ..llm.utils import (
     add_bos_eos_tokens_to_tokenizer,
     cleanup_memory,
     get_device_map,
-    get_max_vram,
+    get_max_memory_map,
     get_quantization_config,
     load_fast_tokenizer,
 )
@@ -321,9 +321,15 @@ class HuggingFaceBackend(TrainingBackend):
         logger.info(f"preparing parameters for HF Automodel with model: {self.params.training.pretrained_model}")
 
         model_kwargs = self._filter_model_kwargs(kwargs)
+        # Pop unconditionally: max_vram_fraction is an NSS-internal kwarg that
+        # transformers does not accept, so it must not leak into
+        # framework_load_params even when add_max_memory is False.
+        frac = model_kwargs.pop("max_vram_fraction", None)
 
         if add_max_memory:
-            model_kwargs["max_memory"] = get_max_vram(max_vram_fraction=model_kwargs.pop("max_vram_fraction", None))
+            if frac is None:
+                frac = self.params.training.max_vram_fraction
+            model_kwargs["max_memory"] = get_max_memory_map(max_vram_fraction=frac)
 
         framework_params = self._build_base_framework_params(model_kwargs)
         quant_config = self._get_quantization_config_if_enabled()

@@ -101,8 +101,8 @@ path. Common causes:
 
 - Local cached tokenizer is missing `tokenizer.json` — re-download
   with `huggingface-cli download <model>`
-- Model ships only a SentencePiece vocab (``tokenizer.model``) with no Rust
-  ``tokenizer.json`` — common on older checkpoints; fast conversion may land upstream.
+- Model ships only a SentencePiece vocab (`tokenizer.model`) with no Rust
+  `tokenizer.json` — common on older checkpoints; fast conversion may land upstream.
 - `trust_remote_code=True` model with a custom slow tokenizer class.
 
 The warning is informational. To suppress it, switch to a model with a
@@ -513,6 +513,7 @@ check of its own.
 | `torch_missing` | error | `gpu.cuda` | PyTorch not installed; cannot verify GPU availability |
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
+| `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
 | `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
 | `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
 | `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |
