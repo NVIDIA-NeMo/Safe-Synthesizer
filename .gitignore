@@ -10,6 +10,7 @@ ai/tmp/
 venv*/
 env*/
 *.env
+*.env.local
 *.envrc
 mise.local.toml
 .mise.local.toml
@@ -28,6 +29,8 @@ integration-report.xml
 .eggs
 *.egg-info
 build
+!.mise/tasks/**/build/
+!.mise/tasks/**/build/**
 dist
 .mypy_cache
 # .python-version is tracked -- uv reads it to select the interpreter

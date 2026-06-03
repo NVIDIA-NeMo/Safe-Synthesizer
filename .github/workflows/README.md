@@ -107,17 +107,17 @@ flowchart LR
 
 ## CI Checks Workflow
 
-The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a `make` target so the Makefile is the single source of truth for how each check runs.
+The `ci-checks.yml` workflow runs on every push to `main` and on pull requests. Every check step calls a mise task. Declarative tasks live in `.mise/tasks/*.toml`; bash-heavy tasks are executable file tasks under `.mise/tasks/`.
 
-| Job | `make` target | What it checks |
+| Job | mise task | What it checks |
 | --- | --- | --- |
 | Format | `format-check` | `ruff format --check` + `ruff check` + SPDX copyright headers |
 | Format (lock) | `lock-check` | `uv.lock` matches `pyproject.toml` |
 | Typecheck | `typecheck` | `ty check` (excludes per `pyproject.toml [tool.ty.src]`) |
-| Unit Tests | `test-ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
-| Smoke Tests | `test-smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
+| Unit Tests | `test:ci` | pytest with coverage (excludes slow, e2e, gpu, smoke) |
+| Smoke Tests | `test:smoke` | CPU smoke tests (training/generation hot paths, tiny models) |
 
-The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, or CI path changes. Smoke tests run only when `src/**`, `tests/**`, `pytest.ini`, `pyproject.toml`, or `uv.lock` changes.
+The `changes` detection job uses `dorny/paths-filter` to decide which test jobs run on push and pull request events. Format and typecheck intentionally do not depend on `changes`; they are ungated and run on every push, pull request, and manual dispatch. Unit tests run when any tracked source, docs source, test, dependency, CI, or mise task path changes. Smoke tests run when source, test, `pytest.ini`, or dependency paths change.
 
 On manual dispatch, `changes` is intentionally skipped and the test jobs explicitly bypass that skipped dependency. Manual dispatch runs unit tests and CPU smoke tests even when there is no changed-file signal to inspect.
 
@@ -126,10 +126,10 @@ Docs source paths include `docs/*.py`, `docs/**/*.py`, and `mkdocs.yml`. These p
 To replicate CI locally:
 
 ```bash
-make check       # format-check + typecheck
-make lock-check  # verify uv.lock
-make test        # unit tests
-make test-smoke  # CPU smoke tests
+mise run check        # format-check + typecheck
+mise run lock-check   # verify uv.lock
+mise run test:ci      # CI unit tests with coverage selectors
+mise run test:smoke   # CPU smoke tests
 ```
 
 All jobs run on `ubuntu-latest` (GitHub-hosted).
@@ -144,7 +144,7 @@ The `gpu-tests.yml` workflow runs nightly at 02:00 UTC, and can also be triggere
 
 The `changes` (Detect Changes) job is skipped on `workflow_dispatch`. GPU jobs use `always()` in their job conditions so manual runs can bypass the skipped dependency and run the selected suite. On scheduled runs, `changes` gates GPU jobs with the `src_test_deps` output, which is true for source, test, `pytest.ini`, dependency, or CI workflow/action changes.
 
-GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: installing `make`, enabling the `uv` cache, setting up Python from `.python-version`, bootstrapping CUDA dependencies, and checking GPU availability.
+GPU jobs use `.github/actions/setup-gpu-test-env` for shared GPU setup: enabling the `uv` cache, setting up Python from `.python-version`, bootstrapping CUDA dependencies with mise, and checking GPU availability.
 
 To trigger manually from the CLI (produces a run but not a PR status check):
 

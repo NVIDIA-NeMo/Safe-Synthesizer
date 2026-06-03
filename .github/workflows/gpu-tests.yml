@@ -99,27 +99,27 @@ jobs:
 
       - name: Run GPU smoke tests - train only
         timeout-minutes: 10
-        run: make test-smoke-gpu-train-only
+        run: mise run test:smoke:gpu:train-only
 
       - name: Run GPU smoke tests - generation
         timeout-minutes: 10
-        run: make test-smoke-gpu-generation
+        run: mise run test:smoke:gpu:generation
 
       - name: Run GPU smoke tests - resume
         timeout-minutes: 10
-        run: make test-smoke-gpu-resume
+        run: mise run test:smoke:gpu:resume
 
       - name: Run GPU smoke tests - structured generation
         timeout-minutes: 10
-        run: make test-smoke-gpu-structured-generation
+        run: mise run test:smoke:gpu:structured-generation
 
       - name: Run GPU smoke tests - timeseries
         timeout-minutes: 10
-        run: make test-smoke-gpu-timeseries
+        run: mise run test:smoke:gpu:timeseries
 
       - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
-        run: make test-smoke-gpu-smollm2
+        run: mise run test:smoke:gpu:smollm2
 
   gpu-e2e-test:
     name: GPU E2E Tests
@@ -153,7 +153,7 @@ jobs:
 
       - name: Run GPU E2E tests
         timeout-minutes: 45
-        run: make test-e2e
+        run: mise run test:e2e
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.

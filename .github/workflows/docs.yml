@@ -52,7 +52,7 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Install docs dependencies
-        run: make bootstrap-nss dev
+        run: mise run bootstrap-nss dev
 
       - name: Configure git for mike
         run: |
@@ -60,6 +60,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Deploy latest docs to GitHub Pages
-        run: |
-          uv run --frozen --group docs mike deploy --push --update-aliases main latest
-          uv run --frozen --group docs mike set-default --push latest
+        run: mise run docs:deploy

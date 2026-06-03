@@ -5,7 +5,7 @@ description: Build Python wheel package
 ---
 Build the wheel package. Version comes from git tags via uv-dynamic-versioning.
 
-* Run with: `make build-wheel`
+* Run with: `mise run build-wheel`
 * Underlying commands:
   ```bash
   rm -rf dist/

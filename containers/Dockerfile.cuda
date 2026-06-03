@@ -83,6 +83,7 @@ ARG CUDA_ARCH_FLAGS="80;86;90;90a"
 FROM ubuntu:${UBUNTU_VERSION} AS tools
 
 ARG UBUNTU_VERSION
+ARG PYTHON_VERSION
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
@@ -93,12 +94,16 @@ ENV MISE_DATA_DIR="/mise" \
     MISE_CONFIG_DIR="/mise" \
     MISE_CACHE_DIR="/mise/cache" \
     MISE_INSTALL_PATH="/usr/local/bin/mise" \
-    PATH="/mise/shims:${PATH}"
+    PATH="/usr/local/bin:/mise/shims:${PATH}"
 
 WORKDIR /build
-COPY .mise.toml mise.lock Makefile ./
+COPY .mise.toml mise.lock ./
+COPY .mise/tasks/ .mise/tasks/
 COPY tools/install-mise.sh ./tools/install-mise.sh
-RUN make setup
+RUN MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
+    bash tools/install-mise.sh && \
+    MISE_YES=1 mise trust && \
+    PYTHON_VERSION="${PYTHON_VERSION}" MISE_YES=1 mise run setup
 
 # Stage real binaries to /usr/local/bin for stages that need the tool
 # without the full mise runtime (shims require mise to resolve).
