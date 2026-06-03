@@ -10367,7 +10367,7 @@ execute in order (<code>config</code> → <code>dataframe</code> → <code>metad
 <tr>
 <td><code>gpu.vram</code></td>
 <td>metadata</td>
-<td>Free VRAM headroom for the chosen model + PEFT mode (warning only)</td>
+<td>Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits <code>low_vram</code> as a warning and <code>vram_exceeds_capacity</code> as an error when the estimate is far above capacity</td>
 </tr>
 <tr>
 <td><code>token_budget</code></td>
@@ -10415,8 +10415,11 @@ Known gaps:</p>
   can be shorter or longer than the original and shift token budgets.</li>
 <li>Token-budget checks sample rows and top groups -- a long-tail
   outlier outside the sample can still exceed the budget at assembly.</li>
-<li>VRAM headroom is a lower bound (LoRA adapters, optimizer state, and
-  activations are not modeled); full training may still OOM.</li>
+<li>VRAM headroom includes a coarse bf16 compute activation term
+  (<code>batch_size</code> x <code>metadata.max_seq_length</code> x width x depth) plus base
+  weights using the configured quantization mode; LoRA adapters,
+  optimizer state, and attention blocks beyond that shape are not modeled
+  tightly. Full training may still OOM.</li>
 </ul>
 <p>Treat <code>--validate</code> as a quick fail-fast gate, not a full-run guarantee.</p>
 </div>
