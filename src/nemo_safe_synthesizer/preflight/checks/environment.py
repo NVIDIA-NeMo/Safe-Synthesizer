@@ -214,7 +214,7 @@ def bytes_per_base_weight(training_cfg: TrainingHyperparams) -> float:
           scales; the \(+0.1\) term accounts for these scales and the
           dequant workspace. <https://arxiv.org/abs/2305.14314>
     """
-    if training_cfg.peft_implementation.upper() == "QLORA":
+    if training_cfg.quantize_model:
         # Prefer the explicit scheme if set; otherwise fall back to the legacy
         # bits-based field. Both routes yield bits/param for memory estimation.
         if training_cfg.quantization_scheme is not None:
