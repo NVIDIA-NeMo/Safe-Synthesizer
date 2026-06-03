@@ -255,7 +255,15 @@ safe-synthesizer run generate \
 | `--run-path` | Explicit path to a previous run's output directory |
 | `--wandb-resume-job-id` | WandB run ID to resume (or path to file containing the ID) |
 
-Accepts the same common options and synthesis parameter overrides as `run`.
+Accepts the same common options and synthesis parameter override syntax as `run`.
+
+!!! note "Override scope on resume"
+    `run generate` reloads the trained run's saved configuration. Only
+    `generation` and `evaluation` overrides (and `emit_telemetry`) supplied via
+    `--config` or `--section__field` flags take effect; fields you do not set
+    keep their saved values. `training`, `data`, `privacy`, and `time_series`
+    are always inherited from the trained run and cannot be changed at generate
+    time, since they describe how the adapter was produced.
 
 ### `run --validate`
 

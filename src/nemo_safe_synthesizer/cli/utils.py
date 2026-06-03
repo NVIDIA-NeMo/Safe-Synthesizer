@@ -276,7 +276,8 @@ def common_setup(
     df: pd.DataFrame | None = None
     if settings.data_source:
         dataset_info = dataset_registry.get_dataset(settings.data_source)
-        synthesis_overrides = merge_dicts(synthesis_overrides, dataset_info.overrides or dict())
+        if not resume:
+            synthesis_overrides = merge_dicts(synthesis_overrides, dataset_info.overrides or dict())
         df = dataset_info.fetch()
     elif resume:
         # For generate-only runs without --data-source, verify cached dataset exists.
@@ -447,9 +448,8 @@ def merge_overrides(config_path: str | Path | None, overrides: dict) -> SafeSynt
         if config_path is None:
             my_config = SafeSynthesizerParameters.model_validate(overrides)
         else:
-            params = merge_dicts(
-                SafeSynthesizerParameters.from_yaml(config_path).model_dump(exclude_unset=False), overrides
-            )
+            file_config = SafeSynthesizerParameters.from_yaml(config_path).model_dump(exclude_unset=True)
+            params = merge_dicts(file_config, overrides)
             my_config = SafeSynthesizerParameters.model_validate(params)
     except ValidationError as e:
         click.echo(f"{config_path} is invalid:\n{e}")
