@@ -131,3 +131,103 @@ def test_from_params_absent_enables_pii():
 
 def test_from_params_none_disables_pii():
     assert SafeSynthesizerParameters.from_params(replace_pii=None).replace_pii is None
+
+
+def _resolve(obj: object, path: str) -> object:
+    """Resolve a dotted attribute ``path`` (e.g. ``generation.validation.foo``)."""
+    for part in path.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
+def _saved_config() -> SafeSynthesizerParameters:
+    """Saved training-run config with customized generation, validation, and telemetry."""
+    saved = SafeSynthesizerParameters()
+    saved.training.batch_size = 8
+    saved.emit_telemetry = False
+    saved.generation.num_records = 3000
+    saved.generation.use_structured_generation = True
+    saved.generation.validation.group_by_ignore_invalid_records = True
+    return saved
+
+
+def _runtime_num_records() -> SafeSynthesizerParameters:
+    """Runtime config overriding only a top-level generation field via mutation."""
+    runtime = SafeSynthesizerParameters()
+    runtime.generation.num_records = 100
+    return runtime
+
+
+def _runtime_nested_validation() -> SafeSynthesizerParameters:
+    """Runtime config overriding a nested generation.validation field via mutation."""
+    runtime = SafeSynthesizerParameters()
+    runtime.generation.validation.group_by_fix_unordered_records = True
+    return runtime
+
+
+class TestWithRuntimeOverrides:
+    """Tests for resume-time generation/evaluation/telemetry override merging."""
+
+    @pytest.mark.parametrize(
+        ("make_runtime", "expected"),
+        [
+            pytest.param(
+                SafeSynthesizerParameters,
+                {
+                    "generation.num_records": 3000,
+                    "generation.use_structured_generation": True,
+                    "generation.validation.group_by_ignore_invalid_records": True,
+                    "training.batch_size": 8,
+                    "emit_telemetry": False,
+                },
+                id="empty-runtime-preserves-saved",
+            ),
+            pytest.param(
+                _runtime_num_records,
+                {
+                    "generation.num_records": 100,
+                    "generation.use_structured_generation": True,  # unset runtime field preserved
+                    "training.batch_size": 8,  # non-overridable section inherited
+                },
+                id="top-level-generation-override",
+            ),
+            pytest.param(
+                _runtime_nested_validation,
+                {
+                    "generation.validation.group_by_fix_unordered_records": True,
+                    "generation.validation.group_by_ignore_invalid_records": True,  # saved sibling kept
+                    "generation.num_records": 3000,
+                },
+                id="nested-validation-via-mutation",
+            ),
+            pytest.param(
+                lambda: SafeSynthesizerParameters.model_validate(
+                    {"generation": {"validation": {"group_by_fix_unordered_records": True}}}
+                ),
+                {
+                    "generation.validation.group_by_fix_unordered_records": True,
+                    "generation.validation.group_by_ignore_invalid_records": True,  # saved sibling kept
+                },
+                id="nested-validation-via-dict",
+            ),
+            pytest.param(
+                lambda: SafeSynthesizerParameters.model_validate({}),
+                {"emit_telemetry": False},
+                id="telemetry-unset-keeps-saved",
+            ),
+            pytest.param(
+                lambda: SafeSynthesizerParameters.model_validate({"emit_telemetry": True}),
+                {"emit_telemetry": True},
+                id="telemetry-set-applied",
+            ),
+        ],
+    )
+    def test_overrides(self, make_runtime, expected: dict[str, object]):
+        merged = _saved_config().with_runtime_overrides(make_runtime())
+        for path, value in expected.items():
+            assert _resolve(merged, path) == value, path
+
+    def test_does_not_mutate_saved(self):
+        saved = _saved_config()
+        saved.with_runtime_overrides(_runtime_num_records())
+        assert saved.generation.num_records == 3000

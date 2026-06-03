@@ -511,6 +511,40 @@ class TestLoadFromSavePath:
         assert builder._nss_config.evaluation.enabled is True
 
     @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
+    def test_load_deep_merges_nested_validation_overrides(
+        self,
+        mock_metadata_cls,
+        tmp_path,
+        fixture_sample_patient_dataframe,
+        fixture_sample_patient_redacted_dataframe,
+    ):
+        """Resume merges nested generation.validation fields without dropping saved siblings."""
+        workdir, _, _ = self._prepare_workdir(
+            tmp_path,
+            fixture_sample_patient_dataframe,
+            fixture_sample_patient_redacted_dataframe,
+        )
+        saved_config = SafeSynthesizerParameters()
+        saved_config.generation.num_records = 3000
+        saved_config.generation.validation.group_by_ignore_invalid_records = True
+        workdir.config.write_text(saved_config.model_dump_json())
+
+        runtime_config = SafeSynthesizerParameters()
+        runtime_config.generation.validation.group_by_fix_unordered_records = True
+        mock_metadata_cls.from_metadata_json.return_value = MagicMock()
+
+        builder = SafeSynthesizer(config=runtime_config, workdir=workdir)
+        builder.load_from_save_path(runtime_config=runtime_config)
+
+        assert builder._nss_config is not None
+        # Nested override applied.
+        assert builder._nss_config.generation.validation.group_by_fix_unordered_records is True
+        # Saved sibling in the same nested group preserved.
+        assert builder._nss_config.generation.validation.group_by_ignore_invalid_records is True
+        # Unrelated saved generation field preserved.
+        assert builder._nss_config.generation.num_records == 3000
+
+    @patch("nemo_safe_synthesizer.sdk.library_builder.ModelMetadata")
     def test_load_full_runtime_config_replaces_supported_runtime_sections(
         self,
         mock_metadata_cls,
