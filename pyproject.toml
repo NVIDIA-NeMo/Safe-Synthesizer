@@ -137,6 +137,7 @@ cpu = [
   "triton>=2.0.0; sys_platform=='linux'",
   "trl>=0.23.0",
   "vllm==0.20.0; sys_platform=='linux'",
+  "xgrammar>=0.2.0; sys_platform=='linux'",
 ]
 
 cu129 = [
@@ -161,6 +162,7 @@ cu129 = [
   "triton>=2.0.0; sys_platform == 'linux'",
   "trl>=0.23.0",
   "vllm==0.20.0+cu129; sys_platform == 'linux'",
+  "xgrammar>=0.2.0; sys_platform == 'linux'",
 ]
 
 # at some point, do per-subpackage dependencies

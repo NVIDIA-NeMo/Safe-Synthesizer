@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import re
 from io import StringIO
 
@@ -11,7 +12,10 @@ from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.data_processing.dataset import make_json_schema
 from nemo_safe_synthesizer.generation.regex_manager import (
     build_json_based_regex,
+    build_json_structural_tag,
 )
+
+from .structural_tag_helpers import structural_tag_accepts_text
 
 BOS_TOKEN = "<s>"
 EOS_TOKEN = "</s>"
@@ -66,6 +70,133 @@ def test_build_json_based_regex(fixture_valid_iris_dataset_jsonl_and_schema, fix
         )
         is None
     )
+
+
+def test_build_json_structural_tag_uses_schema_constrained_jsonl(fixture_safe_synthesizer_config):
+    """Structural Tag composes schema-constrained JSON records with JSONL newlines."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag == {
+        "type": "structural_tag",
+        "format": {
+            "type": "plus",
+            "content": {
+                "type": "sequence",
+                "elements": [
+                    {"type": "json_schema", "json_schema": schema},
+                    {"type": "const_string", "value": "\n"},
+                ],
+            },
+        },
+    }
+
+
+def test_build_json_structural_tag_with_single_sequence(fixture_safe_synthesizer_config):
+    """Single-sequence Structural Tag emits exactly one schema-constrained object."""
+    fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
+    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {"type": "json_schema", "json_schema": schema}
+
+
+def test_build_json_structural_tag_with_groupby(fixture_safe_synthesizer_config):
+    """Grouped Structural Tag keeps BOS/EOS framing around repeated JSONL records."""
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {
+        "type": "plus",
+        "content": {
+            "type": "sequence",
+            "elements": [
+                {
+                    "type": "sequence",
+                    "elements": [
+                        {"type": "const_string", "value": BOS_TOKEN},
+                        {
+                            "type": "plus",
+                            "content": {
+                                "type": "sequence",
+                                "elements": [
+                                    {"type": "json_schema", "json_schema": schema},
+                                    {"type": "const_string", "value": "\n"},
+                                ],
+                            },
+                        },
+                        {"type": "const_string", "value": EOS_TOKEN},
+                    ],
+                },
+                {"type": "const_string", "value": "\n"},
+            ],
+        },
+    }
+
+
+def test_build_json_structural_tag_with_groupby_single_sequence(fixture_safe_synthesizer_config):
+    """Grouped single-sequence Structural Tag emits exactly one BOS/EOS-wrapped sequence."""
+    fixture_safe_synthesizer_config.data.group_training_examples_by = "id"
+    fixture_safe_synthesizer_config.data.max_sequences_per_example = 1
+    fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = True
+    schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    structural_tag = json.loads(
+        build_json_structural_tag(
+            schema,
+            config=fixture_safe_synthesizer_config,
+            bos_token=BOS_TOKEN,
+            eos_token=EOS_TOKEN,
+        )
+    )
+
+    assert structural_tag["format"] == {
+        "type": "sequence",
+        "elements": [
+            {"type": "const_string", "value": BOS_TOKEN},
+            {
+                "type": "plus",
+                "content": {
+                    "type": "sequence",
+                    "elements": [
+                        {"type": "json_schema", "json_schema": schema},
+                        {"type": "const_string", "value": "\n"},
+                    ],
+                },
+            },
+            {"type": "const_string", "value": EOS_TOKEN},
+        ],
+    }
 
 
 # Purpose: Ensures keys with special chars (e.g., '.') are escaped and string length bounds enforced.
@@ -424,6 +555,73 @@ def test_property_regex(fixture_safe_synthesizer_config):
     assert re.fullmatch(regex, '{"c":3}\n') is None
     assert re.fullmatch(regex, '{"c":3,"b":2}\n') is None
     assert re.fullmatch(regex, '{"b":2,"a":1}\n') is None
+
+
+# Purpose: XGrammar Structural Tag round-trip via GrammarMatcher for each output shape.
+@pytest.mark.parametrize(
+    ("config_updates", "text"),
+    [
+        ({}, '{"name":"alice"}\n{"name":"bob"}\n'),
+        (
+            {"max_sequences_per_example": 1, "structured_generation_use_single_sequence": True},
+            '{"name":"alice"}',
+        ),
+        (
+            {"group_training_examples_by": "id"},
+            '<s>{"name":"alice"}\n</s>\n<s>{"name":"bob"}\n</s>\n',
+        ),
+        (
+            {
+                "group_training_examples_by": "id",
+                "max_sequences_per_example": 1,
+                "structured_generation_use_single_sequence": True,
+            },
+            '<s>{"name":"alice"}\n</s>',
+        ),
+    ],
+    ids=["jsonl", "single_sequence", "grouped_jsonl", "grouped_single_sequence"],
+)
+def test_structural_tag_accepts_training_jsonl_shapes(
+    config_updates,
+    text,
+    fixture_safe_synthesizer_config,
+    fixture_tokenizer,
+):
+    for key, value in config_updates.items():
+        if key == "group_training_examples_by":
+            fixture_safe_synthesizer_config.data.group_training_examples_by = value
+        elif key == "max_sequences_per_example":
+            fixture_safe_synthesizer_config.data.max_sequences_per_example = value
+        elif key == "structured_generation_use_single_sequence":
+            fixture_safe_synthesizer_config.generation.structured_generation_use_single_sequence = value
+
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+    structural_tag = build_json_structural_tag(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+    )
+    assert structural_tag_accepts_text(text, structural_tag, fixture_tokenizer) is True
+
+
+def test_round_trip_structural_tag_rejects_invalid_jsonl(fixture_safe_synthesizer_config, fixture_tokenizer):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+    structural_tag = build_json_structural_tag(
+        schema,
+        config=fixture_safe_synthesizer_config,
+        bos_token=BOS_TOKEN,
+        eos_token=EOS_TOKEN,
+    )
+    assert structural_tag_accepts_text('{"name":123}\n', structural_tag, fixture_tokenizer) is False
 
 
 # Purpose: Round-trip regression: DataFrame -> schema -> regex must match the original JSONL rows.

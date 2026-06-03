@@ -160,7 +160,7 @@ for the full API reference.
 | `generation.invalid_fraction_threshold` | `0.8` | Invalid record fraction that triggers the patience counter | Leave at default |
 | `generation.use_structured_generation` | `false` | Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records and increasing generation time; use when the pipeline struggles to produce valid records) | Leave off unless the pipeline cannot produce valid records |
 | `generation.structured_generation_backend` | `"auto"` | vLLM guided-decoding backend | Leave at `"auto"` |
-| `generation.structured_generation_schema_method` | `"regex"` | Schema method (`"regex"` or `"json_schema"`) | Leave at `"regex"` |
+| `generation.structured_generation_schema_method` | `"auto"` | Schema method (`"auto"`, `"structural_tag"`, `"json_schema"`, or `"regex"`) | Leave at `"auto"`; it picks `"structural_tag"` on xgrammar-capable backends and `"regex"` otherwise |
 | `generation.structured_generation_use_single_sequence` | `false` | Match exactly one sequence when `max_sequences_per_example` is 1 | Leave at default |
 | `generation.enforce_timeseries_fidelity` | `false` | Enforce time series order, intervals, and timestamps | Enable for time series data |
 | `generation.attention_backend` | `"auto"` | vLLM attention backend | Leave at `"auto"` |
