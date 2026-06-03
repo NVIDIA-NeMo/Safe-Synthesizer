@@ -158,7 +158,12 @@ class TestVRAMHeadroomCheck:
         assert any(i.code == "low_vram" and i.severity == "warning" for i in issues)
 
     def test_ample_vram_is_silent(self, default_config):
-        """Same config on an 80 GiB GPU must not warn (QLoRA ~5 GiB base + overhead)."""
+        """Same config on an 80 GiB GPU must not warn (bf16 ~15 GiB base + overhead).
+
+        The default config has quantize_model=False, so bytes_per_base_weight is
+        2.0 (bf16) and the ~8B base weights estimate ~15 GiB; 80 GiB leaves ample
+        headroom for both the low_vram warning and the hard-fail threshold.
+        """
         metadata = self._metadata(autoconfig=self._autoconfig())
         fake_props = MagicMock(total_memory=80 * 1024**3)
         with (
@@ -168,6 +173,7 @@ class TestVRAMHeadroomCheck:
         ):
             issues = VRAMHeadroomCheck().run(make_ctx(config=default_config, metadata=metadata))
         assert not any(i.code == "low_vram" for i in issues)
+        assert not any(i.code == "vram_exceeds_capacity" for i in issues)
 
     def test_absurd_batch_errors(self, default_config):
         """Per-device batch_size far too large must fail preflight."""
