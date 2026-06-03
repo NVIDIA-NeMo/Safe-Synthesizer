@@ -747,7 +747,10 @@ class TestLoadFromSavePathHoldoutZero:
         file and keeps ``_test_df`` as ``None``.
         """
         train_split = fixture_sample_patient_dataframe.copy()
-        builder = SafeSynthesizer(config=SafeSynthesizerParameters(), workdir=fixture_workdir)
+        builder = SafeSynthesizer(
+            config=SafeSynthesizerParameters(replace_pii=None),
+            workdir=fixture_workdir,
+        )
         builder._data_source = fixture_sample_patient_dataframe
 
         mock_holdout_cls.return_value.train_test_split.return_value = (train_split, None)

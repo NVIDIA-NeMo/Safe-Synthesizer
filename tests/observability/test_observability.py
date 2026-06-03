@@ -43,9 +43,16 @@ obs = importlib.import_module("nemo_safe_synthesizer.observability")
 class TestNSSObservabilitySettings:
     """Tests for NSSObservabilitySettings configuration class."""
 
+    @staticmethod
+    def _clear_nss_log_env(monkeypatch: pytest.MonkeyPatch) -> None:
+        """Defaults must not inherit ``NSS_LOG_*`` left by other tests on xdist workers."""
+        for name in ("NSS_LOG_LEVEL", "NSS_LOG_FORMAT", "NSS_LOG_FILE", "NSS_LOG_COLOR"):
+            monkeypatch.delenv(name, raising=False)
+
     def test_default_values_tty(self, monkeypatch):
         """Test that default settings are applied correctly."""
         # we dont' want this test to be affected by the actual terminal being a tty or being run in ci
+        self._clear_nss_log_env(monkeypatch)
         with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
             stdout.isatty.return_value = True
 
@@ -58,6 +65,7 @@ class TestNSSObservabilitySettings:
     def test_default_values_no_tty(self, monkeypatch):
         """Test that default settings are applied correctly."""
         # we dont' want this test to be affected by the actual terminal being a tty or being run in ci
+        self._clear_nss_log_env(monkeypatch)
         with mock.patch("nemo_safe_synthesizer.observability.sys.stdout") as stdout:
             stdout.isatty.return_value = False
 
