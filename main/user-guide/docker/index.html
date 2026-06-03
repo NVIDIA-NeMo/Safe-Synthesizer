@@ -1064,10 +1064,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#makefile-shortcuts" class="md-nav__link">
+  <a href="#mise-container-tasks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Makefile Shortcuts
+        Mise Container Tasks
       
     </span>
   </a>
@@ -9102,10 +9102,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#makefile-shortcuts" class="md-nav__link">
+  <a href="#mise-container-tasks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Makefile Shortcuts
+        Mise Container Tasks
       
     </span>
   </a>
@@ -9411,8 +9411,8 @@ for details on <code>HF_HOME</code>, <code>HF_HUB_OFFLINE</code>, and <code>VLLM
 <hr />
 <h2 id="building-from-source">Building from Source<a class="headerlink" href="#building-from-source" title="Permanent link">&para;</a></h2>
 <p>If pulling a pre-built image is not available, build locally:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>make<span class="w"> </span>container-build-gpu<span class="w">           </span><span class="c1"># runtime image</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>make<span class="w"> </span>container-build-gpu-dev<span class="w">       </span><span class="c1"># dev image with test tooling</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu<span class="w">       </span><span class="c1"># runtime image</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu-dev<span class="w">   </span><span class="c1"># dev image with test tooling</span>
 </span></code></pre></div>
 <p>Override build arguments for different CUDA or Python versions:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span><span class="se">\</span>
@@ -9438,9 +9438,9 @@ a bash shell. Mount your data the same way as a normal run:</p>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>appuser@container:/workspace$<span class="w"> </span>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>/workspace/data/config.yaml
 </span></code></pre></div>
 <hr />
-<h2 id="makefile-shortcuts">Makefile Shortcuts<a class="headerlink" href="#makefile-shortcuts" title="Permanent link">&para;</a></h2>
-<p>For developers with the repo checked out, the Makefile provides convenience
-targets that handle GPU flags, HF cache mounts, and workspace bind mounts:</p>
+<h2 id="mise-container-tasks">Mise Container Tasks<a class="headerlink" href="#mise-container-tasks" title="Permanent link">&para;</a></h2>
+<p>For developers with the repo checked out, mise provides convenience tasks
+that handle GPU flags, HF cache mounts, and workspace bind mounts:</p>
 <table>
 <thead>
 <tr>
@@ -9450,30 +9450,30 @@ targets that handle GPU flags, HF cache mounts, and workspace bind mounts:</p>
 </thead>
 <tbody>
 <tr>
-<td><code>make container-build-gpu</code></td>
+<td><code>mise run container:build:gpu</code></td>
 <td>Build the runtime image</td>
 </tr>
 <tr>
-<td><code>make container-run-gpu CMD="run --config ..."</code></td>
+<td><code>CMD="run --config ..." mise run container:run:gpu</code></td>
 <td>Run a pipeline command</td>
 </tr>
 <tr>
-<td><code>make container-build-gpu-dev</code></td>
+<td><code>mise run container:build:gpu-dev</code></td>
 <td>Build the dev image</td>
 </tr>
 <tr>
-<td><code>make container-run-gpu-dev CMD="make test"</code></td>
+<td><code>CMD="mise run test" mise run container:run:gpu-dev</code></td>
 <td>Run a command in the dev container</td>
 </tr>
 </tbody>
 </table>
 <p>Override variables as needed:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>make<span class="w"> </span>container-run-gpu<span class="w"> </span><span class="nv">CONTAINER_HF_CACHE</span><span class="o">=</span>/shared/hf_cache<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data.csv&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nv">CONTAINER_HF_CACHE</span><span class="o">=</span>/shared/hf_cache<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data.csv&quot;</span><span class="w"> </span>mise<span class="w"> </span>run<span class="w"> </span>container:run:gpu
 </span></code></pre></div>
 <p>Mount data from outside the repo tree with <code>CONTAINER_EXTRA_MOUNTS</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>make<span class="w"> </span>container-run-gpu<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nv">CONTAINER_EXTRA_MOUNTS</span><span class="o">=</span><span class="s2">&quot;-v /data/sensitive:/workspace/data&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data/customers.csv&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nv">CONTAINER_EXTRA_MOUNTS</span><span class="o">=</span><span class="s2">&quot;-v /data/sensitive:/workspace/data&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;run --data-source /workspace/data/customers.csv&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>mise<span class="w"> </span>run<span class="w"> </span>container:run:gpu
 </span></code></pre></div>
 <hr />
 <h2 id="what-to-read-next">What to Read Next<a class="headerlink" href="#what-to-read-next" title="Permanent link">&para;</a></h2>

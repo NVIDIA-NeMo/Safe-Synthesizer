@@ -1479,10 +1479,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#makefile-targets" class="md-nav__link">
+  <a href="#mise-tasks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Makefile Targets
+        Mise Tasks
       
     </span>
   </a>
@@ -1590,10 +1590,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#makefile-targets_1" class="md-nav__link">
+  <a href="#mise-tasks_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Makefile targets
+        Mise tasks
       
     </span>
   </a>
@@ -9216,10 +9216,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#makefile-targets" class="md-nav__link">
+  <a href="#mise-tasks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Makefile Targets
+        Mise Tasks
       
     </span>
   </a>
@@ -9327,10 +9327,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#makefile-targets_1" class="md-nav__link">
+  <a href="#mise-tasks_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Makefile targets
+        Mise tasks
       
     </span>
   </a>
@@ -9645,33 +9645,33 @@ etc.) ship pre-built wheels. The CUDA devel image (~3 GB larger) is not
 needed. If a future dependency requires source compilation with CUDA headers,
 change <code>CUDA_IMAGE_TYPE</code> to <code>devel</code>.</p>
 <hr />
-<h2 id="makefile-targets">Makefile Targets<a class="headerlink" href="#makefile-targets" title="Permanent link">&para;</a></h2>
+<h2 id="mise-tasks">Mise Tasks<a class="headerlink" href="#mise-tasks" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Target</th>
+<th>Task</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>container-build-gpu</code></td>
+<td><code>container:build:gpu</code></td>
 <td>Build the <code>runtime</code> stage</td>
 </tr>
 <tr>
-<td><code>container-build-gpu-dev</code></td>
+<td><code>container:build:gpu-dev</code></td>
 <td>Build the <code>dev</code> stage</td>
 </tr>
 <tr>
-<td><code>container-build-gpu-multiarch</code></td>
+<td><code>container:build:gpu-multiarch</code></td>
 <td>Build multi-arch manifest (requires <code>CONTAINER_GPU_REGISTRY</code>)</td>
 </tr>
 <tr>
-<td><code>container-run-gpu</code></td>
+<td><code>container:run:gpu</code></td>
 <td>Run a command in the runtime container</td>
 </tr>
 <tr>
-<td><code>container-run-gpu-dev</code></td>
+<td><code>container:run:gpu-dev</code></td>
 <td>Run a command in the dev container</td>
 </tr>
 </tbody>
@@ -9732,7 +9732,7 @@ this gives full control over mounts and flags. See the
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>nss-gpu:latest<span class="w"> </span>--help
 </span></code></pre></div>
 <p>Run unit tests inside the dev container:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>container-run-gpu-dev<span class="w"> </span><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;make test&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">CMD</span><span class="o">=</span><span class="s2">&quot;mise run test&quot;</span><span class="w"> </span>mise<span class="w"> </span>run<span class="w"> </span>container:run:gpu-dev
 </span></code></pre></div>
 <p>Interactive dev shell (use <code>docker run</code> directly for full mount control):</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>--shm-size<span class="o">=</span>1g<span class="w"> </span><span class="se">\</span>
@@ -9790,17 +9790,17 @@ and CUDA libraries. This is expected for a full ML inference stack.</p>
 <td>CPU-only unit tests and CI checks</td>
 </tr>
 <tr>
-<td>Build target</td>
-<td><code>make container-build-gpu</code></td>
-<td><code>make container-build-test</code></td>
+<td>Build task</td>
+<td><code>mise run container:build:gpu</code></td>
+<td><code>mise run container:build:test</code></td>
 </tr>
 </tbody>
 </table>
 <p>The <code>setup</code> stage installs system packages and mise-managed dev tools
 (ruff, ty, uv, etc.). The <code>install-deps</code> stage extends it with the Python
-environment (<code>make bootstrap-nss cpu</code>). <code>make container-build-test</code> builds
-the full image; <code>make container-build-test-setup</code> builds only the <code>setup</code>
-stage for fast tool-installation verification (<code>make test-tool-install</code>).</p>
+environment (<code>mise run bootstrap-nss cpu</code>). <code>mise run container:build:test</code> builds
+the full image; <code>mise run container:build:test-setup</code> builds only the <code>setup</code>
+stage for fast tool-installation verification (<code>mise run test:tool-install</code>).</p>
 <p>Both follow the conventions in <a href="https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/STYLE_GUIDE.md#dockerfiles">STYLE_GUIDE.md -- Dockerfiles</a>.</p>
 <hr />
 <h2 id="multi-architecture-support">Multi-Architecture Support<a class="headerlink" href="#multi-architecture-support" title="Permanent link">&para;</a></h2>
@@ -9818,8 +9818,8 @@ you pass <code>--platform</code>:</p>
 and forward-compatibility for when <code>CUDA_IMAGE_TYPE=devel</code> builds need to
 pass architecture-specific flags to <code>nvcc</code>.</p>
 <h3 id="building-for-arm64-blackwell">Building for arm64 (Blackwell)<a class="headerlink" href="#building-for-arm64-blackwell" title="Permanent link">&para;</a></h3>
-<p>Single-platform arm64 build via Make:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>container-build-gpu<span class="w"> </span><span class="nv">CONTAINER_GPU_PLATFORM</span><span class="o">=</span>linux/arm64
+<p>Single-platform arm64 build via mise:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nv">CONTAINER_GPU_PLATFORM</span><span class="o">=</span>linux/arm64<span class="w"> </span>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu
 </span></code></pre></div>
 <p>This uses <code>docker build --platform linux/arm64</code>, which works with local
 <code>--load</code> and QEMU emulation (or natively on an arm64 host).</p>
@@ -9828,7 +9828,7 @@ pass architecture-specific flags to <code>nvcc</code>.</p>
 single tag. Clients pull the correct variant automatically. Because
 <code>--load</code> only supports one platform, multi-arch builds must be pushed
 directly to a registry:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>container-build-gpu-multiarch<span class="w"> </span><span class="nv">CONTAINER_GPU_REGISTRY</span><span class="o">=</span>ghcr.io/nvidia-nemo
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nv">CONTAINER_GPU_REGISTRY</span><span class="o">=</span>ghcr.io/nvidia-nemo<span class="w"> </span>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu-multiarch
 </span></code></pre></div>
 <p>This runs:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>build<span class="w"> </span><span class="se">\</span>
@@ -9881,21 +9881,21 @@ pass the appropriate SM values via <code>--build-arg CUDA_ARCH_FLAGS</code>:</p>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--platform<span class="w"> </span>linux/arm64<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:arm64-devel<span class="w"> </span>.
 </span></code></pre></div>
-<h3 id="makefile-targets_1">Makefile targets<a class="headerlink" href="#makefile-targets_1" title="Permanent link">&para;</a></h3>
+<h3 id="mise-tasks_1">Mise tasks<a class="headerlink" href="#mise-tasks_1" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Target</th>
+<th>Task</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>container-build-gpu</code></td>
+<td><code>container:build:gpu</code></td>
 <td>Single-platform build (default <code>linux/amd64</code>, override with <code>CONTAINER_GPU_PLATFORM</code>)</td>
 </tr>
 <tr>
-<td><code>container-build-gpu-multiarch</code></td>
+<td><code>container:build:gpu-multiarch</code></td>
 <td>Multi-platform manifest build (requires <code>CONTAINER_GPU_REGISTRY</code>)</td>
 </tr>
 </tbody>
