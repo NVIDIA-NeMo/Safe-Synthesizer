@@ -936,8 +936,13 @@ class TestRunErrorPathExitCodes:
         # in subsequent tests on the same xdist worker returns a
         # CategoryLogger wrapping a structlog BoundLogger, and stdlib
         # LoggerAdapter.isEnabledFor() then fails with AttributeError.
+        #
+        # common_setup also writes NSS_LOG_* via configure_logging_from_workdir;
+        # clear those so default-value tests on the same worker are not polluted.
         monkeypatch.setattr(obs, "_INITIALIZED_OBSERVABILITY", False)
         monkeypatch.delenv("NSS_PHASE", raising=False)
+        for name in ("NSS_LOG_LEVEL", "NSS_LOG_FORMAT", "NSS_LOG_FILE", "NSS_LOG_COLOR"):
+            monkeypatch.delenv(name, raising=False)
 
     def test_run_with_no_data_source_exits_nonzero(
         self,
