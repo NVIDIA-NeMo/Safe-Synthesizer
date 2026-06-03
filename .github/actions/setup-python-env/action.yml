@@ -39,7 +39,7 @@ inputs:
 
 outputs:
   merge-base:
-    description: "The merge base SHA (only available when fetch-depth is 0)"
+    description: "The base SHA for diffs (only available when fetch-depth is 0)"
     value: ${{ steps.get_merge_base.outputs.merge_base }}
 
 runs:
@@ -56,16 +56,37 @@ runs:
       id: get_merge_base
       if: inputs.checkout == 'true' && inputs.fetch-depth == '0'
       shell: bash
+      env:
+        BASE_REF: ${{ github.base_ref }}
+        EVENT_BEFORE: ${{ github.event.before }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_SHA: ${{ github.sha }}
       run: |
-        if [ -n "${{ github.base_ref }}" ]; then
-          # Pull request: diff against the merge base with the target branch
-          MERGE_BASE_SHA=$(git merge-base origin/${{ github.base_ref }} ${{ github.sha }})
+        EMPTY_TREE_SHA=$(git hash-object -t tree /dev/null)
+
+        if [ -n "$BASE_REF" ]; then
+          # Pull request: diff against the merge base with the target branch.
+          git fetch --no-tags --prune origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if ! MERGE_BASE_SHA=$(git merge-base "origin/${BASE_REF}" "$EVENT_SHA"); then
+            echo "::error::Unable to determine merge base between origin/${BASE_REF} and ${EVENT_SHA}"
+            exit 1
+          fi
+        elif [ "$EVENT_NAME" = "push" ] && [ -n "$EVENT_BEFORE" ] && [[ ! "$EVENT_BEFORE" =~ ^0+$ ]] && git cat-file -e "${EVENT_BEFORE}^{commit}" 2>/dev/null; then
+          # Push: diff against the previous branch tip from the event payload.
+          MERGE_BASE_SHA="$EVENT_BEFORE"
         else
-          # Push to branch: diff against the previous commit
-          MERGE_BASE_SHA=$(git rev-parse HEAD~1)
+          MERGE_BASE_SHA=""
         fi
-        echo "Merge Base SHA: $MERGE_BASE_SHA"
-        echo "merge_base=$MERGE_BASE_SHA" >> $GITHUB_OUTPUT
+
+        if [ -z "$MERGE_BASE_SHA" ] && git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+          # Manual or scheduled run on an existing branch: diff against the parent.
+          MERGE_BASE_SHA=$(git rev-parse HEAD~1)
+        elif [ -z "$MERGE_BASE_SHA" ]; then
+          # Initial commit or synthetic ref with no parent.
+          MERGE_BASE_SHA="$EMPTY_TREE_SHA"
+        fi
+        echo "Diff Base SHA: $MERGE_BASE_SHA"
+        echo "merge_base=$MERGE_BASE_SHA" >> "$GITHUB_OUTPUT"
 
     - name: Set up Python ${{ inputs.python-version }}
       if: inputs.python-version != ''
