@@ -667,122 +667,136 @@ class VllmBackend(GeneratorBackend):
             Results containing the generated DataFrame and statistics.
         """
         loadavg_pre = read_loadavg()
-        vram_sampler = NvmlPeakSampler()
-        vram_sampler.__enter__()
-        generation_start = time.monotonic()
+        sampler = NvmlPeakSampler()
         try:
-            need_special_token_outputs = not isinstance(self.processor, TabularDataProcessor)
-            sampling_kwargs = dict(
-                temperature=self.config.generation.temperature,
-                repetition_penalty=self.config.generation.repetition_penalty,
-                top_p=self.config.generation.top_p,
-                top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
-                min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
-                max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
-                skip_special_tokens=not need_special_token_outputs,
-                include_stop_str_in_output=need_special_token_outputs,
-                ignore_eos=False,
-            )
-
-            self.prepare_params(**sampling_kwargs)
-
-            # The batches object collects batches and keeps track of the stopping condition.
-            batches = GenerationBatches(
-                target_num_records=self.config.generation.num_records,
-                invalid_fraction_threshold=self.config.generation.invalid_fraction_threshold,
-                patience=self.config.generation.patience,
-                data_actions_fn=data_actions_fn,
-            )
-
-            with heartbeat(
-                "Generation",
-                logger_name=__name__,
-                target_records=self.config.generation.num_records,
-                progress_note=("Long stretches with no new records are normal."),
-            ):
-                while batches.num_valid_records < self.config.generation.num_records:
-                    # Generate a batch from prompts and process the responses.
-                    num_prompts = batches.get_next_num_prompts()
-                    start_time = time.perf_counter()
-                    batch: Batch = self._generate_batch(
-                        num_prompts_per_batch=num_prompts,
-                        batch=Batch(processor=self.processor),
-                        **sampling_kwargs,
-                    )
-                    duration = time.perf_counter() - start_time
-                    batches.add_batch(batch)
-
-                    # Log generation summary and progress.
-                    batch.log_summary(detailed_errors=self.use_detailed_logs)
-                    self._log_batch_timing_and_progress(
-                        batch=batch,
-                        duration=duration,
-                        num_records=self.config.generation.num_records,
-                        num_valid_records=batches.num_valid_records,
-                        batches=batches,
-                    )
-                    # Check if the generation job should stop.
-                    if batches.status in [
-                        GenerationStatus.STOP_NO_RECORDS,
-                        GenerationStatus.STOP_METRIC_REACHED,
-                    ]:
-                        break
-
-            batches.job_complete()
-            batches.log_status()
-
-            max_num_records = (
-                self.config.generation.num_records
-                if self.config.data.group_training_examples_by is None and batches.status == GenerationStatus.COMPLETE
-                else None
-            )
-
-            generation_time_sec = time.monotonic() - generation_start
-            self.elapsed_time = generation_time_sec
-            self.gen_results = GenerateJobResults.from_batches(
-                batches=batches,
-                columns=self.columns,
-                max_num_records=max_num_records,
-                elapsed_time=self.elapsed_time,
-            )
+            with sampler:
+                self._run_generation(data_actions_fn)
         finally:
-            # Cleanup + observability emission run regardless of whether
-            # the body raised — sampler thread always shuts down, event
-            # always emits (with whatever measurements were captured up
-            # to the failure point).
-            vram_sampler.__exit__(None, None, None)
-            try:
-                vllm_metrics = read_vllm_runtime_metrics(self.llm)
-            except Exception as exc:  # noqa: BLE001 — degraded mode
-                logger.runtime.warning(
-                    "vllm.cell.observability.metrics_read_failed",
-                    extra={"ctx": {"error": str(exc)}},
+            # Emit regardless of success: the sampler thread has been joined
+            # by ``with`` exit, so ``sampler.peak_gb`` is the final peak, and
+            # the event carries whatever measurements were captured up to a
+            # failure point.
+            self._emit_cell_observability(sampler, loadavg_pre)
+
+        return self.gen_results
+
+    def _run_generation(self, data_actions_fn: utils.DataActionsFn | None) -> None:
+        """Run the batch-generation loop until the target or a stop condition fires.
+
+        Populates ``self.gen_results`` and ``self.elapsed_time``. Extracted
+        from :meth:`generate` so that method stays a thin observability
+        bracket around the loop.
+        """
+        generation_start = time.monotonic()
+        need_special_token_outputs = not isinstance(self.processor, TabularDataProcessor)
+        sampling_kwargs = dict(
+            temperature=self.config.generation.temperature,
+            repetition_penalty=self.config.generation.repetition_penalty,
+            top_p=self.config.generation.top_p,
+            top_k=FIXED_RUNTIME_GENERATE_ARGS["top_k"],
+            min_p=FIXED_RUNTIME_GENERATE_ARGS["min_p"],
+            max_tokens=self.model_metadata.generation_max_tokens_for(self._get_prompt_token_count()),
+            skip_special_tokens=not need_special_token_outputs,
+            include_stop_str_in_output=need_special_token_outputs,
+            ignore_eos=False,
+        )
+
+        self.prepare_params(**sampling_kwargs)
+
+        # The batches object collects batches and keeps track of the stopping condition.
+        batches = GenerationBatches(
+            target_num_records=self.config.generation.num_records,
+            invalid_fraction_threshold=self.config.generation.invalid_fraction_threshold,
+            patience=self.config.generation.patience,
+            data_actions_fn=data_actions_fn,
+        )
+
+        with heartbeat(
+            "Generation",
+            logger_name=__name__,
+            target_records=self.config.generation.num_records,
+            progress_note=("Long stretches with no new records are normal."),
+        ):
+            while batches.num_valid_records < self.config.generation.num_records:
+                # Generate a batch from prompts and process the responses.
+                num_prompts = batches.get_next_num_prompts()
+                start_time = time.perf_counter()
+                batch: Batch = self._generate_batch(
+                    num_prompts_per_batch=num_prompts,
+                    batch=Batch(processor=self.processor),
+                    **sampling_kwargs,
                 )
-                vllm_metrics = {
-                    "kv_cache_usage_perc": None,
-                    "prefix_cache_hit_rate": None,
-                    "spec_accept_rate": None,
-                }
+                duration = time.perf_counter() - start_time
+                batches.add_batch(batch)
+
+                # Log generation summary and progress.
+                batch.log_summary(detailed_errors=self.use_detailed_logs)
+                self._log_batch_timing_and_progress(
+                    batch=batch,
+                    duration=duration,
+                    num_records=self.config.generation.num_records,
+                    num_valid_records=batches.num_valid_records,
+                    batches=batches,
+                )
+                # Check if the generation job should stop.
+                if batches.status in [
+                    GenerationStatus.STOP_NO_RECORDS,
+                    GenerationStatus.STOP_METRIC_REACHED,
+                ]:
+                    break
+
+        batches.job_complete()
+        batches.log_status()
+
+        max_num_records = (
+            self.config.generation.num_records
+            if self.config.data.group_training_examples_by is None and batches.status == GenerationStatus.COMPLETE
+            else None
+        )
+
+        self.elapsed_time = time.monotonic() - generation_start
+        self.gen_results = GenerateJobResults.from_batches(
+            batches=batches,
+            columns=self.columns,
+            max_num_records=max_num_records,
+            elapsed_time=self.elapsed_time,
+        )
+
+    def _emit_cell_observability(
+        self, sampler: NvmlPeakSampler, loadavg_pre: tuple[float, float, float] | None
+    ) -> None:
+        """Assemble and route the ``vllm.cell.complete`` observability event.
+
+        Reads end-of-generation vLLM metrics plus the NVML peak captured by
+        ``sampler``, builds a :class:`CellObservability`, and routes it to
+        structured logs and (when a run is active) wandb. Best-effort: any
+        failure here is logged and swallowed so observability never masks a
+        generation error propagating through :meth:`generate`'s ``finally``.
+        """
+        try:
+            vllm_metrics = read_vllm_runtime_metrics(self.llm)
             cell_event = CellObservability(
-                peak_vram_gb=vram_sampler.peak_gb,
+                peak_vram_gb=sampler.peak_gb,
                 kv_cache_usage_perc=vllm_metrics["kv_cache_usage_perc"],
                 prefix_cache_hit_rate=vllm_metrics["prefix_cache_hit_rate"],
                 spec_accept_rate=vllm_metrics["spec_accept_rate"],
                 loadavg_pre=loadavg_pre,
                 loadavg_post=read_loadavg(),
                 engine_runtime_config=self._engine_runtime_config,
-                # ``flag_did_not_engage`` is the caller's job to compute.
-                # Production has no intended-overrides dict to compare
-                # against; benchmark callers compute the mismatch
-                # against their candidate's ``VllmEngineParameters`` /
-                # equivalent and set the bit if any check fires.
+                # ``flag_did_not_engage`` is the consuming caller's job to
+                # compute. Production generation has no intended-overrides
+                # dict to compare against; the benchmark harness probes the
+                # engine config against its candidate's intended settings and
+                # sets the bit when a knob silently fails to engage.
                 flag_did_not_engage=False,
             )
             logger.runtime.info("vllm.cell.complete", extra={"ctx": cell_event.model_dump()})
-            # Also log to the active wandb run when one exists (no-op
-            # when ``WANDB_MODE=disabled`` or ``initialize_wandb_run``
-            # hasn't been called). Best-effort; wandb failures don't
-            # propagate.
+            # Mirror to the active wandb run when one exists (no-op when
+            # ``WANDB_MODE=disabled`` or ``initialize_wandb_run`` was never
+            # called). Best-effort; wandb failures are swallowed downstream.
             log_cell_observability(cell_event)
-
-        return self.gen_results
+        except Exception as exc:  # noqa: BLE001 — observability must never break generation
+            logger.runtime.warning(
+                "vllm.cell.observability.emit_failed",
+                extra={"ctx": {"error": str(exc)}},
+            )

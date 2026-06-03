@@ -44,7 +44,9 @@ References (design):
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -252,7 +254,7 @@ class NvmlPeakSampler:
             pynvml.nvmlInit()
             self._pynvml = pynvml
             self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._device_index)
-        except Exception as exc:  # noqa: BLE001 — degraded mode
+        except pynvml.NVMLError as exc:  # driver missing, bad index, etc. — degraded mode
             logger.warning("nvml-sampler: init failed; peak VRAM will be None: %s", exc)
             self._pynvml = None
             return self
@@ -267,7 +269,7 @@ class NvmlPeakSampler:
         if self._pynvml is not None:
             try:
                 self._pynvml.nvmlShutdown()
-            except Exception:  # noqa: BLE001
+            except self._pynvml.NVMLError:
                 pass
 
     @property
@@ -288,7 +290,7 @@ class NvmlPeakSampler:
                 with self._lock:
                     if used > self._peak_bytes:
                         self._peak_bytes = used
-            except Exception:  # noqa: BLE001 — degraded mode
+            except self._pynvml.NVMLError:  # transient driver hiccup — keep sampling
                 pass
             self._stop.wait(self._interval)
 
@@ -319,56 +321,108 @@ def read_loadavg() -> tuple[float, float, float] | None:
 # ---------------------------------------------------------------------------
 
 
-# Engine-config fields the flag-engagement check looks at. Kept module-level
-# so callers can subset or extend it without touching probe internals.
-ENGINE_CONFIG_CHECKED_FIELDS: tuple[str, ...] = (
-    "enable_prefix_caching",
-    "enable_chunked_prefill",
-    "max_num_seqs",
-    "max_num_batched_tokens",
-    "kv_cache_dtype",
+def _identity(value: Any) -> Any:
+    """Default field transform — return the probed value unchanged."""
+    return value
+
+
+@dataclass(frozen=True)
+class _ProbeField:
+    """One extraction rule for :func:`probe_engine_runtime_config`.
+
+    Declarative replacement for per-field control flow: each row says where
+    to read (``section`` + precedence-ordered ``sources``), what to call the
+    result (``out_key``), how to normalize it (``transform``), and whether
+    the flag-engagement check compares it (``checked``).
+    """
+
+    section: str
+    """``vllm_config`` sub-object attribute, e.g. ``"scheduler_config"``."""
+    sources: tuple[str, ...]
+    """Candidate source attribute names, modern-name-first precedence."""
+    out_key: str
+    """Key under which the value is surfaced in the probe result."""
+    transform: Callable[[Any], Any] = _identity
+    """Normalizer applied to the first present source value."""
+    checked: bool = True
+    """Whether :data:`ENGINE_CONFIG_CHECKED_FIELDS` includes this field."""
+
+
+# The single source of truth for what the probe extracts. Adding a probed
+# field is one row here — no new control flow. ``sources`` ordering encodes
+# vLLM's cross-version attribute renames (modern name first, legacy fallback).
+_PROBE_FIELDS: tuple[_ProbeField, ...] = (
+    _ProbeField("scheduler_config", ("max_num_seqs",), "max_num_seqs"),
+    _ProbeField("scheduler_config", ("max_num_batched_tokens",), "max_num_batched_tokens"),
+    _ProbeField(
+        "scheduler_config",
+        ("chunked_prefill_enabled", "enable_chunked_prefill"),
+        "enable_chunked_prefill",
+        transform=bool,
+    ),
+    _ProbeField("cache_config", ("enable_prefix_caching",), "enable_prefix_caching"),
+    _ProbeField("cache_config", ("kv_cache_dtype", "cache_dtype"), "kv_cache_dtype"),
+    # Probed for observability but excluded from the flag-engagement check.
+    _ProbeField("speculative_config", ("method",), "speculative_method", checked=False),
 )
 
 
-def probe_engine_runtime_config(llm: Any) -> dict[str, Any]:
+# Engine-config fields the flag-engagement check compares intended-vs-actual.
+# Derived from the probe table so the two cannot drift: a field is checked iff
+# the probe can surface it and the row opts in via ``checked=True``.
+ENGINE_CONFIG_CHECKED_FIELDS: tuple[str, ...] = tuple(f.out_key for f in _PROBE_FIELDS if f.checked)
+
+
+def _engine_vllm_config(llm: object) -> Any | None:
+    """Resolve ``llm.llm_engine.vllm_config`` (or the v0 ``llm.engine`` name).
+
+    Pure ``getattr`` traversal; returns ``None`` when any link is absent.
+    """
+    engine = getattr(llm, "llm_engine", None) or getattr(llm, "engine", None)
+    return getattr(engine, "vllm_config", None) if engine is not None else None
+
+
+def _first_present(obj: object, names: tuple[str, ...]) -> Any | None:
+    """Return the first non-``None`` attribute among ``names``, else ``None``."""
+    for name in names:
+        value = getattr(obj, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def probe_engine_runtime_config(llm: object) -> dict[str, Any]:
     """Best-effort introspection of the engine's effective runtime config.
 
     Returns a flat dict of the load-bearing scheduler/cache/speculative
-    settings. Empty dict on any failure — this is observability, not a
-    correctness gate. Tries ``llm.llm_engine.vllm_config`` first, then
-    ``llm.engine.vllm_config`` to span vLLM v0/v1 attribute naming.
+    settings drawn from :data:`_PROBE_FIELDS`. Empty dict when the engine
+    config can't be reached — this is observability, not a correctness gate.
+
+    Degrades at field granularity: a malformed individual attribute skips
+    that one field rather than emptying the whole result.
+
+    Typed ``object`` (not ``LLM``) on purpose: the probe is pure defensive
+    ``getattr`` introspection and degrades on any shape, so it does not
+    require — and must not claim to require — the concrete engine type.
     """
     try:
-        engine = getattr(llm, "llm_engine", None) or getattr(llm, "engine", None)
-        vcfg = getattr(engine, "vllm_config", None) if engine is not None else None
-        if vcfg is None:
-            return {}
-        out: dict[str, Any] = {}
-        scheduler = getattr(vcfg, "scheduler_config", None)
-        if scheduler is not None:
-            for attr in ("max_num_seqs", "max_num_batched_tokens"):
-                value = getattr(scheduler, attr, None)
-                if value is not None:
-                    out[attr] = value
-            chunked = getattr(scheduler, "chunked_prefill_enabled", None)
-            if chunked is None:
-                chunked = getattr(scheduler, "enable_chunked_prefill", None)
-            if chunked is not None:
-                out["enable_chunked_prefill"] = bool(chunked)
-        cache = getattr(vcfg, "cache_config", None)
-        if cache is not None:
-            for attr in ("enable_prefix_caching", "cache_dtype", "kv_cache_dtype"):
-                value = getattr(cache, attr, None)
-                if value is not None:
-                    out[attr if attr != "cache_dtype" else "kv_cache_dtype"] = value
-        spec = getattr(vcfg, "speculative_config", None)
-        if spec is not None:
-            method = getattr(spec, "method", None)
-            if method is not None:
-                out["speculative_method"] = method
-        return out
+        vcfg = _engine_vllm_config(llm)
     except Exception:  # noqa: BLE001 — degraded mode by design
         return {}
+    if vcfg is None:
+        return {}
+    out: dict[str, Any] = {}
+    for spec in _PROBE_FIELDS:
+        try:
+            section = getattr(vcfg, spec.section, None)
+            if section is None:
+                continue
+            value = _first_present(section, spec.sources)
+            if value is not None:
+                out[spec.out_key] = spec.transform(value)
+        except Exception:  # noqa: BLE001 — degrade one field, not the whole probe
+            continue
+    return out
 
 
 def flag_engagement_mismatches(
@@ -415,13 +469,30 @@ METRIC_SPEC_NUM_DRAFT_TOKENS = "vllm:spec_decode_num_draft_tokens"
 METRIC_SPEC_NUM_ACCEPTED_TOKENS = "vllm:spec_decode_num_accepted_tokens"
 
 
-def read_vllm_runtime_metrics(llm: LLM | None) -> dict[str, float | None]:
+class VllmRuntimeMetrics(TypedDict):
+    """End-of-generation vLLM metric snapshot with a fixed key set.
+
+    Every value is ``float | None``; ``None`` means the engine did not
+    surface that counter on this cell (distinct from a measured zero).
+
+    A ``TypedDict`` rather than a dataclass on purpose: the value stays a
+    plain ``dict`` at runtime, so dict-style consumers (e.g. the benchmark
+    harness) are unaffected, while callers gain static key checking and
+    ``float | None`` value typing instead of ``dict[str, float | None]``.
+    """
+
+    kv_cache_usage_perc: float | None
+    prefix_cache_hit_rate: float | None
+    spec_accept_rate: float | None
+
+
+def read_vllm_runtime_metrics(llm: LLM | None) -> VllmRuntimeMetrics:
     """Snapshot ``llm.get_metrics()`` for known metrics; degraded-mode on failure.
 
-    Returns a dict with stable keys regardless of which metrics were
-    actually exposed by the engine — missing metrics map to ``None``.
-    Callers should treat ``None`` as "engine didn't surface this counter"
-    and not crash on missing data.
+    Returns a :class:`VllmRuntimeMetrics` with stable keys regardless of
+    which metrics the engine actually exposed — missing metrics map to
+    ``None``. Callers should treat ``None`` as "engine didn't surface this
+    counter" and not crash on missing data.
 
     Currently captures:
 
@@ -435,44 +506,46 @@ def read_vllm_runtime_metrics(llm: LLM | None) -> dict[str, float | None]:
       registered at runtime by the spec-decode subsystem; absent
       otherwise) — distinguishes "not measured" from "measured zero".
     """
-    out: dict[str, float | None] = {
+    out: VllmRuntimeMetrics = {
         "kv_cache_usage_perc": None,
         "prefix_cache_hit_rate": None,
         "spec_accept_rate": None,
     }
     if llm is None:
         return out
+
+    # Whole-body guard: this is a best-effort probe, so any failure (the
+    # engine call, an unexpected metric shape, a non-numeric value) degrades
+    # to the stable all-``None`` dict rather than propagating. Callers can
+    # therefore trust the return contract without re-wrapping the call.
     try:
-        metrics = llm.get_metrics()
-    except Exception as exc:  # noqa: BLE001 — degraded mode
-        logger.debug("read_vllm_runtime_metrics: get_metrics failed: %s", exc)
-        return out
+        kv_usage: float | None = None
+        prefix_hits: float | None = None
+        prefix_queries: float | None = None
+        spec_accepted: float | None = None
+        spec_drafted: float | None = None
+        for m in llm.get_metrics():
+            name = getattr(m, "name", "")
+            value = getattr(m, "value", None)
+            if value is None:
+                continue
+            if name == METRIC_KV_CACHE_USAGE_PERC:
+                kv_usage = float(value)
+            elif name == METRIC_PREFIX_CACHE_HITS:
+                prefix_hits = float(value)
+            elif name == METRIC_PREFIX_CACHE_QUERIES:
+                prefix_queries = float(value)
+            elif name == METRIC_SPEC_NUM_ACCEPTED_TOKENS:
+                spec_accepted = float(value)
+            elif name == METRIC_SPEC_NUM_DRAFT_TOKENS:
+                spec_drafted = float(value)
 
-    kv_usage: float | None = None
-    prefix_hits: float | None = None
-    prefix_queries: float | None = None
-    spec_accepted: float | None = None
-    spec_drafted: float | None = None
-    for m in metrics:
-        name = getattr(m, "name", "")
-        value = getattr(m, "value", None)
-        if value is None:
-            continue
-        if name == METRIC_KV_CACHE_USAGE_PERC:
-            kv_usage = float(value)
-        elif name == METRIC_PREFIX_CACHE_HITS:
-            prefix_hits = float(value)
-        elif name == METRIC_PREFIX_CACHE_QUERIES:
-            prefix_queries = float(value)
-        elif name == METRIC_SPEC_NUM_ACCEPTED_TOKENS:
-            spec_accepted = float(value)
-        elif name == METRIC_SPEC_NUM_DRAFT_TOKENS:
-            spec_drafted = float(value)
-
-    if kv_usage is not None:
-        out["kv_cache_usage_perc"] = kv_usage
-    if prefix_hits is not None and prefix_queries is not None and prefix_queries > 0:
-        out["prefix_cache_hit_rate"] = prefix_hits / prefix_queries
-    if spec_accepted is not None and spec_drafted is not None and spec_drafted > 0:
-        out["spec_accept_rate"] = spec_accepted / spec_drafted
+        if kv_usage is not None:
+            out["kv_cache_usage_perc"] = kv_usage
+        if prefix_hits is not None and prefix_queries is not None and prefix_queries > 0:
+            out["prefix_cache_hit_rate"] = prefix_hits / prefix_queries
+        if spec_accepted is not None and spec_drafted is not None and spec_drafted > 0:
+            out["spec_accept_rate"] = spec_accepted / spec_drafted
+    except Exception as exc:  # noqa: BLE001 — degraded mode by design
+        logger.debug("read_vllm_runtime_metrics failed: %s", exc)
     return out

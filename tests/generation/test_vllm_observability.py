@@ -20,6 +20,7 @@ import pytest
 from pydantic import ValidationError
 
 from nemo_safe_synthesizer.generation.vllm_observability import (
+    ENGINE_CONFIG_CHECKED_FIELDS,
     METRIC_KV_CACHE_USAGE_PERC,
     METRIC_PREFIX_CACHE_HITS,
     METRIC_PREFIX_CACHE_QUERIES,
@@ -250,6 +251,64 @@ class TestProbeEngineRuntimeConfig:
         assert out["enable_chunked_prefill"] is True
         assert out["enable_prefix_caching"] is True
         assert out["kv_cache_dtype"] == "auto"  # legacy name surfaced under the modern key
+
+    def test_extracts_speculative_method(self) -> None:
+        """``speculative_config.method`` surfaces under ``speculative_method``."""
+        llm = SimpleNamespace(
+            llm_engine=SimpleNamespace(
+                vllm_config=SimpleNamespace(
+                    scheduler_config=None,
+                    cache_config=None,
+                    speculative_config=SimpleNamespace(method="eagle"),
+                ),
+            ),
+        )
+        out = probe_engine_runtime_config(llm)
+        assert out["speculative_method"] == "eagle"
+
+    def test_one_bad_section_does_not_sink_the_whole_probe(self) -> None:
+        """A section attribute that raises degrades that field only, not the result.
+
+        Field-granular degradation is the contract that replaced the old
+        whole-body try/except.
+        """
+
+        class _Exploding:
+            @property
+            def enable_prefix_caching(self) -> bool:
+                raise RuntimeError("boom")
+
+        llm = SimpleNamespace(
+            llm_engine=SimpleNamespace(
+                vllm_config=SimpleNamespace(
+                    scheduler_config=SimpleNamespace(max_num_seqs=128),
+                    cache_config=_Exploding(),
+                    speculative_config=None,
+                ),
+            ),
+        )
+        out = probe_engine_runtime_config(llm)
+        # The healthy field still lands; the exploding one is simply absent.
+        assert out["max_num_seqs"] == 128
+        assert "enable_prefix_caching" not in out
+
+
+class TestEngineConfigCheckedFields:
+    """``ENGINE_CONFIG_CHECKED_FIELDS`` is derived from the probe table."""
+
+    def test_checked_fields_match_expected_set(self) -> None:
+        """The engagement-checked fields are exactly the probe's ``checked=True`` keys."""
+        assert set(ENGINE_CONFIG_CHECKED_FIELDS) == {
+            "max_num_seqs",
+            "max_num_batched_tokens",
+            "enable_chunked_prefill",
+            "enable_prefix_caching",
+            "kv_cache_dtype",
+        }
+
+    def test_speculative_method_probed_but_not_checked(self) -> None:
+        """``speculative_method`` is observability-only — excluded from the check."""
+        assert "speculative_method" not in ENGINE_CONFIG_CHECKED_FIELDS
 
 
 # ---------------------------------------------------------------------------

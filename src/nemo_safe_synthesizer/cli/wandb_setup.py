@@ -21,6 +21,9 @@ from ..config import SafeSynthesizerParameters
 from ..observability import get_logger
 from .artifact_structure import Workdir
 
+if TYPE_CHECKING:
+    from ..generation.vllm_observability import CellObservability
+
 logger = get_logger(__name__)
 
 
@@ -265,7 +268,7 @@ def initialize_wandb_run(
         logger.info(f"Wandb run url: {wandb.run.url if wandb.run else 'None'}")
 
 
-def log_cell_observability(event: Any, prefix: str = "vllm_cell") -> None:
+def log_cell_observability(event: CellObservability, prefix: str = "vllm_cell") -> None:
     """Log a ``CellObservability`` event to the currently active wandb run.
 
     No-op when no wandb run is active (``WANDB_MODE=disabled`` or the
@@ -273,20 +276,14 @@ def log_cell_observability(event: Any, prefix: str = "vllm_cell") -> None:
     ``wandb.log`` are swallowed at warning level — observability is
     best-effort, and a wandb failure must not break generation.
 
-    Accepts ``Any`` typing for ``event`` to avoid a hard import of
-    ``CellObservability`` at module load time (keeps this CLI module
-    importable without the generation subpackage). Callers must pass a
-    ``CellObservability`` instance (anything with a
-    ``to_wandb_payload(prefix)`` method works at runtime).
+    ``CellObservability`` is imported under ``TYPE_CHECKING`` only; with
+    ``from __future__ import annotations`` the annotation stays a string,
+    so this CLI module keeps importing without eagerly pulling in the
+    generation subpackage.
     """
     if wandb.run is None:
         return
     try:
-        payload = event.to_wandb_payload(prefix=prefix)
-    except Exception as exc:  # noqa: BLE001 — degraded mode
-        logger.warning(f"observability event has no to_wandb_payload: {exc}")
-        return
-    try:
-        wandb.log(payload)
+        wandb.log(event.to_wandb_payload(prefix=prefix))
     except Exception as exc:  # noqa: BLE001 — degraded mode
         logger.warning(f"failed to log cell observability to wandb: {exc}")
