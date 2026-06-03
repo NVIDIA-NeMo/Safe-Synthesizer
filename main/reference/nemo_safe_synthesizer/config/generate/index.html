@@ -2697,6 +2697,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.generate.resolve_structured_generation_schema_method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_structured_generation_schema_method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.generate.structural_tag_backend_error_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;structural_tag_backend_error_message
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9299,6 +9321,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.generate.resolve_structured_generation_schema_method" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;resolve_structured_generation_schema_method
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.config.generate.structural_tag_backend_error_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;structural_tag_backend_error_message
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9528,6 +9572,35 @@
     </table>
 
 
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            resolve_structured_generation_schema_method(schema_method, backend) (nemo_safe_synthesizer.config.generate.resolve_structured_generation_schema_method)" href="#nemo_safe_synthesizer.config.generate.resolve_structured_generation_schema_method">resolve_structured_generation_schema_method</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Resolve <code>auto</code> schema method from the configured structured-output backend.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            structural_tag_backend_error_message(backend) (nemo_safe_synthesizer.config.generate.structural_tag_backend_error_message)" href="#nemo_safe_synthesizer.config.generate.structural_tag_backend_error_message">structural_tag_backend_error_message</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return an error message when <em>backend</em> cannot serve <code>structural_tag</code>.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
 
 
 
@@ -9821,7 +9894,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
   
       pydantic-field
    (nemo_safe_synthesizer.config.generate.GenerateParameters.structured_generation_schema_method)" href="#nemo_safe_synthesizer.config.generate.GenerateParameters.structured_generation_schema_method">structured_generation_schema_method</a></code>
-                (<code><span title="typing.Literal">Literal</span>[&#39;regex&#39;, &#39;json_schema&#39;]</code>)
+                (<code><span title="nemo_safe_synthesizer.config.generate.StructuredGenerationSchemaMethod">StructuredGenerationSchemaMethod</span></code>)
             </li>
             <li>
               <code><a class="autorefs autorefs-internal" title="            structured_generation_use_single_sequence
@@ -9862,6 +9935,12 @@ They affect the quality, diversity, and validity of the generated synthetic reco
             </li>
         </ul>
 
+        <p>Validators:</p>
+        <ul>
+            <li>
+              <code><span title="nemo_safe_synthesizer.config.generate.GenerateParameters._validate_structural_tag_backend">_validate_structural_tag_backend</span></code>
+            </li>
+        </ul>
 
 
 
@@ -10065,7 +10144,7 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
     <div class="doc doc-contents ">
 
-        <p>The method used to generate the schema from your dataset and pass it to the generation backend. 'regex' uses a custom regex construction method that tends to be more comprehensive than 'json_schema' at the cost of speed.</p>
+        <p>The method used to generate the schema from your dataset and pass it to the generation backend. 'auto' picks 'structural_tag' on xgrammar-capable backends and 'regex' otherwise. 'regex' uses a custom regex construction method that tends to be more comprehensive than 'json_schema' at the cost of speed. 'structural_tag' uses XGrammar Structural Tag to compose schema-constrained JSONL output.</p>
 
     </div>
 
@@ -10170,6 +10249,112 @@ They affect the quality, diversity, and validity of the generated synthetic reco
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.config.generate.resolve_structured_generation_schema_method" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">resolve_structured_generation_schema_method</span><span class="p">(</span><span class="n">schema_method</span><span class="p">,</span> <span class="n">backend</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.config.generate.resolve_structured_generation_schema_method" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Resolve <code>auto</code> schema method from the configured structured-output backend.</p>
+<p><code>auto</code> picks <code>structural_tag</code> on xgrammar-capable backends and <code>regex</code>
+elsewhere, preserving legacy behavior for outlines/guidance configs that omit
+an explicit schema method.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/config/generate.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-41">41</a></span>
+<span class="normal"><a href="#__codelineno-0-42">42</a></span>
+<span class="normal"><a href="#__codelineno-0-43">43</a></span>
+<span class="normal"><a href="#__codelineno-0-44">44</a></span>
+<span class="normal"><a href="#__codelineno-0-45">45</a></span>
+<span class="normal"><a href="#__codelineno-0-46">46</a></span>
+<span class="normal"><a href="#__codelineno-0-47">47</a></span>
+<span class="normal"><a href="#__codelineno-0-48">48</a></span>
+<span class="normal"><a href="#__codelineno-0-49">49</a></span>
+<span class="normal"><a href="#__codelineno-0-50">50</a></span>
+<span class="normal"><a href="#__codelineno-0-51">51</a></span>
+<span class="normal"><a href="#__codelineno-0-52">52</a></span>
+<span class="normal"><a href="#__codelineno-0-53">53</a></span>
+<span class="normal"><a href="#__codelineno-0-54">54</a></span>
+<span class="normal"><a href="#__codelineno-0-55">55</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41"></a><span class="k">def</span><span class="w"> </span><span class="nf">resolve_structured_generation_schema_method</span><span class="p">(</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42"></a>    <span class="n">schema_method</span><span class="p">:</span> <span class="n">StructuredGenerationSchemaMethod</span><span class="p">,</span>
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43"></a>    <span class="n">backend</span><span class="p">:</span> <span class="n">StructuredGenerationBackend</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResolvedStructuredGenerationSchemaMethod</span><span class="p">:</span>
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve ``auto`` schema method from the configured structured-output backend.</span>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46"></a>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47"></a><span class="sd">    ``auto`` picks ``structural_tag`` on xgrammar-capable backends and ``regex``</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48"></a><span class="sd">    elsewhere, preserving legacy behavior for outlines/guidance configs that omit</span>
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49"></a><span class="sd">    an explicit schema method.</span>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51"></a>    <span class="k">if</span> <span class="n">schema_method</span> <span class="o">!=</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52"></a>        <span class="k">return</span> <span class="n">schema_method</span>
+</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53"></a>    <span class="k">if</span> <span class="n">backend</span> <span class="ow">in</span> <span class="n">STRUCTURAL_TAG_COMPATIBLE_BACKENDS</span><span class="p">:</span>
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54"></a>        <span class="k">return</span> <span class="s2">&quot;structural_tag&quot;</span>
+</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55"></a>    <span class="k">return</span> <span class="s2">&quot;regex&quot;</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.config.generate.structural_tag_backend_error_message" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">structural_tag_backend_error_message</span><span class="p">(</span><span class="n">backend</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.config.generate.structural_tag_backend_error_message" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return an error message when <em>backend</em> cannot serve <code>structural_tag</code>.</p>
+<p>vLLM only supports XGrammar Structural Tag constraints when the guided
+decoding backend is <code>xgrammar</code> or <code>auto</code> (which selects xgrammar for
+this schema method).</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/config/generate.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-58">58</a></span>
+<span class="normal"><a href="#__codelineno-0-59">59</a></span>
+<span class="normal"><a href="#__codelineno-0-60">60</a></span>
+<span class="normal"><a href="#__codelineno-0-61">61</a></span>
+<span class="normal"><a href="#__codelineno-0-62">62</a></span>
+<span class="normal"><a href="#__codelineno-0-63">63</a></span>
+<span class="normal"><a href="#__codelineno-0-64">64</a></span>
+<span class="normal"><a href="#__codelineno-0-65">65</a></span>
+<span class="normal"><a href="#__codelineno-0-66">66</a></span>
+<span class="normal"><a href="#__codelineno-0-67">67</a></span>
+<span class="normal"><a href="#__codelineno-0-68">68</a></span>
+<span class="normal"><a href="#__codelineno-0-69">69</a></span>
+<span class="normal"><a href="#__codelineno-0-70">70</a></span>
+<span class="normal"><a href="#__codelineno-0-71">71</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58"></a><span class="k">def</span><span class="w"> </span><span class="nf">structural_tag_backend_error_message</span><span class="p">(</span><span class="n">backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return an error message when *backend* cannot serve ``structural_tag``.</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60"></a>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61"></a><span class="sd">    vLLM only supports XGrammar Structural Tag constraints when the guided</span>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62"></a><span class="sd">    decoding backend is ``xgrammar`` or ``auto`` (which selects xgrammar for</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63"></a><span class="sd">    this schema method).</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-65"><a id="__codelineno-0-65" name="__codelineno-0-65"></a>    <span class="k">if</span> <span class="n">backend</span> <span class="ow">in</span> <span class="n">STRUCTURAL_TAG_COMPATIBLE_BACKENDS</span><span class="p">:</span>
+</span><span id="__span-0-66"><a id="__codelineno-0-66" name="__codelineno-0-66"></a>        <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-0-67"><a id="__codelineno-0-67" name="__codelineno-0-67"></a>    <span class="k">return</span> <span class="p">(</span>
+</span><span id="__span-0-68"><a id="__codelineno-0-68" name="__codelineno-0-68"></a>        <span class="s2">&quot;Invalid structured generation configuration: &quot;</span>
+</span><span id="__span-0-69"><a id="__codelineno-0-69" name="__codelineno-0-69"></a>        <span class="s2">&quot;`structured_generation_schema_method=&#39;structural_tag&#39;` requires &quot;</span>
+</span><span id="__span-0-70"><a id="__codelineno-0-70" name="__codelineno-0-70"></a>        <span class="sa">f</span><span class="s2">&quot;`structured_generation_backend` to be &#39;xgrammar&#39; or &#39;auto&#39;, got </span><span class="si">{</span><span class="n">backend</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+</span><span id="__span-0-71"><a id="__codelineno-0-71" name="__codelineno-0-71"></a>    <span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 

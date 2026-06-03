@@ -10966,12 +10966,14 @@ records. Use it when the pipeline struggles to produce valid records.</p>
 <div class="tabbed-block">
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nt">generation</span><span class="p">:</span>
 </span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">use_structured_generation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span><span class="nt">structured_generation_schema_method</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;regex&quot;</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span><span class="nt">structured_generation_schema_method</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;auto&quot;</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
 <ul>
+<li><code>"auto"</code>: picks <code>"structural_tag"</code> when <code>structured_generation_backend</code> is <code>"auto"</code> or <code>"xgrammar"</code>, otherwise <code>"regex"</code>.</li>
+<li><code>"structural_tag"</code>: uses XGrammar Structural Tag to compose schema-constrained JSONL output.</li>
 <li><code>"regex"</code>: constructs a custom regex from the dataset schema. More comprehensive but slower.</li>
 <li><code>"json_schema"</code>: passes a JSON Schema to the backend. Faster, but may miss edge cases.</li>
 </ul>

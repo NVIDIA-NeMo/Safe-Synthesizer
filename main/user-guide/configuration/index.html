@@ -9639,9 +9639,9 @@ for the full API reference.</p>
 </tr>
 <tr>
 <td><code>generation.structured_generation_schema_method</code></td>
-<td><code>"regex"</code></td>
-<td>Schema method (<code>"regex"</code> or <code>"json_schema"</code>)</td>
-<td>Leave at <code>"regex"</code></td>
+<td><code>"auto"</code></td>
+<td>Schema method (<code>"auto"</code>, <code>"structural_tag"</code>, <code>"json_schema"</code>, or <code>"regex"</code>)</td>
+<td>Leave at <code>"auto"</code>; it picks <code>"structural_tag"</code> on xgrammar-capable backends and <code>"regex"</code> otherwise</td>
 </tr>
 <tr>
 <td><code>generation.structured_generation_use_single_sequence</code></td>
