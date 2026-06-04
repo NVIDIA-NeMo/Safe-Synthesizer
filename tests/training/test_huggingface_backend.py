@@ -779,19 +779,21 @@ class TestComputeMetrics:
 
 
 @patch("nemo_safe_synthesizer.training.huggingface_backend.get_device_map")
-@patch("nemo_safe_synthesizer.training.huggingface_backend.get_max_vram")
+@patch("nemo_safe_synthesizer.training.huggingface_backend.get_max_memory_map")
 @patch("nemo_safe_synthesizer.training.huggingface_backend.AutoConfig")
 class TestPrepareConfigIntegration:
-    def test_early_return_when_already_prepared(self, mock_autoconfig, mock_get_max_vram, mock_get_device_map, backend):
+    def test_early_return_when_already_prepared(
+        self, mock_autoconfig, mock_get_max_memory_map, mock_get_device_map, backend
+    ):
         """Test that prepare_config returns early when already prepared."""
         backend.framework_load_params = {"already": "prepared"}
         backend.prepare_config()
 
         mock_autoconfig.from_pretrained.assert_not_called()
 
-    def test_prepares_config_correctly(self, mock_autoconfig, mock_get_max_vram, mock_get_device_map, backend):
+    def test_prepares_config_correctly(self, mock_autoconfig, mock_get_max_memory_map, mock_get_device_map, backend):
         """Test that prepare_config sets framework_load_params correctly."""
-        mock_get_max_vram.return_value = {"cuda:0": "16GB"}
+        mock_get_max_memory_map.return_value = {0: 16 * 1024**3}
         mock_get_device_map.return_value = "auto"
         mock_config = MagicMock()
         mock_autoconfig.from_pretrained.return_value = mock_config
@@ -800,8 +802,26 @@ class TestPrepareConfigIntegration:
 
         backend.prepare_config()
 
+        mock_get_max_memory_map.assert_called_once_with(max_vram_fraction=backend.params.training.max_vram_fraction)
         assert backend.framework_load_params is not None
         assert backend.framework_load_params["pretrained_model_name_or_path"] == "test-model"
+        assert backend.framework_load_params["max_memory"] == {0: 16 * 1024**3}
+
+    def test_prepare_config_max_vram_fraction_kwarg_overrides_config(
+        self, mock_autoconfig, mock_get_max_memory_map, mock_get_device_map, backend
+    ):
+        """Explicit model-load VRAM fraction overrides the configured default."""
+        mock_get_max_memory_map.return_value = {0: 8 * 1024**3}
+        mock_get_device_map.return_value = "auto"
+        mock_autoconfig.from_pretrained.return_value = MagicMock()
+        backend.model_metadata.rope_scaling = None
+
+        backend.prepare_config(max_vram_fraction=0.5)
+
+        mock_get_max_memory_map.assert_called_once_with(max_vram_fraction=0.5)
+        assert backend.framework_load_params is not None
+        assert backend.framework_load_params["max_memory"] == {0: 8 * 1024**3}
+        assert "max_vram_fraction" not in backend.framework_load_params
 
 
 class TestPropagateMaxTokensPerExample:

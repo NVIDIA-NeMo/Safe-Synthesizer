@@ -290,7 +290,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
-| `gpu.vram` | metadata | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
+| `gpu.vram` | metadata | Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits `low_vram` as a warning and `vram_exceeds_capacity` as an error when the estimate is far above capacity |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
 | `training.oversampling` | advisory | Sampling fraction is not extreme (warning only) |
@@ -327,8 +327,11 @@ the best-effort caveat below.
       can be shorter or longer than the original and shift token budgets.
     - Token-budget checks sample rows and top groups -- a long-tail
       outlier outside the sample can still exceed the budget at assembly.
-    - VRAM headroom is a lower bound (LoRA adapters, optimizer state, and
-      activations are not modeled); full training may still OOM.
+    - VRAM headroom includes a coarse bf16 compute activation term
+      (`batch_size` x `metadata.max_seq_length` x width x depth) plus base
+      weights using the configured quantization mode; LoRA adapters,
+      optimizer state, and attention blocks beyond that shape are not modeled
+      tightly. Full training may still OOM.
 
     Treat `--validate` as a quick fail-fast gate, not a full-run guarantee.
 

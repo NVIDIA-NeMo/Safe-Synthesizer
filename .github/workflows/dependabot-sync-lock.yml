@@ -14,7 +14,7 @@
 
 # ---------------------------------------------------------------------------
 # After Dependabot bumps a Python dependency in pyproject.toml, regenerate
-# uv.lock so that `make lock-check` passes in CI.
+# uv.lock so that `mise run lock-check` passes in CI.
 #
 # Uses a PAT (secrets.PAT) to push the updated lockfile so that CI is
 # triggered automatically on the new commit.

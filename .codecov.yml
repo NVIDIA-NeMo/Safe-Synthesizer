@@ -5,8 +5,8 @@
 #
 # Coverage is meant to measure production code, but our coverage upload
 # only runs from the CPU `unit-test` job (.github/workflows/ci-checks.yml)
-# under `make test-ci`, which deselects markers `e2e`, `requires_gpu`,
-# `slow`, and `smoke` (Makefile:195). The whole `tests/smoke/` directory
+# under `mise run test:ci`, which deselects markers `e2e`, `requires_gpu`,
+# `slow`, and `smoke`. The whole `tests/smoke/` directory
 # is auto-marked `smoke` (tests/conftest.py:30-33), so its bodies never
 # execute under the coverage upload and look uncovered to codecov.
 #

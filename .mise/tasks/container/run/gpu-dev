@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Build nss-gpu-dev if needed, then run a command in the GPU dev container. Requires Docker or Podman with GPU support."
+#MISE alias="container-run-gpu-dev"
+#MISE depends=["container:build:gpu-dev"]
+#USAGE arg "[cmd]" var=#true double_dash="optional" help="Command to run in the dev container"
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+container_cmd="$(resolve_container_cmd)"
+hf_cache="$(ensure_hf_cache)"
+repo_root="$(git -C "${MISE_CONFIG_ROOT}" rev-parse --show-toplevel)"
+
+extra_mounts=()
+gpu_flags=()
+cmd=()
+split_words extra_mounts "${CONTAINER_EXTRA_MOUNTS:-}"
+split_words gpu_flags "${CONTAINER_GPU_FLAG:---gpus all}"
+if [[ -n "${usage_cmd:-}" ]]; then
+  split_words cmd "${usage_cmd}"
+elif [[ -n "${CMD:-}" ]]; then
+  split_words cmd "${CMD}"
+else
+  cmd=(mise run test)
+fi
+
+"${container_cmd}" run \
+  --rm \
+  --platform "${CONTAINER_GPU_PLATFORM:-linux/amd64}" \
+  --shm-size=1g \
+  --mount "type=bind,source=${repo_root},target=/workspace" \
+  --mount "type=bind,source=${hf_cache},target=/workspace/.hf_cache" \
+  -e HF_HOME=/workspace/.hf_cache \
+  -e DEBIAN_FRONTEND=noninteractive \
+  "${gpu_flags[@]}" \
+  "${extra_mounts[@]}" \
+  -w /workspace \
+  "${CONTAINER_GPU_IMAGE_DEV:-nss-gpu-dev:latest}" \
+  "${cmd[@]}"

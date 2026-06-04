@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 name: uv-build
-description: "uv package management, dependency groups, PyTorch index handling, hatch build system, and versioning for this repo. Triggers on: uv, uv sync, uv lock, uv add, uv build, dependency, pyproject.toml, extras, cpu, cu128, hatch, wheel, version, publish."
+description: "uv package management, dependency groups, PyTorch index handling, hatch build system, and versioning for this repo. Triggers on: uv, uv sync, uv lock, uv add, uv build, dependency, pyproject.toml, extras, cpu, cu129, hatch, wheel, version, publish."
 license: Apache-2.0
 ---
 
@@ -14,13 +14,14 @@ Package management with uv, extras for CPU/CUDA, hatch build, and dynamic versio
 
 ```bash
 # Full dev environment (tools + Python + CPU deps)
-make bootstrap-tools && make bootstrap-nss cpu
+mise run setup && mise run bootstrap-nss cpu
 
 # Pick a variant:
-make bootstrap-nss dev       # dev tools only (no engine/torch)
-make bootstrap-nss cpu       # + engine + CPU PyTorch
-make bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
-make bootstrap-nss engine    # + engine (no torch)
+mise run bootstrap-nss dev       # dev tools only (no engine/torch)
+mise run bootstrap-nss cpu       # + engine + CPU PyTorch
+mise run bootstrap-nss cu129     # + engine + CUDA 12.9 PyTorch
+mise run bootstrap-nss cuda      # alias for cu129
+mise run bootstrap-nss engine    # + engine (no torch)
 ```
 
 Under the hood: `uv sync --frozen --extra <extra> [--extra engine] --group dev`
@@ -90,10 +91,10 @@ uv run --frozen --no-project --group docs mkdocs build
 
 ```bash
 # Build wheel (version from git tag via uv-dynamic-versioning)
-make build-wheel     # or: uv build --wheel
+mise run build-wheel     # or: uv build --wheel
 
 # Publish to NVIDIA Artifactory
-make publish-internal
+mise run publish:internal
 ```
 
 Version source: `uv-dynamic-versioning` reads git tags (PEP 440 style). Fallback `0.0.0` for shallow clones.

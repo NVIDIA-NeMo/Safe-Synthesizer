@@ -100,13 +100,27 @@ runs:
       with:
         python-version-file: ".python-version"
 
+    - name: Export Python version for uv
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.python-version }}" ]; then
+          python_version="${{ inputs.python-version }}"
+        else
+          python_version="$(tr -d '[:space:]' < .python-version)"
+        fi
+        echo "PYTHON_VERSION=${python_version}" >> "$GITHUB_ENV"
+
     - name: Install mise and dev tools (uv, ruff, ty, etc.)
       if: inputs.bootstrap-tools == 'true'
       shell: bash
       run: |
-        make setup
+        MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
+          bash tools/install-mise.sh
+        export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH"
+        MISE_YES=1 mise trust
+        MISE_YES=1 mise run setup
 
     - name: Install uv (fallback when mise is skipped)
       if: inputs.bootstrap-tools != 'true'

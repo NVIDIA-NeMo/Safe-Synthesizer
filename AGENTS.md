@@ -19,7 +19,7 @@ See [STYLE_GUIDE.md](STYLE_GUIDE.md) for detailed code style conventions (Python
 
 Use `uv` for everything -- never `pip` or raw `python`. Python 3.11–3.13 with modern syntax (`X | Y`, `list[str]`, `Self`). Python 3.14+ is not supported.
 
-Common commands: `make test` (unit tests), `make format` (auto-fix formatting + lint + copyright), `make check` (all read-only CI checks), `make typecheck` (ty only). Always use Make targets or the wrapper scripts in `tools/` instead of running `ruff` or `ty` directly. Use `uv run` for Python execution. When in doubt, read the source (`make help`, `pytest --markers`).
+Common commands: `mise run test` (unit tests), `mise run format` (auto-fix formatting + lint + copyright), `mise run check` (read-only local quality checks), `mise run validate` (pre-PR quality, lock, and CI unit checks), `mise run typecheck` (ty only). Always use mise tasks or the wrapper scripts in `tools/` instead of running `ruff` or `ty` directly. Use `uv run` for Python execution. When in doubt, inspect `mise tasks` and `pytest --markers`.
 
 The canonical `uv sync` command for a full GPU/dev environment is:
 

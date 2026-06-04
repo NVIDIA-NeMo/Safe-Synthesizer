@@ -267,7 +267,7 @@ Common bind-mount targets when running in Docker:
 | `NSS_LOG_FORMAT` | `json` | Structured logs in non-TTY containers |
 | `NVIDIA_VISIBLE_DEVICES` | `0` or `all` | GPU selection inside the container |
 
-See [Docker](docker.md) for mount paths, secrets, GPU flags, and Makefile
+See [Docker](docker.md) for mount paths, secrets, GPU flags, and mise container tasks.
 shortcuts.
 
 ---

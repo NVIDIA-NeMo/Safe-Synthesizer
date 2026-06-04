@@ -13,10 +13,10 @@
 
 Ensure that the following pass:
 
-- [ ] `make format && make check` or via prek validation.
-- [ ] `make test` passes locally
-- [ ] `make test-e2e` passes locally
-- [ ] `make test-ci-container` passes locally (recommended)
+- [ ] `mise run format && mise run check` or via prek validation.
+- [ ] `mise run test` passes locally
+- [ ] `mise run test:e2e` passes locally
+- [ ] `mise run test:ci-container` passes locally (recommended)
 - [ ] GPU CI status check passes -- comment `/sync` on this PR to trigger a run (auto-triggers on ready-for-review)
 
 ## Pre-Merge Checklist

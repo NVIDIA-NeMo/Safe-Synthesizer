@@ -10,7 +10,7 @@ Dockerfiles for running and testing Safe-Synthesizer in containers.
 | File | Base | Purpose |
 |------|------|---------|
 | `Dockerfile.cuda` | `nvidia/cuda:12.8.1-runtime-ubuntu22.04` | GPU runtime and dev images for training, generation, and evaluation |
-| `Dockerfile.test_ci` | `python:3.11-slim` | CPU-only test image (`make test-ci-container`) |
+| `Dockerfile.test_ci` | `python:3.11.13-slim` | CPU-only test image (`mise run test:ci-container`) |
 | `entrypoint.sh` | -- | Wrapper entrypoint for the runtime image (mount/GPU checks) |
 
 ## CUDA Image
@@ -18,14 +18,14 @@ Dockerfiles for running and testing Safe-Synthesizer in containers.
 Three build stages, selected via `--target`:
 
 - `runtime` -- minimal image wrapping the `safe-synthesizer` CLI via `tini` + `entrypoint.sh`. Runs as non-root `appuser`. The entrypoint detects common mistakes (empty workspace, missing HF cache, no HF token, no GPU, low `/dev/shm`) and prints hints before delegating to `safe-synthesizer`.
-- `dev` -- extends runtime with git, make, uv, pytest, and the full dev dependency group. Runs as root for flexibility.
+- `dev` -- extends runtime with git, uv, pytest, and the full dev dependency group. Runs as root for flexibility.
 - `deps` -- intermediate stage (not a useful target on its own).
 
 ### Quick Start
 
 ```bash
 # Build the runtime image
-make container-build-gpu
+mise run container:build:gpu
 
 # Run with your data -- mount your dataset and HF model cache
 docker run --gpus all --shm-size=1g \
@@ -61,8 +61,8 @@ docker run -it --gpus all --shm-size=1g \
   nss-gpu:latest
 
 # Dev image with test tooling
-make container-build-gpu-dev
-make container-run-gpu-dev CMD="make test"
+mise run container:build:gpu-dev
+CMD="mise run test" mise run container:run:gpu-dev
 ```
 
 Key flags:
@@ -97,17 +97,17 @@ docker build -f containers/Dockerfile.cuda \
   --target runtime -t nss-gpu:custom .
 ```
 
-### Makefile Targets
+### Mise Tasks
 
-| Target | Description |
+| Task | Description |
 |--------|-------------|
-| `container-build-gpu` | Build the runtime image |
-| `container-build-gpu-dev` | Build the dev image |
-| `container-build-gpu-multiarch` | Build multi-arch manifest (requires `CONTAINER_GPU_REGISTRY`) |
-| `container-run-gpu` | Run a command in the runtime container |
-| `container-run-gpu-dev` | Run a command in the dev container |
+| `container:build:gpu` | Build the runtime image |
+| `container:build:gpu-dev` | Build the dev image |
+| `container:build:gpu-multiarch` | Build multi-arch manifest (requires `CONTAINER_GPU_REGISTRY`) |
+| `container:run:gpu` | Run a command in the runtime container |
+| `container:run:gpu-dev` | Run a command in the dev container |
 
-See `make help` for the full target list with usage hints.
+See `mise tasks` for the full task list with usage hints.
 
 ## Multi-Architecture
 
@@ -118,7 +118,7 @@ The CUDA image supports `linux/amd64` and `linux/arm64` (Grace/Blackwell).
 Override `CONTAINER_GPU_PLATFORM` to build for a specific architecture:
 
 ```bash
-make container-build-gpu CONTAINER_GPU_PLATFORM=linux/arm64
+CONTAINER_GPU_PLATFORM=linux/arm64 mise run container:build:gpu
 ```
 
 ### Multi-arch manifest
@@ -127,7 +127,7 @@ Building a multi-platform manifest requires `docker buildx` and a registry
 to push to -- `--load` only works for single-platform images:
 
 ```bash
-make container-build-gpu-multiarch CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo
+CONTAINER_GPU_REGISTRY=ghcr.io/nvidia-nemo mise run container:build:gpu-multiarch
 ```
 
 This pushes a manifest containing both `amd64` and `arm64` images to the
@@ -156,23 +156,23 @@ docker build -f containers/Dockerfile.cuda \
 `Dockerfile.test_ci` provides a CPU-only image for running unit tests locally
 or in CI without a GPU. It uses a two-stage build: `setup` (system packages +
 mise-managed tools) and `install-deps` (Python environment via
-`make bootstrap-nss cpu`).
+`mise run bootstrap-nss cpu`).
 
 ### Quick Start
 
 ```bash
 # Run CI unit tests in a container
-make test-ci-container
+mise run test:ci-container
 
 # Verify mise-managed tools install correctly (fast -- setup stage only)
-make test-tool-install
+mise run test:tool-install
 ```
 
-### Makefile Targets
+### CPU Test Mise Tasks
 
-| Target | Description |
+| Task | Description |
 |--------|-------------|
-| `container-build-test` | Build the full CPU test image (both stages) |
-| `container-build-test-setup` | Build only the setup stage (tools, no Python deps) |
-| `test-ci-container` | Build and run CI unit tests |
-| `test-tool-install` | Verify mise-managed tools install correctly (setup stage only) |
+| `container:build:test` | Build the full CPU test image (both stages) |
+| `container:build:test-setup` | Build only the setup stage (tools, no Python deps) |
+| `test:ci-container` | Build and run CI unit tests |
+| `test:tool-install` | Verify mise-managed tools install correctly (setup stage only) |

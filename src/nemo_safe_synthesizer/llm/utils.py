@@ -428,7 +428,15 @@ def gpu_stats() -> None:
     logger.info(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
 
 
-def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
+@dataclass(frozen=True, slots=True)
+class _VRAMAllocation:
+    """Shared GPU memory calculation for runtime loaders."""
+
+    utilization: float
+    memory_bytes: int
+
+
+def _get_vram_allocations(max_vram_fraction: float | None = None) -> dict[int, _VRAMAllocation]:
     """Calculate maximum memory allocation for each available GPU.
 
     Reserves a 2 GiB safety buffer on each device, then applies
@@ -439,27 +447,39 @@ def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
             Defaults to ``0.8`` (80 %).
 
     Returns:
-        Mapping of CUDA device index to the usable memory fraction.
+        Mapping of CUDA device index to utilization and byte limit.
     """
     import torch
 
     if max_vram_fraction is None:
         max_vram_fraction = 0.8
-    max_memory = {}
+    allocations = {}
 
     if torch.cuda.is_available():
         num_gpus = torch.cuda.device_count()
         for i in range(num_gpus):
             free, total = torch.cuda.mem_get_info(device=i)
-            safe_free = free - (2 * 1024**3)
-            gpu_memory_utilization = min(max_vram_fraction, safe_free / total)
-            memory_gib = gpu_memory_utilization * total / (1024**3)
-            max_memory[i] = gpu_memory_utilization
+            safe_free = max(free - (2 * 1024**3), 0)
+            gpu_memory_utilization = min(max_vram_fraction, safe_free / total) if total > 0 else 0.0
+            memory_bytes = int(gpu_memory_utilization * total)
+            memory_gib = memory_bytes / (1024**3)
+            allocations[i] = _VRAMAllocation(utilization=gpu_memory_utilization, memory_bytes=memory_bytes)
             logger.info(
-                f"GPU {i}: Will allocate {memory_gib:.2f}GiB ({max_vram_fraction * 100}% of {total / (1024**3):.2f}GiB)"
+                f"GPU {i}: Will allocate {memory_gib:.2f}GiB "
+                f"({gpu_memory_utilization * 100:.1f}% of {total / (1024**3):.2f}GiB)"
             )
 
-    return max_memory
+    return allocations
+
+
+def get_max_vram(max_vram_fraction: float | None = None) -> dict[int, float]:
+    """Return vLLM-style GPU utilization fractions for each available GPU."""
+    return {device: allocation.utilization for device, allocation in _get_vram_allocations(max_vram_fraction).items()}
+
+
+def get_max_memory_map(max_vram_fraction: float | None = None) -> dict[int, int]:
+    """Return Hugging Face ``max_memory`` byte limits for each available GPU."""
+    return {device: allocation.memory_bytes for device, allocation in _get_vram_allocations(max_vram_fraction).items()}
 
 
 def add_bos_eos_tokens_to_tokenizer(tokenizer: PreTrainedTokenizer) -> PreTrainedTokenizer:
@@ -583,11 +603,15 @@ def load_fast_tokenizer(model_name_or_path: Path | str, **kwargs: Any) -> PreTra
 
 def get_device_name() -> str:
     """Get the name of the current device (first index). Returns 'undefined' if the device is not available."""
+    # torch may be absent (CPU-only install); CUDA/driver problems surface as
+    # RuntimeError/AssertionError from get_device_properties. Anything else is
+    # unexpected and should propagate rather than masquerade as 'undefined'.
     try:
         import torch
 
         return torch.cuda.get_device_properties(0).name
-    except Exception:
+    except (ImportError, RuntimeError, AssertionError):
+        logger.debug("Could not resolve CUDA device name; reporting 'undefined'.", exc_info=True)
         return "undefined"
 
 

@@ -99,7 +99,7 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 === "Docker (Linux with NVIDIA GPU)"
 
     ```bash
-    make container-build-gpu
+    mise run container:build:gpu
 
     docker run --gpus all --shm-size=1g \
       -v $(pwd):/workspace \

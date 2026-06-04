@@ -254,8 +254,8 @@ for details on `HF_HOME`, `HF_HUB_OFFLINE`, and `VLLM_CACHE_ROOT`.
 If pulling a pre-built image is not available, build locally:
 
 ```bash
-make container-build-gpu           # runtime image
-make container-build-gpu-dev       # dev image with test tooling
+mise run container:build:gpu       # runtime image
+mise run container:build:gpu-dev   # dev image with test tooling
 ```
 
 Override build arguments for different CUDA or Python versions:
@@ -295,30 +295,30 @@ appuser@container:/workspace$ safe-synthesizer config validate --config /workspa
 
 ---
 
-## Makefile Shortcuts
+## Mise Container Tasks
 
-For developers with the repo checked out, the Makefile provides convenience
-targets that handle GPU flags, HF cache mounts, and workspace bind mounts:
+For developers with the repo checked out, mise provides convenience tasks
+that handle GPU flags, HF cache mounts, and workspace bind mounts:
 
 | Command | What it does |
 |---------|-------------|
-| `make container-build-gpu` | Build the runtime image |
-| `make container-run-gpu CMD="run --config ..."` | Run a pipeline command |
-| `make container-build-gpu-dev` | Build the dev image |
-| `make container-run-gpu-dev CMD="make test"` | Run a command in the dev container |
+| `mise run container:build:gpu` | Build the runtime image |
+| `CMD="run --config ..." mise run container:run:gpu` | Run a pipeline command |
+| `mise run container:build:gpu-dev` | Build the dev image |
+| `CMD="mise run test" mise run container:run:gpu-dev` | Run a command in the dev container |
 
 Override variables as needed:
 
 ```bash
-make container-run-gpu CONTAINER_HF_CACHE=/shared/hf_cache CMD="run --data-source /workspace/data.csv"
+CONTAINER_HF_CACHE=/shared/hf_cache CMD="run --data-source /workspace/data.csv" mise run container:run:gpu
 ```
 
 Mount data from outside the repo tree with `CONTAINER_EXTRA_MOUNTS`:
 
 ```bash
-make container-run-gpu \
-  CONTAINER_EXTRA_MOUNTS="-v /data/sensitive:/workspace/data" \
-  CMD="run --data-source /workspace/data/customers.csv"
+CONTAINER_EXTRA_MOUNTS="-v /data/sensitive:/workspace/data" \
+  CMD="run --data-source /workspace/data/customers.csv" \
+  mise run container:run:gpu
 ```
 
 ---

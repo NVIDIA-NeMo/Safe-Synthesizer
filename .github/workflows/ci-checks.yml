@@ -86,13 +86,13 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Bootstrap
-        run: make bootstrap-nss dev
+        run: mise run bootstrap-nss dev
 
       - name: Check formatting, linting, and copyright headers
-        run: make format-check
+        run: mise run format-check
 
       - name: Check uv.lock is up to date
-        run: make lock-check
+        run: mise run lock-check
 
   typecheck:
     name: Typecheck
@@ -114,10 +114,10 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Bootstrap
-        run: make bootstrap-nss cpu
+        run: mise run bootstrap-nss cpu
 
       - name: Run ty type checks
-        run: make typecheck
+        run: mise run typecheck
 
   unit-test:
     name: Unit Tests
@@ -151,14 +151,15 @@ jobs:
         id: setup
         uses: ./.github/actions/setup-python-env
         with:
+          python-version: ${{ matrix.python-version }}
           checkout: "false"
           bootstrap-tools: "true"
 
       - name: Bootstrap
-        run: make bootstrap-nss cpu
+        run: mise run bootstrap-nss cpu
 
       - name: Run unit tests with coverage
-        run: make test-ci
+        run: mise run test:ci
 
       - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -210,8 +211,8 @@ jobs:
 
       - name: Run CPU smoke tests
         run: |
-          make bootstrap-nss cpu
-          make test-smoke
+          mise run bootstrap-nss cpu
+          mise run test:smoke
 
 
   # ---------------------------------------------------------------------------

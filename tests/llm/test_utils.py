@@ -10,6 +10,8 @@ import pytest
 
 from nemo_safe_synthesizer.llm.utils import (
     ModelRef,
+    get_max_memory_map,
+    get_max_vram,
     get_quantization_config,
     load_fast_tokenizer,
     trust_remote_code_for_model,
@@ -67,6 +69,17 @@ def test_trust_remote_code_for_model_requires_configured_cache_root(tmp_path: Pa
     spoofed_snapshot.mkdir(parents=True)
 
     assert trust_remote_code_for_model(spoofed_snapshot, cache_root=cache_root) is False
+
+
+def test_vram_helpers_return_fraction_and_hf_memory_map() -> None:
+    gib = 1024**3
+    with (
+        patch("torch.cuda.is_available", return_value=True),
+        patch("torch.cuda.device_count", return_value=1),
+        patch("torch.cuda.mem_get_info", return_value=(10 * gib, 16 * gib)),
+    ):
+        assert get_max_vram(max_vram_fraction=0.8) == {0: 0.5}
+        assert get_max_memory_map(max_vram_fraction=0.8) == {0: 8 * gib}
 
 
 def test_model_ref_trusts_snapshot_under_configured_cache_root(tmp_path: Path, hf_cached_snapshot_factory) -> None:
