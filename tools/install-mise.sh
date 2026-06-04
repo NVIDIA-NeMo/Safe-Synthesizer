@@ -134,6 +134,25 @@ unsigned_install_or_fail() {
 
 expected="${MISE_VERSION#v}"
 
+# version_ge A B -> true when A >= B for dotted numeric versions (e.g.
+# 2026.5.15). Hand-rolled rather than `sort -V`: version sort is GNU
+# coreutils only, and the BSD `sort` shipped with macOS rejects -V, which
+# would make every comparison fail and reject an otherwise-valid mise.
+# Missing components are treated as 0 (1.2 == 1.2.0); 10# forces base-10 so
+# zero-padded fields like "05" aren't read as octal.
+version_ge() {
+    local IFS=.
+    local -a a=($1) b=($2)
+    local i n=${#a[@]}
+    ((${#b[@]} > n)) && n=${#b[@]}
+    for ((i = 0; i < n; i++)); do
+        local x="${a[i]:-0}" y="${b[i]:-0}"
+        ((10#$x > 10#$y)) && return 0
+        ((10#$x < 10#$y)) && return 1
+    done
+    return 0
+}
+
 # mise --version prints "<semver> <target> (<date>)" to stdout plus "available
 # update" nags to stderr, so take only the first field on stdout.
 #
@@ -157,12 +176,14 @@ if command -v mise >/dev/null 2>&1; then
         echo "       or remove ${mise_path} and rerun 'make setup'" >&2
         exit 1
     fi
-    if [[ "$installed" == "$expected" ]]; then
-        echo "mise ${installed} already installed"
+    # `.mise.toml` pins min_version, so any version >= the pinned one is
+    # acceptable; only abort when the installed binary is older.
+    if version_ge "$installed" "$expected"; then
+        echo "mise ${installed} already installed (satisfies min ${expected})"
         exit 0
     fi
-    echo "ERROR: found mise ${installed} on PATH but this repo pins ${MISE_VERSION}" >&2
-    echo "       run 'mise self-update ${expected}' or uninstall the current mise and rerun 'make setup'" >&2
+    echo "ERROR: found mise ${installed} on PATH but this repo requires >= ${MISE_VERSION}" >&2
+    echo "       run 'mise self-update' or uninstall the current mise and rerun 'make setup'" >&2
     exit 1
 fi
 
