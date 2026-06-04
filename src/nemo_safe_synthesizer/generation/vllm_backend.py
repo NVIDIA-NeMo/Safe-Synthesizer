@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -24,7 +25,7 @@ from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 
 from .. import utils
 from ..cli.artifact_structure import Workdir
-from ..cli.wandb_setup import log_cell_observability
+from ..cli.wandb_setup import log_generation_observability
 from ..config import SafeSynthesizerParameters
 from ..config.generate import (
     resolve_structured_generation_schema_method,
@@ -38,7 +39,7 @@ from ..generation.processors import Processor, TabularDataProcessor, create_proc
 from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
 from ..generation.vllm_observability import (
-    CellObservability,
+    GenerationObservability,
     NvmlPeakSampler,
     probe_engine_runtime_config,
     read_loadavg,
@@ -305,7 +306,7 @@ class VllmBackend(GeneratorBackend):
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by
-        # ``generate()`` to populate the ``vllm.cell.complete`` observability
+        # ``generate()`` to populate the ``vllm.generation.complete`` observability
         # event; used by the benchmark harness (and any other intent-comparing
         # caller) to detect "flag didn't engage" mismatches against what was
         # asked for.
@@ -652,7 +653,7 @@ class VllmBackend(GeneratorBackend):
         through ``ignore_eos=False``.
 
         Wrapped in an :class:`NvmlPeakSampler` context so a
-        ``vllm.cell.complete`` observability event is emitted at end of
+        ``vllm.generation.complete`` observability event is emitted at end of
         the call carrying peak device VRAM, host loadavg pre/post, vLLM's
         kv_cache_usage_perc / prefix_cache_hit_rate / spec_accept_rate
         (read at end-of-generation), and the engine's effective runtime
@@ -676,7 +677,7 @@ class VllmBackend(GeneratorBackend):
             # by ``with`` exit, so ``sampler.peak_gb`` is the final peak, and
             # the event carries whatever measurements were captured up to a
             # failure point.
-            self._emit_cell_observability(sampler, loadavg_pre)
+            self._emit_generation_observability(sampler, loadavg_pre)
 
         return self.gen_results
 
@@ -762,20 +763,20 @@ class VllmBackend(GeneratorBackend):
             elapsed_time=self.elapsed_time,
         )
 
-    def _emit_cell_observability(
+    def _emit_generation_observability(
         self, sampler: NvmlPeakSampler, loadavg_pre: tuple[float, float, float] | None
     ) -> None:
-        """Assemble and route the ``vllm.cell.complete`` observability event.
+        """Assemble and route the ``vllm.generation.complete`` observability event.
 
         Reads end-of-generation vLLM metrics plus the NVML peak captured by
-        ``sampler``, builds a :class:`CellObservability`, and routes it to
+        ``sampler``, builds a :class:`GenerationObservability`, and routes it to
         structured logs and (when a run is active) wandb. Best-effort: any
         failure here is logged and swallowed so observability never masks a
         generation error propagating through :meth:`generate`'s ``finally``.
         """
         try:
             vllm_metrics = read_vllm_runtime_metrics(self.llm)
-            cell_event = CellObservability(
+            gen_event = GenerationObservability(
                 peak_vram_gb=sampler.peak_gb,
                 kv_cache_usage_perc=vllm_metrics["kv_cache_usage_perc"],
                 prefix_cache_hit_rate=vllm_metrics["prefix_cache_hit_rate"],
@@ -790,13 +791,16 @@ class VllmBackend(GeneratorBackend):
                 # sets the bit when a knob silently fails to engage.
                 flag_did_not_engage=False,
             )
-            logger.runtime.info("vllm.cell.complete", extra={"ctx": cell_event.model_dump()})
+            logger.runtime.info("vllm.generation.complete", extra={"ctx": gen_event.model_dump()})
             # Mirror to the active wandb run when one exists (no-op when
             # ``WANDB_MODE=disabled`` or ``initialize_wandb_run`` was never
             # called). Best-effort; wandb failures are swallowed downstream.
-            log_cell_observability(cell_event)
+            log_generation_observability(gen_event)
         except Exception as exc:  # noqa: BLE001 — observability must never break generation
-            logger.runtime.warning(
-                "vllm.cell.observability.emit_failed",
-                extra={"ctx": {"error": str(exc)}},
-            )
+            # Guard the warning itself: a faulty logger handler must not turn a
+            # swallowed observability failure into a generation failure.
+            with contextlib.suppress(Exception):
+                logger.runtime.warning(
+                    "vllm.generation.observability.emit_failed",
+                    extra={"ctx": {"error": str(exc)}},
+                )

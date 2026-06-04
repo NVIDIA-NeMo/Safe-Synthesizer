@@ -22,7 +22,7 @@ from ..observability import get_logger
 from .artifact_structure import Workdir
 
 if TYPE_CHECKING:
-    from ..generation.vllm_observability import CellObservability
+    from ..generation.vllm_observability import GenerationObservability
 
 logger = get_logger(__name__)
 
@@ -268,15 +268,15 @@ def initialize_wandb_run(
         logger.info(f"Wandb run url: {wandb.run.url if wandb.run else 'None'}")
 
 
-def log_cell_observability(event: CellObservability, prefix: str = "vllm_cell") -> None:
-    """Log a ``CellObservability`` event to the currently active wandb run.
+def log_generation_observability(event: GenerationObservability, prefix: str = "vllm_gen") -> None:
+    """Log a ``GenerationObservability`` event to the currently active wandb run.
 
     No-op when no wandb run is active (``WANDB_MODE=disabled`` or the
     pipeline hasn't called :func:`initialize_wandb_run`). Errors during
     ``wandb.log`` are swallowed at warning level — observability is
     best-effort, and a wandb failure must not break generation.
 
-    ``CellObservability`` is imported under ``TYPE_CHECKING`` only; with
+    ``GenerationObservability`` is imported under ``TYPE_CHECKING`` only; with
     ``from __future__ import annotations`` the annotation stays a string,
     so this CLI module keeps importing without eagerly pulling in the
     generation subpackage.
@@ -286,4 +286,4 @@ def log_cell_observability(event: CellObservability, prefix: str = "vllm_cell") 
     try:
         wandb.log(event.to_wandb_payload(prefix=prefix))
     except Exception as exc:  # noqa: BLE001 — degraded mode
-        logger.warning(f"failed to log cell observability to wandb: {exc}")
+        logger.warning(f"failed to log generation observability to wandb: {exc}")

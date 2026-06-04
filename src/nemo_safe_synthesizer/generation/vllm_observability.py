@@ -3,7 +3,7 @@
 
 """vLLM observability primitives for production + benchmark.
 
-Schema-frozen cell-observability events emitted by ``VllmBackend.generate()``
+Schema-frozen generation-observability events emitted by ``VllmBackend.generate()``
 and consumed by downstream observability surfaces (structured logs, wandb,
 the benchmark harness's per-cell aggregator).
 
@@ -24,25 +24,30 @@ Four primitives, all degraded-mode by design:
   speculative-decoding acceptance rate. Returns a dict with stable keys
   regardless of which metrics the engine actually exposed.
 
-Plus the :class:`CellObservability` pydantic model — the schema for the
-``vllm.cell.complete`` structured event emitted at the end of each
+Plus the :class:`GenerationObservability` pydantic model — the schema for the
+``vllm.generation.complete`` structured event emitted at the end of each
 generation invocation. Forward-compatible: new optional fields can be
 added without breaking existing consumers because the model uses
 ``extra="forbid"`` (so producers are forced to update when they add new
 fields) but every existing field has a default of ``None`` or empty.
 
 References (design):
-- HuggingFace train_memory blog covers in-process torch profiling, which
-  is the gap NVML fills here (out-of-process VRAM visibility).
+- HuggingFace ``train_memory`` blog ("Visualize and understand GPU memory
+  in PyTorch") covers in-process torch profiling, which is the gap NVML
+  fills here (out-of-process VRAM visibility):
+  https://huggingface.co/blog/train_memory
 - spark-dashboard (Rust) demonstrates the NVML + ``/metrics`` pattern at
   ~1s polling cadence — the precedent for combining NVML's driver-level
-  reading with vLLM's Prometheus surface.
+  reading with vLLM's Prometheus surface:
+  https://github.com/niklasfrick/spark-dashboard
 - vLLM's metrics design doc enumerates the gauges/counters
-  :func:`read_vllm_runtime_metrics` reads.
+  :func:`read_vllm_runtime_metrics` reads:
+  https://github.com/vllm-project/vllm/blob/main/docs/design/metrics.md
 """
 
 from __future__ import annotations
 
+import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -58,13 +63,20 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+_LOADAVG_HORIZON_LABELS: tuple[str, str, str] = ("1m", "5m", "15m")
+"""Labels for unpacked ``/proc/loadavg`` triples on the wandb side.
+
+Used by :meth:`GenerationObservability.to_wandb_payload`.
+"""
+
+
 # ---------------------------------------------------------------------------
-# Schema for the cell-observability event
+# Schema for the generation-observability event
 # ---------------------------------------------------------------------------
 
 
-class CellObservability(BaseModel):
-    """One ``vllm.cell.complete`` event payload.
+class GenerationObservability(BaseModel):
+    """One ``vllm.generation.complete`` event payload.
 
     Emitted by ``VllmBackend.generate()`` at end of each generation
     invocation. Consumed by:
@@ -79,17 +91,17 @@ class CellObservability(BaseModel):
     Every measurement field is optional; producers should populate what
     they can capture and leave the rest at the default. Wandb drops
     ``None`` values silently which is the right behavior for "this
-    metric wasn't reachable on this cell".
+    metric wasn't reachable on this generation".
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    # GPU memory — NVML-sampled peak across the whole cell.
+    # GPU memory — NVML-sampled peak across the whole generation.
     peak_vram_gb: float | None = Field(
         default=None,
         description=(
             "Peak device-wide VRAM usage in GiB, sampled by NVML "
-            "(``pynvml.nvmlDeviceGetMemoryInfo``) across the whole cell. "
+            "(``pynvml.nvmlDeviceGetMemoryInfo``) across the whole generation. "
             "``None`` when NVML is unavailable. Device-wide reading; on a "
             "shared GPU it includes other processes."
         ),
@@ -122,7 +134,7 @@ class CellObservability(BaseModel):
         description=(
             "Derived from ``vllm:spec_decode_num_accepted_tokens / "
             "num_draft_tokens`` at end of generation. ``None`` when "
-            "speculative decoding wasn't enabled on this cell (counters "
+            "speculative decoding wasn't enabled on this generation (counters "
             "absent) or no drafts were proposed (denominator==0)."
         ),
     )
@@ -132,7 +144,7 @@ class CellObservability(BaseModel):
         default=None,
         description=(
             "Host ``/proc/loadavg`` snapshot captured at the start of "
-            "this cell (1-min, 5-min, 15-min averages). ``None`` when "
+            "this generation (1-min, 5-min, 15-min averages). ``None`` when "
             "``/proc/loadavg`` is unavailable (non-Linux)."
         ),
     )
@@ -140,8 +152,8 @@ class CellObservability(BaseModel):
         default=None,
         description=(
             "Host ``/proc/loadavg`` snapshot captured at the end of this "
-            "cell. Drift from ``loadavg_pre`` signals load change during "
-            "the cell."
+            "generation. Drift from ``loadavg_pre`` signals load change during "
+            "the generation."
         ),
     )
 
@@ -166,7 +178,7 @@ class CellObservability(BaseModel):
         ),
     )
 
-    def to_wandb_payload(self, prefix: str = "vllm_cell") -> dict[str, Any]:
+    def to_wandb_payload(self, prefix: str = "vllm_gen") -> dict[str, Any]:
         """Flatten this event into a wandb-friendly ``wandb.log(...)`` dict.
 
         Wandb plots scalars cleanly but renders tuples/dicts as opaque
@@ -180,7 +192,7 @@ class CellObservability(BaseModel):
           scalars (mirrors the existing flattening pattern in the
           benchmark harness).
 
-        All keys are namespaced under ``prefix`` so production cell
+        All keys are namespaced under ``prefix`` so production generation
         events don't collide with other wandb metrics in the same run.
         """
         payload: dict[str, Any] = {}
@@ -201,20 +213,37 @@ class CellObservability(BaseModel):
             for label, value in zip(_LOADAVG_HORIZON_LABELS, tup, strict=False):
                 payload[f"{prefix}/loadavg_{side}_{label}"] = value
         for key, value in self.engine_runtime_config.items():
-            payload[f"{prefix}/engine_runtime/{key}"] = value
+            if value is not None:
+                payload[f"{prefix}/engine_runtime/{key}"] = value
         return payload
-
-
-_LOADAVG_HORIZON_LABELS: tuple[str, str, str] = ("1m", "5m", "15m")
-"""Labels for unpacked ``/proc/loadavg`` triples on the wandb side.
-
-Used by :meth:`CellObservability.to_wandb_payload`.
-"""
 
 
 # ---------------------------------------------------------------------------
 # NVML peak sampler
 # ---------------------------------------------------------------------------
+
+
+def _default_nvml_device_index() -> int:
+    """Physical NVML index of the first CUDA-visible device.
+
+    NVML's :func:`nvmlDeviceGetHandleByIndex` enumerates *physical* GPUs and
+    ignores ``CUDA_VISIBLE_DEVICES``, whereas vLLM (single-GPU here) runs on
+    CUDA logical device 0 — which the env var may remap to a different
+    physical GPU. Returns the physical index of the first visible device so
+    the sampler tracks the GPU vLLM actually uses.
+
+    Falls back to ``0`` when ``CUDA_VISIBLE_DEVICES`` is unset, empty, or not
+    a plain integer list (e.g. ``GPU-<uuid>`` / ``MIG-...`` specs this does
+    not decode) — degraded mode, consistent with the rest of this module.
+    """
+    raw = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if not raw:
+        return 0
+    first = raw.split(",")[0].strip()
+    try:
+        return int(first)
+    except ValueError:
+        return 0
 
 
 class NvmlPeakSampler:
@@ -232,10 +261,15 @@ class NvmlPeakSampler:
     Reports device-wide VRAM — on a dedicated host that's the same as
     the vLLM worker's allocation; on a shared GPU it would include
     other process allocations (filter via PID externally if needed).
+
+    ``device_index`` defaults to the first ``CUDA_VISIBLE_DEVICES`` entry
+    (see :func:`_default_nvml_device_index`) so the sampler follows vLLM's
+    GPU on multi-GPU hosts instead of always reading physical GPU 0. Pass an
+    explicit index to override.
     """
 
-    def __init__(self, device_index: int = 0, interval_seconds: float = 0.25) -> None:
-        self._device_index = device_index
+    def __init__(self, device_index: int | None = None, interval_seconds: float = 0.25) -> None:
+        self._device_index = _default_nvml_device_index() if device_index is None else device_index
         self._interval = interval_seconds
         self._stop = threading.Event()
         self._peak_bytes = 0
@@ -269,8 +303,8 @@ class NvmlPeakSampler:
         if self._pynvml is not None:
             try:
                 self._pynvml.nvmlShutdown()
-            except self._pynvml.NVMLError:
-                pass
+            except self._pynvml.NVMLError:  # shutdown is best-effort; init already succeeded
+                logger.debug("nvml-sampler: nvmlShutdown failed", exc_info=True)
 
     @property
     def peak_gb(self) -> float | None:
@@ -306,7 +340,7 @@ def read_loadavg() -> tuple[float, float, float] | None:
     Linux-only. Cheap (one syscall). Safe to call from any process —
     the read is host-scoped, not process-scoped. Designed to bracket a
     generation call: caller reads pre + post, the pair is informative
-    about whether host load drifted during the cell.
+    about whether host load drifted during the generation.
     """
     try:
         with open("/proc/loadavg", encoding="utf-8") as f:
@@ -408,6 +442,7 @@ def probe_engine_runtime_config(llm: object) -> dict[str, Any]:
     try:
         vcfg = _engine_vllm_config(llm)
     except Exception:  # noqa: BLE001 — degraded mode by design
+        logger.debug("engine-probe: vllm_config unreachable; returning empty probe", exc_info=True)
         return {}
     if vcfg is None:
         return {}
@@ -421,6 +456,7 @@ def probe_engine_runtime_config(llm: object) -> dict[str, Any]:
             if value is not None:
                 out[spec.out_key] = spec.transform(value)
         except Exception:  # noqa: BLE001 — degrade one field, not the whole probe
+            logger.debug("engine-probe: field %r failed; skipping", spec.out_key, exc_info=True)
             continue
     return out
 
@@ -485,7 +521,7 @@ class VllmRuntimeMetrics(TypedDict):
     """End-of-generation vLLM metric snapshot with a fixed key set.
 
     Every value is ``float | None``; ``None`` means the engine did not
-    surface that counter on this cell (distinct from a measured zero).
+    surface that counter on this generation (distinct from a measured zero).
 
     A ``TypedDict`` rather than a dataclass on purpose: the value stays a
     plain ``dict`` at runtime, so dict-style consumers (e.g. the benchmark

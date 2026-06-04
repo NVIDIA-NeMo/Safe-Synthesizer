@@ -26,7 +26,7 @@ from nemo_safe_synthesizer.generation.vllm_observability import (
     METRIC_PREFIX_CACHE_QUERIES,
     METRIC_SPEC_NUM_ACCEPTED_TOKENS,
     METRIC_SPEC_NUM_DRAFT_TOKENS,
-    CellObservability,
+    GenerationObservability,
     NvmlPeakSampler,
     flag_engagement_mismatches,
     probe_engine_runtime_config,
@@ -70,9 +70,9 @@ def mock_llm_full_metrics() -> Any:
 
 
 @pytest.fixture
-def populated_event() -> CellObservability:
-    """A CellObservability with one value of each non-trivial field shape."""
-    return CellObservability(
+def populated_event() -> GenerationObservability:
+    """A GenerationObservability with one value of each non-trivial field shape."""
+    return GenerationObservability(
         peak_vram_gb=64.5,
         kv_cache_usage_perc=0.42,
         prefix_cache_hit_rate=0.99,
@@ -85,11 +85,11 @@ def populated_event() -> CellObservability:
 
 
 # ---------------------------------------------------------------------------
-# CellObservability schema contracts
+# GenerationObservability schema contracts
 # ---------------------------------------------------------------------------
 
 
-class TestCellObservabilitySchema:
+class TestGenerationObservabilitySchema:
     """Schema contracts: defaults, round-trip, extra-fields policy."""
 
     def test_all_measurement_fields_optional(self) -> None:
@@ -98,22 +98,22 @@ class TestCellObservabilitySchema:
         Important because the four primitives each have degraded-mode
         paths that return None — the schema must accept that.
         """
-        event = CellObservability()
+        event = GenerationObservability()
         assert event.peak_vram_gb is None
         assert event.kv_cache_usage_perc is None
         assert event.loadavg_pre is None
         assert event.engine_runtime_config == {}
         assert event.flag_did_not_engage is False
 
-    def test_json_round_trip_lossless(self, populated_event: CellObservability) -> None:
+    def test_json_round_trip_lossless(self, populated_event: GenerationObservability) -> None:
         """Consumers depend on JSON round-trip — structured logs serialize to JSON, deserializers must rebuild the same event."""
-        rt = CellObservability.model_validate_json(populated_event.model_dump_json())
+        rt = GenerationObservability.model_validate_json(populated_event.model_dump_json())
         assert rt == populated_event
 
     def test_extra_fields_forbidden(self) -> None:
         """``extra='forbid'`` is the contract that forces schema updates when fields are added — silent drift would break consumers."""
         with pytest.raises(ValidationError):
-            CellObservability.model_validate({"peak_vram_gb": 1.0, "unknown_field": "x"})
+            GenerationObservability.model_validate({"peak_vram_gb": 1.0, "unknown_field": "x"})
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ class TestCellObservabilitySchema:
 class TestToWandbPayload:
     """Wandb-side flattening: namespace, None-drop, tuple unpack, dict flatten."""
 
-    def test_keys_are_namespaced_under_prefix(self, populated_event: CellObservability) -> None:
+    def test_keys_are_namespaced_under_prefix(self, populated_event: GenerationObservability) -> None:
         """Custom prefix prevents collision with other wandb metrics in the same run."""
         payload = populated_event.to_wandb_payload(prefix="custom")
         assert payload  # non-empty
@@ -132,27 +132,29 @@ class TestToWandbPayload:
 
     def test_none_values_dropped_explicitly(self) -> None:
         """Wandb drops None silently anyway; we drop them explicitly so the payload's shape is predictable."""
-        event = CellObservability(peak_vram_gb=10.0, kv_cache_usage_perc=None)
+        event = GenerationObservability(peak_vram_gb=10.0, kv_cache_usage_perc=None)
         payload = event.to_wandb_payload()
-        assert "vllm_cell/peak_vram_gb" in payload
-        assert "vllm_cell/kv_cache_usage_perc" not in payload
+        assert "vllm_gen/peak_vram_gb" in payload
+        assert "vllm_gen/kv_cache_usage_perc" not in payload
 
     def test_loadavg_tuples_unpacked_to_per_horizon_scalars(self) -> None:
         """3-tuples become 3 scalars — wandb plots scalars cleanly, tuples become opaque blobs."""
-        event = CellObservability(loadavg_pre=(1.0, 2.0, 3.0))
+        event = GenerationObservability(loadavg_pre=(1.0, 2.0, 3.0))
         payload = event.to_wandb_payload()
-        assert payload["vllm_cell/loadavg_pre_1m"] == 1.0
-        assert payload["vllm_cell/loadavg_pre_5m"] == 2.0
-        assert payload["vllm_cell/loadavg_pre_15m"] == 3.0
+        assert payload["vllm_gen/loadavg_pre_1m"] == 1.0
+        assert payload["vllm_gen/loadavg_pre_5m"] == 2.0
+        assert payload["vllm_gen/loadavg_pre_15m"] == 3.0
         # Raw tuple key is gone — only the unpacked scalars are exposed.
-        assert "vllm_cell/loadavg_pre" not in payload
+        assert "vllm_gen/loadavg_pre" not in payload
 
     def test_engine_config_flattened_under_engine_runtime_namespace(self) -> None:
         """Engine-config dict gets flattened to scalars under ``engine_runtime/``."""
-        event = CellObservability(engine_runtime_config={"a": 1, "b": True})
+        event = GenerationObservability(engine_runtime_config={"a": 1, "b": True, "c": None})
         payload = event.to_wandb_payload()
-        assert payload["vllm_cell/engine_runtime/a"] == 1
-        assert payload["vllm_cell/engine_runtime/b"] is True
+        assert payload["vllm_gen/engine_runtime/a"] == 1
+        assert payload["vllm_gen/engine_runtime/b"] is True
+        # None values are dropped, symmetric with the scalar-field handling.
+        assert "vllm_gen/engine_runtime/c" not in payload
 
 
 # ---------------------------------------------------------------------------
@@ -390,34 +392,34 @@ class TestNvmlPeakSampler:
 
 
 # ---------------------------------------------------------------------------
-# log_cell_observability contracts
+# log_generation_observability contracts
 # ---------------------------------------------------------------------------
 
 
-class TestLogCellObservability:
+class TestLogGenerationObservability:
     """The wandb-side helper's degraded-mode + best-effort contracts."""
 
-    def test_no_op_when_no_active_wandb_run(self, populated_event: CellObservability) -> None:
+    def test_no_op_when_no_active_wandb_run(self, populated_event: GenerationObservability) -> None:
         """``wandb.run is None`` → return without raising or logging."""
         from nemo_safe_synthesizer.cli import wandb_setup
 
         with patch.object(wandb_setup.wandb, "run", None):
             # Should not raise; nothing to assert beyond "doesn't blow up".
-            wandb_setup.log_cell_observability(populated_event)
+            wandb_setup.log_generation_observability(populated_event)
 
-    def test_calls_wandb_log_when_run_is_active(self, populated_event: CellObservability) -> None:
+    def test_calls_wandb_log_when_run_is_active(self, populated_event: GenerationObservability) -> None:
         """When a run is active, the flattened payload is passed to ``wandb.log``."""
         from nemo_safe_synthesizer.cli import wandb_setup
 
         fake_run = MagicMock()
         with patch.object(wandb_setup.wandb, "run", fake_run), patch.object(wandb_setup.wandb, "log") as mock_log:
-            wandb_setup.log_cell_observability(populated_event)
+            wandb_setup.log_generation_observability(populated_event)
             mock_log.assert_called_once()
             (call_args,) = mock_log.call_args.args
             # The payload contains exactly the keys from to_wandb_payload (namespaced + flattened).
             assert call_args == populated_event.to_wandb_payload()
 
-    def test_wandb_log_exception_swallowed(self, populated_event: CellObservability) -> None:
+    def test_wandb_log_exception_swallowed(self, populated_event: GenerationObservability) -> None:
         """A wandb failure must not break generation — best-effort emission."""
         from nemo_safe_synthesizer.cli import wandb_setup
 
@@ -427,4 +429,4 @@ class TestLogCellObservability:
             patch.object(wandb_setup.wandb, "log", side_effect=RuntimeError("wandb down")),
         ):
             # Should not raise.
-            wandb_setup.log_cell_observability(populated_event)
+            wandb_setup.log_generation_observability(populated_event)
