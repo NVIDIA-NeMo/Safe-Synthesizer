@@ -5,8 +5,8 @@
 
 Each benchmark cell becomes one wandb run (grouped by sweep ID, tagged
 by condition_label + dataset). Distinct from PR-A's production
-``log_cell_observability`` pattern, which logs to the *currently
-active* wandb run — production logs cells as a time-series within one
+``log_observability_event`` pattern, which logs to the *currently
+active* wandb run — production logs generations as a time-series within one
 run, benchmark logs each cell as its own run for per-condition
 isolation in the wandb UI.
 
@@ -132,8 +132,8 @@ def _flatten_metrics(metrics: CandidateMetrics) -> dict[str, Any]:
     Direct fields land at the top level. ``finish_reason_distribution``
     is flattened to ``finish_reason/<key>`` scalars. The composed
     ``observability`` field is delegated to
-    :meth:`CellObservability.to_wandb_payload` with the
-    ``vllm_cell`` prefix so production + benchmark agree on
+    :meth:`GenerationObservability.to_wandb_payload` with the
+    ``vllm_gen`` prefix so production + benchmark agree on
     observability key namespacing.
     """
     payload = metrics.model_dump(exclude={"observability", "finish_reason_distribution"})

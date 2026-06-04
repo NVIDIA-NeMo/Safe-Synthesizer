@@ -20,7 +20,7 @@ Architecture:
   (engine kwargs overlay + sparse sampling overrides + per-cell
   identity for sweep grouping).
 - :class:`CandidateMetrics` — per-cell measured outputs: throughput,
-  acceptance, TTFT, etc. Composes :class:`CellObservability` from PR-A's
+  acceptance, TTFT, etc. Composes :class:`GenerationObservability` from PR-A's
   ``vllm_observability`` module so the benchmark schema doesn't
   re-define observability primitives — it consumes them.
 - :class:`BenchmarkOutput` — JSON-serialised result of one matrix
@@ -48,7 +48,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..errors import InternalError
 from ..generation.vllm_observability import (
-    CellObservability,
+    GenerationObservability,
     NvmlPeakSampler,
     flag_engagement_mismatches,
     probe_engine_runtime_config,
@@ -340,7 +340,7 @@ class CandidateMetrics(BaseModel):
     Carries cell-specific bench measurements (throughput, acceptance,
     TTFT, etc.) directly; observability primitives (peak VRAM, KV
     cache usage, loadavg, engine_runtime_config) are composed from
-    PR-A's :class:`CellObservability` schema in the ``observability``
+    PR-A's :class:`GenerationObservability` schema in the ``observability``
     field. This composition keeps the schema DRY — adding a new
     observability primitive in PR-A automatically flows through to
     benchmark output via ``model_dump()``.
@@ -411,8 +411,8 @@ class CandidateMetrics(BaseModel):
     # ``probe_engine_runtime_config`` + ``read_vllm_runtime_metrics``,
     # and sets ``flag_did_not_engage`` based on the candidate's intended
     # engine config vs the probed runtime config.
-    observability: CellObservability = Field(
-        default_factory=CellObservability,
+    observability: GenerationObservability = Field(
+        default_factory=GenerationObservability,
         description=(
             "Cell-level observability snapshot. Composed from PR-A's schema "
             "so benchmark consumers can read e.g. ``metrics.observability."
@@ -619,7 +619,7 @@ def run_benchmark(
     batch and prefix caching can actually fire.
 
     Wraps the entire body in PR-A's :class:`NvmlPeakSampler` context and
-    emits a composed :class:`CellObservability` on the returned
+    emits a composed :class:`GenerationObservability` on the returned
     :class:`CandidateMetrics`. The ``flag_did_not_engage`` bit is set
     when the engine's effective runtime config disagrees with the
     candidate's intended ``engine_config`` on any checked field.
@@ -739,7 +739,7 @@ def run_benchmark(
     # degrade), so no guard is needed here.
     vllm_metrics = read_vllm_runtime_metrics(llm)
 
-    observability = CellObservability(
+    observability = GenerationObservability(
         peak_vram_gb=vram_sampler.peak_gb,
         kv_cache_usage_perc=vllm_metrics["kv_cache_usage_perc"],
         prefix_cache_hit_rate=vllm_metrics["prefix_cache_hit_rate"],

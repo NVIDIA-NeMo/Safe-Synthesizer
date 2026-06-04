@@ -39,7 +39,7 @@ from nemo_safe_synthesizer.generation.vllm_benchmark_presets import (
     bracketed_ab_spec_ngram,
     default_matrix,
 )
-from nemo_safe_synthesizer.generation.vllm_observability import CellObservability
+from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
@@ -68,7 +68,7 @@ def empty_base() -> BenchmarkEngineConfig:
 
 class TestSchemaContracts:
     def test_candidate_metrics_composes_observability(self) -> None:
-        """``CandidateMetrics`` embeds ``CellObservability`` rather than re-declaring its fields."""
+        """``CandidateMetrics`` embeds ``GenerationObservability`` rather than re-declaring its fields."""
         m = CandidateMetrics(
             name="t",
             raw_tok_s=1.0,
@@ -80,7 +80,7 @@ class TestSchemaContracts:
             prompts_accepted=9,
             total_output_tokens=100,
             total_wall_seconds=1.0,
-            observability=CellObservability(peak_vram_gb=64.5),
+            observability=GenerationObservability(peak_vram_gb=64.5),
         )
         assert m.observability.peak_vram_gb == 64.5
 
@@ -101,7 +101,7 @@ class TestSchemaContracts:
                     prompts_accepted=9,
                     total_output_tokens=100,
                     total_wall_seconds=1.0,
-                    observability=CellObservability(peak_vram_gb=64.5, loadavg_pre=(1.0, 2.0, 3.0)),
+                    observability=GenerationObservability(peak_vram_gb=64.5, loadavg_pre=(1.0, 2.0, 3.0)),
                 ),
             ],
         )
