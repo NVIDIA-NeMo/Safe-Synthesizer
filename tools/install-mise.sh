@@ -134,6 +134,12 @@ unsigned_install_or_fail() {
 
 expected="${MISE_VERSION#v}"
 
+# version_ge A B -> true when A >= B (dotted numeric semver). `sort -VC`
+# succeeds when its input is already in version order, i.e. B <= A.
+version_ge() {
+    printf '%s\n%s\n' "$2" "$1" | sort -VC
+}
+
 # mise --version prints "<semver> <target> (<date>)" to stdout plus "available
 # update" nags to stderr, so take only the first field on stdout.
 #
@@ -157,12 +163,14 @@ if command -v mise >/dev/null 2>&1; then
         echo "       or remove ${mise_path} and rerun 'make setup'" >&2
         exit 1
     fi
-    if [[ "$installed" == "$expected" ]]; then
-        echo "mise ${installed} already installed"
+    # `.mise.toml` pins min_version, so any version >= the pinned one is
+    # acceptable; only abort when the installed binary is older.
+    if version_ge "$installed" "$expected"; then
+        echo "mise ${installed} already installed (satisfies min ${expected})"
         exit 0
     fi
-    echo "ERROR: found mise ${installed} on PATH but this repo pins ${MISE_VERSION}" >&2
-    echo "       run 'mise self-update ${expected}' or uninstall the current mise and rerun 'make setup'" >&2
+    echo "ERROR: found mise ${installed} on PATH but this repo requires >= ${MISE_VERSION}" >&2
+    echo "       run 'mise self-update' or uninstall the current mise and rerun 'make setup'" >&2
     exit 1
 fi
 
