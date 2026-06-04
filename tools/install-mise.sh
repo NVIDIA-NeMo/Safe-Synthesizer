@@ -134,10 +134,23 @@ unsigned_install_or_fail() {
 
 expected="${MISE_VERSION#v}"
 
-# version_ge A B -> true when A >= B (dotted numeric semver). `sort -VC`
-# succeeds when its input is already in version order, i.e. B <= A.
+# version_ge A B -> true when A >= B for dotted numeric versions (e.g.
+# 2026.5.15). Hand-rolled rather than `sort -V`: version sort is GNU
+# coreutils only, and the BSD `sort` shipped with macOS rejects -V, which
+# would make every comparison fail and reject an otherwise-valid mise.
+# Missing components are treated as 0 (1.2 == 1.2.0); 10# forces base-10 so
+# zero-padded fields like "05" aren't read as octal.
 version_ge() {
-    printf '%s\n%s\n' "$2" "$1" | sort -VC
+    local IFS=.
+    local -a a=($1) b=($2)
+    local i n=${#a[@]}
+    ((${#b[@]} > n)) && n=${#b[@]}
+    for ((i = 0; i < n; i++)); do
+        local x="${a[i]:-0}" y="${b[i]:-0}"
+        ((10#$x > 10#$y)) && return 0
+        ((10#$x < 10#$y)) && return 1
+    done
+    return 0
 }
 
 # mise --version prints "<semver> <target> (<date>)" to stdout plus "available
