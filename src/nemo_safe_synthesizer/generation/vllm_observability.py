@@ -468,6 +468,18 @@ METRIC_PREFIX_CACHE_HITS = "vllm:prefix_cache_hits"
 METRIC_SPEC_NUM_DRAFT_TOKENS = "vllm:spec_decode_num_draft_tokens"
 METRIC_SPEC_NUM_ACCEPTED_TOKENS = "vllm:spec_decode_num_accepted_tokens"
 
+# Raw counters pulled from ``llm.get_metrics()``. The output fields below are
+# either passed through (kv-cache usage) or derived as ratios of these.
+_COLLECTED_METRICS: frozenset[str] = frozenset(
+    {
+        METRIC_KV_CACHE_USAGE_PERC,
+        METRIC_PREFIX_CACHE_QUERIES,
+        METRIC_PREFIX_CACHE_HITS,
+        METRIC_SPEC_NUM_DRAFT_TOKENS,
+        METRIC_SPEC_NUM_ACCEPTED_TOKENS,
+    }
+)
+
 
 class VllmRuntimeMetrics(TypedDict):
     """End-of-generation vLLM metric snapshot with a fixed key set.
@@ -484,6 +496,33 @@ class VllmRuntimeMetrics(TypedDict):
     kv_cache_usage_perc: float | None
     prefix_cache_hit_rate: float | None
     spec_accept_rate: float | None
+
+
+def _empty_runtime_metrics() -> VllmRuntimeMetrics:
+    """The degraded-mode snapshot: every field ``None`` (nothing measured)."""
+    return VllmRuntimeMetrics(kv_cache_usage_perc=None, prefix_cache_hit_rate=None, spec_accept_rate=None)
+
+
+def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
+    """``numerator / denominator``, or ``None`` when either is absent or the denominator is non-positive."""
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def _collect_raw_metrics(llm: LLM) -> dict[str, float]:
+    """Read ``llm.get_metrics()`` into ``{name: value}`` for the counters in :data:`_COLLECTED_METRICS`.
+
+    Isolates the only failure-prone work (the engine call plus numeric
+    coercion) so the caller's degraded-mode guard can wrap exactly this.
+    """
+    raw: dict[str, float] = {}
+    for m in llm.get_metrics():
+        name = getattr(m, "name", "")
+        value = getattr(m, "value", None)
+        if value is not None and name in _COLLECTED_METRICS:
+            raw[name] = float(value)
+    return raw
 
 
 def read_vllm_runtime_metrics(llm: LLM | None) -> VllmRuntimeMetrics:
@@ -506,46 +545,20 @@ def read_vllm_runtime_metrics(llm: LLM | None) -> VllmRuntimeMetrics:
       registered at runtime by the spec-decode subsystem; absent
       otherwise) — distinguishes "not measured" from "measured zero".
     """
-    out: VllmRuntimeMetrics = {
-        "kv_cache_usage_perc": None,
-        "prefix_cache_hit_rate": None,
-        "spec_accept_rate": None,
-    }
     if llm is None:
-        return out
+        return _empty_runtime_metrics()
 
-    # Whole-body guard: this is a best-effort probe, so any failure (the
-    # engine call, an unexpected metric shape, a non-numeric value) degrades
-    # to the stable all-``None`` dict rather than propagating. Callers can
-    # therefore trust the return contract without re-wrapping the call.
+    # Best-effort probe: the engine call or a non-numeric metric value is the
+    # only thing that can fail, so the guard wraps exactly that. The ratio
+    # derivation below is pure dict arithmetic and cannot raise.
     try:
-        kv_usage: float | None = None
-        prefix_hits: float | None = None
-        prefix_queries: float | None = None
-        spec_accepted: float | None = None
-        spec_drafted: float | None = None
-        for m in llm.get_metrics():
-            name = getattr(m, "name", "")
-            value = getattr(m, "value", None)
-            if value is None:
-                continue
-            if name == METRIC_KV_CACHE_USAGE_PERC:
-                kv_usage = float(value)
-            elif name == METRIC_PREFIX_CACHE_HITS:
-                prefix_hits = float(value)
-            elif name == METRIC_PREFIX_CACHE_QUERIES:
-                prefix_queries = float(value)
-            elif name == METRIC_SPEC_NUM_ACCEPTED_TOKENS:
-                spec_accepted = float(value)
-            elif name == METRIC_SPEC_NUM_DRAFT_TOKENS:
-                spec_drafted = float(value)
-
-        if kv_usage is not None:
-            out["kv_cache_usage_perc"] = kv_usage
-        if prefix_hits is not None and prefix_queries is not None and prefix_queries > 0:
-            out["prefix_cache_hit_rate"] = prefix_hits / prefix_queries
-        if spec_accepted is not None and spec_drafted is not None and spec_drafted > 0:
-            out["spec_accept_rate"] = spec_accepted / spec_drafted
+        raw = _collect_raw_metrics(llm)
     except Exception as exc:  # noqa: BLE001 — degraded mode by design
         logger.debug("read_vllm_runtime_metrics failed: %s", exc)
-    return out
+        return _empty_runtime_metrics()
+
+    return VllmRuntimeMetrics(
+        kv_cache_usage_perc=raw.get(METRIC_KV_CACHE_USAGE_PERC),
+        prefix_cache_hit_rate=_safe_ratio(raw.get(METRIC_PREFIX_CACHE_HITS), raw.get(METRIC_PREFIX_CACHE_QUERIES)),
+        spec_accept_rate=_safe_ratio(raw.get(METRIC_SPEC_NUM_ACCEPTED_TOKENS), raw.get(METRIC_SPEC_NUM_DRAFT_TOKENS)),
+    )
