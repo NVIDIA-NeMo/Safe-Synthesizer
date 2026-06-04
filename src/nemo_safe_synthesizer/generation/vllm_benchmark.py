@@ -39,12 +39,14 @@ import sys
 import tempfile
 import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..errors import InternalError
 from ..generation.vllm_observability import (
     CellObservability,
     NvmlPeakSampler,
@@ -538,7 +540,9 @@ def _build_vllm_kwargs(header: TraceHeader, engine_config: BenchmarkEngineConfig
     if attention_backend not in (None, "auto"):
         base["attention_config"] = {"backend": attention_backend}
     # ``structured_generation_backend`` → ``structured_outputs_config``.
-    from vllm.config import StructuredOutputsConfig  # noqa: PLC0415 — lazy, vLLM is heavy
+    from vllm.config import (
+        StructuredOutputsConfig,  # noqa: PLC0415 — lazy, vLLM is heavy
+    )
 
     sg_backend = base.pop("structured_generation_backend", None)
     if sg_backend is not None:
@@ -546,14 +550,27 @@ def _build_vllm_kwargs(header: TraceHeader, engine_config: BenchmarkEngineConfig
     return base
 
 
+@dataclass
+class _EngineInitResult:
+    """Typed channel for the async engine-init thread's outcome.
+
+    Exactly one field is populated once the ``ready`` event fires:
+    ``llm`` on success, ``exception`` on failure. Mutated by the worker
+    thread; read by the runner after the join.
+    """
+
+    llm: LLM | None = None
+    exception: BaseException | None = None
+
+
 def _build_engine_async(
     header: TraceHeader,
     engine_config: BenchmarkEngineConfig,
-) -> tuple[threading.Thread, threading.Event, dict[str, Any]]:
+) -> tuple[threading.Thread, threading.Event, _EngineInitResult]:
     """Start ``vllm.LLM(...)`` in a daemon thread.
 
-    Returns ``(thread, ready_event, result_dict)``. The result dict has
-    keys ``llm`` (set on success) and ``exception`` (set on failure).
+    Returns ``(thread, ready_event, result)``. The :class:`_EngineInitResult`
+    carries ``llm`` (set on success) or ``exception`` (set on failure).
     The runner can sleep for the simulated-training-overlap window
     before joining via ``ready_event.wait()``, measuring how much of
     the engine-init cost can be hidden behind concurrent training.
@@ -562,13 +579,13 @@ def _build_engine_async(
 
     kwargs = _build_vllm_kwargs(header, engine_config)
     ready = threading.Event()
-    result: dict[str, Any] = {"llm": None, "exception": None}
+    result = _EngineInitResult()
 
     def worker() -> None:
         try:
-            result["llm"] = vLLM(**kwargs)
-        except BaseException as exc:  # noqa: BLE001 — surface via the result dict
-            result["exception"] = exc
+            result.llm = vLLM(**kwargs)
+        except BaseException as exc:  # noqa: BLE001 — surface via the result object
+            result.exception = exc
         finally:
             ready.set()
 
@@ -616,8 +633,7 @@ def run_benchmark(
 
     loadavg_pre = read_loadavg()
     vram_sampler = NvmlPeakSampler()
-    vram_sampler.__enter__()
-    try:
+    with vram_sampler:
         overlap = max(0.0, simulate_training_overlap_seconds)
         _init_thread, engine_ready, init_result = _build_engine_async(
             corpus.header,
@@ -629,9 +645,11 @@ def run_benchmark(
         wait_start = time.monotonic()
         engine_ready.wait()
         startup_seconds = max(0.0, time.monotonic() - wait_start)
-        if init_result["exception"] is not None:
-            raise init_result["exception"]
-        llm: LLM = init_result["llm"]
+        if init_result.exception is not None:
+            raise init_result.exception
+        if init_result.llm is None:
+            raise InternalError("engine init thread finished without an LLM or an exception")
+        llm = init_result.llm
 
         startup_overlap_savings_seconds = min(overlap, startup_seconds + overlap) if overlap > 0.0 else 0.0
 
@@ -669,7 +687,13 @@ def run_benchmark(
         prompts: list[str] = [p.prompt for p in corpus.prompts]
         gen_start = time.perf_counter()
         outputs: list[Any] = (
-            list(llm.generate(prompts=prompts, sampling_params=sampling_params, lora_request=lora_request))
+            list(
+                llm.generate(
+                    prompts=prompts,
+                    sampling_params=sampling_params,
+                    lora_request=lora_request,
+                )
+            )
             if prompts
             else []
         )
@@ -708,21 +732,12 @@ def run_benchmark(
         acceptance = (total_valid / total_records) if total_records > 0 else 0.0
         raw_tok_s = (total_output_tokens / total_wall) if total_wall > 0 else 0.0
         records_per_second = (total_valid / total_wall) if total_wall > 0 else 0.0
-    finally:
-        # Cleanup runs regardless of whether the body raised. Sampler
-        # always shuts down; observability event always builds (with
-        # whatever measurements were captured up to the failure).
-        vram_sampler.__exit__(None, None, None)
 
-    # Read end-of-generation metrics + post-load and assemble the event.
-    try:
-        vllm_metrics = read_vllm_runtime_metrics(llm)
-    except Exception as exc:  # noqa: BLE001 — degraded mode
-        logger.runtime.warning(
-            "vllm_benchmark.metrics_read_failed",
-            extra={"ctx": {"error": str(exc)}},
-        )
-        vllm_metrics = {"kv_cache_usage_perc": None, "prefix_cache_hit_rate": None, "spec_accept_rate": None}
+    # The ``with`` block above shut the sampler down, so ``peak_gb`` is now
+    # final. ``read_vllm_runtime_metrics`` is hardened to never raise and
+    # always returns a stable ``VllmRuntimeMetrics`` (None-valued fields on
+    # degrade), so no guard is needed here.
+    vllm_metrics = read_vllm_runtime_metrics(llm)
 
     observability = CellObservability(
         peak_vram_gb=vram_sampler.peak_gb,

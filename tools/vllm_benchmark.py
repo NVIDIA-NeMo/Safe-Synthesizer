@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 
 import click
 from rich.console import Console
@@ -64,7 +65,7 @@ def list_cmd() -> None:
 
 
 def _resolve_candidates(
-    base: object,
+    base: BenchmarkEngineConfig,
     preset_name: str | None,
     candidates_file: str | None,
 ) -> list[BenchmarkCandidate]:
@@ -78,8 +79,7 @@ def _resolve_candidates(
     if preset_name:
         if preset_name not in PRESETS:
             raise click.UsageError(f"Unknown preset {preset_name!r}; available: {sorted(PRESETS)}")
-        resolved = PRESETS[preset_name](base)  # ty: ignore[invalid-argument-type]
-        return resolved if isinstance(resolved, list) else [resolved]
+        return PRESETS[preset_name](base)
     if candidates_file:
         doc = json.loads(Path(candidates_file).read_text(encoding="utf-8"))
         return [BenchmarkCandidate.model_validate(c) for c in doc["candidates"]]
@@ -95,7 +95,12 @@ def _resolve_candidates(
     type=click.Path(dir_okay=False, path_type=Path),
     help="Where to write the BenchmarkOutput JSON.",
 )
-@click.option("--candidates", "preset_name", default=None, help=f"Preset name. One of: {sorted(PRESETS)}.")
+@click.option(
+    "--candidates",
+    "preset_name",
+    default=None,
+    help=f"Preset name. One of: {sorted(PRESETS)}.",
+)
 @click.option(
     "--candidates-file",
     "candidates_file",
@@ -120,7 +125,9 @@ def run_cmd(
 ) -> None:
     """Replay CORPUS_PATH against the chosen candidates and persist results."""
     # Lazy import so ``list`` and ``compare`` work without spinning up vLLM.
-    from nemo_safe_synthesizer.generation.vllm_benchmark import run_benchmark_in_subprocess
+    from nemo_safe_synthesizer.generation.vllm_benchmark import (
+        run_benchmark_in_subprocess,
+    )
 
     corpus = BenchmarkCorpus.from_trace_jsonl(corpus_path)
     base = BenchmarkEngineConfig.model_validate(corpus.header.engine_parameters or {})
@@ -140,8 +147,8 @@ def run_cmd(
             corpus_run_id=corpus.header.run_id,
             corpus_size=len(corpus.prompts),
             sweep_id=sweep_id,
-            candidate_condition_label=getattr(candidate, "condition_label", ""),
-            candidate_bracket_position=getattr(candidate, "bracket_position", 0),
+            candidate_condition_label=candidate.condition_label,
+            candidate_bracket_position=candidate.bracket_position,
         )
         result = run_benchmark_in_subprocess(
             candidate,
@@ -252,12 +259,13 @@ def analyze_cmd(
     """Cluster-conditioned analysis across every BenchmarkOutput JSON in OUTPUT_DIR."""
     from nemo_safe_synthesizer.generation.vllm_benchmark_analysis import (
         MIN_CELLS_PER_CONDITION,
+        ClusterSignal,
         analyze,
     )
 
     report = analyze(
         output_dir,
-        cluster_signal=cluster_signal,  # ty: ignore[invalid-argument-type]
+        cluster_signal=cast(ClusterSignal, cluster_signal),
         min_cells_per_condition=MIN_CELLS_PER_CONDITION if min_cells_per_condition is None else min_cells_per_condition,
     )
     console.print(report.to_markdown_summary())

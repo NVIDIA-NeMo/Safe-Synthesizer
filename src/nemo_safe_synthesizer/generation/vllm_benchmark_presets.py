@@ -19,9 +19,13 @@ analyzer (separate commit).
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 from .vllm_benchmark import BenchmarkCandidate, BenchmarkEngineConfig
+
+PresetFn = Callable[[BenchmarkEngineConfig], list[BenchmarkCandidate]]
+"""A preset resolves the corpus-default engine config into candidate cells."""
 
 DEFAULT_BENCHMARK_SEED: int = 42
 """Default ``SamplingParams.seed`` value for preset-built candidates.
@@ -312,7 +316,7 @@ def bracketed_ab_fp8(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
 
 
 # Map of preset name → callable used by the CLI to resolve ``--candidates``.
-PRESETS: dict[str, object] = {
+PRESETS: dict[str, PresetFn] = {
     "baseline": lambda base: [baseline(base)],
     "attention_backend_sweep": attention_backend_sweep,
     "prefix_caching_sweep": prefix_caching_sweep,
