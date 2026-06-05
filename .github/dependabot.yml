@@ -18,9 +18,10 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(ci)"
-    ignore:
-      # FW-CI reusable workflows are pinned to immutable commits.
-      - dependency-name: "NVIDIA-NeMo/FW-CI-templates"
+    # Delay version-update PRs until releases are at least 5 days old (supply-chain risk).
+    # Security updates are not subject to cooldown. See dependabot cooldown docs.
+    cooldown:
+      default-days: 5
     groups:
       github-actions:
         patterns:
