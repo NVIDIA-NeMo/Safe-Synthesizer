@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import wandb
 from pydantic import AliasChoices, Field, field_validator
@@ -20,9 +20,6 @@ from pydantic_settings import BaseSettings
 from ..config import SafeSynthesizerParameters
 from ..observability import get_logger
 from .artifact_structure import Workdir
-
-if TYPE_CHECKING:
-    from ..generation.vllm_observability import GenerationObservability
 
 logger = get_logger(__name__)
 
@@ -268,22 +265,37 @@ def initialize_wandb_run(
         logger.info(f"Wandb run url: {wandb.run.url if wandb.run else 'None'}")
 
 
-def log_generation_observability(event: GenerationObservability, prefix: str = "vllm_gen") -> None:
-    """Log a ``GenerationObservability`` event to the currently active wandb run.
+class WandbLoggable(Protocol):
+    """Structural type for observability events that can be logged to wandb.
 
-    No-op when no wandb run is active (``WANDB_MODE=disabled`` or the
-    pipeline hasn't called :func:`initialize_wandb_run`). Errors during
-    ``wandb.log`` are swallowed at warning level — observability is
-    best-effort, and a wandb failure must not break generation.
+    Any event exposing ``to_wandb_payload(prefix) -> dict`` satisfies this --
+    e.g. ``TrainingObservability`` and the generation-side
+    ``GenerationObservability``. Using a Protocol keeps :func:`log_observability_event`
+    decoupled from the concrete event types (no import of the training/generation
+    subpackages from this CLI module).
+    """
 
-    ``GenerationObservability`` is imported under ``TYPE_CHECKING`` only; with
-    ``from __future__ import annotations`` the annotation stays a string,
-    so this CLI module keeps importing without eagerly pulling in the
-    generation subpackage.
+    def to_wandb_payload(self, prefix: str = ...) -> dict[str, Any]: ...
+
+
+def log_observability_event(event: WandbLoggable, prefix: str) -> None:
+    """Log an observability event to the currently active wandb run.
+
+    Generic sink shared by the training and generation observability paths.
+    No-op when no wandb run is active (``WANDB_MODE=disabled`` or the pipeline
+    hasn't called :func:`initialize_wandb_run`). Errors during ``wandb.log`` are
+    swallowed at warning level -- observability is best-effort and a wandb
+    failure must not break the run.
+
+    Args:
+        event: Any object exposing ``to_wandb_payload(prefix) -> dict`` (see
+            :class:`WandbLoggable`).
+        prefix: wandb key namespace for this event's metrics (e.g. ``"training"``
+            or ``"vllm_gen"``).
     """
     if wandb.run is None:
         return
     try:
         wandb.log(event.to_wandb_payload(prefix=prefix))
-    except Exception as exc:  # noqa: BLE001 — degraded mode
-        logger.warning(f"failed to log generation observability to wandb: {exc}")
+    except Exception as exc:  # noqa: BLE001 -- degraded mode
+        logger.warning(f"failed to log observability event ({prefix!r}) to wandb: {exc}")

@@ -475,13 +475,14 @@ class TestGenerationObservabilityEmission:
                 return_value={"kv_cache_usage_perc": 0.4, "prefix_cache_hit_rate": 0.9, "spec_accept_rate": None},
             ),
             patch("nemo_safe_synthesizer.generation.vllm_backend.read_loadavg", return_value=(1.0, 2.0, 3.0)),
-            patch("nemo_safe_synthesizer.generation.vllm_backend.log_generation_observability") as mock_log_wandb,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.log_observability_event") as mock_log_wandb,
             patch("nemo_safe_synthesizer.generation.vllm_backend.logger") as mock_logger,
         ):
             backend._emit_generation_observability(sampler, (0.5, 0.6, 0.7))
 
         mock_log_wandb.assert_called_once()
         (event,) = mock_log_wandb.call_args.args
+        assert mock_log_wandb.call_args.kwargs == {"prefix": "vllm_gen"}
         assert isinstance(event, GenerationObservability)
         assert event.peak_vram_gb == 12.5
         assert event.kv_cache_usage_perc == 0.4

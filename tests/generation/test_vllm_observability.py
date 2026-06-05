@@ -392,20 +392,20 @@ class TestNvmlPeakSampler:
 
 
 # ---------------------------------------------------------------------------
-# log_generation_observability contracts
+# log_observability_event contracts
 # ---------------------------------------------------------------------------
 
 
-class TestLogGenerationObservability:
+class TestLogObservabilityEvent:
     """The wandb-side helper's degraded-mode + best-effort contracts."""
 
     def test_no_op_when_no_active_wandb_run(self, populated_event: GenerationObservability) -> None:
         """``wandb.run is None`` → return without raising or logging."""
         from nemo_safe_synthesizer.cli import wandb_setup
 
-        with patch.object(wandb_setup.wandb, "run", None):
-            # Should not raise; nothing to assert beyond "doesn't blow up".
-            wandb_setup.log_generation_observability(populated_event)
+        with patch.object(wandb_setup.wandb, "run", None), patch.object(wandb_setup.wandb, "log") as mock_log:
+            wandb_setup.log_observability_event(populated_event, prefix="vllm_gen")
+            mock_log.assert_not_called()
 
     def test_calls_wandb_log_when_run_is_active(self, populated_event: GenerationObservability) -> None:
         """When a run is active, the flattened payload is passed to ``wandb.log``."""
@@ -413,11 +413,11 @@ class TestLogGenerationObservability:
 
         fake_run = MagicMock()
         with patch.object(wandb_setup.wandb, "run", fake_run), patch.object(wandb_setup.wandb, "log") as mock_log:
-            wandb_setup.log_generation_observability(populated_event)
+            wandb_setup.log_observability_event(populated_event, prefix="vllm_gen")
             mock_log.assert_called_once()
             (call_args,) = mock_log.call_args.args
             # The payload contains exactly the keys from to_wandb_payload (namespaced + flattened).
-            assert call_args == populated_event.to_wandb_payload()
+            assert call_args == populated_event.to_wandb_payload(prefix="vllm_gen")
 
     def test_wandb_log_exception_swallowed(self, populated_event: GenerationObservability) -> None:
         """A wandb failure must not break generation — best-effort emission."""
@@ -429,4 +429,4 @@ class TestLogGenerationObservability:
             patch.object(wandb_setup.wandb, "log", side_effect=RuntimeError("wandb down")),
         ):
             # Should not raise.
-            wandb_setup.log_generation_observability(populated_event)
+            wandb_setup.log_observability_event(populated_event, prefix="vllm_gen")

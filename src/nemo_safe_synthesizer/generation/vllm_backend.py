@@ -25,7 +25,7 @@ from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 
 from .. import utils
 from ..cli.artifact_structure import Workdir
-from ..cli.wandb_setup import log_generation_observability
+from ..cli.wandb_setup import log_observability_event
 from ..config import SafeSynthesizerParameters
 from ..config.generate import (
     resolve_structured_generation_schema_method,
@@ -795,12 +795,13 @@ class VllmBackend(GeneratorBackend):
             # Mirror to the active wandb run when one exists (no-op when
             # ``WANDB_MODE=disabled`` or ``initialize_wandb_run`` was never
             # called). Best-effort; wandb failures are swallowed downstream.
-            log_generation_observability(gen_event)
+            log_observability_event(gen_event, prefix="vllm_gen")
         except Exception as exc:  # noqa: BLE001 — observability must never break generation
             # Guard the warning itself: a faulty logger handler must not turn a
             # swallowed observability failure into a generation failure.
             with contextlib.suppress(Exception):
-                logger.runtime.warning(
+                logger.runtime.debug(
                     "vllm.generation.observability.emit_failed",
-                    extra={"ctx": {"error": str(exc)}},
+                    extra={"ctx": {"error": f"{exc!r}"}},
+                    exc_info=True,
                 )
