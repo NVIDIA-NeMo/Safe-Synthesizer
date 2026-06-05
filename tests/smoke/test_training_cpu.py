@@ -64,10 +64,16 @@ def _dp_trainer(
     train_dataset,
     tmp_path,
     grad_sample_mode: Literal["hooks", "ghost"] = "hooks",
+    **training_arg_overrides,
 ) -> OpacusDPTrainer:
     return OpacusDPTrainer(
         model=model,
-        args=_cpu_training_args(tmp_path, remove_unused_columns=False, max_grad_norm=0.0),
+        args=_cpu_training_args(
+            tmp_path,
+            remove_unused_columns=False,
+            max_grad_norm=0.0,
+            **training_arg_overrides,
+        ),
         train_dataset=train_dataset,
         data_collator=_private_data_collator(tokenizer),
         privacy_args=_privacy_args(),
@@ -201,6 +207,64 @@ def test_dp_ghost_clipping_training_one_step(
     )
     trainer.train()
     assert len(trainer.state.log_history) > 0
+
+
+@pytest.mark.parametrize("grad_sample_mode", ["hooks", "ghost"])
+def test_dp_clipping_training_with_gradient_accumulation(
+    fixture_tiny_model,
+    fixture_stub_tokenizer,
+    fixture_tiny_training_dataset_with_position_ids,
+    tmp_path,
+    monkeypatch,
+    grad_sample_mode,
+):
+    """DP clipping must survive gradient accumulation (the max_physical_batch_size path).
+
+    With ``gradient_accumulation_steps > 1`` the Trainer runs multiple
+    micro-batch backward passes per optimizer step. ``DPCallback.on_substep_end``
+    signals Opacus to accumulate per-sample-clipped gradients into ``summed_grad``
+    and only the final (non-skipped) step adds noise. For ghost clipping this also
+    exercises that the wrapper's internal ``optimizer.zero_grad()`` (between its two
+    backward passes) preserves ``summed_grad`` across skipped substeps.
+    """
+    if grad_sample_mode == "ghost":
+        monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
+    trainer = _dp_trainer(
+        model=fixture_tiny_model,
+        tokenizer=fixture_stub_tokenizer,
+        train_dataset=fixture_tiny_training_dataset_with_position_ids,
+        tmp_path=tmp_path,
+        grad_sample_mode=grad_sample_mode,
+        gradient_accumulation_steps=2,
+    )
+    trainer.train()
+
+    assert trainer.dp_callback._on_substep_end_was_called
+    assert len(trainer.state.log_history) > 0
+
+
+def test_loss_memory_probe_install_and_uninstall_round_trip():
+    """The opt-in loss probe must fully restore process-global Transformers state."""
+    from transformers.loss import loss_utils
+
+    original_fn = loss_utils.ForCausalLMLoss
+    original_mapping = {name: fn for name, fn in loss_utils.LOSS_MAPPING.items() if fn is original_fn}
+    assert original_mapping, "expected at least one LOSS_MAPPING entry pointing at ForCausalLMLoss"
+
+    # Reset any leftover global state from earlier in the process.
+    dp_utils._uninstall_causal_lm_loss_memory_probe()
+    try:
+        dp_utils._install_causal_lm_loss_memory_probe(debug_loss_memory=True, chunked_loss=False, chunk_tokens=1024)
+        assert dp_utils._CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED is True
+        assert loss_utils.ForCausalLMLoss is not original_fn
+        assert all(loss_utils.LOSS_MAPPING[name] is not original_fn for name in original_mapping)
+    finally:
+        dp_utils._uninstall_causal_lm_loss_memory_probe()
+
+    assert dp_utils._CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED is False
+    assert loss_utils.ForCausalLMLoss is original_fn
+    for name in original_mapping:
+        assert loss_utils.LOSS_MAPPING[name] is original_fn
 
 
 @pytest.mark.parametrize("grad_sample_mode", ["hooks", "ghost"])

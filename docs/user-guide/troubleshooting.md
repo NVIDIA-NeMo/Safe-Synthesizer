@@ -166,7 +166,15 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
 5. For DP runs, set `privacy.grad_sample_mode: ghost` to use Opacus
    Fast/Ghost Gradient Clipping, which reduces per-sample gradient memory for
    supported layers
-6. Lower `training.max_vram_fraction` (default `0.8`) to leave headroom for
+6. For DP runs that OOM at the loss step on large-vocab models, set
+   `training.memory.chunked_causal_lm_loss: true` (tune
+   `training.memory.chunked_causal_lm_loss_tokens`, default `1024`) to compute
+   cross entropy in token chunks instead of upcasting all logits to fp32 at
+   once, and/or `training.memory.disable_dp_bf16: true` to keep model outputs
+   in their original dtype through the loss. Set
+   `training.memory.debug_loss_memory: true` to log CUDA memory around the
+   logits upcast while diagnosing
+7. Lower `training.max_vram_fraction` (default `0.8`) to leave headroom for
    other GPU consumers on the same device
 
 GPU memory during LoRA SFT breaks down into three components:

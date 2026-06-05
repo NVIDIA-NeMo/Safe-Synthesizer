@@ -17,7 +17,7 @@ wrapper with ``no_sync`` support.
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
@@ -51,7 +51,9 @@ from transformers import (
 )
 from transformers.trainer import TRAINING_ARGS_NAME
 
-from ...observability import get_logger
+from ...config.training import TrainingMemoryControls
+from ...observability import NvmlPeakSampler, get_logger
+from ...training.training_observability import TRAINING_COMPLETE_EVENT, TrainingObservability
 from . import linear  # imported for side effects  # noqa
 from .privacy_args import (
     PrivacyArguments,
@@ -68,12 +70,18 @@ GradSampleMode = Literal["hooks", "ghost"]
 _MIN_GHOST_CLIPPING_OPACUS_VERSION = Version("1.6.0")
 
 _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
-_DEFAULT_CHUNKED_CAUSAL_LM_LOSS_TOKENS = 1024
+
+# Original Transformers loss callables saved at install time so the opt-in probe
+# can be reverted. The probe monkeypatches process-global state in
+# ``transformers.loss.loss_utils``; without teardown it would leak into every
+# model in the process for the rest of its lifetime.
+_CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN: Any | None = None
+_CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS: list[Any] = []
 
 
-def _log_cuda_loss_memory(stage: str, logits: torch.Tensor) -> None:
-    """Log CUDA memory around the causal-LM fp32 logits upcast."""
-    if os.getenv("NSS_DEBUG_LOSS_MEMORY") != "1":
+def _log_cuda_loss_memory(stage: str, logits: torch.Tensor, *, enabled: bool) -> None:
+    """Log CUDA memory around the causal-LM fp32 logits upcast (no-op when disabled)."""
+    if not enabled:
         return
     if not torch.cuda.is_available() or not logits.is_cuda:
         return
@@ -102,10 +110,10 @@ def _chunked_cross_entropy(
     vocab_size: int,
     num_items_in_batch: torch.Tensor | int | None,
     ignore_index: int,
+    chunk_size: int,
     **kwargs,
 ) -> torch.Tensor:
     """Compute causal-LM cross entropy without upcasting all logits at once."""
-    chunk_size = int(os.getenv("NSS_CHUNKED_CAUSAL_LM_LOSS_TOKENS", _DEFAULT_CHUNKED_CAUSAL_LM_LOSS_TOKENS))
     flat_logits = logits.view(-1, vocab_size)
     flat_labels = shift_labels.view(-1).to(flat_logits.device)
 
@@ -134,12 +142,32 @@ def _chunked_cross_entropy(
     return loss_sum / valid_token_count.clamp_min(1)
 
 
-def _install_causal_lm_loss_memory_probe() -> None:
-    """Install an opt-in Transformers causal-LM loss memory probe."""
+def _install_causal_lm_loss_memory_probe(
+    *,
+    debug_loss_memory: bool,
+    chunked_loss: bool,
+    chunk_tokens: int,
+    peak_recorder: Callable[[int], None] | None = None,
+) -> None:
+    """Install the opt-in Transformers causal-LM loss probe from config flags.
+
+    Args:
+        debug_loss_memory: Log CUDA memory around the fp32 logits upcast and
+            feed ``peak_recorder`` (when supplied) the fp32 logits size.
+        chunked_loss: Compute cross entropy in token chunks instead of a single
+            full-logits fp32 upcast.
+        chunk_tokens: Token chunk size used when ``chunked_loss`` is set.
+        peak_recorder: Optional sink receiving the fp32 logits byte count on
+            each loss call when ``debug_loss_memory`` is set (used to summarize
+            the peak upcast spike for observability).
+
+    No-op when both ``debug_loss_memory`` and ``chunked_loss`` are ``False`` or
+    when the probe is already installed.
+    """
     global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
     if _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
         return
-    if os.getenv("NSS_DEBUG_LOSS_MEMORY") != "1" and os.getenv("NSS_CHUNKED_CAUSAL_LM_LOSS") != "1":
+    if not debug_loss_memory and not chunked_loss:
         return
 
     from transformers.loss import loss_utils
@@ -153,39 +181,71 @@ def _install_causal_lm_loss_memory_probe() -> None:
         shift_labels: torch.Tensor | None = None,
         **kwargs,
     ) -> torch.Tensor:
-        _log_cuda_loss_memory("before_logits_float", logits)
+        if debug_loss_memory and peak_recorder is not None and logits is not None:
+            # fp32 logits size -- the spike the upcast materializes (or that
+            # chunked loss avoids). float32 == 4 bytes/element.
+            peak_recorder(logits.numel() * 4)
+        _log_cuda_loss_memory("before_logits_float", logits, enabled=debug_loss_memory)
         if shift_labels is None:
             labels = F.pad(labels, (0, 1), value=ignore_index)
             shift_labels = labels[..., 1:].contiguous()
 
-        if os.getenv("NSS_CHUNKED_CAUSAL_LM_LOSS") == "1":
-            logger.warning(
-                "Using chunked causal-LM loss because NSS_CHUNKED_CAUSAL_LM_LOSS=1 "
-                f"(chunk_tokens={os.getenv('NSS_CHUNKED_CAUSAL_LM_LOSS_TOKENS', _DEFAULT_CHUNKED_CAUSAL_LM_LOSS_TOKENS)})"
-            )
+        if chunked_loss:
             return _chunked_cross_entropy(
                 logits,
                 shift_labels,
                 vocab_size=vocab_size,
                 num_items_in_batch=num_items_in_batch,
                 ignore_index=ignore_index,
+                chunk_size=chunk_tokens,
                 **kwargs,
             )
 
         logits = logits.float()
-        _log_cuda_loss_memory("after_logits_float", logits)
+        _log_cuda_loss_memory("after_logits_float", logits, enabled=debug_loss_memory)
         logits = logits.view(-1, vocab_size)
         shift_labels = shift_labels.view(-1).to(logits.device)
         loss = loss_utils.fixed_cross_entropy(logits, shift_labels, num_items_in_batch, ignore_index, **kwargs)
         return loss
 
+    global _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN, _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS
     original = loss_utils.ForCausalLMLoss
+    _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = original
+    _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS = []
     setattr(loss_utils, "ForCausalLMLoss", probed_for_causal_lm_loss)
     for loss_name, loss_fn in loss_utils.LOSS_MAPPING.items():
         if loss_fn is original:
             loss_utils.LOSS_MAPPING[loss_name] = probed_for_causal_lm_loss
+            _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.append(loss_name)
     _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = True
-    logger.warning("Installed causal-LM loss wrapper for memory diagnostics/experiments")
+    logger.warning(
+        "Installed causal-LM loss wrapper for memory diagnostics/experiments "
+        f"(debug_loss_memory={debug_loss_memory}, chunked_loss={chunked_loss}, chunk_tokens={chunk_tokens})"
+    )
+
+
+def _uninstall_causal_lm_loss_memory_probe() -> None:
+    """Revert the opt-in causal-LM loss probe, restoring Transformers globals.
+
+    Idempotent and safe to call when the probe was never installed. Resets the
+    installed flag so a subsequent training run re-installs cleanly.
+    """
+    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED, _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
+    if not _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
+        return
+
+    from transformers.loss import loss_utils
+
+    original = _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
+    if original is not None:
+        setattr(loss_utils, "ForCausalLMLoss", original)
+        for loss_name in _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS:
+            loss_utils.LOSS_MAPPING[loss_name] = original
+
+    _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.clear()
+    _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = None
+    _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
+    logger.warning("Reverted causal-LM loss wrapper installed for memory diagnostics/experiments")
 
 
 class DPCallback(TrainerCallback):
@@ -530,6 +590,9 @@ class OpacusDPTrainer(Trainer):
         model: Base model (will be wrapped with GradSampleModule).
         args: Training arguments (e.g. ``TrainingArguments``).
         privacy_args: DP parameters (epsilon, delta, noise, clipping). Required.
+        grad_sample_mode: Opacus per-sample gradient mode (``"hooks"`` or ``"ghost"``).
+        memory_controls: Advanced memory/OOM controls (chunked loss, bf16 disable,
+            loss-memory diagnostics). Defaults to all-off when omitted.
         data_fraction: If set, scales effective number of epochs for privacy math.
         true_dataset_size: Override number of entities/records for privacy accounting.
         entity_column_values: If set, entity-level DP; each value is the entity ID
@@ -551,6 +614,7 @@ class OpacusDPTrainer(Trainer):
         args: training_args.TrainingArguments | None = None,
         privacy_args: PrivacyArguments | None = None,
         grad_sample_mode: GradSampleMode = "hooks",
+        memory_controls: TrainingMemoryControls | None = None,
         data_fraction: float | None = None,
         true_dataset_size: int | None = None,
         entity_column_values: list | None = None,
@@ -565,6 +629,10 @@ class OpacusDPTrainer(Trainer):
         self.train_args = args
         self.privacy_args = privacy_args
         self.grad_sample_mode = grad_sample_mode
+        self.memory_controls = memory_controls or TrainingMemoryControls()
+        self._peak_loss_logits_bytes = 0
+        #: Last training-complete event, set by :meth:`train`; the backend forwards it to wandb.
+        self.last_training_observability: TrainingObservability | None = None
         self.dp_loss: Any | None = None
         self._ghost_optimizer_cls: type[Any] | None = None
         self._ghost_loss_cls: type[Any] | None = None
@@ -758,6 +826,71 @@ class OpacusDPTrainer(Trainer):
 
         return DPOptimizerGhostClipping
 
+    def _record_peak_loss_logits(self, nbytes: int) -> None:
+        """Track the largest fp32 logits tensor seen by the loss (for observability)."""
+        if nbytes > self._peak_loss_logits_bytes:
+            self._peak_loss_logits_bytes = nbytes
+
+    def _install_loss_memory_probe(self) -> None:
+        """Install the causal-LM loss probe from ``self.memory_controls`` (idempotent)."""
+        mc = self.memory_controls
+        _install_causal_lm_loss_memory_probe(
+            debug_loss_memory=mc.debug_loss_memory,
+            chunked_loss=mc.chunked_causal_lm_loss,
+            chunk_tokens=mc.chunked_causal_lm_loss_tokens,
+            peak_recorder=self._record_peak_loss_logits,
+        )
+
+    def train(self, *args: Any, **kwargs: Any) -> Any:
+        """Run training, sampling peak VRAM and emitting a ``training.complete`` event.
+
+        Installs the opt-in causal-LM loss probe, then wraps ``Trainer.train``
+        in an :class:`NvmlPeakSampler`. In a ``finally``, emits a single
+        :class:`TrainingObservability` event and reverts the probe. Install and
+        teardown bracket the run in this one method, and the teardown runs even
+        when training raises, so the process-global Transformers loss patch
+        never leaks into a later model in the same process.
+        """
+        self._peak_loss_logits_bytes = 0
+        self._install_loss_memory_probe()
+        sampler = NvmlPeakSampler()
+        try:
+            with sampler:
+                return super().train(*args, **kwargs)
+        finally:
+            self._emit_training_observability(sampler.peak_gb)
+            _uninstall_causal_lm_loss_memory_probe()
+
+    def _emit_training_observability(self, peak_vram_gb: float | None) -> None:
+        """Assemble the ``training.complete`` event, log it, and stash it.
+
+        Writes the structured log line and stores the event on
+        :attr:`last_training_observability` for the backend to mirror to wandb;
+        this layer does not depend on the CLI/wandb module. Best-effort: any
+        failure here is logged and swallowed so observability never masks a
+        training error propagating through :meth:`train`'s ``finally``.
+        """
+        try:
+            per_device = getattr(self.args, "per_device_train_batch_size", None)
+            grad_accum = getattr(self.args, "gradient_accumulation_steps", None)
+            effective = per_device * grad_accum if per_device is not None and grad_accum is not None else None
+            peak_loss_logits_gb = self._peak_loss_logits_bytes / 1024**3 if self._peak_loss_logits_bytes > 0 else None
+            event = TrainingObservability(
+                peak_vram_gb=peak_vram_gb,
+                peak_loss_logits_gb=peak_loss_logits_gb,
+                per_device_train_batch_size=per_device,
+                gradient_accumulation_steps=grad_accum,
+                effective_batch_size=effective,
+                grad_sample_mode=self.grad_sample_mode,
+            )
+            logger.runtime.info(TRAINING_COMPLETE_EVENT, extra={"ctx": event.model_dump()})
+            self.last_training_observability = event
+        except Exception as exc:  # noqa: BLE001 -- observability must never break training
+            try:
+                logger.warning(f"failed to emit training observability: {exc}")
+            except Exception:  # noqa: BLE001 -- a faulty log handler must not raise from finally
+                pass
+
     def training_step(
         self,
         model: nn.Module,
@@ -788,7 +921,7 @@ class OpacusDPTrainer(Trainer):
         # Pass `num_items_in_batch=None` so the HF Trainer skips its built-in
         # per-token scaling; Opacus already applies per-sample gradient scaling
         # and we divide the logged loss by gradient_accumulation_steps below.
-        _install_causal_lm_loss_memory_probe()
+        # The loss memory probe is installed once in `train()`, not per step.
         inputs = self._prepare_inputs(inputs)
         if self.grad_sample_mode == "ghost":
             return self._ghost_clipping_training_step(model, inputs)
@@ -892,9 +1025,13 @@ class OpacusDPTrainer(Trainer):
 
         Overrides Trainer._save so that when the model is wrapped with
         GradSampleModule we save the inner PEFT model, not the wrapper.
+        Both grad-sample modes wrap the PEFT model and expose it as ``_module``
+        (hooks -> ``GradSampleModule``, ghost ->
+        ``GradSampleModuleFastGradientClipping``), so unwrap whenever that
+        attribute is present.
         TODO: When updating transformers, check for changes to this function.
         """
-        if self.grad_sample_mode in ("hooks", "ghost") and hasattr(self.model, "_module"):
+        if hasattr(self.model, "_module"):
             model_to_save = self.model._module
             if not isinstance(model_to_save, PeftModel):
                 raise ValueError(f"Error saving model with type {type(model_to_save)}. Expected PeftModel.")

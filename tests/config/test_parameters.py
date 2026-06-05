@@ -13,7 +13,11 @@ from pydantic import Field, ValidationError, model_validator
 from nemo_safe_synthesizer.config.generate import GenerateParameters, StructuredGenerationParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig, StepDefinition
-from nemo_safe_synthesizer.config.training import QuantizationScheme, TrainingHyperparams
+from nemo_safe_synthesizer.config.training import (
+    QuantizationScheme,
+    TrainingHyperparams,
+    TrainingMemoryControls,
+)
 from nemo_safe_synthesizer.config.types import AUTO_STR
 from nemo_safe_synthesizer.configurator.parameter_paths import (
     AmbiguousParameterName,
@@ -91,6 +95,36 @@ def test_grad_sample_mode_from_params_rejects_invalid_value():
 def test_grad_sample_mode_from_yaml_rejects_invalid_value():
     with pytest.raises(ValidationError):
         SafeSynthesizerParameters.from_yaml_str("privacy:\n  grad_sample_mode: invalid\n")
+
+
+def test_training_memory_controls_defaults_are_all_off():
+    memory = TrainingHyperparams().memory
+    assert memory.disable_dp_bf16 is False
+    assert memory.chunked_causal_lm_loss is False
+    assert memory.chunked_causal_lm_loss_tokens == 1024
+    assert memory.debug_loss_memory is False
+
+
+@pytest.mark.parametrize("invalid_value", [0, -1])
+def test_training_memory_chunk_tokens_must_be_positive(invalid_value):
+    with pytest.raises(ValidationError):
+        TrainingMemoryControls(chunked_causal_lm_loss_tokens=invalid_value)
+
+
+def test_training_memory_controls_from_yaml_round_trip():
+    params = SafeSynthesizerParameters.from_yaml_str(
+        "training:\n"
+        "  memory:\n"
+        "    disable_dp_bf16: true\n"
+        "    chunked_causal_lm_loss: true\n"
+        "    chunked_causal_lm_loss_tokens: 256\n"
+        "    debug_loss_memory: true\n"
+    )
+    memory = params.training.memory
+    assert memory.disable_dp_bf16 is True
+    assert memory.chunked_causal_lm_loss is True
+    assert memory.chunked_causal_lm_loss_tokens == 256
+    assert memory.debug_loss_memory is True
 
 
 @pytest.mark.parametrize("max_physical_batch_size", [AUTO_STR, None])

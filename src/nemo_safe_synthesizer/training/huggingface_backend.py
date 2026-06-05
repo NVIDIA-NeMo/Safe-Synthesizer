@@ -8,7 +8,6 @@ from __future__ import annotations
 import io
 import logging
 import math
-import os
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -40,6 +39,7 @@ from transformers.utils.quantization_config import QuantizationConfigMixin
 
 from .. import utils
 from ..cli.artifact_structure import BoundDir
+from ..cli.wandb_setup import log_observability_event
 from ..config.autoconfig import AutoConfigResolver
 from ..data_processing.assembler import TrainingExampleAssembler
 from ..data_processing.dataset import make_json_schema
@@ -474,13 +474,14 @@ class HuggingFaceBackend(TrainingBackend):
 
         data_collator = DataCollatorForPrivateTokenClassification(tokenizer=self.tokenizer)
 
+        memory_controls = self.params.training.memory
         training_args["remove_unused_columns"] = False  # required for DP data processing
         training_args["max_grad_norm"] = 0.0  # required for opacus optimizer
         _ = training_args.pop("gradient_checkpointing", None)
-        if os.getenv("NSS_DISABLE_DP_BF16") == "1":
+        if memory_controls.disable_dp_bf16:
             training_args["bf16"] = False
             logger.warning(
-                "Disabled Trainer bf16/autocast for DP because NSS_DISABLE_DP_BF16=1 "
+                "Disabled Trainer bf16/autocast for DP because training.memory.disable_dp_bf16=true "
                 "requires model outputs to stay in their original dtype."
             )
 
@@ -506,6 +507,7 @@ class HuggingFaceBackend(TrainingBackend):
             OpacusDPTrainer,
             privacy_args=privacy_args,
             grad_sample_mode=privacy.grad_sample_mode,
+            memory_controls=memory_controls,
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
         )
@@ -798,6 +800,13 @@ class HuggingFaceBackend(TrainingBackend):
         self.prepare_params(**training_args)
         self.trainer.train()
         training_time_sec = time.monotonic() - training_start
+
+        # Mirror the trainer's training-complete event to wandb (no-op when no
+        # run is active). The trainer assembles and logs the event; forwarding
+        # to wandb lives here so the privacy layer stays independent of the CLI.
+        event = getattr(self.trainer, "last_training_observability", None)
+        if event is not None:
+            log_observability_event(event, prefix="training")
 
         # Capture log_history before teardown deletes the trainer.
         log_history = self.trainer.state.log_history

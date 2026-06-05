@@ -36,6 +36,7 @@ __all__ = [
     "QuantizationScheme",
     "ResolvedTrainingBatching",
     "TrainingHyperparams",
+    "TrainingMemoryControls",
 ]
 
 
@@ -170,6 +171,64 @@ def _largest_divisor_at_most(value: int, limit: int) -> int:
     return 1
 
 
+class TrainingMemoryControls(Parameters):
+    """Advanced memory/OOM controls for the differentially private training path.
+
+    These knobs trade speed or extra logging for lower peak VRAM and only take
+    effect when differential privacy is enabled (the controls live on the DP
+    ``OpacusDPTrainer`` loss path). Defaults reproduce the standard
+    (non-chunked, bf16-autocast) behavior, so leaving the group untouched
+    changes nothing.
+    """
+
+    disable_dp_bf16: Annotated[
+        bool,
+        Field(
+            title="disable_dp_bf16",
+            description=(
+                "Disable the Trainer's bf16 autocast during DP training so model outputs stay "
+                "in their original dtype. Mitigates the fp32 logits-upcast memory spike at the "
+                "cost of speed. Only applies when differential privacy is enabled."
+            ),
+        ),
+    ] = False
+
+    chunked_causal_lm_loss: Annotated[
+        bool,
+        Field(
+            title="chunked_causal_lm_loss",
+            description=(
+                "Compute causal-LM cross entropy in token chunks instead of upcasting all "
+                "logits to fp32 at once, reducing peak VRAM at a small speed cost. Only applies "
+                "to DP training."
+            ),
+        ),
+    ] = False
+
+    chunked_causal_lm_loss_tokens: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 1),
+        Field(
+            title="chunked_causal_lm_loss_tokens",
+            description=(
+                "Token chunk size used when chunked_causal_lm_loss is enabled. Smaller values "
+                "use less memory per chunk. Must be >= 1."
+            ),
+        ),
+    ] = 1024
+
+    debug_loss_memory: Annotated[
+        bool,
+        Field(
+            title="debug_loss_memory",
+            description=(
+                "Log CUDA memory around the causal-LM fp32 logits upcast for diagnostics. "
+                "Logging only -- does not change training behavior. Only applies to DP training."
+            ),
+        ),
+    ] = False
+
+
 class TrainingHyperparams(Parameters):
     """Hyperparameters that control the training process behavior.
 
@@ -232,6 +291,15 @@ class TrainingHyperparams(Parameters):
             ),
         ),
     ] = 8
+
+    memory: TrainingMemoryControls = Field(
+        title="memory",
+        description=(
+            "Advanced memory/OOM controls applied during differentially private training "
+            "(chunked loss, bf16 autocast disable, loss-memory diagnostics)."
+        ),
+        default_factory=TrainingMemoryControls,
+    )
 
     weight_decay: Annotated[
         float,
