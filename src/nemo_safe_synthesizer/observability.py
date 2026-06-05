@@ -1090,6 +1090,11 @@ class NvmlPeakSampler:
             self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._device_index)
         except pynvml.NVMLError as exc:  # driver missing, bad index, etc. -- degraded mode
             _hw_logger.warning("nvml-sampler: init failed; peak VRAM will be None: %s", exc)
+            if self._pynvml is not None:
+                try:
+                    self._pynvml.nvmlShutdown()
+                except self._pynvml.NVMLError:
+                    _hw_logger.debug("nvml-sampler: nvmlShutdown failed after init error", exc_info=True)
             self._pynvml = None
             return self
         self._thread = threading.Thread(target=self._run, daemon=True, name=f"nvml-sampler[{self._device_index}]")

@@ -91,7 +91,8 @@ def test_emit_training_observability_assembles_event_from_trainer_state():
     resolved batching + grad-sample mode and stashes it on
     ``last_training_observability`` (the backend, not the trainer, forwards it
     to wandb). Tested via the unbound method on a lightweight stub to avoid a
-    full training run."""
+    full training run.
+    """
     from types import SimpleNamespace
 
     from nemo_safe_synthesizer.privacy.dp_transformers import dp_utils
