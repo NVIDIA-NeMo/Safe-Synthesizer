@@ -375,7 +375,9 @@ Roughly aligned with our Conventional Commit types. Apply when it adds signal; m
 
 #### Area
 
-Where in the codebase the work lands. Apply one or more on PRs to help routing; optional on issues.
+Where in the codebase the work lands. Optional on issues.
+
+On PRs, `area:*` labels are auto-applied based on the files changed, using the rules in [`.github/labeler.yml`](.github/labeler.yml). Labels are additive only -- maintainers can add, remove, or override them manually, and the action will not undo manual changes on subsequent pushes. Update the labeler rules in the same PR that introduces new modules or area labels.
 
 Product areas mirror the `src/nemo_safe_synthesizer/` module map in [`AGENTS.md`](AGENTS.md):
 
