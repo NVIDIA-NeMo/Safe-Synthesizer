@@ -29,6 +29,9 @@ exclude = [
     "**/*.ipynb",
     ]
 
+# Lint floor = minimum supported Python (requires-python >=3.11), not the
+# 3.13 dev default. Keeps pyupgrade (UP006/UP007/UP035) from rewriting code
+# into 3.12+/3.13-only syntax that would break the 3.11 CI leg.
 target-version = "py311"
 line-length = 120
 indent-width = 4

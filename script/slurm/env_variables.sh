@@ -29,6 +29,7 @@ export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
 export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
 export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
+export NSS_PYTHON_VERSION="${NSS_PYTHON_VERSION:-3.13}"
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 export WANDB_MODE="online" # "online", "offline" or "disabled"
 export NEMO_DEPLOYMENT_TYPE="slurm-nvidia-internal" # sets the values for telemetry

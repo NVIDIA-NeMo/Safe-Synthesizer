@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing_extensions import override
+
 from ..base import IssueCollector, MetadataCheck
 from ..types import MetadataView
 from ._helpers import check_group_budget, check_sampled_record_budget, check_schema_prompt_budget
@@ -43,6 +45,7 @@ class TokenBudgetCheck(MetadataCheck):
     token_sample_size: int = 5000
     top_groups_to_check: int = 100
 
+    @override
     def check(self, ctx: MetadataView, collector: IssueCollector) -> None:
         data = ctx.data
         config = ctx.config

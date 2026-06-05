@@ -26,6 +26,7 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 import click
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
+from typing_extensions import TypeIs
 
 from ..config.types import AUTO_STR
 
@@ -108,7 +109,7 @@ ClickParam = LeafParam | FlagParam
 # ---------------------------------------------------------------------------
 
 
-def _is_basemodel(t: Any) -> bool:
+def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
 
 

@@ -27,7 +27,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ### Prerequisites
 
-- Python 3.11–3.13 (project supports Python 3.11, 3.12, and 3.13; `.python-version` currently pins 3.11 for bootstrapping at the repo root. Python 3.14+ is not supported — see [Troubleshooting](docs/user-guide/troubleshooting.md#python-314-is-not-supported))
+- Python 3.11–3.13 (project supports Python 3.11, 3.12, and 3.13; `.python-version` pins 3.13 for bootstrapping at the repo root. Python 3.14+ is not supported — see [Troubleshooting](docs/user-guide/troubleshooting.md#python-314-is-not-supported))
 - Git 2.34+ (minimum required for SSH commit signing)
 
 > Note: Other tools like [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://github.com/astral-sh/ty), and [gh](https://cli.github.com/) are installed automatically by `make setup` (via [mise](https://mise.jdx.dev/)). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed), ensuring reproducible toolchains across developer systems and CI. These should not interfere with locally installed tools.
@@ -545,6 +545,10 @@ Before submitting a PR:
 ## Code Style
 
 For detailed style guidelines covering Python, markdown, Dockerfiles, shell scripts, testing, and docstrings, see [STYLE_GUIDE.md](STYLE_GUIDE.md).
+
+### Python Version Compatibility
+
+Although the default development/runtime interpreter is Python 3.13, source code must remain Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax such as PEP 695 `type` statements or bracketed generic class/function parameters in shared package code yet.
 
 ### Formatting, Linting, and Type Checking
 

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlparse
 
+from typing_extensions import override
+
 from ...llm.utils import ModelRef
 from ...observability import get_logger
 from ...utils import hf_offline_enabled
@@ -46,6 +48,7 @@ class CUDAAvailabilityCheck(ConfigCheck):
     label = "CUDA availability"
     category = "environment"
 
+    @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         torch = require_import(
             collector,
@@ -362,6 +365,7 @@ class VRAMHeadroomCheck(MetadataCheck):
     category = "environment"
     requires = ("gpu.cuda",)
 
+    @override
     def check(self, ctx: MetadataView, collector: IssueCollector) -> None:
         import torch
 
@@ -483,6 +487,7 @@ class InferenceModelCheck(ConfigCheck):
     label = "Inference configuration"
     category = "environment"
 
+    @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         config = ctx.config
         if config.replace_pii is None or config.replace_pii.globals.classify.enable_classify is False:
@@ -532,6 +537,7 @@ class HFModelAvailabilityCheck(ConfigCheck):
     label = "HF model availability"
     category = "environment"
 
+    @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         model_name = ctx.config.training.pretrained_model
         if not model_name:

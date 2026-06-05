@@ -63,7 +63,7 @@ ARG UBUNTU_VERSION=22.04
 # Use "runtime" when all deps ship pre-built wheels (current state).
 # Switch to "devel" if a future dependency requires CUDA compilation.
 ARG CUDA_IMAGE_TYPE=runtime
-ARG PYTHON_VERSION=3.11.13
+ARG PYTHON_VERSION=3.13.13
 
 # CUDA compute capabilities to compile for (used with CUDA_IMAGE_TYPE=devel).
 # Recommended values per architecture:
