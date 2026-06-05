@@ -9429,7 +9429,7 @@ uses a four-stage multistage build:</p>
 
     subgraph stages [Build Stages]
         tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
-        deps["deps\nInstalls Python 3.11 via uv\nuv sync cu129+engine"]
+        deps["deps\nInstalls Python 3.13 via uv\nuv sync cu129+engine"]
         runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
         dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
     end
@@ -9515,7 +9515,7 @@ command).</p>
 </tr>
 <tr>
 <td><code>PYTHON_VERSION</code></td>
-<td><code>3.11.13</code></td>
+<td><code>3.13</code></td>
 <td>Python version installed via <code>uv python install</code></td>
 </tr>
 <tr>
@@ -9767,7 +9767,7 @@ and CUDA libraries. This is expected for a full ML inference stack.</p>
 <tr>
 <td>Base</td>
 <td><code>nvidia/cuda:12.9.1-runtime-ubuntu22.04</code></td>
-<td><code>python:3.11-slim</code></td>
+<td><code>python:3.13-slim</code></td>
 </tr>
 <tr>
 <td>Extras</td>
