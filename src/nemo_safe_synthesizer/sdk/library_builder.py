@@ -22,6 +22,7 @@ from ..config.autoconfig import AutoConfigResolver
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
+from ..generation.remote_backend import RemoteBackend
 from ..generation.timeseries_backend import TimeseriesBackend
 from ..generation.vllm_backend import VllmBackend
 from ..holdout.holdout import Holdout
@@ -161,7 +162,8 @@ class SafeSynthesizer(ConfigBuilder):
         results = builder.results
 
     ``train()`` uses ``HuggingFaceBackend``. ``generate()`` chooses
-    ``TimeseriesBackend`` when ``config.time_series.is_timeseries`` is true and
+    ``RemoteBackend`` when ``config.generation.remote`` is set,
+    ``TimeseriesBackend`` when ``config.time_series.is_timeseries`` is true, and
     ``VllmBackend`` otherwise. Stepwise callers must call ``save_results()``
     themselves after ``evaluate()``; ``run()`` does this automatically.
 
@@ -544,9 +546,10 @@ class SafeSynthesizer(ConfigBuilder):
     def generate(self) -> SafeSynthesizer:
         """Generate synthetic data using the trained model.
 
-        Selects the appropriate backend (``VllmBackend`` or
-        ``TimeseriesBackend``), initializes it, and generates
-        synthetic records.
+        Selects the appropriate backend -- ``RemoteBackend`` when
+        ``config.generation.remote`` is set, ``TimeseriesBackend`` for
+        time-series datasets, otherwise the local ``VllmBackend`` -- then
+        initializes it and generates synthetic records.
 
         Returns:
             Self for method chaining.
@@ -565,8 +568,15 @@ class SafeSynthesizer(ConfigBuilder):
             trainer.teardown()
 
         assert self._workdir is not None
-        # Select backend based on time_series configuration
-        if self._nss_config.time_series and self._nss_config.time_series.is_timeseries:
+        # Select backend: a configured remote endpoint wins, then time-series,
+        # otherwise the local vLLM engine. The remote+time-series combination is
+        # rejected at config validation time (SafeSynthesizerParameters).
+        is_timeseries = bool(self._nss_config.time_series and self._nss_config.time_series.is_timeseries)
+        if self._nss_config.generation.remote is not None:
+            self.generator = RemoteBackend(
+                config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
+            )
+        elif is_timeseries:
             self.generator = TimeseriesBackend(
                 config=self._nss_config, model_metadata=self._llm_metadata, workdir=self._workdir
             )

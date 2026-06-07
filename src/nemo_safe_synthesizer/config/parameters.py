@@ -163,6 +163,18 @@ class SafeSynthesizerParameters(Parameters):
                 )
         return self
 
+    @model_validator(mode="after")
+    def check_remote_not_timeseries(self) -> Self:
+        """Reject remote generation for time-series datasets at config time.
+
+        The remote backend has no equivalent of the grouped time-series
+        generation loop, so the combination is unsupported. Catching it here
+        fails fast instead of after training completes.
+        """
+        if self.generation.remote is not None and self.time_series is not None and self.time_series.is_timeseries:
+            raise ParameterError("Remote generation is not supported for time-series datasets.")
+        return self
+
     @classmethod
     @override
     def from_params(cls, **kwargs: object) -> "SafeSynthesizerParameters":
