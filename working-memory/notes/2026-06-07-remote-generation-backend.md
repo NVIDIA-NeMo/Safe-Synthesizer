@@ -69,8 +69,67 @@ emulated with parallel review agents). Not yet merged or pushed.
   realistic records via `TabularDataProcessor` in ~13s. `json_schema` works at transport level
   but the server **pretty-prints** JSON across lines, which the JSONL processor rejects (0 valid);
   `regex` and `structural_tag` enforce the compact single-line shape the pipeline needs.
-- `tests/generation/test_remote_backend.py` — 24 unit tests (mocked httpx, GPU-free), incl. an
+- `tests/generation/test_remote_backend.py` — 25 unit tests (mocked httpx, GPU-free), incl. an
   end-to-end `generate()` loop through a real `TabularDataProcessor`. ruff + ty clean.
+
+## Runtime validation against real adapters (2026-06-07, GPU freed mid-session)
+
+Proved RemoteBackend is runtime-agnostic against two engine families, both serving a real
+Safe Synthesizer LoRA, generation with **structured generation OFF** (the adapter emits JSONL):
+
+- **vLLM + SmolLM3-3B `financial_transactions` LoRA** (served via `tools/vllm_debug.py serve
+  --adapter`): 10/10 valid, realistic records (real names/cities, valid enum currencies/types,
+  in-range IDs). The eager→CUDA-graphs perf result is below.
+- **NIM (`mistral-7b-instruct-v0.3:1.12.0`) + Mistral-7B `ai_generated_essays` LoRA**: NIM
+  discovered and served our adapter (`essays-lora` listed in `/v1/models`); 3/3 valid, coherent
+  essay records. **The only code that needed to change was `prepare_params`** — the generate
+  loop, processor, batch, and results machinery worked unchanged. Strongest evidence the
+  abstraction is sound.
+
+**Dialect finding (new compatibility-matrix axis).** NIM's OpenAI server accepts only a *subset*
+of vLLM's sampling extensions; it 400s on the rest:
+
+  | sampling field | vLLM | NIM (TRT-LLM) |
+  | --- | --- | --- |
+  | temperature, top_p, max_tokens, n | OK | OK |
+  | min_p, ignore_eos | OK | OK |
+  | repetition_penalty, top_k | OK | **400** |
+  | skip_special_tokens, include_stop_str_in_output | OK | **400** |
+
+Fix shipped: `RemoteParameters.dialect` (`"vllm"` default | `"openai"`). `prepare_params` emits
+the vLLM extensions only for `"vllm"`; `"openai"` sends just the universal fields, for NIM/Triton.
+Resolved sampling values are identical across dialects — only the wire fields differ.
+
+NIM operational notes: needs `NGC_API_KEY` (env `NVIDIA_API_KEY` here) for `docker login nvcr.io`
++ runtime; mount a **writable** model cache (`chmod 777`, container runs as uid 1000) or it can't
+download its profile; LoRA via `-e NIM_PEFT_SOURCE` with adapters in subdirs (subdir name = served
+model), and rewrite the adapter_config `base_model_name_or_path` from a local snapshot path to the
+canonical repo id. First boot ~10 min (profile download + TRT-LLM engine build).
+
+## Quality & performance (what was and wasn't measured)
+
+- **Quality**: only *face-validity* was observed — 100% schema-valid across all real-adapter runs
+  (10/10, 10/10, 3/3), `status=complete`, realistic content. Safe Synthesizer's real evaluation
+  phase (SQS, distribution fidelity, MI/AIA privacy) was **not** run, so there are no rigorous
+  quality scores. NIM-vs-vLLM quality is **not** isolated: different adapters (SmolLM3-financial
+  vs Mistral-essays), temp 0.9.
+- **Performance**: the one clean comparison (same model/adapter/workload) is **vLLM eager vs
+  CUDA-graphs: 118.73s → 15.24s for 10 records (~7.8x)** — the payoff of the FlashInfer repair
+  (see below) + the `vllm_debug` eager-off default. NIM's number (404s / 68k tokens / 3 essays
+  ≈ 169 tok/s aggregate) is **not** comparable: 7B vs 3B, ~22k-token essays vs ~600-token rows.
+  A fair runtime comparison needs the *same* adapter on both engines + the eval metrics — not yet done.
+
+## FlashInfer was broken in the venv (fixed, not a pyproject change)
+
+Symptom: `import flashinfer` raised `AttributeError: module 'flashinfer_cubin' has no attribute
+'__version__'`, crashing vLLM's backend probe (catches only `ImportError`). Root cause was **not**
+versions: the `0.6.8.post1` PyPI wheel ships `flashinfer_cubin/__init__.py` (verified by remote
+wheel listing) and the uv cache copy was intact, but the `.venv` install was **missing that file**
+(only the 295MB `cubins/` dir linked) — a partial hardlink-fallback copy (`/stable-cache` cache and
+`/root` venv are different filesystems). Fix: `uv sync --reinstall-package flashinfer-cubin` (no
+pyproject edit; vLLM 0.20.0 hard-pins `==0.6.8.post1` anyway). Durable hardening: `UV_LINK_MODE=copy`
+or colocate cache+venv. With FlashInfer importable, `vllm_debug serve` now defaults to CUDA graphs
+(`--eager` is the opt-in escape hatch).
 
 ## Decisions and why
 
