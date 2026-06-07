@@ -26,11 +26,13 @@ from ..errors import ParameterError
 StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "structural_tag"]
 ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
 StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
+RemoteDialect = Literal["vllm", "openai"]
 
 STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
 
 __all__ = [
     "GenerateParameters",
+    "RemoteDialect",
     "RemoteParameters",
     "ResolvedStructuredGenerationSchemaMethod",
     "StructuredGenerationParameters",
@@ -189,6 +191,19 @@ class RemoteParameters(Parameters, BaseModel):
     (``regex`` / ``json`` / ``structural_tag``), so all schema methods are
     supported against a vLLM 0.20+ server.
     """
+
+    dialect: Annotated[
+        RemoteDialect,
+        Field(
+            title="dialect",
+            description=(
+                "Which request fields to send. 'vllm' (default) adds vLLM's sampling extensions "
+                "(repetition_penalty, top_k, min_p, skip_special_tokens, include_stop_str_in_output, "
+                "ignore_eos). 'openai' sends only the universal OpenAI fields, for stricter servers "
+                "(e.g. NIM / TensorRT-LLM) that reject those extensions."
+            ),
+        ),
+    ] = "vllm"
 
     endpoint_url: Annotated[
         str,

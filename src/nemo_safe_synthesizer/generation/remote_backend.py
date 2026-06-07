@@ -177,11 +177,18 @@ class RemoteBackend(GeneratorBackend):
     def prepare_params(self, **kwargs) -> None:
         """Build the reusable ``/v1/completions`` request body from sampling params.
 
-        Standard OpenAI fields (``temperature``, ``top_p``, ``max_tokens``) are
-        sent alongside vLLM's protocol extensions (``repetition_penalty``,
-        ``top_k``, ``min_p``, ``skip_special_tokens``, ``include_stop_str_in_output``,
-        ``ignore_eos``), which a vLLM OpenAI server accepts as top-level fields.
-        The per-request ``prompt`` is added in ``_generate_batch``.
+        The request fields depend on ``config.generation.remote.dialect``:
+
+        - ``"vllm"`` (default): the universal OpenAI fields (``temperature``,
+          ``top_p``, ``max_tokens``, ``n``) plus vLLM's protocol extensions
+          (``repetition_penalty``, ``top_k``, ``min_p``, ``skip_special_tokens``,
+          ``include_stop_str_in_output``, ``ignore_eos``).
+        - ``"openai"``: only the universal fields, for stricter servers (e.g.
+          NIM / TensorRT-LLM) that reject the vLLM extensions with a 400.
+
+        The resolved sampling values are identical across dialects; only which
+        fields go on the wire differs. The per-request ``prompt`` is added in
+        ``_generate_batch``.
         """
         body: dict[str, Any] = {
             "model": self._remote.model,
@@ -189,14 +196,16 @@ class RemoteBackend(GeneratorBackend):
             "temperature": kwargs["temperature"],
             "top_p": kwargs["top_p"],
             "max_tokens": kwargs["max_tokens"],
-            # vLLM OpenAI-server protocol extensions.
-            "repetition_penalty": kwargs["repetition_penalty"],
-            "top_k": kwargs["top_k"],
-            "min_p": kwargs["min_p"],
-            "skip_special_tokens": kwargs["skip_special_tokens"],
-            "include_stop_str_in_output": kwargs["include_stop_str_in_output"],
-            "ignore_eos": kwargs["ignore_eos"],
         }
+        if self._remote.dialect == "vllm":
+            body |= {
+                "repetition_penalty": kwargs["repetition_penalty"],
+                "top_k": kwargs["top_k"],
+                "min_p": kwargs["min_p"],
+                "skip_special_tokens": kwargs["skip_special_tokens"],
+                "include_stop_str_in_output": kwargs["include_stop_str_in_output"],
+                "ignore_eos": kwargs["ignore_eos"],
+            }
         body |= self._build_structured_outputs()
         self._request_body = body
 

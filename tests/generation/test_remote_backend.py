@@ -21,6 +21,7 @@ from nemo_safe_synthesizer.config import (
     TimeSeriesParameters,
     TrainingHyperparams,
 )
+from nemo_safe_synthesizer.config.generate import RemoteDialect
 from nemo_safe_synthesizer.errors import GenerationError, InternalError, ParameterError
 from nemo_safe_synthesizer.generation.backend import GeneratorBackend
 from nemo_safe_synthesizer.generation.batch import Batch
@@ -53,6 +54,7 @@ def make_params(
     model: str = "my-lora",
     api_key_env: str | None = None,
     max_concurrency: int = 16,
+    dialect: RemoteDialect = "vllm",
 ) -> SafeSynthesizerParameters:
     """Build params with a configured remote endpoint."""
     return SafeSynthesizerParameters(
@@ -66,6 +68,7 @@ def make_params(
                 model=model,
                 api_key_env=api_key_env,
                 max_concurrency=max_concurrency,
+                dialect=dialect,
             ),
         ),
     )
@@ -168,6 +171,27 @@ class TestPrepareParams:
         assert body["min_p"] == 0
         # No structured generation -> no structured_outputs field.
         assert "structured_outputs" not in body
+
+    def test_openai_dialect_omits_vllm_extensions(self, mock_model_metadata, mock_schema):
+        backend = make_backend(make_params(dialect="openai"), mock_model_metadata, mock_schema)
+        backend.prepare_params(**self._sampling_kwargs())
+        body = backend._request_body
+        assert body is not None
+        # Universal OpenAI fields are still present.
+        assert body["temperature"] == 0.9
+        assert body["top_p"] == 1.0
+        assert body["max_tokens"] == 128
+        assert body["n"] == 1
+        # The vLLM-only extensions that strict servers (NIM/TRT-LLM) reject are dropped.
+        for field in (
+            "repetition_penalty",
+            "top_k",
+            "min_p",
+            "skip_special_tokens",
+            "include_stop_str_in_output",
+            "ignore_eos",
+        ):
+            assert field not in body
 
     def test_structured_outputs_json_when_json_schema_method(self, mock_model_metadata, mock_schema):
         config = make_params()
