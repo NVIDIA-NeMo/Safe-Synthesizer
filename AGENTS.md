@@ -50,7 +50,7 @@ Source code lives in `src/nemo_safe_synthesizer/`:
 | `configurator/` | Pydantic-to-Click mapping, Parameter types, validators |
 | `data_processing/` | Holdout, actions, assembler, records, shared token budget (`budget.py`), shared column validators (`validation.py`) |
 | `evaluation/` | Evaluator, components (privacy, MI, AIA, PII replay), reports |
-| `generation/` | GeneratorBackend, VllmBackend, regex manager, batch gen |
+| `generation/` | GeneratorBackend (owns the concrete `generate()` batch-loop template method), VllmBackend, RemoteBackend (GPU-free; calls a vLLM/NIM OpenAI-compatible endpoint), regex manager, batch gen |
 | `holdout/` | Train/test splitting |
 | `llm/` | Model loading, metadata, memory management |
 | `pii_replacer/` | NER-based PII detection and replacement |

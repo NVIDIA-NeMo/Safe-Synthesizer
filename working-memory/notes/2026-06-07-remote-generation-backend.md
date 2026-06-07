@@ -106,18 +106,26 @@ download its profile; LoRA via `-e NIM_PEFT_SOURCE` with adapters in subdirs (su
 model), and rewrite the adapter_config `base_model_name_or_path` from a local snapshot path to the
 canonical repo id. First boot ~10 min (profile download + TRT-LLM engine build).
 
-## Quality & performance (what was and wasn't measured)
+## Quality & performance (measured)
 
-- **Quality**: only *face-validity* was observed — 100% schema-valid across all real-adapter runs
-  (10/10, 10/10, 3/3), `status=complete`, realistic content. Safe Synthesizer's real evaluation
-  phase (SQS, distribution fidelity, MI/AIA privacy) was **not** run, so there are no rigorous
-  quality scores. NIM-vs-vLLM quality is **not** isolated: different adapters (SmolLM3-financial
-  vs Mistral-essays), temp 0.9.
-- **Performance**: the one clean comparison (same model/adapter/workload) is **vLLM eager vs
-  CUDA-graphs: 118.73s → 15.24s for 10 records (~7.8x)** — the payoff of the FlashInfer repair
-  (see below) + the `vllm_debug` eager-off default. NIM's number (404s / 68k tokens / 3 essays
-  ≈ 169 tok/s aggregate) is **not** comparable: 7B vs 3B, ~22k-token essays vs ~600-token rows.
-  A fair runtime comparison needs the *same* adapter on both engines + the eval metrics — not yet done.
+- **Real quality + privacy eval** (Evaluator on 250 RemoteBackend-generated financial records via
+  vLLM, vs the run's 8.9k-train / 467-test holdout; gen 23.5s, eval 17.1s). Scores 0–10:
+  **Synthetic Quality Score 8.0** (col-distribution 8.9, text-structure 10.0, text-semantic 8.3,
+  deep-structure 7.7, col-correlation 7.1) and **Data Privacy Score 8.8** (attribute-inference
+  9.4, membership-inference 8.1). Notable: the full quality+privacy pipeline consumed
+  `GenerateJobResults` from the *remote* path unchanged — the abstraction holds through evaluation.
+  This is the tabular financial/vLLM path (where the metrics are meaningful); essays/NIM quality was
+  not scored (free text + too few records).
+- **Controlled vLLM-vs-NIM perf** (same Mistral-7B + essays LoRA, single-stream, 512-tok budget,
+  5 calls): **vLLM (CUDA graphs) 74.7 tok/s (sd 0.1)** vs **NIM (TRT-LLM) 66.3 tok/s steady**
+  (62.4 incl. a 47 tok/s cold first call). So vLLM edges NIM ~13% *at concurrency=1* — but this is
+  the latency-bound regime where TRT-LLM's batching strength does **not** show; concurrent/batched
+  throughput (NIM's expected advantage) was not measured (single GPU can't host both at once).
+  NIM cold start ~490s (cached profile) / ~600s (first) vs vLLM ~318s. The dialect seam carried
+  both runtimes (vLLM=`vllm`, NIM=`openai`).
+- **FlashInfer-repair perf payoff** (same SmolLM3 financial adapter, 10 records): **vLLM eager
+  118.73s → CUDA-graphs 15.24s (~7.8x)** — see below.
+- **Validity** across all real-adapter runs: 100% schema-valid (`status=complete`).
 
 ## FlashInfer was broken in the venv (fixed, not a pyproject change)
 
