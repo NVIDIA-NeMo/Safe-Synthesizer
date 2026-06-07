@@ -16,9 +16,9 @@ r"""vllm-debug: spin up a vLLM model and fire a few debug calls against it.
 A standalone companion to the VllmBackend / RemoteBackend code: serve a base
 model (optionally with a trained LoRA adapter attached) and poke it over the
 OpenAI-compatible API to see exactly what it emits. ``serve`` runs vLLM from the
-project venv with the workarounds this A100 box needs (offline HF cache,
-FLASH_ATTN, eager mode); ``call`` and ``models`` are lightweight and need only
-this script's own deps.
+project venv tuned for this A100 box (offline HF cache, FLASH_ATTN; CUDA graphs
+on by default, ``--eager`` as an escape hatch); ``call`` and ``models`` are
+lightweight and need only this script's own deps.
 
 Usage::
 
@@ -167,7 +167,13 @@ def serve(
     gpu_util: Annotated[float, cyclopts.Parameter(name="--gpu-util")] = 0.90,
     max_num_seqs: int = 128,
     attention_backend: str = "FLASH_ATTN",
-    eager: Annotated[bool, cyclopts.Parameter(help="Use --enforce-eager (FlashInfer is broken in this venv)")] = True,
+    eager: Annotated[
+        bool,
+        cyclopts.Parameter(
+            help="Force --enforce-eager, disabling torch.compile + CUDA graphs. "
+            "Only needed when FlashInfer is broken (see serve docstring); off by default."
+        ),
+    ] = False,
     prefix_caching: bool = True,
     trust_remote_code: bool = True,
     python: Annotated[Path | None, cyclopts.Parameter(help="Interpreter to run vLLM (default: project venv)")] = None,
@@ -176,8 +182,15 @@ def serve(
     """Launch a vLLM OpenAI-compatible server, optionally with a LoRA adapter attached.
 
     Replaces this process with the server (so Ctrl-C / logs behave normally).
-    Defaults bake in the workarounds this A100 box needs: a small context window,
-    high GPU fraction, FLASH_ATTN, and eager mode.
+    Defaults are tuned for this A100 box: a small context window, high GPU
+    fraction, and the FLASH_ATTN attention backend.
+
+    CUDA graphs are enabled by default (``--enforce-eager`` off) for throughput.
+    Pass ``--eager`` only if the venv's FlashInfer is broken -- vLLM's
+    torch.compile path imports ``flashinfer.comm`` unconditionally, so a broken
+    FlashInfer crashes engine init unless eager mode skips compilation. (A broken
+    FlashInfer usually means a partial package install; ``uv sync
+    --reinstall-package flashinfer-cubin`` repairs it.)
     """
     if adapter is not None and not adapter.exists():
         bad_input(f"adapter path does not exist: {adapter}")
@@ -350,9 +363,13 @@ def call(
     top_p: Annotated[float, cyclopts.Parameter(name="--top-p")] = 1.0,
     repetition_penalty: Annotated[float, cyclopts.Parameter(name="--repetition-penalty")] = 1.0,
     think: Annotated[bool, cyclopts.Parameter(help="Allow reasoning CoT (chat mode; default off)")] = False,
-    json_schema: Annotated[Path | None, cyclopts.Parameter(name="--json-schema", help="Constrain to JSON schema")] = None,
+    json_schema: Annotated[
+        Path | None, cyclopts.Parameter(name="--json-schema", help="Constrain to JSON schema")
+    ] = None,
     regex: Annotated[str | None, cyclopts.Parameter(help="Constrain output to a regex")] = None,
-    structural_tag: Annotated[Path | None, cyclopts.Parameter(name="--structural-tag", help="XGrammar tag file")] = None,
+    structural_tag: Annotated[
+        Path | None, cyclopts.Parameter(name="--structural-tag", help="XGrammar tag file")
+    ] = None,
     n: Annotated[int, cyclopts.Parameter(help="Number of times to repeat the call")] = 1,
     api_key: Annotated[str, cyclopts.Parameter(name="--api-key")] = "EMPTY",
     request_timeout: Annotated[float, cyclopts.Parameter(name="--request-timeout")] = 600.0,
