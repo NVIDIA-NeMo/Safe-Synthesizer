@@ -185,9 +185,9 @@ class RemoteParameters(Parameters, BaseModel):
     already serve the base model with the fine-tuned LoRA adapter attached,
     registered under ``model``. No GPU is used locally.
 
-    Structured generation maps to vLLM's guided-decoding extensions
-    (``guided_regex`` / ``guided_json``); the ``structural_tag`` schema method
-    is not supported over the remote API.
+    Structured generation maps to vLLM's ``structured_outputs`` request field
+    (``regex`` / ``json``); the ``structural_tag`` schema method is not
+    supported over the remote API.
     """
 
     endpoint_url: Annotated[

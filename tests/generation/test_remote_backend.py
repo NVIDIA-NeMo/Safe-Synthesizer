@@ -166,11 +166,10 @@ class TestPrepareParams:
         assert body["repetition_penalty"] == 1.0
         assert body["top_k"] == -1
         assert body["min_p"] == 0
-        # No structured generation -> no guided fields.
-        assert "guided_regex" not in body
-        assert "guided_json" not in body
+        # No structured generation -> no structured_outputs field.
+        assert "structured_outputs" not in body
 
-    def test_guided_json_when_json_schema_method(self, mock_model_metadata, mock_schema):
+    def test_structured_outputs_json_when_json_schema_method(self, mock_model_metadata, mock_schema):
         config = make_params()
         config.generation.use_structured_generation = True
         config.generation.structured_generation_schema_method = "json_schema"
@@ -178,9 +177,9 @@ class TestPrepareParams:
         backend.prepare_params(**self._sampling_kwargs())
         body = backend._request_body
         assert body is not None
-        assert body["guided_json"] == mock_schema
+        assert body["structured_outputs"] == {"json": mock_schema}
 
-    def test_guided_regex_when_regex_method(self, mock_model_metadata, mock_schema):
+    def test_structured_outputs_regex_when_regex_method(self, mock_model_metadata, mock_schema):
         config = make_params()
         config.generation.use_structured_generation = True
         config.generation.structured_generation_schema_method = "regex"
@@ -191,7 +190,7 @@ class TestPrepareParams:
         build_regex.assert_called_once()
         body = backend._request_body
         assert body is not None
-        assert body["guided_regex"] == "REGEX"
+        assert body["structured_outputs"] == {"regex": "REGEX"}
 
     def test_structural_tag_rejected(self, mock_model_metadata, mock_schema):
         config = make_params()

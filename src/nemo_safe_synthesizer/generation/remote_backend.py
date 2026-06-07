@@ -46,10 +46,10 @@ class RemoteBackend(GeneratorBackend):
     token count. Requests within a batch are issued concurrently up to
     ``config.generation.remote.max_concurrency``.
 
-    Structured generation maps to vLLM's OpenAI-server guided-decoding
-    extensions: ``regex`` -> ``guided_regex`` and ``json_schema`` ->
-    ``guided_json``. The XGrammar ``structural_tag`` method has no OpenAI-API
-    equivalent and is rejected in ``prepare_params``.
+    Structured generation maps to vLLM's ``structured_outputs`` request field
+    (``regex`` / ``json``), mirroring the offline ``StructuredOutputsParams``.
+    The XGrammar ``structural_tag`` method has no OpenAI-API equivalent and is
+    rejected in ``prepare_params``.
 
     Args:
         config: Pipeline configuration. ``config.generation.remote`` must be set.
@@ -110,9 +110,7 @@ class RemoteBackend(GeneratorBackend):
         if remote.api_key_env:
             api_key = os.environ.get(remote.api_key_env)
             if not api_key:
-                raise ParameterError(
-                    f"Remote endpoint API key env var {remote.api_key_env!r} is not set or is empty."
-                )
+                raise ParameterError(f"Remote endpoint API key env var {remote.api_key_env!r} is not set or is empty.")
             headers["Authorization"] = f"Bearer {api_key}"
 
         self._client = httpx.Client(
@@ -138,10 +136,16 @@ class RemoteBackend(GeneratorBackend):
         """
         return 0
 
-    def _build_guided_params(self) -> dict[str, Any]:
-        """Map structured-generation config to vLLM guided-decoding request fields.
+    def _build_structured_outputs(self) -> dict[str, Any]:
+        """Map structured-generation config to a vLLM ``structured_outputs`` request field.
 
-        Returns an empty dict when structured generation is disabled.
+        Mirrors the offline
+        [`StructuredOutputsParams`][vllm.sampling_params.StructuredOutputsParams]
+        the local backend builds: ``regex`` -> ``{"regex": ...}`` and
+        ``json_schema`` -> ``{"json": schema}``. Returns an empty dict when
+        structured generation is disabled. (The legacy top-level
+        ``guided_regex`` / ``guided_json`` fields are silently ignored by
+        vLLM 0.20+ servers, so they are not used.)
 
         Raises:
             ParameterError: If the resolved schema method is ``structural_tag``,
@@ -157,15 +161,12 @@ class RemoteBackend(GeneratorBackend):
         )
         if method == "regex":
             pc = self.model_metadata.prompt_config
-            logger.info("Structured generation enabled; constraining output with guided_regex")
-            return {
-                "guided_regex": build_json_based_regex(
-                    self.schema, self.config, bos_token=pc.bos_token, eos_token=pc.eos_token
-                )
-            }
+            logger.info("Structured generation enabled; constraining output with a regex")
+            regex = build_json_based_regex(self.schema, self.config, bos_token=pc.bos_token, eos_token=pc.eos_token)
+            return {"structured_outputs": {"regex": regex}}
         if method == "json_schema":
-            logger.info("Structured generation enabled; constraining output with guided_json")
-            return {"guided_json": self.schema}
+            logger.info("Structured generation enabled; constraining output with a JSON schema")
+            return {"structured_outputs": {"json": self.schema}}
 
         raise ParameterError(
             "Remote generation does not support "
@@ -196,7 +197,7 @@ class RemoteBackend(GeneratorBackend):
             "include_stop_str_in_output": kwargs["include_stop_str_in_output"],
             "ignore_eos": kwargs["ignore_eos"],
         }
-        body |= self._build_guided_params()
+        body |= self._build_structured_outputs()
         self._request_body = body
 
     def _complete_one(self) -> tuple[str, int, str | None]:
