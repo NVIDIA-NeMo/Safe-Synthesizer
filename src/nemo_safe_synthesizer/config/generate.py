@@ -186,8 +186,8 @@ class RemoteParameters(Parameters, BaseModel):
     registered under ``model``. No GPU is used locally.
 
     Structured generation maps to vLLM's ``structured_outputs`` request field
-    (``regex`` / ``json``); the ``structural_tag`` schema method is not
-    supported over the remote API.
+    (``regex`` / ``json`` / ``structural_tag``), so all schema methods are
+    supported against a vLLM 0.20+ server.
     """
 
     endpoint_url: Annotated[

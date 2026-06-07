@@ -22,7 +22,7 @@ from ..utils import load_json
 from .backend import GeneratorBackend
 from .batch import Batch
 from .processors import Processor, create_processor
-from .regex_manager import build_json_based_regex
+from .regex_manager import build_json_based_regex, build_json_structural_tag
 
 logger = get_logger(__name__)
 
@@ -47,9 +47,9 @@ class RemoteBackend(GeneratorBackend):
     ``config.generation.remote.max_concurrency``.
 
     Structured generation maps to vLLM's ``structured_outputs`` request field
-    (``regex`` / ``json``), mirroring the offline ``StructuredOutputsParams``.
-    The XGrammar ``structural_tag`` method has no OpenAI-API equivalent and is
-    rejected in ``prepare_params``.
+    (``regex`` / ``json`` / ``structural_tag``), mirroring the offline
+    ``StructuredOutputsParams``, so all three schema methods -- including the
+    ``auto`` default -- are supported.
 
     Args:
         config: Pipeline configuration. ``config.generation.remote`` must be set.
@@ -141,15 +141,15 @@ class RemoteBackend(GeneratorBackend):
 
         Mirrors the offline
         [`StructuredOutputsParams`][vllm.sampling_params.StructuredOutputsParams]
-        the local backend builds: ``regex`` -> ``{"regex": ...}`` and
-        ``json_schema`` -> ``{"json": schema}``. Returns an empty dict when
-        structured generation is disabled. (The legacy top-level
-        ``guided_regex`` / ``guided_json`` fields are silently ignored by
-        vLLM 0.20+ servers, so they are not used.)
+        the local backend builds, so all three schema methods are supported:
+        ``regex`` -> ``{"regex": ...}``, ``json_schema`` -> ``{"json": schema}``,
+        and ``structural_tag`` -> ``{"structural_tag": ...}`` (the XGrammar tag
+        is sent as its JSON-encoded string, which yields multi-record JSONL).
+        Returns an empty dict when structured generation is disabled.
 
-        Raises:
-            ParameterError: If the resolved schema method is ``structural_tag``,
-                which has no OpenAI-API equivalent.
+        The legacy top-level ``guided_regex`` / ``guided_json`` fields are
+        silently ignored by vLLM 0.20+ servers, so the nested
+        ``structured_outputs`` field is used instead.
         """
         gen = self.config.generation
         if not gen.use_structured_generation:
@@ -159,20 +159,20 @@ class RemoteBackend(GeneratorBackend):
             gen.structured_generation_schema_method,
             gen.structured_generation_backend,
         )
+        pc = self.model_metadata.prompt_config
         if method == "regex":
-            pc = self.model_metadata.prompt_config
             logger.info("Structured generation enabled; constraining output with a regex")
             regex = build_json_based_regex(self.schema, self.config, bos_token=pc.bos_token, eos_token=pc.eos_token)
             return {"structured_outputs": {"regex": regex}}
         if method == "json_schema":
             logger.info("Structured generation enabled; constraining output with a JSON schema")
             return {"structured_outputs": {"json": self.schema}}
+        if method == "structural_tag":
+            logger.info("Structured generation enabled; constraining output with an XGrammar structural tag")
+            tag = build_json_structural_tag(self.schema, self.config, bos_token=pc.bos_token, eos_token=pc.eos_token)
+            return {"structured_outputs": {"structural_tag": tag}}
 
-        raise ParameterError(
-            "Remote generation does not support "
-            "`structured_generation_schema_method='structural_tag'`: the XGrammar Structural "
-            "Tag has no OpenAI-API equivalent. Use 'regex' or 'json_schema' instead."
-        )
+        raise InternalError(f"Unhandled structured-generation schema method: {method!r}")
 
     def prepare_params(self, **kwargs) -> None:
         """Build the reusable ``/v1/completions`` request body from sampling params.

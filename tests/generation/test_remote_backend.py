@@ -192,14 +192,18 @@ class TestPrepareParams:
         assert body is not None
         assert body["structured_outputs"] == {"regex": "REGEX"}
 
-    def test_structural_tag_rejected(self, mock_model_metadata, mock_schema):
+    def test_structured_outputs_structural_tag_when_structural_tag_method(self, mock_model_metadata, mock_schema):
         config = make_params()
         config.generation.use_structured_generation = True
         config.generation.structured_generation_schema_method = "structural_tag"
         config.generation.structured_generation_backend = "xgrammar"
         backend = make_backend(config, mock_model_metadata, mock_schema)
-        with pytest.raises(ParameterError, match="structural_tag"):
+        with patch(f"{MODULE}.build_json_structural_tag", return_value="TAG") as build_tag:
             backend.prepare_params(**self._sampling_kwargs())
+        build_tag.assert_called_once()
+        body = backend._request_body
+        assert body is not None
+        assert body["structured_outputs"] == {"structural_tag": "TAG"}
 
 
 class TestCompleteOne:
