@@ -543,6 +543,62 @@ class TestAflushAwaits:
 
 
 # =============================================================================
+# TelemetryHandler — sync flush from async caller contexts
+# =============================================================================
+
+
+class TestFlushFromRunningLoop:
+    """Regression coverage for notebooks and async SDK callers."""
+
+    def test_flush_runs_to_completion_when_loop_is_running(self) -> None:
+        sent: list[int] = []
+
+        async def fake_flush(self) -> None:  # noqa: ARG001 - bound-method signature
+            sent.append(1)
+
+        async def driver() -> None:
+            handler = TelemetryHandler(source_client_version="1.0.0")
+            handler._events.append(
+                QueuedEvent(
+                    event=NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED),
+                    timestamp=datetime.now(timezone.utc),
+                )
+            )
+            with patch.object(TelemetryHandler, "_flush_events", new=fake_flush):
+                handler.flush()
+
+        asyncio.run(driver())
+        assert sent == [1]
+
+    def test_stop_flushes_fire_and_flush_path_when_loop_is_running(self, monkeypatch) -> None:
+        monkeypatch.setenv("NEMO_TELEMETRY_ENABLED", "true")
+        sent: list[int] = []
+
+        async def fake_send(events):
+            sent.append(len(events))
+
+        async def driver() -> None:
+            handler = TelemetryHandler(source_client_version="1.0.0")
+            with patch.object(handler, "_send_events", side_effect=fake_send):
+                handler.enqueue(NSSTrainingAndGenerationEvent(task="run", task_status=TaskStatusEnum.COMPLETED))
+                handler.stop()
+                assert handler._events == []
+
+        asyncio.run(driver())
+        assert sent == [1]
+
+    def test_run_sync_propagates_exception_to_flush_boundary(self) -> None:
+        async def boom() -> None:
+            raise RuntimeError("kaboom")
+
+        async def driver() -> None:
+            with pytest.raises(RuntimeError, match="kaboom"):
+                TelemetryHandler._run_sync(boom())
+
+        asyncio.run(driver())
+
+
+# =============================================================================
 # TelemetryHandler — sync lifecycle and context manager
 # =============================================================================
 

@@ -17,12 +17,13 @@ import asyncio
 import os
 import platform
 import threading
-from concurrent.futures import Future
+from collections.abc import Coroutine
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PureWindowsPath
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field
@@ -77,7 +78,7 @@ def _redact_endpoint(endpoint: str) -> str:
     except ValueError:
         return "<invalid-endpoint>"
     query = "<redacted>" if parsed.query else ""
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
+    return cast(str, urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment)))
 
 
 def _deployment_type() -> DeploymentTypeEnum:
@@ -333,7 +334,9 @@ class TelemetryHandler:
       a daemon thread with its own event loop that drives periodic flushing.
       ``stop()`` schedules a final flush, then stops the loop and joins the thread.
     - **Fire-and-flush mode**: skip ``start()``, ``enqueue()`` events, then call
-      ``stop()`` to flush once via ``asyncio.run``. No background thread is created.
+      ``stop()`` to flush once. No background thread is created unless the caller
+      already has a running event loop, in which case the one-shot flush is
+      offloaded to a worker thread with its own loop.
 
     Args:
         flush_interval_seconds (float): The interval in seconds to flush the events.
@@ -458,9 +461,9 @@ class TelemetryHandler:
         # Fire-and-flush: no background thread; flush once on a fresh loop.
         if self._events or self._dlq:
             try:
-                asyncio.run(self._flush_events())
+                self._run_sync(self._flush_events())
             except Exception:  # noqa: BLE001
-                pass  # best-effort: telemetry must not disrupt callers
+                logger.runtime.debug("Telemetry stop flush failed", exc_info=True)
 
     def flush(self) -> None:
         """Flush all queued events immediately and wait for completion."""
@@ -473,9 +476,29 @@ class TelemetryHandler:
             return
         if self._events or self._dlq:
             try:
-                asyncio.run(self._flush_events())
+                self._run_sync(self._flush_events())
             except Exception:  # noqa: BLE001
-                pass  # best-effort
+                logger.runtime.debug("Telemetry flush failed", exc_info=True)
+
+    @staticmethod
+    def _run_sync(coro: Coroutine[Any, Any, Any]) -> Any:
+        """Run a coroutine synchronously from sync or async caller contexts.
+
+        ``asyncio.run`` raises when called from a thread that already has a
+        running event loop, such as a notebook kernel or an async SDK caller. In
+        that case, run the coroutine in a worker thread so telemetry still gets
+        a fresh event loop while remaining synchronous to the caller.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            pool = ThreadPoolExecutor(max_workers=1)
+            future = pool.submit(asyncio.run, coro)
+            return future.result(timeout=30)
+        return asyncio.run(coro)
 
     async def _astop_inner(self) -> None:
         """Async shutdown body run on the background loop."""
