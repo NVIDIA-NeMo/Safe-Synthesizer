@@ -181,24 +181,19 @@ Overridable variables:
 
 `.github/workflows/container-build.yml` builds the runtime image on:
 
-- Pull requests that touch container or dependency inputs (`containers/**`,
-  `pyproject.toml`, `uv.lock`, `Makefile`, `.dockerignore`, or the workflow).
 - Manual dispatch.
 - Release tags.
 
 Manual dispatch works for branch validation after this workflow exists on the
-default branch. While adding the workflow for the first time, the path-filtered
-pull request trigger is the pre-merge validation path.
+default branch. Manual runs build the image without pushing it.
 
-The workflow pushes images for release tag `push` events and same-repository
-pull requests. Fork pull requests build without pushing because their
-`GITHUB_TOKEN` does not have package write permissions.
+The workflow pushes images only for release tag `push` events.
 
 Build cache is exported to a dedicated GHCR registry cache tag,
-`buildcache-<variant>`, only for events that can push packages. The workflow
-does not use the GitHub Actions cache backend for Docker layers because the
-CUDA dependency layers are large enough to churn the default Actions cache
-quota and slow down cache export.
+`buildcache-<variant>`, only for release tag events that can push packages. The
+workflow does not use the GitHub Actions cache backend for Docker layers
+because the CUDA dependency layers are large enough to churn the default
+Actions cache quota and slow down cache export.
 
 Current image name:
 
@@ -211,11 +206,6 @@ On release tags, current `cu129` tags include:
 - `cu129` and `latest-cu129`
 - `<version>-cu129` and `<major>.<minor>-cu129` on `v*` tags
 - `sha-<short-sha>-cu129` for traceability
-
-On same-repository pull requests, current `cu129` tags include:
-
-- `pr-<number>-cu129`
-- `sha-<short-sha>-cu129`
 
 The workflow passes `PACKAGE_VERSION` into the Docker build. On release tags,
 this is the tag without the leading `v`; on non-tag builds, it is

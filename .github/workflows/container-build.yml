@@ -15,16 +15,6 @@
 name: Container Build
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '.dockerignore'
-      - '.github/workflows/container-build.yml'
-      - 'containers/**'
-      - 'Makefile'
-      - 'pyproject.toml'
-      - 'uv.lock'
   push:
     tags:
       - 'v*'
@@ -77,14 +67,7 @@ jobs:
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        if: >-
-          ${{
-            github.event_name == 'push' ||
-            (
-              github.event_name == 'pull_request' &&
-              github.event.pull_request.head.repo.full_name == github.repository
-            )
-          }}
+        if: github.event_name == 'push'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -101,7 +84,6 @@ jobs:
           tags: |
             type=raw,value=${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=latest-${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=ref,event=pr,prefix=pr-,suffix=-${{ matrix.variant }}
             type=sha,prefix=sha-,suffix=-${{ matrix.variant }}
             type=semver,pattern={{version}}-${{ matrix.variant }}
             type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant }}
@@ -111,14 +93,7 @@ jobs:
             com.nvidia.nemo.safe-synthesizer.variant=${{ matrix.variant }}
 
       - name: Build and push image
-        if: >-
-          ${{
-            github.event_name == 'push' ||
-            (
-              github.event_name == 'pull_request' &&
-              github.event.pull_request.head.repo.full_name == github.repository
-            )
-          }}
+        if: github.event_name == 'push'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -136,14 +111,7 @@ jobs:
           cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-${{ matrix.variant }},mode=max,oci-mediatypes=true,image-manifest=true
 
       - name: Build image
-        if: >-
-          ${{
-            github.event_name != 'push' &&
-            (
-              github.event_name != 'pull_request' ||
-              github.event.pull_request.head.repo.full_name != github.repository
-            )
-          }}
+        if: github.event_name != 'push'
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
