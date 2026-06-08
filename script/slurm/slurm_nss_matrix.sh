@@ -106,7 +106,10 @@ apt-get update && apt-get install -y --no-install-recommends \
 
 # Ensure Python environment is available inside the container
 source "${LUSTRE_DIR}/.uv/bin/env"
-NSS_PYTHON_VERSION="${NSS_PYTHON_VERSION:-3.13}"
+
+# NSS_PYTHON_VERSION is resolved in env_variables.sh (from .python-version, with
+# an optional override), which is always sourced before this script runs.
+
 if [[ -n "${NSS_VERSION:-}" ]]; then
     # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
     # lustre so concurrent array jobs can share it without redundant downloads.
@@ -121,9 +124,17 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
 else
-    uv sync --frozen --extra cu129 --extra engine --group dev
+    # Repo mode: activate the venv pre-built once on the login node by
+    # submit_slurm_jobs.sh, rather than each array task running `uv sync` against
+    # the shared Lustre .venv (which could race and corrupt it).
+    if [[ ! -x "${NSS_DIR}/.venv/bin/safe-synthesizer" ]]; then
+        echo "[NSS SLURM] ERROR: no usable repo venv at ${NSS_DIR}/.venv (missing safe-synthesizer entry point)" >&2
+        echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once), or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss cu129)" >&2
+        exit 1
+    fi
+    echo "[NSS SLURM] Using pre-built repo venv at ${NSS_DIR}/.venv"
     source "${NSS_DIR}/.venv/bin/activate"
-    NSS_RUN_CMD="uv run safe-synthesizer"
+    NSS_RUN_CMD="${NSS_DIR}/.venv/bin/safe-synthesizer"
 fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 

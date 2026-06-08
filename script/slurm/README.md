@@ -117,7 +117,7 @@ Edit `env_variables.sh` to match your environment. Key items:
 - `NSS_DIR`: path to this repository.
 - `ADAPTER_PATH`: base path for workdirs (each run creates a subdirectory with adapter, logs, and outputs).
 - `VLLM_CACHE_ROOT`, `UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_BIN_DIR`, `UV_TOOL_DIR`, `HF_HOME`: cache locations to avoid stressing login nodes.
-- `NSS_PYTHON_VERSION`: Python version used for PyPI-mode Slurm virtualenvs. Defaults to `3.13` and is included in the cached venv name to avoid reusing venvs created with older Python versions.
+- `NSS_PYTHON_VERSION`: Python version used for Slurm virtualenvs. Defaults to the repo's pinned version from `.python-version` (so it tracks Python bumps automatically) and falls back to `3.13`. For PyPI mode it is also included in the cached venv name to avoid reusing venvs created with older Python versions. Export it before sourcing `env_variables.sh` to override.
 - `NSS_SHARED_DIR`: location of shared files such as benchmark data and container images, see section below for details.
 
 NSS CLI Environment Variables (used by `safe-synthesizer` CLI via pydantic-settings):
@@ -134,6 +134,11 @@ In `slurm_nss_matrix.sh`, each job extracts the dataset and config that it shoul
 
 ### Submit jobs
 
+> **Run one submit at a time.** `submit_slurm_jobs.sh` builds the shared
+> `${NSS_DIR}/.venv` on the login node before submitting. Running multiple submits
+> concurrently (especially from different login nodes, where the build lock is not
+> reliable across hosts) can corrupt that venv and lets branch switches race. Let
+> one submit finish before starting another.
 
 Run the submit script (flags are order-independent) from this directory:
 
