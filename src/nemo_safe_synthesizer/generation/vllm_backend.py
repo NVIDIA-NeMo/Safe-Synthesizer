@@ -306,7 +306,7 @@ class VllmBackend(GeneratorBackend):
             )
 
         # Cache the engine's *effective* runtime config once at init. Read by
-        # ``generate()`` to populate the ``vllm.generation.complete`` observability
+        # ``generate()`` to populate the generation-complete observability
         # event; used by the benchmark harness (and any other intent-comparing
         # caller) to detect "flag didn't engage" mismatches against what was
         # asked for.
@@ -653,7 +653,7 @@ class VllmBackend(GeneratorBackend):
         through ``ignore_eos=False``.
 
         Wrapped in an :class:`NvmlPeakSampler` context so a
-        ``vllm.generation.complete`` observability event is emitted at end of
+        generation-complete observability event is emitted at end of
         the call carrying peak device VRAM, host loadavg pre/post, vLLM's
         kv_cache_usage_perc / prefix_cache_hit_rate / spec_accept_rate
         (read at end-of-generation), and the engine's effective runtime
@@ -766,7 +766,7 @@ class VllmBackend(GeneratorBackend):
     def _emit_generation_observability(
         self, sampler: NvmlPeakSampler, loadavg_pre: tuple[float, float, float] | None
     ) -> None:
-        """Assemble and route the ``vllm.generation.complete`` observability event.
+        """Assemble and route the generation-complete observability event.
 
         Reads end-of-generation vLLM metrics plus the NVML peak captured by
         ``sampler``, builds a :class:`GenerationObservability`, and routes it to
@@ -791,7 +791,7 @@ class VllmBackend(GeneratorBackend):
                 # sets the bit when a knob silently fails to engage.
                 flag_did_not_engage=False,
             )
-            logger.runtime.info("vllm.generation.complete", extra={"ctx": gen_event.model_dump()})
+            logger.runtime.info("vLLM generation complete", extra={"ctx": gen_event.model_dump()})
             # Mirror to the active wandb run when one exists (no-op when
             # ``WANDB_MODE=disabled`` or ``initialize_wandb_run`` was never
             # called). Best-effort; wandb failures are swallowed downstream.
@@ -801,7 +801,7 @@ class VllmBackend(GeneratorBackend):
             # swallowed observability failure into a generation failure.
             with contextlib.suppress(Exception):
                 logger.runtime.debug(
-                    "vllm.generation.observability.emit_failed",
+                    "vLLM generation observability emit failed",
                     extra={"ctx": {"error": f"{exc!r}"}},
                     exc_info=True,
                 )

@@ -406,7 +406,7 @@ class TestInitializeModelRef:
     ):
         """``initialize()`` probes the engine once and caches the effective runtime config.
 
-        The cached dict is the source the ``vllm.generation.complete`` event reads
+        The cached dict is the source the generation-complete event reads
         at end of generation, so the init-time wiring is part of the
         observability contract.
         """
@@ -439,7 +439,7 @@ class TestInitializeModelRef:
 
 
 class TestGenerationObservabilityEmission:
-    """The ``vllm.generation.complete`` production emission contract.
+    """The generation-complete production emission contract.
 
     Covers the path that backend sampling-plumbing tests skip: that
     ``generate()`` always runs the finalizer, and that the finalizer
@@ -493,8 +493,8 @@ class TestGenerationObservabilityEmission:
         # is read fresh inside the finalizer.
         assert event.loadavg_pre == (0.5, 0.6, 0.7)
         assert event.loadavg_post == (1.0, 2.0, 3.0)
-        # The same event is mirrored to structured logs as ``vllm.generation.complete``.
-        mock_logger.runtime.info.assert_called_once_with("vllm.generation.complete", extra={"ctx": event.model_dump()})
+        # The same event is mirrored to structured logs as "vLLM generation complete".
+        mock_logger.runtime.info.assert_called_once_with("vLLM generation complete", extra={"ctx": event.model_dump()})
 
     def test_emit_swallows_failures(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
         """A failure inside emission must not propagate — observability is best-effort."""

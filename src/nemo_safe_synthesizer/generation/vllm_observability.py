@@ -25,7 +25,7 @@ Four primitives, all degraded-mode by design:
   regardless of which metrics the engine actually exposed.
 
 Plus the :class:`GenerationObservability` pydantic model — the schema for the
-``vllm.generation.complete`` structured event emitted at the end of each
+generation-complete structured event emitted at the end of each
 generation invocation. Forward-compatible: new optional fields can be
 added without breaking existing consumers because the model uses
 ``extra="forbid"`` (so producers are forced to update when they add new
@@ -96,7 +96,7 @@ Used by :meth:`GenerationObservability.to_wandb_payload`.
 
 
 class GenerationObservability(BaseModel):
-    """One ``vllm.generation.complete`` event payload.
+    """One generation-complete event payload.
 
     Emitted by ``VllmBackend.generate()`` at end of each generation
     invocation. Consumed by:
