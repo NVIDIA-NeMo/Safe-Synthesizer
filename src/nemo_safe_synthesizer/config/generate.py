@@ -250,6 +250,19 @@ class RemoteParameters(Parameters, BaseModel):
         ),
     ] = 16
 
+    max_retries: Annotated[
+        int,
+        ValueValidator(value_func=lambda v: v >= 0),
+        Field(
+            title="max_retries",
+            description=(
+                "Number of retry attempts per request for transient failures (connection drops, "
+                "timeouts, and HTTP 408/409/425/429/500/502/503/504), using exponential backoff with "
+                "full jitter and honoring a Retry-After header. 0 disables retries. Must be >= 0."
+            ),
+        ),
+    ] = 4
+
 
 class GenerateParameters(Parameters, BaseModel):
     """Configuration parameters for synthetic data generation.

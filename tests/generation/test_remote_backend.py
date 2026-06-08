@@ -26,7 +26,13 @@ from nemo_safe_synthesizer.errors import GenerationError, InternalError, Paramet
 from nemo_safe_synthesizer.generation.backend import GeneratorBackend
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor, create_processor
-from nemo_safe_synthesizer.generation.remote_backend import RemoteBackend
+from nemo_safe_synthesizer.generation.remote_backend import (
+    RemoteBackend,
+    _backoff_delay,
+    _coerce_token_count,
+    _compact_json_completion,
+    _parse_retry_after,
+)
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
 MODULE = "nemo_safe_synthesizer.generation.remote_backend"
@@ -45,6 +51,8 @@ def mock_model_metadata():
     metadata.prompt_config.template = "[INST] {instruction} {schema} [/INST]"
     metadata.prompt_config.bos_token = "<s>"
     metadata.prompt_config.eos_token = "</s>"
+    # The resume / offline-remote path carries no local tokenizer.
+    metadata.tokenizer = None
     return metadata
 
 
@@ -54,6 +62,7 @@ def make_params(
     model: str = "my-lora",
     api_key_env: str | None = None,
     max_concurrency: int = 16,
+    max_retries: int = 4,
     dialect: RemoteDialect = "vllm",
 ) -> SafeSynthesizerParameters:
     """Build params with a configured remote endpoint."""
@@ -68,6 +77,7 @@ def make_params(
                 model=model,
                 api_key_env=api_key_env,
                 max_concurrency=max_concurrency,
+                max_retries=max_retries,
                 dialect=dialect,
             ),
         ),
@@ -86,11 +96,27 @@ def make_backend(config, model_metadata, schema, processor=None) -> RemoteBacken
 
 def make_http_response(text: str, completion_tokens: int, finish_reason: str = "stop") -> MagicMock:
     response = MagicMock(spec=httpx.Response)
+    response.status_code = 200
     response.json.return_value = {
         "choices": [{"text": text, "finish_reason": finish_reason}],
         "usage": {"completion_tokens": completion_tokens},
     }
     response.raise_for_status.return_value = None
+    return response
+
+
+def make_status_response(status_code: int, text: str = "", *, retry_after: str | None = None) -> MagicMock:
+    """A response with an explicit status code, for retry/error-path tests."""
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = status_code
+    response.text = text
+    response.headers = {"Retry-After": retry_after} if retry_after else {}
+    if status_code >= 400:
+        response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            str(status_code), request=MagicMock(), response=response
+        )
+    else:
+        response.raise_for_status.return_value = None
     return response
 
 
@@ -105,9 +131,20 @@ class TestConstruction:
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         assert isinstance(backend, GeneratorBackend)
 
-    def test_prompt_token_count_is_zero(self, mock_model_metadata, mock_schema):
+    def test_prompt_token_count_is_zero_without_tokenizer(self, mock_model_metadata, mock_schema):
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         assert backend._get_prompt_token_count() == 0
+
+    def test_prompt_token_count_uses_tokenizer_when_present(self, mock_model_metadata, mock_schema):
+        tokenizer = MagicMock()
+        tokenizer.encode.return_value = [1, 2, 3, 4, 5]
+        mock_model_metadata.tokenizer = tokenizer
+        backend = make_backend(make_params(), mock_model_metadata, mock_schema)
+        assert backend._get_prompt_token_count() == 5
+        tokenizer.encode.assert_called_once_with("test prompt")
+        # Result is cached: the tokenizer is not re-invoked.
+        assert backend._get_prompt_token_count() == 5
+        tokenizer.encode.assert_called_once()
 
 
 class TestInitialize:
@@ -193,15 +230,46 @@ class TestPrepareParams:
         ):
             assert field not in body
 
-    def test_structured_outputs_json_when_json_schema_method(self, mock_model_metadata, mock_schema):
-        config = make_params()
+    def test_structured_outputs_json_vllm_dialect_disables_whitespace(self, mock_model_metadata, mock_schema):
+        config = make_params(dialect="vllm")
         config.generation.use_structured_generation = True
         config.generation.structured_generation_schema_method = "json_schema"
         backend = make_backend(config, mock_model_metadata, mock_schema)
         backend.prepare_params(**self._sampling_kwargs())
         body = backend._request_body
         assert body is not None
+        # Source fix: vLLM/xgrammar emits compact JSON when whitespace is disabled.
+        assert body["structured_outputs"] == {"json": mock_schema, "disable_any_whitespace": True}
+        # Compaction stays armed as a safety net even with the source fix on.
+        assert backend._compact_json is True
+
+    def test_structured_outputs_json_openai_dialect_omits_vllm_extension(self, mock_model_metadata, mock_schema):
+        config = make_params(dialect="openai")
+        config.generation.use_structured_generation = True
+        config.generation.structured_generation_schema_method = "json_schema"
+        backend = make_backend(config, mock_model_metadata, mock_schema)
+        backend.prepare_params(**self._sampling_kwargs())
+        body = backend._request_body
+        assert body is not None
+        # The vLLM-only field would 400 on strict OpenAI servers, so it is dropped;
+        # the post-process compaction is the portable fallback.
         assert body["structured_outputs"] == {"json": mock_schema}
+        assert backend._compact_json is True
+
+    def test_compact_json_not_armed_for_other_methods(self, mock_model_metadata, mock_schema):
+        config = make_params()
+        config.generation.use_structured_generation = True
+        config.generation.structured_generation_schema_method = "regex"
+        config.generation.structured_generation_backend = "outlines"
+        backend = make_backend(config, mock_model_metadata, mock_schema)
+        with patch(f"{MODULE}.build_json_based_regex", return_value="REGEX"):
+            backend.prepare_params(**self._sampling_kwargs())
+        assert backend._compact_json is False
+
+    def test_compact_json_not_armed_without_structured_generation(self, mock_model_metadata, mock_schema):
+        backend = make_backend(make_params(), mock_model_metadata, mock_schema)
+        backend.prepare_params(**self._sampling_kwargs())
+        assert backend._compact_json is False
 
     def test_structured_outputs_regex_when_regex_method(self, mock_model_metadata, mock_schema):
         config = make_params()
@@ -235,30 +303,131 @@ class TestCompleteOne:
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         backend._client = MagicMock()
         backend._client.post.return_value = make_http_response('{"name": "A", "age": 1}', 7, "stop")
-        backend._request_body = {"model": "my-lora"}
+        backend._request_body = {"model": "my-lora", "prompt": "test prompt"}
         text, tokens, finish = backend._complete_one()
         assert text == '{"name": "A", "age": 1}'
         assert tokens == 7
         assert finish == "stop"
-        # The per-request prompt is injected into the body.
+        # The prompt is baked into the request body by prepare_params and posted as-is.
         _, kwargs = backend._client.post.call_args
-        assert kwargs["json"]["prompt"] == "test prompt"
-
-    def test_http_status_error_becomes_generation_error(self, mock_model_metadata, mock_schema):
-        backend = make_backend(make_params(), mock_model_metadata, mock_schema)
-        backend._client = MagicMock()
-        error_response = MagicMock(status_code=500, text="boom")
-        backend._client.post.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "500", request=MagicMock(), response=error_response
-        )
-        backend._request_body = {"model": "my-lora"}
-        with pytest.raises(GenerationError, match="500"):
-            backend._complete_one()
+        assert kwargs["json"] == {"model": "my-lora", "prompt": "test prompt"}
 
     def test_complete_one_before_init_raises(self, mock_model_metadata, mock_schema):
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         with pytest.raises(InternalError):
             backend._complete_one()
+
+
+class TestPostCompletionRetries:
+    """Transient-failure resilience: the network path must survive blips, not abort the run."""
+
+    @staticmethod
+    def _backend_and_client(mock_model_metadata, mock_schema, *, max_retries: int) -> tuple[RemoteBackend, MagicMock]:
+        backend = make_backend(make_params(max_retries=max_retries), mock_model_metadata, mock_schema)
+        client = MagicMock()
+        backend._client = client
+        backend._request_body = {"model": "m", "prompt": "p"}
+        return backend, client
+
+    def test_retries_retryable_status_then_succeeds(self, mock_model_metadata, mock_schema):
+        backend, client = self._backend_and_client(mock_model_metadata, mock_schema, max_retries=3)
+        client.post.side_effect = [
+            make_status_response(503, "busy"),
+            make_http_response('{"name": "A"}', 3, "stop"),
+        ]
+        with patch(f"{MODULE}.time.sleep") as sleep:
+            text, tokens, finish = backend._complete_one()
+        assert (text, tokens, finish) == ('{"name": "A"}', 3, "stop")
+        assert client.post.call_count == 2
+        sleep.assert_called_once()
+
+    def test_retries_transient_connection_error(self, mock_model_metadata, mock_schema):
+        backend, client = self._backend_and_client(mock_model_metadata, mock_schema, max_retries=3)
+        client.post.side_effect = [
+            httpx.ConnectError("connection refused"),
+            make_http_response('{"name": "A"}', 1, "stop"),
+        ]
+        with patch(f"{MODULE}.time.sleep"):
+            backend._complete_one()
+        assert client.post.call_count == 2
+
+    def test_persistent_retryable_status_exhausts_attempts(self, mock_model_metadata, mock_schema):
+        backend, client = self._backend_and_client(mock_model_metadata, mock_schema, max_retries=2)
+        client.post.return_value = make_status_response(503, "down")
+        with patch(f"{MODULE}.time.sleep") as sleep, pytest.raises(GenerationError, match="after 3 attempt"):
+            backend._complete_one()
+        assert client.post.call_count == 3  # initial + 2 retries
+        assert sleep.call_count == 2
+
+    def test_non_retryable_status_fails_fast(self, mock_model_metadata, mock_schema):
+        backend, client = self._backend_and_client(mock_model_metadata, mock_schema, max_retries=5)
+        client.post.return_value = make_status_response(400, "bad request")
+        with patch(f"{MODULE}.time.sleep") as sleep, pytest.raises(GenerationError, match="400"):
+            backend._complete_one()
+        assert client.post.call_count == 1  # no retries on a permanent error
+        sleep.assert_not_called()
+
+    def test_zero_retries_disables_retry(self, mock_model_metadata, mock_schema):
+        backend, client = self._backend_and_client(mock_model_metadata, mock_schema, max_retries=0)
+        client.post.return_value = make_status_response(503, "down")
+        with patch(f"{MODULE}.time.sleep") as sleep, pytest.raises(GenerationError, match="after 1 attempt"):
+            backend._complete_one()
+        assert client.post.call_count == 1
+        sleep.assert_not_called()
+
+    def test_honors_retry_after_header(self, mock_model_metadata, mock_schema):
+        backend, client = self._backend_and_client(mock_model_metadata, mock_schema, max_retries=1)
+        client.post.side_effect = [
+            make_status_response(429, "slow down", retry_after="2.5"),
+            make_http_response('{"name": "A"}', 1, "stop"),
+        ]
+        with patch(f"{MODULE}.time.sleep") as sleep:
+            backend._complete_one()
+        sleep.assert_called_once_with(2.5)
+
+
+class TestResilienceHelpers:
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (5, 5),
+            (0, 0),
+            (-3, 0),
+            (None, 0),
+            (True, 0),
+            (False, 0),
+            ("7", 7),
+            (7.9, 7),
+            ("bad", 0),
+            ([], 0),
+            ({}, 0),
+        ],
+    )
+    def test_coerce_token_count(self, value, expected):
+        assert _coerce_token_count(value) == expected
+
+    def test_parse_retry_after_numeric_seconds(self):
+        response = MagicMock(spec=httpx.Response)
+        response.headers = {"Retry-After": "3"}
+        assert _parse_retry_after(response) == 3.0
+
+    def test_parse_retry_after_absent(self):
+        response = MagicMock(spec=httpx.Response)
+        response.headers = {}
+        assert _parse_retry_after(response) is None
+
+    def test_parse_retry_after_http_date_ignored(self):
+        response = MagicMock(spec=httpx.Response)
+        response.headers = {"Retry-After": "Wed, 21 Oct 2025 07:28:00 GMT"}
+        assert _parse_retry_after(response) is None
+
+    def test_backoff_delay_uses_retry_after_capped(self):
+        assert _backoff_delay(0, 999.0) == 30.0
+        assert _backoff_delay(5, 3.0) == 3.0
+
+    def test_backoff_delay_full_jitter_within_bounds(self):
+        for attempt in range(7):
+            assert 0.0 <= _backoff_delay(attempt, None) <= 30.0
 
 
 class TestGenerateBatch:
@@ -278,6 +447,37 @@ class TestGenerateBatch:
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         with pytest.raises(InternalError):
             backend._generate_batch(num_prompts_per_batch=1, batch=Batch(processor=MagicMock()))
+
+    def test_compacts_pretty_printed_json_before_processing(self, mock_model_metadata, mock_schema):
+        backend = make_backend(make_params(), mock_model_metadata, mock_schema)
+        backend._compact_json = True
+        backend.initialize()
+        pretty = '{\n  "name": "Alice",\n  "age": 30\n}'
+        try:
+            with patch.object(backend, "_complete_one", return_value=(pretty, 8, "stop")):
+                batch = Batch(processor=MagicMock())
+                with patch.object(batch, "process") as process:
+                    backend._generate_batch(num_prompts_per_batch=1, batch=batch)
+        finally:
+            backend.teardown()
+        _, kwargs = process.call_args
+        # The multi-line object is collapsed to single-line JSONL the extractor can match.
+        assert process.call_args[0][1] == '{"name":"Alice","age":30}'
+        assert kwargs["completion_tokens"] == 8
+
+    def test_no_compaction_when_flag_disabled(self, mock_model_metadata, mock_schema):
+        backend = make_backend(make_params(), mock_model_metadata, mock_schema)
+        backend.initialize()
+        pretty = '{\n  "name": "Alice"\n}'
+        try:
+            with patch.object(backend, "_complete_one", return_value=(pretty, 8, "stop")):
+                batch = Batch(processor=MagicMock())
+                with patch.object(batch, "process") as process:
+                    backend._generate_batch(num_prompts_per_batch=1, batch=batch)
+        finally:
+            backend.teardown()
+        # Text passes through untouched when compaction is not armed.
+        assert process.call_args[0][1] == pretty
 
 
 class TestTeardown:
@@ -299,10 +499,27 @@ class TestResponseEdgeCases:
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         backend._client = MagicMock()
         response = MagicMock(spec=httpx.Response)
+        response.status_code = 200
         response.json.return_value = {"choices": [{"text": "x", "finish_reason": "stop"}]}  # no usage key
         response.raise_for_status.return_value = None
         backend._client.post.return_value = response
-        backend._request_body = {"model": "my-lora"}
+        backend._request_body = {"model": "my-lora", "prompt": "p"}
+        _, tokens, _ = backend._complete_one()
+        assert tokens == 0
+
+    def test_null_completion_tokens_defaults_to_zero(self, mock_model_metadata, mock_schema):
+        backend = make_backend(make_params(), mock_model_metadata, mock_schema)
+        backend._client = MagicMock()
+        response = MagicMock(spec=httpx.Response)
+        response.status_code = 200
+        # A null token count must degrade to 0, not crash the completion.
+        response.json.return_value = {
+            "choices": [{"text": "x", "finish_reason": "stop"}],
+            "usage": {"completion_tokens": None},
+        }
+        response.raise_for_status.return_value = None
+        backend._client.post.return_value = response
+        backend._request_body = {"model": "my-lora", "prompt": "p"}
         _, tokens, _ = backend._complete_one()
         assert tokens == 0
 
@@ -310,11 +527,12 @@ class TestResponseEdgeCases:
         backend = make_backend(make_params(), mock_model_metadata, mock_schema)
         backend._client = MagicMock()
         response = MagicMock(spec=httpx.Response)
+        response.status_code = 200
         response.json.return_value = {"unexpected": "shape"}  # no "choices"
         response.raise_for_status.return_value = None
         response.text = '{"unexpected": "shape"}'
         backend._client.post.return_value = response
-        backend._request_body = {"model": "my-lora"}
+        backend._request_body = {"model": "my-lora", "prompt": "p"}
         with pytest.raises(GenerationError, match="unexpected response shape"):
             backend._complete_one()
 
@@ -354,6 +572,37 @@ class TestGenerateEndToEnd:
         assert results.df is not None
         assert len(results.df) >= 3
         assert list(results.df.columns) == ["name", "age"]
+
+
+class TestCompactJsonCompletion:
+    def test_collapses_multiline_object(self):
+        pretty = '{\n  "name": "Alice",\n  "age": 30\n}'
+        assert _compact_json_completion(pretty) == '{"name":"Alice","age":30}'
+
+    def test_strips_surrounding_whitespace(self):
+        assert _compact_json_completion('  \n {"a": 1}\n  ') == '{"a":1}'
+
+    def test_preserves_non_ascii(self):
+        assert _compact_json_completion('{"city": "São Paulo"}') == '{"city":"São Paulo"}'
+
+    def test_already_compact_object_unchanged(self):
+        assert _compact_json_completion('{"a":1,"b":2}') == '{"a":1,"b":2}'
+
+    def test_non_json_returned_unchanged(self):
+        assert _compact_json_completion("not json at all") == "not json at all"
+
+    def test_empty_returned_unchanged(self):
+        assert _compact_json_completion("   ") == "   "
+
+    def test_multiple_objects_returned_unchanged(self):
+        # Two JSONL records don't parse as one object; the line-oriented
+        # extractor already handles them, so leave the text untouched.
+        jsonl = '{"a": 1}\n{"a": 2}'
+        assert _compact_json_completion(jsonl) == jsonl
+
+    def test_non_object_json_returned_unchanged(self):
+        # A bare array is valid JSON but not a record object; don't reshape it.
+        assert _compact_json_completion("[1, 2, 3]") == "[1, 2, 3]"
 
 
 class TestRemoteParametersValidation:
