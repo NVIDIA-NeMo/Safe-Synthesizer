@@ -106,7 +106,10 @@ apt-get update && apt-get install -y --no-install-recommends \
 
 # Ensure Python environment is available inside the container
 source "${LUSTRE_DIR}/.uv/bin/env"
-NSS_PYTHON_VERSION="${NSS_PYTHON_VERSION:-3.13}"
+
+# NSS_PYTHON_VERSION is resolved in env_variables.sh (from .python-version, with
+# an optional override), which is always sourced before this script runs.
+
 if [[ -n "${NSS_VERSION:-}" ]]; then
     # Install nemo-safe-synthesizer from PyPI into a versioned venv cached on
     # lustre so concurrent array jobs can share it without redundant downloads.
@@ -121,9 +124,21 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
 else
-    uv sync --frozen --extra cu129 --extra engine --group dev
+    # Repo mode. The shared ${NSS_DIR}/.venv is bind-mounted from Lustre into
+    # every container, so running `uv sync` in each array task means dozens of
+    # jobs create/recreate the same directory at once (uv recreates it whenever
+    # the pinned Python changes), which corrupts the venv on Lustre. Instead the
+    # venv is built once on the login node by submit_slurm_jobs.sh before the
+    # array is submitted; tasks only activate it here. Invoke the venv binary
+    # directly so `uv run` can't trigger an implicit re-sync.
+    if [[ ! -x "${NSS_DIR}/.venv/bin/python" ]]; then
+        echo "[NSS SLURM] ERROR: no pre-built repo venv at ${NSS_DIR}/.venv" >&2
+        echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once), or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss cu129)" >&2
+        exit 1
+    fi
+    echo "[NSS SLURM] Using pre-built repo venv at ${NSS_DIR}/.venv"
     source "${NSS_DIR}/.venv/bin/activate"
-    NSS_RUN_CMD="uv run safe-synthesizer"
+    NSS_RUN_CMD="${NSS_DIR}/.venv/bin/safe-synthesizer"
 fi
 echo "[NSS SLURM] nemo-safe-synthesizer version: $(python -c 'from nemo_safe_synthesizer.package_info import __version__; print(__version__)')"
 

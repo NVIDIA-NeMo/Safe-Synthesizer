@@ -131,6 +131,41 @@ export ACCOUNT
 export EXP_NAME
 export NSS_VERSION
 
+# nss_prebuild_repo_venv: In repo mode (no --nss-version) the shared
+# ${NSS_DIR}/.venv is bind-mounted into every job container from Lustre. If each
+# array task ran `uv sync`, dozens of jobs would create/recreate the same
+# directory at once and corrupt it. Build it once here on the login node so the
+# array tasks (see slurm_nss_matrix.sh) only activate it.
+prebuild_repo_venv() {
+  if [[ -n "${NSS_VERSION:-}" ]]; then
+    return 0  # PyPI mode manages its own versioned venv
+  fi
+  if [[ -n "${DRY_RUN:-}" ]]; then
+    echo "[submit] --dry-run: skipping repo venv pre-build"
+    return 0
+  fi
+
+  local lock_dir="${LUSTRE_DIR}/.locks"
+  local lock_file="${lock_dir}/nss-repo-venv.lock"
+  mkdir -p "${lock_dir}"
+
+  echo "[submit] pre-building repo venv at ${NSS_DIR}/.venv (python=${NSS_PYTHON_VERSION})"
+  (
+    flock -x 200
+    unset VIRTUAL_ENV
+    cd "${NSS_DIR}"
+    uv sync --frozen --extra cu129 --extra engine --group dev --python "${NSS_PYTHON_VERSION}"
+  ) 200>"${lock_file}"
+
+  if [[ ! -x "${NSS_DIR}/.venv/bin/python" ]]; then
+    echo "[submit] ERROR: repo venv pre-build did not create ${NSS_DIR}/.venv/bin/python" >&2
+    exit 1
+  fi
+  echo "[submit] repo venv ready: $("${NSS_DIR}/.venv/bin/python" --version 2>&1)"
+}
+
+prebuild_repo_venv
+
 # Build configs list: CLI override (comma-separated) takes precedence; otherwise use CONFIGS from env
 declare -a CONFIGS_LIST
 if [ -n "${CONFIGS_CSV:-}" ]; then
