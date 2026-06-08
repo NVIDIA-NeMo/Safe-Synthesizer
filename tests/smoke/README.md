@@ -22,6 +22,18 @@ NSS_TELEMETRY_SMOKE_SEND=1 uv run --frozen pytest tests/smoke/test_telemetry_smo
 
 Set `NEMO_TELEMETRY_ENDPOINT` to point at a local or controlled endpoint if you do not want to contact the default NVIDIA telemetry endpoint.
 
+The remote generation backend has two smoke layers:
+
+- `test_remote_generation_cpu.py` -- always runs in `mise run test:smoke`. Drives the full `RemoteBackend` path (real `httpx`, concurrency, retry, JSON compaction, processor) against an in-process loopback HTTP stub. No GPU, no network, no model.
+- `test_remote_generation_live.py` -- opt-in, makes real billable calls to build.nvidia.com:
+
+```bash
+NSS_REMOTE_SMOKE_SEND=1 NVIDIA_API_KEY=nvapi-... \
+    uv run --frozen pytest tests/smoke/test_remote_generation_live.py -vvs -n0
+```
+
+Override `NSS_REMOTE_SMOKE_ENDPOINT` / `NSS_REMOTE_SMOKE_MODEL` to target a different OpenAI-compatible server or model. The model must expose `/v1/completions` (the backend uses text completions, not chat); the test skips rather than fails when a model rejects that route.
+
 ## When should I add a smoke test?
 
 If you're adding a new training backend, generation backend, evaluation
