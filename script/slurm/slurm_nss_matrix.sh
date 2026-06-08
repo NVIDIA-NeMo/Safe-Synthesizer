@@ -131,8 +131,11 @@ else
     # venv is built once on the login node by submit_slurm_jobs.sh before the
     # array is submitted; tasks only activate it here. Invoke the venv binary
     # directly so `uv run` can't trigger an implicit re-sync.
-    if [[ ! -x "${NSS_DIR}/.venv/bin/python" ]]; then
-        echo "[NSS SLURM] ERROR: no pre-built repo venv at ${NSS_DIR}/.venv" >&2
+    # Check the safe-synthesizer entry point (not just python): a partial
+    # install can leave python present but the package missing, which would
+    # otherwise fail much later with a generic "command not found".
+    if [[ ! -x "${NSS_DIR}/.venv/bin/safe-synthesizer" ]]; then
+        echo "[NSS SLURM] ERROR: no usable repo venv at ${NSS_DIR}/.venv (missing safe-synthesizer entry point)" >&2
         echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once), or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss cu129)" >&2
         exit 1
     fi

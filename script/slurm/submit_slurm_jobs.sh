@@ -157,8 +157,12 @@ prebuild_repo_venv() {
     uv sync --frozen --extra cu129 --extra engine --group dev --python "${NSS_PYTHON_VERSION}"
   ) 200>"${lock_file}"
 
-  if [[ ! -x "${NSS_DIR}/.venv/bin/python" ]]; then
-    echo "[submit] ERROR: repo venv pre-build did not create ${NSS_DIR}/.venv/bin/python" >&2
+  # Functionally verify the venv by running safe-synthesizer once. This catches
+  # partial installs and corrupted libs that a file-existence check would miss,
+  # so array tasks fail fast here instead of much later. Cheap since it runs once.
+  if ! "${NSS_DIR}/.venv/bin/safe-synthesizer" --version >/dev/null 2>&1; then
+    echo "[submit] ERROR: repo venv at ${NSS_DIR}/.venv is not functional (safe-synthesizer failed to run)" >&2
+    echo "[submit] Rebuild it: (cd ${NSS_DIR} && rm -rf .venv && mise run bootstrap-nss cu129)" >&2
     exit 1
   fi
   echo "[submit] repo venv ready: $("${NSS_DIR}/.venv/bin/python" --version 2>&1)"

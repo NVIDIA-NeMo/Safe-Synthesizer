@@ -134,6 +134,11 @@ In `slurm_nss_matrix.sh`, each job extracts the dataset and config that it shoul
 
 ### Submit jobs
 
+> **Run one submit at a time.** `submit_slurm_jobs.sh` builds the shared
+> `${NSS_DIR}/.venv` on the login node before submitting. Running multiple submits
+> concurrently (especially from different login nodes, where the build lock is not
+> reliable across hosts) can corrupt that venv and lets branch switches race. Let
+> one submit finish before starting another.
 
 Run the submit script (flags are order-independent) from this directory:
 
