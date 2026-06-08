@@ -124,16 +124,9 @@ if [[ -n "${NSS_VERSION:-}" ]]; then
     NSS_RUN_CMD="${PYPI_VENV}/bin/safe-synthesizer"
     echo "[NSS SLURM] Using PyPI install: nemo-safe-synthesizer==${NSS_VERSION} on Python ${NSS_PYTHON_VERSION}"
 else
-    # Repo mode. The shared ${NSS_DIR}/.venv is bind-mounted from Lustre into
-    # every container, so running `uv sync` in each array task means dozens of
-    # jobs create/recreate the same directory at once (uv recreates it whenever
-    # the pinned Python changes), which corrupts the venv on Lustre. Instead the
-    # venv is built once on the login node by submit_slurm_jobs.sh before the
-    # array is submitted; tasks only activate it here. Invoke the venv binary
-    # directly so `uv run` can't trigger an implicit re-sync.
-    # Check the safe-synthesizer entry point (not just python): a partial
-    # install can leave python present but the package missing, which would
-    # otherwise fail much later with a generic "command not found".
+    # Repo mode: activate the venv pre-built once on the login node by
+    # submit_slurm_jobs.sh, rather than each array task running `uv sync` against
+    # the shared Lustre .venv (which could race and corrupt it).
     if [[ ! -x "${NSS_DIR}/.venv/bin/safe-synthesizer" ]]; then
         echo "[NSS SLURM] ERROR: no usable repo venv at ${NSS_DIR}/.venv (missing safe-synthesizer entry point)" >&2
         echo "[NSS SLURM] Submit via submit_slurm_jobs.sh (it builds the venv once), or build it manually: (cd ${NSS_DIR} && mise run bootstrap-nss cu129)" >&2
