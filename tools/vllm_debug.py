@@ -255,21 +255,43 @@ class CallResult(BaseModel):
     error: str | None = None
 
 
+def _read_text_file(path: Path, flag: str) -> str:
+    """Read a file for ``flag``, exiting with a clean usage error on failure."""
+    try:
+        return path.read_text()
+    except OSError as exc:
+        bad_input(f"{flag}: cannot read {path}: {exc}")
+
+
+def _read_json_file(path: Path, flag: str) -> Any:
+    """Read and parse a JSON file for ``flag``, exiting cleanly on read/parse failure."""
+    text = _read_text_file(path, flag)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        bad_input(f"{flag}: {path} is not valid JSON: {exc}")
+
+
 def build_structured_outputs(json_schema: Path | None, regex: str | None, structural_tag: Path | None) -> dict | None:
-    """Build the vLLM ``structured_outputs`` field from at most one constraint flag."""
-    chosen: list[tuple[str, Any]] = []
-    if json_schema is not None:
-        chosen.append(("json", json.loads(json_schema.read_text())))
-    if regex is not None:
-        chosen.append(("regex", regex))
-    if structural_tag is not None:
-        chosen.append(("structural_tag", structural_tag.read_text()))
+    """Build the vLLM ``structured_outputs`` field from at most one constraint flag.
+
+    Validates the at-most-one rule before touching the filesystem, so passing
+    two flags fails fast without a partial read. Missing or malformed files
+    exit via ``bad_input`` (code 125) rather than raising a traceback.
+    """
+    candidates = (("json", json_schema), ("regex", regex), ("structural_tag", structural_tag))
+    chosen = [(key, value) for key, value in candidates if value is not None]
     if not chosen:
         return None
     if len(chosen) > 1:
         bad_input("pass at most one of --json-schema / --regex / --structural-tag")
+
     key, value = chosen[0]
-    return {key: value}
+    if key == "json":
+        return {"json": _read_json_file(value, "--json-schema")}
+    if key == "structural_tag":
+        return {"structural_tag": _read_text_file(value, "--structural-tag")}
+    return {"regex": value}
 
 
 def build_call_payload(
@@ -304,8 +326,15 @@ def build_call_payload(
 
 
 def parse_call_response(mode: CallMode, data: dict[str, Any]) -> tuple[str, str | None, str | None]:
-    """Extract ``(content, reasoning, finish_reason)`` from a completion response."""
-    choice = data["choices"][0]
+    """Extract ``(content, reasoning, finish_reason)`` from a completion response.
+
+    Raises ``ValueError`` on a response with no choices; ``do_call`` catches it
+    and reports it as a failed ``CallResult`` rather than crashing the run.
+    """
+    choices = data.get("choices") or []
+    if not choices:
+        raise ValueError(f"response contained no choices: {json.dumps(data)[:300]}")
+    choice = choices[0]
     if mode == "chat":
         message = choice.get("message") or {}
         return message.get("content") or "", message.get("reasoning_content"), choice.get("finish_reason")
