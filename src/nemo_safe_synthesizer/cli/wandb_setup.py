@@ -275,7 +275,7 @@ class WandbLoggable(Protocol):
     subpackages from this CLI module).
     """
 
-    def to_wandb_payload(self, prefix: str = ...) -> dict[str, Any]: ...
+    def to_wandb_payload(self, prefix: str = "") -> dict[str, Any]: ...
 
 
 def log_observability_event(event: WandbLoggable, prefix: str) -> None:

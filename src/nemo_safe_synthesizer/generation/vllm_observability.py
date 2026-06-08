@@ -477,8 +477,8 @@ def read_vllm_runtime_metrics(llm: LLM | None) -> VllmRuntimeMetrics:
     # derivation below is pure dict arithmetic and cannot raise.
     try:
         raw = _collect_raw_metrics(llm)
-    except Exception as exc:  # noqa: BLE001 — degraded mode by design
-        logger.debug("read_vllm_runtime_metrics failed: %s", exc)
+    except Exception:  # noqa: BLE001 — degraded mode by design
+        logger.debug("read_vllm_runtime_metrics failed", exc_info=True)
         return _empty_runtime_metrics()
 
     return VllmRuntimeMetrics(
