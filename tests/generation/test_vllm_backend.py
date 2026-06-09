@@ -19,6 +19,7 @@ from nemo_safe_synthesizer.config.generate import ValidationParameters
 from nemo_safe_synthesizer.defaults import DEFAULT_SAMPLING_PARAMETERS
 from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.generation.processors import TabularDataProcessor
+from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 
 
@@ -394,6 +395,121 @@ class TestInitializeModelRef:
         assert backend.llm is mock_llm
         assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
+
+    def test_initialize_caches_engine_runtime_config(
+        self,
+        base_params,
+        mock_model_metadata,
+        mock_schema,
+        mock_workdir,
+        fixture_cached_nvidia_snapshot,
+    ):
+        """``initialize()`` probes the engine once and caches the effective runtime config.
+
+        The cached dict is the source the generation-complete event reads
+        at end of generation, so the init-time wiring is part of the
+        observability contract.
+        """
+        cache_root, _ = fixture_cached_nvidia_snapshot
+        base_params.training.pretrained_model = "nvidia/Nemotron-Mini-4B-Instruct"
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        # Pre-condition: nothing cached before initialize().
+        assert backend._engine_runtime_config == {}
+
+        mock_llm = MagicMock()
+        mock_llm.get_tokenizer.return_value = MagicMock()
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.ModelRef._default_hf_cache_root",
+                return_value=cache_root,
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config",
+                return_value={"max_num_seqs": 256, "enable_prefix_caching": True},
+            ) as mock_probe,
+        ):
+            backend.initialize()
+
+        mock_probe.assert_called_once_with(mock_llm)
+        assert backend._engine_runtime_config == {"max_num_seqs": 256, "enable_prefix_caching": True}
+
+
+class TestGenerationObservabilityEmission:
+    """The generation-complete production emission contract.
+
+    Covers the path that backend sampling-plumbing tests skip: that
+    ``generate()`` always runs the finalizer, and that the finalizer
+    assembles and routes a ``GenerationObservability`` without ever breaking
+    generation.
+    """
+
+    def test_generate_runs_finalizer_even_when_body_fails(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """A failure inside the generation loop must still emit the generation event."""
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.prepare_params = MagicMock(side_effect=StopIteration("short-circuit"))
+
+        with patch.object(backend, "_emit_generation_observability") as mock_emit:
+            with pytest.raises(StopIteration):
+                backend.generate()
+
+        mock_emit.assert_called_once()
+
+    def test_emit_assembles_and_routes_event(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+        """The finalizer builds a GenerationObservability from probes and routes it to logs + wandb."""
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.llm = None
+        backend._engine_runtime_config = {"enable_prefix_caching": True}
+
+        sampler = MagicMock()
+        sampler.peak_gb = 12.5
+
+        with (
+            patch(
+                "nemo_safe_synthesizer.generation.vllm_backend.read_vllm_runtime_metrics",
+                return_value={"kv_cache_usage_perc": 0.4, "prefix_cache_hit_rate": 0.9, "spec_accept_rate": None},
+            ),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.read_loadavg", return_value=(1.0, 2.0, 3.0)),
+            patch("nemo_safe_synthesizer.generation.vllm_backend.log_observability_event") as mock_log_wandb,
+            patch("nemo_safe_synthesizer.generation.vllm_backend.logger") as mock_logger,
+        ):
+            backend._emit_generation_observability(sampler, (0.5, 0.6, 0.7))
+
+        mock_log_wandb.assert_called_once()
+        (event,) = mock_log_wandb.call_args.args
+        assert mock_log_wandb.call_args.kwargs == {"prefix": "vllm_gen"}
+        assert isinstance(event, GenerationObservability)
+        assert event.peak_vram_gb == 12.5
+        assert event.kv_cache_usage_perc == 0.4
+        assert event.prefix_cache_hit_rate == 0.9
+        assert event.spec_accept_rate is None
+        assert event.engine_runtime_config == {"enable_prefix_caching": True}
+        # ``loadavg_pre`` is the value captured before generation; ``loadavg_post``
+        # is read fresh inside the finalizer.
+        assert event.loadavg_pre == (0.5, 0.6, 0.7)
+        assert event.loadavg_post == (1.0, 2.0, 3.0)
+        # The same event is mirrored to structured logs as "vLLM generation complete".
+        mock_logger.runtime.info.assert_called_once_with("vLLM generation complete", extra={"ctx": event.model_dump()})
+
+    def test_emit_swallows_failures(self, base_params, mock_model_metadata, mock_schema, mock_workdir):
+        """A failure inside emission must not propagate — observability is best-effort."""
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+        backend.llm = None
+
+        sampler = MagicMock()
+        sampler.peak_gb = 1.0
+
+        with patch(
+            "nemo_safe_synthesizer.generation.vllm_backend.read_vllm_runtime_metrics",
+            side_effect=RuntimeError("probe blew up"),
+        ):
+            # Must not raise.
+            backend._emit_generation_observability(sampler, None)
 
 
 class TestResolveTemperature:
