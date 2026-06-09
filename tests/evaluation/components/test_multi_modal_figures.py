@@ -223,7 +223,7 @@ class TestGetAutoBins:
         bins = get_auto_bins(x1, x2)
 
         assert bins == {"start": 5.0, "end": 6.0, "size": 1.0}
-    
+
     def test_get_auto_bins_returns_plausible_bins_with_mixture_of_finite_and_nan(self):
         x1 = pd.Series([1.0, 2.0, 3.0, np.nan, np.nan, np.inf, -np.inf])
         x2 = pd.Series([1.0, 2.0, 3.0, np.nan, np.nan, np.inf, -np.inf])
