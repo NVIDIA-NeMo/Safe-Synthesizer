@@ -116,9 +116,6 @@ class PIIReplay(Component):
             # These are the same in both cases. We want the size of that set of training[col] unique values.
             training_entity_unique_count = len(training_entity_unique_values)
             # We want the total number of rows in synthetic[column] that contain some value from the training[col] unique values.
-            # Use a vectorized isin() rather than DataFrame.query(): query() routes the
-            # backtick-quoted column name through the Python tokenizer, which fails on
-            # names containing quotes/apostrophes (e.g. "i'm fine") under Python 3.12+.
             synthetic_col = evaluation_datasets.synthetic[col]
             synthetic_entity_values = synthetic_col[synthetic_col.isin(training_entity_unique_values)]
             synthetic_entity_count = len(synthetic_entity_values)
