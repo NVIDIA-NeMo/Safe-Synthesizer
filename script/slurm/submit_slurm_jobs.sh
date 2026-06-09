@@ -158,7 +158,7 @@ prebuild_repo_venv() {
   ) 200>"${lock_file}"
 
   # Functionally verify the venv by running safe-synthesizer once
-  if ! "${NSS_DIR}/.venv/bin/safe-synthesizer" --version >/dev/null 2>&1; then
+  if ! "${NSS_DIR}/.venv/bin/safe-synthesizer" --help >/dev/null 2>&1; then
     echo "[submit] ERROR: repo venv at ${NSS_DIR}/.venv is not functional (safe-synthesizer failed to run)" >&2
     echo "[submit] Rebuild it: (cd ${NSS_DIR} && rm -rf .venv && mise run bootstrap-nss cu129)" >&2
     exit 1
