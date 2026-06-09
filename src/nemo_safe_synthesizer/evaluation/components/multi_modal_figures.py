@@ -238,8 +238,8 @@ def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
             max_bins,
             exc,
         )
-        start = float(np.nanmin(finite_data))
-        end = float(np.nanmax(finite_data))
+        start = float(np.min(finite_data))
+        end = float(np.max(finite_data))
         bin_count = max_bins
 
     if not np.isfinite(start) or not np.isfinite(end):
