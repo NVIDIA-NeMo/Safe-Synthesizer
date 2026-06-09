@@ -9233,11 +9233,12 @@ for training, generation, and evaluation.</p>
 <ul>
 <li>Docker 20.10+ (BuildKit enabled by default in 23.0+)</li>
 <li><a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html">NVIDIA Container Toolkit</a> installed and configured</li>
-<li>NVIDIA driver compatible with CUDA 12.9</li>
+<li>NVIDIA driver compatible with the CUDA libraries installed by the image
+  variant (<code>cu129</code> today)</li>
 <li>NVIDIA GPU (A100 or better recommended)</li>
 </ul>
 <p>Verify GPU access works:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>nvidia/cuda:12.8.1-runtime-ubuntu22.04<span class="w"> </span>nvidia-smi
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--gpus<span class="w"> </span>all<span class="w"> </span>nvidia/cuda:12.9.1-base-ubuntu22.04<span class="w"> </span>nvidia-smi
 </span></code></pre></div>
 <hr />
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
@@ -9444,11 +9445,13 @@ for details on <code>HF_HOME</code>, <code>HF_HUB_OFFLINE</code>, and <code>VLLM
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu<span class="w">       </span><span class="c1"># runtime image</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>mise<span class="w"> </span>run<span class="w"> </span>container:build:gpu-dev<span class="w">   </span><span class="c1"># dev image with test tooling</span>
 </span></code></pre></div>
-<p>Override build arguments for different CUDA or Python versions:</p>
+<p>Override build arguments for a different package extra, image variant, or
+Python slim base version:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>docker<span class="w"> </span>build<span class="w"> </span>-f<span class="w"> </span>containers/Dockerfile.cuda<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CUDA_VERSION</span><span class="o">=</span><span class="m">12</span>.6.3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">PYTHON_VERSION</span><span class="o">=</span><span class="m">3</span>.12.10<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:custom<span class="w"> </span>.
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CONTAINER_EXTRA</span><span class="o">=</span>cu129<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">CONTAINER_VARIANT</span><span class="o">=</span>cu129<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">PYTHON_VERSION</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--target<span class="w"> </span>runtime<span class="w"> </span>-t<span class="w"> </span>nss-gpu:custom<span class="w"> </span>.
 </span></code></pre></div>
 <p>See <a href="../../developer-guide/docker/">Developer Guide -- Docker</a> for
 build stages, ARG reference, and customization details.</p>
