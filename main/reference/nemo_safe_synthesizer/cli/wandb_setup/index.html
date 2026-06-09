@@ -2303,6 +2303,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;WandbLoggable
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" WandbLoggable">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable.to_wandb_payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_wandb_payload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.cli.wandb_setup.resolve_wandb_run_id" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2340,6 +2368,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;initialize_wandb_run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.cli.wandb_setup.log_observability_event" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;log_observability_event
       
     </span>
   </a>
@@ -4939,6 +4978,8 @@
       
         
       
+        
+      
     
     
     
@@ -5225,6 +5266,34 @@
     
   
     vllm_backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../generation/vllm_observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    vllm_observability
   
 
     
@@ -9134,6 +9203,34 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;WandbLoggable
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" WandbLoggable">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable.to_wandb_payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_wandb_payload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nemo_safe_synthesizer.cli.wandb_setup.resolve_wandb_run_id" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -9171,6 +9268,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;initialize_wandb_run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.cli.wandb_setup.log_observability_event" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;log_observability_event
       
     </span>
   </a>
@@ -9404,6 +9512,14 @@ including run initialization, configuration logging, and failure reporting.</p>
               </div>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            WandbLoggable (nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable)" href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable">WandbLoggable</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Structural type for observability events that can be logged to wandb.</p>
+              </div>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -9448,6 +9564,14 @@ including run initialization, configuration logging, and failure reporting.</p>
               <td>
                 <div class="doc-md-description">
                   <p>Initialize or resume a wandb run with consistent configuration.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            log_observability_event(event, prefix) (nemo_safe_synthesizer.cli.wandb_setup.log_observability_event)" href="#nemo_safe_synthesizer.cli.wandb_setup.log_observability_event">log_observability_event</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Log an observability event to the currently active wandb run.</p>
                 </div>
               </td>
             </tr>
@@ -9944,6 +10068,110 @@ including run initialization, configuration logging, and failure reporting.</p>
 </span><span id="__span-0-107"><a id="__codelineno-0-107" name="__codelineno-0-107"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">WandbPhase</span><span class="p">):</span>
 </span><span id="__span-0-108"><a id="__codelineno-0-108" name="__codelineno-0-108"></a>        <span class="k">return</span> <span class="n">v</span>
 </span><span id="__span-0-109"><a id="__codelineno-0-109" name="__codelineno-0-109"></a>    <span class="k">return</span> <span class="n">WandbPhase</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>WandbLoggable</code>
+
+
+<a href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
+
+
+
+        <p>Structural type for observability events that can be logged to wandb.</p>
+<p>Any event exposing <code>to_wandb_payload(prefix) -&gt; dict</code> satisfies this --
+e.g. <code>TrainingObservability</code> and the generation-side
+<code>GenerationObservability</code>. Using a Protocol keeps :func:<code>log_observability_event</code>
+decoupled from the concrete event types (no import of the training/generation
+subpackages from this CLI module).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Methods:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            to_wandb_payload(prefix='') (nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable.to_wandb_payload)" href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable.to_wandb_payload">to_wandb_payload</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return wandb metrics for this event, namespaced under <code>prefix</code>.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable.to_wandb_payload" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">to_wandb_payload</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable.to_wandb_payload" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return wandb metrics for this event, namespaced under <code>prefix</code>.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/cli/wandb_setup.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-278"><a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_wandb_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span id="__span-0-279"><a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return wandb metrics for this event, namespaced under ``prefix``.&quot;&quot;&quot;</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -10583,6 +10811,123 @@ including run initialization, configuration logging, and failure reporting.</p>
 </span><span id="__span-0-263"><a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Wandb run id: </span><span class="si">{</span><span class="n">wandb</span><span class="o">.</span><span class="n">run</span><span class="o">.</span><span class="n">id</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">wandb</span><span class="o">.</span><span class="n">run</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span><span id="__span-0-264"><a id="__codelineno-0-264" name="__codelineno-0-264"></a>    <span class="k">if</span> <span class="n">settings</span><span class="o">.</span><span class="n">wandb_mode</span> <span class="o">!=</span> <span class="n">WandbMode</span><span class="o">.</span><span class="n">DISABLED</span><span class="p">:</span>
 </span><span id="__span-0-265"><a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Wandb run url: </span><span class="si">{</span><span class="n">wandb</span><span class="o">.</span><span class="n">run</span><span class="o">.</span><span class="n">url</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">wandb</span><span class="o">.</span><span class="n">run</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;None&#39;</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.cli.wandb_setup.log_observability_event" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">log_observability_event</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">prefix</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.cli.wandb_setup.log_observability_event" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Log an observability event to the currently active wandb run.</p>
+<p>Generic sink shared by the training and generation observability paths.
+No-op when no wandb run is active (<code>WANDB_MODE=disabled</code> or the pipeline
+hasn't called :func:<code>initialize_wandb_run</code>). Errors during <code>wandb.log</code> are
+swallowed at warning level -- observability is best-effort and a wandb
+failure must not break the run.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>event</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            WandbLoggable (nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable)" href="#nemo_safe_synthesizer.cli.wandb_setup.WandbLoggable">WandbLoggable</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Any object exposing <code>to_wandb_payload(prefix) -&gt; dict</code> (see
+:class:<code>WandbLoggable</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>prefix</code>
+            </td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>wandb key namespace for this event's metrics (e.g. <code>"training"</code>
+or <code>"vllm_gen"</code>).</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/cli/wandb_setup.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span>
+<span class="normal"><a href="#__codelineno-0-290">290</a></span>
+<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+<span class="normal"><a href="#__codelineno-0-292">292</a></span>
+<span class="normal"><a href="#__codelineno-0-293">293</a></span>
+<span class="normal"><a href="#__codelineno-0-294">294</a></span>
+<span class="normal"><a href="#__codelineno-0-295">295</a></span>
+<span class="normal"><a href="#__codelineno-0-296">296</a></span>
+<span class="normal"><a href="#__codelineno-0-297">297</a></span>
+<span class="normal"><a href="#__codelineno-0-298">298</a></span>
+<span class="normal"><a href="#__codelineno-0-299">299</a></span>
+<span class="normal"><a href="#__codelineno-0-300">300</a></span>
+<span class="normal"><a href="#__codelineno-0-301">301</a></span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-282"><a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="k">def</span><span class="w"> </span><span class="nf">log_observability_event</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="n">WandbLoggable</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-283"><a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Log an observability event to the currently active wandb run.</span>
+</span><span id="__span-0-284"><a id="__codelineno-0-284" name="__codelineno-0-284"></a>
+</span><span id="__span-0-285"><a id="__codelineno-0-285" name="__codelineno-0-285"></a><span class="sd">    Generic sink shared by the training and generation observability paths.</span>
+</span><span id="__span-0-286"><a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">    No-op when no wandb run is active (``WANDB_MODE=disabled`` or the pipeline</span>
+</span><span id="__span-0-287"><a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">    hasn&#39;t called :func:`initialize_wandb_run`). Errors during ``wandb.log`` are</span>
+</span><span id="__span-0-288"><a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">    swallowed at warning level -- observability is best-effort and a wandb</span>
+</span><span id="__span-0-289"><a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">    failure must not break the run.</span>
+</span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a>
+</span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">    Args:</span>
+</span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">        event: Any object exposing ``to_wandb_payload(prefix) -&gt; dict`` (see</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">            :class:`WandbLoggable`).</span>
+</span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a><span class="sd">        prefix: wandb key namespace for this event&#39;s metrics (e.g. ``&quot;training&quot;``</span>
+</span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">            or ``&quot;vllm_gen&quot;``).</span>
+</span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-297"><a id="__codelineno-0-297" name="__codelineno-0-297"></a>    <span class="k">if</span> <span class="n">wandb</span><span class="o">.</span><span class="n">run</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-298"><a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="k">return</span>
+</span><span id="__span-0-299"><a id="__codelineno-0-299" name="__codelineno-0-299"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-300"><a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="n">wandb</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">to_wandb_payload</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="n">prefix</span><span class="p">))</span>
+</span><span id="__span-0-301"><a id="__codelineno-0-301" name="__codelineno-0-301"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 -- degraded mode</span>
+</span><span id="__span-0-302"><a id="__codelineno-0-302" name="__codelineno-0-302"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;failed to log observability event (</span><span class="si">{</span><span class="n">prefix</span><span class="si">!r}</span><span class="s2">) to wandb: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>

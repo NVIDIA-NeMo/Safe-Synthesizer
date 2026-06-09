@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/config/job/">
+        <link rel="canonical" href="https://nvidia-nemo.github.io/Safe-Synthesizer/main/reference/nemo_safe_synthesizer/generation/vllm_observability/">
       
       
-        <link rel="prev" href="../internal_results/">
+        <link rel="prev" href="../vllm_backend/">
       
       
-        <link rel="next" href="../parameters/">
+        <link rel="next" href="../../holdout/holdout/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>job - NeMo Safe Synthesizer</title>
+        <title>vllm_observability - NeMo Safe Synthesizer</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nemo_safe_synthesizer.config.job" class="md-skip">
+        <a href="#nemo_safe_synthesizer.generation.vllm_observability" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              job
+              vllm_observability
             
           </span>
         </div>
@@ -2152,10 +2152,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -2198,11 +2196,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7_1_3" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_3" >
         
           
           <label class="md-nav__link" for="__nav_5_7_1_3" id="__nav_5_7_1_3_label" tabindex="0">
@@ -2223,7 +2223,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_7_1_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2241,7 +2241,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../autoconfig/" class="md-nav__link">
+      <a href="../../config/autoconfig/" class="md-nav__link">
         
   
   
@@ -2269,7 +2269,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../base/" class="md-nav__link">
+      <a href="../../config/base/" class="md-nav__link">
         
   
   
@@ -2297,7 +2297,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../data/" class="md-nav__link">
+      <a href="../../config/data/" class="md-nav__link">
         
   
   
@@ -2325,7 +2325,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../differential_privacy/" class="md-nav__link">
+      <a href="../../config/differential_privacy/" class="md-nav__link">
         
   
   
@@ -2353,7 +2353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../evaluate/" class="md-nav__link">
+      <a href="../../config/evaluate/" class="md-nav__link">
         
   
   
@@ -2381,7 +2381,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../external_results/" class="md-nav__link">
+      <a href="../../config/external_results/" class="md-nav__link">
         
   
   
@@ -2409,7 +2409,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../generate/" class="md-nav__link">
+      <a href="../../config/generate/" class="md-nav__link">
         
   
   
@@ -2437,7 +2437,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../internal_results/" class="md-nav__link">
+      <a href="../../config/internal_results/" class="md-nav__link">
         
   
   
@@ -2462,35 +2462,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    job
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../config/job/" class="md-nav__link">
         
   
   
@@ -2506,91 +2481,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;job
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" job">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SafeSynthesizerJobConfig
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label=" SafeSynthesizerJobConfig">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;data_source
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hf_token_secret
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2603,7 +2493,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../parameters/" class="md-nav__link">
+      <a href="../../config/parameters/" class="md-nav__link">
         
   
   
@@ -2631,7 +2521,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../preflight/" class="md-nav__link">
+      <a href="../../config/preflight/" class="md-nav__link">
         
   
   
@@ -2659,7 +2549,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../replace_pii/" class="md-nav__link">
+      <a href="../../config/replace_pii/" class="md-nav__link">
         
   
   
@@ -2687,7 +2577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../time_series/" class="md-nav__link">
+      <a href="../../config/time_series/" class="md-nav__link">
         
   
   
@@ -2715,7 +2605,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../training/" class="md-nav__link">
+      <a href="../../config/training/" class="md-nav__link">
         
   
   
@@ -2743,7 +2633,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../types/" class="md-nav__link">
+      <a href="../../config/types/" class="md-nav__link">
         
   
   
@@ -4806,8 +4696,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -4840,13 +4732,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_1_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7_1_9" checked>
         
           
           <label class="md-nav__link" for="__nav_5_7_1_9" id="__nav_5_7_1_9_label" tabindex="0">
@@ -4867,7 +4757,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_5_7_1_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5_7_1_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -4885,7 +4775,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/backend/" class="md-nav__link">
+      <a href="../backend/" class="md-nav__link">
         
   
   
@@ -4913,7 +4803,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/batch/" class="md-nav__link">
+      <a href="../batch/" class="md-nav__link">
         
   
   
@@ -4941,7 +4831,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/processors/" class="md-nav__link">
+      <a href="../processors/" class="md-nav__link">
         
   
   
@@ -4969,7 +4859,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/regex_manager/" class="md-nav__link">
+      <a href="../regex_manager/" class="md-nav__link">
         
   
   
@@ -4997,7 +4887,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/results/" class="md-nav__link">
+      <a href="../results/" class="md-nav__link">
         
   
   
@@ -5025,7 +4915,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/stopping/" class="md-nav__link">
+      <a href="../stopping/" class="md-nav__link">
         
   
   
@@ -5053,7 +4943,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/timeseries_backend/" class="md-nav__link">
+      <a href="../timeseries_backend/" class="md-nav__link">
         
   
   
@@ -5081,7 +4971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/utils/" class="md-nav__link">
+      <a href="../utils/" class="md-nav__link">
         
   
   
@@ -5109,7 +4999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../generation/vllm_backend/" class="md-nav__link">
+      <a href="../vllm_backend/" class="md-nav__link">
         
   
   
@@ -5134,10 +5024,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../generation/vllm_observability/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    vllm_observability
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -5153,6 +5068,240 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;vllm_observability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" vllm_observability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;NvmlPeakSampler
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" NvmlPeakSampler">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler.peak_gb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;peak_gb
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerationObservability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" GenerationObservability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.peak_vram_gb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;peak_vram_gb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.kv_cache_usage_perc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;kv_cache_usage_perc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.prefix_cache_hit_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;prefix_cache_hit_rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.spec_accept_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;spec_accept_rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_pre" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;loadavg_pre
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;loadavg_post
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.engine_runtime_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;engine_runtime_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.flag_did_not_engage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;flag_did_not_engage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.to_wandb_payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_wandb_payload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.VllmRuntimeMetrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;VllmRuntimeMetrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.read_loadavg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;read_loadavg
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.probe_engine_runtime_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;probe_engine_runtime_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.flag_engagement_mismatches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;flag_engagement_mismatches
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.read_vllm_runtime_metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;read_vllm_runtime_metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -8926,56 +9075,34 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;job
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;vllm_observability
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" job">
+    <nav class="md-nav" aria-label=" vllm_observability">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;SafeSynthesizerJobConfig
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;NvmlPeakSampler
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label=" SafeSynthesizerJobConfig">
+    <nav class="md-nav" aria-label=" NvmlPeakSampler">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="md-nav__link">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler.peak_gb" class="md-nav__link">
     <span class="md-ellipsis">
       
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;data_source
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;config
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hf_token_secret
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;peak_gb
       
     </span>
   </a>
@@ -8984,6 +9111,177 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;GenerationObservability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" GenerationObservability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.peak_vram_gb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;peak_vram_gb
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.kv_cache_usage_perc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;kv_cache_usage_perc
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.prefix_cache_hit_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;prefix_cache_hit_rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.spec_accept_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;spec_accept_rate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_pre" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;loadavg_pre
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_post" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;loadavg_post
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.engine_runtime_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;engine_runtime_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.flag_did_not_engage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;flag_did_not_engage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.to_wandb_payload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;to_wandb_payload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.VllmRuntimeMetrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;VllmRuntimeMetrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.read_loadavg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;read_loadavg
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.probe_engine_runtime_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;probe_engine_runtime_config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.flag_engagement_mismatches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;flag_engagement_mismatches
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nemo_safe_synthesizer.generation.vllm_observability.read_vllm_runtime_metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;read_vllm_runtime_metrics
+      
+    </span>
+  </a>
   
 </li>
         
@@ -9129,10 +9427,10 @@
     
     
       <li class="md-path__item">
-        <a href="../autoconfig/" class="md-path__link">
+        <a href="../backend/" class="md-path__link">
           
   <span class="md-ellipsis">
-    config
+    generation
   </span>
 
         </a>
@@ -9154,19 +9452,59 @@
   
 
 
-  <h1>job</h1>
+  <h1>vllm_observability</h1>
 
 <div class="doc doc-object doc-module">
 
 
 
-<h2 id="nemo_safe_synthesizer.config.job" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>job</code>
+<h2 id="nemo_safe_synthesizer.generation.vllm_observability" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>vllm_observability</code>
 
 
-<a href="#nemo_safe_synthesizer.config.job" class="headerlink" title="Permanent link">&para;</a></h2>
+<a href="#nemo_safe_synthesizer.generation.vllm_observability" class="headerlink" title="Permanent link">&para;</a></h2>
 
     <div class="doc doc-contents first">
+
+        <p>vLLM observability primitives for production + benchmark.</p>
+<p>Schema-frozen generation-observability events emitted by <code>VllmBackend.generate()</code>
+and consumed by downstream observability surfaces (structured logs, wandb,
+the benchmark harness's per-cell aggregator).</p>
+<p>Four primitives, all degraded-mode by design:</p>
+<ul>
+<li>:class:<code>NvmlPeakSampler</code> — daemon-thread peak device-VRAM tracker via
+  <code>pynvml</code>. Reads at the driver layer so it sees vLLM worker-subprocess
+  allocations regardless of which process holds the torch handle —
+  sidesteps the <code>VLLM_ENABLE_V1_MULTIPROCESSING=1</code> blind spot where
+  <code>torch.cuda.max_memory_allocated()</code> in the harness reads 0.</li>
+<li>:func:<code>read_loadavg</code> — <code>/proc/loadavg</code> snapshot as a (1m, 5m, 15m)
+  triple. <code>None</code> on non-Linux or read failure.</li>
+<li>:func:<code>probe_engine_runtime_config</code> — best-effort introspection of the
+  engine's effective scheduler/cache/speculative settings via
+  <code>llm.llm_engine.vllm_config</code>. Empty dict on any failure.</li>
+<li>:func:<code>read_vllm_runtime_metrics</code> — one-shot snapshot of
+  <code>llm.get_metrics()</code> for KV-cache usage, prefix-cache hit rate, and
+  speculative-decoding acceptance rate. Returns a dict with stable keys
+  regardless of which metrics the engine actually exposed.</li>
+</ul>
+<p>Plus the :class:<code>GenerationObservability</code> pydantic model — the schema for the
+generation-complete structured event emitted at the end of each
+generation invocation. Forward-compatible: new optional fields can be
+added without breaking existing consumers because the model uses
+<code>extra="forbid"</code> (so producers are forced to update when they add new
+fields) but every existing field has a default of <code>None</code> or empty.</p>
+<p>References (design):
+- HuggingFace <code>train_memory</code> blog ("Visualize and understand GPU memory
+  in PyTorch") covers in-process torch profiling, which is the gap NVML
+  fills here (out-of-process VRAM visibility):
+  https://huggingface.co/blog/train_memory
+- spark-dashboard (Rust) demonstrates the NVML + <code>/metrics</code> pattern at
+  ~1s polling cadence — the precedent for combining NVML's driver-level
+  reading with vLLM's Prometheus surface:
+  https://github.com/niklasfrick/spark-dashboard
+- vLLM's metrics design doc enumerates the gauges/counters
+  :func:<code>read_vllm_runtime_metrics</code> reads:
+  https://github.com/vllm-project/vllm/blob/main/docs/design/metrics.md</p>
 
 
 
@@ -9187,15 +9525,31 @@
       </thead>
       <tbody>
           <tr class="doc-section-item">
-            <td><code><a class="autorefs autorefs-internal" title="            SafeSynthesizerJobConfig
+            <td><code><a class="autorefs autorefs-internal" title="              NvmlPeakSampler(device_index=None, interval_seconds=0.25) (nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler)" href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler">NvmlPeakSampler</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>Daemon-thread sampler tracking peak device VRAM via NVML.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            GenerationObservability
 
 
   
       pydantic-model
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig">SafeSynthesizerJobConfig</a></code></td>
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability">GenerationObservability</a></code></td>
             <td>
               <div class="doc-md-description">
-                <p>Configuration model for Safe Synthesizer jobs.</p>
+                <p>One generation-complete event payload.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            VllmRuntimeMetrics (nemo_safe_synthesizer.generation.vllm_observability.VllmRuntimeMetrics)" href="#nemo_safe_synthesizer.generation.vllm_observability.VllmRuntimeMetrics">VllmRuntimeMetrics</a></code></td>
+            <td>
+              <div class="doc-md-description">
+                <p>End-of-generation vLLM metric snapshot with a fixed key set.</p>
               </div>
             </td>
           </tr>
@@ -9203,6 +9557,51 @@
     </table>
 
 
+
+
+<p><span class="doc-section-title">Functions:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            read_loadavg() (nemo_safe_synthesizer.generation.vllm_observability.read_loadavg)" href="#nemo_safe_synthesizer.generation.vllm_observability.read_loadavg">read_loadavg</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return <code>/proc/loadavg</code> as a (1m, 5m, 15m) triple; <code>None</code> when unavailable.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            probe_engine_runtime_config(llm) (nemo_safe_synthesizer.generation.vllm_observability.probe_engine_runtime_config)" href="#nemo_safe_synthesizer.generation.vllm_observability.probe_engine_runtime_config">probe_engine_runtime_config</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Best-effort introspection of the engine's effective runtime config.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            flag_engagement_mismatches(intended, actual, checked_fields=ENGINE_CONFIG_CHECKED_FIELDS) (nemo_safe_synthesizer.generation.vllm_observability.flag_engagement_mismatches)" href="#nemo_safe_synthesizer.generation.vllm_observability.flag_engagement_mismatches">flag_engagement_mismatches</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Return human-readable mismatch descriptions; empty list means clean engagement.</p>
+                </div>
+              </td>
+            </tr>
+            <tr class="doc-section-item">
+              <td><code><a class="autorefs autorefs-internal" title="            read_vllm_runtime_metrics(llm) (nemo_safe_synthesizer.generation.vllm_observability.read_vllm_runtime_metrics)" href="#nemo_safe_synthesizer.generation.vllm_observability.read_vllm_runtime_metrics">read_vllm_runtime_metrics</a></code></td>
+              <td>
+                <div class="doc-md-description">
+                  <p>Snapshot <code>llm.get_metrics()</code> for known metrics; degraded-mode on failure.</p>
+                </div>
+              </td>
+            </tr>
+      </tbody>
+    </table>
 
 
 
@@ -9222,62 +9621,245 @@
 
 
 
-<h3 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>SafeSynthesizerJobConfig</code>
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NvmlPeakSampler</span><span class="p">(</span><span class="n">device_index</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">interval_seconds</span><span class="o">=</span><span class="mf">0.25</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Daemon-thread sampler tracking peak device VRAM via NVML.</p>
+<p>Use as a context manager wrapping the work whose peak VRAM you want::</p>
+<div class="language-text highlight"><pre><span></span><code>with NvmlPeakSampler() as vram:
+    ...  # build engine / run training / generate
+peak_gb = vram.peak_gb  # float | None
+</code></pre></div>
+<p>Returns <code>None</code> from :attr:<code>peak_gb</code> when NVML isn't available (driver
+missing, pynvml import failed, device index invalid). Reads at the driver
+layer, so it sees allocations made by worker subprocesses regardless of
+which process holds the torch handle. Reports device-wide VRAM -- on a
+dedicated host that equals the workload's allocation; on a shared GPU it
+includes other process allocations.</p>
+<p><code>device_index</code> defaults to the first <code>CUDA_VISIBLE_DEVICES</code> entry (see
+:func:<code>_default_nvml_device_index</code>) so the sampler follows the workload's
+GPU on multi-GPU hosts instead of always reading physical GPU 0. Pass an
+explicit index to override.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><a class="autorefs autorefs-internal" title="            peak_gb
+
+  
+      property
+   (nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler.peak_gb)" href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler.peak_gb">peak_gb</a></code></td>
+            <td>
+                  <code><span title="float">float</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Peak device-wide VRAM (GiB) observed during sampling; <code>None</code> if NVML unavailable.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+                  <details class="mkdocstrings-source">
+                    <summary>Source code in <code>src/nemo_safe_synthesizer/observability.py</code></summary>
+                    <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1066">1066</a></span>
+<span class="normal"><a href="#__codelineno-0-1067">1067</a></span>
+<span class="normal"><a href="#__codelineno-0-1068">1068</a></span>
+<span class="normal"><a href="#__codelineno-0-1069">1069</a></span>
+<span class="normal"><a href="#__codelineno-0-1070">1070</a></span>
+<span class="normal"><a href="#__codelineno-0-1071">1071</a></span>
+<span class="normal"><a href="#__codelineno-0-1072">1072</a></span>
+<span class="normal"><a href="#__codelineno-0-1073">1073</a></span>
+<span class="normal"><a href="#__codelineno-0-1074">1074</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1066"><a id="__codelineno-0-1066" name="__codelineno-0-1066"></a><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">interval_seconds</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-1067"><a id="__codelineno-0-1067" name="__codelineno-0-1067"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_device_index</span> <span class="o">=</span> <span class="n">_default_nvml_device_index</span><span class="p">()</span> <span class="k">if</span> <span class="n">device_index</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">device_index</span>
+</span><span id="__span-0-1068"><a id="__codelineno-0-1068" name="__codelineno-0-1068"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_interval</span> <span class="o">=</span> <span class="n">interval_seconds</span>
+</span><span id="__span-0-1069"><a id="__codelineno-0-1069" name="__codelineno-0-1069"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_stop</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+</span><span id="__span-0-1070"><a id="__codelineno-0-1070" name="__codelineno-0-1070"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_peak_bytes</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-0-1071"><a id="__codelineno-0-1071" name="__codelineno-0-1071"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+</span><span id="__span-0-1072"><a id="__codelineno-0-1072" name="__codelineno-0-1072"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_thread</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-1073"><a id="__codelineno-0-1073" name="__codelineno-0-1073"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-1074"><a id="__codelineno-0-1074" name="__codelineno-0-1074"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_pynvml</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div></td></tr></table></div>
+                  </details>
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler.peak_gb" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">peak_gb</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.NvmlPeakSampler.peak_gb" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Peak device-wide VRAM (GiB) observed during sampling; <code>None</code> if NVML unavailable.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>GenerationObservability</code>
 
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-pydantic-model"><code>pydantic-model</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability" class="headerlink" title="Permanent link">&para;</a></h3>
 
 
     <div class="doc doc-contents ">
             <p class="doc doc-class-bases">
-              Bases: <code><a class="autorefs autorefs-internal" title="            NSSBaseModel
+              Bases: <code><span title="pydantic.BaseModel">BaseModel</span></code></p>
 
-
-  
-      pydantic-model
-   (nemo_safe_synthesizer.config.base.NSSBaseModel)" href="../base/#nemo_safe_synthesizer.config.base.NSSBaseModel">NSSBaseModel</a></code></p>
-
-        <p>Configuration model for Safe Synthesizer jobs.</p>
-<p>Used primarily internally to configure a run submitted to the NeMo Jobs
-Microservice.</p>
+        <p>One generation-complete event payload.</p>
+<p>Emitted by <code>VllmBackend.generate()</code> at end of each generation
+invocation. Consumed by:</p>
+<ul>
+<li>Structured log routing (default — flows through
+  <code>logger.runtime.info(...)</code> like the rest of PR-1's trace
+  telemetry).</li>
+<li>Wandb (when a run is active) — logged to the current wandb run.</li>
+<li>The benchmark harness's per-cell aggregator (composes this into
+  its richer <code>CandidateMetrics</code> schema).</li>
+</ul>
+<p>Every measurement field is optional; producers should populate what
+they can capture and leave the rest at the default. Wandb drops
+<code>None</code> values silently which is the right behavior for "this
+metric wasn't reachable on this generation".</p>
 
     
+      <p>Config:</p>
+      <ul>
+          <li><code>extra</code>: <code class="highlight language-python"><span class="n">forbid</span></code></li>
+      </ul>
 
         <p>Fields:</p>
         <ul>
             <li>
-              <code><a class="autorefs autorefs-internal" title="            data_source
+              <code><a class="autorefs autorefs-internal" title="            peak_vram_gb = None
 
   
       pydantic-field
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source">data_source</a></code>
-                (<code><span title="str">str</span></code>)
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.peak_vram_gb)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.peak_vram_gb">peak_vram_gb</a></code>
+                (<code><span title="float">float</span> | None</code>)
             </li>
             <li>
-              <code><a class="autorefs autorefs-internal" title="            config
+              <code><a class="autorefs autorefs-internal" title="            kv_cache_usage_perc = None
 
   
       pydantic-field
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config">config</a></code>
-                (<code><a class="autorefs autorefs-internal" title="            SafeSynthesizerParameters
-
-
-  
-      pydantic-model
-   (nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters)" href="../parameters/#nemo_safe_synthesizer.config.parameters.SafeSynthesizerParameters">SafeSynthesizerParameters</a></code>)
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.kv_cache_usage_perc)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.kv_cache_usage_perc">kv_cache_usage_perc</a></code>
+                (<code><span title="float">float</span> | None</code>)
             </li>
             <li>
-              <code><a class="autorefs autorefs-internal" title="            hf_token_secret = None
+              <code><a class="autorefs autorefs-internal" title="            prefix_cache_hit_rate = None
 
   
       pydantic-field
-   (nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret)" href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret">hf_token_secret</a></code>
-                (<code><span title="str">str</span> | None</code>)
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.prefix_cache_hit_rate)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.prefix_cache_hit_rate">prefix_cache_hit_rate</a></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            spec_accept_rate = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.spec_accept_rate)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.spec_accept_rate">spec_accept_rate</a></code>
+                (<code><span title="float">float</span> | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            loadavg_pre = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_pre)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_pre">loadavg_pre</a></code>
+                (<code><span title="tuple">tuple</span>[<span title="float">float</span>, <span title="float">float</span>, <span title="float">float</span>] | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            loadavg_post = None
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_post)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_post">loadavg_post</a></code>
+                (<code><span title="tuple">tuple</span>[<span title="float">float</span>, <span title="float">float</span>, <span title="float">float</span>] | None</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            engine_runtime_config
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.engine_runtime_config)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.engine_runtime_config">engine_runtime_config</a></code>
+                (<code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>)
+            </li>
+            <li>
+              <code><a class="autorefs autorefs-internal" title="            flag_did_not_engage = False
+
+  
+      pydantic-field
+   (nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.flag_did_not_engage)" href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.flag_did_not_engage">flag_did_not_engage</a></code>
+                (<code><span title="bool">bool</span></code>)
             </li>
         </ul>
 
@@ -9296,19 +9878,19 @@ Microservice.</p>
 
 
 
-<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">data_source</span></code>
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.peak_vram_gb" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">peak_vram_gb</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.data_source" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.peak_vram_gb" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>The data source for the job.</p>
+        <p>Peak device-wide VRAM usage in GiB, sampled by NVML (<code>pynvml.nvmlDeviceGetMemoryInfo</code>) across the whole generation. <code>None</code> when NVML is unavailable. Device-wide reading; on a shared GPU it includes other processes.</p>
 
     </div>
 
@@ -9318,19 +9900,19 @@ Microservice.</p>
 
 
 
-<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">config</span></code>
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.kv_cache_usage_perc" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">kv_cache_usage_perc</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.config" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.kv_cache_usage_perc" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>The Safe Synthesizer parameters configuration.</p>
+        <p>vLLM's <code>vllm:kv_cache_usage_perc</code> gauge (fraction 0..1 of KV cache blocks in use) at end of generation. <code>None</code> when the engine doesn't expose the gauge or the call failed. Approximates peak; vLLM only publishes the instantaneous value, not a max-over-time.</p>
 
     </div>
 
@@ -9340,23 +9922,302 @@ Microservice.</p>
 
 
 
-<h4 id="nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">hf_token_secret</span> <span class="o">=</span> <span class="kc">None</span></code>
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.prefix_cache_hit_rate" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">prefix_cache_hit_rate</span> <span class="o">=</span> <span class="kc">None</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
-<a href="#nemo_safe_synthesizer.config.job.SafeSynthesizerJobConfig.hf_token_secret" class="headerlink" title="Permanent link">&para;</a></h4>
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.prefix_cache_hit_rate" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Name of platform secret containing the HuggingFace token. Must exist in the same workspace as the job.</p>
+        <p>Derived from <code>vllm:prefix_cache_hits / vllm:prefix_cache_queries</code> at end of generation. <code>None</code> when either counter is absent or queries==0. Surfaces whether shared schema prefixes actually amortized across the batch.</p>
 
     </div>
 
 </div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.spec_accept_rate" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">spec_accept_rate</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.spec_accept_rate" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Derived from <code>vllm:spec_decode_num_accepted_tokens / num_draft_tokens</code> at end of generation. <code>None</code> when speculative decoding wasn't enabled on this generation (counters absent) or no drafts were proposed (denominator==0).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_pre" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">loadavg_pre</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_pre" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Host <code>/proc/loadavg</code> snapshot captured at the start of this generation (1-min, 5-min, 15-min averages). <code>None</code> when <code>/proc/loadavg</code> is unavailable (non-Linux).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_post" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">loadavg_post</span> <span class="o">=</span> <span class="kc">None</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.loadavg_post" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Host <code>/proc/loadavg</code> snapshot captured at the end of this generation. Drift from <code>loadavg_pre</code> signals load change during the generation.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.engine_runtime_config" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">engine_runtime_config</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.engine_runtime_config" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Best-effort probe of the engine's effective runtime config (<code>enable_prefix_caching</code>, <code>enable_chunked_prefill</code>, <code>max_num_seqs</code>, <code>max_num_batched_tokens</code>, <code>kv_cache_dtype</code>, <code>speculative_method</code> when populated). Empty dict on probe failure.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.flag_did_not_engage" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">flag_did_not_engage</span> <span class="o">=</span> <span class="kc">False</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.flag_did_not_engage" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p><code>True</code> when <code>engine_runtime_config</code> disagrees with the candidate/caller's intended setting on any checked field — an unsupported knob silently ignored, a default-on flag overriding an explicit-off intent, etc.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.to_wandb_payload" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">to_wandb_payload</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;vllm_gen&#39;</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.GenerationObservability.to_wandb_payload" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Flatten this event into a wandb-friendly <code>wandb.log(...)</code> dict.</p>
+<p>Wandb plots scalars cleanly but renders tuples/dicts as opaque
+blobs, so this method:</p>
+<ul>
+<li>Drops <code>None</code> values (wandb would drop them anyway; explicit
+  here for documentation).</li>
+<li>Unpacks <code>loadavg_pre</code> / <code>loadavg_post</code> 3-tuples to per-
+  duration scalars (<code>loadavg_pre_1m</code> / <code>_5m</code> / <code>_15m</code>).</li>
+<li>Flattens <code>engine_runtime_config</code> to <code>engine_runtime/&lt;key&gt;</code>
+  scalars (mirrors the existing flattening pattern in the
+  benchmark harness).</li>
+</ul>
+<p>All keys are namespaced under <code>prefix</code> so production generation
+events don't collide with other wandb metrics in the same run.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/generation/vllm_observability.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-201">201</a></span>
+<span class="normal"><a href="#__codelineno-0-202">202</a></span>
+<span class="normal"><a href="#__codelineno-0-203">203</a></span>
+<span class="normal"><a href="#__codelineno-0-204">204</a></span>
+<span class="normal"><a href="#__codelineno-0-205">205</a></span>
+<span class="normal"><a href="#__codelineno-0-206">206</a></span>
+<span class="normal"><a href="#__codelineno-0-207">207</a></span>
+<span class="normal"><a href="#__codelineno-0-208">208</a></span>
+<span class="normal"><a href="#__codelineno-0-209">209</a></span>
+<span class="normal"><a href="#__codelineno-0-210">210</a></span>
+<span class="normal"><a href="#__codelineno-0-211">211</a></span>
+<span class="normal"><a href="#__codelineno-0-212">212</a></span>
+<span class="normal"><a href="#__codelineno-0-213">213</a></span>
+<span class="normal"><a href="#__codelineno-0-214">214</a></span>
+<span class="normal"><a href="#__codelineno-0-215">215</a></span>
+<span class="normal"><a href="#__codelineno-0-216">216</a></span>
+<span class="normal"><a href="#__codelineno-0-217">217</a></span>
+<span class="normal"><a href="#__codelineno-0-218">218</a></span>
+<span class="normal"><a href="#__codelineno-0-219">219</a></span>
+<span class="normal"><a href="#__codelineno-0-220">220</a></span>
+<span class="normal"><a href="#__codelineno-0-221">221</a></span>
+<span class="normal"><a href="#__codelineno-0-222">222</a></span>
+<span class="normal"><a href="#__codelineno-0-223">223</a></span>
+<span class="normal"><a href="#__codelineno-0-224">224</a></span>
+<span class="normal"><a href="#__codelineno-0-225">225</a></span>
+<span class="normal"><a href="#__codelineno-0-226">226</a></span>
+<span class="normal"><a href="#__codelineno-0-227">227</a></span>
+<span class="normal"><a href="#__codelineno-0-228">228</a></span>
+<span class="normal"><a href="#__codelineno-0-229">229</a></span>
+<span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span>
+<span class="normal"><a href="#__codelineno-0-235">235</a></span>
+<span class="normal"><a href="#__codelineno-0-236">236</a></span>
+<span class="normal"><a href="#__codelineno-0-237">237</a></span>
+<span class="normal"><a href="#__codelineno-0-238">238</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-201"><a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_wandb_payload</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prefix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;vllm_gen&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span id="__span-0-202"><a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Flatten this event into a wandb-friendly ``wandb.log(...)`` dict.</span>
+</span><span id="__span-0-203"><a id="__codelineno-0-203" name="__codelineno-0-203"></a>
+</span><span id="__span-0-204"><a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">    Wandb plots scalars cleanly but renders tuples/dicts as opaque</span>
+</span><span id="__span-0-205"><a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">    blobs, so this method:</span>
+</span><span id="__span-0-206"><a id="__codelineno-0-206" name="__codelineno-0-206"></a>
+</span><span id="__span-0-207"><a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">    - Drops ``None`` values (wandb would drop them anyway; explicit</span>
+</span><span id="__span-0-208"><a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">      here for documentation).</span>
+</span><span id="__span-0-209"><a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">    - Unpacks ``loadavg_pre`` / ``loadavg_post`` 3-tuples to per-</span>
+</span><span id="__span-0-210"><a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">      duration scalars (``loadavg_pre_1m`` / ``_5m`` / ``_15m``).</span>
+</span><span id="__span-0-211"><a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">    - Flattens ``engine_runtime_config`` to ``engine_runtime/&lt;key&gt;``</span>
+</span><span id="__span-0-212"><a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">      scalars (mirrors the existing flattening pattern in the</span>
+</span><span id="__span-0-213"><a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">      benchmark harness).</span>
+</span><span id="__span-0-214"><a id="__codelineno-0-214" name="__codelineno-0-214"></a>
+</span><span id="__span-0-215"><a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">    All keys are namespaced under ``prefix`` so production generation</span>
+</span><span id="__span-0-216"><a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">    events don&#39;t collide with other wandb metrics in the same run.</span>
+</span><span id="__span-0-217"><a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-218"><a id="__codelineno-0-218" name="__codelineno-0-218"></a>    <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-219"><a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="k">for</span> <span class="n">scalar_field</span> <span class="ow">in</span> <span class="p">(</span>
+</span><span id="__span-0-220"><a id="__codelineno-0-220" name="__codelineno-0-220"></a>        <span class="s2">&quot;peak_vram_gb&quot;</span><span class="p">,</span>
+</span><span id="__span-0-221"><a id="__codelineno-0-221" name="__codelineno-0-221"></a>        <span class="s2">&quot;kv_cache_usage_perc&quot;</span><span class="p">,</span>
+</span><span id="__span-0-222"><a id="__codelineno-0-222" name="__codelineno-0-222"></a>        <span class="s2">&quot;prefix_cache_hit_rate&quot;</span><span class="p">,</span>
+</span><span id="__span-0-223"><a id="__codelineno-0-223" name="__codelineno-0-223"></a>        <span class="s2">&quot;spec_accept_rate&quot;</span><span class="p">,</span>
+</span><span id="__span-0-224"><a id="__codelineno-0-224" name="__codelineno-0-224"></a>        <span class="s2">&quot;flag_did_not_engage&quot;</span><span class="p">,</span>
+</span><span id="__span-0-225"><a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="p">):</span>
+</span><span id="__span-0-226"><a id="__codelineno-0-226" name="__codelineno-0-226"></a>        <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scalar_field</span><span class="p">)</span>
+</span><span id="__span-0-227"><a id="__codelineno-0-227" name="__codelineno-0-227"></a>        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-228"><a id="__codelineno-0-228" name="__codelineno-0-228"></a>            <span class="n">payload</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">scalar_field</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+</span><span id="__span-0-229"><a id="__codelineno-0-229" name="__codelineno-0-229"></a>    <span class="k">for</span> <span class="n">side</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;pre&quot;</span><span class="p">,</span> <span class="s2">&quot;post&quot;</span><span class="p">):</span>
+</span><span id="__span-0-230"><a id="__codelineno-0-230" name="__codelineno-0-230"></a>        <span class="n">tup</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;loadavg_</span><span class="si">{</span><span class="n">side</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-231"><a id="__codelineno-0-231" name="__codelineno-0-231"></a>        <span class="k">if</span> <span class="n">tup</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-232"><a id="__codelineno-0-232" name="__codelineno-0-232"></a>            <span class="k">continue</span>
+</span><span id="__span-0-233"><a id="__codelineno-0-233" name="__codelineno-0-233"></a>        <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">_LOADAVG_HORIZON_LABELS</span><span class="p">,</span> <span class="n">tup</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+</span><span id="__span-0-234"><a id="__codelineno-0-234" name="__codelineno-0-234"></a>            <span class="n">payload</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">/loadavg_</span><span class="si">{</span><span class="n">side</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+</span><span id="__span-0-235"><a id="__codelineno-0-235" name="__codelineno-0-235"></a>    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">engine_runtime_config</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-0-236"><a id="__codelineno-0-236" name="__codelineno-0-236"></a>        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-237"><a id="__codelineno-0-237" name="__codelineno-0-237"></a>            <span class="n">payload</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">/engine_runtime/</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+</span><span id="__span-0-238"><a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="k">return</span> <span class="n">payload</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.VllmRuntimeMetrics" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>VllmRuntimeMetrics</code>
+
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.VllmRuntimeMetrics" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.TypedDict">TypedDict</span></code></p>
+
+
+
+        <p>End-of-generation vLLM metric snapshot with a fixed key set.</p>
+<p>Every value is <code>float | None</code>; <code>None</code> means the engine did not
+surface that counter on this generation (distinct from a measured zero).</p>
+<p>A <code>TypedDict</code> rather than a dataclass on purpose: the value stays a
+plain <code>dict</code> at runtime, so dict-style consumers (e.g. the benchmark
+harness) are unaffected, while callers gain static key checking and
+<code>float | None</code> value typing instead of <code>dict[str, float | None]</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
 
 
 
@@ -9369,6 +10230,352 @@ Microservice.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.read_loadavg" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">read_loadavg</span><span class="p">()</span></code>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.read_loadavg" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return <code>/proc/loadavg</code> as a (1m, 5m, 15m) triple; <code>None</code> when unavailable.</p>
+<p>Linux-only. Cheap (one syscall). Safe to call from any process -- the read
+is host-scoped, not process-scoped. Designed to bracket a workload: caller
+reads pre + post, the pair is informative about whether host load drifted
+during the run.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/observability.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1132">1132</a></span>
+<span class="normal"><a href="#__codelineno-0-1133">1133</a></span>
+<span class="normal"><a href="#__codelineno-0-1134">1134</a></span>
+<span class="normal"><a href="#__codelineno-0-1135">1135</a></span>
+<span class="normal"><a href="#__codelineno-0-1136">1136</a></span>
+<span class="normal"><a href="#__codelineno-0-1137">1137</a></span>
+<span class="normal"><a href="#__codelineno-0-1138">1138</a></span>
+<span class="normal"><a href="#__codelineno-0-1139">1139</a></span>
+<span class="normal"><a href="#__codelineno-0-1140">1140</a></span>
+<span class="normal"><a href="#__codelineno-0-1141">1141</a></span>
+<span class="normal"><a href="#__codelineno-0-1142">1142</a></span>
+<span class="normal"><a href="#__codelineno-0-1143">1143</a></span>
+<span class="normal"><a href="#__codelineno-0-1144">1144</a></span>
+<span class="normal"><a href="#__codelineno-0-1145">1145</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-1132"><a id="__codelineno-0-1132" name="__codelineno-0-1132"></a><span class="k">def</span><span class="w"> </span><span class="nf">read_loadavg</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-1133"><a id="__codelineno-0-1133" name="__codelineno-0-1133"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``/proc/loadavg`` as a (1m, 5m, 15m) triple; ``None`` when unavailable.</span>
+</span><span id="__span-0-1134"><a id="__codelineno-0-1134" name="__codelineno-0-1134"></a>
+</span><span id="__span-0-1135"><a id="__codelineno-0-1135" name="__codelineno-0-1135"></a><span class="sd">    Linux-only. Cheap (one syscall). Safe to call from any process -- the read</span>
+</span><span id="__span-0-1136"><a id="__codelineno-0-1136" name="__codelineno-0-1136"></a><span class="sd">    is host-scoped, not process-scoped. Designed to bracket a workload: caller</span>
+</span><span id="__span-0-1137"><a id="__codelineno-0-1137" name="__codelineno-0-1137"></a><span class="sd">    reads pre + post, the pair is informative about whether host load drifted</span>
+</span><span id="__span-0-1138"><a id="__codelineno-0-1138" name="__codelineno-0-1138"></a><span class="sd">    during the run.</span>
+</span><span id="__span-0-1139"><a id="__codelineno-0-1139" name="__codelineno-0-1139"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-1140"><a id="__codelineno-0-1140" name="__codelineno-0-1140"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-1141"><a id="__codelineno-0-1141" name="__codelineno-0-1141"></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;/proc/loadavg&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-0-1142"><a id="__codelineno-0-1142" name="__codelineno-0-1142"></a>            <span class="n">parts</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+</span><span id="__span-0-1143"><a id="__codelineno-0-1143" name="__codelineno-0-1143"></a>        <span class="k">return</span> <span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="nb">float</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+</span><span id="__span-0-1144"><a id="__codelineno-0-1144" name="__codelineno-0-1144"></a>    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">IndexError</span><span class="p">):</span>
+</span><span id="__span-0-1145"><a id="__codelineno-0-1145" name="__codelineno-0-1145"></a>        <span class="k">return</span> <span class="kc">None</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.probe_engine_runtime_config" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">probe_engine_runtime_config</span><span class="p">(</span><span class="n">llm</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.probe_engine_runtime_config" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Best-effort introspection of the engine's effective runtime config.</p>
+<p>Returns a flat dict of the load-bearing scheduler/cache/speculative
+settings drawn from :data:<code>_PROBE_FIELDS</code>. Empty dict when the engine
+config can't be reached — this is observability, not a correctness gate.</p>
+<p>Degrades at field granularity: a malformed individual attribute skips
+that one field rather than emptying the whole result.</p>
+<p>Typed <code>object</code> (not <code>LLM</code>) on purpose: the probe is pure defensive
+<code>getattr</code> introspection and degrades on any shape, so it does not
+require — and must not claim to require — the concrete engine type.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/generation/vllm_observability.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span>
+<span class="normal"><a href="#__codelineno-0-337">337</a></span>
+<span class="normal"><a href="#__codelineno-0-338">338</a></span>
+<span class="normal"><a href="#__codelineno-0-339">339</a></span>
+<span class="normal"><a href="#__codelineno-0-340">340</a></span>
+<span class="normal"><a href="#__codelineno-0-341">341</a></span>
+<span class="normal"><a href="#__codelineno-0-342">342</a></span>
+<span class="normal"><a href="#__codelineno-0-343">343</a></span>
+<span class="normal"><a href="#__codelineno-0-344">344</a></span>
+<span class="normal"><a href="#__codelineno-0-345">345</a></span>
+<span class="normal"><a href="#__codelineno-0-346">346</a></span>
+<span class="normal"><a href="#__codelineno-0-347">347</a></span>
+<span class="normal"><a href="#__codelineno-0-348">348</a></span>
+<span class="normal"><a href="#__codelineno-0-349">349</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-316"><a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="k">def</span><span class="w"> </span><span class="nf">probe_engine_runtime_config</span><span class="p">(</span><span class="n">llm</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+</span><span id="__span-0-317"><a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Best-effort introspection of the engine&#39;s effective runtime config.</span>
+</span><span id="__span-0-318"><a id="__codelineno-0-318" name="__codelineno-0-318"></a>
+</span><span id="__span-0-319"><a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">    Returns a flat dict of the load-bearing scheduler/cache/speculative</span>
+</span><span id="__span-0-320"><a id="__codelineno-0-320" name="__codelineno-0-320"></a><span class="sd">    settings drawn from :data:`_PROBE_FIELDS`. Empty dict when the engine</span>
+</span><span id="__span-0-321"><a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">    config can&#39;t be reached — this is observability, not a correctness gate.</span>
+</span><span id="__span-0-322"><a id="__codelineno-0-322" name="__codelineno-0-322"></a>
+</span><span id="__span-0-323"><a id="__codelineno-0-323" name="__codelineno-0-323"></a><span class="sd">    Degrades at field granularity: a malformed individual attribute skips</span>
+</span><span id="__span-0-324"><a id="__codelineno-0-324" name="__codelineno-0-324"></a><span class="sd">    that one field rather than emptying the whole result.</span>
+</span><span id="__span-0-325"><a id="__codelineno-0-325" name="__codelineno-0-325"></a>
+</span><span id="__span-0-326"><a id="__codelineno-0-326" name="__codelineno-0-326"></a><span class="sd">    Typed ``object`` (not ``LLM``) on purpose: the probe is pure defensive</span>
+</span><span id="__span-0-327"><a id="__codelineno-0-327" name="__codelineno-0-327"></a><span class="sd">    ``getattr`` introspection and degrades on any shape, so it does not</span>
+</span><span id="__span-0-328"><a id="__codelineno-0-328" name="__codelineno-0-328"></a><span class="sd">    require — and must not claim to require — the concrete engine type.</span>
+</span><span id="__span-0-329"><a id="__codelineno-0-329" name="__codelineno-0-329"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-330"><a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-331"><a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="n">vcfg</span> <span class="o">=</span> <span class="n">_engine_vllm_config</span><span class="p">(</span><span class="n">llm</span><span class="p">)</span>
+</span><span id="__span-0-332"><a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 — degraded mode by design</span>
+</span><span id="__span-0-333"><a id="__codelineno-0-333" name="__codelineno-0-333"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;engine-probe: vllm_config unreachable; returning empty probe&quot;</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-334"><a id="__codelineno-0-334" name="__codelineno-0-334"></a>        <span class="k">return</span> <span class="p">{}</span>
+</span><span id="__span-0-335"><a id="__codelineno-0-335" name="__codelineno-0-335"></a>    <span class="k">if</span> <span class="n">vcfg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-336"><a id="__codelineno-0-336" name="__codelineno-0-336"></a>        <span class="k">return</span> <span class="p">{}</span>
+</span><span id="__span-0-337"><a id="__codelineno-0-337" name="__codelineno-0-337"></a>    <span class="n">out</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-338"><a id="__codelineno-0-338" name="__codelineno-0-338"></a>    <span class="k">for</span> <span class="n">spec</span> <span class="ow">in</span> <span class="n">_PROBE_FIELDS</span><span class="p">:</span>
+</span><span id="__span-0-339"><a id="__codelineno-0-339" name="__codelineno-0-339"></a>        <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-340"><a id="__codelineno-0-340" name="__codelineno-0-340"></a>            <span class="n">section</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">vcfg</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">section</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-0-341"><a id="__codelineno-0-341" name="__codelineno-0-341"></a>            <span class="k">if</span> <span class="n">section</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-342"><a id="__codelineno-0-342" name="__codelineno-0-342"></a>                <span class="k">continue</span>
+</span><span id="__span-0-343"><a id="__codelineno-0-343" name="__codelineno-0-343"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">_first_present</span><span class="p">(</span><span class="n">section</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">sources</span><span class="p">)</span>
+</span><span id="__span-0-344"><a id="__codelineno-0-344" name="__codelineno-0-344"></a>            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-345"><a id="__codelineno-0-345" name="__codelineno-0-345"></a>                <span class="n">out</span><span class="p">[</span><span class="n">spec</span><span class="o">.</span><span class="n">out_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+</span><span id="__span-0-346"><a id="__codelineno-0-346" name="__codelineno-0-346"></a>        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 — degrade one field, not the whole probe</span>
+</span><span id="__span-0-347"><a id="__codelineno-0-347" name="__codelineno-0-347"></a>            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;engine-probe: field </span><span class="si">%r</span><span class="s2"> failed; skipping&quot;</span><span class="p">,</span> <span class="n">spec</span><span class="o">.</span><span class="n">out_key</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-348"><a id="__codelineno-0-348" name="__codelineno-0-348"></a>            <span class="k">continue</span>
+</span><span id="__span-0-349"><a id="__codelineno-0-349" name="__codelineno-0-349"></a>    <span class="k">return</span> <span class="n">out</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.flag_engagement_mismatches" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">flag_engagement_mismatches</span><span class="p">(</span><span class="n">intended</span><span class="p">,</span> <span class="n">actual</span><span class="p">,</span> <span class="n">checked_fields</span><span class="o">=</span><span class="n">ENGINE_CONFIG_CHECKED_FIELDS</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.flag_engagement_mismatches" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Return human-readable mismatch descriptions; empty list means clean engagement.</p>
+<p>Only checks fields the caller explicitly set in <code>intended</code> (i.e.,
+fields whose value is not <code>None</code>); a <code>None</code> on the intended side
+means "use engine default" so there's no reference value to compare
+against. Fields missing from <code>actual</code> are skipped — the probe is
+best-effort and may not expose every flag.</p>
+<p>The dict-vs-dict shape (rather than a typed pydantic model) is
+deliberate so this helper works regardless of whether the caller
+has a <code>VllmEngineParameters</code> instance or just raw vLLM kwargs.</p>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/generation/vllm_observability.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-352">352</a></span>
+<span class="normal"><a href="#__codelineno-0-353">353</a></span>
+<span class="normal"><a href="#__codelineno-0-354">354</a></span>
+<span class="normal"><a href="#__codelineno-0-355">355</a></span>
+<span class="normal"><a href="#__codelineno-0-356">356</a></span>
+<span class="normal"><a href="#__codelineno-0-357">357</a></span>
+<span class="normal"><a href="#__codelineno-0-358">358</a></span>
+<span class="normal"><a href="#__codelineno-0-359">359</a></span>
+<span class="normal"><a href="#__codelineno-0-360">360</a></span>
+<span class="normal"><a href="#__codelineno-0-361">361</a></span>
+<span class="normal"><a href="#__codelineno-0-362">362</a></span>
+<span class="normal"><a href="#__codelineno-0-363">363</a></span>
+<span class="normal"><a href="#__codelineno-0-364">364</a></span>
+<span class="normal"><a href="#__codelineno-0-365">365</a></span>
+<span class="normal"><a href="#__codelineno-0-366">366</a></span>
+<span class="normal"><a href="#__codelineno-0-367">367</a></span>
+<span class="normal"><a href="#__codelineno-0-368">368</a></span>
+<span class="normal"><a href="#__codelineno-0-369">369</a></span>
+<span class="normal"><a href="#__codelineno-0-370">370</a></span>
+<span class="normal"><a href="#__codelineno-0-371">371</a></span>
+<span class="normal"><a href="#__codelineno-0-372">372</a></span>
+<span class="normal"><a href="#__codelineno-0-373">373</a></span>
+<span class="normal"><a href="#__codelineno-0-374">374</a></span>
+<span class="normal"><a href="#__codelineno-0-375">375</a></span>
+<span class="normal"><a href="#__codelineno-0-376">376</a></span>
+<span class="normal"><a href="#__codelineno-0-377">377</a></span>
+<span class="normal"><a href="#__codelineno-0-378">378</a></span>
+<span class="normal"><a href="#__codelineno-0-379">379</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-352"><a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="k">def</span><span class="w"> </span><span class="nf">flag_engagement_mismatches</span><span class="p">(</span>
+</span><span id="__span-0-353"><a id="__codelineno-0-353" name="__codelineno-0-353"></a>    <span class="n">intended</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+</span><span id="__span-0-354"><a id="__codelineno-0-354" name="__codelineno-0-354"></a>    <span class="n">actual</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+</span><span id="__span-0-355"><a id="__codelineno-0-355" name="__codelineno-0-355"></a>    <span class="n">checked_fields</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">ENGINE_CONFIG_CHECKED_FIELDS</span><span class="p">,</span>
+</span><span id="__span-0-356"><a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+</span><span id="__span-0-357"><a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return human-readable mismatch descriptions; empty list means clean engagement.</span>
+</span><span id="__span-0-358"><a id="__codelineno-0-358" name="__codelineno-0-358"></a>
+</span><span id="__span-0-359"><a id="__codelineno-0-359" name="__codelineno-0-359"></a><span class="sd">    Only checks fields the caller explicitly set in ``intended`` (i.e.,</span>
+</span><span id="__span-0-360"><a id="__codelineno-0-360" name="__codelineno-0-360"></a><span class="sd">    fields whose value is not ``None``); a ``None`` on the intended side</span>
+</span><span id="__span-0-361"><a id="__codelineno-0-361" name="__codelineno-0-361"></a><span class="sd">    means &quot;use engine default&quot; so there&#39;s no reference value to compare</span>
+</span><span id="__span-0-362"><a id="__codelineno-0-362" name="__codelineno-0-362"></a><span class="sd">    against. Fields missing from ``actual`` are skipped — the probe is</span>
+</span><span id="__span-0-363"><a id="__codelineno-0-363" name="__codelineno-0-363"></a><span class="sd">    best-effort and may not expose every flag.</span>
+</span><span id="__span-0-364"><a id="__codelineno-0-364" name="__codelineno-0-364"></a>
+</span><span id="__span-0-365"><a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="sd">    The dict-vs-dict shape (rather than a typed pydantic model) is</span>
+</span><span id="__span-0-366"><a id="__codelineno-0-366" name="__codelineno-0-366"></a><span class="sd">    deliberate so this helper works regardless of whether the caller</span>
+</span><span id="__span-0-367"><a id="__codelineno-0-367" name="__codelineno-0-367"></a><span class="sd">    has a ``VllmEngineParameters`` instance or just raw vLLM kwargs.</span>
+</span><span id="__span-0-368"><a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a>    <span class="n">mismatches</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a>    <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">checked_fields</span><span class="p">:</span>
+</span><span id="__span-0-371"><a id="__codelineno-0-371" name="__codelineno-0-371"></a>        <span class="n">intended_val</span> <span class="o">=</span> <span class="n">intended</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a>        <span class="k">if</span> <span class="n">intended_val</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a>            <span class="k">continue</span>
+</span><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a>        <span class="n">actual_val</span> <span class="o">=</span> <span class="n">actual</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">)</span>
+</span><span id="__span-0-375"><a id="__codelineno-0-375" name="__codelineno-0-375"></a>        <span class="k">if</span> <span class="n">actual_val</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-376"><a id="__codelineno-0-376" name="__codelineno-0-376"></a>            <span class="k">continue</span>
+</span><span id="__span-0-377"><a id="__codelineno-0-377" name="__codelineno-0-377"></a>        <span class="k">if</span> <span class="n">intended_val</span> <span class="o">!=</span> <span class="n">actual_val</span><span class="p">:</span>
+</span><span id="__span-0-378"><a id="__codelineno-0-378" name="__codelineno-0-378"></a>            <span class="n">mismatches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">field</span><span class="si">}</span><span class="s2">: intended=</span><span class="si">{</span><span class="n">intended_val</span><span class="si">!r}</span><span class="s2"> actual=</span><span class="si">{</span><span class="n">actual_val</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-0-379"><a id="__codelineno-0-379" name="__codelineno-0-379"></a>    <span class="k">return</span> <span class="n">mismatches</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nemo_safe_synthesizer.generation.vllm_observability.read_vllm_runtime_metrics" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">read_vllm_runtime_metrics</span><span class="p">(</span><span class="n">llm</span><span class="p">)</span></code>
+
+<a href="#nemo_safe_synthesizer.generation.vllm_observability.read_vllm_runtime_metrics" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Snapshot <code>llm.get_metrics()</code> for known metrics; degraded-mode on failure.</p>
+<p>Returns a :class:<code>VllmRuntimeMetrics</code> with stable keys regardless of
+which metrics the engine actually exposed — missing metrics map to
+<code>None</code>. Callers should treat <code>None</code> as "engine didn't surface this
+counter" and not crash on missing data.</p>
+<p>Currently captures:</p>
+<ul>
+<li><code>kv_cache_usage_perc</code> — vLLM gauge, fraction (0..1) of used KV
+  cache blocks at the moment of read.</li>
+<li><code>prefix_cache_hit_rate</code> — derived from
+  <code>vllm:prefix_cache_hits / vllm:prefix_cache_queries</code>.</li>
+<li><code>spec_accept_rate</code> — derived from
+  <code>vllm:spec_decode_num_accepted_tokens / num_draft_tokens</code>.
+  <code>None</code> when speculative decoding wasn't enabled (counters
+  registered at runtime by the spec-decode subsystem; absent
+  otherwise) — distinguishes "not measured" from "measured zero".</li>
+</ul>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>src/nemo_safe_synthesizer/generation/vllm_observability.py</code></summary>
+              <div class="language-python highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span>
+<span class="normal"><a href="#__codelineno-0-456">456</a></span>
+<span class="normal"><a href="#__codelineno-0-457">457</a></span>
+<span class="normal"><a href="#__codelineno-0-458">458</a></span>
+<span class="normal"><a href="#__codelineno-0-459">459</a></span>
+<span class="normal"><a href="#__codelineno-0-460">460</a></span>
+<span class="normal"><a href="#__codelineno-0-461">461</a></span>
+<span class="normal"><a href="#__codelineno-0-462">462</a></span>
+<span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span>
+<span class="normal"><a href="#__codelineno-0-466">466</a></span>
+<span class="normal"><a href="#__codelineno-0-467">467</a></span>
+<span class="normal"><a href="#__codelineno-0-468">468</a></span>
+<span class="normal"><a href="#__codelineno-0-469">469</a></span>
+<span class="normal"><a href="#__codelineno-0-470">470</a></span>
+<span class="normal"><a href="#__codelineno-0-471">471</a></span>
+<span class="normal"><a href="#__codelineno-0-472">472</a></span>
+<span class="normal"><a href="#__codelineno-0-473">473</a></span>
+<span class="normal"><a href="#__codelineno-0-474">474</a></span>
+<span class="normal"><a href="#__codelineno-0-475">475</a></span>
+<span class="normal"><a href="#__codelineno-0-476">476</a></span>
+<span class="normal"><a href="#__codelineno-0-477">477</a></span>
+<span class="normal"><a href="#__codelineno-0-478">478</a></span>
+<span class="normal"><a href="#__codelineno-0-479">479</a></span>
+<span class="normal"><a href="#__codelineno-0-480">480</a></span>
+<span class="normal"><a href="#__codelineno-0-481">481</a></span>
+<span class="normal"><a href="#__codelineno-0-482">482</a></span>
+<span class="normal"><a href="#__codelineno-0-483">483</a></span>
+<span class="normal"><a href="#__codelineno-0-484">484</a></span>
+<span class="normal"><a href="#__codelineno-0-485">485</a></span>
+<span class="normal"><a href="#__codelineno-0-486">486</a></span>
+<span class="normal"><a href="#__codelineno-0-487">487</a></span>
+<span class="normal"><a href="#__codelineno-0-488">488</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-452"><a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="k">def</span><span class="w"> </span><span class="nf">read_vllm_runtime_metrics</span><span class="p">(</span><span class="n">llm</span><span class="p">:</span> <span class="n">LLM</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VllmRuntimeMetrics</span><span class="p">:</span>
+</span><span id="__span-0-453"><a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Snapshot ``llm.get_metrics()`` for known metrics; degraded-mode on failure.</span>
+</span><span id="__span-0-454"><a id="__codelineno-0-454" name="__codelineno-0-454"></a>
+</span><span id="__span-0-455"><a id="__codelineno-0-455" name="__codelineno-0-455"></a><span class="sd">    Returns a :class:`VllmRuntimeMetrics` with stable keys regardless of</span>
+</span><span id="__span-0-456"><a id="__codelineno-0-456" name="__codelineno-0-456"></a><span class="sd">    which metrics the engine actually exposed — missing metrics map to</span>
+</span><span id="__span-0-457"><a id="__codelineno-0-457" name="__codelineno-0-457"></a><span class="sd">    ``None``. Callers should treat ``None`` as &quot;engine didn&#39;t surface this</span>
+</span><span id="__span-0-458"><a id="__codelineno-0-458" name="__codelineno-0-458"></a><span class="sd">    counter&quot; and not crash on missing data.</span>
+</span><span id="__span-0-459"><a id="__codelineno-0-459" name="__codelineno-0-459"></a>
+</span><span id="__span-0-460"><a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="sd">    Currently captures:</span>
+</span><span id="__span-0-461"><a id="__codelineno-0-461" name="__codelineno-0-461"></a>
+</span><span id="__span-0-462"><a id="__codelineno-0-462" name="__codelineno-0-462"></a><span class="sd">    - ``kv_cache_usage_perc`` — vLLM gauge, fraction (0..1) of used KV</span>
+</span><span id="__span-0-463"><a id="__codelineno-0-463" name="__codelineno-0-463"></a><span class="sd">      cache blocks at the moment of read.</span>
+</span><span id="__span-0-464"><a id="__codelineno-0-464" name="__codelineno-0-464"></a><span class="sd">    - ``prefix_cache_hit_rate`` — derived from</span>
+</span><span id="__span-0-465"><a id="__codelineno-0-465" name="__codelineno-0-465"></a><span class="sd">      ``vllm:prefix_cache_hits / vllm:prefix_cache_queries``.</span>
+</span><span id="__span-0-466"><a id="__codelineno-0-466" name="__codelineno-0-466"></a><span class="sd">    - ``spec_accept_rate`` — derived from</span>
+</span><span id="__span-0-467"><a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">      ``vllm:spec_decode_num_accepted_tokens / num_draft_tokens``.</span>
+</span><span id="__span-0-468"><a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">      ``None`` when speculative decoding wasn&#39;t enabled (counters</span>
+</span><span id="__span-0-469"><a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="sd">      registered at runtime by the spec-decode subsystem; absent</span>
+</span><span id="__span-0-470"><a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">      otherwise) — distinguishes &quot;not measured&quot; from &quot;measured zero&quot;.</span>
+</span><span id="__span-0-471"><a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-0-472"><a id="__codelineno-0-472" name="__codelineno-0-472"></a>    <span class="k">if</span> <span class="n">llm</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-0-473"><a id="__codelineno-0-473" name="__codelineno-0-473"></a>        <span class="k">return</span> <span class="n">_empty_runtime_metrics</span><span class="p">()</span>
+</span><span id="__span-0-474"><a id="__codelineno-0-474" name="__codelineno-0-474"></a>
+</span><span id="__span-0-475"><a id="__codelineno-0-475" name="__codelineno-0-475"></a>    <span class="c1"># Best-effort probe: the engine call or a non-numeric metric value is the</span>
+</span><span id="__span-0-476"><a id="__codelineno-0-476" name="__codelineno-0-476"></a>    <span class="c1"># only thing that can fail, so the guard wraps exactly that. The ratio</span>
+</span><span id="__span-0-477"><a id="__codelineno-0-477" name="__codelineno-0-477"></a>    <span class="c1"># derivation below is pure dict arithmetic and cannot raise.</span>
+</span><span id="__span-0-478"><a id="__codelineno-0-478" name="__codelineno-0-478"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-479"><a id="__codelineno-0-479" name="__codelineno-0-479"></a>        <span class="n">raw</span> <span class="o">=</span> <span class="n">_collect_raw_metrics</span><span class="p">(</span><span class="n">llm</span><span class="p">)</span>
+</span><span id="__span-0-480"><a id="__codelineno-0-480" name="__codelineno-0-480"></a>    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 — degraded mode by design</span>
+</span><span id="__span-0-481"><a id="__codelineno-0-481" name="__codelineno-0-481"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;read_vllm_runtime_metrics failed&quot;</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-482"><a id="__codelineno-0-482" name="__codelineno-0-482"></a>        <span class="k">return</span> <span class="n">_empty_runtime_metrics</span><span class="p">()</span>
+</span><span id="__span-0-483"><a id="__codelineno-0-483" name="__codelineno-0-483"></a>
+</span><span id="__span-0-484"><a id="__codelineno-0-484" name="__codelineno-0-484"></a>    <span class="k">return</span> <span class="n">VllmRuntimeMetrics</span><span class="p">(</span>
+</span><span id="__span-0-485"><a id="__codelineno-0-485" name="__codelineno-0-485"></a>        <span class="n">kv_cache_usage_perc</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">METRIC_KV_CACHE_USAGE_PERC</span><span class="p">),</span>
+</span><span id="__span-0-486"><a id="__codelineno-0-486" name="__codelineno-0-486"></a>        <span class="n">prefix_cache_hit_rate</span><span class="o">=</span><span class="n">_safe_ratio</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">METRIC_PREFIX_CACHE_HITS</span><span class="p">),</span> <span class="n">raw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">METRIC_PREFIX_CACHE_QUERIES</span><span class="p">)),</span>
+</span><span id="__span-0-487"><a id="__codelineno-0-487" name="__codelineno-0-487"></a>        <span class="n">spec_accept_rate</span><span class="o">=</span><span class="n">_safe_ratio</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">METRIC_SPEC_NUM_ACCEPTED_TOKENS</span><span class="p">),</span> <span class="n">raw</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">METRIC_SPEC_NUM_DRAFT_TOKENS</span><span class="p">)),</span>
+</span><span id="__span-0-488"><a id="__codelineno-0-488" name="__codelineno-0-488"></a>    <span class="p">)</span>
+</span></code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
 
 
 
@@ -9414,7 +10621,7 @@ Microservice.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../internal_results/" class="md-footer__link md-footer__link--prev" aria-label="Previous: internal_results">
+          <a href="../vllm_backend/" class="md-footer__link md-footer__link--prev" aria-label="Previous: vllm_backend">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -9424,20 +10631,20 @@ Microservice.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                internal_results
+                vllm_backend
               </div>
             </div>
           </a>
         
         
           
-          <a href="../parameters/" class="md-footer__link md-footer__link--next" aria-label="Next: parameters">
+          <a href="../../holdout/holdout/" class="md-footer__link md-footer__link--next" aria-label="Next: holdout">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                parameters
+                holdout
               </div>
             </div>
             <div class="md-footer__button md-icon">
