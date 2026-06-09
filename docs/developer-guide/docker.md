@@ -3,8 +3,8 @@
 
 # Docker: Build and Customize
 
-How the CUDA Docker image is built, how to customize it, and how it relates
-to the CI test image.
+How the GPU Docker image is built, how variants map to dependency extras, and
+how the image publication workflow is configured.
 
 For running Safe Synthesizer in a container, see
 [User Guide -- Docker](../user-guide/docker.md).
@@ -14,83 +14,70 @@ For running Safe Synthesizer in a container, see
 ## Dockerfile Layout
 
 [`containers/Dockerfile.cuda`](https://github.com/NVIDIA-NeMo/Safe-Synthesizer/blob/main/containers/Dockerfile.cuda)
-uses a four-stage multistage build:
+uses `python:3.13-slim-bookworm` for the runtime and dev stages. CUDA support
+comes from the selected Python extra rather than from an `nvidia/cuda` base
+image.
 
 ```mermaid
 flowchart TD
-    ubuntuBase["ubuntu:UBUNTU_VERSION\n(tools stage)"]
-    cudaBuild["nvidia/cuda:CUDA_VERSION-CUDA_IMAGE_TYPE-ubuntu\n(deps stage -- may be runtime or devel)"]
-    cudaRuntime["nvidia/cuda:CUDA_VERSION-runtime-ubuntu\n(runtime stage -- always runtime)"]
+    uvImage["ghcr.io/astral-sh/uv:0.9.30\n(uv stage)"]
+    pythonBase["python:PYTHON_VERSION-slim-bookworm"]
 
     subgraph stages [Build Stages]
-        tools["tools\nInstalls mise + all dev tools\n(.mise.toml is single source of truth)"]
-        deps["deps\nInstalls Python 3.13 via uv\nuv sync cu129+engine"]
-        runtime["runtime\nCopies venv + Python\nNon-root appuser\ntini + entrypoint.sh"]
-        dev["dev\nExtends runtime\nCopies mise tree from tools\nRoot user"]
+        uv["uv\nCopies /uv and /uvx"]
+        runtime["runtime\nuv sync base deps\nuv sync engine+CONTAINER_EXTRA\nInstalls project into /opt/venv\nNon-root appuser\ntini + entrypoint.sh"]
+        dev["dev\nExtends runtime\nuv + make + dev/test deps\nRoot user"]
     end
 
-    ubuntuBase --> tools
-    tools -->|"COPY uv binary"| deps
-    cudaBuild --> deps
-    deps -->|"COPY venv + toolchain"| runtime
-    cudaRuntime --> runtime
+    uvImage --> uv
+    pythonBase --> runtime
+    uv -->|"COPY uv binaries"| runtime
     runtime --> dev
-    tools -->|"COPY mise + all tools"| dev
+    uv -->|"COPY uv binaries"| dev
 ```
 
-- tools: installs mise and all dev tools (uv, ruff, ty, gh, etc.) on a
-  lightweight `ubuntu` base. Mise is the single source of truth for tool
-  versions via `.mise.toml` -- no separate version pins in the Dockerfile.
-  Uses the [mise Docker cookbook](https://mise.jdx.dev/mise-cookbook/docker.html)
-  pattern with `MISE_DATA_DIR=/mise` for stable, copyable paths.
-- deps: copies the uv binary from `tools`, then installs Python and all
-  cu129+engine dependencies. Uses `--mount=type=cache` to avoid
-  re-downloading ~10 GB of PyTorch/CUDA wheels.
-- runtime: copies the venv and uv-managed Python into a fresh CUDA runtime
-  base. Runs as non-root `appuser` (uid 1000). GPU access is declared via
-  `NVIDIA_VISIBLE_DEVICES=all` and `NVIDIA_DRIVER_CAPABILITIES=compute,utility`
-  environment variables baked into the image.
-  Uses a wrapper entrypoint (`containers/entrypoint.sh`) that detects
-  common misconfigurations before delegating to `safe-synthesizer`.
-- dev: extends runtime with the full mise toolchain (copied from `tools`)
-  and the dev dependency group (pytest, ruff, etc.). Runs as root for
-  flexibility. Used for interactive development and running tests inside
-  the container (also serves as the CI test target).
+- `uv`: copies pinned `uv` binaries from the official image.
+- `runtime`: installs base dependencies, then `engine` plus the selected
+  `CONTAINER_EXTRA`, then installs the project non-editably. These sync steps
+  run in the published image stage so the largest dependency families remain
+  separate pull layers.
+- `dev`: adds `uv`, build tools, `make`, and the Python dev/test dependency
+  group so `make test` can run in-container.
+
+---
+
+## Variants
+
+The variant name is intentionally the same as the CUDA package extra.
+
+| Variant | Extra | Workflow status |
+|---------|-------|-----------------|
+| `cu129` | `cu129` | Enabled |
+| `cu130` | `cu130` | Add when the CUDA 13.0 dependency PR lands |
+
+Adding a new variant should be mechanical:
+
+1. Add the extra and source indexes to `pyproject.toml`.
+2. Regenerate `uv.lock`.
+3. Add a matrix row to `.github/workflows/container-build.yml`.
+4. Build locally with `CONTAINER_GPU_EXTRA=<extra> CONTAINER_GPU_VARIANT=<variant>`.
 
 ---
 
 ## Entrypoint Script
 
 The runtime stage uses `containers/entrypoint.sh` instead of a bare
-`ENTRYPOINT ["safe-synthesizer"]`. The script checks for common mistakes
-and prints hints to stderr before calling `exec safe-synthesizer "$@"`:
+`ENTRYPOINT ["safe-synthesizer"]`. The script checks common mistakes and
+prints hints to stderr before calling `exec safe-synthesizer "$@"`:
 
-- Empty `/workspace` -- user forgot to mount data
-- `HF_HOME` not set or pointing to a nonexistent directory -- models will
-  download to a temporary location and be lost on exit
-- `HF_TOKEN` missing and no cached token file -- gated models will fail
-- `nvidia-smi` not found -- user may have forgotten `--gpus all`
-- `/dev/shm` below 256 MB -- training with multi-worker data loading will
-  crash with "Bus error"; hints at `--shm-size=1g`
+- Empty `/workspace`
+- Missing or nonexistent `HF_HOME`
+- Missing `HF_TOKEN` or cached Hugging Face token
+- Missing `nvidia-smi`
+- `/dev/shm` below 256 MB
 
-These checks run only on stderr and do not interfere with normal CLI
-output. For non-GPU commands (`--help`, `config validate`), the GPU check
-is skipped.
-
----
-
-## OCI Labels
-
-The runtime image includes [OCI image metadata](https://github.com/opencontainers/image-spec/blob/main/annotations.md)
-visible via `docker inspect`:
-
-```bash
-docker inspect nss-gpu:latest --format '{{index .Config.Labels "org.opencontainers.image.usage"}}'
-```
-
-Labels include `title`, `description`, `vendor`, `licenses`, `source`,
-`documentation`, `base.name`, and `usage` (a full example `docker run`
-command).
+These checks do not interfere with normal CLI output. Info-only commands such
+as `--help`, `--version`, and `config` skip runtime diagnostics.
 
 ---
 
@@ -98,19 +85,20 @@ command).
 
 | ARG | Default | Description |
 |-----|---------|-------------|
-| `CUDA_VERSION` | `12.8.1` | CUDA toolkit version in the base image tag |
-| `UBUNTU_VERSION` | `22.04` | Ubuntu version in the base image tag |
-| `CUDA_IMAGE_TYPE` | `runtime` | Base image variant for the deps stage. Change to `devel` if a dependency requires CUDA headers for compilation |
-| `PYTHON_VERSION` | `3.13` | Python version installed via `uv python install` |
-| `TARGETARCH` | _(set by BuildKit)_ | Target architecture (`amd64` or `arm64`). Automatically populated by `docker buildx build --platform` |
-| `CUDA_ARCH_FLAGS` | `80;86;90;90a` | CUDA SM capabilities for `nvcc`. Override for arm64: `90;90a;120;120a` |
+| `CONTAINER_EXTRA` | `cu129` | Python extra installed with `engine` |
+| `CONTAINER_VARIANT` | `cu129` | Variant label/tag suffix |
+| `PACKAGE_VERSION` | unset | Optional PEP 440 version passed via `UV_DYNAMIC_VERSIONING_BYPASS` |
+| `PYTHON_VERSION` | `3.13` | Python slim image version |
+| `PYTHON_IMAGE` | `python:${PYTHON_VERSION}-slim-bookworm` | Runtime/dev base image |
+| `UV_IMAGE` | `ghcr.io/astral-sh/uv:0.9.30` | Source image for pinned `uv` binaries |
 
 Override at build time:
 
 ```bash
 docker build -f containers/Dockerfile.cuda \
-  --build-arg PYTHON_VERSION=3.12.10 \
-  --build-arg CUDA_VERSION=12.6.3 \
+  --build-arg CONTAINER_EXTRA=cu129 \
+  --build-arg CONTAINER_VARIANT=cu129 \
+  --build-arg PACKAGE_VERSION=0.1.0 \
   --target runtime -t nss-gpu:custom .
 ```
 
@@ -120,71 +108,45 @@ docker build -f containers/Dockerfile.cuda \
 
 ### uv Environment Variables
 
-The deps stage sets several uv environment variables for reproducible builds.
-See the [uv Docker guide](https://docs.astral.sh/uv/guides/integration/docker/)
-for full documentation.
+The runtime and dev stages set:
 
 | Variable | Value | Why |
 |----------|-------|-----|
 | `UV_PROJECT_ENVIRONMENT` | `/opt/venv` | Installs into a fixed venv path |
-| `UV_PYTHON_INSTALL_DIR` | `/opt/python` | Stable path for cross-stage COPY |
-| `UV_PYTHON_CACHE_DIR` | `/root/.cache/uv/python` | Lets Python downloads benefit from the uv cache mount |
-| `UV_LINK_MODE` | `copy` | Hardlinks into cache mounts vanish after unmount; copy is safe |
-| `UV_COMPILE_BYTECODE` | `1` | Precompile `.pyc` for faster container startup |
-| `UV_NO_INSTALLER_METADATA` | `1` | Deterministic layers (no `installer`/`direct_url.json` variance) |
-| `UV_FROZEN` | `true` | Equivalent to `--frozen` on every uv command; prevents accidental re-locking |
+| `UV_LINK_MODE` | `copy` | Cache-mount hardlinks do not survive outside the cache mount |
+| `UV_COMPILE_BYTECODE` | `1` | Precompiles `.pyc` for faster startup |
+| `UV_NO_INSTALLER_METADATA` | `1` | Reduces nondeterministic installer metadata |
+| `UV_NO_MANAGED_PYTHON` | `1` | Forces use of the Python from the base image |
+| `UV_FROZEN` | `true` | Prevents lockfile updates |
+| `UV_DYNAMIC_VERSIONING_BYPASS` | `PACKAGE_VERSION` | Lets release workflows set package metadata without copying `.git` |
+
+### Runtime Dependency Layers
+
+The runtime stage uses layered installation:
+
+1. `uv sync --no-install-project --no-group dev` installs the base package dependencies.
+2. `uv sync --no-install-project --extra engine --no-group dev` installs engine dependencies.
+3. `uv sync --no-install-project --extra engine --extra ${CONTAINER_EXTRA} --no-install-package ... --no-group dev` installs the CUDA dependency closure while omitting FlashInfer, PyTorch/Triton, and vLLM.
+4. A second omitted-package sync adds FlashInfer binary/cache wheels.
+5. A third omitted-package sync adds PyTorch, TorchVision, TorchAudio, TorchAO, and Triton while still omitting vLLM.
+6. `uv sync --no-install-project --extra engine --extra ${CONTAINER_EXTRA} --no-group dev` installs the remaining runtime dependencies, currently dominated by vLLM.
+7. `uv sync --no-editable --extra engine --extra ${CONTAINER_EXTRA} --no-group dev` installs Safe Synthesizer into the existing venv.
+
+This keeps base and engine dependencies cached across CUDA extra changes,
+splits the largest GPU dependency families into separate published image
+layers, and keeps all dependency layers cached when only source files change.
 
 ### NVIDIA Runtime Environment
 
-The runtime stage sets two environment variables that declare GPU
-requirements to the NVIDIA Container Toolkit:
+The runtime stage sets:
 
-| Variable | Value | Why |
-|----------|-------|-----|
-| `NVIDIA_VISIBLE_DEVICES` | `all` | Tells the toolkit this image needs GPU access. Equivalent to `--gpus all` intent; the user still passes `--gpus` to inject devices |
-| `NVIDIA_DRIVER_CAPABILITIES` | `compute,utility` | Requests CUDA compute libraries and `nvidia-smi`. Matches the NMP convention (`nmp-gpu-base`) |
+| Variable | Value |
+|----------|-------|
+| `NVIDIA_VISIBLE_DEVICES` | `all` |
+| `NVIDIA_DRIVER_CAPABILITIES` | `compute,utility` |
 
-This follows the same pattern used by NeMo Customizer and `nmp-gpu-base`.
-No `video` group membership is needed -- the toolkit handles device
-permissions when these variables are set.
-
-### Python Toolchain Portability
-
-`UV_PYTHON_INSTALL_DIR=/opt/python` puts the uv-managed Python at a
-stable, explicit path instead of the default `~/.local/share/uv/python/`.
-The venv at `/opt/venv` symlinks into that directory. Both paths are
-copied to the runtime stage:
-
-```dockerfile
-COPY --from=deps /opt/python /opt/python
-COPY --from=deps /opt/venv /opt/venv
-```
-
-### Intermediate Layers
-
-The deps stage uses two-pass installation following
-[uv best practices](https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers):
-
-1. `uv sync --no-install-project` -- installs all dependencies from the
-   lockfile without the project itself. This layer is invalidated only when
-   `pyproject.toml` or `uv.lock` changes.
-2. `uv sync --no-editable` -- installs the project non-editably into the
-   existing venv. Non-editable means the venv is self-contained and does
-   not need source code at runtime.
-
-### APT Cache Mounts
-
-APT layers use `--mount=type=cache,target=/var/cache/apt,sharing=locked`
-instead of the traditional `rm -rf /var/lib/apt/lists/*` pattern. This
-caches downloaded `.deb` files across rebuilds, speeding up layer
-re-creation when the apt install list changes.
-
-### Why runtime, Not devel
-
-All current locked dependencies (`torch`, `vllm`, `xformers`, `flashinfer`,
-etc.) ship pre-built wheels. The CUDA devel image (~3 GB larger) is not
-needed. If a future dependency requires source compilation with CUDA headers,
-change `CUDA_IMAGE_TYPE` to `devel`.
+The NVIDIA Container Toolkit injects host GPU devices, driver libraries, and
+utility binaries such as `nvidia-smi` when the user runs with `--gpus all`.
 
 ---
 
@@ -198,74 +160,69 @@ change `CUDA_IMAGE_TYPE` to `devel`.
 | `container:run:gpu` | Run a command in the runtime container |
 | `container:run:gpu-dev` | Run a command in the dev container |
 
-For interactive shells, use `docker run -it --entrypoint /bin/bash` directly --
-this gives full control over mounts and flags. See the
-[user guide](../user-guide/docker.md#interactive-shell) for examples.
-
 Overridable variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `CONTAINER_GPU_EXTRA` | `cu129` | Extra passed to `CONTAINER_EXTRA` |
+| `CONTAINER_GPU_VARIANT` | `$(CONTAINER_GPU_EXTRA)` | Variant label passed to `CONTAINER_VARIANT` |
+| `CONTAINER_GPU_PACKAGE_VERSION` | _(empty)_ | Version passed to `PACKAGE_VERSION` |
 | `CONTAINER_GPU_IMAGE` | `nss-gpu:latest` | Runtime image tag |
 | `CONTAINER_GPU_IMAGE_DEV` | `nss-gpu-dev:latest` | Dev image tag |
-| `CONTAINER_GPU_PLATFORM` | `linux/amd64` | Target platform (override for arm64) |
+| `CONTAINER_GPU_PLATFORM` | `linux/amd64` | Target platform |
 | `CONTAINER_GPU_REGISTRY` | _(empty)_ | Registry for multi-arch manifest pushes |
 | `CONTAINER_GPU_FLAG` | `--gpus all` | GPU access flag |
 | `CONTAINER_HF_CACHE` | `$(HOME)/.cache/huggingface` | Host HF cache dir |
-| `CONTAINER_EXTRA_MOUNTS` | _(empty)_ | Additional `-v` flags for data outside the repo tree |
+| `CONTAINER_EXTRA_MOUNTS` | _(empty)_ | Additional mounts for data outside the repo tree |
 
 ---
 
-## Testing the Image
+## Container Build Workflow
 
-Smoke test (no GPU required):
+`.github/workflows/container-build.yml` builds the runtime image on:
 
-```bash
-docker run --rm nss-gpu:latest --help
+- Manual dispatch.
+- Release tags.
+
+Manual dispatch works for branch validation after this workflow exists on the
+default branch. Manual runs build the image without pushing it.
+
+The workflow pushes images only for release tag `push` events.
+
+Build cache is exported to a dedicated GHCR registry cache tag,
+`buildcache-<variant>`, only for release tag events that can push packages. The
+workflow does not use the GitHub Actions cache backend for Docker layers
+because the CUDA dependency layers are large enough to churn the default
+Actions cache quota and slow down cache export.
+
+Current image name:
+
+```text
+ghcr.io/nvidia-nemo/safe-synthesizer
 ```
 
-Run unit tests inside the dev container:
+On release tags, current `cu129` tags include:
 
-```bash
-CMD="mise run test" mise run container:run:gpu-dev
-```
+- `cu129` and `latest-cu129`
+- `<version>-cu129` and `<major>.<minor>-cu129` on `v*` tags
+- `sha-<short-sha>-cu129` for traceability
 
-Interactive dev shell (use `docker run` directly for full mount control):
-
-```bash
-docker run -it --gpus all --shm-size=1g \
-  -v $(pwd):/workspace \
-  -v ~/.cache/huggingface:/workspace/.hf_cache \
-  -e HF_HOME=/workspace/.hf_cache \
-  --entrypoint /bin/bash \
-  nss-gpu-dev:latest
-```
-
----
-
-## Image Size
-
-The runtime image is approximately 15--25 GB, dominated by PyTorch, vllm,
-and CUDA libraries. This is expected for a full ML inference stack.
-
-To reduce size:
-
-- The runtime stage excludes dev dependencies (`--no-group dev`)
-- The base is `cuda-runtime` (not `cuda-devel`)
-- Build caches (`--mount=type=cache`) stay out of the final image layers
+The workflow passes `PACKAGE_VERSION` into the Docker build. On release tags,
+this is the tag without the leading `v`; on non-tag builds, it is
+`0.0.0+<short-sha>`.
 
 ---
 
 ## Relationship to `Dockerfile.test_ci`
 
-`Dockerfile.test_ci` provides a CPU-only test image for CI and local testing.
+`Dockerfile.test_ci` provides a CPU-only test image for local CI checks.
 
 | Aspect | `Dockerfile.cuda` | `Dockerfile.test_ci` |
 |--------|-------------------|----------------------|
-| Base | `nvidia/cuda:12.9.1-runtime-ubuntu22.04` | `python:3.13-slim` |
-| Extras | `cu129` + `engine` | `cpu` + `engine` |
-| GPU | Required | Not needed |
-| Stages | `tools` / `deps` / `runtime` / `dev` | `setup` / `install-deps` |
+| Base | `python:3.13-slim-bookworm` | `python:3.13-slim` |
+| Extras | `CONTAINER_EXTRA` + `engine` | `cpu` + `engine` |
+| GPU | Expected for runtime workloads | Not needed |
+| Stages | `uv` / `runtime` / `dev` | `setup` / `install-deps` |
 | Use case | Training, generation, evaluation | CPU-only unit tests and CI checks |
 | Build task | `mise run container:build:gpu` | `mise run container:build:test` |
 
@@ -282,9 +239,10 @@ Both follow the conventions in [STYLE_GUIDE.md -- Dockerfiles](https://github.co
 ## Multi-Architecture Support
 
 The CUDA Dockerfile supports `linux/amd64` and `linux/arm64`
-(Grace/Blackwell). The `nvidia/cuda` base images, `ubuntu` base images,
-and mise binaries are already multi-platform, so the same Dockerfile works
-for both architectures without conditional logic.
+(Grace/Blackwell) when the selected Python extra has compatible wheels for
+the requested architecture. The Dockerfile relies on the Python slim base and
+locked Python CUDA wheels, so there is no architecture-specific CUDA base
+image selection in the Dockerfile.
 
 ### How it works
 
@@ -296,9 +254,9 @@ docker buildx build --platform linux/arm64 \
   -f containers/Dockerfile.cuda --target runtime -t nss-gpu:arm64 .
 ```
 
-No code paths branch on `TARGETARCH` today -- it exists as documentation
-and forward-compatibility for when `CUDA_IMAGE_TYPE=devel` builds need to
-pass architecture-specific flags to `nvcc`.
+No code paths branch on `TARGETARCH` today; BuildKit selects the matching
+base image architecture and the package resolver must find wheels compatible
+with that platform.
 
 ### Building for arm64 (Blackwell)
 
@@ -345,26 +303,6 @@ docker buildx inspect --bootstrap
 
 - For cross-architecture builds on amd64 hosts, QEMU user-static must be
   registered: `docker run --rm --privileged multiarch/qemu-user-static --reset -p yes`.
-
-### CUDA compute capabilities (`CUDA_ARCH_FLAGS`)
-
-When `CUDA_IMAGE_TYPE=devel` is used and CUDA kernels must be compiled,
-pass the appropriate SM values via `--build-arg CUDA_ARCH_FLAGS`:
-
-| Architecture | `CUDA_ARCH_FLAGS` | GPUs |
-|--------------|-------------------|------|
-| amd64 | `80;86;90;90a` | A100, A10/3090, H100 |
-| arm64 | `90;90a;120;120a` | H100 Grace, Blackwell |
-
-The Dockerfile defaults to the amd64 set. Override for arm64:
-
-```bash
-docker build -f containers/Dockerfile.cuda \
-  --build-arg CUDA_IMAGE_TYPE=devel \
-  --build-arg CUDA_ARCH_FLAGS="90;90a;120;120a" \
-  --platform linux/arm64 \
-  --target runtime -t nss-gpu:arm64-devel .
-```
 
 ### Mise tasks
 

@@ -13,6 +13,9 @@ container_cmd="$(resolve_container_cmd)"
   --platform "${CONTAINER_GPU_PLATFORM:-linux/amd64}" \
   --tag "${CONTAINER_GPU_IMAGE_DEV:-nss-gpu-dev:latest}" \
   --target dev \
+  --build-arg "CONTAINER_EXTRA=${CONTAINER_GPU_EXTRA:-cu129}" \
+  --build-arg "CONTAINER_VARIANT=${CONTAINER_GPU_VARIANT:-${CONTAINER_GPU_EXTRA:-cu129}}" \
+  --build-arg "PACKAGE_VERSION=${CONTAINER_GPU_PACKAGE_VERSION:-}" \
   --progress=plain \
   -f "${CONTAINER_GPU_FILE:-containers/Dockerfile.cuda}" \
   .

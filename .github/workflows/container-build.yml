@@ -1,0 +1,127 @@
+# Copyright (c) 2024-2026, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Container Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash -x -e -u -o pipefail {0}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY_IMAGE: ghcr.io/nvidia-nemo/safe-synthesizer
+
+jobs:
+  build:
+    name: Build ${{ matrix.variant }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: cu129
+            extra: cu129
+            platforms: linux/amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Resolve package version
+        id: package-version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0+${GITHUB_SHA::12}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest-${{ matrix.variant }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,prefix=sha-,suffix=-${{ matrix.variant }}
+            type=semver,pattern={{version}}-${{ matrix.variant }}
+            type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.package-version.outputs.version }}
+            com.nvidia.nemo.safe-synthesizer.extra=${{ matrix.extra }}
+            com.nvidia.nemo.safe-synthesizer.variant=${{ matrix.variant }}
+
+      - name: Build and push image
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: containers/Dockerfile.cuda
+          target: runtime
+          platforms: ${{ matrix.platforms }}
+          push: true
+          build-args: |
+            CONTAINER_EXTRA=${{ matrix.extra }}
+            CONTAINER_VARIANT=${{ matrix.variant }}
+            PACKAGE_VERSION=${{ steps.package-version.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-${{ matrix.variant }}
+          cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache-${{ matrix.variant }},mode=max,oci-mediatypes=true,image-manifest=true
+
+      - name: Build image
+        if: github.event_name != 'push'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: containers/Dockerfile.cuda
+          target: runtime
+          platforms: ${{ matrix.platforms }}
+          push: false
+          build-args: |
+            CONTAINER_EXTRA=${{ matrix.extra }}
+            CONTAINER_VARIANT=${{ matrix.variant }}
+            PACKAGE_VERSION=${{ steps.package-version.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
