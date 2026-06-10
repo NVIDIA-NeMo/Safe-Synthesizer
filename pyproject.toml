@@ -100,7 +100,7 @@ engine = [
     "tenacity==9.1.4",
     "tldextract",
     "tqdm>=4.67.1",
-    "wandb==0.26.1",
+    "wandb==0.27.2",
 ]
 
 
