@@ -145,7 +145,7 @@ jobs:
           inputs.suite == 'e2e'
         )
       }}
-    timeout-minutes: 60
+    timeout-minutes: 210
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
@@ -158,8 +158,8 @@ jobs:
         uses: ./.github/actions/setup-gpu-test-env
 
       - name: Run GPU E2E tests
-        timeout-minutes: 45
         run: mise run test:e2e
+        timeout-minutes: 190
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.

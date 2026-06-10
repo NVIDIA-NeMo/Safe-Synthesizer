@@ -37,7 +37,7 @@ def fixture_save_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("nemo_safe_synthesizer_tmp")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def fixture_financial_transactions_dataset() -> pd.DataFrame:
     """Gretel financial-transactions sample CSV fetched from GitHub."""
     return pd.read_csv(

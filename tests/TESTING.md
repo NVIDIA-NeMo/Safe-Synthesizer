@@ -68,6 +68,12 @@ Details:
 - Each target bootstraps `cu129`, runs single-process (`-n 0`) with coverage
 - These are not part of `mise run test:e2e` -- they are standalone CI tasks
 
+## SafeSynthesizer E2E Matrix
+
+`make test-e2e-default` and `make test-e2e-dp` run `tests/e2e/test_safe_synthesizer.py` against the same three model families used by the 6-config coverage strategy: Mistral 7B, SmolLM3 3B, and TinyLlama 1.1B. The default target covers the no-DP path and the DP target covers the same model set with differential privacy enabled.
+
+These tests are GPU-only and intentionally slow. Each model case has a 30-minute timeout, so budget up to 90 minutes for either `make test-e2e-default` or `make test-e2e-dp`, and up to 3 hours for the full `make test-e2e` target in cold-cache environments. Warm Hugging Face caches are expected to finish sooner.
+
 ## Pytest Markers
 
 Defined in `pytest.ini` (`--strict-markers` is enabled):

@@ -517,6 +517,8 @@ mise run test:ci-container
 uv run --frozen pytest tests/cli/test_run.py
 ```
 
+`make test-e2e-default` and `make test-e2e-dp` each run the SafeSynthesizer e2e flow across Mistral 7B, SmolLM3 3B, and TinyLlama 1.1B. Each model case has a 30-minute timeout, so reserve up to 90 minutes for either target and up to 3 hours for the full `make test-e2e` target in cold-cache GPU environments.
+
 ### GPU Tests (CI)
 
 GPU tests run on NVIDIA self-hosted A100 runners -- they cannot run on a local machine unless you have a compatible GPU environment. `gpu-tests.yml` currently runs only on the nightly schedule or manual `workflow_dispatch`; the `push` trigger for copy-pr-bot PR branches is commented out due to internal blockers. We expect to re-enable PR GPU runs as soon as those blockers are resolved. The workflow has two main test jobs:
