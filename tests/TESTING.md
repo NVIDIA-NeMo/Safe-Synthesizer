@@ -43,6 +43,20 @@ uv run --frozen pytest tests/path/test_file.py::test_name -vvs -n0
 
 Test runner: `uv run --frozen pytest -n auto --dist loadscope -vv`
 
+## Viewing NSS Logs
+
+`pytest -s` / `--capture=no` initializes the NSS observability stack from
+`tests/conftest.py`, so `get_logger(__name__)` messages are routed to stdout in
+that pytest process. When you do not pass `-n` explicitly, the same hook also
+overrides this repo's default xdist worker count so `pytest -s` behaves like a
+single-process live-debug run. If you do pass `-n`, use `-n0` for visible logs
+because xdist does not stream worker stdout:
+
+```bash
+uv run --frozen pytest tests/path/test_file.py::test_name -vvs -n0
+NSS_LOG_LEVEL=DEBUG uv run --frozen pytest tests/path/test_file.py::test_name -vvs -n0
+```
+
 ## Config-Dataset Combo Tests
 
 Two test functions (`test_clinc_oos_dataset`, `test_dow_jones_index_dataset`) each parametrized over 6 model configs = 12 combinations. Each has a dedicated mise task:

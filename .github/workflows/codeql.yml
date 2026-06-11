@@ -17,11 +17,12 @@ name: CodeQL Security Scan
 # No path filter: security vulnerabilities can appear in any file type, so
 # this must run on every pull request regardless of which files changed.
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
-  merge_group:
-    types: [checks_requested]
   schedule:
     - cron: "0 6 * * 0"  # Weekly on Sunday at 06:00 UTC
   workflow_dispatch:

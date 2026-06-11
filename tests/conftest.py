@@ -8,11 +8,50 @@ shared across unit, smoke, and e2e tests.
 """
 
 import json
+import os
+import sys
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from datasets import Dataset, load_dataset
+
+
+def _pytest_live_logging_requested(config: pytest.Config) -> bool:
+    """Return whether pytest is configured to stream test logs live."""
+    return config.getoption("capture", default=None) in {"no", "tee-sys"}
+
+
+def _xdist_option_was_explicit() -> bool:
+    """Return whether the command line explicitly selected an xdist worker count."""
+    return any(arg in {"-n", "--numprocesses"} or arg.startswith(("-n", "--numprocesses=")) for arg in sys.argv[1:])
+
+
+def _disable_default_xdist_for_live_logging(config: pytest.Config) -> None:
+    """Let ``pytest -s`` stream logs by running tests in the current process."""
+    if _xdist_option_was_explicit():
+        return
+    if hasattr(config.option, "numprocesses"):
+        config.option.numprocesses = 0
+    if hasattr(config.option, "dist"):
+        config.option.dist = "no"
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_configure(config: pytest.Config) -> None:
+    """Route NSS logs to stdout for local live-output pytest runs."""
+    if not _pytest_live_logging_requested(config):
+        return
+
+    _disable_default_xdist_for_live_logging(config)
+
+    os.environ.setdefault("NSS_LOG_FORMAT", "plain")
+    os.environ.setdefault("NSS_LOG_COLOR", "false")
+    os.environ.setdefault("NSS_LOG_LEVEL", "INFO")
+
+    from nemo_safe_synthesizer.observability import initialize_observability
+
+    initialize_observability()
 
 
 def pytest_collection_modifyitems(config, items):
