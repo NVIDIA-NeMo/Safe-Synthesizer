@@ -154,7 +154,6 @@ class HuggingFaceBackend(TrainingBackend):
             "model_metadata",
             "training_dataset",
             "data_fraction",
-            "logging_level",
             "true_dataset_size",
             "eval_dataset",
             "generation_eval",
@@ -564,9 +563,7 @@ class HuggingFaceBackend(TrainingBackend):
 
         # Add our own callbacks. The progress bar should be used internally.
         trainer.add_callback(
-            SafeSynthesizerWorkerCallback()
-            if self.logging_level in (logging.INFO, logging.DEBUG)
-            else ProgressBarCallback()
+            SafeSynthesizerWorkerCallback() if logger.isEnabledFor(logging.INFO) else ProgressBarCallback()
         )
 
         for callback in self.callbacks or []:

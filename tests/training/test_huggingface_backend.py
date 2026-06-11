@@ -19,6 +19,7 @@ from nemo_safe_synthesizer.config import (
     TrainingHyperparams,
 )
 from nemo_safe_synthesizer.errors import ParameterError
+from nemo_safe_synthesizer.training.callbacks import ProgressBarCallback, SafeSynthesizerWorkerCallback
 from nemo_safe_synthesizer.training.huggingface_backend import (
     HuggingFaceBackend,
     compute_metrics,
@@ -716,6 +717,27 @@ class TestConfigureStandardTraining:
 
         assert data_collator == custom_collator
         assert "data_collator" not in training_args
+
+
+class TestConfigureTrainerCallbacks:
+    @pytest.mark.parametrize(
+        ("is_info_enabled", "expected_callback_type"),
+        [
+            (True, SafeSynthesizerWorkerCallback),
+            (False, ProgressBarCallback),
+        ],
+    )
+    def test_uses_central_logger_level_for_progress_callback(self, backend, is_info_enabled, expected_callback_type):
+        """Trainer progress callback follows observability-controlled logger level."""
+        trainer = MagicMock()
+
+        with patch("nemo_safe_synthesizer.training.huggingface_backend.logger") as mock_logger:
+            mock_logger.isEnabledFor.return_value = is_info_enabled
+            backend._configure_trainer_callbacks(trainer, {})
+
+        trainer.remove_callback.assert_called_once()
+        callback = trainer.add_callback.call_args.args[0]
+        assert isinstance(callback, expected_callback_type)
 
 
 class TestApplyPreprocessing:
