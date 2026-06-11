@@ -12,10 +12,11 @@ import tempfile
 import time
 from functools import partial
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeGuard, cast
 
 import torch
 from transformers import PreTrainedTokenizerBase
+from typing_extensions import override
 from vllm import LLM as vLLM
 from vllm import RequestOutput
 from vllm.config import StructuredOutputsConfig
@@ -48,7 +49,7 @@ from ..generation.vllm_observability import (
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
-from ..utils import all_equal_type, load_json
+from ..utils import load_json
 
 logger = get_logger(__name__)
 
@@ -126,6 +127,20 @@ def _secure_outlines_cache_dir() -> None:
 
 
 _secure_outlines_cache_dir()
+
+
+def _is_nested_int_list(value: object) -> TypeGuard[list[list[int]]]:
+    """Return whether ``value`` is a non-empty list of int lists."""
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(row, list) and all(isinstance(item, int) for item in row) for row in value)
+    )
+
+
+def _is_flat_int_list(value: object) -> TypeGuard[list[int]]:
+    """Return whether ``value`` is a list of ints."""
+    return isinstance(value, list) and all(isinstance(item, int) for item in value)
 
 
 def _is_redis_available() -> bool:
@@ -243,6 +258,7 @@ class VllmBackend(GeneratorBackend):
         self.lora_req = LoRARequest("lora", 1, str(adapter_path)) if adapter_path else None
         self._torn_down = False
 
+    @override
     def teardown(self) -> None:
         """Release GPU memory and distributed resources. Idempotent -- safe to call multiple times."""
         if self._torn_down:
@@ -270,6 +286,7 @@ class VllmBackend(GeneratorBackend):
         except Exception:
             logger.debug("VllmBackend teardown failed during garbage collection", exc_info=True)
 
+    @override
     def initialize(self, **kwargs) -> None:
         """Initialize and load the model into memory.
 
@@ -465,6 +482,7 @@ class VllmBackend(GeneratorBackend):
 
         return sampling_params
 
+    @override
     def prepare_params(self, **kwargs) -> None:
         """Parse parameters and configure the generation method.
 
@@ -538,11 +556,10 @@ class VllmBackend(GeneratorBackend):
                     case torch.Tensor():
                         logger.debug("vllm generate: prompt_token_ids (torch.Tensor)")
                         result = self._gen_method(prompt_token_ids=input_ids.tolist())
-                    case [[*_inner], *_] if all_equal_type(input_ids, int):  # ty: ignore[invalid-argument-type]
-                        assert isinstance(input_ids, list)
-                        logger.debug(f"vllm generate: prompt_token_ids ({len(input_ids)} prompts)")
-                        result = self._gen_method(prompt_token_ids=input_ids)
-                    case [*ids] if all_equal_type(ids, int, flatten_iter=False):
+                    case list() as ids if _is_nested_int_list(ids):
+                        logger.debug(f"vllm generate: prompt_token_ids ({len(ids)} prompts)")
+                        result = self._gen_method(prompt_token_ids=ids)
+                    case list() as ids if _is_flat_int_list(ids):
                         logger.debug("vllm generate: prompt_token_ids (single flat list)")
                         result = self._gen_method(prompt_token_ids=[ids])
                     case None:
@@ -637,6 +654,7 @@ class VllmBackend(GeneratorBackend):
             },
         )
 
+    @override
     def generate(
         self,
         data_actions_fn: utils.DataActionsFn | None = None,

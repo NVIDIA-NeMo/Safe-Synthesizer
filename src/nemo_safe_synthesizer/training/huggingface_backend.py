@@ -36,6 +36,7 @@ from transformers import (
 )
 from transformers.trainer_pt_utils import get_model_param_count
 from transformers.utils.quantization_config import QuantizationConfigMixin
+from typing_extensions import override
 
 from .. import utils
 from ..cli.artifact_structure import BoundDir
@@ -306,6 +307,7 @@ class HuggingFaceBackend(TrainingBackend):
         logger.warning(msg)
 
     @traced_runtime("prepare_config")
+    @override
     def prepare_config(self, add_max_memory: bool = True, **kwargs: Any) -> None:
         """Set common model arguments for initializing a model.
 
@@ -371,6 +373,7 @@ class HuggingFaceBackend(TrainingBackend):
                 logger.info(f"using loftq with {scheme.effective_bits} bits")
                 self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=scheme.effective_bits)
 
+    @override
     def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
         self._prepare_quantize_base(**quant_params)
@@ -392,6 +395,7 @@ class HuggingFaceBackend(TrainingBackend):
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",
         )
 
+    @override
     def load_model(self, **model_args: Any) -> None:
         """Load an ``AutoModelForCausalLM`` instance with specified arguments.
 
@@ -601,6 +605,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
     @traced_runtime("prepare_params")
+    @override
     def prepare_params(self, **training_args: Any) -> None:
         """Prepare training parameters and create the trainer.
 
@@ -700,6 +705,7 @@ class HuggingFaceBackend(TrainingBackend):
             }
             logger.user.info("", extra=extra)
 
+    @override
     def prepare_training_data(self) -> None:
         """Validate, preprocess, and tokenize the training dataset.
 
@@ -778,6 +784,7 @@ class HuggingFaceBackend(TrainingBackend):
             self.model_metadata.max_tokens_per_example = int(math.ceil(tokens_per_example.max))
 
     @utils.time_function
+    @override
     def train(self, **training_args: Any) -> None:
         """Run the full training pipeline and populate ``results``.
 
@@ -807,6 +814,7 @@ class HuggingFaceBackend(TrainingBackend):
             elapsed_time=training_time_sec,
         )
 
+    @override
     def save_model(self) -> None:
         """Save the fine-tuning adapter and related artifacts under ``self.workdir``.
 
@@ -837,6 +845,7 @@ class HuggingFaceBackend(TrainingBackend):
             indent=4,
         )
 
+    @override
     def teardown(self) -> None:
         """Release GPU memory, distributed resources, and trainer state. Idempotent -- safe to call multiple times."""
         if getattr(self, "_torn_down", False):

@@ -15,11 +15,12 @@ import os
 import time
 from collections.abc import Callable, Generator, Iterable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, ParamSpec, Protocol, TypeVar
 
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
+from typing_extensions import TypeIs
 
 from .data_processing.stats import Statistics
 from .observability import get_logger
@@ -35,6 +36,9 @@ logger = get_logger(__name__)
 _TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 _HF_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def env_flag_is_true(name: str, *, default: bool = False) -> bool:
@@ -180,7 +184,7 @@ def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
     Raises:
         ValueError: If the file extension is not supported.
     """
-    if isinstance(df_or_path, pd.DataFrame):
+    if is_dataframe(df_or_path):
         return df_or_path
 
     path = str(df_or_path)
@@ -200,11 +204,11 @@ def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def time_function(func: Callable[..., Any]) -> Callable[..., Any]:
+def time_function(func: Callable[P, R]) -> Callable[P, R]:
     """Decorator to log the time taken by a function to execute."""
 
     @functools.wraps(func)
-    def time_closure(*args: Any, **kwargs: Any) -> Any:
+    def time_closure(*args: P.args, **kwargs: P.kwargs) -> R:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         time_elapsed = time.perf_counter() - start
@@ -309,6 +313,11 @@ def all_equal_type(iter: Iterable[object], type_: type, flatten_iter: bool = Tru
         if not i:
             return False
     return True
+
+
+def is_dataframe(x: object) -> TypeIs[pd.DataFrame]:
+    """Return whether ``x`` is a pandas ``DataFrame``."""
+    return isinstance(x, pd.DataFrame)
 
 
 def write_json(

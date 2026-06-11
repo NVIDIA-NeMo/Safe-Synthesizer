@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PureWindowsPath
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field
@@ -78,7 +78,7 @@ def _redact_endpoint(endpoint: str) -> str:
     except ValueError:
         return "<invalid-endpoint>"
     query = "<redacted>" if parsed.query else ""
-    return cast(str, urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment)))
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, parsed.fragment))
 
 
 def _deployment_type() -> DeploymentTypeEnum:

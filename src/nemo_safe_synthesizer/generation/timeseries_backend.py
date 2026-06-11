@@ -13,6 +13,7 @@ from enum import Enum, auto
 from pathlib import Path
 
 import pandas as pd
+from typing_extensions import override
 from vllm.sampling_params import SamplingParams
 
 from .. import utils
@@ -890,6 +891,7 @@ class TimeseriesBackend(VllmBackend):
 
         return final_records
 
+    @override
     def generate(
         self,
         data_actions_fn: utils.DataActionsFn | None = None,

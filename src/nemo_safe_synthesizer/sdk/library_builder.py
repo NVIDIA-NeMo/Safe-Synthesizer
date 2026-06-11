@@ -44,6 +44,7 @@ from ..telemetry import (
     sanitize_model_for_telemetry,
 )
 from ..training.huggingface_backend import HuggingFaceBackend
+from ..utils import is_dataframe
 from .config_builder import ConfigBuilder
 
 logger = get_logger(__name__)
@@ -110,9 +111,10 @@ def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTr
 
     records_bucket = "undefined"
     columns_bucket = "undefined"
-    if isinstance(ss._data_source, pd.DataFrame):
-        records_bucket = bucket_records(len(ss._data_source))
-        columns_bucket = bucket_columns(len(ss._data_source.columns))
+    data_source = ss._data_source
+    if is_dataframe(data_source):
+        records_bucket = bucket_records(len(data_source))
+        columns_bucket = bucket_columns(len(data_source.columns))
 
     gpu = get_device_name()
 
