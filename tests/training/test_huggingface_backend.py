@@ -749,6 +749,31 @@ class TestConfigureDpTraining:
             backend_with_dp._configure_dp_training(training_args)
 
 
+def test_train_mirrors_training_observability_when_trainer_raises(monkeypatch):
+    """Failed DP runs should still forward the trainer's observability event to wandb."""
+    from nemo_safe_synthesizer.training.training_observability import TrainingObservability
+
+    backend = object.__new__(HuggingFaceBackend)
+    backend.prepare_training_data = MagicMock()
+    backend.prepare_params = MagicMock()
+
+    event = TrainingObservability(peak_vram_gb=1.0)
+    backend.trainer = MagicMock()
+    backend.trainer.last_training_observability = event
+    backend.trainer.train.side_effect = RuntimeError("boom")
+
+    logged: list[tuple[TrainingObservability, str]] = []
+    monkeypatch.setattr(
+        "nemo_safe_synthesizer.training.huggingface_backend.log_observability_event",
+        lambda observed, prefix: logged.append((observed, prefix)),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        backend.train()
+
+    assert logged == [(event, "training")]
+
+
 class TestConfigureStandardTraining:
     def test_configures_standard_training(self, backend):
         """Test that standard training is configured correctly."""

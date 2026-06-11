@@ -92,6 +92,24 @@ def test_grad_sample_mode_from_params_rejects_invalid_value():
         SafeSynthesizerParameters.from_params(grad_sample_mode="invalid")
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"top_p": 2},
+        {"order_training_examples_by": "timestamp"},
+        {"is_timeseries": True},
+        {
+            "use_structured_generation": True,
+            "structured_generation_schema_method": "structural_tag",
+            "structured_generation_backend": "outlines",
+        },
+    ],
+)
+def test_from_params_validates_all_nested_submodels(kwargs):
+    with pytest.raises(ValidationError):
+        SafeSynthesizerParameters.from_params(**kwargs)
+
+
 def test_grad_sample_mode_from_yaml_rejects_invalid_value():
     with pytest.raises(ValidationError):
         SafeSynthesizerParameters.from_yaml_str("privacy:\n  grad_sample_mode: invalid\n")

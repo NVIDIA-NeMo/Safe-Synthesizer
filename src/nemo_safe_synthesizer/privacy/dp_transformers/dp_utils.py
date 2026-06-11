@@ -21,6 +21,7 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from importlib import import_module
 from importlib.metadata import PackageNotFoundError, version
+from threading import Lock
 from types import MethodType
 from typing import Any, Literal, cast
 
@@ -70,6 +71,7 @@ GradSampleMode = Literal["hooks", "ghost"]
 _MIN_GHOST_CLIPPING_OPACUS_VERSION = Version("1.6.0")
 
 _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
+_CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK = Lock()
 
 # Original Transformers loss callables saved at install time so the opt-in probe
 # can be reverted. The probe monkeypatches process-global state in
@@ -130,7 +132,6 @@ def _chunked_cross_entropy(
         loss_sum = loss_sum + F.cross_entropy(
             chunk_logits,
             chunk_labels,
-            ignore_index=ignore_index,
             reduction="sum",
         )
         valid_token_count = valid_token_count + keep.sum().to(dtype=torch.float32)
@@ -148,7 +149,7 @@ def _install_causal_lm_loss_memory_probe(
     chunked_loss: bool,
     chunk_tokens: int,
     peak_recorder: Callable[[int], None] | None = None,
-) -> None:
+) -> bool:
     """Install the opt-in Transformers causal-LM loss probe from config flags.
 
     Args:
@@ -161,14 +162,12 @@ def _install_causal_lm_loss_memory_probe(
             each loss call when ``debug_loss_memory`` is set (used to summarize
             the peak upcast spike for observability).
 
-    No-op when both ``debug_loss_memory`` and ``chunked_loss`` are ``False`` or
-    when the probe is already installed.
+    Returns ``True`` when this call installed the process-global probe and the
+    caller must later uninstall it. Returns ``False`` when neither probe feature
+    is enabled.
     """
-    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
-    if _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
-        return
     if not debug_loss_memory and not chunked_loss:
-        return
+        return False
 
     from transformers.loss import loss_utils
 
@@ -209,42 +208,55 @@ def _install_causal_lm_loss_memory_probe(
         return loss
 
     global _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN, _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS
-    original = loss_utils.ForCausalLMLoss
-    _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = original
-    _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS = []
-    setattr(loss_utils, "ForCausalLMLoss", probed_for_causal_lm_loss)
-    for loss_name, loss_fn in loss_utils.LOSS_MAPPING.items():
-        if loss_fn is original:
-            loss_utils.LOSS_MAPPING[loss_name] = probed_for_causal_lm_loss
-            _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.append(loss_name)
-    _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = True
+    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
+    with _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK:
+        if _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
+            raise RuntimeError(
+                "Causal-LM loss memory probe is already installed; concurrent DP training runs "
+                "with debug_loss_memory or chunked_causal_lm_loss are not supported."
+            )
+
+        original = loss_utils.ForCausalLMLoss
+        _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = original
+        _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS = []
+        setattr(loss_utils, "ForCausalLMLoss", probed_for_causal_lm_loss)
+        for loss_name, loss_fn in loss_utils.LOSS_MAPPING.items():
+            if loss_fn is original:
+                loss_utils.LOSS_MAPPING[loss_name] = probed_for_causal_lm_loss
+                _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.append(loss_name)
+        _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = True
     logger.warning(
         "Installed causal-LM loss wrapper for memory diagnostics/experiments "
         f"(debug_loss_memory={debug_loss_memory}, chunked_loss={chunked_loss}, chunk_tokens={chunk_tokens})"
     )
+    return True
 
 
-def _uninstall_causal_lm_loss_memory_probe() -> None:
+def _uninstall_causal_lm_loss_memory_probe(installed: bool = True) -> None:
     """Revert the opt-in causal-LM loss probe, restoring Transformers globals.
 
     Idempotent and safe to call when the probe was never installed. Resets the
     installed flag so a subsequent training run re-installs cleanly.
     """
-    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED, _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
-    if not _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
+    if not installed:
         return
 
+    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED, _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
     from transformers.loss import loss_utils
 
-    original = _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
-    if original is not None:
-        setattr(loss_utils, "ForCausalLMLoss", original)
-        for loss_name in _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS:
-            loss_utils.LOSS_MAPPING[loss_name] = original
+    with _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK:
+        if not _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
+            return
 
-    _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.clear()
-    _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = None
-    _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
+        original = _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
+        if original is not None:
+            setattr(loss_utils, "ForCausalLMLoss", original)
+            for loss_name in _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS:
+                loss_utils.LOSS_MAPPING[loss_name] = original
+
+        _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.clear()
+        _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = None
+        _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
     logger.warning("Reverted causal-LM loss wrapper installed for memory diagnostics/experiments")
 
 
@@ -831,10 +843,10 @@ class OpacusDPTrainer(Trainer):
         if nbytes > self._peak_loss_logits_bytes:
             self._peak_loss_logits_bytes = nbytes
 
-    def _install_loss_memory_probe(self) -> None:
+    def _install_loss_memory_probe(self) -> bool:
         """Install the causal-LM loss probe from ``self.memory_controls`` (idempotent)."""
         mc = self.memory_controls
-        _install_causal_lm_loss_memory_probe(
+        return _install_causal_lm_loss_memory_probe(
             debug_loss_memory=mc.debug_loss_memory,
             chunked_loss=mc.chunked_causal_lm_loss,
             chunk_tokens=mc.chunked_causal_lm_loss_tokens,
@@ -852,14 +864,14 @@ class OpacusDPTrainer(Trainer):
         never leaks into a later model in the same process.
         """
         self._peak_loss_logits_bytes = 0
-        self._install_loss_memory_probe()
+        probe_installed = self._install_loss_memory_probe()
         sampler = NvmlPeakSampler()
         try:
             with sampler:
                 return super().train(*args, **kwargs)
         finally:
             self._emit_training_observability(sampler.peak_gb)
-            _uninstall_causal_lm_loss_memory_probe()
+            _uninstall_causal_lm_loss_memory_probe(installed=probe_installed)
 
     def _emit_training_observability(self, peak_vram_gb: float | None) -> None:
         """Assemble the ``training.complete`` event, log it, and stash it.
@@ -973,6 +985,11 @@ class OpacusDPTrainer(Trainer):
             logits = outputs.get("logits")
         if logits is None:
             raise RuntimeError("Ghost clipping DP training requires model outputs with logits.")
+        if logits.ndim != 3 or logits.shape[1] != valid_positions.numel():
+            raise RuntimeError(
+                "Ghost clipping DP training expected the model to honor logits_to_keep "
+                f"with {valid_positions.numel()} kept positions, got logits shape {tuple(logits.shape)}."
+            )
 
         shift_logits = logits.contiguous()
         shift_labels = shift_labels.index_select(1, valid_positions.to(shift_labels.device)).to(shift_logits.device)

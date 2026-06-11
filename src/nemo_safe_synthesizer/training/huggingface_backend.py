@@ -798,15 +798,14 @@ class HuggingFaceBackend(TrainingBackend):
         training_start = time.monotonic()
         self.prepare_training_data()
         self.prepare_params(**training_args)
-        self.trainer.train()
+        try:
+            self.trainer.train()
+        finally:
+            # The DP trainer emits this event from its own finally; mirror it even when training raises.
+            event = getattr(self.trainer, "last_training_observability", None)
+            if event is not None:
+                log_observability_event(event, prefix="training")
         training_time_sec = time.monotonic() - training_start
-
-        # Mirror the trainer's training-complete event to wandb (no-op when no
-        # run is active). The trainer assembles and logs the event; forwarding
-        # to wandb lives here so the privacy layer stays independent of the CLI.
-        event = getattr(self.trainer, "last_training_observability", None)
-        if event is not None:
-            log_observability_event(event, prefix="training")
 
         # Capture log_history before teardown deletes the trainer.
         log_history = self.trainer.state.log_history
