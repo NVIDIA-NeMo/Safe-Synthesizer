@@ -176,6 +176,7 @@ nav:
       - tutorials/index.md
       - Safe Synthesizer 101: tutorials/safe-synthesizer-101.ipynb
       - Differential Privacy: tutorials/differential-privacy.ipynb
+      - Time Series: tutorials/time-series.ipynb
   - User Guide:
       - Getting Started: user-guide/getting-started.md
       - Running Safe Synthesizer: user-guide/running.md

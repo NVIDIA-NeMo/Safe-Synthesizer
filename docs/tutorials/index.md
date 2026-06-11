@@ -9,6 +9,7 @@ Interactive Jupyter notebook tutorials for NeMo Safe Synthesizer.
 
 - [Safe Synthesizer 101](safe-synthesizer-101.ipynb) -- learn the fundamentals
 - [Differential Privacy](differential-privacy.ipynb) -- enable differential privacy guarantees
+- [Time Series](time-series.ipynb) -- learn to generate synthetic time series data with NSS
 
 ## Adding a Tutorial
 
