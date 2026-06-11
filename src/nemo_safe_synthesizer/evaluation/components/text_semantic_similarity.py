@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
@@ -12,7 +13,6 @@ import pandas as pd
 from numpy.linalg import norm
 from pydantic import BaseModel, ConfigDict, Field
 from scipy.stats import ks_2samp
-from sentence_transformers import SentenceTransformer
 from tenacity import (
     RetryError,
     Retrying,
@@ -34,6 +34,9 @@ from ...evaluation.data_model.evaluation_score import EvaluationScore
 from ...evaluation.statistics import stats
 from ...observability import get_logger
 from . import multi_modal_figures as figures
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 logger = get_logger(__name__)
 
@@ -237,6 +240,11 @@ class TextSemanticSimilarity(Component):
     @staticmethod
     def _init_sentence_transformer_model() -> SentenceTransformer | None:
         """Load the sentence transformer model with exponential-backoff retries."""
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            return None
+
         try:
             for attempt in Retrying(
                 # TODO(PLAT-2537): Temporarily increase retries, but we will bundle this model next, so download is not required.

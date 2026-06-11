@@ -40,6 +40,12 @@ from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 logger = get_logger(__name__)
 
 
+def _assert_evaluation_report_rendered(report_html: str | None) -> None:
+    assert report_html is not None
+    assert "Synthetic Quality Score" in report_html
+    assert "Text Semantic Similarity" in report_html
+
+
 @pytest.mark.e2e
 @pytest.mark.requires_gpu
 @pytest.mark.timeout(1000)
@@ -66,6 +72,7 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
     assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0
     assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0
     assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0
+    _assert_evaluation_report_rendered(result.evaluation_report_html)
 
 
 @pytest.mark.e2e
@@ -89,3 +96,4 @@ def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fix
     assert result.summary.timing.training_time_sec is not None and result.summary.timing.training_time_sec > 0
     assert result.summary.timing.generation_time_sec is not None and result.summary.timing.generation_time_sec > 0
     assert result.summary.timing.evaluation_time_sec is not None and result.summary.timing.evaluation_time_sec > 0
+    _assert_evaluation_report_rendered(result.evaluation_report_html)
