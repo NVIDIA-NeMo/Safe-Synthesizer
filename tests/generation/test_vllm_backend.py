@@ -93,7 +93,6 @@ def base_params():
         ),
         generation=GenerateParameters(
             num_records=100,
-            use_structured_generation=False,
         ),
     )
 
@@ -101,35 +100,35 @@ def base_params():
 @pytest.fixture
 def params_with_structured_generation_auto(base_params):
     """Create params with structured generation enabled using auto schema method."""
-    base_params.generation.use_structured_generation = True
-    base_params.generation.structured_generation_schema_method = "auto"
+    base_params.generation.structured_generation.enabled = True
+    base_params.generation.structured_generation.schema_method = "auto"
     return base_params
 
 
 @pytest.fixture
 def params_with_structured_generation_regex(base_params):
     """Create params with structured generation enabled using regex."""
-    base_params.generation.use_structured_generation = True
-    base_params.generation.structured_generation_schema_method = "regex"
-    base_params.generation.structured_generation_backend = "xgrammar"
+    base_params.generation.structured_generation.enabled = True
+    base_params.generation.structured_generation.schema_method = "regex"
+    base_params.generation.structured_generation.backend = "xgrammar"
     return base_params
 
 
 @pytest.fixture
 def params_with_structured_generation_json(base_params):
     """Create params with structured generation enabled using json_schema."""
-    base_params.generation.use_structured_generation = True
-    base_params.generation.structured_generation_schema_method = "json_schema"
-    base_params.generation.structured_generation_backend = "xgrammar"
+    base_params.generation.structured_generation.enabled = True
+    base_params.generation.structured_generation.schema_method = "json_schema"
+    base_params.generation.structured_generation.backend = "xgrammar"
     return base_params
 
 
 @pytest.fixture
 def params_with_structured_generation_structural_tag(base_params):
     """Create params with structured generation enabled using structural_tag."""
-    base_params.generation.use_structured_generation = True
-    base_params.generation.structured_generation_schema_method = "structural_tag"
-    base_params.generation.structured_generation_backend = "xgrammar"
+    base_params.generation.structured_generation.enabled = True
+    base_params.generation.structured_generation.schema_method = "structural_tag"
+    base_params.generation.structured_generation.backend = "xgrammar"
     return base_params
 
 
@@ -266,7 +265,7 @@ class TestBuildStructuredOutputParams:
         backend,
     ):
         """Auto schema method uses structural_tag on xgrammar-capable backends."""
-        params_with_structured_generation_auto.generation.structured_generation_backend = backend
+        params_with_structured_generation_auto.generation.structured_generation.backend = backend
         backend_instance = create_backend(
             params_with_structured_generation_auto,
             mock_model_metadata,
@@ -298,7 +297,7 @@ class TestBuildStructuredOutputParams:
         backend,
     ):
         """Auto schema method falls back to regex on non-xgrammar backends."""
-        params_with_structured_generation_auto.generation.structured_generation_backend = backend
+        params_with_structured_generation_auto.generation.structured_generation.backend = backend
         backend_instance = create_backend(
             params_with_structured_generation_auto,
             mock_model_metadata,
@@ -330,7 +329,7 @@ class TestBuildStructuredOutputParams:
         backend,
     ):
         """Structural Tag requires vLLM's xgrammar backend."""
-        params_with_structured_generation_structural_tag.generation.structured_generation_backend = backend
+        params_with_structured_generation_structural_tag.generation.structured_generation.backend = backend
         backend_instance = create_backend(
             params_with_structured_generation_structural_tag,
             mock_model_metadata,
@@ -338,7 +337,7 @@ class TestBuildStructuredOutputParams:
             mock_workdir,
         )
 
-        with pytest.raises(ParameterError, match="requires `structured_generation_backend`"):
+        with pytest.raises(ParameterError, match="requires `backend`"):
             backend_instance._build_structured_output_params()
 
     def test_config_with_grouping_passed_to_build_regex(

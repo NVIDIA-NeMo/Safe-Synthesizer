@@ -270,7 +270,8 @@ training:
   learning_rate: 0.05
   batch_size: 8
 generation:
-  use_structured_generation: true
+  structured_generation:
+    enabled: true
 """)
 
         # Overrides from registry for reference (see registry_with_dataset fixture)
@@ -298,7 +299,7 @@ generation:
 
         # Only given in config file
         assert config.training.num_input_records_to_sample == 150
-        assert config.generation.use_structured_generation
+        assert config.generation.structured_generation.enabled
         # Only given in registry
         assert config.replace_pii is None
         # Only given in CLI
@@ -364,7 +365,7 @@ generation:
         config = merge_overrides(config_file, {})
 
         assert config.generation.num_records == 77
-        assert config.generation.use_structured_generation is False
+        assert config.generation.structured_generation.enabled is False
         assert config.model_dump(exclude_unset=True) == {"generation": {"num_records": 77}}
 
 

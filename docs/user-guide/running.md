@@ -864,7 +864,7 @@ flowchart TD
 
 ### Structured Generation
 
-Set `generation.use_structured_generation` to `true` to constrain the model's
+Set `generation.structured_generation.enabled` to `true` to constrain the model's
 output so every record matches the dataset schema. This reduces the fraction of
 invalid records, typically at the cost of reducing the quality of the generated
 records. Use it when the pipeline struggles to produce valid records.
@@ -873,7 +873,7 @@ records. Use it when the pipeline struggles to produce valid records.
 
     ```bash
     safe-synthesizer run \
-      --generation__use_structured_generation true \
+      --generation__structured_generation__enabled true \
       --data-source data.csv
     ```
 
@@ -885,7 +885,7 @@ records. Use it when the pipeline struggles to produce valid records.
     synthesizer = (
         SafeSynthesizer()
         .with_data_source("data.csv")
-        .with_generate(use_structured_generation=True)
+        .with_generate(structured_generation={"enabled": True})
     )
     ```
 
@@ -893,11 +893,12 @@ records. Use it when the pipeline struggles to produce valid records.
 
     ```yaml
     generation:
-      use_structured_generation: true
-      structured_generation_schema_method: "auto"
+      structured_generation:
+        enabled: true
+        schema_method: "auto"
     ```
 
-- `"auto"`: picks `"structural_tag"` when `structured_generation_backend` is `"auto"` or `"xgrammar"`, otherwise `"regex"`.
+- `"auto"`: picks `"structural_tag"` when `structured_generation.backend` is `"auto"` or `"xgrammar"`, otherwise `"regex"`.
 - `"structural_tag"`: uses XGrammar Structural Tag to compose schema-constrained JSONL output.
 - `"regex"`: constructs a custom regex from the dataset schema. More comprehensive but slower.
 - `"json_schema"`: passes a JSON Schema to the backend. Faster, but may miss edge cases.
@@ -941,7 +942,7 @@ fraction per batch.
 
 !!! tip "Early stopping"
     If the pipeline stops early due to patience, try enabling
-    `use_structured_generation: true` to constrain outputs to the dataset
+    `structured_generation.enabled: true` to constrain outputs to the dataset
     schema, or lower `temperature` to reduce the chance of malformed records.
 
 See [Configuration Reference -- Generation](configuration.md#generation) for the full parameter table.

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Self, TypeAlias, TypeVar, cast
+from typing import Any, Self, TypeAlias, TypeVar
 
 import pandas as pd
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ from ..config import (
 )
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
+from ..utils import merge_dicts
 
 logger = get_logger(__name__)
 
@@ -119,11 +120,12 @@ class ConfigBuilder(object):
         overrides = kwargs
         match values:
             case BaseModel() as model:
-                return cast(ParamT, model.model_copy(update=overrides))
+                data = model.model_dump()
+                return cls.model_validate(merge_dicts(data, overrides))
             case dict() as d:
-                return cls.model_validate(d).model_copy(update=overrides)
+                return cls.model_validate(merge_dicts(d, overrides))
             case None:
-                return cls(**overrides)
+                return cls.model_validate(overrides)
             case _:
                 raise TypeError(f"Unsupported config type: {type(values)}")
 

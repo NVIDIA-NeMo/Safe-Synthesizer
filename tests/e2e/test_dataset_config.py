@@ -144,7 +144,7 @@ def test_dow_jones_index_dataset(
     config = update_group_by_config(config, "stock", "date")
     config = AutoConfigResolver(df, config)()
     if config_file == "smollm3-dp.yaml":
-        config.generation.structured_generation_backend = "outlines"
+        config.generation.structured_generation.backend = "outlines"
     logger.info(f"Running test with config: {config}")
 
     nss = SafeSynthesizer(config=config).with_data_source(df)
