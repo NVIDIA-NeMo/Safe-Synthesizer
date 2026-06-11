@@ -83,17 +83,25 @@ run = [{ task = "test:e2e:default" }, { task = "test:e2e:dp" }]
 ["test:e2e:default"]
 description = "Run default e2e tests (requires CUDA)"
 alias = "test-e2e-default"
-run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default"
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k default"
+]
 
 ["test:e2e:dp"]
 description = "Run dp e2e tests (requires CUDA)"
 alias = "test-e2e-dp"
-run = "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  "uv run --frozen pytest --dist loadscope -vv -n 0 tests/e2e/test_safe_synthesizer.py -k dp"
+]
 
 ["test:e2e:collect"]
 description = "Dry-run e2e and GPU selectors with pytest collection only. Does not run tests; useful before changing task selectors."
 alias = "test-e2e-collect"
-run = '''
+run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
+  '''
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -106,6 +114,7 @@ uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesi
 echo "--- test-gpu-integration (dp) ---"
 uv run --frozen pytest -n auto --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp -o "addopts=" --collect-only -qq -p no:warnings 2>/dev/null || true
 '''
+]
 
 ["test:nss-config-dataset"]
 description = "Run pytest for one config and dataset combination"
