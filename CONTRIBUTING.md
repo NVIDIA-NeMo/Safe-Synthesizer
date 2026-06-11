@@ -517,7 +517,7 @@ mise run test:ci-container
 uv run --frozen pytest tests/cli/test_run.py
 ```
 
-`make test-e2e-default` and `make test-e2e-dp` each run the SafeSynthesizer e2e flow across Mistral 7B, SmolLM3 3B, and TinyLlama 1.1B. Each model case has a 30-minute timeout, so reserve up to 90 minutes for either target and up to 3 hours for the full `make test-e2e` target in cold-cache GPU environments.
+`mise run test:e2e:default` and `mise run test:e2e:dp` each run the SafeSynthesizer e2e flow across Mistral 7B, SmolLM3 3B, and TinyLlama 1.1B. Each model case has a 30-minute timeout, so reserve up to 90 minutes for either target and up to 3 hours for the full `mise run test:e2e` target in cold-cache GPU environments.
 
 ### GPU Tests (CI)
 
