@@ -1,12 +1,12 @@
 ---
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-date: 2026-05-22
+date: 2026-06-11
 authors:
   - seayang
 ---
 
-# Does NeMo Safe Synthesizer Actually Work?
+# Does NeMo Safe Synthesizer Actually Work? A Case Study with Financial Transactions Data
 
 NeMo Safe Synthesizer creates private, safe versions of sensitive tabular datasets: entirely synthetic data with no one-to-one mapping to the original records, while preserving the statistical structure to remain useful for downstream AI and analytics.
 
@@ -17,15 +17,15 @@ That promise sounds simple, but it raises the question every synthetic data syst
 For NeMo Safe Synthesizer, "working" means satisfying two requirements at the same time:
 
 1. Privacy: Does the synthetic data avoid direct memorization of transaction rows?
-2. Utility: Does it preserve the data structure and behavioral patterns that were intentionally built into the source data?
+2. Fidelity: Does it preserve the data structure and behavioral patterns in the source data?
 
-The tension between those two goals is the interesting part. A dataset that merely avoids copying records is private, but not necessarily useful. A dataset that captures every pattern too literally may be useful, but has higher risk of leaking sensitive aspects of the original. In this dev note, we walk through a concrete financial transactions example and check both sides of that tradeoff.
+The tension between privacy and fidelity is the interesting part. A dataset that merely avoids copying records is private, but not necessarily useful. A dataset that captures every pattern too literally may be useful, but has higher risk of leaking sensitive aspects of the original. In this dev note, we walk through a concrete financial transactions example and check both sides of that tradeoff.
 
 The [full tutorial notebook](../../tutorials/time-series-financial-transactions.ipynb) contains the runnable workflow, including prerequisites and setup.
 
 ## Dataset
 
-The dataset is an account transaction ledger with 3,980 transaction detail rows. Each row represents a transaction, with columns such as:
+The dataset is a synthetic account transaction ledger with 3,980 transaction detail rows. Each row represents a transaction, with columns such as:
 
 - `acct_id`: account identifier used to group transactions into sequences
 - `cardholder`: cardholder name
@@ -35,6 +35,8 @@ The dataset is an account transaction ledger with 3,980 transaction detail rows.
 - `merchant_cat`: merchant category
 - `merchant`: merchant name
 - `txn_amount`: transaction amount
+
+This dataset was generated for the case study so we could evaluate known transaction patterns without using real financial customer data.
 
 Here is a preview of the source data:
 
@@ -77,7 +79,7 @@ results = builder.results
 
 The results below come from one run of the tutorial notebook. Exact values and plots will vary across runs, which is expected for synthetic generation, but the same checks apply.
 
-This run produced 3,919 valid transaction detail rows. The original and synthetic datasets both contained 50 account groups, with a median of 79 valid transactions per original account and 80 valid transactions per synthetic account. In other words, NeMo Safe Synthesizer generated a dataset with roughly the same scale and sequence structure as the source.
+This run produced 3,919 transaction detail rows. The original and synthetic datasets both contained 50 account groups, with a median of 79 transactions per original account and 80 transactions per synthetic account. In other words, NeMo Safe Synthesizer generated a dataset with roughly the same scale and sequence structure as the source.
 
 Here is a sample of the synthetic output:
 
@@ -111,13 +113,12 @@ Privacy:
 
 The headline numbers are strong. Quality and privacy scores are high. The next question is use-case specific: do the general-purpose evaluation metrics line up with the patterns that matter for this transaction dataset?
 
-## Question 1: Did NeMo Safe Synthesizer Memorize Rows?
+## Question 1: Did NeMo Safe Synthesizer Memorize Rows or Groups?
 
 The first test is whether synthetic records duplicate the source. The answer is no:
 
-- Exact valid transaction row overlap: 0.0%
-- Exact raw row overlap: 0.0%
-- Cardholder value overlap: 0.0%
+- Exact transaction row overlap: 0.0%
+- `cardholder` value overlap: 0.0%
 
 There were no duplicate transaction rows, and no cardholder names from the source appeared in the generated data. NeMo Safe Synthesizer produced novel rows rather than a row-for-row copy of the input.
 
@@ -127,11 +128,14 @@ We also checked whether account-level metadata could make an account stand out e
 |---|---:|
 | Accounts compared | 50 |
 | Exact transaction-count matches | 3 |
-| Accounts within 5 transactions | 21 |
-| Accounts within 10 transactions | 38 |
+| Accounts with absolute delta <= 5 transactions | 21 |
+| Accounts with absolute delta <= 10 transactions | 38 |
 | Median absolute transaction-count delta | 7 |
+| Max absolute transaction-count delta | 28 |
+| Exact high-value transaction-count matches | 14 |
+| Median absolute total-spend delta | $3,350 |
 
-Transaction counts and amount summaries varied enough between original and synthetic account histories that there was no obvious one-to-one match from those signals alone.
+Transaction counts and amount summaries (comparison not shown) varied enough between original and synthetic account histories that there was no obvious one-to-one match from those signals alone.
 
 ## Question 2: Did NeMo Safe Synthesizer Preserve the Patterns?
 
@@ -145,7 +149,7 @@ The first target is merchant category mix:
 
 ![Merchant category distribution](assets/does-nss-actually-work/category-mix.png)
 
-The synthetic distribution tracks the intended shape. High-frequency categories remain high frequency, low-frequency categories remain low frequency, and wire transfers remain rare.
+The synthetic distribution preserves the intended shape. High-frequency categories remain high frequency, low-frequency categories remain low frequency, and wire transfers remain rare.
 
 That matters because downstream uses are not just looking for valid strings in the `merchant_cat` column. They need a plausible transaction portfolio. A model trained on a flattened or arbitrary category distribution would learn the wrong baseline behavior before it ever reached a more advanced task.
 
