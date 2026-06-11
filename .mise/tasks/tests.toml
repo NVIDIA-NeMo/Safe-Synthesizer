@@ -71,6 +71,7 @@ run = 'uv run --frozen pytest --dist loadscope -vv -n 0 tests/smoke/ -m "require
 description = "Run GPU integration e2e tests for default and DP configs. Requires CUDA; stages are sequential to control GPU load."
 alias = "test-gpu-integration"
 run = [
+  { task = "bootstrap-nss", args = ["cu129"] },
   "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k default",
   "uv run --frozen pytest -n 0 --dist loadscope -vv tests/e2e/test_safe_synthesizer.py -k dp",
 ]
