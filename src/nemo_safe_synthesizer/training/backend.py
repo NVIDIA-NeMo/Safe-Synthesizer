@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import abc
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,7 +83,6 @@ class TrainingBackend(metaclass=abc.ABCMeta):
             total training records. Passed to the Opacus DP trainer
             to compute per-step sampling probability for privacy
             accounting.
-        logging_level: Python logging verbosity level.
         true_dataset_size: Total number of records (or groups, when
             grouping is enabled) in the training set before
             subsampling. Used by the Opacus DP trainer alongside
@@ -164,7 +162,6 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         model_metadata: ModelMetadata,
         training_dataset: Dataset | None = None,
         data_fraction: float | None = None,
-        logging_level: int = logging.INFO,
         true_dataset_size: int | None = None,
         eval_dataset: Dataset | None = None,
         generation_eval: bool = False,
@@ -179,7 +176,6 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         self.dataset_schema = None
         self.framework_load_params: dict = {}
         self.data_fraction = data_fraction
-        self.logging_level = logging_level
         self.true_dataset_size = true_dataset_size
         self.eval_dataset = eval_dataset
         self.training_dataset = training_dataset
