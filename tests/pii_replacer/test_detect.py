@@ -111,6 +111,7 @@ def test_gliner_local_files_only_follows_hf_offline_env(env_value, offline_var, 
         assert mock_gliner.from_pretrained.call_args.kwargs["local_files_only"] is True
 
 
+@pytest.mark.slow
 def test_gliner_pii_detection_recall():
     # Tests GLiNER’s PII detection on a short text, ensuring it finds a reasonable number of entities without over- or under-detecting.
 

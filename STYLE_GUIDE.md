@@ -116,7 +116,9 @@ How to write clear, testable Python -- independent of which library primitives y
 
 ### Type hints
 
-The codebase targets Python 3.11–3.13 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (currently ray/vLLM lack `cp314` wheels).
+The codebase targets Python 3.11–3.13 and uses native typing syntax throughout. Expect 3.11 as the minimum for the foreseeable future; the upper bound tracks dependency availability (currently vLLM declares `<3.14` support while its dependency stack gains full `cp314` wheel coverage).
+
+Even though `.python-version` pins Python 3.13 for local development and CI defaults, shared package code must stay Python 3.11 syntax-compatible until the NMP platform moves its base Python version to 3.12. Do not use Python 3.12-only syntax yet, including PEP 695 `type` statements or bracketed generic class/function parameters. Prefer `TypeAlias`, `TypeVar`, and `typing_extensions` backports when newer typing features are useful before the minimum runtime moves.
 
 ```python
 from typing import Self, Sequence
@@ -763,10 +765,10 @@ Testing conventions are substantial enough to warrant their own section. For the
 
 Two Dockerfiles live in `containers/`:
 
-- [containers/Dockerfile.cuda](containers/Dockerfile.cuda) -- CUDA GPU image (deps/runtime/dev stages). The production reference for these conventions.
-- [containers/Dockerfile.test_ci](containers/Dockerfile.test_ci) -- CPU-only CI image (`make test-ci-container`).
+- [containers/Dockerfile.cuda](containers/Dockerfile.cuda) -- CUDA GPU image (uv/runtime/dev stages). The production reference for these conventions.
+- [containers/Dockerfile.test_ci](containers/Dockerfile.test_ci) -- CPU-only CI image (`mise run test:ci-container`).
 
-See [containers/README.md](containers/README.md) for build arguments and Makefile targets.
+See [containers/README.md](containers/README.md) for build arguments and mise tasks.
 
 Conventions for new or modified Dockerfiles:
 
@@ -821,12 +823,13 @@ readonly OUTPUT_DIR="${1:?Usage: $0 <output-dir>}"
 - Comments: `# comment` with inline comments for dependency pins
 - Section ordering in `pyproject.toml`: `[project]`, `[dependency-groups]`, `[project.optional-dependencies]`, `[tool.uv]`, `[build-system]`, `[tool.*]`
 
-### Makefile
+### Mise Tasks
 
-- Target help format: `target-name: ## Description` (enables `make help` auto-generation)
-- Tab indentation (standard Makefile)
-- `.PHONY` declaration directly above each target it applies to
-- Variables in `### CONFIGURATION ###` section
+- Root task include lives in `.mise.toml` under `[task_config]`.
+- Keep all tasks under `.mise/tasks/`: `*.toml` for declarative tasks and task graphs; executable scripts for bash-heavy tasks.
+- Put shared shell helpers in `.mise/tasks/_lib.sh`; keep it non-executable so mise does not list it as a task.
+- Use `#MISE description=...` on public file tasks and `description` on public TOML tasks so `mise tasks` is useful.
+- Use `#USAGE` comments in file tasks, or `usage` in TOML tasks, for arguments that need validation or help text.
 
 ---
 
@@ -840,7 +843,7 @@ Every directory under `src/` that contains Python files must include an `__init_
 
 ### Copyright headers
 
-Every source file requires an SPDX copyright header and `make format` handles this automatically. See [tools/codestyle/copyright_fixer.py](tools/codestyle/copyright_fixer.py).
+Every source file requires an SPDX copyright header and `mise run format` handles this automatically. See [tools/codestyle/copyright_fixer.py](tools/codestyle/copyright_fixer.py).
 
 E.g., Hash-comments for `.py`, `.sh`, `.yaml`, `.yml`. HTML-comment for `.md`:
 

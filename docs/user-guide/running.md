@@ -255,7 +255,15 @@ safe-synthesizer run generate \
 | `--run-path` | Explicit path to a previous run's output directory |
 | `--wandb-resume-job-id` | WandB run ID to resume (or path to file containing the ID) |
 
-Accepts the same common options and synthesis parameter overrides as `run`.
+Accepts the same common options and synthesis parameter override syntax as `run`.
+
+!!! note "Override scope on resume"
+    `run generate` reloads the trained run's saved configuration. Only
+    `generation` and `evaluation` overrides (and `emit_telemetry`) supplied via
+    `--config` or `--section__field` flags take effect; fields you do not set
+    keep their saved values. `training`, `data`, `privacy`, and `time_series`
+    are always inherited from the trained run and cannot be changed at generate
+    time, since they describe how the adapter was produced.
 
 ### `run --validate`
 
@@ -282,7 +290,7 @@ execute in order (`config` → `dataframe` → `metadata` → `advisory`).
 | `columns.pseudo` | dataframe | Input does not use the reserved `__nss_sequence_id` column name |
 | `columns.constant` | dataframe | No column is constant (warning only) |
 | `timeseries.timestamp` | dataframe | Timestamp column is present and has no nulls (time-series mode) |
-| `gpu.vram` | metadata | Free VRAM headroom for the chosen model + PEFT mode (warning only) |
+| `gpu.vram` | metadata | Free VRAM headroom for the chosen model, quantization load mode, and per-device batch size; emits `low_vram` as a warning and `vram_exceeds_capacity` as an error when the estimate is far above capacity |
 | `token_budget` | metadata | Schema prompt, sampled records, and top groups each fit in the model's context window |
 | `dataset.row_count` | advisory | Training split is above a comfort threshold (warning only) |
 | `training.oversampling` | advisory | Sampling fraction is not extreme (warning only) |
@@ -319,8 +327,11 @@ the best-effort caveat below.
       can be shorter or longer than the original and shift token budgets.
     - Token-budget checks sample rows and top groups -- a long-tail
       outlier outside the sample can still exceed the budget at assembly.
-    - VRAM headroom is a lower bound (LoRA adapters, optimizer state, and
-      activations are not modeled); full training may still OOM.
+    - VRAM headroom includes a coarse bf16 compute activation term
+      (`batch_size` x `metadata.max_seq_length` x width x depth) plus base
+      weights using the configured quantization mode; LoRA adapters,
+      optimizer state, and attention blocks beyond that shape are not modeled
+      tightly. Full training may still OOM.
 
     Treat `--validate` as a quick fail-fast gate, not a full-run guarantee.
 
@@ -883,9 +894,11 @@ records. Use it when the pipeline struggles to produce valid records.
     ```yaml
     generation:
       use_structured_generation: true
-      structured_generation_schema_method: "regex"
+      structured_generation_schema_method: "auto"
     ```
 
+- `"auto"`: picks `"structural_tag"` when `structured_generation_backend` is `"auto"` or `"xgrammar"`, otherwise `"regex"`.
+- `"structural_tag"`: uses XGrammar Structural Tag to compose schema-constrained JSONL output.
 - `"regex"`: constructs a custom regex from the dataset schema. More comprehensive but slower.
 - `"json_schema"`: passes a JSON Schema to the backend. Faster, but may miss edge cases.
 

@@ -45,6 +45,9 @@ defaults:
   run:
     shell: bash -x -e -u -o pipefail {0}
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -54,12 +57,10 @@ jobs:
     name: Detect changes
     if: github.event_name != 'workflow_dispatch'
     runs-on: linux-amd64-cpu4
-    permissions:
-      contents: read
     outputs:
       src_test_deps: ${{ steps.changes.outputs.src_test_deps }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
       - name: Detect changes
@@ -86,39 +87,45 @@ jobs:
       }}
     timeout-minutes: 30
     runs-on: linux-amd64-gpu-a100-latest-1
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13"]
     steps:
       - name: checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Setup GPU test environment
         uses: ./.github/actions/setup-gpu-test-env
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Run GPU smoke tests - train only
         timeout-minutes: 10
-        run: make test-smoke-gpu-train-only
+        run: mise run test:smoke:gpu:train-only
 
       - name: Run GPU smoke tests - generation
         timeout-minutes: 10
-        run: make test-smoke-gpu-generation
+        run: mise run test:smoke:gpu:generation
 
       - name: Run GPU smoke tests - resume
         timeout-minutes: 10
-        run: make test-smoke-gpu-resume
+        run: mise run test:smoke:gpu:resume
 
       - name: Run GPU smoke tests - structured generation
         timeout-minutes: 10
-        run: make test-smoke-gpu-structured-generation
+        run: mise run test:smoke:gpu:structured-generation
 
       - name: Run GPU smoke tests - timeseries
         timeout-minutes: 10
-        run: make test-smoke-gpu-timeseries
+        run: mise run test:smoke:gpu:timeseries
 
       - name: Run GPU smoke tests - SmolLM2
         timeout-minutes: 20
-        run: make test-smoke-gpu-smollm2
+        run: mise run test:smoke:gpu:smollm2
 
   gpu-e2e-test:
     name: GPU E2E Tests
@@ -142,7 +149,7 @@ jobs:
     runs-on: linux-amd64-gpu-a100-latest-1
     steps:
       - name: checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -152,7 +159,7 @@ jobs:
 
       - name: Run GPU E2E tests
         timeout-minutes: 45
-        run: make test-e2e
+        run: mise run test:e2e
 
   # ---------------------------------------------------------------------------
   # Single required status check for branch protection.

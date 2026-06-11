@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: docs-deploy
@@ -36,9 +36,11 @@ jobs:
   deploy:
     name: Deploy docs to GitHub Pages
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
 
@@ -50,7 +52,7 @@ jobs:
           bootstrap-tools: "true"
 
       - name: Install docs dependencies
-        run: make bootstrap-nss dev
+        run: mise run bootstrap-nss dev
 
       - name: Configure git for mike
         run: |
@@ -58,6 +60,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Deploy latest docs to GitHub Pages
-        run: |
-          uv run --frozen --group docs mike deploy --push --update-aliases main latest
-          uv run --frozen --group docs mike set-default --push latest
+        run: mise run docs:deploy

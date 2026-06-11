@@ -6,11 +6,15 @@
 # install-mise.sh -- install the pinned mise version, preferring the
 # GPG-verified path when the local toolchain supports it.
 #
-# Inputs (required, passed by the Makefile):
-#   MISE_VERSION  mise version to install, e.g. "v2026.4.11"
-#   MISE_GPG_KEY  fingerprint of the mise release signing key
+# Version source:
+#   `.mise.toml` `min_version` is the single source of truth. Set MISE_VERSION
+#   only to override for testing.
+#
+# Inputs:
+#   MISE_GPG_KEY  fingerprint of the mise release signing key (required)
 #
 # Optional env:
+#   MISE_VERSION  override pinned version (default: read from .mise.toml)
 #   MISE_REQUIRE_SIGNED_INSTALL=1  fail instead of falling back to the
 #                                  unsigned mise.run installer when the
 #                                  signed path can't be completed (missing
@@ -30,9 +34,9 @@
 #     by timeouts and retried a few times on failure.
 #   - If any of the above fails and MISE_REQUIRE_SIGNED_INSTALL != 1, fall
 #     back to https://mise.run (no signature verification; warn loudly).
-#   - In either install path, pass MISE_VERSION through to the installer
+#   - In either install path, pass the pinned version through to the installer
 #     via the documented MISE_VERSION env var so the installed binary
-#     matches the value pinned in the Makefile.
+#     matches `.mise.toml` `min_version`.
 #   - Assert the installed binary reports the pinned version before exit.
 #
 # See: https://mise.jdx.dev/installing-mise.html
@@ -40,11 +44,29 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly MISE_CONFIG="${SCRIPT_DIR}/../.mise.toml"
+
+read_pinned_mise_version() {
+    local raw
+    raw="$(grep -E '^min_version[[:space:]]*=' "$MISE_CONFIG" | head -1 \
+        | sed -E "s/^min_version[[:space:]]*=[[:space:]]*['\"]([^'\"]+)['\"].*/\1/")"
+    if [[ -z "$raw" ]]; then
+        echo "ERROR: min_version not found in ${MISE_CONFIG}" >&2
+        exit 1
+    fi
+    if [[ "$raw" == v* ]]; then
+        printf '%s\n' "$raw"
+    else
+        printf 'v%s\n' "$raw"
+    fi
+}
+
 # ${VAR:?msg} aborts the script with the given message when VAR is unset or
 # empty. Paired with `:` (the no-op builtin) it becomes an assert-and-die
 # guard that surfaces a clearer error than `set -u`'s "unbound variable".
-: "${MISE_VERSION:?MISE_VERSION is required (pass from Makefile)}"
-: "${MISE_GPG_KEY:?MISE_GPG_KEY is required (pass from Makefile)}"
+MISE_VERSION="${MISE_VERSION:-$(read_pinned_mise_version)}"
+: "${MISE_GPG_KEY:?MISE_GPG_KEY is required (pass from bootstrap caller)}"
 
 readonly MISE_SIG_URL="https://mise.jdx.dev/install.sh.sig"
 readonly MISE_RUN_URL="https://mise.run"
@@ -112,6 +134,25 @@ unsigned_install_or_fail() {
 
 expected="${MISE_VERSION#v}"
 
+# version_ge A B -> true when A >= B for dotted numeric versions (e.g.
+# 2026.5.15). Hand-rolled rather than `sort -V`: version sort is GNU
+# coreutils only, and the BSD `sort` shipped with macOS rejects -V, which
+# would make every comparison fail and reject an otherwise-valid mise.
+# Missing components are treated as 0 (1.2 == 1.2.0); 10# forces base-10 so
+# zero-padded fields like "05" aren't read as octal.
+version_ge() {
+    local IFS=.
+    local -a a=($1) b=($2)
+    local i n=${#a[@]}
+    ((${#b[@]} > n)) && n=${#b[@]}
+    for ((i = 0; i < n; i++)); do
+        local x="${a[i]:-0}" y="${b[i]:-0}"
+        ((10#$x > 10#$y)) && return 0
+        ((10#$x < 10#$y)) && return 1
+    done
+    return 0
+}
+
 # mise --version prints "<semver> <target> (<date>)" to stdout plus "available
 # update" nags to stderr, so take only the first field on stdout.
 #
@@ -135,12 +176,14 @@ if command -v mise >/dev/null 2>&1; then
         echo "       or remove ${mise_path} and rerun 'make setup'" >&2
         exit 1
     fi
-    if [[ "$installed" == "$expected" ]]; then
-        echo "mise ${installed} already installed"
+    # `.mise.toml` pins min_version, so any version >= the pinned one is
+    # acceptable; only abort when the installed binary is older.
+    if version_ge "$installed" "$expected"; then
+        echo "mise ${installed} already installed (satisfies min ${expected})"
         exit 0
     fi
-    echo "ERROR: found mise ${installed} on PATH but this repo pins ${MISE_VERSION}" >&2
-    echo "       run 'mise self-update ${expected}' or uninstall the current mise and rerun 'make setup'" >&2
+    echo "ERROR: found mise ${installed} on PATH but this repo requires >= ${MISE_VERSION}" >&2
+    echo "       run 'mise self-update' or uninstall the current mise and rerun 'make setup'" >&2
     exit 1
 fi
 
@@ -187,6 +230,14 @@ if [[ "$have_gpg_toolchain" == true ]]; then
 else
     unsigned_install_or_fail "full gpg toolchain (gpg + gpg-agent + dirmngr) not available"
 fi
+
+# Make the freshly-installed binary discoverable to this script's own
+# verification below: the unsigned (mise.run) and signed installers default to
+# ${HOME}/.local/bin, which may not be on PATH yet. This export only affects
+# this process -- `bash install-mise.sh` runs in a subprocess, so it cannot
+# update the caller's PATH. Callers that need mise after this returns must
+# update their own PATH (container RUN layers already set ENV PATH).
+export PATH="${HOME}/.local/bin:${PATH}"
 
 if ! command -v mise >/dev/null 2>&1; then
     echo "ERROR: mise not found after install" >&2

@@ -1,16 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# Multistage CUDA Dockerfile for Safe-Synthesizer.
+# Multistage GPU Dockerfile for Safe-Synthesizer.
 #
-# Stages:
-#   tools   -- install mise and all dev tools (uv, ruff, etc.)
-#   deps    -- install Python, uv, and all cu129+engine dependencies
-#   runtime -- minimal CLI wrapper (ENTRYPOINT entrypoint.sh -> safe-synthesizer)
-#   dev     -- extends runtime with dev tools, tests, and interactive shell
+# CUDA support is selected through the project extras instead of a CUDA base
+# image. The current distributable variant is cu129; adding cu130 later should
+# only require a matching pyproject extra plus another workflow matrix row.
 #
 # Build:
-#   docker build -f containers/Dockerfile.cuda --target runtime -t nss-gpu:latest .
+#   docker build -f containers/Dockerfile.cuda \
+#     --build-arg CONTAINER_EXTRA=cu129 \
+#     --build-arg CONTAINER_VARIANT=cu129 \
+#     --target runtime -t nss-gpu:latest .
 #   docker build -f containers/Dockerfile.cuda --target dev -t nss-gpu-dev:latest .
 #
 # Run with your data:
@@ -21,175 +22,141 @@
 #     nss-gpu:latest \
 #     run --data-source /workspace/data/input.csv
 #
-# Key flags:
-#   --gpus all          expose NVIDIA GPUs (requires nvidia-container-toolkit)
-#   --shm-size=1g       increase /dev/shm for PyTorch training (default 64 MB is too small)
-#   -v HOST:CONTAINER   bind-mount data and HF cache (use absolute paths)
-#   -e HF_HOME=...      persist model downloads across container runs
-#   -e HF_TOKEN=...     HF token for gated models (Llama, Mistral, etc.)
-#   -e NSS_INFERENCE_KEY=...  inference API key for PII column classification (optional)
-#
-# Interactive shell:
-#   docker run -it --gpus all --shm-size=1g \
-#     -v $(pwd)/my_data:/workspace/data \
-#     -v ~/.cache/huggingface:/workspace/.hf_cache \
-#     -e HF_HOME=/workspace/.hf_cache \
-#     --entrypoint /bin/bash nss-gpu:latest
-#
-# Cache mounts (DOCKER_BUILDKIT=1, default in Docker 23.0+) avoid
-# re-downloading ~10 GB of PyTorch/CUDA wheels on rebuild.
-#
 # uv Docker best practices: https://docs.astral.sh/uv/guides/integration/docker/
 
-# ---------------------------------------------------------------------------
-# Multi-architecture support
-# ---------------------------------------------------------------------------
-# This Dockerfile supports linux/amd64 and linux/arm64 (Blackwell/Grace).
-# BuildKit sets TARGETARCH automatically when building with:
-#   docker buildx build --platform linux/arm64 ...
-#
-# The nvidia/cuda base images, ubuntu base images, and mise binaries are
-# already multi-platform, so no conditional logic is needed for the core
-# build. CUDA_ARCH_FLAGS is provided as forward-compatibility for when
-# CUDA_IMAGE_TYPE=devel is used
-# and kernels must be compiled for specific GPU architectures.
-ARG TARGETARCH
+ARG PYTHON_VERSION=3.13
+ARG PYTHON_IMAGE=python:${PYTHON_VERSION}-slim-bookworm
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.30
 
 # ---------------------------------------------------------------------------
-# Build arguments
+# Stage 1: uv -- copy the pinned uv binaries from the official image
 # ---------------------------------------------------------------------------
-ARG CUDA_VERSION=12.9.1
-ARG UBUNTU_VERSION=22.04
-# Use "runtime" when all deps ship pre-built wheels (current state).
-# Switch to "devel" if a future dependency requires CUDA compilation.
-ARG CUDA_IMAGE_TYPE=runtime
-ARG PYTHON_VERSION=3.11.13
-
-# CUDA compute capabilities to compile for (used with CUDA_IMAGE_TYPE=devel).
-# Recommended values per architecture:
-#   amd64 -> "80;86;90;90a"   (A100, A10/3090, H100)
-#   arm64 -> "90;90a;120;120a" (H100 Grace, Blackwell)
-# Not consumed by the current stages -- present for documentation and
-# forward-compatibility with devel builds that invoke nvcc.
-# Override via: --build-arg CUDA_ARCH_FLAGS="90;90a;120;120a"
-ARG CUDA_ARCH_FLAGS="80;86;90;90a"
+FROM ${UV_IMAGE} AS uv
 
 # ---------------------------------------------------------------------------
-# Stage 1: tools -- install mise and all dev tools
+# Stage 2: runtime -- slim image wrapping the safe-synthesizer CLI
 # ---------------------------------------------------------------------------
-# Lightweight base (no CUDA needed for tool binaries). Mise is the single
-# source of truth for tool versions via .mise.toml.
-# See: https://mise.jdx.dev/mise-cookbook/docker.html
-FROM ubuntu:${UBUNTU_VERSION} AS tools
+FROM ${PYTHON_IMAGE} AS runtime
 
-ARG UBUNTU_VERSION
+ARG CONTAINER_EXTRA=cu129
+ARG CONTAINER_VARIANT=cu129
+ARG PACKAGE_VERSION=
+ARG PYTHON_VERSION=3.13
+ARG OMIT_FLASHINFER_PACKAGES="--no-install-package flashinfer-cubin --no-install-package flashinfer-jit-cache"
+ARG OMIT_TORCH_PACKAGES="--no-install-package torch --no-install-package torch-c-dlpack-ext --no-install-package torchaudio --no-install-package torchao --no-install-package torchvision --no-install-package triton"
+ARG OMIT_VLLM_PACKAGES="--no-install-package vllm"
+
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        git curl build-essential make ca-certificates gnupg gpg-agent dirmngr
-
-ENV MISE_DATA_DIR="/mise" \
-    MISE_CONFIG_DIR="/mise" \
-    MISE_CACHE_DIR="/mise/cache" \
-    MISE_INSTALL_PATH="/usr/local/bin/mise" \
-    PATH="/mise/shims:${PATH}"
-
-WORKDIR /build
-COPY .mise.toml mise.lock Makefile ./
-COPY tools/install-mise.sh ./tools/install-mise.sh
-RUN make setup
-
-# Stage real binaries to /usr/local/bin for stages that need the tool
-# without the full mise runtime (shims require mise to resolve).
-RUN cp "$(mise which uv)" /usr/local/bin/uv && \
-    cp "$(mise which uvx)" /usr/local/bin/uvx
-
-# ---------------------------------------------------------------------------
-# Stage 2: deps -- build dependencies in a CUDA environment
-# ---------------------------------------------------------------------------
-FROM nvidia/cuda:${CUDA_VERSION}-${CUDA_IMAGE_TYPE}-ubuntu${UBUNTU_VERSION} AS deps
-
-ARG PYTHON_VERSION
-
-COPY --from=tools /usr/local/bin/uv /usr/local/bin/uv
-COPY --from=tools /usr/local/bin/uvx /usr/local/bin/uvx
-
-# Cache apt downloads across rebuilds instead of deleting them each time.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        git curl build-essential ca-certificates
+        bash \
+        ca-certificates \
+        libgomp1 \
+        tini
 
 # uv settings for reproducible container builds.
-# See: https://docs.astral.sh/uv/guides/integration/docker/#optimizations
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
-    UV_PYTHON_INSTALL_DIR=/opt/python \
-    UV_PYTHON_CACHE_DIR=/root/.cache/uv/python \
+    PATH="/opt/venv/bin:${PATH}" \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_INSTALLER_METADATA=1 \
-    UV_FROZEN=true
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_FROZEN=true \
+    UV_DYNAMIC_VERSIONING_BYPASS=${PACKAGE_VERSION}
 
 WORKDIR /build
 
-# Install Python to a stable path (/opt/python) for cross-stage portability.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv python install ${PYTHON_VERSION}
-
-# -- Intermediate layer: install dependencies without the project itself.
-# This layer is invalidated only when pyproject.toml or uv.lock changes,
-# not when source code changes.
+# Install base dependencies first, then layer larger GPU dependency families.
+# Each sync solves the final extra set but temporarily omits selected packages;
+# later syncs install those omitted packages without removing prior layers.
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project --extra cu129 --extra engine --no-group dev
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --no-group dev
 
-# -- Project layer: install the project (non-editable so the venv is
-# self-contained and source code is not needed in the runtime image).
-COPY README.md ./
+# Engine dependencies are variant-neutral and can be reused by future CUDA
+# extras.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --no-group dev
+
+# Install the CUDA dependency closure before the largest binary package
+# families. This captures NVIDIA runtime libraries separately from PyTorch,
+# FlashInfer, and vLLM.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        ${OMIT_FLASHINFER_PACKAGES} \
+        ${OMIT_TORCH_PACKAGES} \
+        ${OMIT_VLLM_PACKAGES} \
+        --no-group dev
+
+# Add FlashInfer binary/cache wheels in their own layer.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        ${OMIT_TORCH_PACKAGES} \
+        ${OMIT_VLLM_PACKAGES} \
+        --no-group dev
+
+# Add PyTorch, TorchVision, TorchAudio, TorchAO, and Triton separately from
+# vLLM.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        ${OMIT_VLLM_PACKAGES} \
+        --no-group dev
+
+# Install the remaining runtime dependencies, currently dominated by vLLM,
+# before source files are copied.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python /usr/local/bin/python \
+        --no-install-project \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        --no-group dev
+
+# Install the project non-editably so runtime does not need source code.
+COPY LICENSE THIRD_PARTY.md README.md ./
 COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-editable --extra cu129 --extra engine --no-group dev
-
-# ---------------------------------------------------------------------------
-# Stage 3: runtime -- minimal image wrapping the safe-synthesizer CLI
-# ---------------------------------------------------------------------------
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} AS runtime
-
-ARG CUDA_VERSION
-ARG UBUNTU_VERSION
-
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        libgomp1 ca-certificates tini \
-        gcc libc6-dev  # torch.compile / Triton JIT needs a C compiler at runtime
-
-# Python toolchain and venv from the deps stage.
-# UV_PYTHON_INSTALL_DIR=/opt/python keeps the path stable across stages.
-COPY --from=deps /opt/python /opt/python
-COPY --from=deps /opt/venv /opt/venv
+    uv sync --python /usr/local/bin/python \
+        --no-editable \
+        --extra engine \
+        --extra "${CONTAINER_EXTRA}" \
+        --no-group dev
 
 ENV PATH="/opt/venv/bin:${PATH}" \
+    NSS_CONTAINER_EXTRA=${CONTAINER_EXTRA} \
+    NSS_CONTAINER_VARIANT=${CONTAINER_VARIANT} \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# OCI image metadata.
 LABEL org.opencontainers.image.title="Safe Synthesizer" \
-      org.opencontainers.image.description="NVIDIA NeMo Safe Synthesizer -- GPU runtime for synthetic data generation, training, and evaluation." \
+      org.opencontainers.image.description="NVIDIA NeMo Safe Synthesizer GPU runtime (${CONTAINER_VARIANT}); CUDA libraries are supplied by the ${CONTAINER_EXTRA} Python extra." \
       org.opencontainers.image.vendor="NVIDIA" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.source="https://github.com/NVIDIA-NeMo/Safe-Synthesizer" \
       org.opencontainers.image.documentation="https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/docker/" \
-      org.opencontainers.image.base.name="nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}" \
+      org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim-bookworm" \
+      com.nvidia.nemo.safe-synthesizer.extra="${CONTAINER_EXTRA}" \
+      com.nvidia.nemo.safe-synthesizer.variant="${CONTAINER_VARIANT}" \
       org.opencontainers.image.usage="docker run --gpus all --shm-size=1g -v /path/to/data:/workspace/data -v ~/.cache/huggingface:/workspace/.hf_cache -e HF_HOME=/workspace/.hf_cache nss-gpu:latest run --config /workspace/data/config.yaml --data-source /workspace/data/input.csv"
 
-# Non-root user.
 RUN groupadd -r -g 1000 appuser && \
     useradd -r -u 1000 -g appuser -m appuser
 
-# Wrapper entrypoint detects common misconfigurations (missing mounts,
-# unset HF_HOME, no GPU) and prints hints before delegating to safe-synthesizer.
 COPY --chmod=755 containers/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER appuser
@@ -199,31 +166,34 @@ ENTRYPOINT ["tini", "--", "entrypoint.sh"]
 CMD ["--help"]
 
 # ---------------------------------------------------------------------------
-# Stage 4: dev -- interactive development and testing (also CI test target)
+# Stage 3: dev -- interactive development and testing
 # ---------------------------------------------------------------------------
 FROM runtime AS dev
 
+ARG CONTAINER_EXTRA=cu129
+ARG PACKAGE_VERSION=
+
 USER root
+
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        git curl build-essential make gpg dirmngr gpg-agent
+        bash \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        make
 
-# Mise toolchain from the tools stage -- no re-download needed.
-COPY --from=tools /usr/local/bin/mise /usr/local/bin/mise
-COPY --from=tools /mise /mise
-
-ENV MISE_DATA_DIR="/mise" \
-    MISE_CONFIG_DIR="/mise" \
-    MISE_CACHE_DIR="/mise/cache" \
-    MISE_YES=1 \
-    UV_PROJECT_ENVIRONMENT=/opt/venv \
-    UV_PYTHON_INSTALL_DIR=/opt/python \
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
+    UV_NO_INSTALLER_METADATA=1 \
+    UV_NO_MANAGED_PYTHON=1 \
     UV_FROZEN=true \
-    PATH="/mise/shims:${PATH}"
+    UV_DYNAMIC_VERSIONING_BYPASS=${PACKAGE_VERSION}
 
 WORKDIR /build
 
@@ -231,9 +201,11 @@ WORKDIR /build
 # Bind-mount at /workspace overrides this at runtime for live editing.
 COPY . .
 
-# Install dev dependencies into the existing venv.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra cu129 --extra engine --group dev
+    uv sync --python /usr/local/bin/python \
+        --extra "${CONTAINER_EXTRA}" \
+        --extra engine \
+        --group dev
 
 RUN git config --global --add safe.directory /workspace
 

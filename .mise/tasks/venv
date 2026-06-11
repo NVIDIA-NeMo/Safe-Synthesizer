@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Create or update the project Python virtualenv at UV_PROJECT_ENVIRONMENT or .venv. Depends on Python version verification."
+#MISE hide=true
+#MISE depends=["verify-python-version"]
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+python_version="$(resolve_python_version)"
+venv_path="$(resolve_venv_path)"
+uv venv --seed --allow-existing --python "${python_version}" "${venv_path}"

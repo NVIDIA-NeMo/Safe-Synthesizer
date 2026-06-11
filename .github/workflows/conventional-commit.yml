@@ -29,6 +29,10 @@ defaults:
 permissions:
   pull-requests: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   conventional-commit:
-    uses: NVIDIA-NeMo/FW-CI-templates/.github/workflows/_semantic_pull_request.yml@63ee9e3b9fc4ca02af1bd75d3126e526b2a77a24 # v0.89.0
+    uses: NVIDIA-NeMo/FW-CI-templates/.github/workflows/_semantic_pull_request.yml@d48ee21a4986f7281abf746b7d500880c0e91f41 # v1.5.1

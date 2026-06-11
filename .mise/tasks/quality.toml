@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[format]
+description = "Format all tracked source files with ruff and SPDX copyright fixer. Modifies files in place; run before committing."
+run = [
+  "bash tools/codestyle/format.sh",
+  "uv run --script tools/codestyle/copyright_fixer.py .",
+]
+
+["format-check"]
+description = "Check ruff formatting, lint rules, and SPDX copyright headers without modifying files. Safe for CI and local pre-review checks."
+run = [
+  "bash tools/codestyle/format.sh --check",
+  "bash tools/codestyle/ruff_check.sh",
+  "uv run --script tools/codestyle/copyright_fixer.py --check .",
+]
+
+[typecheck]
+description = "Run ty type checks through the repo wrapper. Requires Python dependencies installed; does not modify files."
+run = "bash tools/codestyle/typecheck.sh"
+
+["lock-check"]
+description = "Verify uv.lock matches pyproject.toml. Runs uv lock, then fails if uv.lock has a diff."
+run = [
+  "uv lock",
+  "git diff --exit-code uv.lock",
+]
+
+[check]
+description = "Run local read-only quality checks: format-check and typecheck. Dependencies are independent and may run in parallel."
+depends = ["format-check", "typecheck"]
+run = "echo 'quality checks passed'"
+
+[validate]
+description = "Run the standard pre-PR validation suite: check, lock-check, then CI unit tests."
+alias = "ci"
+run = [
+  { task = "check" },
+  { task = "lock-check" },
+  { task = "test:ci" },
+  "echo 'validation passed'",
+]

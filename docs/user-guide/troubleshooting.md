@@ -14,7 +14,7 @@ configuration, and NER parallelism, see [Environment Variables](environment.md).
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
-| Install fails on Python 3.14 | ray has no `cp314` wheels | [Use Python 3.11–3.13](#python-314-is-not-supported) |
+| Install fails on Python 3.14 | vLLM and dependency wheels are not ready | [Use Python 3.11–3.13](#python-314-is-not-supported) |
 | "kernels package not installed" | Optional Kernels Hub backend selected without `kernels` installed | Set `training.attn_implementation: sdpa` |
 | `ConnectionError` during startup | No internet / model not cached | [Pre-cache models](environment.md#pre-caching-models) |
 | OOM in training | VRAM exhausted | [Reduce batch size, quantize](#out-of-memory-during-training) |
@@ -101,8 +101,8 @@ path. Common causes:
 
 - Local cached tokenizer is missing `tokenizer.json` — re-download
   with `huggingface-cli download <model>`
-- Model ships only a SentencePiece vocab (``tokenizer.model``) with no Rust
-  ``tokenizer.json`` — common on older checkpoints; fast conversion may land upstream.
+- Model ships only a SentencePiece vocab (`tokenizer.model`) with no Rust
+  `tokenizer.json` — common on older checkpoints; fast conversion may land upstream.
 - `trust_remote_code=True` model with a custom slow tokenizer class.
 
 The warning is informational. To suppress it, switch to a model with a
@@ -112,10 +112,10 @@ fast tokenizer (most popular models do; check
 ### Python 3.14 Is Not Supported
 
 Safe Synthesizer requires **Python 3.11, 3.12, or 3.13**. Python 3.14+ is not
-supported because [ray](https://github.com/ray-project/ray) (a transitive
-dependency of vLLM) does not publish `cp314` wheels. Attempting to install on
-Python 3.14 fails with an unresolvable dependency error during `pip install` or
-`uv pip install`.
+supported because vLLM currently declares `<3.14` support while upstream
+resolves Python 3.14 wheel compatibility across its dependency stack. Attempting
+to install on Python 3.14 fails with an unresolvable dependency error during
+`pip install` or `uv pip install`.
 
 To fix, create a virtual environment with a supported interpreter:
 
@@ -513,6 +513,7 @@ check of its own.
 | `torch_missing` | error | `gpu.cuda` | PyTorch not installed; cannot verify GPU availability |
 | `no_gpu` | error | `gpu.cuda` | No CUDA GPU detected (required for training or generation) |
 | `low_vram` | warning | `gpu.vram` | Free GPU VRAM may be insufficient |
+| `vram_exceeds_capacity` | error | `gpu.vram` | Estimated training VRAM is far above available GPU memory |
 | `inference_key_missing` | warning | `env.inference` | `NSS_INFERENCE_KEY` not set; PII classification degraded |
 | `inference_model_blank` | warning | `env.inference` | `NSS_INFERENCE_MODEL` set but empty; the blank value is ignored and the default model id is used |
 | `inference_endpoint_invalid` | error | `env.inference` | `NSS_INFERENCE_ENDPOINT` set but not a valid http(s) URL; classification requests will fail |

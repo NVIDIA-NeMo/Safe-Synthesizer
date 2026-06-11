@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from ..config import (
     SafeSynthesizerParameters,
 )
 from ..config.autoconfig import AutoConfigResolver
+from ..configurator.parameters import Parameters
 from ..errors import ParameterError
 from ..evaluation.evaluator import Evaluator
 from ..generation.timeseries_backend import TimeseriesBackend
@@ -49,6 +51,37 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from ..generation.backend import GeneratorBackend
     from ..training.backend import TrainingBackend
+
+
+def _direct_parameter_values(params: Parameters) -> Iterator[tuple[str, object]]:
+    for item in params._iter_parameters(recursive=False):
+        yield next(iter(item.items()))
+
+
+def _default_drift_paths(saved_model: Parameters, default_model: Parameters, prefix: str = "") -> list[str]:
+    paths: list[str] = []
+    default_values = dict(_direct_parameter_values(default_model))
+    for field_name, saved_value in _direct_parameter_values(saved_model):
+        default_value = default_values[field_name]
+        field_path = f"{prefix}.{field_name}" if prefix else field_name
+
+        saved_attr = saved_model.__dict__[field_name]
+        default_attr = default_model.__dict__[field_name]
+        if isinstance(saved_attr, Parameters) and isinstance(default_attr, Parameters):
+            paths.extend(_default_drift_paths(saved_attr, default_attr, field_path))
+        elif saved_value != default_value:
+            paths.append(field_path)
+    return paths
+
+
+def _warn_for_saved_default_drift(saved_config: SafeSynthesizerParameters) -> None:
+    """Warn when saved materialized values differ from current defaults."""
+    current_defaults = SafeSynthesizerParameters()
+    for path in _default_drift_paths(saved_config, current_defaults):
+        logger.user.warning(
+            f"Saved run config value at {path} is non-default; preserving saved value.",
+            extra={"config_path": path},
+        )
 
 
 def _build_telemetry_event(ss: SafeSynthesizer, status: TaskStatusEnum) -> NSSTrainingAndGenerationEvent:
@@ -237,12 +270,15 @@ class SafeSynthesizer(ConfigBuilder):
         initialize_observability()
 
     @traced("SafeSynthesizer.load_from_save_path", category=LogCategory.RUNTIME)
-    def load_from_save_path(self) -> SafeSynthesizer:
+    def load_from_save_path(self, runtime_config: SafeSynthesizerParameters | None = None) -> SafeSynthesizer:
         """Load the Safe Synthesizer configuration from the save path.
 
         Loads the configuration from the source run directory's config file.
         When resuming from a trained model for generation, the source paths
         point to the parent workdir that contains the trained adapter.
+        Optional ``runtime_config`` values for generation and evaluation are
+        applied after loading the saved training-run config so resume-time CLI
+        overrides work without mutating the persisted train config.
 
         Always prefers cached train/test splits from the training run to ensure
         evaluation metrics are consistent and privacy guarantees are maintained.
@@ -256,7 +292,14 @@ class SafeSynthesizer(ConfigBuilder):
         # Use source paths which point to parent workdir when resuming for generation
         config_file = self._workdir.source_config
 
-        self._nss_config = SafeSynthesizerParameters.from_json(config_file)
+        saved_config = SafeSynthesizerParameters.from_json(config_file)
+        _warn_for_saved_default_drift(saved_config)
+        if runtime_config is not None:
+            saved_config = saved_config.with_runtime_overrides(runtime_config)
+        self._nss_config = saved_config
+        self._generation_config = self._nss_config.generation
+        self._evaluation_config = self._nss_config.evaluation
+        self._emit_telemetry_config = self._nss_config.emit_telemetry
 
         # Load model metadata from saved file (contains initial_prefill for timeseries)
         # rather than creating new metadata from config

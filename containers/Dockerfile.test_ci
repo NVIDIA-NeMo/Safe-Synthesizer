@@ -1,4 +1,6 @@
-FROM python:3.11-slim AS setup
+FROM python:3.13.13-slim AS setup
+
+ARG PYTHON_VERSION=3.13.13
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -10,15 +12,17 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /workspace
 
-# Install mise and all dev tools including uv (cached until .mise.toml or Makefile change)
+# Install mise and all dev tools including uv (cached until .mise.toml or task files change)
 COPY .mise.toml .
+COPY .mise/tasks/ .mise/tasks/
 COPY mise.lock .
-COPY Makefile .
 RUN mkdir -p /workspace/tools
 COPY tools/install-mise.sh ./tools/install-mise.sh
-RUN make setup
-
 ENV PATH="/root/.local/share/mise/shims:/root/.local/bin:${PATH}"
+RUN MISE_GPG_KEY=24853EC9F655CE80B48E6C3A8B81C9D17413A06D \
+    bash tools/install-mise.sh && \
+    MISE_YES=1 mise trust && \
+    PYTHON_VERSION="${PYTHON_VERSION}" MISE_YES=1 mise run setup
 
 FROM setup AS install-deps
 # Install Python dependencies (cached until pyproject.toml, uv.lock, or src/ or tests/ change)
@@ -29,6 +33,6 @@ COPY README.md .
 COPY uv.lock .
 COPY src/ src/
 COPY tests/ tests/
-RUN make bootstrap-nss cpu
+RUN mise run bootstrap-nss cpu
 
 RUN git config --global --add safe.directory /workspace

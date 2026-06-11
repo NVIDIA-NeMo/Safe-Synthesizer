@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#MISE description="Verify the requested Python version is available through uv, installing it if missing. Hidden helper for venv/setup tasks."
+#MISE hide=true
+
+set -euo pipefail
+source "${MISE_CONFIG_ROOT}/.mise/tasks/_lib.sh"
+
+python_version="$(resolve_python_version)"
+uv python find "${python_version}" || uv python install "${python_version}"

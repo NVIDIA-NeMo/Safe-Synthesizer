@@ -186,6 +186,20 @@ def test_click_type_literal_non_auto_int_returns_string():
     assert _click_type(Literal["disabled"] | int) == click.STRING
 
 
+def test_click_type_int_literal_returns_int():
+    """Literal[4, 8] must parse CLI values as ints before Pydantic validation."""
+    from typing import Literal
+
+    assert _click_type(Literal[4, 8]) == click.INT
+
+
+def test_click_type_string_literal_plus_int_literal_returns_string():
+    """String literals still need STRING so Pydantic can validate sentinel values."""
+    from typing import Literal
+
+    assert _click_type(Literal["disabled", 4]) == click.STRING
+
+
 def test_click_type_literal_auto_plus_other_int_returns_string():
     """Literal['auto', 'manual'] | int must NOT use AutoParamType (multiple sentinels)."""
     from typing import Literal
@@ -436,6 +450,20 @@ def test_leaf_override_end_to_end_via_click_runner():
     result = CliRunner().invoke(cmd, ["--training__batch_size", "4"])
     assert result.exit_code == 0, result.output
     assert captured["training"]["batch_size"] == 4
+
+
+def test_literal_int_override_end_to_end_via_click_runner():
+    """A numeric Literal option must reach Pydantic as an int, not a string."""
+    captured: dict = {}
+
+    @pydantic_options(SafeSynthesizerParameters, field_separator="__")
+    @click.command()
+    def cmd(**kwargs):
+        captured.update(parse_overrides(kwargs))
+
+    result = CliRunner().invoke(cmd, ["--training__quantization_bits", "4"])
+    assert result.exit_code == 0, result.output
+    assert captured["training"]["quantization_bits"] == 4
 
 
 def test_deep_nested_override_end_to_end_via_click_runner():

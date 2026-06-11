@@ -14,7 +14,7 @@ does at each stage.
 
 ### Prerequisites
 
-- Python 3.11–3.13 (dev tooling currently pins 3.11 via `.python-version` in the repo root; Python 3.14+ is **not** supported — see [Troubleshooting](troubleshooting.md#python-314-is-not-supported))
+- Python 3.11–3.13 (dev tooling pins 3.13 via `.python-version` in the repo root; Python 3.14+ is not supported -- see [Troubleshooting](troubleshooting.md#python-314-is-not-supported))
 - CUDA runtime 12.9+
 - NVIDIA GPU (A100 or larger) for training and generation
 
@@ -99,7 +99,7 @@ indexes outside PyPI. You must pass the extra index URLs shown below.
 === "Docker (Linux with NVIDIA GPU)"
 
     ```bash
-    make container-build-gpu
+    mise run container:build:gpu
 
     docker run --gpus all --shm-size=1g \
       -v $(pwd):/workspace \

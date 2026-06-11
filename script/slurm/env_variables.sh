@@ -29,6 +29,21 @@ export UV_CACHE_DIR="${LUSTRE_DIR}/.cache/uv"
 export UV_PYTHON_INSTALL_DIR="${LUSTRE_DIR}/.local/share/uv/python"
 export UV_PYTHON_BIN_DIR="${LUSTRE_DIR}/.local/bin"
 export UV_TOOL_DIR="${LUSTRE_DIR}/.local/share/uv/tools"
+# Cap concurrent wheel downloads. The repo venv pre-build pulls large CUDA/torch/
+# vLLM/flashinfer wheels, and uv's default high concurrency might spike memory on
+# the login node. Override by exporting UV_CONCURRENT_DOWNLOADS first.
+export UV_CONCURRENT_DOWNLOADS="${UV_CONCURRENT_DOWNLOADS:-20}"
+# Python version for Slurm virtualenvs. Defaults to the repo's pinned version
+# (.python-version) so it tracks dependency/Python bumps automatically; override
+# by exporting NSS_PYTHON_VERSION before sourcing this file.
+if [[ -z "${NSS_PYTHON_VERSION:-}" ]]; then
+    if [[ -f "${NSS_DIR}/.python-version" ]]; then
+        NSS_PYTHON_VERSION="$(tr -d '[:space:]' < "${NSS_DIR}/.python-version")"
+    else
+        NSS_PYTHON_VERSION="3.13"
+    fi
+fi
+export NSS_PYTHON_VERSION
 export HF_HOME="${LUSTRE_DIR}/.cache/huggingface"
 export WANDB_MODE="online" # "online", "offline" or "disabled"
 export NEMO_DEPLOYMENT_TYPE="slurm-nvidia-internal" # sets the values for telemetry

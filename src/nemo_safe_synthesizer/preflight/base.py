@@ -72,6 +72,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import ClassVar, Generic, TypeVar
 
+from typing_extensions import override
+
 from .types import ConfigView, DataFrameView, MetadataView, PreflightContext, PreflightIssue, PreflightStage
 
 C = TypeVar("C")
@@ -268,6 +270,7 @@ class ConfigCheck(PreflightCheck[ConfigView]):
 
     stage = PreflightStage.CONFIG
 
+    @override
     def _narrow(self, ctx: PreflightContext) -> ConfigView:
         return ConfigView(config=ctx.config)
 
@@ -282,6 +285,7 @@ class DataFrameCheck(PreflightCheck[DataFrameView]):
 
     stage = PreflightStage.DATAFRAME
 
+    @override
     def _narrow(self, ctx: PreflightContext) -> DataFrameView:
         return DataFrameView(config=ctx.config, data=ctx.data)
 
@@ -296,6 +300,7 @@ class MetadataCheck(PreflightCheck[MetadataView]):
 
     stage = PreflightStage.METADATA
 
+    @override
     def _narrow(self, ctx: PreflightContext) -> MetadataView:
         return MetadataView(config=ctx.config, data=ctx.data, metadata=ctx.metadata)
 
@@ -314,5 +319,6 @@ class AdvisoryCheck(PreflightCheck[DataFrameView]):
 
     stage = PreflightStage.ADVISORY
 
+    @override
     def _narrow(self, ctx: PreflightContext) -> DataFrameView:
         return DataFrameView(config=ctx.config, data=ctx.data)

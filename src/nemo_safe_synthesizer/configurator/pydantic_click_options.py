@@ -26,6 +26,7 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 import click
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
+from typing_extensions import TypeIs
 
 from ..config.types import AUTO_STR
 
@@ -108,7 +109,7 @@ ClickParam = LeafParam | FlagParam
 # ---------------------------------------------------------------------------
 
 
-def _is_basemodel(t: Any) -> bool:
+def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
 
 
@@ -197,6 +198,17 @@ def _is_auto_only_literal_union(args: set) -> bool:
     return string_values == {AUTO_STR}
 
 
+def _literal_value_types(args: set) -> set:
+    """Replace non-string ``Literal`` annotations with their value types."""
+    normalized: set = set()
+    for arg in args:
+        if get_origin(arg) is Literal:
+            normalized.update(type(value) for value in get_args(arg))
+        else:
+            normalized.add(arg)
+    return normalized
+
+
 def _click_type(annotation: Any) -> click.ParamType:
     """Map a Pydantic field annotation to a Click type.
 
@@ -228,6 +240,7 @@ def _click_type(annotation: Any) -> click.ParamType:
                 if py_type in args:
                     return AutoParamType(click_type)
         return click.STRING
+    args = _literal_value_types(args)
     for py_type, click_type in _CLICK_TYPE_PRIORITY:
         if py_type in args:
             return click_type

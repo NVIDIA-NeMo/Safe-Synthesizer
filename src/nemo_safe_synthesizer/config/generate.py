@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     BaseModel,
     Field,
+    model_validator,
 )
 
 from ..configurator.parameters import (
@@ -17,8 +18,57 @@ from ..configurator.validators import (
     ValueValidator,
     range_validator,
 )
+from ..errors import ParameterError
 
-__all__ = ["GenerateParameters", "ValidationParameters"]
+StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "structural_tag"]
+ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
+StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
+
+STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
+
+__all__ = [
+    "GenerateParameters",
+    "ResolvedStructuredGenerationSchemaMethod",
+    "StructuredGenerationBackend",
+    "StructuredGenerationSchemaMethod",
+    "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
+    "ValidationParameters",
+    "resolve_structured_generation_schema_method",
+    "structural_tag_backend_error_message",
+]
+
+
+def resolve_structured_generation_schema_method(
+    schema_method: StructuredGenerationSchemaMethod,
+    backend: StructuredGenerationBackend | str,
+) -> ResolvedStructuredGenerationSchemaMethod:
+    """Resolve ``auto`` schema method from the configured structured-output backend.
+
+    ``auto`` picks ``structural_tag`` on xgrammar-capable backends and ``regex``
+    elsewhere, preserving legacy behavior for outlines/guidance configs that omit
+    an explicit schema method.
+    """
+    if schema_method != "auto":
+        return schema_method
+    if backend in STRUCTURAL_TAG_COMPATIBLE_BACKENDS:
+        return "structural_tag"
+    return "regex"
+
+
+def structural_tag_backend_error_message(backend: str) -> str | None:
+    """Return an error message when *backend* cannot serve ``structural_tag``.
+
+    vLLM only supports XGrammar Structural Tag constraints when the guided
+    decoding backend is ``xgrammar`` or ``auto`` (which selects xgrammar for
+    this schema method).
+    """
+    if backend in STRUCTURAL_TAG_COMPATIBLE_BACKENDS:
+        return None
+    return (
+        "Invalid structured generation configuration: "
+        "`structured_generation_schema_method='structural_tag'` requires "
+        f"`structured_generation_backend` to be 'xgrammar' or 'auto', got {backend!r}."
+    )
 
 
 class ValidationParameters(Parameters, BaseModel):
@@ -147,16 +197,18 @@ class GenerateParameters(Parameters, BaseModel):
     ] = "auto"
 
     structured_generation_schema_method: Annotated[
-        Literal["regex", "json_schema"],
+        StructuredGenerationSchemaMethod,
         Field(
             title="structured_generation_schema_method",
             description=(
                 "The method used to generate the schema from your dataset and pass it to the generation backend. "
+                "'auto' picks 'structural_tag' on xgrammar-capable backends and 'regex' otherwise. "
                 "'regex' uses a custom regex construction method that tends to be more comprehensive "
-                "than 'json_schema' at the cost of speed."
+                "than 'json_schema' at the cost of speed. 'structural_tag' uses XGrammar Structural Tag "
+                "to compose schema-constrained JSONL output."
             ),
         ),
-    ] = "regex"
+    ] = "auto"
 
     structured_generation_use_single_sequence: Annotated[
         bool,
@@ -191,3 +243,13 @@ class GenerateParameters(Parameters, BaseModel):
             ),
         ),
     ] = "auto"
+
+    @model_validator(mode="after")
+    def _validate_structural_tag_backend(self) -> Self:
+        if not self.use_structured_generation:
+            return self
+        if self.structured_generation_schema_method != "structural_tag":
+            return self
+        if message := structural_tag_backend_error_message(self.structured_generation_backend):
+            raise ParameterError(message)
+        return self

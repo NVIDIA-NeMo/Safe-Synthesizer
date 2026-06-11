@@ -366,3 +366,74 @@ def build_json_based_regex(
         regex = rf"({sequence_regex}\n)+"
 
     return regex
+
+
+def _const_string_format(value: str) -> dict[str, str]:
+    """Return a Structural Tag constant-string format."""
+    return {"type": "const_string", "value": value}
+
+
+def _sequence_format(elements: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return a Structural Tag sequence format."""
+    return {"type": "sequence", "elements": elements}
+
+
+def _plus_format(content: dict[str, Any]) -> dict[str, Any]:
+    """Return a Structural Tag one-or-more repetition format."""
+    return {"type": "plus", "content": content}
+
+
+def build_json_structural_tag(
+    schema: dict[str, Any],
+    config: SafeSynthesizerParameters,
+    bos_token: str,
+    eos_token: str,
+) -> str:
+    """Build an XGrammar Structural Tag for schema-constrained JSONL records.
+
+    The raw vLLM ``json`` constraint describes a single JSON value. Structural
+    Tag lets NSS describe the larger generation shape directly: one or more
+    schema-constrained JSON records separated by newlines, optionally wrapped
+    in BOS/EOS group delimiters.
+
+    Args:
+        schema: JSON schema dictionary describing one record.
+        config: Pipeline configuration (used for grouping and
+            structured-generation settings).
+        bos_token: Beginning-of-sequence token (used when grouping).
+        eos_token: End-of-sequence token (used when grouping).
+
+    Returns:
+        JSON string suitable for ``StructuredOutputsParams(structural_tag=...)``.
+    """
+    record_format: dict[str, Any] = {
+        "type": "json_schema",
+        "json_schema": schema,
+    }
+    record_line_format = _sequence_format([record_format, _const_string_format("\n")])
+
+    if config.data.group_training_examples_by is not None:
+        sequence_format = _sequence_format(
+            [
+                _const_string_format(bos_token),
+                _plus_format(record_line_format),
+                _const_string_format(eos_token),
+            ]
+        )
+    else:
+        sequence_format = record_format
+
+    if config.generation.structured_generation_use_single_sequence and config.data.max_sequences_per_example == 1:
+        output_format = sequence_format
+    elif config.data.group_training_examples_by is not None:
+        output_format = _plus_format(_sequence_format([sequence_format, _const_string_format("\n")]))
+    else:
+        output_format = _plus_format(record_line_format)
+
+    return json.dumps(
+        {
+            "type": "structural_tag",
+            "format": output_format,
+        },
+        ensure_ascii=True,
+    )

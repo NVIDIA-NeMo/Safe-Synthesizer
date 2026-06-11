@@ -9,7 +9,7 @@ Read detailed usage below, or jump to the documentation with [Getting Started](h
 
 ### Prerequisites
 
-- Python 3.11–3.13 (we pin a specific 3.11.x in `.python-version` for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because ray, a transitive dependency of vLLM, does not yet publish `cp314` wheels)
+- Python 3.11–3.13 (`.python-version` pins 3.13 for local/dev bootstrap; any 3.11, 3.12, or 3.13 interpreter works. Python 3.14+ is NOT supported because vLLM currently declares `<3.14` support while upstream resolves Python 3.14 wheel compatibility across its dependency stack)
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip -- Python package manager
 - NVIDIA GPU (A100 or larger) for training and generation
 - Linux only -- macOS, Windows, and Apple Silicon are not supported for training or generation. A CPU-only install is available for development and configuration validation.
@@ -36,11 +36,20 @@ Or install from source:
 ```bash
 git clone https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git
 cd Safe-Synthesizer
-make setup # installs the pinned mise version (if missing) + pinned tool versions from mise.lock
-make bootstrap-nss cuda
+make setup # installs pinned mise, pinned tools from mise.lock, and .venv
+mise run bootstrap-nss cuda
 ```
 
 Development tools (`ruff`, `ty`, `yq`, `gh`, etc.) are managed via [mise](https://mise.jdx.dev/). Tool versions are declared in `.mise.toml` and locked in `mise.lock` (committed). mise also manages environment variables -- place project-local secrets or overrides in `.env` or `.env.local` (both git-ignored, auto-loaded by mise).
+
+Project commands run through mise tasks under `.mise/tasks/`: `*.toml` files for declarative tasks, executable scripts for bash-heavy logic.
+
+```bash
+mise tasks                # list public tasks
+mise tasks --hidden       # include helper and legacy alias tasks
+mise tasks deps validate  # inspect the pre-PR validation graph
+mise run validate         # check + lock-check + CI unit tests
+```
 
 ### Running
 

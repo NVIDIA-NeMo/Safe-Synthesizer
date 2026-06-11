@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -24,14 +25,26 @@ from vllm.sampling_params import SamplingParams, StructuredOutputsParams
 
 from .. import utils
 from ..cli.artifact_structure import Workdir
+from ..cli.wandb_setup import log_observability_event
 from ..config import SafeSynthesizerParameters
+from ..config.generate import (
+    resolve_structured_generation_schema_method,
+    structural_tag_backend_error_message,
+)
 from ..defaults import DEFAULT_SAMPLING_PARAMETERS, FIXED_RUNTIME_GENERATE_ARGS
-from ..errors import InternalError
+from ..errors import InternalError, ParameterError
 from ..generation.backend import GeneratorBackend
 from ..generation.batch import Batch
 from ..generation.processors import Processor, TabularDataProcessor, create_processor
-from ..generation.regex_manager import build_json_based_regex
+from ..generation.regex_manager import build_json_based_regex, build_json_structural_tag
 from ..generation.results import GenerateJobResults, GenerationBatches, GenerationStatus
+from ..generation.vllm_observability import (
+    GenerationObservability,
+    NvmlPeakSampler,
+    probe_engine_runtime_config,
+    read_loadavg,
+    read_vllm_runtime_metrics,
+)
 from ..llm.metadata import ModelMetadata
 from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
 from ..observability import get_logger, heartbeat
@@ -212,6 +225,10 @@ class VllmBackend(GeneratorBackend):
         )
         self.llm: vLLM | None = None
         self._prompt_token_count: int | None = None
+        # Populated in ``initialize()`` after engine build; pre-declared
+        # here so ``generate()`` can always read it (tests that mock the
+        # backend without calling ``initialize()`` see the empty dict).
+        self._engine_runtime_config: dict[str, Any] = {}
 
         # Do not generate detailed error messages in production to avoid leaking sensitive data.
         self.use_detailed_logs = kwargs.pop("use_detailed_logs", False)
@@ -288,6 +305,13 @@ class VllmBackend(GeneratorBackend):
                 trust_remote_code=model_ref.trust_remote_code,
             )
 
+        # Cache the engine's *effective* runtime config once at init. Read by
+        # ``generate()`` to populate the generation-complete observability
+        # event; used by the benchmark harness (and any other intent-comparing
+        # caller) to detect "flag didn't engage" mismatches against what was
+        # asked for.
+        self._engine_runtime_config = probe_engine_runtime_config(self.llm)
+
         # vLLM's get_tokenizer() returns a wider union than HF's PreTrainedTokenizerBase;
         # in practice it's always a HF tokenizer subclass, so cast for the processor.
         tokenizer = cast(PreTrainedTokenizerBase, self.llm.get_tokenizer())
@@ -324,8 +348,12 @@ class VllmBackend(GeneratorBackend):
             return None
 
         params: dict[str, Any] = {}
+        schema_method = resolve_structured_generation_schema_method(
+            self.config.generation.structured_generation_schema_method,
+            self.config.generation.structured_generation_backend,
+        )
 
-        if self.config.generation.structured_generation_schema_method == "regex":
+        if schema_method == "regex":
             logger.info("Structured generation is enabled, using a regex to enforce the schema")
             pc = self.model_metadata.prompt_config
             regex = build_json_based_regex(
@@ -335,8 +363,20 @@ class VllmBackend(GeneratorBackend):
                 eos_token=pc.eos_token,
             )
             params["regex"] = regex
-        elif self.config.generation.structured_generation_schema_method == "json_schema":
+        elif schema_method == "json_schema":
             params["json"] = self.schema
+        elif schema_method == "structural_tag":
+            backend = self.config.generation.structured_generation_backend
+            if message := structural_tag_backend_error_message(backend):
+                raise ParameterError(message)
+            logger.info("Structured generation is enabled, using an XGrammar Structural Tag")
+            pc = self.model_metadata.prompt_config
+            params["structural_tag"] = build_json_structural_tag(
+                self.schema,
+                self.config,
+                bos_token=pc.bos_token,
+                eos_token=pc.eos_token,
+            )
 
         return StructuredOutputsParams(**params)
 
@@ -612,6 +652,14 @@ class VllmBackend(GeneratorBackend):
         only for ``TabularDataProcessor``. Native EOS stopping remains enabled
         through ``ignore_eos=False``.
 
+        Wrapped in an :class:`NvmlPeakSampler` context so a
+        generation-complete observability event is emitted at end of
+        the call carrying peak device VRAM, host loadavg pre/post, vLLM's
+        kv_cache_usage_perc / prefix_cache_hit_rate / spec_accept_rate
+        (read at end-of-generation), and the engine's effective runtime
+        config probed at engine-init time. Sampler is degraded-mode when
+        NVML is unavailable; the event still emits with ``peak_vram_gb=None``.
+
         Args:
             data_actions_fn: Optional post-processing / validation function
                 applied to each batch of generated records.
@@ -619,8 +667,28 @@ class VllmBackend(GeneratorBackend):
         Returns:
             Results containing the generated DataFrame and statistics.
         """
-        generation_start = time.monotonic()
+        loadavg_pre = read_loadavg()
+        sampler = NvmlPeakSampler()
+        try:
+            with sampler:
+                self._run_generation(data_actions_fn)
+        finally:
+            # Emit regardless of success: the sampler thread has been joined
+            # by ``with`` exit, so ``sampler.peak_gb`` is the final peak, and
+            # the event carries whatever measurements were captured up to a
+            # failure point.
+            self._emit_generation_observability(sampler, loadavg_pre)
 
+        return self.gen_results
+
+    def _run_generation(self, data_actions_fn: utils.DataActionsFn | None) -> None:
+        """Run the batch-generation loop until the target or a stop condition fires.
+
+        Populates ``self.gen_results`` and ``self.elapsed_time``. Extracted
+        from :meth:`generate` so that method stays a thin observability
+        bracket around the loop.
+        """
+        generation_start = time.monotonic()
         need_special_token_outputs = not isinstance(self.processor, TabularDataProcessor)
         sampling_kwargs = dict(
             temperature=self.config.generation.temperature,
@@ -687,8 +755,7 @@ class VllmBackend(GeneratorBackend):
             else None
         )
 
-        generation_time_sec = time.monotonic() - generation_start
-        self.elapsed_time = generation_time_sec
+        self.elapsed_time = time.monotonic() - generation_start
         self.gen_results = GenerateJobResults.from_batches(
             batches=batches,
             columns=self.columns,
@@ -696,4 +763,45 @@ class VllmBackend(GeneratorBackend):
             elapsed_time=self.elapsed_time,
         )
 
-        return self.gen_results
+    def _emit_generation_observability(
+        self, sampler: NvmlPeakSampler, loadavg_pre: tuple[float, float, float] | None
+    ) -> None:
+        """Assemble and route the generation-complete observability event.
+
+        Reads end-of-generation vLLM metrics plus the NVML peak captured by
+        ``sampler``, builds a :class:`GenerationObservability`, and routes it to
+        structured logs and (when a run is active) wandb. Best-effort: any
+        failure here is logged and swallowed so observability never masks a
+        generation error propagating through :meth:`generate`'s ``finally``.
+        """
+        try:
+            vllm_metrics = read_vllm_runtime_metrics(self.llm)
+            gen_event = GenerationObservability(
+                peak_vram_gb=sampler.peak_gb,
+                kv_cache_usage_perc=vllm_metrics["kv_cache_usage_perc"],
+                prefix_cache_hit_rate=vllm_metrics["prefix_cache_hit_rate"],
+                spec_accept_rate=vllm_metrics["spec_accept_rate"],
+                loadavg_pre=loadavg_pre,
+                loadavg_post=read_loadavg(),
+                engine_runtime_config=self._engine_runtime_config,
+                # ``flag_did_not_engage`` is the consuming caller's job to
+                # compute. Production generation has no intended-overrides
+                # dict to compare against; the benchmark harness probes the
+                # engine config against its candidate's intended settings and
+                # sets the bit when a knob silently fails to engage.
+                flag_did_not_engage=False,
+            )
+            logger.runtime.info("vLLM generation complete", extra={"ctx": gen_event.model_dump()})
+            # Mirror to the active wandb run when one exists (no-op when
+            # ``WANDB_MODE=disabled`` or ``initialize_wandb_run`` was never
+            # called). Best-effort; wandb failures are swallowed downstream.
+            log_observability_event(gen_event, prefix="vllm_gen")
+        except Exception as exc:  # noqa: BLE001 — observability must never break generation
+            # Guard the warning itself: a faulty logger handler must not turn a
+            # swallowed observability failure into a generation failure.
+            with contextlib.suppress(Exception):
+                logger.runtime.debug(
+                    "vLLM generation observability emit failed",
+                    extra={"ctx": {"error": f"{exc!r}"}},
+                    exc_info=True,
+                )

@@ -4,14 +4,14 @@ Quick tests that verify training, generation, evaluation, and PII replacement co
 They use tiny or small models and run in seconds (CPU) or a few minutes (GPU).
 
 ```bash
-make test-smoke             # CPU only, no GPU needed
-make test-smoke-gpu          # All staged GPU smoke tests (requires CUDA)
-make test-smoke-gpu-train-only
-make test-smoke-gpu-generation
-make test-smoke-gpu-resume
-make test-smoke-gpu-structured-generation
-make test-smoke-gpu-timeseries
-make test-smoke-gpu-smollm2
+mise run test:smoke                         # CPU only, no GPU needed
+mise run test:smoke:gpu                     # All staged GPU smoke tests (requires CUDA)
+mise run test:smoke:gpu:train-only
+mise run test:smoke:gpu:generation
+mise run test:smoke:gpu:resume
+mise run test:smoke:gpu:structured-generation
+mise run test:smoke:gpu:timeseries
+mise run test:smoke:gpu:smollm2
 ```
 
 Telemetry smoke is opt-in because it sends a real network request:
@@ -36,7 +36,7 @@ a real tokenizer/model).
 
 ## GPU Test Process Isolation
 
-GPU smoke tests use staged Make targets for process isolation and CI visibility:
+GPU smoke tests use staged mise tasks for process isolation and CI visibility:
 
 1. `test-smoke-gpu-train-only`: `requires_gpu` without `vllm`/`smollm2`, auto-discovered via marker algebra.
 2. `test-smoke-gpu-generation`: generation vLLM tests.
@@ -45,7 +45,7 @@ GPU smoke tests use staged Make targets for process isolation and CI visibility:
 5. `test-smoke-gpu-timeseries`: timeseries generation vLLM tests.
 6. `test-smoke-gpu-smollm2`: SmolLM2 Hub download tests, auto-discovered via markers.
 
-`make test-smoke-gpu` runs all GPU smoke stages in order. vLLM stages are
+`mise run test:smoke:gpu` runs all GPU smoke stages in order. vLLM stages are
 split by file because vLLM pre-allocates all GPU memory and never releases it
 within a process. CI runs the same stage targets as separate workflow steps so
 the failing smoke lane is visible in the GitHub Actions UI.
@@ -61,7 +61,7 @@ pytestmark = [
 ]
 ```
 
-If the new file uses vLLM, add a dedicated `test-smoke-gpu-*` Makefile target and include it in `test-smoke-gpu` so CI shows it as its own stage.
+If the new file uses vLLM, add a dedicated `test:smoke:gpu:*` mise task and include it in `test:smoke:gpu` so CI shows it as its own stage.
 
 ## Things that will bite you
 

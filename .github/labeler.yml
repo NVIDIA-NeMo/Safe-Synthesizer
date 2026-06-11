@@ -1,0 +1,133 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# ---------------------------------------------------------------------------
+# Rules for actions/labeler@v6. Consumed by .github/workflows/labeler.yml.
+#
+# Each top-level key is a label name (must exist in the repo). The rules
+# below apply the label when ANY changed file in the PR matches ANY of the
+# listed globs (any-glob-to-any-file semantics).
+#
+# The product-area mapping mirrors the module map in AGENTS.md. Infrastructure
+# areas cover repo-wide concerns (CI, tests, docs, dev-ex, build/dist).
+#
+# Adding a new area label:
+#   1. Add it to CONTRIBUTING.md (canonical list).
+#   2. Create it in the GitHub UI.
+#   3. Add an entry here with the file globs that should trigger it.
+# ---------------------------------------------------------------------------
+
+# -- Product areas (mirror src/nemo_safe_synthesizer/ module map) ------------
+
+"area:sdk-cli":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/cli/**"
+          - "src/nemo_safe_synthesizer/sdk/**"
+          - "src/nemo_safe_synthesizer/__main__.py"
+
+"area:config":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/config/**"
+          - "src/nemo_safe_synthesizer/configurator/**"
+          - "src/nemo_safe_synthesizer/defaults.py"
+
+"area:data-processing":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/data_processing/**"
+          - "src/nemo_safe_synthesizer/holdout/**"
+          - "src/nemo_safe_synthesizer/artifacts/**"
+          - "src/nemo_safe_synthesizer/preflight/**"
+
+"area:evaluation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/evaluation/**"
+          - "src/nemo_safe_synthesizer/results.py"
+          - "src/nemo_safe_synthesizer/tooling/**"
+
+"area:generation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/generation/**"
+
+"area:training":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/training/**"
+
+"area:pii":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/pii_replacer/**"
+
+"area:privacy":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/privacy/**"
+
+"area:llm":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/llm/**"
+
+"area:observability":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/nemo_safe_synthesizer/observability.py"
+          - "src/nemo_safe_synthesizer/telemetry.py"
+
+# -- Infrastructure areas ----------------------------------------------------
+
+"area:tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+          - "pytest.ini"
+          - "script/slurm/**"
+
+"area:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "mkdocs.yml"
+          - "README.md"
+          - "CITATION.md"
+          - "CODE_OF_CONDUCT.md"
+          - "SECURITY.md"
+          - "THIRD_PARTY.md"
+          - "design.md"
+          - "src/nemo_safe_synthesizer/**/*.md"
+
+"area:ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+
+"area:dev-ex":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".agents/**"
+          - ".cursor/**"
+          - ".claude/**"
+          - "AGENTS.md"
+          - "AGENTS.local.md"
+          - "CLAUDE.md"
+          - "CONTRIBUTING.md"
+          - "STYLE_GUIDE.md"
+          - "Makefile"
+          - "tools/**"
+          - "ruff.toml"
+          - ".mise.toml"
+          - "mise.lock"
+
+"area:build-dist":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "pyproject.toml"
+          - "uv.lock"
+          - "constraints.txt"
+          - "containers/**"
+          - "src/nemo_safe_synthesizer/package_info.py"

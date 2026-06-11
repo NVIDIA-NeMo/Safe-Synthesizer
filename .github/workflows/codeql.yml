@@ -17,12 +17,19 @@ name: CodeQL Security Scan
 # No path filter: security vulnerabilities can appear in any file type, so
 # this must run on every pull request regardless of which files changed.
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
   schedule:
     - cron: "0 6 * * 0"  # Weekly on Sunday at 06:00 UTC
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
@@ -35,20 +42,20 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
+        uses: github/codeql-action/init@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4
         with:
           languages: python
           queries: security-extended
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
+        uses: github/codeql-action/autobuild@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
+        uses: github/codeql-action/analyze@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4
         with:
           category: "/language:python"

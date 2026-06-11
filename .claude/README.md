@@ -34,7 +34,7 @@ Registers hook scripts against Claude Code lifecycle events. The hook scripts th
 
 ## commands/
 
-Each file is a slash command available in Claude Code as `/command-name` (filename without `.md`). Commands map common development tasks to the correct Make targets and tool invocations for this repo. The `claude-commands.mdc` rule in `.cursor/rules/` also surfaces these to Cursor agents by keyword.
+Each file is a slash command available in Claude Code as `/command-name` (filename without `.md`). Commands map common development tasks to the correct mise tasks and tool invocations for this repo. The `claude-commands.mdc` rule in `.cursor/rules/` also surfaces these to Cursor agents by keyword.
 
 | Command | Task |
 |---------|------|

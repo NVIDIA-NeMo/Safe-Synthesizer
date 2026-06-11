@@ -131,12 +131,12 @@ CI jobs map to local commands:
 
 | CI Job | Local Command |
 |--------|---------------|
-| Format | `make format` (fix) or `make format-check` (check) |
-| Format (lock) | `make lock-check` |
-| Typecheck | `make typecheck` |
-| Unit Tests | `make test-ci` or `make test` |
+| Format | `mise run format` (fix) or `mise run format-check` (check) |
+| Format (lock) | `mise run lock-check` |
+| Typecheck | `mise run typecheck` |
+| Unit Tests | `mise run test:ci` |
 
-Path filtering may skip format/typecheck/unit-test when only non-source files change. Run `make check` and `make test` locally or add a trivial Python change to trigger CI.
+Path filtering may skip format/typecheck/unit-test when only non-source files change. Run `mise run validate` locally or add a relevant source/test/config change to trigger CI.
 
 ## Issues
 
