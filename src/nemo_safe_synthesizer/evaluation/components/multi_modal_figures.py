@@ -19,6 +19,9 @@ from ...evaluation.data_model.evaluation_score import (
     PrivacyGrade,
 )
 from ...evaluation.statistics.stats import get_numeric_distribution_bins
+from ...observability import get_logger
+
+logger = get_logger(__name__)
 
 _REPORT_PALETTE = ["#3C2ED1", "#1AA2E6"]
 _GRAPH_BARGAP = 0.2  # gap between bars of adjacent location coordinates
@@ -202,14 +205,51 @@ def histogram(
 
 
 def get_auto_bins(x1: pd.Series, x2: pd.Series) -> dict:
-    """Get common bin edges for the training and synthetic principal components."""
-    data = pd.concat([x1, x2]).to_numpy()
-    edges = np.histogram_bin_edges(data, bins="auto")
+    """Get common histogram bins for training/synthetic PCA projections.
 
-    # Bin start, end, and size
-    start = edges[0]
-    end = edges[-1]
-    bin_size = edges[1] - edges[0]
+    NumPy ``bins="auto"`` is adaptive, but for some pathological distributions
+    (very small IQR with wide range/outliers) it can request an extreme number
+    of bins and raise. We cap to at most 100 bins for report stability.
+    """
+    max_bins = 100
+    data = pd.concat([x1, x2]).to_numpy()
+    finite_data = data[np.isfinite(data)]
+
+    def _single_value_fallback(value: float) -> dict:
+        """Build a one-bin range anchored at the observed value."""
+        return dict(start=value, end=value + 1.0, size=1.0)
+
+    if finite_data.size == 0:
+        return _single_value_fallback(0.0)
+    if np.min(finite_data) == np.max(finite_data):
+        return _single_value_fallback(float(np.min(finite_data)))
+
+    try:
+        edges = np.histogram_bin_edges(finite_data, bins="auto")
+        start = float(edges[0])
+        end = float(edges[-1])
+        auto_bin_count = max(len(edges) - 1, 1)
+        bin_count = min(auto_bin_count, max_bins)
+    except (ValueError, MemoryError) as exc:
+        # Fallback for edge cases where numpy "auto" overestimates bin count
+        # and raises before returning edges (ValueError/MemoryError).
+        logger.warning(
+            "np.histogram_bin_edges(bins='auto') failed; falling back to %d bins: %s",
+            max_bins,
+            exc,
+        )
+        start = float(np.min(finite_data))
+        end = float(np.max(finite_data))
+        bin_count = max_bins
+
+    if not np.isfinite(start) or not np.isfinite(end):
+        return _single_value_fallback(0.0)
+    if start == end:
+        return _single_value_fallback(start)
+
+    bin_size = (end - start) / float(bin_count)
+    if not np.isfinite(bin_size) or bin_size <= 0:
+        return _single_value_fallback(0.0)
 
     return dict(start=start, end=end, size=bin_size)
 
