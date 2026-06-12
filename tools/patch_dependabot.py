@@ -127,56 +127,72 @@ def _bump_direct_deps_in_doc(
     """
     changed: list[str] = []
 
-    proj = _get_table(doc, "project")
-    if proj is not None:
-        main_deps = _get_array(proj, "dependencies")
-        if isinstance(main_deps, tomlkit.items.Array):
-            if _bump_array_item(main_deps, cname, floor, display_name):
-                changed.append("project.dependencies")
+    match _get_table(doc, "project"):
+        case None:
+            pass
+        case proj:
+            match _get_array(proj, "dependencies"):
+                case tomlkit.items.Array() as main_deps:
+                    if _bump_array_item(main_deps, cname, floor, display_name):
+                        changed.append("project.dependencies")
 
-        opt = _get_table(proj, "optional-dependencies")
-        if opt is not None:
-            for extra_name, extra_arr in opt.items():
-                if isinstance(extra_arr, tomlkit.items.Array):
-                    if _bump_array_item(extra_arr, cname, floor, display_name):
-                        changed.append(f"project.optional-dependencies.{extra_name}")
+            match _get_table(proj, "optional-dependencies"):
+                case None:
+                    pass
+                case opt:
+                    for extra_name, extra_arr in opt.items():
+                        match extra_arr:
+                            case tomlkit.items.Array() as extra_dependencies:
+                                if _bump_array_item(extra_dependencies, cname, floor, display_name):
+                                    changed.append(f"project.optional-dependencies.{extra_name}")
 
-    dep_groups = _get_table(doc, "dependency-groups")
-    if dep_groups is not None:
-        for gname, garr in dep_groups.items():
-            if isinstance(garr, tomlkit.items.Array):
-                if _bump_array_item(garr, cname, floor, display_name):
-                    changed.append(f"dependency-groups.{gname}")
+    match _get_table(doc, "dependency-groups"):
+        case None:
+            pass
+        case dep_groups:
+            for gname, garr in dep_groups.items():
+                match garr:
+                    case tomlkit.items.Array() as group_dependencies:
+                        if _bump_array_item(group_dependencies, cname, floor, display_name):
+                            changed.append(f"dependency-groups.{gname}")
 
     return changed
 
 
 def _collect_direct_dep_names(doc: tomlkit.TOMLDocument) -> frozenset[str]:
     names: set[str] = set()
-    proj = _get_table(doc, "project")
-    if proj is not None:
-        for line in _get_array(proj, "dependencies") or []:
-            n = _safe_req_name(str(line)) if isinstance(line, str) else None
-            if n:
-                names.add(n)
-        optional_dependencies = _get_table(proj, "optional-dependencies")
-        if optional_dependencies is not None:
-            for lines in optional_dependencies.values():
-                if not isinstance(lines, tomlkit.items.Array):
-                    continue
-                for line in lines:
-                    n = _safe_req_name(str(line)) if isinstance(line, str) else None
-                    if n:
-                        names.add(n)
-    dep_groups = _get_table(doc, "dependency-groups")
-    if dep_groups is not None:
-        for items in dep_groups.values():
-            if not isinstance(items, tomlkit.items.Array):
-                continue
-            for item in items:
-                n = _safe_req_name(str(item)) if isinstance(item, str) else None
+    match _get_table(doc, "project"):
+        case None:
+            pass
+        case proj:
+            for line in _get_array(proj, "dependencies") or []:
+                n = _safe_req_name(str(line)) if isinstance(line, str) else None
                 if n:
                     names.add(n)
+
+            match _get_table(proj, "optional-dependencies"):
+                case None:
+                    pass
+                case optional_dependencies:
+                    for lines in optional_dependencies.values():
+                        match lines:
+                            case tomlkit.items.Array() as dependency_lines:
+                                for line in dependency_lines:
+                                    n = _safe_req_name(str(line)) if isinstance(line, str) else None
+                                    if n:
+                                        names.add(n)
+
+    match _get_table(doc, "dependency-groups"):
+        case None:
+            pass
+        case dep_groups:
+            for items in dep_groups.values():
+                match items:
+                    case tomlkit.items.Array() as dependency_items:
+                        for item in dependency_items:
+                            n = _safe_req_name(str(item)) if isinstance(item, str) else None
+                            if n:
+                                names.add(n)
     return frozenset(names)
 
 
@@ -217,17 +233,19 @@ def _write_constraints_txt(path: Path, constraint_lines: list[str]) -> None:
 
 
 def _replace_constraint_dependencies_array(doc: tomlkit.TOMLDocument, lines: list[str]) -> None:
-    tool = _get_table(doc, "tool")
-    if tool is None:
-        raise SystemExit("pyproject.toml: missing or invalid [tool] table")
-    uv = _get_table(tool, "uv")
-    if uv is None:
-        raise SystemExit("pyproject.toml: missing or invalid [tool.uv] table")
-    arr = tomlkit.array()
-    arr.multiline(True)
-    for line in sorted(lines):
-        arr.append(line)
-    uv["constraint-dependencies"] = arr
+    match _get_table(doc, "tool"):
+        case None:
+            raise SystemExit("pyproject.toml: missing or invalid [tool] table")
+        case tool:
+            match _get_table(tool, "uv"):
+                case None:
+                    raise SystemExit("pyproject.toml: missing or invalid [tool.uv] table")
+                case uv:
+                    arr = tomlkit.array()
+                    arr.multiline(True)
+                    for line in sorted(lines):
+                        arr.append(line)
+                    uv["constraint-dependencies"] = arr
 
 
 # ---------------------------------------------------------------------------
@@ -345,15 +363,23 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Pass 2: transitive deps → constraint-dependencies
     # ------------------------------------------------------------------
-    tool = _get_table(doc, "tool")
-    uv_section = _get_table(tool, "uv") if tool is not None else None
-    raw = uv_section.get("constraint-dependencies") if uv_section is not None else None
-    if raw is None:
-        current: list[str] = []
-    elif not isinstance(raw, tomlkit.items.Array):
-        raise SystemExit("pyproject: [tool.uv] constraint-dependencies is not an array")
-    else:
-        current = [str(x) for x in raw if str(x).strip()]
+    match _get_table(doc, "tool"):
+        case None:
+            raw_constraints = None
+        case tool:
+            match _get_table(tool, "uv"):
+                case None:
+                    raw_constraints = None
+                case uv_section:
+                    raw_constraints = uv_section.get("constraint-dependencies")
+
+    match raw_constraints:
+        case None:
+            current: list[str] = []
+        case tomlkit.items.Array() as constraints:
+            current = [str(item) for item in constraints if str(item).strip()]
+        case _:
+            raise SystemExit("pyproject: [tool.uv] constraint-dependencies is not an array")
 
     updated = list(current)
     for cname, floor in sorted(floors.items()):

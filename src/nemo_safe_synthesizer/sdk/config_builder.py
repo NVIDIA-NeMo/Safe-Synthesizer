@@ -123,19 +123,21 @@ class ConfigBuilder(object):
         Returns:
             A validated config instance of type ``cls``.
         """
-        if values is None:
-            return cls.model_validate(kwargs)
-        if isinstance(values, BaseModel):
-            if not isinstance(values, cls):
-                raise TypeError(f"Expected {cls.__name__}, got {type(values).__name__}")
-            raw_values = values.model_dump()
-            raw_values.update(kwargs)
-            return cls.model_validate(raw_values)
-        if isinstance(values, Mapping):
-            raw_values = dict(values)
-            raw_values.update(kwargs)
-            return cls.model_validate(raw_values)
-        raise TypeError(f"Unsupported config type: {type(values)}")
+        match values:
+            case None:
+                return cls.model_validate(kwargs)
+            case BaseModel() as model:
+                if not isinstance(model, cls):
+                    raise TypeError(f"Expected {cls.__name__}, got {type(model).__name__}")
+                raw_values = model.model_dump()
+                raw_values.update(kwargs)
+                return cls.model_validate(raw_values)
+            case Mapping() as mapping:
+                raw_values = dict(mapping)
+                raw_values.update(kwargs)
+                return cls.model_validate(raw_values)
+            case _:
+                raise TypeError(f"Unsupported config type: {type(values)}")
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.

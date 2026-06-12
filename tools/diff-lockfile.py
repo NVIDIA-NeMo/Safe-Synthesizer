@@ -118,11 +118,15 @@ def get_lockfile_content(repo: git.Repo, ref: str, path: str) -> str:
 
 def _extract_source(raw: dict[str, Any]) -> str:
     """Return a human-readable source string from a ``[[package]]`` entry."""
-    src = raw.get("source", {})
-    if isinstance(src, dict):
-        value = src.get("registry", src.get("git", src.get("path", "")))
-        return str(value) if value is not None else ""
-    return str(src) if src else ""
+    match raw.get("source", {}):
+        case {"registry": value} | {"git": value} | {"path": value}:
+            return str(value) if value is not None else ""
+        case dict():
+            return ""
+        case src if src:
+            return str(src)
+        case _:
+            return ""
 
 
 def parse_packages(content: str) -> dict[str, Package]:
