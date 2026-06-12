@@ -11,7 +11,6 @@ registered actions in order.
 
 from __future__ import annotations
 
-import json
 import operator
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -230,7 +229,7 @@ class BaseAction(BaseModel, ABC):
     def get_state(self, state_obj_type: type[BaseModelT]) -> BaseModelT:
         """Retrieve and deserialize a previously persisted state object."""
         state_obj_json = self._ctx.state[self.hash()]
-        return state_obj_type.model_validate(json.loads(state_obj_json))
+        return state_obj_type.model_validate_json(state_obj_json)
 
 
 DEFAULT_ACTION_CTX = ActionCtx()

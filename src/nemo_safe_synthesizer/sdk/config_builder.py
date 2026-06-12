@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Self, TypeAlias, TypeVar, cast
+from typing import Self, TypeAlias, TypeVar, overload
 
 import pandas as pd
 from pydantic import BaseModel
@@ -27,9 +27,6 @@ from ..telemetry import _telemetry_enabled
 logger = get_logger(__name__)
 
 
-KT = TypeVar("KT")
-VT = TypeVar("VT")
-
 NSSParameters = (
     DataParameters
     | EvaluationParameters
@@ -43,7 +40,8 @@ NSSParameters = (
 
 ParamT = TypeVar("ParamT", bound=BaseModel)
 DataSource = pd.DataFrame | str
-ParamDict: TypeAlias = dict[str, str | int | float | bool | None | list[Any] | Mapping[KT, VT]]
+RawConfig: TypeAlias = Mapping[str, object]
+ParamDict: TypeAlias = RawConfig
 
 
 class ConfigBuilder(object):
@@ -56,8 +54,8 @@ class ConfigBuilder(object):
     ``SafeSynthesizerParameters``.
 
     Each ``with_*`` method accepts an optional typed config object or
-    a plain dict, plus ``**kwargs`` overrides.  ``kwargs`` always take
-    precedence over fields in the config/dict.  All ``with_*`` methods
+    a raw mapping, plus ``**kwargs`` overrides.  ``kwargs`` always take
+    precedence over fields in the config/mapping.  All ``with_*`` methods
     return ``Self`` so subclasses preserve their concrete type through
     fluent chains.
 
@@ -101,14 +99,23 @@ class ConfigBuilder(object):
             "_time_series_config",
         ]
 
-    def _resolve_config(self, values: ParamDict | NSSParameters | None, cls: type[ParamT], **kwargs) -> ParamT:
+    @overload
+    def _resolve_config(self, values: ParamT, cls: type[ParamT], **kwargs: object) -> ParamT: ...
+
+    @overload
+    def _resolve_config(self, values: RawConfig, cls: type[ParamT], **kwargs: object) -> ParamT: ...
+
+    @overload
+    def _resolve_config(self, values: None, cls: type[ParamT], **kwargs: object) -> ParamT: ...
+
+    def _resolve_config(self, values: object, cls: type[ParamT], **kwargs: object) -> ParamT:
         """Resolve configuration from various input types.
 
         Precedence: ``kwargs`` override ``values``; ``values`` override
         model defaults.
 
         Args:
-            values: Existing config, a raw dict, or ``None`` for
+            values: Existing config, a raw mapping, or ``None`` for
                 defaults-only.
             cls: The Pydantic model class to validate against.
             **kwargs: Field-level overrides applied on top.
@@ -116,16 +123,19 @@ class ConfigBuilder(object):
         Returns:
             A validated config instance of type ``cls``.
         """
-        overrides = kwargs
-        match values:
-            case BaseModel() as model:
-                return cast(ParamT, model.model_copy(update=overrides))
-            case dict() as d:
-                return cls.model_validate(d).model_copy(update=overrides)
-            case None:
-                return cls(**overrides)
-            case _:
-                raise TypeError(f"Unsupported config type: {type(values)}")
+        if values is None:
+            return cls.model_validate(kwargs)
+        if isinstance(values, BaseModel):
+            if not isinstance(values, cls):
+                raise TypeError(f"Expected {cls.__name__}, got {type(values).__name__}")
+            raw_values = values.model_dump()
+            raw_values.update(kwargs)
+            return cls.model_validate(raw_values)
+        if isinstance(values, Mapping):
+            raw_values = dict(values)
+            raw_values.update(kwargs)
+            return cls.model_validate(raw_values)
+        raise TypeError(f"Unsupported config type: {type(values)}")
 
     def with_data_source(self, df_source: DataSource) -> Self:
         """Set the data source for synthetic data generation.
@@ -139,11 +149,11 @@ class ConfigBuilder(object):
         self._data_source = df_source
         return self
 
-    def with_data(self, config: DataParameters | ParamDict | None = None, **kwargs) -> Self:
+    def with_data(self, config: DataParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure data processing settings.
 
         Args:
-            config: Data configuration object or dict.
+            config: Data configuration object or raw mapping.
             **kwargs: Field-level overrides (e.g. ``holdout_size``).
 
         Returns:
@@ -152,11 +162,11 @@ class ConfigBuilder(object):
         self._data_config = self._resolve_config(values=config, cls=DataParameters, **kwargs)
         return self
 
-    def with_train(self, config: TrainingHyperparams | ParamDict | None = None, **kwargs) -> Self:
+    def with_train(self, config: TrainingHyperparams | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure training hyperparameters.
 
         Args:
-            config: Training configuration object or dict.
+            config: Training configuration object or raw mapping.
             **kwargs: Field-level overrides (e.g. ``learning_rate``).
 
         Returns:
@@ -167,11 +177,11 @@ class ConfigBuilder(object):
         )
         return self
 
-    def with_generate(self, config: GenerateParameters | ParamDict | None = None, **kwargs) -> Self:
+    def with_generate(self, config: GenerateParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure generation settings.
 
         Args:
-            config: Generation configuration object or dict.
+            config: Generation configuration object or raw mapping.
             **kwargs: Field-level overrides (e.g. ``num_records``).
 
         Returns:
@@ -182,11 +192,11 @@ class ConfigBuilder(object):
         )
         return self
 
-    def with_time_series(self, config: TimeSeriesParameters | ParamDict | None = None, **kwargs) -> Self:
+    def with_time_series(self, config: TimeSeriesParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure time-series synthesis settings.
 
         Args:
-            config: Time-series configuration object or dict.
+            config: Time-series configuration object or raw mapping.
             **kwargs: Field-level overrides (e.g. ``time_column``).
 
         Returns:
@@ -196,12 +206,12 @@ class ConfigBuilder(object):
         return self
 
     def with_differential_privacy(
-        self, config: DifferentialPrivacyHyperparams | ParamDict | None = None, **kwargs
+        self, config: DifferentialPrivacyHyperparams | RawConfig | None = None, **kwargs: object
     ) -> Self:
         """Configure differential privacy settings.
 
         Args:
-            config: DP configuration object or dict.
+            config: DP configuration object or raw mapping.
             **kwargs: Field-level overrides (e.g. ``epsilon``).
 
         Returns:
@@ -211,7 +221,7 @@ class ConfigBuilder(object):
         return self
 
     def with_replace_pii(
-        self, config: PiiReplacerConfig | ParamDict | None = None, *, enable: bool = True, **kwargs
+        self, config: PiiReplacerConfig | RawConfig | None = None, *, enable: bool = True, **kwargs: object
     ) -> Self:
         """Configure PII replacement settings.
 
@@ -231,7 +241,7 @@ class ConfigBuilder(object):
         in ``from_params``.
 
         Args:
-            config: PII replacement configuration object or dict.
+            config: PII replacement configuration object or raw mapping.
             enable: When ``False``, disables PII replacement entirely
                 and clears any previously set config.
             **kwargs: Field-level overrides (e.g. ``classify``).
@@ -241,7 +251,7 @@ class ConfigBuilder(object):
 
         Raises:
             ValueError: If ``config`` is not a ``PiiReplacerConfig``,
-                dict, or ``None``.
+                raw mapping, or ``None``.
 
         Example::
 
@@ -251,25 +261,30 @@ class ConfigBuilder(object):
             self._replace_pii_config = None
             return self
 
-        cfg = None
         match config:
             case PiiReplacerConfig() as m:
-                cfg = m.model_copy(update=kwargs, deep=True)
-            case dict() as d:
-                cfg = PiiReplacerConfig.model_validate(d).model_copy(update=kwargs, deep=True)
+                cfg = self._resolve_config(values=m, cls=PiiReplacerConfig, **kwargs)
+            case Mapping() as d:
+                raw_values = dict(d)
+                raw_values.update(kwargs)
+                cfg = PiiReplacerConfig.model_validate(raw_values)
             case None:
-                cfg = PiiReplacerConfig.get_default_config().model_copy(update=kwargs, deep=True)
+                cfg = self._resolve_config(
+                    values=PiiReplacerConfig.get_default_config(),
+                    cls=PiiReplacerConfig,
+                    **kwargs,
+                )
             case _:
-                raise ValueError(f"Config must be a PiiReplacerConfig, dict, or None, got {config!r}")
+                raise ValueError(f"Config must be a PiiReplacerConfig, raw mapping, or None, got {config!r}")
 
         self._replace_pii_config = cfg
         return self
 
-    def with_evaluate(self, config: EvaluationParameters | ParamDict | None = None, **kwargs) -> Self:
+    def with_evaluate(self, config: EvaluationParameters | RawConfig | None = None, **kwargs: object) -> Self:
         """Configure evaluation settings.
 
         Args:
-            config: Evaluation configuration object or dict.
+            config: Evaluation configuration object or raw mapping.
             **kwargs: Field-level overrides (e.g. ``enabled``).
 
         Returns:

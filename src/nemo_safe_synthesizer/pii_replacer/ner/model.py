@@ -6,16 +6,37 @@
 from __future__ import annotations
 
 import re
+from typing import Any, Literal, TypeAlias, TypedDict, cast, overload
 
-from ...data_processing.records.fragment import create_ner_api_response
+from ...data_processing.records.fragment import (
+    NERApiResponseRow,
+    NERRawPredictionPayload,
+    create_ner_api_response,
+)
+from ...pii_replacer.ner import ner, pipeline, regex
 from ...pii_replacer.ner.entity import Score
-from ...pii_replacer.ner.ner import ner
-from ...pii_replacer.ner.pipeline import pipeline
-from ...pii_replacer.ner.regex import regex
 
 INPUT_ERR = "Input data must be a string, dict, or a list of either"
 
 _source_validator = re.compile(r"[A-Za-z_]{2,15}$")
+
+
+class NERPredictorTimingPayload(TypedDict):
+    total_time_ms: float
+    total_time_ms_avg: float
+
+
+class NERTimingsPayload(TypedDict):
+    records: int
+    total_predictions: int
+    total_time_ms: float
+    total_time_ms_avg: float
+    time_per_prediction_ms: float
+    predictors: dict[str, NERPredictorTimingPayload]
+
+
+NERPredictionRows: TypeAlias = list[list[NERRawPredictionPayload]]
+NERModelPredictionResponse: TypeAlias = NERPredictionRows | list[NERApiResponseRow]
 
 
 def _parse_custom_source(source: str) -> tuple[str, str]:
@@ -35,48 +56,107 @@ class Model:
     several NER techniques into a simple interface
     """
 
-    def __init__(self, *args, exclude: list[str] | None = None):
+    def __init__(self, *args: str, exclude: list[str] | None = None):
         if args and exclude:
             raise ValueError("Cannot include and exclude predictors")
 
-        _pipeline = pipeline.from_source_string_list(include=args, exclude=exclude)
+        include = list(args) if args else None
+        if include is not None:
+            _pipeline = pipeline.from_source_string_list(include=include)
+        elif exclude is not None:
+            _pipeline = pipeline.from_source_string_list(exclude=exclude)
+        else:
+            _pipeline = pipeline.from_source_string_list()
         self._ner = ner.NER(pipeline=_pipeline)
 
     @property
     def predictors(self) -> list[str]:
         return [pred.source for pred in self._ner.pipeline.predictors]
 
-    def predict(self, input_data: str | dict | list[str] | list[dict], *, timings_only=False) -> list[dict] | dict:
-        if isinstance(input_data, (str, dict)):
-            input_data = [input_data]
+    @overload
+    def predict(
+        self,
+        input_data: str | dict[str, Any] | list[str] | list[dict[str, Any]],
+        *,
+        timings_only: Literal[True],
+    ) -> NERTimingsPayload: ...
 
-        if not isinstance(input_data, list):
+    @overload
+    def predict(
+        self,
+        input_data: str,
+        *,
+        timings_only: Literal[False] = False,
+    ) -> NERPredictionRows: ...
+
+    @overload
+    def predict(
+        self,
+        input_data: list[str],
+        *,
+        timings_only: Literal[False] = False,
+    ) -> list[list[NERRawPredictionPayload]]: ...
+
+    @overload
+    def predict(
+        self,
+        input_data: dict[str, Any] | list[dict[str, Any]],
+        *,
+        timings_only: Literal[False] = False,
+    ) -> list[NERApiResponseRow]: ...
+
+    @overload
+    def predict(
+        self,
+        input_data: str | dict[str, Any] | list[str] | list[dict[str, Any]],
+        *,
+        timings_only: bool = False,
+    ) -> NERModelPredictionResponse | NERTimingsPayload: ...
+
+    def predict(
+        self,
+        input_data: str | dict[str, Any] | list[str] | list[dict[str, Any]],
+        *,
+        timings_only: bool = False,
+    ) -> NERModelPredictionResponse | NERTimingsPayload:
+        if isinstance(input_data, str):
+            input_rows: list[str] | list[dict[str, Any]] = [input_data]
+        elif isinstance(input_data, dict):
+            input_rows = [input_data]
+        else:
+            input_rows = input_data
+
+        if not isinstance(input_rows, list):
             raise ValueError(INPUT_ERR)
 
-        if not isinstance(input_data[0], (str, dict)):
+        if not isinstance(input_rows[0], (str, dict)):
             raise ValueError(INPUT_ERR)
 
-        _target_type = type(input_data[0])
+        _target_type = type(input_rows[0])
 
-        for _target in input_data:
+        for _target in input_rows:
             if not isinstance(_target, _target_type):
                 raise ValueError(INPUT_ERR)
 
-        predictions = self._ner.predict(input_data, timings_only=timings_only, dict_result=True)
+        predictions = self._ner.predict(input_rows, timings_only=timings_only, dict_result=True)
 
         if timings_only:
-            return predictions.to_dict()
+            return cast(NERTimingsPayload, cast(Any, predictions).to_dict())
         if _target_type is str:
-            return predictions
+            return cast(NERPredictionRows, predictions)
 
-        return create_ner_api_response(input_data, predictions, pure_dict=True)
+        return create_ner_api_response(
+            cast(list[dict[str, Any]], input_rows),
+            cast(list[list[NERRawPredictionPayload]], predictions),
+            pure_dict=True,
+        )
 
-    def add_regex(self, source: str, pattern: str | re.Pattern, score: Score | None = None):
+    def add_regex(self, source: str, pattern: str | re.Pattern, score: float | None = None):
         namespace, name = _parse_custom_source(source)
         if score is None:
             score = Score.HIGH
-        pattern = regex.Pattern(pattern=pattern, raw_score=score.value)
-        predictor = regex.RegexPredictor(name=name, namespace=namespace, patterns=[pattern])
+        regex_pattern = regex.Pattern(pattern=pattern, raw_score=score)
+        predictor = regex.RegexPredictor(name=name, namespace=namespace, patterns=[regex_pattern])
         self._ner.pipeline.add_predictors(predictor)
 
 

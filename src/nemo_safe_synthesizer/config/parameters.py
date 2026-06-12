@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Self
+from collections.abc import Mapping
+from typing import Any, Self, TypeAlias
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -23,13 +24,16 @@ from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
 
-__all__ = ["SafeSynthesizerParameters"]
+ConfigPatch: TypeAlias = Mapping[str, Any]
+_SectionPatch: TypeAlias = dict[str, Any]
+
+__all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
 
 
-def _collect_set_fields(model: BaseModel) -> dict[str, Any]:
+def _collect_set_fields(model: BaseModel) -> _SectionPatch:
     """Recursively collect a model's explicitly-set fields as a nested dict.
 
     Unlike ``model_dump(exclude_unset=True)``, nested models are always
@@ -38,7 +42,7 @@ def _collect_set_fields(model: BaseModel) -> dict[str, Any]:
     ``cfg.generation.validation.foo = True``) are captured. A nested model is
     included only when it has at least one set field of its own.
     """
-    overrides: dict[str, Any] = {}
+    overrides: _SectionPatch = {}
     for name in type(model).model_fields:
         value = getattr(model, name)
         if isinstance(value, BaseModel):
@@ -236,6 +240,21 @@ class SafeSynthesizerParameters(Parameters):
         if "emit_telemetry" in kwargs:
             extra["emit_telemetry"] = kwargs["emit_telemetry"]
         return cls(**extra)
+
+    @classmethod
+    def from_config_patch(cls, patch: ConfigPatch) -> Self:
+        """Validate a sparse top-level config patch as a full configuration."""
+        return cls.model_validate(patch)
+
+    def with_config_patch(self, patch: ConfigPatch) -> Self:
+        """Apply a sparse top-level config patch and revalidate the result.
+
+        Only fields explicitly set on ``self`` are carried into the merge before
+        applying ``patch``. This preserves file/CLI precedence while keeping
+        default values implicit for future ``exclude_unset`` dumps.
+        """
+        params = merge_dicts(self.model_dump(exclude_unset=True), patch)
+        return type(self).model_validate(params)
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
         """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.

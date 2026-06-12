@@ -16,7 +16,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, NotRequired, TypeAlias, TypedDict, cast
 
 from ...pii_replacer.ner.entity import Score
 from ...pii_replacer.ner.predictor import NERPrediction
@@ -30,6 +30,62 @@ SCORE_HIGH = "score_high"
 SCORE_MED = "score_med"
 SCORE_LOW = "score_low"
 E2F = "fields_by_entity"
+
+
+class NERRawPredictionPayload(TypedDict):
+    """Raw ``NERPrediction.as_dict`` payload consumed by metadata helpers."""
+
+    text: str
+    start: int
+    end: int
+    label: str
+    source: str
+    score: float | None
+    field: NotRequired[str | None]
+    value_path: NotRequired[tuple[str | int, ...] | list[str | int] | None]
+    substring_match: NotRequired[bool | None]
+
+
+class NERFieldLabelPayload(TypedDict):
+    """Per-field label entry in the NER model metadata payload."""
+
+    start: int
+    end: int
+    label: str
+    score: float | None
+    source: str
+    text: str
+
+
+NERMetadataFieldsPayload: TypeAlias = dict[str, dict[str, dict[str, list[NERFieldLabelPayload]]]]
+
+
+class NEREntityMapPayload(TypedDict):
+    """Score-bucketed entity summary in the NER model metadata payload."""
+
+    score_high: list[str]
+    score_med: list[str]
+    score_low: list[str]
+    fields_by_entity: dict[str, list[str]]
+
+
+class NERMetadataPayload(TypedDict):
+    """API-facing NER metadata payload."""
+
+    record_id: str
+    fields: NERMetadataFieldsPayload
+    entities: NEREntityMapPayload
+    received_at: str
+
+
+NERRecordPayload: TypeAlias = dict[str, Any]
+
+
+class NERApiResponseRow(TypedDict):
+    """One API response row for dict-based NER model predictions."""
+
+    data: NERRecordPayload
+    model_metadata: NERMetadataPayload
 
 
 @dataclass
@@ -52,7 +108,7 @@ class Metadata:
     received_at: str
     """ISO-8601 timestamp of the earliest fragment."""
 
-    def as_dict(self):
+    def as_dict(self) -> dict[str, Any]:
         """Serialize to a plain dictionary."""
         return self.__dict__
 
@@ -102,7 +158,7 @@ class MetadataFragment:
         else:
             raise TypeError("field_data must be a dict or list, got ", type(field_data))
 
-    def as_dict(self):
+    def as_dict(self) -> dict[str, Any]:
         """Serialize to a plain dictionary."""
         return self.__dict__
 
@@ -154,7 +210,7 @@ def predictions_to_dict(
     *,
     high_score: float = Score.HIGH,
     med_score: float = Score.MED,
-) -> tuple[dict, dict]:
+) -> tuple[dict[str, list[NERFieldLabelPayload]], NEREntityMapPayload]:
     """Aggregate NER predictions into per-field results and an entity map.
 
     Groups predictions by field and builds a score-bucketed entity map::
@@ -180,7 +236,7 @@ def predictions_to_dict(
         SCORE_LOW: set(),
         E2F: defaultdict(set),
     }
-    predictions_by_key = defaultdict(list)
+    predictions_by_key: dict[str, list[NERFieldLabelPayload]] = defaultdict(list)
     for prediction in predictions:
         if prediction.field is None:
             continue
@@ -212,14 +268,14 @@ def predictions_to_dict(
         entity_map[level] = list(entity_map[level])
     for entity, _set in entity_map[E2F].items():
         entity_map[E2F][entity] = list(_set)
-    return predictions_by_key, entity_map
+    return predictions_by_key, cast(NEREntityMapPayload, entity_map)
 
 
 def fragment_from_ner_predictions(
     fragment_name: str,
     predictions: list[NERPrediction],
     record_id: str,
-) -> tuple[MetadataFragment, dict]:
+) -> tuple[MetadataFragment, NEREntityMapPayload]:
     """Build a ``MetadataFragment`` and entity map from NER predictions.
 
     Args:
@@ -244,20 +300,24 @@ def fragment_from_ner_predictions(
     return fragment, ent_map
 
 
-def build_ner_metadata(preds: list[dict]) -> Metadata:
-    """Construct a ``Metadata`` object from raw prediction dicts."""
-    ner_preds = [NERPrediction.from_dict(p) for p in preds]
+def build_ner_metadata(preds: list[NERRawPredictionPayload]) -> NERMetadataPayload:
+    """Construct an API-facing metadata payload from raw prediction dicts."""
+    ner_preds = [NERPrediction.from_dict(dict(p)) for p in preds]
     fragment, ent_map = fragment_from_ner_predictions(
         "ner",
         ner_preds,
         uuid.uuid4().hex,
     )
     meta = merge_fragments(fragment)
-    meta.entities = ent_map
-    return meta.as_dict()
+    meta.entities = cast(dict[str, Any], ent_map)
+    return cast(NERMetadataPayload, meta.as_dict())
 
 
-def create_ner_api_response(records: list[dict], predictions: list[list[dict]], pure_dict: bool = False) -> list[dict]:
+def create_ner_api_response(
+    records: list[NERRecordPayload],
+    predictions: list[list[NERRawPredictionPayload]],
+    pure_dict: bool = False,
+) -> list[NERApiResponseRow]:
     """Build an API-compatible list of ``{data, model_metadata}`` dicts.
 
     Args:
@@ -268,10 +328,10 @@ def create_ner_api_response(records: list[dict], predictions: list[list[dict]], 
     Returns:
         List of dicts, each containing ``data`` and ``model_metadata`` keys.
     """
-    out = [
+    out: list[NERApiResponseRow] = [
         {"data": record, "model_metadata": build_ner_metadata(prediction)}
         for record, prediction in zip(records, predictions)
     ]
     if pure_dict:
-        return json.loads(json.dumps(out))
+        return cast(list[NERApiResponseRow], json.loads(json.dumps(out)))
     return out

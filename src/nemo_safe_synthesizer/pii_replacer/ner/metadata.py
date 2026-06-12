@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from dataclasses import field as Field
 from enum import StrEnum
 from math import ceil
-from typing import Optional
+from typing import Optional, TypedDict, cast
 
 from ...data_processing.records.json_record import JSONRecord
 from .ner import NER, PipelineResult
@@ -17,6 +17,53 @@ from .ner_mp import NERParallel
 class FieldAttribute(StrEnum):
     ID = "id"
     CATEGORICAL = "categorical"
+
+
+class EntityMetadataPayload(TypedDict):
+    label: str
+    count: int
+    f_ratio: float
+    approx_cardinality: int
+    sources: list[str]
+    field_label_f_ratio: float
+
+
+class TypeMetadataPayload(TypedDict):
+    type: str
+    count: int
+
+
+class FieldMetadataPayload(TypedDict):
+    field: str
+    count: int
+    approx_cardinality: int
+    missing: int
+    pct_missing: float
+    pct_total_unique: float
+    s_score: float
+    entities: list[EntityMetadataPayload]
+    types: list[TypeMetadataPayload]
+    field_labels: list[str]
+    field_attributes: list[FieldAttribute]
+
+
+class EntitySummaryPayload(TypedDict):
+    label: str
+    fields: list[str]
+    count: int
+    approx_distinct_count: int
+    sources: list[str]
+
+
+class FieldsMetadataPayload(TypedDict):
+    fields: list[FieldMetadataPayload]
+    entities: list[EntitySummaryPayload]
+
+
+class DatasetMetadataPayload(TypedDict):
+    project_record_count: int
+    total_field_count: int
+    data: FieldsMetadataPayload
 
 
 @dataclass(frozen=True)
@@ -101,8 +148,8 @@ class FieldMetadata:
     field_attributes: list[FieldAttribute] = Field(default_factory=list)
     """Attributes detected for this field."""
 
-    def dict(self):
-        return asdict(self)
+    def dict(self) -> FieldMetadataPayload:
+        return cast(FieldMetadataPayload, asdict(self))
 
 
 @dataclass(frozen=True)
@@ -129,8 +176,8 @@ class EntitySummary:
     to the entity summary.
     """
 
-    def dict(self) -> dict:
-        return asdict(self)
+    def dict(self) -> EntitySummaryPayload:
+        return cast(EntitySummaryPayload, asdict(self))
 
 
 @dataclass(frozen=True)
@@ -159,8 +206,8 @@ class DatasetMetadata:
     def add_entity(self, entity_summary: EntitySummary):
         self.data.entities.append(entity_summary)
 
-    def to_dict(self):
-        return asdict(self)
+    def to_dict(self) -> DatasetMetadataPayload:
+        return cast(DatasetMetadataPayload, asdict(self))
 
 
 @dataclass(frozen=True)
