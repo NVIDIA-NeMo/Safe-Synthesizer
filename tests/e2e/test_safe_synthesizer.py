@@ -39,21 +39,28 @@ from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer
 
 logger = get_logger(__name__)
 
+E2E_PRETRAINED_MODELS = [
+    pytest.param("mistralai/Mistral-7B-Instruct-v0.3", id="mistral"),
+    pytest.param("HuggingFaceTB/SmolLM3-3B", id="smollm3"),
+    pytest.param("TinyLlama/TinyLlama-1.1B-Chat-v1.0", id="tinyllama"),
+]
+
 
 @pytest.mark.e2e
 @pytest.mark.requires_gpu
-@pytest.mark.timeout(1000)
+@pytest.mark.timeout(1800)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
-def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_save_path):
+@pytest.mark.parametrize("pretrained_model", E2E_PRETRAINED_MODELS)
+def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_save_path, pretrained_model):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
         num_input_records_to_sample=1500,
+        pretrained_model=pretrained_model,
         dp_enabled=True,
         epsilon=100.0,
         num_records=100,
         use_structured_generation=True,
-        structured_generation_backend="xgrammar",
     )
     logger.info(f"Running DP test with config: {config}")
 
@@ -70,13 +77,15 @@ def test_train_and_generate_dp(fixture_financial_transactions_dataset, fixture_s
 
 @pytest.mark.e2e
 @pytest.mark.requires_gpu
-@pytest.mark.timeout(900)
+@pytest.mark.timeout(1800)
 @pytest.mark.skipif(sys.platform == "darwin", reason="Not applicable on macOS")
-def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path):
+@pytest.mark.parametrize("pretrained_model", E2E_PRETRAINED_MODELS)
+def test_train_and_generate_defaults(fixture_financial_transactions_dataset, fixture_save_path, pretrained_model):
     df = fixture_financial_transactions_dataset
     config = SafeSynthesizerParameters.from_params(
         replace_pii=None,
         num_input_records_to_sample=5000,
+        pretrained_model=pretrained_model,
     )
     logger.info(f"Running test_train_and_generate_defaults with config: {config}")
 
