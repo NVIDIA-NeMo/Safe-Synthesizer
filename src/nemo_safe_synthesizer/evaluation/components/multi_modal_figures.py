@@ -676,7 +676,7 @@ def generate_text_structure_similarity_figures(
         "average_words_per_sentence",
         "average_characters_per_word",
     ]
-    figures = []
+    figures: list[go.Figure] = []
     for key in statistics_keys:
         if training_statistics.per_record_statistics.empty or synthetic_statistics.per_record_statistics.empty:
             break
@@ -684,7 +684,8 @@ def generate_text_structure_similarity_figures(
             training_statistics.per_record_statistics[key],
             synthetic_statistics.per_record_statistics[key],
         )
-        figures.append(figure)
+        if figure is not None:
+            figures.append(figure)
     if not figures:
         return None
 

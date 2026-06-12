@@ -21,6 +21,16 @@ from ..observability import get_logger
 logger = get_logger(__name__)
 
 
+def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
+    if isinstance(value, pd.DataFrame):
+        return value
+    raise TypeError(f"Expected dataset reader for {url} to return a pandas DataFrame, got {type(value).__name__}")
+
+
+def _dynamic_callable(value: object) -> Any:
+    return value
+
+
 class DatasetInfo(BaseModel):
     """Entry in the dataset registry."""
 
@@ -96,20 +106,22 @@ class DatasetInfo(BaseModel):
         logger.info(f"Reading dataset from {url}")
 
         # Determine the file extension and appropriate reader
-        match Path(url).suffix.lstrip("."):
+        reader: Any
+        extension = Path(url).suffix.lstrip(".")
+        match extension:
             case "csv" | "txt":
-                reader = pd.read_csv
+                reader = _dynamic_callable(pd.read_csv)
                 default_load_args: dict[str, Any] = {}
             case "json":
-                reader = pd.read_json
+                reader = _dynamic_callable(pd.read_json)
                 default_load_args = {}
             case "jsonl":
-                reader = pd.read_json
+                reader = _dynamic_callable(pd.read_json)
                 default_load_args = {"lines": True}
             case "parquet":
-                reader = pd.read_parquet
+                reader = _dynamic_callable(pd.read_parquet)
                 default_load_args = {}
-            case extension:
+            case _:
                 if not extension:
                     extension = f"<no extension found on url '{url}'>"
                 raise ValueError(f"Unsupported file extension: {extension}")
@@ -118,7 +130,7 @@ class DatasetInfo(BaseModel):
         final_load_args = {**default_load_args, **(self.load_args or {})}
 
         try:
-            return reader(url, **final_load_args)  # ty: ignore[invalid-argument-type] -- reader union includes parquet which has stricter signature
+            return _require_dataframe(reader(url, **final_load_args), url=url)
         except Exception as e:
             logger.error(f"Error reading dataset from {url}: {e}", exc_info=True)
             raise

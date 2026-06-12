@@ -415,7 +415,7 @@ def fit_and_transform_dates(
         names to ``{"format": ..., "min": ...}`` dicts needed by
         ``transform_dates`` for reversal.
     """
-    date_min_dict = {}
+    date_min_dict: dict[str, dict[str, str]] = {}
     object_cols = [col for col, col_type in df.dtypes.items() if col_type == "object"]
     result_df = df.copy() if not inplace else df
     for object_col in object_cols:
@@ -428,7 +428,7 @@ def fit_and_transform_dates(
                     dates = pd.to_datetime(result_df[object_col], format=inferred_format)
                     min_date = dates.min()
                     result_df[object_col] = (dates - min_date).dt.total_seconds()
-                    date_min_dict[object_col] = {
+                    date_min_dict[str(object_col)] = {
                         "format": inferred_format,
                         "min": str(min_date),
                     }

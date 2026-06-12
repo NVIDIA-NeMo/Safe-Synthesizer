@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from functools import partial
 from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy as np
@@ -77,21 +76,20 @@ class DatetimeDistribution(BaseModel, ABC):
         rounded_ts = round(dt.timestamp() / precision.total_seconds()) * precision.total_seconds()
         return datetime.fromtimestamp(rounded_ts)
 
-    def _apply_universal_params(self, samples: list[datetime]) -> list[datetime]:
-        ret: list[str] | list[datetime] = samples
-
-        ops = []
-        if self.precision is not None:
-            ops.append(partial(self._round_datetime, self.precision))
+    def _apply_universal_params(self, samples: list[datetime]) -> list[datetime] | list[str]:
         if self.format is not None:
-            ops.append(lambda x: x.strftime(self.format))
+            formatted: list[str] = []
+            for sample in samples:
+                if self.precision is not None:
+                    sample = self._round_datetime(sample, self.precision)
+                formatted.append(sample.strftime(self.format))
+            return formatted
 
+        ret: list[datetime] = []
         for sample in samples:
-            n = sample
-            for op in ops:
-                n = op(n)
-            ret.append(n)
-
+            if self.precision is not None:
+                sample = self._round_datetime(sample, self.precision)
+            ret.append(sample)
         return ret
 
 

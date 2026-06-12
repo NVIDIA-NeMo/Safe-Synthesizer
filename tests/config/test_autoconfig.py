@@ -72,9 +72,9 @@ class AutoConfigTestCase:
 
     def get_config(self) -> SafeSynthesizerParameters:
         """Get the config, calling it if it's a factory function."""
-        if callable(self.config):
-            return self.config()  # ty: ignore[call-top-callable] -- dynamic callable
-        return self.config
+        if isinstance(self.config, SafeSynthesizerParameters):
+            return self.config
+        return self.config()
 
 
 AUTO_NO_DP = AutoConfigTestCase(
