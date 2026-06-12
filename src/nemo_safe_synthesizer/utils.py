@@ -41,6 +41,10 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
+def _is_statistics_list(stats: Statistics | list[Statistics]) -> TypeIs[list[Statistics]]:
+    return isinstance(stats, list)
+
+
 def env_flag_is_true(name: str, *, default: bool = False) -> bool:
     """Return whether ``name`` is set to a truthy env value.
 
@@ -129,11 +133,11 @@ def log_stats(
         title: Optional table title.
     """
     headers = headers or []
-    stats = stats if isinstance(stats, list) else [stats]
+    stats_list = stats if _is_statistics_list(stats) else [stats]
 
     # Build structured data - processor will render as table for console
     structured_stats = {}
-    for header, stat in zip(headers, stats):
+    for header, stat in zip(headers, stats_list):
         key = header.lower().replace(" ", "_")
         structured_stats[key] = {
             "min": round_number_if_float(stat.min),

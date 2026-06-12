@@ -366,16 +366,16 @@ class AttributeInferenceProtection(Component):
 
             # Get all combinations of columns to be the quasi-identifiers
             # This gets explosive when column count > 500
+            training_columns = [str(column) for column in training_df.columns]
             if len(training_df.columns) < 500:
-                qi_combos = list(itertools.combinations(training_df.columns, quasi_identifier_count))
+                qi_combos = list(itertools.combinations(training_columns, quasi_identifier_count))
             else:
-                columns = list(training_df.columns)
                 qi_combos = []
-                for i in range(len(columns) - quasi_identifier_count):
-                    combo = set()
+                for i in range(len(training_columns) - quasi_identifier_count):
+                    combo = []
                     for j in range(quasi_identifier_count):
-                        combo.add(columns[i + j])
-                    qi_combos.append(combo)
+                        combo.append(training_columns[i + j])
+                    qi_combos.append(tuple(combo))
 
             np.random.seed(5)
             np.random.shuffle(qi_combos)
@@ -415,7 +415,6 @@ class AttributeInferenceProtection(Component):
 
             # As we process the attack dataset, we'll accumulate for each column the number of
             # correct and incorrect predictions
-            training_columns = [str(column) for column in training_df.columns]
             correct = {predict_column: 0 for predict_column in training_columns}
             incorrect = {predict_column: 0 for predict_column in training_columns}
 
@@ -578,7 +577,8 @@ class AttributeInferenceProtection(Component):
                 for i in range(len(entropy)):
                     entropy_wts.append(0)
             else:
-                arr = (entropy - min(entropy)) / (max(entropy) - min(entropy))
+                entropy_arr = np.asarray(entropy, dtype=float)
+                arr = (entropy_arr - min(entropy)) / (max(entropy) - min(entropy))
                 entropy_wts = arr / arr.sum()
 
             i = 0
