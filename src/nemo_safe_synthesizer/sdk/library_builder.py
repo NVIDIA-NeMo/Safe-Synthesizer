@@ -235,6 +235,7 @@ class SafeSynthesizer(ConfigBuilder):
         self._pii_replacer_time: float | None = None
         self._llm_metadata: ModelMetadata | None = None
         self._total_start: float | None = None
+        self._training_time_sec: float | None = None
         self._loaded_from_save_path: bool = False
         self.preflight_report: PreflightReport | None = None
         self._data_processed: bool = False
@@ -537,6 +538,8 @@ class SafeSynthesizer(ConfigBuilder):
 
         # Propagate config changes from training (e.g., inferred timestamp_format) to generation
         self._nss_config = self.trainer.params
+        if result := getattr(self.trainer, "results", None):
+            self._training_time_sec = result.elapsed_time
 
         return self
 
@@ -562,7 +565,11 @@ class SafeSynthesizer(ConfigBuilder):
         # Clean up trainer model if it exists (only present when train->generate in same session)
         trainer = getattr(self, "trainer", None)
         if trainer is not None:
+            if result := getattr(trainer, "results", None):
+                self._training_time_sec = result.elapsed_time
             trainer.teardown()
+            del self.trainer
+            trainer = None
 
         assert self._workdir is not None
         # Select backend based on time_series configuration
@@ -612,7 +619,7 @@ class SafeSynthesizer(ConfigBuilder):
         )
         self.evaluator.evaluate()
 
-        training_time = None
+        training_time = self._training_time_sec
         if trainer := getattr(self, "trainer", {}):
             if res := getattr(trainer, "results", None):
                 training_time = res.elapsed_time

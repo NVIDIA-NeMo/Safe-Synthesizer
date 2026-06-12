@@ -406,8 +406,13 @@ def cleanup_memory() -> None:
     import torch
 
     gc.collect()
+    if not torch.cuda.is_available():
+        return
+
     with torch.no_grad():
+        torch.cuda.synchronize()
         torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
 
 
 def gpu_stats() -> None:

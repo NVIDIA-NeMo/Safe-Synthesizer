@@ -46,7 +46,7 @@ from ..generation.vllm_observability import (
     read_vllm_runtime_metrics,
 )
 from ..llm.metadata import ModelMetadata
-from ..llm.utils import ModelRef, cleanup_memory, get_max_vram
+from ..llm.utils import ModelRef, cleanup_memory
 from ..observability import get_logger, heartbeat
 from ..utils import all_equal_type, load_json
 
@@ -284,9 +284,13 @@ class VllmBackend(GeneratorBackend):
         attn_backend = self.config.generation.attention_backend
         attention_config = {"backend": attn_backend} if attn_backend not in (None, "auto") else None
 
-        max_vram = get_max_vram()
-        # note this only works for single GPU setups
-        max_vram = max_vram.get(0, 0.8)
+        cleanup_memory()
+        # vLLM expects a positive fraction of total device memory. The HF
+        # loader helper is bounded by current free memory and can return 0.0
+        # immediately after training teardown on some CUDA nodes.
+        max_vram = self.config.training.max_vram_fraction
+        if max_vram <= 0:
+            raise ParameterError("training.max_vram_fraction must be greater than 0 for vLLM generation.")
 
         # vllm requires this "config" to set the backend ahead of time.
         structured_outputs_config = StructuredOutputsConfig(

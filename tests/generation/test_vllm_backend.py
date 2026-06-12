@@ -387,7 +387,6 @@ class TestInitializeModelRef:
                 return_value=cache_root,
             ),
             patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm) as mock_vllm,
-            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
             patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
         ):
             backend.initialize()
@@ -395,6 +394,22 @@ class TestInitializeModelRef:
         assert backend.llm is mock_llm
         assert mock_vllm.call_args.kwargs["model"] == str(snapshot)
         assert mock_vllm.call_args.kwargs["trust_remote_code"] is True
+        assert mock_vllm.call_args.kwargs["gpu_memory_utilization"] == base_params.training.max_vram_fraction
+
+    def test_initialize_rejects_zero_vllm_memory_fraction(
+        self, base_params, mock_model_metadata, mock_schema, mock_workdir
+    ):
+        """vLLM requires a positive ``gpu_memory_utilization`` value."""
+        base_params.training.max_vram_fraction = 0.0
+        backend = create_backend(base_params, mock_model_metadata, mock_schema, mock_workdir)
+
+        with (
+            patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM") as mock_vllm,
+            pytest.raises(ParameterError, match="max_vram_fraction must be greater than 0"),
+        ):
+            backend.initialize()
+
+        mock_vllm.assert_not_called()
 
     def test_initialize_caches_engine_runtime_config(
         self,
@@ -425,7 +440,6 @@ class TestInitializeModelRef:
                 return_value=cache_root,
             ),
             patch("nemo_safe_synthesizer.generation.vllm_backend.vLLM", return_value=mock_llm),
-            patch("nemo_safe_synthesizer.generation.vllm_backend.get_max_vram", return_value={0: 0.8}),
             patch("nemo_safe_synthesizer.generation.vllm_backend.create_processor", return_value=MagicMock()),
             patch(
                 "nemo_safe_synthesizer.generation.vllm_backend.probe_engine_runtime_config",
