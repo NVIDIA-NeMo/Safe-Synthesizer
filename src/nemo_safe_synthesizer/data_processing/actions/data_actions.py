@@ -26,7 +26,6 @@ from typing import (
     Protocol,
     TypeVar,
     Union,
-    cast,
 )
 
 import pandas as pd
@@ -383,7 +382,10 @@ class ReplaceDataSource(BaseAction):
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.col in df.columns:
-            column_index = cast(int, df.columns.get_loc(self.col))
+            location = df.columns.get_loc(self.col)
+            if not isinstance(location, int):
+                raise ValueError(f"Column {self.col!r} must be unique to replace data source")
+            column_index = location
         else:
             column_index = None
         self.set_state(self.State(column_index=column_index))

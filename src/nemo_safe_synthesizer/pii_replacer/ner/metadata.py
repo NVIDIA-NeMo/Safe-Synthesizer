@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from dataclasses import field as Field
 from enum import StrEnum
 from math import ceil
-from typing import Optional, TypedDict, cast
+from typing import Optional, TypedDict
 
 from ...data_processing.records.json_record import JSONRecord
 from .ner import NER, PipelineResult
@@ -90,6 +90,16 @@ class EntityMetadata:
     This field is used to determine if an entity should be applied
     as a field_label in transformation pipelines."""
 
+    def dict(self) -> EntityMetadataPayload:
+        return {
+            "label": self.label,
+            "count": self.count,
+            "f_ratio": self.f_ratio,
+            "approx_cardinality": self.approx_cardinality,
+            "sources": self.sources,
+            "field_label_f_ratio": self.field_label_f_ratio,
+        }
+
 
 @dataclass(frozen=True)
 class TypeMetadata:
@@ -101,6 +111,12 @@ class TypeMetadata:
 
     count: int
     """Number of times this type appeared in the values of a field."""
+
+    def dict(self) -> TypeMetadataPayload:
+        return {
+            "type": self.type,
+            "count": self.count,
+        }
 
 
 @dataclass(frozen=True)
@@ -149,7 +165,19 @@ class FieldMetadata:
     """Attributes detected for this field."""
 
     def dict(self) -> FieldMetadataPayload:
-        return cast(FieldMetadataPayload, asdict(self))
+        return {
+            "field": self.field,
+            "count": self.count,
+            "approx_cardinality": self.approx_cardinality,
+            "missing": self.missing,
+            "pct_missing": self.pct_missing,
+            "pct_total_unique": self.pct_total_unique,
+            "s_score": self.s_score,
+            "entities": [entity.dict() for entity in self.entities],
+            "types": [type_metadata.dict() for type_metadata in self.types],
+            "field_labels": self.field_labels,
+            "field_attributes": self.field_attributes,
+        }
 
 
 @dataclass(frozen=True)
@@ -177,7 +205,13 @@ class EntitySummary:
     """
 
     def dict(self) -> EntitySummaryPayload:
-        return cast(EntitySummaryPayload, asdict(self))
+        return {
+            "label": self.label,
+            "fields": self.fields,
+            "count": self.count,
+            "approx_distinct_count": self.approx_distinct_count,
+            "sources": self.sources,
+        }
 
 
 @dataclass(frozen=True)
@@ -207,7 +241,14 @@ class DatasetMetadata:
         self.data.entities.append(entity_summary)
 
     def to_dict(self) -> DatasetMetadataPayload:
-        return cast(DatasetMetadataPayload, asdict(self))
+        return {
+            "project_record_count": self.project_record_count,
+            "total_field_count": self.total_field_count,
+            "data": {
+                "fields": [field_metadata.dict() for field_metadata in self.data.fields],
+                "entities": [entity_summary.dict() for entity_summary in self.data.entities],
+            },
+        }
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, TypeAlias, TypedDict, cast, overload
+from collections.abc import Mapping
+from numbers import Real
+from typing import Any, Literal, TypeAlias, TypedDict, overload
+
+from typing_extensions import TypeIs
 
 from ...data_processing.records.fragment import (
     NERApiResponseRow,
@@ -37,6 +41,129 @@ class NERTimingsPayload(TypedDict):
 
 NERPredictionRows: TypeAlias = list[list[NERRawPredictionPayload]]
 NERModelPredictionResponse: TypeAlias = NERPredictionRows | list[NERApiResponseRow]
+
+
+def _is_string_rows(rows: list[str] | list[dict[str, Any]]) -> TypeIs[list[str]]:
+    return all(isinstance(row, str) for row in rows)
+
+
+def _is_record_rows(rows: list[str] | list[dict[str, Any]]) -> TypeIs[list[dict[str, Any]]]:
+    return all(isinstance(row, dict) for row in rows)
+
+
+def _required_str(value: object, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"NER prediction field {field_name!r} must be a string")
+    return value
+
+
+def _required_int(value: object, field_name: str) -> int:
+    if not isinstance(value, int):
+        raise TypeError(f"NER prediction field {field_name!r} must be an integer")
+    return value
+
+
+def _optional_float(value: object, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise TypeError(f"NER prediction field {field_name!r} must be a float or None")
+    return float(value)
+
+
+def _required_float(value: object, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise TypeError(f"NER timing field {field_name!r} must be a float")
+    return float(value)
+
+
+def _optional_str(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"NER prediction field {field_name!r} must be a string or None")
+    return value
+
+
+def _optional_value_path(value: object, field_name: str) -> tuple[str | int, ...] | list[str | int] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (tuple, list)) or not all(isinstance(part, (str, int)) for part in value):
+        raise TypeError(f"NER prediction field {field_name!r} must be a string/integer path or None")
+    return value
+
+
+def _optional_bool(value: object, field_name: str) -> bool | None:
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise TypeError(f"NER prediction field {field_name!r} must be a boolean or None")
+    return value
+
+
+def _raw_prediction_payload(value: object) -> NERRawPredictionPayload:
+    if not isinstance(value, Mapping):
+        raise TypeError("NER prediction rows must contain dictionaries")
+
+    payload: NERRawPredictionPayload = {
+        "text": _required_str(value.get("text"), "text"),
+        "start": _required_int(value.get("start"), "start"),
+        "end": _required_int(value.get("end"), "end"),
+        "label": _required_str(value.get("label"), "label"),
+        "source": _required_str(value.get("source"), "source"),
+        "score": _optional_float(value.get("score"), "score"),
+    }
+    if "field" in value:
+        payload["field"] = _optional_str(value.get("field"), "field")
+    if "value_path" in value:
+        payload["value_path"] = _optional_value_path(value.get("value_path"), "value_path")
+    if "substring_match" in value:
+        payload["substring_match"] = _optional_bool(value.get("substring_match"), "substring_match")
+    return payload
+
+
+def _prediction_rows(value: object) -> NERPredictionRows:
+    if not isinstance(value, list):
+        raise TypeError("NER predictions must be a list of prediction rows")
+    rows: NERPredictionRows = []
+    for row in value:
+        if not isinstance(row, list):
+            raise TypeError("NER predictions must be a list of prediction rows")
+        rows.append([_raw_prediction_payload(prediction) for prediction in row])
+    return rows
+
+
+def _timings_payload_from_mapping(value: object) -> NERTimingsPayload:
+    if not isinstance(value, Mapping):
+        raise TypeError("NER timings must be a dictionary")
+    predictors = value.get("predictors")
+    if not isinstance(predictors, Mapping):
+        raise TypeError("NER timings field 'predictors' must be a dictionary")
+    predictor_timings: dict[str, NERPredictorTimingPayload] = {}
+    for predictor, timing in predictors.items():
+        if not isinstance(predictor, str):
+            raise TypeError("NER timing predictor names must be strings")
+        if not isinstance(timing, Mapping):
+            raise TypeError("NER predictor timings must be dictionaries")
+        predictor_timings[predictor] = {
+            "total_time_ms": _required_float(timing.get("total_time_ms"), "total_time_ms"),
+            "total_time_ms_avg": _required_float(timing.get("total_time_ms_avg"), "total_time_ms_avg"),
+        }
+    return {
+        "records": _required_int(value.get("records"), "records"),
+        "total_predictions": _required_int(value.get("total_predictions"), "total_predictions"),
+        "total_time_ms": _required_float(value.get("total_time_ms"), "total_time_ms"),
+        "total_time_ms_avg": _required_float(value.get("total_time_ms_avg"), "total_time_ms_avg"),
+        "time_per_prediction_ms": _required_float(value.get("time_per_prediction_ms"), "time_per_prediction_ms"),
+        "predictors": predictor_timings,
+    }
+
+
+def _timings_payload(value: object) -> NERTimingsPayload:
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return _timings_payload_from_mapping(to_dict())
+    raise TypeError("timings_only=True must return NER timings")
 
 
 def _parse_custom_source(source: str) -> tuple[str, str]:
@@ -126,7 +253,7 @@ class Model:
         else:
             input_rows = input_data
 
-        if not isinstance(input_rows, list):
+        if not isinstance(input_rows, list) or not input_rows:
             raise ValueError(INPUT_ERR)
 
         if not isinstance(input_rows[0], (str, dict)):
@@ -141,13 +268,18 @@ class Model:
         predictions = self._ner.predict(input_rows, timings_only=timings_only, dict_result=True)
 
         if timings_only:
-            return cast(NERTimingsPayload, cast(Any, predictions).to_dict())
-        if _target_type is str:
-            return cast(NERPredictionRows, predictions)
+            return _timings_payload(predictions)
+
+        prediction_rows = _prediction_rows(predictions)
+        if _target_type is str and _is_string_rows(input_rows):
+            return prediction_rows
+
+        if not _is_record_rows(input_rows):
+            raise ValueError(INPUT_ERR)
 
         return create_ner_api_response(
-            cast(list[dict[str, Any]], input_rows),
-            cast(list[list[NERRawPredictionPayload]], predictions),
+            input_rows,
+            prediction_rows,
             pure_dict=True,
         )
 

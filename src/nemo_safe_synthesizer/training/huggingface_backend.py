@@ -11,9 +11,8 @@ import math
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
-from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -85,6 +84,11 @@ logger = get_logger(__name__)
 
 DEFAULT_ROPE_THETA = 10000.0
 
+# Training arguments fixed by Safe Synthesizer at runtime.
+#
+# Training duration is controlled by ``num_input_records_to_sample`` and the
+# assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
+# Trainer behavior stable across CLI and SDK entry points.
 FIXED_RUNTIME_TRAINING_ARGS = {
     # the training time is set by the number of training records
     "num_train_epochs": 1,
@@ -96,12 +100,27 @@ FIXED_RUNTIME_TRAINING_ARGS = {
     "bf16": True,
     "ddp_find_unused_parameters": False,
 }
-"""Training arguments fixed by Safe Synthesizer at runtime.
 
-Training duration is controlled by ``num_input_records_to_sample`` and the
-assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
-Trainer behavior stable across CLI and SDK entry points.
-"""
+
+def _standard_trainer_factory(**kwargs: Any) -> Trainer:
+    return Trainer(**kwargs)
+
+
+def _opacus_trainer_factory(
+    *,
+    privacy_args: PrivacyArguments,
+    true_dataset_size: int,
+    data_fraction: float,
+) -> Callable[..., Trainer]:
+    def factory(**kwargs: Any) -> Trainer:
+        return OpacusDPTrainer(
+            privacy_args=privacy_args,
+            true_dataset_size=true_dataset_size,
+            data_fraction=data_fraction,
+            **kwargs,
+        )
+
+    return factory
 
 
 class HuggingFaceBackend(TrainingBackend):
@@ -120,7 +139,7 @@ class HuggingFaceBackend(TrainingBackend):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
+        self.trainer_type: Callable[..., Trainer] = _standard_trainer_factory
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
         self.model_ref = ModelRef.parse(self.params.training.pretrained_model)
@@ -498,8 +517,7 @@ class HuggingFaceBackend(TrainingBackend):
             per_sample_max_grad_norm=privacy.per_sample_max_grad_norm,
         )
 
-        self.trainer_type = partial(  # ty: ignore[invalid-assignment] -- partial is assignable at runtime
-            OpacusDPTrainer,
+        self.trainer_type = _opacus_trainer_factory(
             privacy_args=privacy_args,
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
@@ -541,8 +559,7 @@ class HuggingFaceBackend(TrainingBackend):
         Returns:
             The configured Trainer instance.
         """
-        factory = cast(Callable[..., Trainer], self.trainer_type)
-        trainer = factory(
+        trainer = self.trainer_type(
             model=self.model,
             processing_class=self.tokenizer,
             args=training_args,

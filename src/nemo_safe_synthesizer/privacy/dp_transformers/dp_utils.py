@@ -27,7 +27,6 @@ import safetensors.torch  # transformers v5 makes safetensors a hard dep
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
-from opacus.accountants import RDPAccountant
 from peft import PeftModel
 from torch import nn
 from torch.utils.data import DataLoader
@@ -166,7 +165,7 @@ class DPCallback(TrainerCallback):
         if not self.accountant.use_prv:
             # Use RDPAccountant, which uses `.step()` to increment number of
             # steps, required for accurate epsilon calculation.
-            acct = cast(RDPAccountant, self.accountant.accountant)
+            acct = self.accountant.rdp_accountant()
             acct.step(
                 noise_multiplier=self.noise_multiplier,
                 sample_rate=self.sampling_probability,
