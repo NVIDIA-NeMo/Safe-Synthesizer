@@ -18,6 +18,7 @@ from typing import Any, Generic, TypeVar, get_args
 
 from pydantic import BaseModel, GetCoreSchemaHandler, model_serializer
 from pydantic_core import core_schema
+from typing_extensions import override
 
 DataT = TypeVar(
     "DataT", bound=(int | float | str | bytes | bool | None | Sequence[int | float | str | bytes | bool | BaseModel])
@@ -56,6 +57,7 @@ class Parameter(Generic[DataT]):
         else:
             return self
 
+    @override
     def __str__(self):
         return self.__repr__()
 
@@ -109,6 +111,7 @@ class Parameter(Generic[DataT]):
     def __lt__(self, other: "Parameter[DataT] | DataT") -> bool | None:
         return self._comp_helper(other, operator.__lt__)
 
+    @override
     def __eq__(self, other: object) -> bool:
         result = self._comp_helper(other, operator.__eq__)
         return False if result is NotImplemented else result

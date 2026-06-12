@@ -897,6 +897,7 @@ class HuggingFaceBackend(TrainingBackend):
         except Exception:
             logger.warning("destroy_process_group failed during teardown", exc_info=True)
 
+    @override
     def __str__(self):
         f = f"HuggingFaceBackend(pretrained_model={self.params.training.pretrained_model}, params={self.params})"
         return f

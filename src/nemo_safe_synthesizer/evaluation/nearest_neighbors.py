@@ -31,6 +31,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "8")
 os.environ.setdefault("OMP_NUM_THREADS", "8")
 
 import numpy as np
+import numpy.typing as npt
 import torch
 from sklearn.neighbors import NearestNeighbors
 
@@ -61,7 +62,7 @@ class NearestNeighborSearch:
         self.n_neighbors = n_neighbors
         self._torch_device = self._detect_device()
         self.use_gpu = self._torch_device is not None
-        self._index = None
+        self._index: NearestNeighbors | None = None
         self._data_t: torch.Tensor | None = None
 
     @classmethod
@@ -87,7 +88,7 @@ class NearestNeighborSearch:
         cls._device_checked = True
         return cls._torch_device
 
-    def fit(self, data: np.ndarray) -> NearestNeighborSearch:
+    def fit(self, data: npt.NDArray[np.float32]) -> NearestNeighborSearch:
         """Build the search index from data.
 
         Args:
@@ -110,7 +111,11 @@ class NearestNeighborSearch:
 
         return self
 
-    def kneighbors(self, queries: np.ndarray, n_neighbors: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+    def kneighbors(
+        self,
+        queries: npt.NDArray[np.float32],
+        n_neighbors: int | None = None,
+    ) -> tuple[npt.NDArray[np.float32], npt.NDArray[np.int64]]:
         """Find k nearest neighbors for query points.
 
         Args:

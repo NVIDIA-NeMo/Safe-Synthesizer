@@ -27,6 +27,7 @@ ruff = "0.15.0"
 ty = "0.0.44"
 
 "aqua:j178/prek" = "latest"
+"pipx:pyrefly" = "1.0.0"
 
 
 [env]

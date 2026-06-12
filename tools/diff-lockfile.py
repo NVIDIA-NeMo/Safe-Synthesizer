@@ -36,7 +36,7 @@ from __future__ import annotations
 import subprocess
 import tomllib
 from enum import Enum
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 import git
 import typer
@@ -116,11 +116,12 @@ def get_lockfile_content(repo: git.Repo, ref: str, path: str) -> str:
     return blob.data_stream.read().decode()
 
 
-def _extract_source(raw: dict) -> str:
+def _extract_source(raw: dict[str, Any]) -> str:
     """Return a human-readable source string from a ``[[package]]`` entry."""
     src = raw.get("source", {})
     if isinstance(src, dict):
-        return src.get("registry", src.get("git", src.get("path", "")))
+        value = src.get("registry", src.get("git", src.get("path", "")))
+        return str(value) if value is not None else ""
     return str(src) if src else ""
 
 

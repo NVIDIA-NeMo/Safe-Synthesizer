@@ -12,8 +12,11 @@ dict using the ``NESTING_DELIM`` / ``ARRAY_POS`` markers.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import chain, starmap
-from typing import Optional
+from typing import Any, Optional, TypeAlias
+
+from typing_extensions import override
 
 from . import base
 from .value_path import (
@@ -21,8 +24,10 @@ from .value_path import (
     value_path_to_field_name,
 )
 
+JsonContainer: TypeAlias = dict[Any, Any] | list[Any]
 
-def flatten(raw, array_marker=base.ARRAY_POS):
+
+def flatten(raw: JsonContainer, array_marker: str = base.ARRAY_POS) -> dict[Any, Any]:
     """Recursively flatten a nested dict/list into a single-level dict.
 
     Keys are joined with ``NESTING_DELIM``; array indices are encoded as
@@ -40,10 +45,10 @@ def flatten(raw, array_marker=base.ARRAY_POS):
         # if the whole JSON document is an array, we wrap it in dict
         raw = {None: raw}
 
-    def unpack_level(parent_key, parent_val):
+    def unpack_level(parent_key: object, parent_val: object) -> Iterator[tuple[object, object]]:
         if isinstance(parent_val, dict):
             for key, value in parent_val.items():
-                tmp = str(parent_key) + base.NESTING_DELIM + key
+                tmp = str(parent_key) + base.NESTING_DELIM + str(key)
                 yield tmp, value
         elif isinstance(parent_val, list):
             i = 0
@@ -76,7 +81,7 @@ def remove_array_markers(data: str) -> tuple[str, int, base.ValuePath]:
     """
     array_count = 0
     parts = data.split(base.NESTING_DELIM)
-    path_items = []
+    path_items: list[str | int] = []
     for part in parts:
         if part.startswith(base.ARRAY_POS):
             array_count += 1
@@ -88,9 +93,9 @@ def remove_array_markers(data: str) -> tuple[str, int, base.ValuePath]:
     return value_path_to_field_name(path), array_count, path
 
 
-def convert_flat_dict_to_kv_pairs(data: dict) -> list[base.KVPair]:
+def convert_flat_dict_to_kv_pairs(data: dict[Any, Any]) -> list[base.KVPair]:
     """Convert a flattened dict (from ``flatten``) into a list of ``KVPair`` objects."""
-    out = []
+    out: list[base.KVPair] = []
     for k, v in data.items():
         k = str(k)
         new_key, array_count, value_path = remove_array_markers(k)
@@ -106,7 +111,7 @@ class JSONRecord(base.BaseRecord):
     Provides lookup by JSONPath or ``ValuePath``.
     """
 
-    def __init__(self, original):
+    def __init__(self, original: Any):
         super().__init__(original)
         self._unpack_json()
 
@@ -118,7 +123,8 @@ class JSONRecord(base.BaseRecord):
             self.fields.add(pair.field)
             self.kv_pairs.append(pair)
 
-    def unpack(self):
+    @override
+    def unpack(self) -> None:
         self.kv_pairs = []
         self.fields = set()
         self._unpack_json()

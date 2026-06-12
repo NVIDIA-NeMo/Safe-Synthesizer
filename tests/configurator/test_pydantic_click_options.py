@@ -355,6 +355,7 @@ def test_no_flag_is_bool_type():
         pass
 
     flag = next(p for p in cmd.params if p.name == "no_nested")
+    assert isinstance(flag, click.Option)
     assert flag.is_flag
 
 

@@ -20,6 +20,8 @@ Run standalone:
 import logging
 import os
 
+from typing_extensions import override
+
 # Must be set BEFORE importing numpy/sklearn (which load OpenBLAS)
 # Cap threads to avoid OpenBLAS crashes on high-core machines (>128 cores)
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "8")
@@ -96,6 +98,7 @@ class BenchmarkResult:
     n_queries: int
     k: int
 
+    @override
     def __str__(self) -> str:
         return (
             f"{self.name}: fit={self.fit_time_sec:.3f}s, "

@@ -7,6 +7,7 @@
 #     "requests>=2.33.0",
 #     "tomlkit>=0.13.0",
 #     "packaging>=24",
+#     "typing-extensions>=4.15.0",
 # ]
 # ///
 # What is this?
@@ -30,18 +31,23 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any, TypeAlias
 
 import requests
 import tomlkit
 import tomlkit.items
+from packaging.markers import Marker
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 from tomlkit.container import OutOfOrderTableProxy
+from typing_extensions import TypeIs
 
 TOO_HARD_TO_UPGRADE = frozenset({canonicalize_name(n) for n in ("torch", "transformers", "vllm")})
 REPOSITORY_NAME = os.environ.get("REPOSITORY_NAME") or "NVIDIA-NeMo/Safe-Synthesizer"
+
+TomlTable: TypeAlias = tomlkit.TOMLDocument | tomlkit.items.Table | OutOfOrderTableProxy
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +55,7 @@ REPOSITORY_NAME = os.environ.get("REPOSITORY_NAME") or "NVIDIA-NeMo/Safe-Synthes
 # ---------------------------------------------------------------------------
 
 
-def _format_requirement(name: str, spec: SpecifierSet, marker) -> str:
+def _format_requirement(name: str, spec: SpecifierSet, marker: Marker | None) -> str:
     s = str(spec).strip()
     out = f"{name}{s}" if s else str(name)
     if marker is not None:
@@ -121,23 +127,23 @@ def _bump_direct_deps_in_doc(
     """
     changed: list[str] = []
 
-    proj = doc.get("project")
-    if _is_table(proj):
-        main_deps = proj.get("dependencies")  # type: ignore[union-attr]
+    proj = _get_table(doc, "project")
+    if proj is not None:
+        main_deps = _get_array(proj, "dependencies")
         if isinstance(main_deps, tomlkit.items.Array):
             if _bump_array_item(main_deps, cname, floor, display_name):
                 changed.append("project.dependencies")
 
-        opt = proj.get("optional-dependencies")  # type: ignore[union-attr]
-        if _is_table(opt):
-            for extra_name, extra_arr in opt.items():  # type: ignore[union-attr]
+        opt = _get_table(proj, "optional-dependencies")
+        if opt is not None:
+            for extra_name, extra_arr in opt.items():
                 if isinstance(extra_arr, tomlkit.items.Array):
                     if _bump_array_item(extra_arr, cname, floor, display_name):
                         changed.append(f"project.optional-dependencies.{extra_name}")
 
-    dep_groups = doc.get("dependency-groups")
-    if _is_table(dep_groups):
-        for gname, garr in dep_groups.items():  # type: ignore[union-attr]
+    dep_groups = _get_table(doc, "dependency-groups")
+    if dep_groups is not None:
+        for gname, garr in dep_groups.items():
             if isinstance(garr, tomlkit.items.Array):
                 if _bump_array_item(garr, cname, floor, display_name):
                     changed.append(f"dependency-groups.{gname}")
@@ -147,21 +153,27 @@ def _bump_direct_deps_in_doc(
 
 def _collect_direct_dep_names(doc: tomlkit.TOMLDocument) -> frozenset[str]:
     names: set[str] = set()
-    proj = doc.get("project")
-    if _is_table(proj):
-        for line in proj.get("dependencies") or []:  # type: ignore[union-attr]
+    proj = _get_table(doc, "project")
+    if proj is not None:
+        for line in _get_array(proj, "dependencies") or []:
             n = _safe_req_name(str(line)) if isinstance(line, str) else None
             if n:
                 names.add(n)
-        for lines in (proj.get("optional-dependencies") or {}).values():  # type: ignore[union-attr]
-            for line in lines or []:
-                n = _safe_req_name(str(line)) if isinstance(line, str) else None
-                if n:
-                    names.add(n)
-    dep_groups = doc.get("dependency-groups")
-    if _is_table(dep_groups):
-        for items in dep_groups.values():  # type: ignore[union-attr]
-            for item in items or []:
+        optional_dependencies = _get_table(proj, "optional-dependencies")
+        if optional_dependencies is not None:
+            for lines in optional_dependencies.values():
+                if not isinstance(lines, tomlkit.items.Array):
+                    continue
+                for line in lines:
+                    n = _safe_req_name(str(line)) if isinstance(line, str) else None
+                    if n:
+                        names.add(n)
+    dep_groups = _get_table(doc, "dependency-groups")
+    if dep_groups is not None:
+        for items in dep_groups.values():
+            if not isinstance(items, tomlkit.items.Array):
+                continue
+            for item in items:
                 n = _safe_req_name(str(item)) if isinstance(item, str) else None
                 if n:
                     names.add(n)
@@ -205,10 +217,11 @@ def _write_constraints_txt(path: Path, constraint_lines: list[str]) -> None:
 
 
 def _replace_constraint_dependencies_array(doc: tomlkit.TOMLDocument, lines: list[str]) -> None:
-    if "tool" not in doc or not _is_table(doc["tool"]):
+    tool = _get_table(doc, "tool")
+    if tool is None:
         raise SystemExit("pyproject.toml: missing or invalid [tool] table")
-    uv = doc["tool"]["uv"]
-    if not _is_table(uv):
+    uv = _get_table(tool, "uv")
+    if uv is None:
         raise SystemExit("pyproject.toml: missing or invalid [tool.uv] table")
     arr = tomlkit.array()
     arr.multiline(True)
@@ -222,7 +235,7 @@ def _replace_constraint_dependencies_array(doc: tomlkit.TOMLDocument, lines: lis
 # ---------------------------------------------------------------------------
 
 
-def _collect_max_floors(deps: list[dict], too_hard: frozenset[str]) -> dict[str, str]:
+def _collect_max_floors(deps: list[dict[str, Any]], too_hard: frozenset[str]) -> dict[str, str]:
     """Map canonical name -> highest advisory floor version across all alerts."""
     out: dict[str, str] = {}
     for dep in deps:
@@ -240,7 +253,7 @@ def _collect_max_floors(deps: list[dict], too_hard: frozenset[str]) -> dict[str,
     return out
 
 
-def _advisory_spelling_by_canonical(deps: list[dict], cnames: frozenset[str]) -> dict[str, str]:
+def _advisory_spelling_by_canonical(deps: list[dict[str, Any]], cnames: frozenset[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     for dep in deps:
         p = dep["dependency"]["package"]["name"]
@@ -257,8 +270,18 @@ def _advisory_spelling_by_canonical(deps: list[dict], cnames: frozenset[str]) ->
 # ---------------------------------------------------------------------------
 
 
-def _is_table(x: object) -> bool:
-    return isinstance(x, (tomlkit.items.Table, OutOfOrderTableProxy))
+def _is_table(x: object) -> TypeIs[TomlTable]:
+    return isinstance(x, (tomlkit.TOMLDocument, tomlkit.items.Table, OutOfOrderTableProxy))
+
+
+def _get_table(table: TomlTable, key: str) -> TomlTable | None:
+    value = table.get(key)
+    return value if _is_table(value) else None
+
+
+def _get_array(table: TomlTable, key: str) -> tomlkit.items.Array | None:
+    value = table.get(key)
+    return value if isinstance(value, tomlkit.items.Array) else None
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +301,9 @@ def main() -> None:
         if not github_token:
             raise SystemExit("GITHUB_TOKEN is not set, required to fetch dependabot alerts")
         headers = {"Authorization": f"Bearer {github_token}"}
-        all_deps: list[dict] = []
+        all_deps: list[dict[str, Any]] = []
         next_url: str | None = url
-        params: dict | None = {"per_page": 100}
+        params: dict[str, int] | None = {"per_page": 100}
         while next_url:
             response = requests.get(next_url, headers=headers, params=params)
             response.raise_for_status()
@@ -292,7 +315,7 @@ def main() -> None:
             json.dump(all_deps, f)
 
     with open(dependabot_file, encoding="utf-8") as f:
-        deps = json.load(f)
+        deps: list[dict[str, Any]] = json.load(f)
 
     doc = tomlkit.parse(pyproject_path.read_text(encoding="utf-8"))
     direct_dep_names = _collect_direct_dep_names(doc)
@@ -322,8 +345,9 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Pass 2: transitive deps → constraint-dependencies
     # ------------------------------------------------------------------
-    uv_section = doc["tool"]["uv"] if _is_table(doc.get("tool")) else None
-    raw = uv_section.get("constraint-dependencies") if _is_table(uv_section) else None
+    tool = _get_table(doc, "tool")
+    uv_section = _get_table(tool, "uv") if tool is not None else None
+    raw = uv_section.get("constraint-dependencies") if uv_section is not None else None
     if raw is None:
         current: list[str] = []
     elif not isinstance(raw, tomlkit.items.Array):

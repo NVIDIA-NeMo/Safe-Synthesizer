@@ -27,6 +27,7 @@ import yaml
 from pydantic import (
     BaseModel,
 )
+from typing_extensions import override
 
 from ..config.base import (
     pydantic_model_config,
@@ -55,6 +56,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         return True
 
     @classmethod
+    @override
     def __subclasshook__(cls, c):
         """Enable ``isinstance()`` checks via duck typing on the ``_isparams`` marker."""
         if cls is Parameters:
@@ -109,6 +111,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             for pg in param_groups:
                 yield from pg._iter_parameters(recursive=True)
 
+    @override
     def __iter__(self) -> Iterator[Mapping[str, Any]]:  # ty: ignore[invalid-method-override] -- intentionally overrides pydantic BaseModel.__iter__ with parameter-group semantics
         """Iterate over all parameters, recursing into nested groups."""
         return self._iter_parameters(recursive=True)

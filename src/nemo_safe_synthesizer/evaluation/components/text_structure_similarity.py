@@ -9,6 +9,7 @@ from functools import cached_property
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
+from typing_extensions import override
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
@@ -93,6 +94,7 @@ class TextStructureSimilarity(Component):
         return d
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> TextStructureSimilarity:

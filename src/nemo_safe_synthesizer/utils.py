@@ -15,7 +15,7 @@ import os
 import time
 from collections.abc import Callable, Generator, Iterable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeGuard, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -161,11 +161,11 @@ def log_stats(
     )
 
 
-def log_training_example_stats(stats_dict: dict[str, Statistics], **kwargs) -> None:
+def log_training_example_stats(stats_dict: dict[str, Statistics]) -> None:
     """Log training example statistics from the given dictionary."""
     stats = list(stats_dict.values())
     headers = list([name.replace("_", " ").capitalize() for name in stats_dict.keys()])
-    log_stats(title="Training Example Statistics", stats=stats, headers=headers, **kwargs)
+    log_stats(title="Training Example Statistics", stats=stats, headers=headers)
 
 
 def round_number_if_float(number: int | float, precision: int = 3) -> int | float:
@@ -275,12 +275,12 @@ def merge_dicts(base: Mapping[str, Any], new: Mapping[str, Any]) -> dict[str, An
     return result
 
 
-def is_iterable(x: object) -> bool:
+def is_iterable(x: object) -> TypeGuard[Iterable[object]]:
     """Check whether ``x`` has both ``__iter__`` and ``__getitem__``."""
     return hasattr(x, "__iter__") and hasattr(x, "__getitem__")
 
 
-def flatten(iter: Iterable) -> Generator:
+def flatten(iter: Iterable[object]) -> Generator[object]:
     """Flatten a possibly nested iterable.
 
     Strings are yielded as-is (not broken into characters). Dicts are
@@ -325,7 +325,7 @@ def is_dataframe(x: object) -> TypeIs[pd.DataFrame]:
 
 
 def write_json(
-    data: dict,
+    data: Mapping[str, object],
     path: str | os.PathLike[str],
     encoding: str | None = None,
     indent: int | None = None,
@@ -337,7 +337,7 @@ def write_json(
         json.dump(data, file, indent=indent)
 
 
-def load_json(path: str | Path, encoding: str | None = None) -> dict:
+def load_json(path: str | Path, encoding: str | None = None) -> dict[str, Any]:
     """Load JSON file and return the content as a dict."""
     with Path(path).open(encoding=encoding) as file:
         return json.load(file)

@@ -98,6 +98,10 @@ checksum = "sha256:a9fe3ea2f86dfc72f6728417521ec9067b343277152b114f4e98d8cb0e263
 url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-macos-arm64"
 provenance = "github-attestations"
 
+[[tools."pipx:pyrefly"]]
+version = "1.0.0"
+backend = "pipx:pyrefly"
+
 [[tools.ripgrep]]
 version = "15.1.0"
 backend = "aqua:BurntSushi/ripgrep"

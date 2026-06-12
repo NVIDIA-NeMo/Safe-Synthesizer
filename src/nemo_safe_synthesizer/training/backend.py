@@ -20,6 +20,7 @@ from transformers import (
     TrainerCallback,
     TrainingArguments,
 )
+from typing_extensions import override
 
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
@@ -188,6 +189,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         self.workdir = workdir
 
     @classmethod
+    @override
     def __subclasshook__(cls, subclass):
         if cls is not TrainingBackend:
             return NotImplemented

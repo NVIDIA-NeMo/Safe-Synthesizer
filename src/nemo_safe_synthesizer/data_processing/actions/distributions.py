@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy as np
 from pydantic import BaseModel, Field
+from typing_extensions import override
 
 
 class Distribution(BaseModel, ABC):
@@ -98,6 +99,7 @@ class GaussianDistribution(Distribution):
     mean: float
     std_dev: float = Field(gt=0)
 
+    @override
     def sample(self, num_records: int) -> list[float]:
         return np.random.normal(loc=self.mean, scale=self.std_dev, size=num_records).tolist()
 
@@ -107,6 +109,7 @@ class DatetimeGaussianDistribution(DatetimeDistribution):
     mean: datetime
     std_dev: timedelta
 
+    @override
     def sample_datetimes(self, num_records: int) -> list[datetime]:
         float_samples = GaussianDistribution(mean=self.mean.timestamp(), std_dev=self.std_dev.total_seconds()).sample(
             num_records=num_records
@@ -119,6 +122,7 @@ class UniformDistribution(Distribution):
     low: float
     high: float
 
+    @override
     def sample(self, num_records: int) -> list[float]:
         return np.random.uniform(low=self.low, high=self.high, size=num_records).tolist()
 
@@ -128,6 +132,7 @@ class DatetimeUniformDistribution(DatetimeDistribution):
     low: datetime
     high: datetime
 
+    @override
     def sample_datetimes(self, num_records: int) -> list[datetime]:
         float_samples = UniformDistribution(low=self.low.timestamp(), high=self.high.timestamp()).sample(
             num_records=num_records

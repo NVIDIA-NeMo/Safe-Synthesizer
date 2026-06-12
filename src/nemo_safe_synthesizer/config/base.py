@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+from typing_extensions import override
 
 __all__ = ["NSSBaseModel", "LRScheduler", "pydantic_model_config"]
 
@@ -34,6 +35,7 @@ class NSSBaseModel(BaseModel):
 
     model_config = pydantic_model_config
 
+    @override
     def dict(self, **kwargs: Any) -> dict[str, Any]:  # ty: ignore[invalid-type-form] -- method name shadows builtin dict; backward-compat shim for model_dump
         """Return a dict representation via ``model_dump`` for backward compatibility."""
         return self.model_dump(**kwargs)

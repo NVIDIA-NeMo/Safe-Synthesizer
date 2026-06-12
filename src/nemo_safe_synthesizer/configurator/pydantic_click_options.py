@@ -20,13 +20,14 @@ from __future__ import annotations
 
 import inspect
 import types
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal, Union, get_args, get_origin
+from typing import Annotated, Any, Literal, TypeVar, Union, get_args, get_origin
 
 import click
 from pydantic import BaseModel
 from pydantic.fields import FieldInfo
-from typing_extensions import TypeIs
+from typing_extensions import TypeIs, override
 
 from ..config.types import AUTO_STR
 
@@ -102,6 +103,7 @@ class FlagParam:
 
 
 ClickParam = LeafParam | FlagParam
+F = TypeVar("F", bound=Callable[..., object])
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +115,7 @@ def _is_basemodel(t: Any) -> TypeIs[type[BaseModel]]:
     return inspect.isclass(t) and issubclass(t, BaseModel)
 
 
-def _nullable_model_arg(union_args: tuple) -> type[BaseModel] | None:
+def _nullable_model_arg(union_args: tuple[object, ...]) -> type[BaseModel] | None:
     """Return the BaseModel member of a ``SomeModel | None`` union, or ``None``."""
     return next((a for a in union_args if a is not type(None) and _is_basemodel(a)), None)
 
@@ -148,6 +150,7 @@ class AutoParamType(click.ParamType):
         self.base_type = base_type
         self.name = f"{base_type.name}|{AUTO_STR}"
 
+    @override
     def convert(
         self,
         value: str,
@@ -175,12 +178,12 @@ class AutoParamType(click.ParamType):
         return self.base_type.convert(value, param, ctx)
 
 
-def _has_string_literal(args: set) -> bool:
+def _has_string_literal(args: set[object]) -> bool:
     """Check if any member is a ``Literal`` containing a string value."""
     return any(get_origin(a) is Literal and any(isinstance(v, str) for v in get_args(a)) for a in args)
 
 
-def _is_auto_only_literal_union(args: set) -> bool:
+def _is_auto_only_literal_union(args: set[object]) -> bool:
     """Check that the union's string-valued ``Literal`` members are exactly ``{AUTO_STR}``.
 
     Returns ``True`` only if every string-valued Literal member contributes the
@@ -198,9 +201,9 @@ def _is_auto_only_literal_union(args: set) -> bool:
     return string_values == {AUTO_STR}
 
 
-def _literal_value_types(args: set) -> set:
+def _literal_value_types(args: set[object]) -> set[object]:
     """Replace non-string ``Literal`` annotations with their value types."""
-    normalized: set = set()
+    normalized: set[object] = set()
     for arg in args:
         if get_origin(arg) is Literal:
             normalized.update(type(value) for value in get_args(arg))
@@ -224,7 +227,7 @@ def _click_type(annotation: Any) -> click.ParamType:
     t = annotation
     if get_origin(t) is Annotated:
         t = get_args(t)[0]
-    args = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
+    args: set[object] = set(get_args(t)) if get_origin(t) in (Union, types.UnionType) else {t}
     args.discard(type(None))
     if _has_string_literal(args):
         # Auto*Param: Literal["auto"] | <numeric|bool> -- wrap in AutoParamType so
@@ -289,7 +292,7 @@ def _collect_params(cls: type[BaseModel], prefix: str = "") -> list[ClickParam]:
 # ---------------------------------------------------------------------------
 
 
-def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
+def pydantic_options(model_class: type[BaseModel], field_separator: str = "__") -> Callable[[F], F]:
     """Decorate a Click command with options derived from a Pydantic model.
 
     Recurses into nested sub-models, flattening their fields into top-level
@@ -309,7 +312,7 @@ def pydantic_options(model_class: type[BaseModel], field_separator: str = "__"):
         A Click decorator that attaches the generated options to a command.
     """
 
-    def decorator(f):
+    def decorator(f: F) -> F:
         for param in sorted(_collect_params(model_class), key=lambda p: p.name):
             match param:
                 case FlagParam(field_name=field_name):

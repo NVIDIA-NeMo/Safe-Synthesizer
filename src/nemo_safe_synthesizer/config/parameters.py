@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any, Self, TypeAlias
 
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import override
 
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
@@ -196,6 +197,7 @@ class SafeSynthesizerParameters(Parameters):
         return self
 
     @classmethod
+    @override
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
 

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from category_encoders.count import CountEncoder
 from pydantic import ConfigDict, Field
+from typing_extensions import override
 
 from ...artifacts.analyzers.field_features import (
     FieldType,
@@ -56,6 +57,7 @@ class DeepStructure(Component):
         return d
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> DeepStructure:

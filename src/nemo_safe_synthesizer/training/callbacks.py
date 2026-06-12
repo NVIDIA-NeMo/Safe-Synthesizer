@@ -15,6 +15,7 @@ from transformers import (
     TrainerState,
     TrainingArguments,
 )
+from typing_extensions import override
 
 if TYPE_CHECKING:
     from torch.utils.data import DataLoader
@@ -101,6 +102,7 @@ class InferenceEvalCallback(TrainerCallback):
             "repetition_penalty": kws.get("repetition_penalty", DEFAULT_SAMPLING_PARAMETERS["repetition_penalty"]),
         }
 
+    @override
     def on_evaluate(
         self,
         args: TrainingArguments,
@@ -205,6 +207,7 @@ class ProgressBarCallback(TrainerCallback):
         self.training_bar = None
         self.prediction_bar = None
 
+    @override
     def on_train_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
         if state.is_world_process_zero:
             self.training_bar = tqdm(
@@ -214,11 +217,13 @@ class ProgressBarCallback(TrainerCallback):
             )
         self.current_step = 0
 
+    @override
     def on_step_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
         if state.is_world_process_zero and self.training_bar is not None:
             self.training_bar.update(state.global_step - self.current_step)
             self.current_step = state.global_step
 
+    @override
     def on_prediction_step(
         self,
         args: TrainingArguments,
@@ -242,12 +247,14 @@ class ProgressBarCallback(TrainerCallback):
             )
         self.prediction_bar.update(1)
 
+    @override
     def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
         if state.is_world_process_zero:
             if self.prediction_bar is not None:
                 self.prediction_bar.close()
             self.prediction_bar = None
 
+    @override
     def on_predict(
         self,
         args: TrainingArguments,
@@ -261,6 +268,7 @@ class ProgressBarCallback(TrainerCallback):
                 self.prediction_bar.close()
             self.prediction_bar = None
 
+    @override
     def on_log(
         self,
         args: TrainingArguments,
@@ -284,6 +292,7 @@ class ProgressBarCallback(TrainerCallback):
             if "loss" in logs:
                 self.training_bar.set_description(f"Training in progress [loss = {logs['loss']: .4f}]")
 
+    @override
     def on_train_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs) -> None:
         if state.is_world_process_zero and self.training_bar is not None:
             self.training_bar.close()
@@ -310,6 +319,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         self._last_log_ts = time.monotonic()
         self._last_log_global_step = 0
 
+    @override
     def on_train_begin(
         self,
         args: TrainingArguments,
@@ -333,6 +343,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
             return control
         return None
 
+    @override
     def on_epoch_end(
         self,
         args: TrainingArguments,
@@ -344,6 +355,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         # when the last log was emitted.
         return self._checked_log_if(True, state, control)
 
+    @override
     def on_substep_end(
         self,
         args: TrainingArguments,
@@ -357,6 +369,7 @@ class SafeSynthesizerWorkerCallback(TrainerCallback):
         # We leave it to `on_log` below to actually reset the last log timestamp.
         return self._checked_log_if(time.monotonic() - self._last_log_ts >= self._log_interval, state, control)
 
+    @override
     def on_log(
         self,
         args: TrainingArguments,

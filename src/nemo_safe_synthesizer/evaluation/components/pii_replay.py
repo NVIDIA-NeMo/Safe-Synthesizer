@@ -7,6 +7,7 @@ import math
 from functools import cached_property
 
 from pydantic import BaseModel, Field
+from typing_extensions import override
 
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
@@ -72,6 +73,7 @@ class PIIReplay(Component):
         return d
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> PIIReplay:

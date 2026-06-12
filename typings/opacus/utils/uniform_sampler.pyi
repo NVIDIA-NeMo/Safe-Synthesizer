@@ -5,6 +5,7 @@ from collections.abc import Iterator
 
 import torch
 from torch.utils.data import Sampler
+from typing_extensions import override
 
 class UniformWithReplacementSampler(Sampler[list[int]]):
     num_samples: int
@@ -13,4 +14,5 @@ class UniformWithReplacementSampler(Sampler[list[int]]):
     generator: torch.Generator | None
     def __init__(self, *, num_samples: int, sample_rate: float, generator: object = None) -> None: ...
     def __len__(self) -> int: ...
+    @override
     def __iter__(self) -> Iterator[list[int]]: ...

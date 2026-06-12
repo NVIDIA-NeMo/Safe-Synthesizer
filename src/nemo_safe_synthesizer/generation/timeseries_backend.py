@@ -238,6 +238,7 @@ class TimeseriesBackend(VllmBackend):
         self._group_prefills: dict[str, str] = initial_prefill_value
         self._groups: list[str] = list(self._group_prefills.keys())
 
+    @override
     def _get_prompt_token_count(self) -> int:
         """Return the longest active prompt length for ``SamplingParams``.
 
