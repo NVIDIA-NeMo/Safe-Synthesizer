@@ -45,7 +45,7 @@ logger = get_logger(__name__)
 
 score_map = {"low": Score.LOW, "med": Score.MED, "high": Score.HIGH}
 
-PatternListType = list[re.Pattern]
+PatternListType = list[re.Pattern[str]]
 
 
 def _str_to_pattern(data: str | list[str]) -> PatternListType:
@@ -72,7 +72,7 @@ class CustomRegexPattern:
     header_skip: Optional[str | list[str]] = field(default_factory=list)
 
     # set after init
-    regex_compiled: re.Pattern = None
+    regex_compiled: re.Pattern[str] | None = None
     header_match_compiled: PatternListType = field(default_factory=list)
     header_skip_compiled: PatternListType = field(default_factory=list)
 
@@ -80,9 +80,7 @@ class CustomRegexPattern:
         if self.score not in score_map:
             raise CustomPredictorError("score must be one of low, med, high")
 
-        self.regex_compiled = self.regex
-        if not isinstance(self.regex, re.Pattern):
-            self.regex_compiled = re.compile(str(self.regex))
+        self.regex_compiled = re.compile(str(self.regex))
 
         self._load_header_patterns()
 
@@ -94,6 +92,8 @@ class CustomRegexPattern:
             self.header_skip_compiled = _str_to_pattern(self.header_skip)
 
     def get_synthesizer_pattern(self):
+        if self.regex_compiled is None:
+            raise CustomPredictorError("regex pattern was not compiled")
         _score = score_map[self.score]
         return RegexPattern(
             pattern=self.regex_compiled,

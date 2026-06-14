@@ -3,8 +3,12 @@
 
 from typing import Any
 
+import pytest
+
 from nemo_safe_synthesizer.data_processing.records.fragment import NERRawPredictionPayload
+from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
 from nemo_safe_synthesizer.pii_replacer.ner.model import Model
+from nemo_safe_synthesizer.pii_replacer.ner.utils import input_to_json_records
 
 
 def _prediction() -> NERRawPredictionPayload:
@@ -95,3 +99,19 @@ def test_predict_timings_only_returns_timing_payload_for_dict_input():
         "time_per_prediction_ms": 2.0,
         "predictors": {},
     }
+
+
+def test_input_to_json_records_preserves_json_records_and_wraps_raw_records():
+    existing = JSONRecord({"contact": "alice@example.com"})
+
+    records = input_to_json_records([existing, {"name": "Alice"}, "raw text"])
+
+    assert records[0] is existing
+    assert [record.original for record in records[1:]] == [{"name": "Alice"}, "raw text"]
+
+
+def test_input_to_json_records_rejects_unsupported_list_items():
+    bad_input: Any = [1]
+
+    with pytest.raises(TypeError, match="Input data not supported"):
+        input_to_json_records(bad_input)

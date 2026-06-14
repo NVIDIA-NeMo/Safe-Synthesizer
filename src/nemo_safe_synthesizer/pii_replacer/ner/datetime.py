@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import itertools
 import math
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -12,6 +14,7 @@ from typing import Optional
 from dateparser import parse
 from dateparser.date import get_date_from_timestamp
 from dateparser.search import search_dates
+from typing_extensions import override
 
 from ...data_processing.records.json_record import JSONRecord
 from .entity import (
@@ -98,23 +101,28 @@ PARSERS = ["timestamp", "absolute-time"]
 
 @dataclass
 class BaseContext(PredictorContext):
-    header_contexts: list
-    header_regexes: list = None
-    header_tokens: list = None
+    header_contexts: Sequence[str | re.Pattern[str]]
+    header_regexes: re.Pattern[str] | None = None
+    header_tokens: re.Pattern[str] | None = None
 
     def __post_init__(self):
         self.header_regexes, self.header_tokens = split_header_contexts(self.header_contexts)
 
+    def get_entity_label(self, match: tuple[str, datetime]) -> str:
+        raise NotImplementedError
+
 
 @dataclass
 class DateTimeContext(BaseContext):
-    def get_entity_label(self, match: tuple):
+    @override
+    def get_entity_label(self, match: tuple[str, datetime]) -> str:
         return Entity.DATETIME.tag
 
 
 @dataclass
 class BirthDateContext(BaseContext):
-    def get_entity_label(self, _):
+    @override
+    def get_entity_label(self, match: tuple[str, datetime]) -> str:
         return Entity.BIRTH_DATE.tag
 
 
@@ -169,14 +177,16 @@ class DateTime(Predictor):
     """Date date/time matcher."""
 
     default_name: str = "datetime"
+    _context: BaseContext
 
-    def __init__(self, name: str = None):
+    def __init__(self, name: str | None = None):
         if name is None:
             name = self.default_name
         super().__init__(name)
         self._context = DateTimeContext(LABELS)
 
-    def evaluate(self, in_record: JSONRecord) -> list[NERPrediction]:
+    @override
+    def evaluate(self, in_data: JSONRecord) -> list[NERPrediction]:
         """
         Given a single record determine if any
         entities are represented.
@@ -187,8 +197,8 @@ class DateTime(Predictor):
         Returns:
             A list of entity predictions sorted by score. Top score is first entry in list.
         """
-        result_set_by_field = [[] for _ in in_record.kv_pairs]
-        for field_matches, record_field in zip(result_set_by_field, in_record.kv_pairs):
+        result_set_by_field: list[list[NERPrediction]] = [[] for _ in in_data.kv_pairs]
+        for field_matches, record_field in zip(result_set_by_field, in_data.kv_pairs):
             # NOTE(jm): Changed to require header context no matter what, too many
             # FPs when looking in unstructured text
             if not self.header_has_context(

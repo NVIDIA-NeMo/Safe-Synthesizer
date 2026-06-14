@@ -3,9 +3,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .entity import Entity
 
-spacy = None
+spacy: Any
+try:
+    import spacy as _spacy  # ty: ignore[unresolved-import]
+except ImportError:
+    spacy = None
+else:
+    spacy = _spacy
 
 
 def entities_to_html(text: str, entities: list):
@@ -15,6 +23,9 @@ def entities_to_html(text: str, entities: list):
 
     Returns: an HTML string
     """
+    if spacy is None:
+        raise RuntimeError("spacy is not installed")
+
     palette = [
         "#7aecec",
         "#bfeeb7",

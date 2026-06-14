@@ -6,8 +6,11 @@ from __future__ import annotations
 import itertools
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Optional
+
+from typing_extensions import override
 
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord
@@ -17,8 +20,8 @@ from .predictor import ContextSpan, Predictor, is_context_matched
 
 
 def split_header_contexts(
-    contexts: list[str | re.Pattern],
-) -> tuple[re.Pattern | None, re.Pattern | None]:
+    contexts: Sequence[str | re.Pattern[str]],
+) -> tuple[re.Pattern[str] | None, re.Pattern[str] | None]:
     """Split a list of strings and re.Patterns into two distcit regexes.
 
     Returns (regexes, tokens)
@@ -56,7 +59,7 @@ class Pattern:
         `NERError` if `pattern` is not a string or regex Pattern
     """
 
-    pattern: str | re.Pattern
+    pattern: str | re.Pattern[str]
 
     context_score: Optional[float] = Score.HIGH
     """This is the optimal score that you want to assign when context exists
@@ -72,21 +75,21 @@ class Pattern:
     """If set, do not emit a match if only the raw regex matches without any context
     """
 
-    header_contexts: Optional[list[str | re.Pattern]] = field(default_factory=list)
+    header_contexts: Sequence[str | re.Pattern[str]] = field(default_factory=list)
     """A list of strings or regexes that should be used to check the
     name of the field / header for a match. If there are any matches here, then
     the ``context_score`` value will be used as the matched score
     """
 
-    header_regexes: Optional[re.Pattern] = field(init=False, default=None)
-    header_tokens: Optional[re.Pattern] = field(init=False, default=None)
+    header_regexes: re.Pattern[str] | None = field(init=False, default=None)
+    header_tokens: re.Pattern[str] | None = field(init=False, default=None)
 
-    neg_header_contexts: Optional[list[str | re.Pattern]] = field(default_factory=list)
+    neg_header_contexts: Sequence[str | re.Pattern[str]] = field(default_factory=list)
     """A list of strings or regexes that can be used to disqualify a field from being analyzed.
     If used, any matches were will short-circuit processing for a given key/value pair."""
 
-    neg_header_regexes: Optional[re.Pattern] = field(init=False, default=None)
-    neg_header_tokens: Optional[re.Pattern] = field(init=False, default=None)
+    neg_header_regexes: re.Pattern[str] | None = field(init=False, default=None)
+    neg_header_tokens: re.Pattern[str] | None = field(init=False, default=None)
 
     header_context_source: int = Predictor.KEY
     """If doing header context searching, this dictates where to search for the context. We default
@@ -94,7 +97,7 @@ class Pattern:
     of the field name and value
     """
 
-    span_contexts: Optional[ContextSpan | list[ContextSpan]] = field(default_factory=list)
+    span_contexts: ContextSpan | Sequence[ContextSpan] | None = field(default_factory=list)
     """A list of ``ContextSpan`` instances that will be used, if provided, to
     search surrounding text of a string match for other discrete strings or
     matching regular expressions. See the ``ContextSpan`` usage for more details.
@@ -117,6 +120,14 @@ class Pattern:
         self.neg_header_regexes, self.neg_header_tokens = split_header_contexts(self.neg_header_contexts)
 
 
+def _span_contexts(spans: ContextSpan | Sequence[ContextSpan] | None) -> Sequence[ContextSpan]:
+    if spans is None:
+        return ()
+    if isinstance(spans, ContextSpan):
+        return (spans,)
+    return spans
+
+
 class RegexPredictor(Predictor):
     """Base class that represents a single entity.
 
@@ -127,14 +138,14 @@ class RegexPredictor(Predictor):
     def __init__(
         self,
         name: Optional[str] = None,
-        patterns: list[Pattern] = None,
+        patterns: Sequence[Pattern] | None = None,
         entity: Optional[Entity] = None,
         namespace: Optional[str] = None,
     ):
         if patterns is None:
             patterns = []
 
-        self.patterns = patterns
+        self.patterns = list(patterns)
         self.entity = entity
 
         # NOTE: If a name is not provided, then we will use the
@@ -145,7 +156,7 @@ class RegexPredictor(Predictor):
 
         super().__init__(name, namespace=namespace)
 
-    def validate_match(self, matched_text: str, original_text: str):
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
         """
         A base method for regex rules to implement.
 
@@ -165,7 +176,8 @@ class RegexPredictor(Predictor):
 
         return [max(ps, key=lambda p: p.score) for _, ps in by_range]
 
-    def evaluate(self, in_record: JSONRecord, res_by_field=False) -> list[NERPrediction]:
+    @override
+    def evaluate(self, in_data: JSONRecord) -> list[NERPrediction]:
         """
         Given a single record determine if any
         entities are represented.
@@ -177,8 +189,8 @@ class RegexPredictor(Predictor):
             A list of entity predictions sorted by score. Top score is
             first entry in list.
         """
-        record_fields = in_record.kv_pairs
-        result_set_by_field = [set() for _ in record_fields]
+        record_fields = in_data.kv_pairs
+        result_set_by_field: list[set[NERPrediction]] = [set() for _ in record_fields]
 
         record_field: KVPair
         for field_matches, record_field in zip(result_set_by_field, record_fields):
@@ -234,7 +246,7 @@ class RegexPredictor(Predictor):
                                 record_field.value,
                                 start_pos,
                                 end_pos,
-                                pattern.span_contexts,
+                                _span_contexts(pattern.span_contexts),
                             ):
                                 _score = pattern.context_score
                             elif pattern.ignore_raw_score:
@@ -257,20 +269,17 @@ class RegexPredictor(Predictor):
 
         filtered_results = map(self.filter_by_range_by_score, result_set_by_field)
 
-        if res_by_field:
-            return [list(res_set) for res_set in result_set_by_field]
-
         results_flat = itertools.chain.from_iterable(filtered_results)
         results = sorted(results_flat, key=lambda i: i.score, reverse=True)
 
         return list(results)
 
     @classmethod
-    def from_pattern(cls, pattern: Pattern, name: str = None, namespace: str = None):
+    def from_pattern(cls, pattern: Pattern, name: str | None = None, namespace: str | None = None):
         return cls(patterns=[pattern], name=name, namespace=namespace)
 
     @classmethod
-    def from_regex(cls, regex: str, name: str = None, namespace: str = None):
+    def from_regex(cls, regex: str, name: str | None = None, namespace: str | None = None):
         pattern = Pattern(pattern=regex, raw_score=Score.MAX)
         return RegexPredictor.from_pattern(pattern, name=name, namespace=namespace)
 
@@ -363,7 +372,11 @@ class PhraseMatcherBuilder:
         return out_predictors
 
 
-def phrase_predictors_from_entity_ruler(name: str, er_patterns: list[dict], entity_map: dict) -> list[RegexPredictor]:
+def phrase_predictors_from_entity_ruler(
+    name: str,
+    er_patterns: Sequence[dict[str, object]],
+    entity_map: dict[str, str | Entity],
+) -> list[RegexPredictor]:
     """Given a list of Spacy EntityRuler patterns, create
     a phrase matcher predictor.
     """
@@ -372,11 +385,14 @@ def phrase_predictors_from_entity_ruler(name: str, er_patterns: list[dict], enti
     builder = PhraseMatcherBuilder(name)
 
     for er_pattern in er_patterns:
-        _label = er_label_map.get(er_pattern["label"], None)
+        label_key = er_pattern.get("label")
+        if not isinstance(label_key, str):
+            continue
+        _label = er_label_map.get(label_key, None)
         # _label = er_pattern["label"]
         if not _label:
             continue
-        _pattern = er_pattern["pattern"]
+        _pattern = er_pattern.get("pattern")
         if isinstance(_pattern, str):
             builder.add_phrase(_label, _pattern, case=True)
 
@@ -386,12 +402,19 @@ def phrase_predictors_from_entity_ruler(name: str, er_patterns: list[dict], enti
             # to determine if it should have a whitespace added
             # before it
 
-            # seed the base string
-            _pattern = iter(_pattern)
-            _str = next(_pattern)["LOWER"]
-
+            token_values: list[str] = []
             for part in _pattern:
-                part = part["LOWER"]
+                match part:
+                    case {"LOWER": str(lower)}:
+                        token_values.append(lower)
+                    case _:
+                        continue
+            if not token_values:
+                continue
+
+            # seed the base string
+            _str = token_values[0]
+            for part in token_values[1:]:
                 if not part.isalnum() and len(part) == 1:
                     _str += part
                 else:

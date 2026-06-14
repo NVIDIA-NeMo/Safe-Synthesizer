@@ -91,17 +91,17 @@ def tokenize_header(field: str) -> list[str]:
 
 def get_type_as_string(value) -> str:
     """Return the JSON schema type name for a Python scalar value."""
-    if isinstance(value, str):
-        return STRING
-    elif isinstance(value, bool):
-        if str(value) in ("True", "False"):
+    match value:
+        case str():
+            return STRING
+        case bool():
             return BOOL
-    elif isinstance(value, Number):
-        return NUMBER
-    elif value is None:
-        return NULL
-
-    return NULL
+        case Number():
+            return NUMBER
+        case None:
+            return NULL
+        case _:
+            return NULL
 
 
 class KVPair:

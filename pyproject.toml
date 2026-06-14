@@ -363,32 +363,13 @@ safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
 unused-ignore-comment = "ignore"
 missing-override-decorator = "error"
 
+
 [tool.ty.environment]
 extra-paths = ["typings"]
 
 [tool.ty.src]
 # Below is a list of excluded directories from ty typechecks.
 exclude = [
-    ".uv_cache", # Cache Dir in CI
-    "./docs/**/*.ipynb",
-    "./src/nemo_safe_synthesizer/pii_replacer/",
-]
-
-[tool.pyrefly]
-# Pyrefly is currently a comparison checker, not the merge gate. Keep the
-# basic preset explicit so local runs match the initial evaluation mode.
-preset = "basic"
-project-includes = [
-    "src",
-    "tests",
-    "tools/*.py",
-]
-project-excludes = [
-    "docs/**/*.ipynb",
-    "src/nemo_safe_synthesizer/pii_replacer/**",
-]
-search-path = [
-    "src",
-    "tests",
-    "typings",
+  "./uv-cache",
+  "./docs/**/*.ipynb",
 ]

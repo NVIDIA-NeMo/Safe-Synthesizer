@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import re
 
+from typing_extensions import override
+
 from ..entity import Entity
 from ..regex import Pattern, RegexPredictor
 from .iban import regex_per_country
@@ -55,7 +57,8 @@ class SWIFT(RegexPredictor):
 
         super().__init__(entity=Entity.SWIFT_CODE, patterns=patterns)
 
-    def validate_match(self, in_text: str, _) -> bool:
-        country_code = in_text[4:6]
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
+        country_code = matched_text[4:6]
         # Keys of the more extensive dict in iban regex are country codes used for swift
         return country_code.upper() in regex_per_country

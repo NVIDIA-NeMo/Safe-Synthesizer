@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+from typing_extensions import override
+
 from ..entity import Entity
 from ..regex import Pattern, RegexPredictor
 
@@ -39,9 +41,10 @@ class Age(RegexPredictor):
 
         super().__init__(entity=entity, patterns=[age, desc])
 
-    def validate_match(self, matched_str: str, _):
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
         try:
-            age = float(matched_str)
+            age = float(matched_text)
             return 0 <= age <= 120 * 12
         except ValueError:
             pass

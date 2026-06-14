@@ -14,20 +14,31 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from itertools import chain, starmap
-from typing import Any, Optional, TypeAlias
+from typing import Any, Optional
 
 from typing_extensions import override
 
 from . import base
+from .json_types import JsonArray, JsonContainer, JsonObject, JsonScalar, JsonValue
 from .value_path import (
     value_path,
     value_path_to_field_name,
 )
 
-JsonContainer: TypeAlias = dict[Any, Any] | list[Any]
+__all__ = [
+    "JSONRecord",
+    "JsonArray",
+    "JsonContainer",
+    "JsonObject",
+    "JsonScalar",
+    "JsonValue",
+    "convert_flat_dict_to_kv_pairs",
+    "flatten",
+    "remove_array_markers",
+]
 
 
-def flatten(raw: JsonContainer, array_marker: str = base.ARRAY_POS) -> dict[Any, Any]:
+def flatten(raw: JsonContainer, array_marker: str = base.ARRAY_POS) -> dict[object, object]:
     """Recursively flatten a nested dict/list into a single-level dict.
 
     Keys are joined with ``NESTING_DELIM``; array indices are encoded as
@@ -41,36 +52,39 @@ def flatten(raw: JsonContainer, array_marker: str = base.ARRAY_POS) -> dict[Any,
     Returns:
         A flat dict mapping composite keys to scalar values.
     """
-    if isinstance(raw, list):
-        # if the whole JSON document is an array, we wrap it in dict
-        raw = {None: raw}
+    match raw:
+        case list() as values:
+            # if the whole JSON document is an array, we wrap it in dict
+            flattened: dict[object, object] = {None: values}
+        case dict() as values:
+            flattened = {key: value for key, value in values.items()}
+        case _:
+            raise TypeError("flatten expects a JSON object or array")
 
     def unpack_level(parent_key: object, parent_val: object) -> Iterator[tuple[object, object]]:
-        if isinstance(parent_val, dict):
-            for key, value in parent_val.items():
-                tmp = str(parent_key) + base.NESTING_DELIM + str(key)
-                yield tmp, value
-        elif isinstance(parent_val, list):
-            i = 0
-            for value in parent_val:
-                if parent_key is None:
-                    tmp = array_marker + str(i)
-                else:
-                    tmp = str(parent_key) + base.NESTING_DELIM + array_marker + str(i)
+        match parent_val:
+            case dict() as values:
+                for key, value in values.items():
+                    yield str(parent_key) + base.NESTING_DELIM + str(key), value
+            case list() as values:
+                for i, value in enumerate(values):
+                    if parent_key is None:
+                        tmp = array_marker + str(i)
+                    else:
+                        tmp = str(parent_key) + base.NESTING_DELIM + array_marker + str(i)
 
-                yield tmp, value
-                i += 1
-        else:
-            yield parent_key, parent_val
+                    yield tmp, value
+            case scalar:
+                yield parent_key, scalar
 
     while True:
-        raw = dict(chain.from_iterable(starmap(unpack_level, raw.items())))
-        if not any(isinstance(value, dict) for value in raw.values()) and not any(
-            isinstance(value, list) for value in raw.values()
+        flattened = dict(chain.from_iterable(starmap(unpack_level, flattened.items())))
+        if not any(isinstance(value, dict) for value in flattened.values()) and not any(
+            isinstance(value, list) for value in flattened.values()
         ):
             break
 
-    return raw
+    return flattened
 
 
 def remove_array_markers(data: str) -> tuple[str, int, base.ValuePath]:

@@ -24,15 +24,16 @@ import jsonschema
 import pandas as pd
 
 from ..observability import get_logger
+from .records.json_types import JsonSchema, JsonValue, is_json_object
 
 RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
 RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
 
 logger = get_logger()
 
-RecordDict = dict[Any, Any]
-RecordMapping = Mapping[Any, Any]
-JsonSchema = dict[str, Any]
+RecordDict = dict[str, Any]
+RecordMapping = Mapping[str, Any]
+RawRecordMapping = Mapping[Any, Any]
 
 
 @dataclass
@@ -122,7 +123,7 @@ class ParsedResponse:
         return [r.error for r in self.records if r.error is not None]
 
 
-def is_safe_for_float_conversion(value: str | int | float | None | Sequence[Any] | RecordMapping) -> bool:
+def is_safe_for_float_conversion(value: JsonValue) -> bool:
     """Check if a value can be safely converted to float64 without overflow.
 
     Only ``int`` values can cause overflow; all other types are considered safe.
@@ -179,6 +180,11 @@ def check_if_records_are_ordered(records: Sequence[RecordMapping], order_by: str
     order_by_values = [rec[order_by] for rec in records]
     sorted_values = sorted([rec[order_by] for rec in records])
     return order_by_values == sorted_values
+
+
+def normalize_record_keys(record: RawRecordMapping) -> RecordDict:
+    """Return a record with string keys, matching JSON object semantics."""
+    return {str(key): value for key, value in record.items()}
 
 
 def extract_records_from_jsonl_string(jsonl_string: str) -> list[str]:
@@ -315,6 +321,9 @@ def _parse_and_validate_json(matched_json: str, schema: JsonSchema) -> tuple[Rec
     """
     try:
         matched_dict = json.loads(matched_json)
+        if not is_json_object(matched_dict):
+            return None, ("Expected a JSON object", "Invalid JSON")
+
         jsonschema.validate(matched_dict, schema)
 
         error_msg = check_record_for_large_numbers(matched_dict)
@@ -546,7 +555,7 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
         )
 
 
-def records_to_jsonl(records: pd.DataFrame | list[RecordMapping] | RecordMapping) -> str:
+def records_to_jsonl(records: pd.DataFrame | list[RawRecordMapping] | RawRecordMapping) -> str:
     """Convert list of records to a JSONL string.
 
     Args:
@@ -555,9 +564,10 @@ def records_to_jsonl(records: pd.DataFrame | list[RecordMapping] | RecordMapping
     Returns:
         The JSONL string.
     """
-    if isinstance(records, pd.DataFrame):
-        return records.to_json(orient="records", lines=True, force_ascii=False)
-    elif isinstance(records, (list, dict)):
-        return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
-    else:
-        raise ValueError(f"Unsupported type: {type(records)}")
+    match records:
+        case pd.DataFrame() as dataframe:
+            return dataframe.to_json(orient="records", lines=True, force_ascii=False)
+        case list() | dict():
+            return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
+        case _:
+            raise ValueError(f"Unsupported type: {type(records)}")

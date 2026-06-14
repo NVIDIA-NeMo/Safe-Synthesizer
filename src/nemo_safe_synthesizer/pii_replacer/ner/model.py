@@ -41,14 +41,21 @@ class NERTimingsPayload(TypedDict):
 
 NERPredictionRows: TypeAlias = list[list[NERRawPredictionPayload]]
 NERModelPredictionResponse: TypeAlias = NERPredictionRows | list[NERApiResponseRow]
+NERInputRecord: TypeAlias = dict[str, Any]
+NERInputRows: TypeAlias = list[str] | list[NERInputRecord]
+RawPredictionRows: TypeAlias = list[list[object]]
 
 
-def _is_string_rows(rows: list[str] | list[dict[str, Any]]) -> TypeIs[list[str]]:
-    return all(isinstance(row, str) for row in rows)
+def _is_string_rows(rows: object) -> TypeIs[list[str]]:
+    return isinstance(rows, list) and bool(rows) and all(isinstance(row, str) for row in rows)
 
 
-def _is_record_rows(rows: list[str] | list[dict[str, Any]]) -> TypeIs[list[dict[str, Any]]]:
-    return all(isinstance(row, dict) for row in rows)
+def _is_record_rows(rows: object) -> TypeIs[list[NERInputRecord]]:
+    return isinstance(rows, list) and bool(rows) and all(isinstance(row, dict) for row in rows)
+
+
+def _is_raw_prediction_rows(value: object) -> TypeIs[RawPredictionRows]:
+    return isinstance(value, list) and all(isinstance(row, list) for row in value)
 
 
 def _required_str(value: object, field_name: str) -> str:
@@ -88,9 +95,16 @@ def _optional_str(value: object, field_name: str) -> str | None:
 def _optional_value_path(value: object, field_name: str) -> tuple[str | int, ...] | list[str | int] | None:
     if value is None:
         return None
-    if not isinstance(value, (tuple, list)) or not all(isinstance(part, (str, int)) for part in value):
+    if not isinstance(value, (tuple, list)):
         raise TypeError(f"NER prediction field {field_name!r} must be a string/integer path or None")
-    return value
+    path_parts: list[str | int] = []
+    for part in value:
+        if not isinstance(part, (str, int)):
+            raise TypeError(f"NER prediction field {field_name!r} must be a string/integer path or None")
+        path_parts.append(part)
+    if isinstance(value, tuple):
+        return tuple(path_parts)
+    return path_parts
 
 
 def _optional_bool(value: object, field_name: str) -> bool | None:
@@ -102,68 +116,82 @@ def _optional_bool(value: object, field_name: str) -> bool | None:
 
 
 def _raw_prediction_payload(value: object) -> NERRawPredictionPayload:
-    if not isinstance(value, Mapping):
-        raise TypeError("NER prediction rows must contain dictionaries")
-
-    payload: NERRawPredictionPayload = {
-        "text": _required_str(value.get("text"), "text"),
-        "start": _required_int(value.get("start"), "start"),
-        "end": _required_int(value.get("end"), "end"),
-        "label": _required_str(value.get("label"), "label"),
-        "source": _required_str(value.get("source"), "source"),
-        "score": _optional_float(value.get("score"), "score"),
-    }
-    if "field" in value:
-        payload["field"] = _optional_str(value.get("field"), "field")
-    if "value_path" in value:
-        payload["value_path"] = _optional_value_path(value.get("value_path"), "value_path")
-    if "substring_match" in value:
-        payload["substring_match"] = _optional_bool(value.get("substring_match"), "substring_match")
-    return payload
+    match value:
+        case Mapping() as prediction:
+            payload: NERRawPredictionPayload = {
+                "text": _required_str(prediction.get("text"), "text"),
+                "start": _required_int(prediction.get("start"), "start"),
+                "end": _required_int(prediction.get("end"), "end"),
+                "label": _required_str(prediction.get("label"), "label"),
+                "source": _required_str(prediction.get("source"), "source"),
+                "score": _optional_float(prediction.get("score"), "score"),
+            }
+            match prediction:
+                case {"field": field}:
+                    payload["field"] = _optional_str(field, "field")
+            match prediction:
+                case {"value_path": value_path}:
+                    payload["value_path"] = _optional_value_path(value_path, "value_path")
+            match prediction:
+                case {"substring_match": substring_match}:
+                    payload["substring_match"] = _optional_bool(substring_match, "substring_match")
+            return payload
+        case _:
+            raise TypeError("NER prediction rows must contain dictionaries")
 
 
 def _prediction_rows(value: object) -> NERPredictionRows:
-    if not isinstance(value, list):
-        raise TypeError("NER predictions must be a list of prediction rows")
-    rows: NERPredictionRows = []
-    for row in value:
-        if not isinstance(row, list):
+    match value:
+        case list() as rows if _is_raw_prediction_rows(rows):
+            return [[_raw_prediction_payload(prediction) for prediction in row] for row in rows]
+        case _:
             raise TypeError("NER predictions must be a list of prediction rows")
-        rows.append([_raw_prediction_payload(prediction) for prediction in row])
-    return rows
 
 
 def _timings_payload_from_mapping(value: object) -> NERTimingsPayload:
-    if not isinstance(value, Mapping):
-        raise TypeError("NER timings must be a dictionary")
-    predictors = value.get("predictors")
-    if not isinstance(predictors, Mapping):
-        raise TypeError("NER timings field 'predictors' must be a dictionary")
-    predictor_timings: dict[str, NERPredictorTimingPayload] = {}
-    for predictor, timing in predictors.items():
-        if not isinstance(predictor, str):
-            raise TypeError("NER timing predictor names must be strings")
-        if not isinstance(timing, Mapping):
-            raise TypeError("NER predictor timings must be dictionaries")
-        predictor_timings[predictor] = {
-            "total_time_ms": _required_float(timing.get("total_time_ms"), "total_time_ms"),
-            "total_time_ms_avg": _required_float(timing.get("total_time_ms_avg"), "total_time_ms_avg"),
-        }
+    match value:
+        case Mapping() as timing_data:
+            match timing_data.get("predictors"):
+                case Mapping() as predictors:
+                    predictor_timings: dict[str, NERPredictorTimingPayload] = {}
+                    for predictor, timing in predictors.items():
+                        match predictor, timing:
+                            case str() as predictor_name, Mapping() as predictor_timing:
+                                predictor_timings[predictor_name] = {
+                                    "total_time_ms": _required_float(
+                                        predictor_timing.get("total_time_ms"), "total_time_ms"
+                                    ),
+                                    "total_time_ms_avg": _required_float(
+                                        predictor_timing.get("total_time_ms_avg"), "total_time_ms_avg"
+                                    ),
+                                }
+                            case _, Mapping():
+                                raise TypeError("NER timing predictor names must be strings")
+                            case str(), _:
+                                raise TypeError("NER predictor timings must be dictionaries")
+                            case _:
+                                raise TypeError("NER timing predictor names must be strings")
+                case _:
+                    raise TypeError("NER timings field 'predictors' must be a dictionary")
+        case _:
+            raise TypeError("NER timings must be a dictionary")
+
     return {
-        "records": _required_int(value.get("records"), "records"),
-        "total_predictions": _required_int(value.get("total_predictions"), "total_predictions"),
-        "total_time_ms": _required_float(value.get("total_time_ms"), "total_time_ms"),
-        "total_time_ms_avg": _required_float(value.get("total_time_ms_avg"), "total_time_ms_avg"),
-        "time_per_prediction_ms": _required_float(value.get("time_per_prediction_ms"), "time_per_prediction_ms"),
+        "records": _required_int(timing_data.get("records"), "records"),
+        "total_predictions": _required_int(timing_data.get("total_predictions"), "total_predictions"),
+        "total_time_ms": _required_float(timing_data.get("total_time_ms"), "total_time_ms"),
+        "total_time_ms_avg": _required_float(timing_data.get("total_time_ms_avg"), "total_time_ms_avg"),
+        "time_per_prediction_ms": _required_float(timing_data.get("time_per_prediction_ms"), "time_per_prediction_ms"),
         "predictors": predictor_timings,
     }
 
 
 def _timings_payload(value: object) -> NERTimingsPayload:
-    to_dict = getattr(value, "to_dict", None)
-    if callable(to_dict):
-        return _timings_payload_from_mapping(to_dict())
-    raise TypeError("timings_only=True must return NER timings")
+    match getattr(value, "to_dict", None):
+        case to_dict if callable(to_dict):
+            return _timings_payload_from_mapping(to_dict())
+        case _:
+            raise TypeError("timings_only=True must return NER timings")
 
 
 def _parse_custom_source(source: str) -> tuple[str, str]:
@@ -198,7 +226,10 @@ class Model:
 
     @property
     def predictors(self) -> list[str]:
-        return [pred.source for pred in self._ner.pipeline.predictors]
+        active_pipeline = self._ner.pipeline
+        if active_pipeline is None:
+            raise RuntimeError("NER pipeline is not configured")
+        return [pred.source for pred in active_pipeline.predictors]
 
     @overload
     def predict(
@@ -246,23 +277,16 @@ class Model:
         *,
         timings_only: bool = False,
     ) -> NERModelPredictionResponse | NERTimingsPayload:
-        if isinstance(input_data, str):
-            input_rows: list[str] | list[dict[str, Any]] = [input_data]
-        elif isinstance(input_data, dict):
-            input_rows = [input_data]
-        else:
-            input_rows = input_data
-
-        if not isinstance(input_rows, list) or not input_rows:
-            raise ValueError(INPUT_ERR)
-
-        if not isinstance(input_rows[0], (str, dict)):
-            raise ValueError(INPUT_ERR)
-
-        _target_type = type(input_rows[0])
-
-        for _target in input_rows:
-            if not isinstance(_target, _target_type):
+        match input_data:
+            case str() as text:
+                input_rows: NERInputRows = [text]
+            case dict() as record:
+                input_rows = [record]
+            case list() as rows if _is_string_rows(rows):
+                input_rows = rows
+            case list() as rows if _is_record_rows(rows):
+                input_rows = rows
+            case _:
                 raise ValueError(INPUT_ERR)
 
         predictions = self._ner.predict(input_rows, timings_only=timings_only, dict_result=True)
@@ -271,17 +295,17 @@ class Model:
             return _timings_payload(predictions)
 
         prediction_rows = _prediction_rows(predictions)
-        if _target_type is str and _is_string_rows(input_rows):
-            return prediction_rows
-
-        if not _is_record_rows(input_rows):
-            raise ValueError(INPUT_ERR)
-
-        return create_ner_api_response(
-            input_rows,
-            prediction_rows,
-            pure_dict=True,
-        )
+        match input_rows:
+            case list() as rows if _is_string_rows(rows):
+                return prediction_rows
+            case list() as rows if _is_record_rows(rows):
+                return create_ner_api_response(
+                    rows,
+                    prediction_rows,
+                    pure_dict=True,
+                )
+            case _:
+                raise ValueError(INPUT_ERR)
 
     def add_regex(self, source: str, pattern: str | re.Pattern, score: float | None = None):
         namespace, name = _parse_custom_source(source)
@@ -289,7 +313,10 @@ class Model:
             score = Score.HIGH
         regex_pattern = regex.Pattern(pattern=pattern, raw_score=score)
         predictor = regex.RegexPredictor(name=name, namespace=namespace, patterns=[regex_pattern])
-        self._ner.pipeline.add_predictors(predictor)
+        active_pipeline = self._ner.pipeline
+        if active_pipeline is None:
+            raise RuntimeError("NER pipeline is not configured")
+        active_pipeline.add_predictors(predictor)
 
 
 def create_empty() -> Model:

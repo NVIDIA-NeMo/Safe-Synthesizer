@@ -31,3 +31,13 @@ def test_with_generate_rejects_wrong_typed_config_object():
 def test_with_replace_pii_validates_default_config_with_kwargs():
     with pytest.raises(ValidationError, match="Invalid locale"):
         ConfigBuilder().with_replace_pii(globals={"locales": ["not-a-locale"]})
+
+
+def test_with_replace_pii_resolves_raw_config_with_kwargs():
+    builder = ConfigBuilder().with_replace_pii(
+        config=PiiReplacerConfig.get_default_config().model_dump(),
+        globals={"classify": {"enable_classify": False}},
+    )
+
+    assert builder._replace_pii_config is not None
+    assert builder._replace_pii_config.globals.classify.enable_classify is False

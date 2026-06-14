@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import ipaddress
 
+from typing_extensions import override
+
 from ..entity import Entity, Score
 from ..regex import Pattern, RegexPredictor
 
@@ -32,7 +34,8 @@ class IpAddress(RegexPredictor):
             patterns=[possible_match, likely_match],
         )
 
-    def validate_match(self, matched_text: str, _):
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
         try:
             ipaddress.ip_address(matched_text)
         except ValueError:

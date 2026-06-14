@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import string
 
+from typing_extensions import override
+
 # Import 're2' regex engine if installed, if not- import 'regex'
 try:
-    import re2 as re
+    import re2 as re  # ty: ignore[unresolved-import]
 except ImportError:
     import regex as re
 
@@ -222,17 +224,11 @@ class IBAN(RegexPredictor):
 
         super().__init__(entity=Entity.IBAN_CODE, patterns=patterns)
 
-    def validate_match(self, in_text: str, _) -> bool:
-        pattern_text = in_text.replace(" ", "")
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
+        pattern_text = matched_text.replace(" ", "")
         is_valid_checksum = IBAN.__generate_iban_check_digits(pattern_text) == pattern_text[2:4]
-        # score = EntityRecognizer.MIN_SCORE
-        result = False
-        if is_valid_checksum:
-            if IBAN.__is_valid_format(pattern_text):
-                result = True
-            elif IBAN.__is_valid_format(pattern_text.upper()):
-                result = None
-        return result
+        return bool(is_valid_checksum and IBAN.__is_valid_format(pattern_text))
 
     @staticmethod
     def __number_iban(iban):

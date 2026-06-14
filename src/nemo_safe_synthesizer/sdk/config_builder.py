@@ -264,12 +264,8 @@ class ConfigBuilder(object):
             return self
 
         match config:
-            case PiiReplacerConfig() as m:
-                cfg = self._resolve_config(values=m, cls=PiiReplacerConfig, **kwargs)
-            case Mapping() as d:
-                raw_values = dict(d)
-                raw_values.update(kwargs)
-                cfg = PiiReplacerConfig.model_validate(raw_values)
+            case PiiReplacerConfig() | Mapping() as values:
+                cfg = self._resolve_config(values=values, cls=PiiReplacerConfig, **kwargs)
             case None:
                 cfg = self._resolve_config(
                     values=PiiReplacerConfig.get_default_config(),

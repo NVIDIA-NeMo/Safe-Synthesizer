@@ -11,8 +11,10 @@ import itertools
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 from flashtext import KeywordProcessor
+from typing_extensions import override
 
 from ...data_processing.records.base import KVPair, tokenize_header
 from ...data_processing.records.json_record import JSONRecord
@@ -45,8 +47,8 @@ TOKEN_REGEX = re.compile(r"\b(?!\d)\w+", re.IGNORECASE)
 MAX_STR_LEN = 64
 
 
-def build_name_only_headers(others: Iterable[str]) -> list[re.Pattern]:
-    out = []
+def build_name_only_headers(others: Iterable[str]) -> list[str]:
+    out: list[str] = []
     for other in others:
         out.append(r"{}.?{}".format("name", other))
         out.append(r"{}.?{}".format(other, "name"))
@@ -59,13 +61,13 @@ class WordList:
     names MUST match the ref names of the files from the manifest
     """
 
-    word_list: KeywordProcessor = field(default_factory=frozenset)
+    word_list: KeywordProcessor | frozenset[str] = field(default_factory=frozenset)
     """The master list of actual names"""
 
-    headers: re.Pattern | None = None  # NOTE: init'd as a FrozenSet then converted
+    headers: re.Pattern[str] | frozenset[str] = field(default_factory=frozenset)
     """The list of partial header names that can trigger the prediction flow"""
 
-    headers_neg: KeywordProcessor = None  # NOTE: init'd as a FrozenSet then converted
+    headers_neg: KeywordProcessor | frozenset[str] = field(default_factory=frozenset)
     """A list of header tokens that should not be present to trigger prediction flow"""
 
     headers_pairs: frozenset[str] = field(default_factory=frozenset)
@@ -83,16 +85,22 @@ class WordList:
         # matching header values from them, and then re-set our master
         # header list
         tmp = build_name_only_headers(self.headers_pairs)
+        if not isinstance(self.headers, frozenset):
+            raise TypeError("headers must be loaded as a frozenset")
         _header_strings = list(self.headers | frozenset(tmp))
         _header_regex = re.compile("|".join(_header_strings), re.IGNORECASE)
         self.headers = _header_regex
 
         _neg_headers = KeywordProcessor()
+        if not isinstance(self.headers_neg, frozenset):
+            raise TypeError("negative headers must be loaded as a frozenset")
         _neg_headers.add_keywords_from_list(list(self.headers_neg))
         self.headers_neg = _neg_headers
 
         # self.word_list = re.compile("|".join([w + "$" for w in list(self.word_list)]), re.IGNORECASE)
         _word_list = KeywordProcessor()
+        if not isinstance(self.word_list, frozenset):
+            raise TypeError("word list must be loaded as a frozenset")
         _word_list.add_keywords_from_list(list(self.word_list))
         self.word_list = _word_list
 
@@ -100,14 +108,32 @@ class WordList:
         # _parts.add_keywords_from_list(list(self.parts))
         # self.parts = _parts
 
+    @property
+    def word_processor(self) -> KeywordProcessor:
+        if not isinstance(self.word_list, KeywordProcessor):
+            raise TypeError("word list has not been initialized")
+        return self.word_list
+
+    @property
+    def header_pattern(self) -> re.Pattern[str]:
+        if not isinstance(self.headers, re.Pattern):
+            raise TypeError("headers have not been initialized")
+        return self.headers
+
+    @property
+    def negative_header_processor(self) -> KeywordProcessor:
+        if not isinstance(self.headers_neg, KeywordProcessor):
+            raise TypeError("negative headers have not been initialized")
+        return self.headers_neg
+
     @classmethod
-    def init_from_manifest(cls, manifest: ModelManifest = None):
+    def init_from_manifest(cls, manifest: ModelManifest | None = None) -> WordList:
         if manifest is None:
             manifest = DEFAULT_MANIFEST
         cache_data = get_cache_manager().resolve(manifest, skip_pickle=True)
         if cache_data is None:
             raise RuntimeError("Model cached returned None data for word list")
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         # NOTE: this functionality depends on the dataclass attrs
         # being named the same as the keys in the ``ObjectRef``
         # instances since those keys are what is returned
@@ -126,11 +152,12 @@ class PersonNamePredictor(Predictor):
         super().__init__(self.default_name)
         self.word_list = WordList.init_from_manifest()
 
-    def create_prediction(self, record_field: KVPair):
+    def create_prediction(self, record_field: KVPair) -> NERPrediction:
+        value = str(record_field.value)
         return NERPrediction(
-            text=record_field.value,
+            text=value,
             start=0,
-            end=len(record_field.value),
+            end=len(value),
             field=record_field.field,
             value_path=record_field.value_path,
             score=Score.HIGH,
@@ -149,12 +176,12 @@ class PersonNamePredictor(Predictor):
             if len(token) == 1:
                 continue
 
-            in_main_word_list = self.word_list.word_list.extract_keywords(token)
+            in_main_word_list = self.word_list.word_processor.extract_keywords(token)
 
             # if the token is not in any of these lists, fail
             if (
                 not in_main_word_list
-                and not self.word_list.headers.match(token)
+                and not self.word_list.header_pattern.match(token)
                 # and token not in self.word_list.headers
                 and token not in self.word_list.parts
             ):
@@ -171,13 +198,14 @@ class PersonNamePredictor(Predictor):
         value_tokens = tokenize_header(str(value))
         for _token in value_tokens:
             # if _token in self.word_list.headers_neg:
-            if self.word_list.headers_neg.match(_token):
+            if self.word_list.negative_header_processor.extract_keywords(_token):
                 return True
         return False
 
-    def evaluate(self, in_record: JSONRecord) -> list[NERPrediction]:
-        record_fields = in_record.kv_pairs
-        result_set_by_field = [set() for _ in record_fields]
+    @override
+    def evaluate(self, in_data: JSONRecord) -> list[NERPrediction]:
+        record_fields = in_data.kv_pairs
+        result_set_by_field: list[set[NERPrediction]] = [set() for _ in record_fields]
 
         record_field: KVPair
         for field_matches, record_field in zip(result_set_by_field, record_fields):
@@ -189,16 +217,16 @@ class PersonNamePredictor(Predictor):
 
             # check if any negative header fields exist
             for header_token in record_field.field_tokens:
-                if self.word_list.headers_neg.extract_keywords(header_token):
+                if self.word_list.negative_header_processor.extract_keywords(header_token):
                     continue
 
             # tokenize the value and see if any of tokens exist
             # in the negative header list
             # if record_field.value and self._is_neg_header_in_value(record_field.value):
-            if self.word_list.headers_neg.extract_keywords(record_field.value):
+            if self.word_list.negative_header_processor.extract_keywords(record_field.value):
                 continue
 
-            if not self.header_has_context(record_field, self.KEY, regex_patterns=self.word_list.headers):
+            if not self.header_has_context(record_field, self.KEY, regex_patterns=self.word_list.header_pattern):
                 # specialy handling with the field name is exactly "name", we need
                 # to check if every token in the value exists in one of our specific
                 # name or modifier lists
@@ -213,7 +241,7 @@ class PersonNamePredictor(Predictor):
             # for token in re.finditer(TOKEN_REGEX, record_field.value):
             #    token_str = token.group(0).lower()
 
-            if not self.word_list.word_list.extract_keywords(record_field.value):
+            if not self.word_list.word_processor.extract_keywords(record_field.value):
                 continue
 
             # if the token is in the word list, we consider

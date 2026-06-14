@@ -16,14 +16,14 @@ REG = [
     r"secret",
 ]
 
-LABELS = [
+LABELS: list[str | re.Pattern[str]] = [
     "token",
 ]
 
 for reg in REG:
     LABELS.append(re.compile("^" + reg))
 
-SPANNER_PATTERNS = ["token"]
+SPANNER_PATTERNS: list[str | re.Pattern[str]] = ["token"]
 
 for reg in REG:
     SPANNER_PATTERNS.append(re.compile(reg))

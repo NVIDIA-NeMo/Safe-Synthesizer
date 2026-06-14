@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 from typing_extensions import override
 
 from ..configurator.parameters import Parameters
+from ..data_processing.records.json_types import JsonValue
 from ..errors import ParameterError
 from ..observability import get_logger
 from ..telemetry import _telemetry_enabled
@@ -25,8 +26,8 @@ from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
 
-ConfigPatch: TypeAlias = Mapping[str, Any]
-_SectionPatch: TypeAlias = dict[str, Any]
+ConfigPatch: TypeAlias = Mapping[str, JsonValue]
+_SectionPatch: TypeAlias = dict[str, object]
 
 __all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 

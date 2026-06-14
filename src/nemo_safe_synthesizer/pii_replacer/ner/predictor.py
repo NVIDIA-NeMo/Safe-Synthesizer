@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from re import Pattern
 from typing import Optional
@@ -74,7 +75,7 @@ class ContextSpan:
             to search for any matches from the ``pattern_list`` objects.
     """
 
-    pattern_list: list[str | Pattern]
+    pattern_list: Sequence[str | Pattern[str]]
     span: int = DEFAULT_CONTEXT_SPAN_SIZE
 
     def is_match(self, data: str, start: int, end: int) -> bool:
@@ -100,7 +101,7 @@ class ContextSpan:
         return False
 
 
-def is_context_matched(data: str, start: int, end: int, spans: list[ContextSpan]) -> bool:
+def is_context_matched(data: str, start: int, end: int, spans: Sequence[ContextSpan]) -> bool:
     for span in spans:
         if span.is_match(data, start, end):
             return True
@@ -135,7 +136,7 @@ class Predictor(ABC):
     BOTH = 3
 
     default_namespace: str = "safe-synthesizer"
-    default_name: str = None
+    default_name: str | None = None
     """Subclasses can set a default name to use that
     can be directly accessed as a class attr if need
     be.
@@ -144,7 +145,7 @@ class Predictor(ABC):
     def __init__(
         self,
         name: str,
-        namespace: str = None,
+        namespace: str | None = None,
         predictor_context: Optional[PredictorContext] = None,
     ):
         if namespace is None:
@@ -165,15 +166,15 @@ class Predictor(ABC):
         self,
         field_pair: KVPair,
         header_context_source: int,
-        token_patterns: Pattern = None,
-        regex_patterns: Pattern = None,
+        token_patterns: Pattern[str] | None = None,
+        regex_patterns: Pattern[str] | None = None,
     ) -> bool:
         """Checks to see if the field has a label match."""
         _field = field_pair
         if header_context_source == self.BOTH:
-            search_string = (_field.field + " " + _field.value if _field.field else _field.value).casefold()
+            search_string = (f"{_field.field} {str(_field.value)}" if _field.field else str(_field.value)).casefold()
         elif header_context_source == self.VALUE:
-            search_string = _field.value.casefold()
+            search_string = str(_field.value).casefold()
         else:
             if _field.field is None:
                 return False

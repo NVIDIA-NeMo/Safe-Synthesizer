@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from ...observability import get_logger
 
@@ -107,7 +107,7 @@ class StorageConfig:
         return cls(bucket=DEFAULT_BUCKET, cache_dir=cache_dir)
 
 
-def get_cache_manager(storage_config: StorageConfig = None) -> CacheManager:
+def get_cache_manager(storage_config: StorageConfig | None = None) -> CacheManager:
     """Returns a singleton instance of ``CacheManager``."""
     return CacheManager.get_instance(storage_config)
 
@@ -122,7 +122,7 @@ class CacheManager:
         storage_config: A storage config.
     """
 
-    __instance = None
+    __instance: ClassVar[CacheManager | None] = None
     """Used to hold a singleton of ``CacheManager``"""
 
     _cache: dict[str, dict[str, Any]]
@@ -139,13 +139,15 @@ class CacheManager:
         CacheManager.__instance = None
 
     @classmethod
-    def get_instance(cls, storage_config: StorageConfig = None) -> CacheManager:
+    def get_instance(cls, storage_config: StorageConfig | None = None) -> CacheManager:
         """Returns a singleton instance of ``CacheManager``."""
         if not CacheManager.__instance:
             CacheManager(storage_config)
+        if CacheManager.__instance is None:
+            raise RuntimeError("CacheManager singleton was not initialized")
         return CacheManager.__instance
 
-    def __init__(self, storage_config: StorageConfig = None):
+    def __init__(self, storage_config: StorageConfig | None = None):
         if CacheManager.__instance:
             raise Exception("Cannot instantiate a singleton.")
         else:

@@ -14,6 +14,7 @@ import pandas as pd
 from ..data_processing.actions.utils import (
     MetadataColumns,
 )
+from ..data_processing.record_utils import normalize_record_keys
 from ..data_processing.stats import RunningStatistics
 from ..defaults import (
     EPS,
@@ -294,7 +295,7 @@ class GenerationBatches:
                 rid = record.parsed[record_id_key]
                 if new_record := id_to_valid_records.get(rid):
                     del new_record[record_id_key]
-                    record.parsed = new_record
+                    record.parsed = normalize_record_keys(new_record)
                 elif new_record := id_to_rejected_records.get(rid):
                     del new_record[record_id_key]
                     record.invalidate(rejected_record_to_error(new_record))
