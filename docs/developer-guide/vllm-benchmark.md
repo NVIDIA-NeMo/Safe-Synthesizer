@@ -86,12 +86,11 @@ uv run --frozen --extra cu129 --extra engine --group dev \
     --json-out /path/to/analysis.json
 ```
 
-The analyzer reports candidate-run aggregates by condition. It keeps the JSON
-field name `n_cells` for compatibility; in this context a "cell" means one
-candidate run in the benchmark matrix.
+The analyzer reports candidate-run aggregates by condition. The report JSON
+uses `n_candidate_runs` for aggregate sample counts.
 
 Use `--min-runs-per-condition` to raise or lower the refusal threshold. The
-older `--min-cells-per-condition` spelling remains accepted for compatibility.
+default threshold is 6 candidate runs per condition.
 
 ## WandB Sink
 

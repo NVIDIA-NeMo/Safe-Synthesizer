@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Subprocess entry point for one isolated benchmark cell.
+"""Subprocess entry point for one isolated benchmark candidate run.
 
 Invoked by :func:`vllm_benchmark.run_benchmark_in_subprocess` via
 ``python -m nemo_safe_synthesizer.generation.vllm_benchmark_single_run``.

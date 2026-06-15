@@ -27,7 +27,6 @@ Invocation::
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -38,6 +37,7 @@ from rich.table import Table
 
 from nemo_safe_synthesizer.generation.vllm_benchmark import (
     BenchmarkCandidate,
+    BenchmarkCandidateDocument,
     BenchmarkCorpus,
     BenchmarkEngineConfig,
     BenchmarkOutput,
@@ -46,7 +46,7 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
 )
 from nemo_safe_synthesizer.generation.vllm_benchmark_presets import PRESETS
 from nemo_safe_synthesizer.generation.vllm_benchmark_wandb import (
-    init_cell_run,
+    init_candidate_run,
     log_and_finish,
     resolve_sweep_id,
 )
@@ -83,8 +83,10 @@ def _resolve_candidates(
             raise click.UsageError(f"Unknown preset {preset_name!r}; available: {sorted(PRESETS)}")
         return PRESETS[preset_name](base)
     if candidates_file:
-        doc = json.loads(Path(candidates_file).read_text(encoding="utf-8"))
-        return [BenchmarkCandidate.model_validate(c) for c in doc["candidates"]]
+        try:
+            return BenchmarkCandidateDocument.from_json_file(candidates_file).candidates
+        except ValueError as exc:
+            raise click.UsageError(f"Invalid candidates file {candidates_file}: {exc}") from exc
     raise click.UsageError("One of --candidates or --candidates-file is required.")
 
 
@@ -142,7 +144,7 @@ def run_cmd(
     sweep_id = resolve_sweep_id()
     for idx, candidate in enumerate(candidates, start=1):
         console.print(f"[{idx}/{len(candidates)}] running candidate {candidate.name!r}")
-        wandb_run = init_cell_run(
+        wandb_run = init_candidate_run(
             candidate_name=candidate.name,
             candidate_idx=idx,
             total=len(candidates),
@@ -245,10 +247,10 @@ def compare_cmd(output_path: Path) -> None:
 )
 @click.option(
     "--min-runs-per-condition",
-    "--min-cells-per-condition",
+    "min_candidate_runs_per_condition",
     type=int,
     default=None,
-    show_default="MIN_CELLS_PER_CONDITION (6)",
+    show_default="MIN_CANDIDATE_RUNS_PER_CONDITION (6)",
     help="Refuse aggregates for conditions below this N. Brief mandates N>=6 candidate runs.",
 )
 @click.option(
@@ -260,12 +262,12 @@ def compare_cmd(output_path: Path) -> None:
 def analyze_cmd(
     output_dir: Path,
     cluster_signal: str,
-    min_cells_per_condition: int | None,
+    min_candidate_runs_per_condition: int | None,
     json_out: Path | None,
 ) -> None:
     """Cluster-conditioned analysis across every BenchmarkOutput JSON in OUTPUT_DIR."""
     from nemo_safe_synthesizer.generation.vllm_benchmark_analysis import (
-        MIN_CELLS_PER_CONDITION,
+        MIN_CANDIDATE_RUNS_PER_CONDITION,
         ClusterSignal,
         analyze,
     )
@@ -273,7 +275,11 @@ def analyze_cmd(
     report = analyze(
         output_dir,
         cluster_signal=cast(ClusterSignal, cluster_signal),
-        min_cells_per_condition=MIN_CELLS_PER_CONDITION if min_cells_per_condition is None else min_cells_per_condition,
+        min_candidate_runs_per_condition=(
+            MIN_CANDIDATE_RUNS_PER_CONDITION
+            if min_candidate_runs_per_condition is None
+            else min_candidate_runs_per_condition
+        ),
     )
     console.print(report.to_markdown_summary())
     if json_out is not None:

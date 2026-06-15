@@ -43,9 +43,9 @@ def _metric(name: str, condition: str, *, eff: float, accept: float, wall: float
     )
 
 
-def _write_output_dir(tmp_path: Path, cells: list[CandidateMetrics]) -> Path:
+def _write_output_dir(tmp_path: Path, candidate_runs: list[CandidateMetrics]) -> Path:
     """Write a single BenchmarkOutput JSON to ``tmp_path / out.json``."""
-    out = BenchmarkOutput(corpus_run_id="r1", corpus_size=143, candidates=cells)
+    out = BenchmarkOutput(corpus_run_id="r1", corpus_size=143, candidates=candidate_runs)
     (tmp_path / "out.json").write_text(out.model_dump_json(), encoding="utf-8")
     return tmp_path
 
@@ -53,7 +53,7 @@ def _write_output_dir(tmp_path: Path, cells: list[CandidateMetrics]) -> Path:
 @pytest.fixture
 def synthetic_sweep_dir(tmp_path: Path) -> Path:
     """6 baselines + 6 spec_ngram runs, both with realistic-noise spread."""
-    cells = [
+    candidate_runs = [
         # Baselines: ~1500 eff_tok_s, ~0.99 acceptance.
         *(
             _metric(f"baseline_{i}", "baseline", eff=1500 + i * 5, accept=0.99, wall=130.0, bracket=2 * i)
@@ -65,7 +65,7 @@ def synthetic_sweep_dir(tmp_path: Path) -> Path:
             for i in range(6)
         ),
     ]
-    return _write_output_dir(tmp_path, cells)
+    return _write_output_dir(tmp_path, candidate_runs)
 
 
 # ---------------------------------------------------------------------------
@@ -111,13 +111,13 @@ class TestWelchTtestCi:
 class TestAnalyze:
     def test_partitions_and_aggregates(self, synthetic_sweep_dir: Path) -> None:
         report = analyze(synthetic_sweep_dir, cluster_signal="wall_seconds")
-        assert report.n_cells == 12
+        assert report.n_candidate_runs == 12
         # Two conditions present.
         labels = {agg.condition_label for agg in report.condition_aggregates}
         assert labels == {"baseline", "spec_ngram"}
         # Each condition has the expected pooled aggregate.
         spec_agg = next(agg for agg in report.condition_aggregates if agg.condition_label == "spec_ngram")
-        assert spec_agg.n_cells == 6
+        assert spec_agg.n_candidate_runs == 6
         assert spec_agg.pooled_mean_effective_tok_s == pytest.approx(1712.5, abs=0.1)
 
     def test_emits_effect_size_for_non_baseline_conditions(self, synthetic_sweep_dir: Path) -> None:
@@ -132,14 +132,14 @@ class TestAnalyze:
         assert es.delta_absolute > 0
         assert es.ci95_low > 0
 
-    def test_refuses_aggregates_below_min_cells(self, tmp_path: Path) -> None:
+    def test_refuses_aggregates_below_min_candidate_runs(self, tmp_path: Path) -> None:
         """Conditions with N<6 land in refusals, not aggregates."""
         # 6 baselines + only 3 candidate runs means spec_ngram should be refused.
-        cells = [
+        candidate_runs = [
             *(_metric(f"baseline_{i}", "baseline", eff=1500.0, accept=0.99, wall=130.0) for i in range(6)),
             *(_metric(f"spec_{i}", "spec_ngram", eff=1700.0, accept=0.99, wall=115.0) for i in range(3)),
         ]
-        out_dir = _write_output_dir(tmp_path, cells)
+        out_dir = _write_output_dir(tmp_path, candidate_runs)
         report = analyze(out_dir)
         labels = {agg.condition_label for agg in report.condition_aggregates}
         assert "baseline" in labels

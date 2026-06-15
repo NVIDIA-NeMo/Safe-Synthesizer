@@ -39,10 +39,11 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -137,6 +138,28 @@ class BenchmarkPrompt(BaseModel):
     )
 
 
+class TracePromptRecord(BaseModel):
+    """Raw ``kind='record'`` line from a captured trace JSONL."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    row_index: int
+    prompt: str
+    sampling_params: dict[str, Any] = Field(default_factory=dict)
+    finish_reason: str | None = None
+    output_text: str = ""
+
+    def to_benchmark_prompt(self) -> BenchmarkPrompt:
+        """Convert capture-time field names to the benchmark corpus schema."""
+        return BenchmarkPrompt(
+            row_index=self.row_index,
+            prompt=self.prompt,
+            original_sampling_params=dict(self.sampling_params),
+            expected_finish_reason=self.finish_reason,
+            original_output_text=self.output_text,
+        )
+
+
 class BenchmarkCorpus(BaseModel):
     """One captured workload corpus, loaded from a trace JSONL.
 
@@ -170,15 +193,7 @@ class BenchmarkCorpus(BaseModel):
                 elif kind == "record":
                     if header is None:
                         raise ValueError(f"{path}: record on line {line_no} before any header")
-                    prompts.append(
-                        BenchmarkPrompt(
-                            row_index=int(payload["row_index"]),
-                            prompt=str(payload["prompt"]),
-                            original_sampling_params=dict(payload.get("sampling_params") or {}),
-                            expected_finish_reason=payload.get("finish_reason"),
-                            original_output_text=str(payload.get("output_text", "")),
-                        ),
-                    )
+                    prompts.append(TracePromptRecord.model_validate(payload).to_benchmark_prompt())
                 else:
                     raise ValueError(f"{path}: unknown kind={kind!r} on line {line_no}")
         if header is None:
@@ -336,6 +351,52 @@ class BenchmarkCandidate(BaseModel):
         ),
     )
 
+    def sampling_kwargs(self, base: dict[str, Any]) -> dict[str, Any]:
+        """Compose vLLM ``SamplingParams`` kwargs for this candidate.
+
+        The corpus's captured sampling params can carry metadata fields
+        that vLLM does not accept. Candidate overrides win, and an
+        override can intentionally reintroduce a normally stripped key.
+        """
+        merged: dict[str, Any] = {**base, **self.sampling_overrides}
+        for field in _NON_SAMPLING_FIELDS:
+            if field not in self.sampling_overrides:
+                merged.pop(field, None)
+        return merged
+
+    def dispatch_plan(self, prompts: Sequence[str], base_sampling: dict[str, Any]) -> BenchmarkDispatchPlan:
+        """Build prompt and sampling kwargs for the candidate's dispatch mode."""
+        prompt_list = list(prompts)
+        sampling_kwargs = self.sampling_kwargs(base_sampling)
+        if self.batch_dispatch_mode == "n_fanout" and len(set(prompt_list)) > 1:
+            raise ValueError("batch_dispatch_mode='n_fanout' requires every corpus prompt to be identical")
+        if self.batch_dispatch_mode == "n_fanout":
+            sampling_kwargs["n"] = max(1, len(prompt_list))
+            return BenchmarkDispatchPlan(prompts=prompt_list[:1], sampling_kwargs=sampling_kwargs)
+        sampling_kwargs.setdefault("n", 1)
+        return BenchmarkDispatchPlan(prompts=prompt_list, sampling_kwargs=sampling_kwargs)
+
+
+class BenchmarkCandidateDocument(BaseModel):
+    """JSON document shape consumed by ``tools/vllm_benchmark.py --candidates-file``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[BenchmarkCandidate] = Field(description="Candidate configurations to run.")
+
+    @classmethod
+    def from_json_file(cls, path: str | Path) -> Self:
+        """Load and validate a candidate-file JSON document."""
+        return cls.model_validate_json(Path(path).read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True)
+class BenchmarkDispatchPlan:
+    """Prompt payload plus sampling kwargs for one candidate dispatch."""
+
+    prompts: list[str]
+    sampling_kwargs: dict[str, Any]
+
 
 class CandidateMetrics(BaseModel):
     """Measured outputs for one benchmark candidate run.
@@ -417,7 +478,7 @@ class CandidateMetrics(BaseModel):
     observability: GenerationObservability = Field(
         default_factory=GenerationObservability,
         description=(
-            "Cell-level observability snapshot. Composed from PR-A's schema "
+            "Candidate-run observability snapshot. Composed from PR-A's schema "
             "so benchmark consumers can read e.g. ``metrics.observability."
             "peak_vram_gb`` and ``metrics.observability.kv_cache_usage_perc`` "
             "without the benchmark schema re-defining those fields."
@@ -459,23 +520,8 @@ class BenchmarkOutput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Sampling-params + percentile helpers
+# Percentile + metric helpers
 # ---------------------------------------------------------------------------
-
-
-def _merge_sampling_kwargs(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
-    """Compose ``SamplingParams`` kwargs from corpus default + candidate overrides.
-
-    The corpus's captured ``original_sampling_params`` may carry fields
-    that ``vllm.SamplingParams`` doesn't accept (e.g. structured-output
-    presence summaries). Strip those unless the override explicitly
-    provides them. Overrides win on conflict.
-    """
-    merged: dict[str, Any] = {**base, **overrides}
-    for field in _NON_SAMPLING_FIELDS:
-        if field not in overrides:
-            merged.pop(field, None)
-    return merged
 
 
 def _percentile(values: list[float], pct: float) -> float:
@@ -687,29 +733,20 @@ def run_benchmark(
         base_sampling: dict[str, Any] = {}
         if corpus.prompts:
             base_sampling = corpus.prompts[0].original_sampling_params
-        sampling_kwargs = _merge_sampling_kwargs(base_sampling, candidate.sampling_overrides)
-        prompts: list[str] = [p.prompt for p in corpus.prompts]
-        if candidate.batch_dispatch_mode == "n_fanout" and len(set(prompts)) > 1:
-            raise ValueError("batch_dispatch_mode='n_fanout' requires every corpus prompt to be identical")
-        if candidate.batch_dispatch_mode == "n_fanout":
-            sampling_kwargs["n"] = max(1, len(prompts))
-            dispatch_prompts = prompts[:1]
-        else:
-            sampling_kwargs.setdefault("n", 1)
-            dispatch_prompts = prompts
-        sampling_params = SamplingParams(**sampling_kwargs)
+        dispatch = candidate.dispatch_plan([p.prompt for p in corpus.prompts], base_sampling)
+        sampling_params = SamplingParams(**dispatch.sampling_kwargs)
 
         # Dispatch.
         gen_start = time.perf_counter()
         outputs: list[Any] = (
             list(
                 llm.generate(
-                    prompts=dispatch_prompts,
+                    prompts=dispatch.prompts,
                     sampling_params=sampling_params,
                     lora_request=lora_request,
                 )
             )
-            if dispatch_prompts
+            if dispatch.prompts
             else []
         )
         total_wall = max(time.perf_counter() - gen_start, 0.0)
@@ -846,9 +883,8 @@ def run_benchmark_in_subprocess(
     interpreter; the OS reclaims everything on child exit.
     """
     candidate_json = candidate.model_dump_json()
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as result_fh:
-        result_path = Path(result_fh.name)
-    try:
+    with tempfile.TemporaryDirectory(prefix="nss-vllm-benchmark-") as result_dir:
+        result_path = Path(result_dir) / "result.json"
         completed = subprocess.run(
             [
                 sys.executable,
@@ -880,5 +916,3 @@ def run_benchmark_in_subprocess(
             )
         metrics = CandidateMetrics.model_validate_json(result_path.read_text(encoding="utf-8"))
         return SubprocessRunResult(metrics=metrics)
-    finally:
-        result_path.unlink(missing_ok=True)

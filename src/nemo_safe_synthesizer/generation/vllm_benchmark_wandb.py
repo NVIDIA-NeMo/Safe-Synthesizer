@@ -53,7 +53,7 @@ def resolve_sweep_id() -> str:
     return os.environ.get("WANDB_RUN_GROUP") or f"sweep-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}"
 
 
-def init_cell_run(
+def init_candidate_run(
     *,
     candidate_name: str,
     candidate_idx: int,

@@ -23,7 +23,7 @@ Cluster signal per workload shape:
 
 Cluster count is selected via silhouette score (post-hoc, k in [2, 4]).
 Refuses to compute delta-style aggregates when a condition has fewer than
-:data:`MIN_CELLS_PER_CONDITION` candidate runs - single-run measurements
+:data:`MIN_CANDIDATE_RUNS_PER_CONDITION` candidate runs - single-run measurements
 should never drive promote/reject decisions on this stack.
 
 Effect-size + 95% CI reporting lives in this module too - see
@@ -45,7 +45,7 @@ from .vllm_benchmark import BenchmarkOutput, CandidateMetrics
 
 ClusterSignal = Literal["wall_seconds", "acceptance_rate", "auto"]
 
-MIN_CELLS_PER_CONDITION: int = 6
+MIN_CANDIDATE_RUNS_PER_CONDITION: int = 6
 """Minimum candidate runs per condition before delta-style aggregates are computed.
 
 Matches :data:`DEFAULT_BRACKETED_AB_N`. Below this threshold the
@@ -80,7 +80,7 @@ class ClusterStats(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cluster_id: int
-    n_cells: int
+    n_candidate_runs: int
     signal_mean: float
     signal_stddev: float
     signal_cov: float
@@ -118,7 +118,7 @@ class ConditionClusterAggregate(BaseModel):
 
     condition_label: str
     cluster_id: int
-    n_cells: int
+    n_candidate_runs: int
     mean_effective_tok_s: float
     stddev_effective_tok_s: float
     cov_effective_tok_s: float
@@ -133,7 +133,7 @@ class ConditionAggregate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     condition_label: str
-    n_cells: int
+    n_candidate_runs: int
     pooled_mean_effective_tok_s: float
     pooled_stddev_effective_tok_s: float
     pooled_cov_effective_tok_s: float
@@ -151,7 +151,7 @@ class AnalysisReport(BaseModel):
 
     cluster_signal: str
     n_clusters: int
-    n_cells: int
+    n_candidate_runs: int
     cluster_assignments: list[ClusterAssignment]
     cluster_stats: list[ClusterStats]
     condition_aggregates: list[ConditionAggregate]
@@ -160,7 +160,7 @@ class AnalysisReport(BaseModel):
     def to_markdown_summary(self) -> str:
         """Render a human-readable summary."""
         lines: list[str] = [
-            f"# Cluster-conditioned analysis ({self.n_cells} candidate runs, k={self.n_clusters})",
+            f"# Cluster-conditioned analysis ({self.n_candidate_runs} candidate runs, k={self.n_clusters})",
             "",
             f"Cluster signal: `{self.cluster_signal}`",
             "",
@@ -171,12 +171,12 @@ class AnalysisReport(BaseModel):
         ]
         for cs in self.cluster_stats:
             lines.append(
-                f"| {cs.cluster_id} | {cs.n_cells} | {cs.signal_mean:.4f} | "
+                f"| {cs.cluster_id} | {cs.n_candidate_runs} | {cs.signal_mean:.4f} | "
                 f"{cs.signal_stddev:.4f} | {cs.signal_cov * 100:.2f}% |"
             )
         lines.extend(("", "## Per-condition aggregates", ""))
         for agg in self.condition_aggregates:
-            lines.append(f"### `{agg.condition_label}` (n={agg.n_cells})")
+            lines.append(f"### `{agg.condition_label}` (n={agg.n_candidate_runs})")
             lines.append("")
             lines.append(
                 f"- Pooled: eff_tok_s={agg.pooled_mean_effective_tok_s:.1f} "
@@ -196,7 +196,7 @@ class AnalysisReport(BaseModel):
                 lines.append("- In-cluster:")
                 for ic in agg.in_cluster:
                     lines.append(
-                        f"  - cluster {ic.cluster_id}: n={ic.n_cells}, "
+                        f"  - cluster {ic.cluster_id}: n={ic.n_candidate_runs}, "
                         f"eff_tok_s={ic.mean_effective_tok_s:.1f} "
                         f"+/- {ic.stddev_effective_tok_s:.1f} "
                         f"(CoV {ic.cov_effective_tok_s * 100:.2f}%); "
@@ -224,12 +224,12 @@ class AnalysisReport(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _signal_value(cell: CandidateMetrics, signal: str) -> float:
+def _signal_value(candidate_run: CandidateMetrics, signal: str) -> float:
     """Extract the signal value for clustering; raises on unknown signal."""
     if signal == "wall_seconds":
-        return cell.total_wall_seconds
+        return candidate_run.total_wall_seconds
     if signal == "acceptance_rate":
-        return cell.acceptance_rate
+        return candidate_run.acceptance_rate
     raise ValueError(f"unknown cluster signal: {signal!r}")
 
 
@@ -243,16 +243,16 @@ def _pooled_cov(values: list[float]) -> tuple[float, float, float]:
     return mean, stddev, cov
 
 
-def _auto_select_signal(cells: list[CandidateMetrics]) -> str:
+def _auto_select_signal(candidate_runs: list[CandidateMetrics]) -> str:
     """Pick whichever signal has higher pooled CoV across the candidate runs.
 
     Defaults to ``wall_seconds`` on ties (short-context bimodality is
     the more common workload shape).
     """
-    if not cells:
+    if not candidate_runs:
         return "wall_seconds"
-    _, _, cov_wall = _pooled_cov([c.total_wall_seconds for c in cells])
-    _, _, cov_acc = _pooled_cov([c.acceptance_rate for c in cells])
+    _, _, cov_wall = _pooled_cov([c.total_wall_seconds for c in candidate_runs])
+    _, _, cov_acc = _pooled_cov([c.acceptance_rate for c in candidate_runs])
     return "acceptance_rate" if cov_acc > cov_wall else "wall_seconds"
 
 
@@ -372,46 +372,46 @@ def _effect_size(
 # ---------------------------------------------------------------------------
 
 
-def load_cells(output_dir: Path) -> list[CandidateMetrics]:
+def load_candidate_runs(output_dir: Path) -> list[CandidateMetrics]:
     """Read every ``BenchmarkOutput`` JSON in ``output_dir``, flatten candidate runs.
 
     Subdirectories are NOT recursed. Callers wanting cross-dataset
     analysis should invoke once per dataset dir.
     """
-    cells: list[CandidateMetrics] = []
+    candidate_runs: list[CandidateMetrics] = []
     for path in sorted(output_dir.glob("*.json")):
         try:
             doc = BenchmarkOutput.model_validate_json(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, ValueError):
             continue
-        cells.extend(doc.candidates)
-    return cells
+        candidate_runs.extend(doc.candidates)
+    return candidate_runs
 
 
 def analyze(
     output_dir: Path,
     cluster_signal: ClusterSignal = "auto",
-    min_cells_per_condition: int = MIN_CELLS_PER_CONDITION,
+    min_candidate_runs_per_condition: int = MIN_CANDIDATE_RUNS_PER_CONDITION,
 ) -> AnalysisReport:
     """Full pipeline: load -> cluster -> per-condition aggregate -> effect-size -> report."""
-    cells = load_cells(output_dir)
-    if not cells:
+    candidate_runs = load_candidate_runs(output_dir)
+    if not candidate_runs:
         raise ValueError(f"No BenchmarkOutput JSONs found under {output_dir}")
 
-    resolved_signal = _auto_select_signal(cells) if cluster_signal == "auto" else cluster_signal
-    values = np.array([_signal_value(c, resolved_signal) for c in cells], dtype=float)
+    resolved_signal = _auto_select_signal(candidate_runs) if cluster_signal == "auto" else cluster_signal
+    values = np.array([_signal_value(candidate_run, resolved_signal) for candidate_run in candidate_runs], dtype=float)
     n_clusters = _select_n_clusters(values)
     labels = _assign_clusters(values, n_clusters)
 
     assignments = [
         ClusterAssignment(
-            candidate_name=cell.name,
-            condition_label=cell.condition_label,
-            bracket_position=cell.bracket_position,
+            candidate_name=candidate_run.name,
+            condition_label=candidate_run.condition_label,
+            bracket_position=candidate_run.bracket_position,
             cluster_id=int(lbl),
             signal_value=float(val),
         )
-        for cell, lbl, val in zip(cells, labels, values, strict=True)
+        for candidate_run, lbl, val in zip(candidate_runs, labels, values, strict=True)
     ]
 
     cluster_stats: list[ClusterStats] = []
@@ -421,7 +421,7 @@ def analyze(
         cluster_stats.append(
             ClusterStats(
                 cluster_id=cid,
-                n_cells=len(cluster_values),
+                n_candidate_runs=len(cluster_values),
                 signal_mean=mean,
                 signal_stddev=stddev,
                 signal_cov=cov,
@@ -429,23 +429,23 @@ def analyze(
         )
 
     by_condition: dict[str, list[tuple[int, CandidateMetrics]]] = {}
-    for cell, lbl in zip(cells, labels, strict=True):
-        by_condition.setdefault(cell.condition_label, []).append((int(lbl), cell))
+    for candidate_run, lbl in zip(candidate_runs, labels, strict=True):
+        by_condition.setdefault(candidate_run.condition_label, []).append((int(lbl), candidate_run))
 
     baseline_pooled_eff: list[float] = []
     baseline_per_cluster_eff: dict[int, list[float]] = {}
-    for lbl, cell in by_condition.get("baseline", []):
-        baseline_pooled_eff.append(cell.effective_tok_s)
-        baseline_per_cluster_eff.setdefault(lbl, []).append(cell.effective_tok_s)
+    for lbl, candidate_run in by_condition.get("baseline", []):
+        baseline_pooled_eff.append(candidate_run.effective_tok_s)
+        baseline_per_cluster_eff.setdefault(lbl, []).append(candidate_run.effective_tok_s)
 
     aggregates: list[ConditionAggregate] = []
     refusals: list[str] = []
     for condition in sorted(by_condition):
         labeled = by_condition[condition]
-        if len(labeled) < min_cells_per_condition:
+        if len(labeled) < min_candidate_runs_per_condition:
             refusals.append(
                 f"condition {condition!r} has only {len(labeled)} candidate runs; "
-                f"need >={min_cells_per_condition} - refusing aggregate"
+                f"need >={min_candidate_runs_per_condition} - refusing aggregate"
             )
             continue
         pooled_eff = [c.effective_tok_s for _, c in labeled]
@@ -455,12 +455,12 @@ def analyze(
 
         in_cluster: list[ConditionClusterAggregate] = []
         for cid in range(n_clusters):
-            cluster_cells = [c for lbl, c in labeled if lbl == cid]
-            if not cluster_cells:
+            cluster_candidate_runs = [c for lbl, c in labeled if lbl == cid]
+            if not cluster_candidate_runs:
                 continue
-            ic_eff = [c.effective_tok_s for c in cluster_cells]
-            ic_acc = [c.acceptance_rate for c in cluster_cells]
-            ic_raw = [c.raw_tok_s for c in cluster_cells]
+            ic_eff = [c.effective_tok_s for c in cluster_candidate_runs]
+            ic_acc = [c.acceptance_rate for c in cluster_candidate_runs]
+            ic_raw = [c.raw_tok_s for c in cluster_candidate_runs]
             mean_eff, stddev_eff, cov_eff = _pooled_cov(ic_eff)
             ic_effect: EffectSize | None = None
             if condition != "baseline" and cid in baseline_per_cluster_eff:
@@ -476,7 +476,7 @@ def analyze(
                 ConditionClusterAggregate(
                     condition_label=condition,
                     cluster_id=cid,
-                    n_cells=len(cluster_cells),
+                    n_candidate_runs=len(cluster_candidate_runs),
                     mean_effective_tok_s=mean_eff,
                     stddev_effective_tok_s=stddev_eff,
                     cov_effective_tok_s=cov_eff,
@@ -498,7 +498,7 @@ def analyze(
         aggregates.append(
             ConditionAggregate(
                 condition_label=condition,
-                n_cells=len(labeled),
+                n_candidate_runs=len(labeled),
                 pooled_mean_effective_tok_s=eff_mean,
                 pooled_stddev_effective_tok_s=eff_stddev,
                 pooled_cov_effective_tok_s=eff_cov,
@@ -513,7 +513,7 @@ def analyze(
     return AnalysisReport(
         cluster_signal=resolved_signal,
         n_clusters=n_clusters,
-        n_cells=len(cells),
+        n_candidate_runs=len(candidate_runs),
         cluster_assignments=assignments,
         cluster_stats=cluster_stats,
         condition_aggregates=aggregates,

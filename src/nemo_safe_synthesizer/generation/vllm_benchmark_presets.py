@@ -22,7 +22,7 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from .vllm_benchmark import BenchmarkCandidate, BenchmarkEngineConfig
+from .vllm_benchmark import BatchDispatchMode, BenchmarkCandidate, BenchmarkEngineConfig
 
 PresetFn = Callable[[BenchmarkEngineConfig], list[BenchmarkCandidate]]
 """A preset resolves the corpus-default engine config into candidate runs."""
@@ -205,7 +205,7 @@ def bracketed_ab(
     *,
     candidate_engine_overrides: dict[str, Any] | None = None,
     candidate_sampling_overrides: dict[str, Any] | None = None,
-    candidate_batch_dispatch_mode: str | None = None,
+    candidate_batch_dispatch_mode: BatchDispatchMode | None = None,
     condition_label: str,
     n_samples_per_condition: int = DEFAULT_BRACKETED_AB_N,
 ) -> list[BenchmarkCandidate]:
@@ -226,9 +226,9 @@ def bracketed_ab(
     """
     engine_overrides = candidate_engine_overrides or {}
     sampling_extra = candidate_sampling_overrides or {}
-    cells: list[BenchmarkCandidate] = []
+    candidate_runs: list[BenchmarkCandidate] = []
     for i in range(n_samples_per_condition):
-        cells.append(
+        candidate_runs.append(
             BenchmarkCandidate(
                 name=f"bracket_baseline_{i}",
                 engine_config=_with_default_max_model_len(base),
@@ -246,8 +246,8 @@ def bracketed_ab(
         }
         if candidate_batch_dispatch_mode is not None:
             cand_kwargs["batch_dispatch_mode"] = candidate_batch_dispatch_mode
-        cells.append(BenchmarkCandidate(**cand_kwargs))
-    return cells
+        candidate_runs.append(BenchmarkCandidate(**cand_kwargs))
+    return candidate_runs
 
 
 # Phase B matrix-condition wrappers. Each yields a 2N-run sequence

@@ -23,6 +23,7 @@ import nemo_safe_synthesizer.generation.processors as processors_mod
 import nemo_safe_synthesizer.generation.vllm_benchmark as benchmark_mod
 from nemo_safe_synthesizer.generation.vllm_benchmark import (
     BenchmarkCandidate,
+    BenchmarkCandidateDocument,
     BenchmarkCorpus,
     BenchmarkEngineConfig,
     BenchmarkOutput,
@@ -30,9 +31,9 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
     CandidateMetrics,
     SubprocessRunResult,
     TraceHeader,
+    TracePromptRecord,
     _build_vllm_kwargs,
     _extract_ttft_ms,
-    _merge_sampling_kwargs,
     _parse_error_class,
     _percentile,
     _truncate_stderr,
@@ -262,6 +263,19 @@ class TestSchemaContracts:
         with pytest.raises(ValidationError):
             BenchmarkCandidate.model_validate({"name": "t", "unknown_field": 42})
 
+    def test_candidate_document_loads_candidate_file(self, tmp_path: Any) -> None:
+        path = tmp_path / "candidates.json"
+        path.write_text(
+            json.dumps({"candidates": [{"name": "baseline", "sampling_overrides": {"seed": 42}}]}),
+            encoding="utf-8",
+        )
+
+        doc = BenchmarkCandidateDocument.from_json_file(path)
+
+        assert len(doc.candidates) == 1
+        assert doc.candidates[0].name == "baseline"
+        assert doc.candidates[0].sampling_overrides == {"seed": 42}
+
 
 # ---------------------------------------------------------------------------
 # Corpus loader
@@ -269,6 +283,24 @@ class TestSchemaContracts:
 
 
 class TestBenchmarkCorpus:
+    def test_trace_prompt_record_converts_capture_keys(self) -> None:
+        record = TracePromptRecord.model_validate(
+            {
+                "row_index": "3",
+                "prompt": "p",
+                "sampling_params": {"temperature": 0.7},
+                "finish_reason": "stop",
+                "output_text": '{"col": "x"}',
+            },
+        )
+
+        prompt = record.to_benchmark_prompt()
+
+        assert prompt.row_index == 3
+        assert prompt.original_sampling_params == {"temperature": 0.7}
+        assert prompt.expected_finish_reason == "stop"
+        assert prompt.original_output_text == '{"col": "x"}'
+
     def test_loads_jsonl_with_header_and_records(self, tmp_path: Any) -> None:
         path = tmp_path / "trace.jsonl"
         lines = [
@@ -300,17 +332,30 @@ class TestHelpers:
         assert _percentile([1.0], 50) == 1.0
         assert _percentile([], 50) == 0.0  # empty returns 0, not raises
 
-    def test_merge_sampling_strips_non_sampling_fields(self) -> None:
+    def test_candidate_sampling_kwargs_strips_non_sampling_fields(self) -> None:
         """``structured_outputs`` is capture-time metadata, not a SamplingParams kwarg."""
-        merged = _merge_sampling_kwargs(
-            {"temperature": 0.7, "top_p": 0.9, "structured_outputs": "json"},
-            {"seed": 42},
-        )
+        candidate = BenchmarkCandidate(name="baseline", sampling_overrides={"seed": 42})
+        merged = candidate.sampling_kwargs({"temperature": 0.7, "top_p": 0.9, "structured_outputs": "json"})
         assert merged == {"temperature": 0.7, "top_p": 0.9, "seed": 42}
 
-    def test_merge_overrides_win_on_conflict(self) -> None:
-        merged = _merge_sampling_kwargs({"temperature": 0.7}, {"temperature": 0.0})
+    def test_candidate_sampling_overrides_win_on_conflict(self) -> None:
+        candidate = BenchmarkCandidate(name="baseline", sampling_overrides={"temperature": 0.0})
+        merged = candidate.sampling_kwargs({"temperature": 0.7})
         assert merged["temperature"] == 0.0
+
+    def test_candidate_dispatch_plan_replicates_prompts(self) -> None:
+        candidate = BenchmarkCandidate(name="baseline")
+        plan = candidate.dispatch_plan(["a", "b"], {"temperature": 0.0})
+
+        assert plan.prompts == ["a", "b"]
+        assert plan.sampling_kwargs == {"temperature": 0.0, "n": 1}
+
+    def test_candidate_dispatch_plan_fans_out_identical_prompts(self) -> None:
+        candidate = BenchmarkCandidate(name="fanout", batch_dispatch_mode="n_fanout")
+        plan = candidate.dispatch_plan(["same", "same", "same"], {"temperature": 0.0})
+
+        assert plan.prompts == ["same"]
+        assert plan.sampling_kwargs == {"temperature": 0.0, "n": 3}
 
     @pytest.mark.parametrize(
         ("metrics_obj", "expected"),
@@ -454,26 +499,26 @@ class TestPresets:
 
 
 class TestBracketedAb:
-    def test_emits_2n_cells_interleaved(self, empty_base: BenchmarkEngineConfig) -> None:
+    def test_emits_2n_candidate_runs_interleaved(self, empty_base: BenchmarkEngineConfig) -> None:
         """N baselines + N candidate runs, interleaved by bracket_position."""
-        cells = bracketed_ab(
+        candidate_runs = bracketed_ab(
             empty_base,
             candidate_engine_overrides={"enable_prefix_caching": True},
             condition_label="prefix_on",
             n_samples_per_condition=3,
         )
-        assert len(cells) == 6
+        assert len(candidate_runs) == 6
         # Even positions are baseline; odd positions are the candidate.
-        for i, cell in enumerate(cells):
+        for i, candidate_run in enumerate(candidate_runs):
             expected_label = "baseline" if i % 2 == 0 else "prefix_on"
-            assert cell.condition_label == expected_label
-            assert cell.bracket_position == i
+            assert candidate_run.condition_label == expected_label
+            assert candidate_run.bracket_position == i
 
     def test_spec_ngram_wrapper_applies_speculative_config(self, empty_base: BenchmarkEngineConfig) -> None:
-        cells = bracketed_ab_spec_ngram(empty_base)
+        candidate_runs = bracketed_ab_spec_ngram(empty_base)
         # Candidate runs have speculative_config; baselines don't.
-        candidates = [c for c in cells if c.condition_label == "spec_ngram"]
-        baselines = [c for c in cells if c.condition_label == "baseline"]
+        candidates = [c for c in candidate_runs if c.condition_label == "spec_ngram"]
+        baselines = [c for c in candidate_runs if c.condition_label == "baseline"]
         assert len(candidates) == DEFAULT_BRACKETED_AB_N
         assert len(baselines) == DEFAULT_BRACKETED_AB_N
         for c in candidates:
@@ -482,9 +527,9 @@ class TestBracketedAb:
         for b in baselines:
             assert b.engine_config.speculative_config is None
 
-    def test_all_cells_seed_pinned(self, empty_base: BenchmarkEngineConfig) -> None:
-        cells = bracketed_ab_spec_ngram(empty_base)
-        for c in cells:
+    def test_all_candidate_runs_seed_pinned(self, empty_base: BenchmarkEngineConfig) -> None:
+        candidate_runs = bracketed_ab_spec_ngram(empty_base)
+        for c in candidate_runs:
             assert c.sampling_overrides.get("seed") == DEFAULT_BENCHMARK_SEED
 
 
