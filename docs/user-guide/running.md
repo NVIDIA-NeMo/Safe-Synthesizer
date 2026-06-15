@@ -714,21 +714,23 @@ Based on testing, some trade-offs identified compared to SmolLM3 on average:
 ### Quantization
 
 Enabling quantization reduces VRAM consumption at the cost of some numerical
-precision. Set `training.quantize_model` to `true` and choose a bit width with
-`training.quantization_bits`.
+precision. Set `training.quantize_model` to `true` and choose a scheme with
+`training.quantization_scheme`. New configs should set the scheme directly;
+legacy configs that still set `training.quantization_bits` continue to map
+`4` to `bnb-4bit` and `8` to `bnb-8bit`.
 
 | Setting | VRAM | Precision | Speed | Notes |
 |---------|------|-----------|-------|-------|
 | No quantization | Highest | Full | Baseline | Use when VRAM is not a constraint |
-| 8-bit | ~50% reduction | Near-full | Slightly slower | Good balance for most cases |
-| 4-bit | ~75% reduction | Reduced | Faster | Use when VRAM is tight; may affect output quality |
+| `bnb-8bit` | ~50% reduction | Near-full | Slightly slower | Good balance for most cases |
+| `bnb-4bit` | ~75% reduction | Reduced | Faster | Use when VRAM is tight; may affect output quality |
 
 === "CLI"
 
     ```bash
     safe-synthesizer run \
       --training__quantize_model true \
-      --training__quantization_bits 4 \
+      --training__quantization_scheme bnb-4bit \
       --data-source data.csv
     ```
 
@@ -740,7 +742,7 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
     synthesizer = (
         SafeSynthesizer()
         .with_data_source("data.csv")
-        .with_train(quantize_model=True, quantization_bits=4)
+        .with_train(quantize_model=True, quantization_scheme="bnb-4bit")
     )
     ```
 
@@ -749,7 +751,7 @@ precision. Set `training.quantize_model` to `true` and choose a bit width with
     ```yaml
     training:
       quantize_model: true
-      quantization_bits: 4
+      quantization_scheme: bnb-4bit
     ```
 
 ### Attention Backends

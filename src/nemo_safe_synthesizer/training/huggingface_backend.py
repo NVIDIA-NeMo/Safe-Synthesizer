@@ -234,12 +234,7 @@ class HuggingFaceBackend(TrainingBackend):
         Prefers the explicit ``quantization_scheme`` field; falls back to
         the legacy ``quantization_bits`` alias when unset.
         """
-        from ..config.training import QuantizationScheme
-
-        cfg = self.params.training
-        if cfg.quantization_scheme is not None:
-            return cfg.quantization_scheme
-        return QuantizationScheme.BNB_4BIT if cfg.quantization_bits == 4 else QuantizationScheme.BNB_8BIT
+        return self.params.training.resolve_quantization_scheme()
 
     def _get_quantization_config_if_enabled(self) -> QuantizationConfigMixin | None:
         """Build the v5 quantization config for the configured scheme, or None.

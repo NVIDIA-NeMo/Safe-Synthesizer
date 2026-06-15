@@ -463,6 +463,13 @@ class TrainingHyperparams(Parameters):
         ),
     ] = None
 
+    def resolve_quantization_scheme(self) -> QuantizationScheme:
+        """Return the effective quantization scheme, including legacy bit aliases."""
+        if self.quantization_scheme is not None:
+            return self.quantization_scheme
+        legacy_bits = self.__dict__.get("quantization_bits", 8)
+        return QuantizationScheme.from_alias(legacy_bits)
+
     peft_implementation: Annotated[
         str,
         Field(
