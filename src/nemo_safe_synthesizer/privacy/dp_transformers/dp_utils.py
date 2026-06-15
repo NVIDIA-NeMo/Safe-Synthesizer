@@ -846,6 +846,15 @@ class OpacusDPTrainer(Trainer):
     def _install_loss_memory_probe(self) -> bool:
         """Install the causal-LM loss probe from ``self.memory_controls`` (idempotent)."""
         mc = self.memory_controls
+        if self.grad_sample_mode == "ghost":
+            if mc.debug_loss_memory or mc.chunked_causal_lm_loss:
+                logger.warning(
+                    "DP memory controls debug_loss_memory and chunked_causal_lm_loss are "
+                    "ignored for grad_sample_mode='ghost' because ghost clipping bypasses "
+                    "Transformers' causal-LM loss."
+                )
+            return False
+
         return _install_causal_lm_loss_memory_probe(
             debug_loss_memory=mc.debug_loss_memory,
             chunked_loss=mc.chunked_causal_lm_loss,
@@ -895,8 +904,8 @@ class OpacusDPTrainer(Trainer):
                 effective_batch_size=effective,
                 grad_sample_mode=self.grad_sample_mode,
             )
-            logger.runtime.info(TRAINING_COMPLETE_EVENT, extra={"ctx": event.model_dump()})
             self.last_training_observability = event
+            logger.runtime.info(TRAINING_COMPLETE_EVENT, extra={"ctx": event.model_dump()})
         except Exception as exc:  # noqa: BLE001 -- observability must never break training
             try:
                 logger.warning(f"failed to emit training observability: {exc}")
