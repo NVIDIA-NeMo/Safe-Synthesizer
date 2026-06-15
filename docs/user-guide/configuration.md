@@ -56,6 +56,40 @@ synthesizer.run()
 See [Using YAML Config Files with the CLI and SDK](running.md#using-yaml-config-files)
 for more detail on combining config files with runtime overrides.
 
+### Python Parameter Construction
+
+The Python SDK accepts both fully nested config objects and compatibility
+shortcuts for fields on top-level parameter sections:
+
+```python
+from nemo_safe_synthesizer.config import SafeSynthesizerParameters
+
+config = SafeSynthesizerParameters.from_params(
+    num_records=2000,  # generation.num_records
+    dp_enabled=True,  # privacy.dp_enabled
+    structured_generation={"enabled": True},  # generation.structured_generation.enabled
+)
+```
+
+Flat keyword arguments are matched by field name against the top-level parameter
+sections. Use the nested shape for fields inside nested subobjects, especially
+when a generic field name could appear in multiple places:
+
+```python
+# Preferred: unambiguous nested form.
+SafeSynthesizerParameters.from_params(
+    structured_generation={"enabled": True},
+)
+
+# Also valid: fully nested generation section.
+SafeSynthesizerParameters.from_params(
+    generation={"structured_generation": {"enabled": True}},
+)
+
+# Avoid: this configures evaluation.enabled, not structured generation.
+SafeSynthesizerParameters.from_params(enabled=True)
+```
+
 ---
 
 ## Training

@@ -865,9 +865,9 @@ flowchart TD
 ### Structured Generation
 
 Set `generation.structured_generation.enabled` to `true` to constrain the model's
-output so every record matches the dataset schema. This reduces the fraction of
-invalid records, typically at the cost of reducing the quality of the generated
-records. Use it when the pipeline struggles to produce valid records.
+output toward the dataset schema. This usually reduces the fraction of invalid
+records, typically at the cost of reducing the quality of the generated records.
+Use it when the pipeline struggles to produce valid records.
 
 === "CLI"
 
@@ -888,6 +888,10 @@ records. Use it when the pipeline struggles to produce valid records.
         .with_generate(structured_generation={"enabled": True})
     )
     ```
+
+    Pass `structured_generation` as a nested dict or
+    `StructuredGenerationParameters` object. Do not use a bare `enabled=True`
+    shortcut for structured generation.
 
 === "Config reference"
 
@@ -942,8 +946,9 @@ fraction per batch.
 
 !!! tip "Early stopping"
     If the pipeline stops early due to patience, try enabling
-    `structured_generation.enabled: true` to constrain outputs to the dataset
-    schema, or lower `temperature` to reduce the chance of malformed records.
+    `generation.structured_generation.enabled: true` to constrain outputs to
+    the dataset schema, or lower `temperature` to reduce the chance of malformed
+    records.
 
 See [Configuration Reference -- Generation](configuration.md#generation) for the full parameter table.
 

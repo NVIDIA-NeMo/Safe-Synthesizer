@@ -76,7 +76,7 @@ class TestStructuredGenerationParametersStructuralTagValidation:
 
     def test_generate_parameters_accepts_nested_structured_generation(self) -> None:
         params = GenerateParameters(
-            structured_generation={
+            structured_generation={  # ty: ignore[invalid-argument-type]
                 "enabled": True,
                 "schema_method": "json_schema",
                 "backend": "outlines",
@@ -87,10 +87,12 @@ class TestStructuredGenerationParametersStructuralTagValidation:
         assert params.structured_generation.backend == "outlines"
 
     def test_generate_parameters_migrates_legacy_flat_keys(self) -> None:
-        params = GenerateParameters(
-            use_structured_generation=True,
-            structured_generation_schema_method="json_schema",
-            structured_generation_backend="outlines",
+        params = GenerateParameters.model_validate(
+            {
+                "use_structured_generation": True,
+                "structured_generation_schema_method": "json_schema",
+                "structured_generation_backend": "outlines",
+            }
         )
         assert params.structured_generation.enabled is True
         assert params.structured_generation.schema_method == "json_schema"

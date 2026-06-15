@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import (
@@ -312,35 +313,75 @@ class GenerateParameters(Parameters, BaseModel):
     @property
     def use_structured_generation(self) -> bool:
         """Deprecated flat alias for ``structured_generation.enabled``."""
+        warnings.warn(
+            "use_structured_generation is deprecated; use structured_generation.enabled instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.structured_generation.enabled
 
     @use_structured_generation.setter
     def use_structured_generation(self, value: bool) -> None:
+        warnings.warn(
+            "use_structured_generation is deprecated; use structured_generation.enabled instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.structured_generation.enabled = value
 
     @property
     def structured_generation_backend(self) -> StructuredGenerationBackend:
         """Deprecated flat alias for ``structured_generation.backend``."""
+        warnings.warn(
+            "structured_generation_backend is deprecated; use structured_generation.backend instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.structured_generation.backend
 
     @structured_generation_backend.setter
     def structured_generation_backend(self, value: StructuredGenerationBackend) -> None:
+        warnings.warn(
+            "structured_generation_backend is deprecated; use structured_generation.backend instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.structured_generation.backend = value
 
     @property
     def structured_generation_schema_method(self) -> StructuredGenerationSchemaMethod:
         """Deprecated flat alias for ``structured_generation.schema_method``."""
+        warnings.warn(
+            "structured_generation_schema_method is deprecated; use structured_generation.schema_method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.structured_generation.schema_method
 
     @structured_generation_schema_method.setter
     def structured_generation_schema_method(self, value: StructuredGenerationSchemaMethod) -> None:
+        warnings.warn(
+            "structured_generation_schema_method is deprecated; use structured_generation.schema_method instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.structured_generation.schema_method = value
 
     @property
     def structured_generation_use_single_sequence(self) -> bool:
         """Deprecated flat alias for ``structured_generation.use_single_sequence``."""
+        warnings.warn(
+            "structured_generation_use_single_sequence is deprecated; use structured_generation.use_single_sequence instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.structured_generation.use_single_sequence
 
     @structured_generation_use_single_sequence.setter
     def structured_generation_use_single_sequence(self, value: bool) -> None:
+        warnings.warn(
+            "structured_generation_use_single_sequence is deprecated; use structured_generation.use_single_sequence instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.structured_generation.use_single_sequence = value
