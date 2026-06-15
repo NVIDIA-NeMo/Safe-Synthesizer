@@ -32,3 +32,7 @@ updates:
           - "actions/*"
           - "astral-sh/*"
           - "codecov/*"
+          - "docker/*"
+          - "dorny/*"
+          - "github/codeql-action/*"
+          - "NVIDIA-NeMo/FW-CI-templates*"
