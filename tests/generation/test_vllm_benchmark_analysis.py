@@ -3,7 +3,7 @@
 
 """Tests for the cluster-conditioned analyzer.
 
-Scope: contracts consumers depend on — cluster partitioning produces
+Scope: contracts consumers depend on: cluster partitioning produces
 the expected shape, refusals fire when sample size is too small,
 effect-size CI brackets behave correctly, JSON output round-trips.
 """
@@ -26,7 +26,7 @@ from nemo_safe_synthesizer.generation.vllm_benchmark_analysis import (
 
 
 def _metric(name: str, condition: str, *, eff: float, accept: float, wall: float, bracket: int = 0) -> CandidateMetrics:
-    """Build a CandidateMetrics with minimal scaffolding — used to seed the analyzer."""
+    """Build a CandidateMetrics with minimal scaffolding to seed the analyzer."""
     return CandidateMetrics(
         name=name,
         raw_tok_s=eff / max(accept, 0.01),
@@ -52,7 +52,7 @@ def _write_output_dir(tmp_path: Path, cells: list[CandidateMetrics]) -> Path:
 
 @pytest.fixture
 def synthetic_sweep_dir(tmp_path: Path) -> Path:
-    """6 baselines + 6 spec_ngram cells, both with realistic-noise spread."""
+    """6 baselines + 6 spec_ngram runs, both with realistic-noise spread."""
     cells = [
         # Baselines: ~1500 eff_tok_s, ~0.99 acceptance.
         *(
@@ -75,7 +75,7 @@ def synthetic_sweep_dir(tmp_path: Path) -> Path:
 
 class TestWelchTtestCi:
     def test_clear_difference_excludes_zero(self) -> None:
-        """Genuine difference in means → CI doesn't bracket 0."""
+        """Genuine difference in means means CI doesn't bracket 0."""
         res = _welch_ttest_ci([1700, 1720, 1690, 1710, 1705, 1715], [1500, 1510, 1495, 1505, 1502, 1498])
         assert res is not None
         mean_diff, ci_low, ci_high, _df = res
@@ -83,7 +83,7 @@ class TestWelchTtestCi:
         assert ci_low > 0  # CI excludes 0
 
     def test_identical_means_brackets_zero(self) -> None:
-        """Same means + nonzero variance → CI brackets 0."""
+        """Same means + nonzero variance means CI brackets 0."""
         res = _welch_ttest_ci([1500, 1510, 1495, 1505, 1502, 1498], [1500, 1510, 1495, 1505, 1502, 1498])
         assert res is not None
         mean_diff, ci_low, ci_high, _df = res
@@ -127,14 +127,14 @@ class TestAnalyze:
         baseline_agg = next(agg for agg in report.condition_aggregates if agg.condition_label == "baseline")
         assert spec_agg.pooled_effect_size_vs_baseline is not None
         assert baseline_agg.pooled_effect_size_vs_baseline is None
-        # The Δ should be roughly +200 tok/s, CI excludes 0.
+        # The delta should be roughly +200 tok/s, CI excludes 0.
         es = spec_agg.pooled_effect_size_vs_baseline
         assert es.delta_absolute > 0
         assert es.ci95_low > 0
 
     def test_refuses_aggregates_below_min_cells(self, tmp_path: Path) -> None:
         """Conditions with N<6 land in refusals, not aggregates."""
-        # 6 baselines + only 3 candidate cells → spec_ngram should be refused.
+        # 6 baselines + only 3 candidate runs means spec_ngram should be refused.
         cells = [
             *(_metric(f"baseline_{i}", "baseline", eff=1500.0, accept=0.99, wall=130.0) for i in range(6)),
             *(_metric(f"spec_{i}", "spec_ngram", eff=1700.0, accept=0.99, wall=115.0) for i in range(3)),

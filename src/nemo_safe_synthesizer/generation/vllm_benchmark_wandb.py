@@ -1,13 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Benchmark-side wandb integration — per-cell new-run mode.
+"""WandB metrics sink for vLLM benchmark runs.
 
-Each benchmark cell becomes one wandb run (grouped by sweep ID, tagged
+Each benchmark candidate run becomes one WandB run (grouped by sweep ID, tagged
 by condition_label + dataset). Distinct from PR-A's production
 ``log_observability_event`` pattern, which logs to the *currently
-active* wandb run — production logs generations as a time-series within one
-run, benchmark logs each cell as its own run for per-condition
+active* WandB run: production logs generations as a time-series within one
+run, while benchmark mode logs each candidate run as its own run for per-condition
 isolation in the wandb UI.
 
 Reuses :class:`WandbSettings` from ``nemo_safe_synthesizer.cli.wandb_setup``
@@ -17,7 +17,7 @@ of the pipeline.
 
 Soft dependency: wandb is observability, not a hard requirement. Any
 failure (missing package, missing netrc, ``wandb.init`` exception)
-logs a warning and the harness continues — the benchmark JSON output
+logs a warning and the harness continues; the benchmark JSON output
 is still written.
 """
 
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# A benchmark cell is structurally a GENERATE invocation that's
+# A benchmark candidate run is structurally a GENERATE invocation that's
 # measured rather than consumed. Phase aligns with production GENERATE
 # runs; job_type distinguishes benchmark from production at the
 # wandb-UI level.
@@ -46,8 +46,8 @@ def resolve_sweep_id() -> str:
     """Resolve the wandb group identifier for the current sweep.
 
     Reads ``WANDB_RUN_GROUP`` when set (the orchestrator sets this once
-    per sweep to group all cells). Falls back to an auto-generated
-    timestamp so single-cell invocations don't all collapse into one
+    per sweep to group all candidate runs). Falls back to an auto-generated
+    timestamp so single-run invocations don't all collapse into one
     bucket.
     """
     return os.environ.get("WANDB_RUN_GROUP") or f"sweep-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}"
@@ -64,7 +64,7 @@ def init_cell_run(
     candidate_condition_label: str = "",
     candidate_bracket_position: int = 0,
 ) -> Any:
-    """Open one wandb run for a single benchmark cell.
+    """Open one WandB run for a single benchmark candidate run.
 
     Returns the run object on success, ``None`` when wandb is disabled,
     misconfigured, or the package is unavailable. Callers must treat
@@ -79,16 +79,16 @@ def init_cell_run(
     path is set by the ``bracketed_ab`` preset family.
 
     Auth via ``~/.netrc`` (set up by ``wandb login``).
-    ``WANDB_API_KEY`` is NOT read — passing the key via env leaks it
+    ``WANDB_API_KEY`` is NOT read; passing the key via env leaks it
     via ``ps auxe``.
     """
     settings = WandbSettings()
     if settings.wandb_mode == WandbMode.DISABLED:
         return None
     try:
-        import wandb  # noqa: PLC0415 — soft dependency
+        import wandb  # noqa: PLC0415 - soft dependency
     except ImportError:
-        logger.warning("wandb not installed; skipping wandb integration for this cell")
+        logger.warning("wandb not installed; skipping wandb metrics sink for this candidate run")
         return None
 
     condition_label = candidate_condition_label or os.environ.get("BENCHMARK_CONDITION_LABEL") or candidate_name
@@ -121,7 +121,7 @@ def init_cell_run(
                 "phase": WandbPhase.GENERATE.value,
             },
         )
-    except Exception as exc:  # noqa: BLE001 — degraded mode by design
+    except Exception as exc:  # noqa: BLE001 - degraded mode by design
         logger.warning("wandb.init failed; continuing without wandb", exc_info=exc)
         return None
 
@@ -158,5 +158,5 @@ def log_and_finish(run: Any, metrics: CandidateMetrics | None, exit_code: int = 
 
             wandb.log(_flatten_metrics(metrics))
         run.finish(exit_code=exit_code)
-    except Exception as exc:  # noqa: BLE001 — degraded mode
+    except Exception as exc:  # noqa: BLE001 - degraded mode
         logger.warning("wandb finish failed; continuing", exc_info=exc)

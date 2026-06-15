@@ -25,7 +25,7 @@ from typing import Any
 from .vllm_benchmark import BenchmarkCandidate, BenchmarkEngineConfig
 
 PresetFn = Callable[[BenchmarkEngineConfig], list[BenchmarkCandidate]]
-"""A preset resolves the corpus-default engine config into candidate cells."""
+"""A preset resolves the corpus-default engine config into candidate runs."""
 
 DEFAULT_BENCHMARK_SEED: int = 42
 """Default ``SamplingParams.seed`` value for preset-built candidates.
@@ -41,7 +41,7 @@ DEFAULT_MAX_MODEL_LEN: int = 4096
 """Fallback ``max_model_len`` for presets when the corpus header doesn't have a resolver hint.
 
 vLLM 0.20 defaults this to whatever the model's tokenizer reports, which
-for Mistral-7B is 32768 — over-provisions the KV cache budget for the
+for Mistral-7B is 32768 - over-provisions the KV cache budget for the
 tabular workloads we benchmark.
 """
 
@@ -107,7 +107,7 @@ def _named_copy(base: BenchmarkEngineConfig, name: str, **updates: Any) -> Bench
 
 
 def baseline(base: BenchmarkEngineConfig) -> BenchmarkCandidate:
-    """Pass-through candidate — runs the corpus's default config unchanged.
+    """Pass-through candidate - runs the corpus's default config unchanged.
 
     Still seed-pinned for reproducibility. See :func:`_named_copy`.
     """
@@ -165,7 +165,7 @@ def max_model_len_sweep(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]
 def default_matrix(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
     """Concatenation of every sweep, deduplicated by (engine config, overrides).
 
-    Dedup is conservative — two candidates with identical engine config
+    Dedup is conservative - two candidates with identical engine config
     but different ``name`` are still considered duplicates because the
     resulting engine + sampling combination is what the runner measures.
     """
@@ -191,12 +191,12 @@ def default_matrix(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
 
 
 DEFAULT_BRACKETED_AB_N: int = 6
-"""Cells per condition in :func:`bracketed_ab`.
+"""Candidate runs per condition in :func:`bracketed_ab`.
 
 N=6 is the methodology-critic-recommended compromise between N=4 (~20%
 statistical power for detecting +5% effects under the stack's observed
-~3% in-cluster CoV) and N=8 (busts the 24h × $350 envelope on a
-4-dataset × 4-condition matrix).
+~3% in-cluster CoV) and N=8 (busts the 24h x $350 envelope on a
+4-dataset x 4-condition matrix).
 """
 
 
@@ -209,18 +209,18 @@ def bracketed_ab(
     condition_label: str,
     n_samples_per_condition: int = DEFAULT_BRACKETED_AB_N,
 ) -> list[BenchmarkCandidate]:
-    """Emit an interleaved baseline-candidate cell sequence for bracketed A/B.
+    """Emit an interleaved baseline-candidate run sequence for bracketed A/B.
 
-    Returns ``2 * n_samples_per_condition`` cells: ``n`` baselines
-    interleaved with ``n`` candidate cells. ``bracket_position`` is set
-    on each cell so the cluster-conditioned analyzer can align
-    candidate cells with their bracketing baselines for drift detection.
+    Returns ``2 * n_samples_per_condition`` runs: ``n`` baselines
+    interleaved with ``n`` candidate runs. ``bracket_position`` is set
+    on each run so the cluster-conditioned analyzer can align
+    candidate runs with their bracketing baselines for drift detection.
 
     Both baselines and candidates pin
     ``SamplingParams.seed=DEFAULT_BENCHMARK_SEED``. The seed-pin
     verification (2026-05-26) showed this does NOT collapse acceptance
     variance to <0.5% CoV on long-output workloads but DOES eliminate
-    the per-request RNG portion — residual ~5% pooled CoV is structural
+    the per-request RNG portion - residual ~5% pooled CoV is structural
     non-RNG variance that the cluster-conditioned analyzer partitions
     out post-hoc.
     """
@@ -250,12 +250,12 @@ def bracketed_ab(
     return cells
 
 
-# Phase B matrix-condition wrappers. Each yields a 2N-cell sequence
+# Phase B matrix-condition wrappers. Each yields a 2N-run sequence
 # (N baselines + N condition-specific candidates, interleaved).
 
 
 def bracketed_ab_baseline_pool(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
-    """N baseline cells with bracket_position labels — the shared baseline pool."""
+    """N baseline runs with bracket_position labels - the shared baseline pool."""
     return [
         BenchmarkCandidate(
             name=f"bracket_baseline_pool_{i}",
@@ -315,7 +315,7 @@ def bracketed_ab_fp8(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
     )
 
 
-# Map of preset name → callable used by the CLI to resolve ``--candidates``.
+# Map of preset name -> callable used by the CLI to resolve ``--candidates``.
 PRESETS: dict[str, PresetFn] = {
     "baseline": lambda base: [baseline(base)],
     "attention_backend_sweep": attention_backend_sweep,

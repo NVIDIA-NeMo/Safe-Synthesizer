@@ -11,19 +11,19 @@ modules and import vLLM lazily.
 
 Architecture:
 
-- :class:`BenchmarkCorpus` — the replayable input (one corpus per
+- :class:`BenchmarkCorpus` - the replayable input (one corpus per
   dataset, captured once via the production ``VllmBackend`` trace
   surface). Header carries the model reference + LoRA path + the
   engine kwargs at capture time. Prompt records carry the original
   sampling params so the harness can replay them faithfully.
-- :class:`BenchmarkCandidate` — one configuration to benchmark
-  (engine kwargs overlay + sparse sampling overrides + per-cell
+- :class:`BenchmarkCandidate` - one configuration to benchmark
+  (engine kwargs overlay + sparse sampling overrides + per-candidate-run
   identity for sweep grouping).
-- :class:`CandidateMetrics` — per-cell measured outputs: throughput,
+- :class:`CandidateMetrics` - per-candidate-run measured outputs: throughput,
   acceptance, TTFT, etc. Composes :class:`GenerationObservability` from PR-A's
   ``vllm_observability`` module so the benchmark schema doesn't
-  re-define observability primitives — it consumes them.
-- :class:`BenchmarkOutput` — JSON-serialised result of one matrix
+  re-define observability primitives - it consumes them.
+- :class:`BenchmarkOutput` - JSON-serialised result of one matrix
   invocation, with skip records for candidates that failed.
 
 The runner (next commit) is in ``vllm_benchmark.py`` alongside these
@@ -72,7 +72,7 @@ SUBPROCESS_STDERR_LIMIT: int = 500
 """Maximum bytes of captured stderr to record on a subprocess failure."""
 
 PromptAssemblyMode = Literal["multi_record", "per_record"]
-"""Prompt-assembly regime — controls how max_tokens partitions the budget."""
+"""Prompt-assembly regime - controls how max_tokens partitions the budget."""
 
 BatchDispatchMode = Literal["replicate", "n_fanout"]
 """How corpus prompts get submitted to vLLM.
@@ -201,7 +201,7 @@ class BenchmarkEngineConfig(BaseModel):
     against that; for now it stands alone.
 
     ``extra='ignore'`` so the CLI can validate a corpus header's raw
-    ``engine_parameters`` dict into this model — header dicts may carry
+    ``engine_parameters`` dict into this model - header dicts may carry
     capture-time kwargs we don't expose as typed fields (those flow
     through ``_build_vllm_kwargs`` as the base layer regardless).
     """
@@ -214,7 +214,10 @@ class BenchmarkEngineConfig(BaseModel):
     )
     structured_generation_backend: str = Field(
         default="xgrammar",
-        description="Structured-outputs backend. ``'xgrammar'`` is vLLM's current default; ``'outlines'`` and ``'guidance'`` are the alternatives.",
+        description=(
+            "Structured-outputs backend used by benchmark sweeps. The preset "
+            "matrix covers ``'xgrammar'``, ``'outlines'``, and ``'guidance'``."
+        ),
     )
     max_model_len: int | None = Field(
         default=None,
@@ -225,7 +228,7 @@ class BenchmarkEngineConfig(BaseModel):
         description=(
             "Forwarded to ``vllm.LLM(enable_prefix_caching=...)``. "
             "On for shared-schema tabular workloads (the prefix amortises across the batch); "
-            "off when measuring per-cell cold-start behaviour. ``None`` keeps vLLM's default."
+            "off when measuring per-candidate-run cold-start behaviour. ``None`` keeps vLLM's default."
         ),
     )
     max_num_seqs: int | None = Field(default=None, description="vLLM scheduler ``max_num_seqs`` cap.")
@@ -276,9 +279,9 @@ class BenchmarkEngineConfig(BaseModel):
 
 
 class BenchmarkCandidate(BaseModel):
-    """One configuration to benchmark — engine kwargs + sampling overrides + identity.
+    """One configuration to benchmark - engine kwargs + sampling overrides + identity.
 
-    ``sampling_overrides`` is sparse — only fields that differ from the
+    ``sampling_overrides`` is sparse - only fields that differ from the
     corpus default. The runner merges it on top of each prompt's
     ``original_sampling_params``. Pass ``{"seed": int}`` to pin
     ``SamplingParams.seed`` for reproducible acceptance-rate
@@ -318,30 +321,30 @@ class BenchmarkCandidate(BaseModel):
             "Sweep-level condition this candidate measures, e.g. "
             "``'baseline'``, ``'n_fanout'``, ``'spec_ngram'``, ``'fp8'``. "
             "Set by the ``bracketed_ab`` preset family. Used by the "
-            "cluster-conditioned analyzer to group cells by condition "
-            "regardless of per-cell name suffixes."
+            "cluster-conditioned analyzer to group candidate runs by condition "
+            "regardless of candidate-run name suffixes."
         ),
     )
     bracket_position: int = Field(
         default=0,
         ge=0,
         description=(
-            "Sequence index within a ``bracketed_ab`` cell stream "
+            "Sequence index within a ``bracketed_ab`` candidate-run stream "
             "(baseline_0=0, candidate_0=1, baseline_1=2, candidate_1=3, "
-            "etc.). Used by the analyzer to align candidate cells with "
+            "etc.). Used by the analyzer to align candidate runs with "
             "their bracketing baselines for drift detection."
         ),
     )
 
 
 class CandidateMetrics(BaseModel):
-    """Measured outputs for one benchmark cell.
+    """Measured outputs for one benchmark candidate run.
 
-    Carries cell-specific bench measurements (throughput, acceptance,
+    Carries candidate-run bench measurements (throughput, acceptance,
     TTFT, etc.) directly; observability primitives (peak VRAM, KV
     cache usage, loadavg, engine_runtime_config) are composed from
     PR-A's :class:`GenerationObservability` schema in the ``observability``
-    field. This composition keeps the schema DRY — adding a new
+    field. This composition keeps the schema DRY - adding a new
     observability primitive in PR-A automatically flows through to
     benchmark output via ``model_dump()``.
     """
@@ -350,14 +353,14 @@ class CandidateMetrics(BaseModel):
 
     name: str = Field(description="Matches :attr:`BenchmarkCandidate.name`.")
 
-    # Cell-level throughput + acceptance.
+    # Candidate-run throughput + acceptance.
     raw_tok_s: float = Field(description="Output tokens / wall seconds, ignoring validity.")
     acceptance_rate: float = Field(description="Fraction of generated records that passed validation (0..1).")
     effective_tok_s: float = Field(description="``raw_tok_s * acceptance_rate``; the operator-relevant headline.")
 
     # Per-request latency stats. TTFT is queue-inclusive under batched
     # submission (vLLM's ``first_token_latency`` = ``first_token_ts -
-    # arrival_time`` — so prompts later in the batch contribute their
+    # arrival_time`` - so prompts later in the batch contribute their
     # queue wait). Useful for spotting tail-of-batch wait time but not
     # for per-candidate comparisons under varying batch shapes.
     ttft_p50_ms: float = Field(description="Median time-to-first-token in milliseconds (queue-inclusive).")
@@ -393,7 +396,7 @@ class CandidateMetrics(BaseModel):
         description="Counts of vLLM finish reasons (``stop``, ``length``, etc.) across replays.",
     )
 
-    # Sweep grouping — copied from BenchmarkCandidate so the analyzer
+    # Sweep grouping - copied from BenchmarkCandidate so the analyzer
     # can read them off CandidateMetrics without re-joining to the
     # BenchmarkCandidate by name.
     condition_label: str = Field(
@@ -438,7 +441,7 @@ class SkipRecord(BaseModel):
 
 
 class BenchmarkOutput(BaseModel):
-    """Full result of one matrix invocation — JSON-serialised for diffing."""
+    """Full result of one matrix invocation - JSON-serialised for diffing."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -534,14 +537,14 @@ def _build_vllm_kwargs(header: TraceHeader, engine_config: BenchmarkEngineConfig
     # Required-positional kwargs that aren't in BenchmarkEngineConfig:
     base["model"] = header.pretrained_model
     base.setdefault("enable_lora", header.lora_path is not None)
-    # ``attention_backend`` → ``attention_config`` translation. vLLM's
+    # ``attention_backend`` -> ``attention_config`` translation. vLLM's
     # public API takes a config dict rather than a bare string.
     attention_backend = base.pop("attention_backend", None)
     if attention_backend not in (None, "auto"):
         base["attention_config"] = {"backend": attention_backend}
-    # ``structured_generation_backend`` → ``structured_outputs_config``.
+    # ``structured_generation_backend`` -> ``structured_outputs_config``.
     from vllm.config import (
-        StructuredOutputsConfig,  # noqa: PLC0415 — lazy, vLLM is heavy
+        StructuredOutputsConfig,  # noqa: PLC0415 - lazy, vLLM is heavy
     )
 
     sg_backend = base.pop("structured_generation_backend", None)
@@ -554,13 +557,15 @@ def _build_vllm_kwargs(header: TraceHeader, engine_config: BenchmarkEngineConfig
 class _EngineInitResult:
     """Typed channel for the async engine-init thread's outcome.
 
-    Exactly one field is populated once the ``ready`` event fires:
-    ``llm`` on success, ``exception`` on failure. Mutated by the worker
-    thread; read by the runner after the join.
+    Once the ``ready`` event fires, ``llm`` is populated on success or
+    ``exception`` on failure; ``init_seconds`` records the worker-side
+    engine-construction duration. Mutated by the worker thread; read by
+    the runner after the join.
     """
 
     llm: LLM | None = None
     exception: BaseException | None = None
+    init_seconds: float = 0.0
 
 
 def _build_engine_async(
@@ -575,18 +580,20 @@ def _build_engine_async(
     before joining via ``ready_event.wait()``, measuring how much of
     the engine-init cost can be hidden behind concurrent training.
     """
-    from vllm import LLM as vLLM  # noqa: PLC0415 — lazy
+    from vllm import LLM as vLLM  # noqa: PLC0415 - lazy
 
     kwargs = _build_vllm_kwargs(header, engine_config)
     ready = threading.Event()
     result = _EngineInitResult()
 
     def worker() -> None:
+        init_start = time.monotonic()
         try:
             result.llm = vLLM(**kwargs)
-        except BaseException as exc:  # noqa: BLE001 — surface via the result object
+        except BaseException as exc:  # noqa: BLE001 - surface via the result object
             result.exception = exc
         finally:
+            result.init_seconds = max(0.0, time.monotonic() - init_start)
             ready.set()
 
     thread = threading.Thread(target=worker, name="vllm-benchmark-engine-init", daemon=True)
@@ -624,7 +631,7 @@ def run_benchmark(
     when the engine's effective runtime config disagrees with the
     candidate's intended ``engine_config`` on any checked field.
     """
-    # Lazy imports — keep this module CPU-importable.
+    # Lazy imports - keep this module CPU-importable.
     from vllm.lora.request import LoRARequest  # noqa: PLC0415
     from vllm.sampling_params import SamplingParams  # noqa: PLC0415
 
@@ -651,7 +658,10 @@ def run_benchmark(
             raise InternalError("engine init thread finished without an LLM or an exception")
         llm = init_result.llm
 
-        startup_overlap_savings_seconds = min(overlap, startup_seconds + overlap) if overlap > 0.0 else 0.0
+        engine_init_seconds = max(0.0, getattr(init_result, "init_seconds", 0.0))
+        startup_overlap_savings_seconds = (
+            min(overlap, max(0.0, engine_init_seconds - startup_seconds)) if overlap > 0.0 else 0.0
+        )
 
         # Probe the engine's effective runtime config + check for
         # candidate-intent / engine-actual disagreements.
@@ -674,27 +684,32 @@ def run_benchmark(
         )
 
         # Build SamplingParams from corpus default + candidate overrides.
+        base_sampling: dict[str, Any] = {}
         if corpus.prompts:
             base_sampling = corpus.prompts[0].original_sampling_params
-        else:
-            base_sampling = {}
         sampling_kwargs = _merge_sampling_kwargs(base_sampling, candidate.sampling_overrides)
-        # n=1 unless the caller's override sets it (n_fanout sets it explicitly).
-        sampling_kwargs.setdefault("n", 1)
+        prompts: list[str] = [p.prompt for p in corpus.prompts]
+        if candidate.batch_dispatch_mode == "n_fanout" and len(set(prompts)) > 1:
+            raise ValueError("batch_dispatch_mode='n_fanout' requires every corpus prompt to be identical")
+        if candidate.batch_dispatch_mode == "n_fanout":
+            sampling_kwargs["n"] = max(1, len(prompts))
+            dispatch_prompts = prompts[:1]
+        else:
+            sampling_kwargs.setdefault("n", 1)
+            dispatch_prompts = prompts
         sampling_params = SamplingParams(**sampling_kwargs)
 
         # Dispatch.
-        prompts: list[str] = [p.prompt for p in corpus.prompts]
         gen_start = time.perf_counter()
         outputs: list[Any] = (
             list(
                 llm.generate(
-                    prompts=prompts,
+                    prompts=dispatch_prompts,
                     sampling_params=sampling_params,
                     lora_request=lora_request,
                 )
             )
-            if prompts
+            if dispatch_prompts
             else []
         )
         total_wall = max(time.perf_counter() - gen_start, 0.0)
@@ -706,27 +721,31 @@ def run_benchmark(
         total_valid = 0
         total_invalid = 0
         prompts_accepted = 0
+        completion_idx = 0
         for prompt_idx, output in enumerate(outputs):
             ttft = _extract_ttft_ms(output)
             if ttft is not None:
                 ttft_ms_samples.append(ttft)
-            best = output.outputs[0] if getattr(output, "outputs", None) else None
-            if best is None:
-                continue
-            total_output_tokens += len(getattr(best, "token_ids", []) or [])
-            finish_reason = str(getattr(best, "finish_reason", None) or "unknown")
-            finish_reasons[finish_reason] = finish_reasons.get(finish_reason, 0) + 1
-            text = getattr(best, "text", "") or ""
-            # ``Processor.__call__(prompt_number, text) -> ParsedResponse`` is
-            # the actual interface — see ``processors.py``. ``valid_records``
-            # and ``invalid_records`` are properties on ``ParsedResponse``.
-            parsed = processor(prompt_idx, text)
-            valid_records = parsed.valid_records
-            invalid_records = parsed.invalid_records
-            total_valid += len(valid_records)
-            total_invalid += len(invalid_records)
-            if valid_records:
-                prompts_accepted += 1
+            completions = list(getattr(output, "outputs", []) or [])
+            if candidate.batch_dispatch_mode != "n_fanout":
+                completions = completions[:1]
+            for completion in completions:
+                record_idx = completion_idx if candidate.batch_dispatch_mode == "n_fanout" else prompt_idx
+                completion_idx += 1
+                total_output_tokens += len(getattr(completion, "token_ids", []) or [])
+                finish_reason = str(getattr(completion, "finish_reason", None) or "unknown")
+                finish_reasons[finish_reason] = finish_reasons.get(finish_reason, 0) + 1
+                text = getattr(completion, "text", "") or ""
+                # ``Processor.__call__(prompt_number, text) -> ParsedResponse`` is
+                # the actual interface - see ``processors.py``. ``valid_records``
+                # and ``invalid_records`` are properties on ``ParsedResponse``.
+                parsed = processor(record_idx, text)
+                valid_records = parsed.valid_records
+                invalid_records = parsed.invalid_records
+                total_valid += len(valid_records)
+                total_invalid += len(invalid_records)
+                if valid_records:
+                    prompts_accepted += 1
 
         total_records = total_valid + total_invalid
         acceptance = (total_valid / total_records) if total_records > 0 else 0.0

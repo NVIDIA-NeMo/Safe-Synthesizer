@@ -4,6 +4,8 @@
 
 r"""vllm-benchmark: drive the vLLM benchmark harness from the command line.
 
+Full usage notes live in docs/developer-guide/vllm-benchmark.md.
+
 Subcommands:
     list                           Print the available preset matrices.
     run CORPUS --output PATH ...   Replay CORPUS against the chosen candidates
@@ -213,7 +215,7 @@ def compare_cmd(output_path: Path) -> None:
             f"{m.acceptance_rate:.3f}",
             f"{m.ttft_p50_ms:.1f}",
             f"{m.ttft_p99_ms:.1f}",
-            f"{m.observability.peak_vram_gb:.2f}" if m.observability.peak_vram_gb is not None else "—",
+            f"{m.observability.peak_vram_gb:.2f}" if m.observability.peak_vram_gb is not None else "--",
             f"{m.startup_seconds:.1f}",
             f"{m.prompts_accepted}/{m.prompts_attempted}",
         )
@@ -235,14 +237,19 @@ def compare_cmd(output_path: Path) -> None:
     type=click.Choice(["wall_seconds", "acceptance_rate", "auto"]),
     default="auto",
     show_default=True,
-    help="Which per-cell metric to partition cells on. Use 'wall_seconds' for short-context (load-driven bimodality), 'acceptance_rate' for long-output (RNG/scheduler driven), 'auto' to pick whichever has higher pooled CoV.",
+    help=(
+        "Which per-candidate-run metric to partition on. Use 'wall_seconds' for "
+        "short-context workloads, 'acceptance_rate' for long-output workloads, "
+        "or 'auto' to pick whichever has higher pooled CoV."
+    ),
 )
 @click.option(
+    "--min-runs-per-condition",
     "--min-cells-per-condition",
     type=int,
     default=None,
     show_default="MIN_CELLS_PER_CONDITION (6)",
-    help="Refuse aggregates for conditions below this N. Brief mandates N≥6.",
+    help="Refuse aggregates for conditions below this N. Brief mandates N>=6 candidate runs.",
 )
 @click.option(
     "--json-out",

@@ -3,32 +3,32 @@
 
 """Cluster-conditioned analysis for benchmark output.
 
-This stack does not produce trustworthy single-cell measurements.
-Pooled cross-cell CoV runs ~5-10%; in-cluster CoV is ~3%. This module
-partitions cells by a per-dataset cluster signal, then reports
+This stack does not produce trustworthy single-run measurements.
+Pooled cross-run CoV runs ~5-10%; in-cluster CoV is ~3%. This module
+partitions candidate runs by a per-dataset cluster signal, then reports
 per-condition aggregates both pooled and within-cluster, so the
 operator can see which clusters contained the candidate's samples
-and trust the in-cluster Δ rather than the noisier pooled Δ.
+and trust the in-cluster delta rather than the noisier pooled delta.
 
 Cluster signal per workload shape:
 
-- ``wall_seconds`` for short-context workloads (bike_sales-shape) —
+- ``wall_seconds`` for short-context workloads (bike_sales-shape) -
   bimodality is load-driven; partitioning on wall_seconds separates
   the fast vs normal-load clusters.
 - ``acceptance_rate`` for long-output workloads (call_transcripts-
-  shape) — bimodality is RNG/scheduler driven; partitioning on
+  shape) - bimodality is RNG/scheduler driven; partitioning on
   acceptance_rate separates the high vs low cluster the seed-pin
   validation found persists even with seed=42.
-- ``auto`` — picks whichever signal has higher pooled CoV.
+- ``auto`` - picks whichever signal has higher pooled CoV.
 
-Cluster count is selected via silhouette score (post-hoc, k ∈ [2, 4]).
-Refuses to compute Δ-style aggregates when a condition has fewer than
-:data:`MIN_CELLS_PER_CONDITION` cells — single-cell measurements
+Cluster count is selected via silhouette score (post-hoc, k in [2, 4]).
+Refuses to compute delta-style aggregates when a condition has fewer than
+:data:`MIN_CELLS_PER_CONDITION` candidate runs - single-run measurements
 should never drive promote/reject decisions on this stack.
 
-Effect-size + 95% CI reporting lives in this module too — see
+Effect-size + 95% CI reporting lives in this module too - see
 :class:`EffectSize`, computed via Welch's t-test on the difference of
-means + Welch–Satterthwaite degrees of freedom.
+means + Welch-Satterthwaite degrees of freedom.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from .vllm_benchmark import BenchmarkOutput, CandidateMetrics
 ClusterSignal = Literal["wall_seconds", "acceptance_rate", "auto"]
 
 MIN_CELLS_PER_CONDITION: int = 6
-"""Minimum cells per condition before Δ-style aggregates are computed.
+"""Minimum candidate runs per condition before delta-style aggregates are computed.
 
 Matches :data:`DEFAULT_BRACKETED_AB_N`. Below this threshold the
 analyzer records a refusal in the report rather than emitting
@@ -63,7 +63,7 @@ _DEFAULT_K_MAX: int = 4
 
 
 class ClusterAssignment(BaseModel):
-    """One cell's assignment to a cluster + its raw signal value."""
+    """One candidate run's assignment to a cluster + its raw signal value."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -87,7 +87,7 @@ class ClusterStats(BaseModel):
 
 
 class EffectSize(BaseModel):
-    """Welch's-t Δ ± 95% CI for one condition vs a baseline reference.
+    """Welch's-t delta and 95% CI for one condition vs a baseline reference.
 
     ``cluster_id=None`` is a pooled effect across all clusters;
     integer values mean within-cluster (the brief-mandated headline
@@ -112,7 +112,7 @@ class EffectSize(BaseModel):
 
 
 class ConditionClusterAggregate(BaseModel):
-    """Per-(condition × cluster) aggregate: in-cluster condition stats."""
+    """Per-(condition x cluster) aggregate: in-cluster condition stats."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -160,13 +160,13 @@ class AnalysisReport(BaseModel):
     def to_markdown_summary(self) -> str:
         """Render a human-readable summary."""
         lines: list[str] = [
-            f"# Cluster-conditioned analysis ({self.n_cells} cells, k={self.n_clusters})",
+            f"# Cluster-conditioned analysis ({self.n_cells} candidate runs, k={self.n_clusters})",
             "",
-            f"**Cluster signal**: `{self.cluster_signal}`",
+            f"Cluster signal: `{self.cluster_signal}`",
             "",
             "## Clusters",
             "",
-            "| cluster | n_cells | signal_mean | signal_stddev | signal_cov |",
+            "| cluster | candidate_runs | signal_mean | signal_stddev | signal_cov |",
             "|--------:|--------:|------------:|--------------:|-----------:|",
         ]
         for cs in self.cluster_stats:
@@ -179,8 +179,8 @@ class AnalysisReport(BaseModel):
             lines.append(f"### `{agg.condition_label}` (n={agg.n_cells})")
             lines.append("")
             lines.append(
-                f"- **Pooled**: eff_tok_s={agg.pooled_mean_effective_tok_s:.1f} "
-                f"± {agg.pooled_stddev_effective_tok_s:.1f} "
+                f"- Pooled: eff_tok_s={agg.pooled_mean_effective_tok_s:.1f} "
+                f"+/- {agg.pooled_stddev_effective_tok_s:.1f} "
                 f"(CoV {agg.pooled_cov_effective_tok_s * 100:.2f}%); "
                 f"accept={agg.pooled_mean_acceptance_rate:.4f} "
                 f"(CoV {agg.pooled_cov_acceptance_rate * 100:.2f}%)"
@@ -188,24 +188,24 @@ class AnalysisReport(BaseModel):
             if agg.pooled_effect_size_vs_baseline is not None:
                 es = agg.pooled_effect_size_vs_baseline
                 lines.append(
-                    f"  - Δ vs baseline (pooled): {es.delta_absolute:+.1f} tok/s "
+                    f"  - Delta vs baseline (pooled): {es.delta_absolute:+.1f} tok/s "
                     f"({es.delta_pct:+.2f}%) [95% CI: {es.ci95_low:+.1f}, {es.ci95_high:+.1f}; "
                     f"n={es.n_candidate}+{es.n_baseline}, Welch df={es.welch_df:.1f}]"
                 )
             if agg.in_cluster:
-                lines.append("- **In-cluster**:")
+                lines.append("- In-cluster:")
                 for ic in agg.in_cluster:
                     lines.append(
                         f"  - cluster {ic.cluster_id}: n={ic.n_cells}, "
                         f"eff_tok_s={ic.mean_effective_tok_s:.1f} "
-                        f"± {ic.stddev_effective_tok_s:.1f} "
+                        f"+/- {ic.stddev_effective_tok_s:.1f} "
                         f"(CoV {ic.cov_effective_tok_s * 100:.2f}%); "
                         f"accept={ic.mean_acceptance_rate:.4f}"
                     )
                     if ic.effect_size_vs_baseline is not None:
                         es = ic.effect_size_vs_baseline
                         lines.append(
-                            f"    - Δ vs baseline cluster {es.cluster_id}: "
+                            f"    - Delta vs baseline cluster {es.cluster_id}: "
                             f"{es.delta_absolute:+.1f} tok/s ({es.delta_pct:+.2f}%) "
                             f"[95% CI: {es.ci95_low:+.1f}, {es.ci95_high:+.1f}; "
                             f"n={es.n_candidate}+{es.n_baseline}, Welch df={es.welch_df:.1f}]"
@@ -244,7 +244,7 @@ def _pooled_cov(values: list[float]) -> tuple[float, float, float]:
 
 
 def _auto_select_signal(cells: list[CandidateMetrics]) -> str:
-    """Pick whichever signal has higher pooled CoV across the cells.
+    """Pick whichever signal has higher pooled CoV across the candidate runs.
 
     Defaults to ``wall_seconds`` on ties (short-context bimodality is
     the more common workload shape).
@@ -259,7 +259,7 @@ def _auto_select_signal(cells: list[CandidateMetrics]) -> str:
 def _select_n_clusters(values: np.ndarray, k_max: int = _DEFAULT_K_MAX) -> int:
     """Silhouette-score-best ``k`` in range ``[2, min(k_max, n-1)]``.
 
-    Returns 1 when there are too few cells (<4) to cluster meaningfully.
+    Returns 1 when there are too few candidate runs (<4) to cluster meaningfully.
     """
     from sklearn.cluster import KMeans  # noqa: PLC0415
     from sklearn.metrics import silhouette_score  # noqa: PLC0415
@@ -373,7 +373,7 @@ def _effect_size(
 
 
 def load_cells(output_dir: Path) -> list[CandidateMetrics]:
-    """Read every ``BenchmarkOutput`` JSON in ``output_dir``, flatten candidates.
+    """Read every ``BenchmarkOutput`` JSON in ``output_dir``, flatten candidate runs.
 
     Subdirectories are NOT recursed. Callers wanting cross-dataset
     analysis should invoke once per dataset dir.
@@ -393,7 +393,7 @@ def analyze(
     cluster_signal: ClusterSignal = "auto",
     min_cells_per_condition: int = MIN_CELLS_PER_CONDITION,
 ) -> AnalysisReport:
-    """Full pipeline: load → cluster → per-condition aggregate → effect-size → report."""
+    """Full pipeline: load -> cluster -> per-condition aggregate -> effect-size -> report."""
     cells = load_cells(output_dir)
     if not cells:
         raise ValueError(f"No BenchmarkOutput JSONs found under {output_dir}")
@@ -444,8 +444,8 @@ def analyze(
         labeled = by_condition[condition]
         if len(labeled) < min_cells_per_condition:
             refusals.append(
-                f"condition {condition!r} has only {len(labeled)} cells; "
-                f"need ≥{min_cells_per_condition} — refusing aggregate"
+                f"condition {condition!r} has only {len(labeled)} candidate runs; "
+                f"need >={min_cells_per_condition} - refusing aggregate"
             )
             continue
         pooled_eff = [c.effective_tok_s for _, c in labeled]

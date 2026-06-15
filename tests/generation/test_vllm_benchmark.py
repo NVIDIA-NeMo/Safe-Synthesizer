@@ -1,25 +1,32 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for benchmark harness data models, helpers, and presets.
+"""Tests for benchmark harness data models, helpers, presets, and runner dispatch.
 
-Scope: consumer-facing contracts. Skip the runner itself (requires
-spinning up vLLM); covered by the actual production cell smokes.
+Scope: consumer-facing contracts. Runner tests patch vLLM imports and
+engine construction so they exercise dispatch/metric semantics without
+spinning up a real vLLM engine.
 """
 
 from __future__ import annotations
 
 import json
+import sys
+import types
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
+import nemo_safe_synthesizer.generation.processors as processors_mod
+import nemo_safe_synthesizer.generation.vllm_benchmark as benchmark_mod
 from nemo_safe_synthesizer.generation.vllm_benchmark import (
     BenchmarkCandidate,
     BenchmarkCorpus,
     BenchmarkEngineConfig,
     BenchmarkOutput,
+    BenchmarkPrompt,
     CandidateMetrics,
     SubprocessRunResult,
     TraceHeader,
@@ -29,6 +36,7 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
     _parse_error_class,
     _percentile,
     _truncate_stderr,
+    run_benchmark,
 )
 from nemo_safe_synthesizer.generation.vllm_benchmark_presets import (
     DEFAULT_BENCHMARK_SEED,
@@ -59,6 +67,139 @@ def header() -> TraceHeader:
 @pytest.fixture
 def empty_base() -> BenchmarkEngineConfig:
     return BenchmarkEngineConfig()
+
+
+class _FakeSamplingParams:
+    def __init__(self, **kwargs: Any) -> None:
+        self.kwargs = kwargs
+
+
+class _FakeLoRARequest:
+    def __init__(self, *args: Any) -> None:
+        self.args = args
+
+
+class _NoopPeakSampler:
+    peak_gb: float | None = None
+
+    def __enter__(self) -> _NoopPeakSampler:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+class _ReadyEvent:
+    def wait(self) -> None:
+        return None
+
+
+class _FakeCompletion:
+    def __init__(self, text: str, token_ids: list[int], finish_reason: str = "stop") -> None:
+        self.text = text
+        self.token_ids = token_ids
+        self.finish_reason = finish_reason
+
+
+class _FakeRequestOutput:
+    def __init__(self, outputs: list[_FakeCompletion], ttft_s: float = 0.01) -> None:
+        self.outputs = outputs
+        self.metrics = SimpleNamespace(first_token_latency=ttft_s)
+
+
+class _FakeLLM:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def generate(self, *, prompts: list[str], sampling_params: _FakeSamplingParams, lora_request: Any) -> list[Any]:
+        self.calls.append(
+            {
+                "prompts": list(prompts),
+                "sampling_params": sampling_params,
+                "lora_request": lora_request,
+            },
+        )
+        if len(prompts) == 1 and sampling_params.kwargs.get("n", 1) > 1:
+            return [
+                _FakeRequestOutput(
+                    [
+                        _FakeCompletion(text=f'{{"col": "v{i}"}}', token_ids=[i, i + 100])
+                        for i in range(sampling_params.kwargs["n"])
+                    ],
+                ),
+            ]
+        return [
+            _FakeRequestOutput([_FakeCompletion(text=f'{{"col": "v{i}"}}', token_ids=[i])])
+            for i, _prompt in enumerate(prompts)
+        ]
+
+    def get_metrics(self) -> list[Any]:
+        return []
+
+
+class _FakeProcessor:
+    def __init__(self, calls: list[tuple[int, str]]) -> None:
+        self._calls = calls
+
+    def __call__(self, prompt_number: int, text: str) -> Any:
+        self._calls.append((prompt_number, text))
+        return SimpleNamespace(valid_records=[{"text": text}], invalid_records=[])
+
+
+def _install_fake_vllm_modules(monkeypatch: pytest.MonkeyPatch) -> None:
+    vllm_mod = types.ModuleType("vllm")
+    vllm_mod.__path__ = []
+    lora_mod = types.ModuleType("vllm.lora")
+    lora_mod.__path__ = []
+    request_mod = types.ModuleType("vllm.lora.request")
+    setattr(request_mod, "LoRARequest", _FakeLoRARequest)
+    sampling_mod = types.ModuleType("vllm.sampling_params")
+    setattr(sampling_mod, "SamplingParams", _FakeSamplingParams)
+    monkeypatch.setitem(sys.modules, "vllm", vllm_mod)
+    monkeypatch.setitem(sys.modules, "vllm.lora", lora_mod)
+    monkeypatch.setitem(sys.modules, "vllm.lora.request", request_mod)
+    monkeypatch.setitem(sys.modules, "vllm.sampling_params", sampling_mod)
+
+
+def _install_runner_fakes(
+    monkeypatch: pytest.MonkeyPatch,
+    llm: _FakeLLM,
+    *,
+    init_seconds: float = 0.0,
+    processor_calls: list[tuple[int, str]] | None = None,
+) -> None:
+    _install_fake_vllm_modules(monkeypatch)
+    calls = processor_calls if processor_calls is not None else []
+    monkeypatch.setattr(processors_mod, "TabularDataProcessor", lambda *args, **kwargs: _FakeProcessor(calls))
+    monkeypatch.setattr(benchmark_mod, "NvmlPeakSampler", _NoopPeakSampler)
+    monkeypatch.setattr(benchmark_mod, "read_loadavg", lambda: (0.0, 0.0, 0.0))
+    monkeypatch.setattr(benchmark_mod, "probe_engine_runtime_config", lambda llm: {})
+    monkeypatch.setattr(benchmark_mod, "flag_engagement_mismatches", lambda intended, actual: [])
+    monkeypatch.setattr(
+        benchmark_mod,
+        "read_vllm_runtime_metrics",
+        lambda llm: {"kv_cache_usage_perc": None, "prefix_cache_hit_rate": None, "spec_accept_rate": None},
+    )
+
+    def fake_build_engine_async(header: TraceHeader, engine_config: BenchmarkEngineConfig) -> tuple[Any, Any, Any]:
+        result = SimpleNamespace(llm=llm, exception=None, init_seconds=init_seconds)
+        return SimpleNamespace(), _ReadyEvent(), result
+
+    monkeypatch.setattr(benchmark_mod, "_build_engine_async", fake_build_engine_async)
+
+
+def _benchmark_corpus(prompts: list[str]) -> BenchmarkCorpus:
+    return BenchmarkCorpus(
+        header=TraceHeader(run_id="r", pretrained_model="m", dataset_schema={"col": "string"}),
+        prompts=[
+            BenchmarkPrompt(
+                row_index=i,
+                prompt=prompt,
+                original_sampling_params={"temperature": 0.0, "max_tokens": 8},
+            )
+            for i, prompt in enumerate(prompts)
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +258,7 @@ class TestSchemaContracts:
         assert cfg.attention_backend == "FLASHINFER"
 
     def test_candidate_extra_fields_forbidden(self) -> None:
-        """``BenchmarkCandidate.extra='forbid'`` — adding a field must update the schema."""
+        """``BenchmarkCandidate.extra='forbid'`` means adding a field must update the schema."""
         with pytest.raises(ValidationError):
             BenchmarkCandidate.model_validate({"name": "t", "unknown_field": 42})
 
@@ -228,10 +369,66 @@ class TestBuildVllmKwargs:
     def test_auto_attention_backend_is_treated_as_unset(
         self, header: TraceHeader, empty_base: BenchmarkEngineConfig
     ) -> None:
-        """``attention_backend='auto'`` means "let vLLM pick" — no attention_config kwarg should appear."""
+        """``attention_backend='auto'`` means no attention_config kwarg should appear."""
         cfg = empty_base.model_copy(update={"attention_backend": "auto"})
         kwargs = _build_vllm_kwargs(header, cfg)
         assert "attention_config" not in kwargs
+
+
+# ---------------------------------------------------------------------------
+# Runner contracts
+# ---------------------------------------------------------------------------
+
+
+class TestRunBenchmark:
+    def test_n_fanout_dispatches_one_prompt_with_one_completion_per_corpus_prompt(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        llm = _FakeLLM()
+        processor_calls: list[tuple[int, str]] = []
+        _install_runner_fakes(monkeypatch, llm, processor_calls=processor_calls)
+
+        metrics = run_benchmark(
+            BenchmarkCandidate(name="fanout", batch_dispatch_mode="n_fanout"),
+            _benchmark_corpus(["same", "same", "same"]),
+        )
+
+        assert llm.calls[0]["prompts"] == ["same"]
+        assert llm.calls[0]["sampling_params"].kwargs["n"] == 3
+        assert processor_calls == [
+            (0, '{"col": "v0"}'),
+            (1, '{"col": "v1"}'),
+            (2, '{"col": "v2"}'),
+        ]
+        assert metrics.prompts_attempted == 3
+        assert metrics.prompts_accepted == 3
+        assert metrics.total_output_tokens == 6
+        assert metrics.finish_reason_distribution == {"stop": 3}
+
+    def test_n_fanout_rejects_non_identical_prompts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        llm = _FakeLLM()
+        _install_runner_fakes(monkeypatch, llm)
+
+        with pytest.raises(ValueError, match="requires every corpus prompt to be identical"):
+            run_benchmark(
+                BenchmarkCandidate(name="fanout", batch_dispatch_mode="n_fanout"),
+                _benchmark_corpus(["first", "second"]),
+            )
+
+    def test_overlap_savings_are_capped_by_actual_engine_init_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        llm = _FakeLLM()
+        _install_runner_fakes(monkeypatch, llm, init_seconds=1.25)
+        monkeypatch.setattr(benchmark_mod.time, "sleep", lambda seconds: None)
+        monkeypatch.setattr(benchmark_mod.time, "monotonic", lambda: 100.0)
+
+        metrics = run_benchmark(
+            BenchmarkCandidate(name="baseline"),
+            _benchmark_corpus(["p0"]),
+            simulate_training_overlap_seconds=10.0,
+        )
+
+        assert metrics.startup_seconds == 0.0
+        assert metrics.startup_overlap_savings_seconds == 1.25
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +455,7 @@ class TestPresets:
 
 class TestBracketedAb:
     def test_emits_2n_cells_interleaved(self, empty_base: BenchmarkEngineConfig) -> None:
-        """N baselines + N candidate cells, interleaved by bracket_position."""
+        """N baselines + N candidate runs, interleaved by bracket_position."""
         cells = bracketed_ab(
             empty_base,
             candidate_engine_overrides={"enable_prefix_caching": True},
@@ -274,7 +471,7 @@ class TestBracketedAb:
 
     def test_spec_ngram_wrapper_applies_speculative_config(self, empty_base: BenchmarkEngineConfig) -> None:
         cells = bracketed_ab_spec_ngram(empty_base)
-        # Candidate cells have speculative_config; baselines don't.
+        # Candidate runs have speculative_config; baselines don't.
         candidates = [c for c in cells if c.condition_label == "spec_ngram"]
         baselines = [c for c in cells if c.condition_label == "baseline"]
         assert len(candidates) == DEFAULT_BRACKETED_AB_N
