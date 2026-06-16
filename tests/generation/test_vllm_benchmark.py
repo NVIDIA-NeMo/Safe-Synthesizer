@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 import nemo_safe_synthesizer.generation.processors as processors_mod
 import nemo_safe_synthesizer.generation.vllm_benchmark as benchmark_mod
+from nemo_safe_synthesizer.config.generate import COMMON_ATTENTION_BACKENDS, SUPPORTED_STRUCTURED_GENERATION_BACKENDS
 from nemo_safe_synthesizer.generation.vllm_benchmark import (
     BenchmarkCandidate,
     BenchmarkCandidateDocument,
@@ -40,13 +41,16 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
     run_benchmark,
 )
 from nemo_safe_synthesizer.generation.vllm_benchmark_presets import (
+    BATCHING_STEPS,
     DEFAULT_BENCHMARK_SEED,
     DEFAULT_BRACKETED_AB_N,
+    BatchingStep,
     attention_backend_sweep,
     baseline,
     bracketed_ab,
     bracketed_ab_spec_ngram,
     default_matrix,
+    structured_backend_sweep,
 )
 from nemo_safe_synthesizer.generation.vllm_observability import GenerationObservability
 
@@ -492,10 +496,25 @@ class TestPresets:
         keys = {(c.engine_config.model_dump_json(), json.dumps(c.sampling_overrides, sort_keys=True)) for c in cands}
         assert len(keys) == len(cands)
 
-    def test_attention_backend_sweep_covers_known_backends(self, empty_base: BenchmarkEngineConfig) -> None:
+    def test_attention_backend_sweep_uses_common_backends(self, empty_base: BenchmarkEngineConfig) -> None:
         cands = attention_backend_sweep(empty_base)
         backends = {c.engine_config.attention_backend for c in cands}
-        assert {"FLASHINFER", "FLASH_ATTN", "TRITON_ATTN"}.issubset(backends)
+        assert backends == set(COMMON_ATTENTION_BACKENDS) - {"TORCH_SDPA", "FLEX_ATTENTION"}
+
+    def test_structured_backend_sweep_uses_supported_explicit_backends(
+        self,
+        empty_base: BenchmarkEngineConfig,
+    ) -> None:
+        cands = structured_backend_sweep(empty_base)
+        backends = {c.engine_config.structured_generation_backend for c in cands}
+        assert backends == set(SUPPORTED_STRUCTURED_GENERATION_BACKENDS) - {"auto", "lm-format-enforcer"}
+
+    def test_batching_steps_are_named_scheduler_settings(self) -> None:
+        assert BATCHING_STEPS == (
+            BatchingStep(max_num_seqs=128, max_num_batched_tokens=4096),
+            BatchingStep(max_num_seqs=256, max_num_batched_tokens=8192),
+            BatchingStep(max_num_seqs=512, max_num_batched_tokens=16384),
+        )
 
 
 class TestBracketedAb:

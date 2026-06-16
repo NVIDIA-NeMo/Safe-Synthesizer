@@ -20,8 +20,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
+from ..config.generate import (
+    COMMON_ATTENTION_BACKENDS,
+    SUPPORTED_STRUCTURED_GENERATION_BACKENDS,
+    StructuredGenerationBackend,
+)
 from .vllm_benchmark import BatchDispatchMode, BenchmarkCandidate, BenchmarkEngineConfig
 
 PresetFn = Callable[[BenchmarkEngineConfig], list[BenchmarkCandidate]]
@@ -45,22 +51,41 @@ for Mistral-7B is 32768 - over-provisions the KV cache budget for the
 tabular workloads we benchmark.
 """
 
-ATTENTION_BACKENDS: tuple[str, ...] = (
-    "FLASHINFER",
-    "FLASH_ATTN",
-    "TRITON_ATTN",
-)
-"""CUDA attention backends the sweep covers; excludes ROCm/XPU/MLA variants."""
+_ATTENTION_BACKENDS_EXCLUDED_FROM_SWEEP: frozenset[str] = frozenset({"TORCH_SDPA", "FLEX_ATTENTION"})
+"""Common attention backends that are not direct benchmark sweep entries."""
 
-STRUCTURED_BACKENDS: tuple[str, ...] = ("xgrammar", "outlines", "guidance")
-"""Structured-output backends the sweep covers."""
-
-BATCHING_STEPS: tuple[tuple[int, int], ...] = (
-    (128, 4096),
-    (256, 8192),
-    (512, 16384),
+ATTENTION_BACKENDS: tuple[str, ...] = tuple(
+    backend for backend in COMMON_ATTENTION_BACKENDS if backend not in _ATTENTION_BACKENDS_EXCLUDED_FROM_SWEEP
 )
-"""(max_num_seqs, max_num_batched_tokens) steps for the batching sweep."""
+"""Common attention backends covered by the benchmark sweep."""
+
+_STRUCTURED_BACKENDS_EXCLUDED_FROM_SWEEP: frozenset[StructuredGenerationBackend] = frozenset(
+    {"auto", "lm-format-enforcer"},
+)
+"""Supported structured backends that are not direct benchmark sweep entries."""
+
+STRUCTURED_BACKENDS: tuple[StructuredGenerationBackend, ...] = tuple(
+    backend
+    for backend in SUPPORTED_STRUCTURED_GENERATION_BACKENDS
+    if backend not in _STRUCTURED_BACKENDS_EXCLUDED_FROM_SWEEP
+)
+"""Structured-output backends covered by the benchmark sweep."""
+
+
+@dataclass(frozen=True)
+class BatchingStep:
+    """One scheduler sizing point for :func:`batching_sweep`."""
+
+    max_num_seqs: int
+    max_num_batched_tokens: int
+
+
+BATCHING_STEPS: tuple[BatchingStep, ...] = (
+    BatchingStep(max_num_seqs=128, max_num_batched_tokens=4096),
+    BatchingStep(max_num_seqs=256, max_num_batched_tokens=8192),
+    BatchingStep(max_num_seqs=512, max_num_batched_tokens=16384),
+)
+"""Scheduler sizing steps for the batching sweep."""
 
 MAX_MODEL_LEN_STEPS: tuple[int, ...] = (2048, 4096, 8192)
 """``max_model_len`` steps for the max-model-len sweep."""
@@ -141,11 +166,11 @@ def batching_sweep(base: BenchmarkEngineConfig) -> list[BenchmarkCandidate]:
     return [
         _named_copy(
             base,
-            f"batch_seqs={seqs}_tokens={tokens}",
-            max_num_seqs=seqs,
-            max_num_batched_tokens=tokens,
+            f"batch_seqs={step.max_num_seqs}_tokens={step.max_num_batched_tokens}",
+            max_num_seqs=step.max_num_seqs,
+            max_num_batched_tokens=step.max_num_batched_tokens,
         )
-        for seqs, tokens in BATCHING_STEPS
+        for step in BATCHING_STEPS
     ]
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Annotated, Any, ClassVar, Literal, Self
+from typing import Annotated, Any, ClassVar, Literal, Self, cast, get_args
 
 from pydantic import (
     BaseModel,
@@ -27,15 +27,32 @@ StructuredGenerationSchemaMethod = Literal["auto", "regex", "json_schema", "stru
 ResolvedStructuredGenerationSchemaMethod = Literal["regex", "json_schema", "structural_tag"]
 StructuredGenerationBackend = Literal["auto", "xgrammar", "guidance", "outlines", "lm-format-enforcer"]
 
+SUPPORTED_STRUCTURED_GENERATION_BACKENDS = cast(
+    tuple[StructuredGenerationBackend, ...],
+    get_args(StructuredGenerationBackend),
+)
+"""Structured-output backend values accepted by generation config."""
+
 STRUCTURAL_TAG_COMPATIBLE_BACKENDS = frozenset({"auto", "xgrammar"})
 
+COMMON_ATTENTION_BACKENDS: tuple[str, ...] = (
+    "FLASHINFER",
+    "FLASH_ATTN",
+    "TORCH_SDPA",
+    "TRITON_ATTN",
+    "FLEX_ATTENTION",
+)
+"""Common vLLM attention backend values accepted by ``generation.attention_backend``."""
+
 __all__ = [
+    "COMMON_ATTENTION_BACKENDS",
     "GenerateParameters",
     "ResolvedStructuredGenerationSchemaMethod",
     "StructuredGenerationParameters",
     "StructuredGenerationBackend",
     "StructuredGenerationSchemaMethod",
     "STRUCTURAL_TAG_COMPATIBLE_BACKENDS",
+    "SUPPORTED_STRUCTURED_GENERATION_BACKENDS",
     "ValidationParameters",
     "resolve_structured_generation_schema_method",
     "structural_tag_backend_error_message",
@@ -265,8 +282,8 @@ class GenerateParameters(Parameters, BaseModel):
         Field(
             title="attention_backend",
             description=(
-                "The attention backend for the vLLM engine. Common values: 'FLASHINFER', "
-                "'FLASH_ATTN', 'TRITON_ATTN', 'FLEX_ATTENTION'. "
+                "The attention backend for the vLLM engine. Common values: "
+                f"{', '.join(repr(backend) for backend in COMMON_ATTENTION_BACKENDS)}. "
                 "If ``None`` or 'auto', vLLM will auto-select the best available backend."
             ),
         ),

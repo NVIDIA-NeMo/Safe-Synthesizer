@@ -42,10 +42,11 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
 from .vllm_benchmark import BenchmarkOutput, CandidateMetrics
+from .vllm_benchmark_presets import DEFAULT_BRACKETED_AB_N
 
 ClusterSignal = Literal["wall_seconds", "acceptance_rate", "auto"]
 
-MIN_CANDIDATE_RUNS_PER_CONDITION: int = 6
+MIN_CANDIDATE_RUNS_PER_CONDITION: int = DEFAULT_BRACKETED_AB_N
 """Minimum candidate runs per condition before delta-style aggregates are computed.
 
 Matches :data:`DEFAULT_BRACKETED_AB_N`. Below this threshold the
