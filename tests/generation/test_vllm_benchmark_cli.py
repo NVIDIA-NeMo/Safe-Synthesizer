@@ -77,6 +77,59 @@ def test_analyze_accepts_min_runs_option(tmp_path: Path) -> None:
     assert "Cluster-conditioned analysis" in result.output
 
 
+def test_run_presets_receive_trace_max_token_hint(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(
+            [
+                (
+                    '{"kind": "header", "run_id": "r", "pretrained_model": "m", '
+                    '"dataset_schema": {}, "max_tokens_per_example": 8192}'
+                ),
+                '{"kind": "record", "row_index": 0, "prompt": "p", "sampling_params": {"temperature": 0.0}}',
+            ],
+        ),
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "benchmark.json"
+    seen_candidates: list[BenchmarkCandidate] = []
+
+    def fake_run_benchmark_in_subprocess(
+        candidate: BenchmarkCandidate,
+        _corpus_path: str | Path,
+        **_kwargs: Any,
+    ) -> Any:
+        seen_candidates.append(candidate)
+        return tool.SubprocessRunResult(
+            metrics=CandidateMetrics(
+                name=candidate.name,
+                raw_tok_s=1.0,
+                acceptance_rate=1.0,
+                effective_tok_s=1.0,
+                ttft_p50_ms=0.0,
+                ttft_p99_ms=0.0,
+                prompts_attempted=1,
+                prompts_accepted=1,
+                total_output_tokens=1,
+                total_wall_seconds=1.0,
+            ),
+        )
+
+    monkeypatch.setattr(tool, "resolve_sweep_id", lambda: None)
+    monkeypatch.setattr(tool, "init_candidate_run", lambda **_kwargs: None)
+    monkeypatch.setattr(tool, "log_and_finish", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(tool, "run_benchmark_in_subprocess", fake_run_benchmark_in_subprocess)
+
+    result = CliRunner().invoke(
+        cli,
+        ["run", str(trace_path), "--output", str(output_path), "--candidates", "baseline"],
+        color=False,
+    )
+
+    assert result.exit_code == 0, result.output
+    assert seen_candidates[0].engine_config.max_model_len == 8192
+
+
 def test_hidden_run_candidate_command_is_available() -> None:
     """The subprocess wrapper should target the repo-local tool command."""
     result = CliRunner().invoke(cli, ["_run-candidate", "--help"], color=False)

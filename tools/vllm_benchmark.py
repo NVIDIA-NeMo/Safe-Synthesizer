@@ -224,7 +224,9 @@ def run_cmd(
 ) -> None:
     """Replay CORPUS_PATH against the chosen candidates and persist results."""
     corpus = BenchmarkCorpus.from_trace_jsonl(corpus_path)
-    base = BenchmarkEngineConfig.model_validate(corpus.header.engine_parameters or {})
+    base = BenchmarkEngineConfig.model_validate(corpus.header.engine_parameters or {}).with_trace_defaults(
+        corpus.header
+    )
     candidates = _resolve_candidates(base, preset_name, candidates_file)
     if not candidates:
         raise click.UsageError("Resolved candidate list is empty.")

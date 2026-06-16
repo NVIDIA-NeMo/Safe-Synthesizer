@@ -51,6 +51,7 @@ from ..generation.vllm_observability import (
     read_loadavg,
     read_vllm_runtime_metrics,
 )
+from ..llm.utils import ModelRef
 from ..observability import get_logger
 
 if TYPE_CHECKING:
@@ -192,6 +193,19 @@ class BenchmarkCorpus(BaseModel):
             raise ValueError(f"{path}: missing header line")
         return cls(header=header, prompts=prompts)
 
+    def common_sampling_params(self) -> dict[str, Any]:
+        """Return the corpus-wide sampling params, rejecting heterogeneous traces."""
+        if not self.prompts:
+            return {}
+        first = self.prompts[0].original_sampling_params
+        for prompt in self.prompts[1:]:
+            if prompt.original_sampling_params != first:
+                raise ValueError(
+                    "benchmark corpus contains heterogeneous sampling_params; "
+                    "capture a homogeneous trace or split the corpus before replay",
+                )
+        return dict(first)
+
 
 class BenchmarkEngineConfig(BaseModel):
     """Engine-construction kwargs the harness forwards to ``vllm.LLM(...)``.
@@ -219,11 +233,12 @@ class BenchmarkEngineConfig(BaseModel):
         default=None,
         description="vLLM attention backend (``FLASHINFER``, ``FLASH_ATTN``, ``TRITON_ATTN``, etc.). ``None`` or ``'auto'`` leaves it unset.",
     )
-    structured_generation_backend: str = Field(
-        default="xgrammar",
+    structured_generation_backend: str | None = Field(
+        default=None,
         description=(
-            "Structured-outputs backend used by benchmark sweeps. The preset "
-            "matrix covers ``'xgrammar'``, ``'outlines'``, and ``'guidance'``."
+            "Structured-outputs backend used by benchmark sweeps. ``None`` preserves "
+            "the trace header's captured backend. The preset matrix covers "
+            "``'xgrammar'``, ``'outlines'``, and ``'guidance'``."
         ),
     )
     max_model_len: int | None = Field(
@@ -283,6 +298,14 @@ class BenchmarkEngineConfig(BaseModel):
             "``LLM.get_metrics()`` already provides."
         ),
     )
+
+    def with_trace_defaults(self, header: TraceHeader) -> Self:
+        """Apply trace-level sizing defaults that are not direct vLLM kwargs."""
+        if self.max_model_len is not None:
+            return self
+        if header.max_tokens_per_example is None or header.max_tokens_per_example <= 0:
+            return self
+        return self.model_copy(update={"max_model_len": header.max_tokens_per_example})
 
 
 class BenchmarkCandidate(BaseModel):
@@ -569,24 +592,25 @@ def _build_vllm_kwargs(header: TraceHeader, engine_config: BenchmarkEngineConfig
     Drops ``None``-valued candidate fields explicitly so vLLM treats
     them as "not configured" rather than "override to None".
     """
-    overlay = engine_config.model_dump(exclude_none=True)
+    overlay = engine_config.with_trace_defaults(header).model_dump(exclude_none=True)
     base = dict(header.engine_parameters)
     base.update(overlay)
     # Required-positional kwargs that aren't in BenchmarkEngineConfig:
-    base["model"] = header.pretrained_model
+    model_ref = ModelRef.parse(header.pretrained_model)
+    base["model"] = model_ref.target()
+    base["trust_remote_code"] = model_ref.trust_remote_code
     base.setdefault("enable_lora", header.lora_path is not None)
     # ``attention_backend`` -> ``attention_config`` translation. vLLM's
     # public API takes a config dict rather than a bare string.
     attention_backend = base.pop("attention_backend", None)
     if attention_backend not in (None, "auto"):
         base["attention_config"] = {"backend": attention_backend}
-    # ``structured_generation_backend`` -> ``structured_outputs_config``.
-    from vllm.config import (
-        StructuredOutputsConfig,  # noqa: PLC0415 - lazy, vLLM is heavy
-    )
-
     sg_backend = base.pop("structured_generation_backend", None)
     if sg_backend is not None:
+        from vllm.config import (
+            StructuredOutputsConfig,  # noqa: PLC0415 - lazy, vLLM is heavy
+        )
+
         base["structured_outputs_config"] = StructuredOutputsConfig(backend=sg_backend)
     return base
 
@@ -669,6 +693,9 @@ def run_benchmark(
     when the engine's effective runtime config disagrees with the
     candidate's intended ``engine_config`` on any checked field.
     """
+    base_sampling = corpus.common_sampling_params()
+    dispatch = candidate.dispatch_plan([p.prompt for p in corpus.prompts], base_sampling)
+
     # Lazy imports - keep this module CPU-importable.
     from vllm.lora.request import LoRARequest  # noqa: PLC0415
     from vllm.sampling_params import SamplingParams  # noqa: PLC0415
@@ -721,11 +748,6 @@ def run_benchmark(
             LoRARequest("lora", 1, str(corpus.header.lora_path)) if corpus.header.lora_path is not None else None
         )
 
-        # Build SamplingParams from corpus default + candidate overrides.
-        base_sampling: dict[str, Any] = {}
-        if corpus.prompts:
-            base_sampling = corpus.prompts[0].original_sampling_params
-        dispatch = candidate.dispatch_plan([p.prompt for p in corpus.prompts], base_sampling)
         sampling_params = SamplingParams(**dispatch.sampling_kwargs)
 
         # Dispatch.

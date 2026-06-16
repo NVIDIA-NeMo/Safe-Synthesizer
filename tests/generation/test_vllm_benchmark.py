@@ -163,6 +163,17 @@ def _install_fake_vllm_modules(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "vllm.sampling_params", sampling_mod)
 
 
+def _install_fake_vllm_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    config_mod = types.ModuleType("vllm.config")
+
+    class FakeStructuredOutputsConfig:
+        def __init__(self, *, backend: str) -> None:
+            self.backend = backend
+
+    setattr(config_mod, "StructuredOutputsConfig", FakeStructuredOutputsConfig)
+    monkeypatch.setitem(sys.modules, "vllm.config", config_mod)
+
+
 def _install_runner_fakes(
     monkeypatch: pytest.MonkeyPatch,
     llm: _FakeLLM,
@@ -200,6 +211,20 @@ def _benchmark_corpus(prompts: list[str]) -> BenchmarkCorpus:
                 original_sampling_params={"temperature": 0.0, "max_tokens": 8},
             )
             for i, prompt in enumerate(prompts)
+        ],
+    )
+
+
+def _benchmark_corpus_with_sampling(sampling_params: list[dict[str, Any]]) -> BenchmarkCorpus:
+    return BenchmarkCorpus(
+        header=TraceHeader(run_id="r", pretrained_model="m", dataset_schema={"col": "string"}),
+        prompts=[
+            BenchmarkPrompt(
+                row_index=i,
+                prompt=f"p{i}",
+                original_sampling_params=params,
+            )
+            for i, params in enumerate(sampling_params)
         ],
     )
 
@@ -321,6 +346,17 @@ class TestBenchmarkCorpus:
         with pytest.raises(ValueError, match="record on line 1 before any header"):
             BenchmarkCorpus.from_trace_jsonl(path)
 
+    def test_common_sampling_params_rejects_heterogeneous_records(self) -> None:
+        corpus = _benchmark_corpus_with_sampling(
+            [
+                {"temperature": 0.0, "max_tokens": 8},
+                {"temperature": 0.7, "max_tokens": 8},
+            ],
+        )
+
+        with pytest.raises(ValueError, match="heterogeneous sampling_params"):
+            corpus.common_sampling_params()
+
 
 # ---------------------------------------------------------------------------
 # Helper contracts
@@ -379,13 +415,71 @@ class TestHelpers:
 
 
 class TestBuildVllmKwargs:
-    def test_overlays_engine_config_on_header(self, header: TraceHeader) -> None:
+    def test_resolves_model_ref_target_and_trust_remote_code(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class FakeModelRef:
+            trust_remote_code = True
+
+            def target(self) -> str:
+                return "/cache/nvidia-model"
+
+        parse_calls: list[str] = []
+
+        def fake_parse(value: str) -> FakeModelRef:
+            parse_calls.append(value)
+            return FakeModelRef()
+
+        monkeypatch.setattr(benchmark_mod.ModelRef, "parse", staticmethod(fake_parse))
+        header = TraceHeader(run_id="r", pretrained_model="nvidia/Nemotron-Mini-4B-Instruct", dataset_schema={})
+
+        kwargs = _build_vllm_kwargs(header, BenchmarkEngineConfig())
+
+        assert parse_calls == ["nvidia/Nemotron-Mini-4B-Instruct"]
+        assert kwargs["model"] == "/cache/nvidia-model"
+        assert kwargs["trust_remote_code"] is True
+
+    def test_overlays_engine_config_on_header(self, monkeypatch: pytest.MonkeyPatch, header: TraceHeader) -> None:
         """Candidate engine_config overlays the header's engine_parameters."""
+        monkeypatch.setattr(
+            benchmark_mod.ModelRef,
+            "parse",
+            staticmethod(
+                lambda value: SimpleNamespace(
+                    target=lambda: value,
+                    trust_remote_code=False,
+                ),
+            ),
+        )
         cfg = BenchmarkEngineConfig(attention_backend="FLASHINFER", max_model_len=4096)
         kwargs = _build_vllm_kwargs(header, cfg)
         assert kwargs["model"] == "mistralai/Mistral-7B-Instruct-v0.3"
         assert kwargs["max_lora_rank"] == 32  # from header
         assert kwargs["max_model_len"] == 4096  # from cfg
+
+    def test_empty_engine_config_preserves_header_structured_backend(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        header: TraceHeader,
+    ) -> None:
+        _install_fake_vllm_config(monkeypatch)
+
+        kwargs = _build_vllm_kwargs(header, BenchmarkEngineConfig())
+
+        assert kwargs["structured_outputs_config"].backend == "outlines"
+
+    def test_engine_config_applies_trace_max_token_hint_when_unset(self) -> None:
+        header = TraceHeader(
+            run_id="r",
+            pretrained_model="m",
+            dataset_schema={},
+            max_tokens_per_example=8192,
+        )
+
+        cfg = BenchmarkEngineConfig().with_trace_defaults(header)
+
+        assert cfg.max_model_len == 8192
 
     def test_translates_attention_backend_to_attention_config(
         self, header: TraceHeader, empty_base: BenchmarkEngineConfig
@@ -465,6 +559,23 @@ class TestRunBenchmark:
 
         assert metrics.startup_seconds == 0.0
         assert metrics.startup_overlap_savings_seconds == 1.25
+
+    def test_rejects_heterogeneous_sampling_params(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        llm = _FakeLLM()
+        _install_runner_fakes(monkeypatch, llm)
+
+        with pytest.raises(ValueError, match="heterogeneous sampling_params"):
+            run_benchmark(
+                BenchmarkCandidate(name="baseline"),
+                _benchmark_corpus_with_sampling(
+                    [
+                        {"temperature": 0.0, "max_tokens": 8},
+                        {"temperature": 0.7, "max_tokens": 8},
+                    ],
+                ),
+            )
+
+        assert llm.calls == []
 
 
 # ---------------------------------------------------------------------------
