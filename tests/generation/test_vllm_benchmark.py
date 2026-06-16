@@ -30,14 +30,11 @@ from nemo_safe_synthesizer.generation.vllm_benchmark import (
     BenchmarkOutput,
     BenchmarkPrompt,
     CandidateMetrics,
-    SubprocessRunResult,
     TraceHeader,
     TracePromptRecord,
     _build_vllm_kwargs,
     _extract_ttft_ms,
-    _parse_error_class,
     _percentile,
-    _truncate_stderr,
     run_benchmark,
 )
 from nemo_safe_synthesizer.generation.vllm_benchmark_presets import (
@@ -375,16 +372,6 @@ class TestHelpers:
         output = type("Out", (), {"metrics": metrics_obj})()
         assert _extract_ttft_ms(output) == expected
 
-    def test_truncate_stderr_keeps_tail(self) -> None:
-        long = "x" * 600
-        truncated = _truncate_stderr(long, limit=100)
-        assert len(truncated) <= 100
-        assert truncated.endswith("xxxxx")  # tail-preserving
-
-    def test_parse_error_class_finds_exception_name(self) -> None:
-        assert _parse_error_class("Traceback (most recent call last):\n...\nValueError: bad") == "ValueError"
-        assert _parse_error_class("") == "Error"
-
 
 # ---------------------------------------------------------------------------
 # Engine kwargs builder
@@ -550,30 +537,3 @@ class TestBracketedAb:
         candidate_runs = bracketed_ab_spec_ngram(empty_base)
         for c in candidate_runs:
             assert c.sampling_overrides.get("seed") == DEFAULT_BENCHMARK_SEED
-
-
-# ---------------------------------------------------------------------------
-# SubprocessRunResult
-# ---------------------------------------------------------------------------
-
-
-class TestSubprocessRunResult:
-    def test_success_shape(self) -> None:
-        m = CandidateMetrics(
-            name="t",
-            raw_tok_s=1.0,
-            acceptance_rate=0.9,
-            effective_tok_s=0.9,
-            ttft_p50_ms=0.0,
-            ttft_p99_ms=0.0,
-            prompts_attempted=10,
-            prompts_accepted=9,
-            total_output_tokens=100,
-            total_wall_seconds=1.0,
-        )
-        r = SubprocessRunResult(metrics=m)
-        assert r.metrics is not None and r.error is None
-
-    def test_failure_shape(self) -> None:
-        r = SubprocessRunResult(error="exit 1", error_class="RuntimeError")
-        assert r.metrics is None and r.error_class == "RuntimeError"

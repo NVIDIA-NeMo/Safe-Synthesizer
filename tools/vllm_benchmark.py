@@ -27,11 +27,15 @@ Invocation::
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
 import click
+from pydantic import BaseModel, ConfigDict, Field
 from rich.console import Console
 from rich.table import Table
 
@@ -52,6 +56,63 @@ from nemo_safe_synthesizer.generation.vllm_benchmark_wandb import (
 )
 
 console = Console()
+
+SUBPROCESS_STDERR_LIMIT: int = 500
+"""Maximum bytes of captured stderr to record on a subprocess failure."""
+
+
+class SubprocessRunResult(BaseModel):
+    """Outcome of one subprocess-isolated candidate run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metrics: CandidateMetrics | None = Field(default=None, description="Populated when the child exited successfully.")
+    error: str | None = Field(default=None, description="Captured stderr summary; populated on non-zero exit.")
+    error_class: str | None = Field(default=None, description="Best-effort exception class name parsed from stderr.")
+
+
+def _truncate_stderr(stderr: str, limit: int = SUBPROCESS_STDERR_LIMIT) -> str:
+    """Trim ``stderr`` to ``limit`` bytes, keeping the tail."""
+    stderr = stderr.strip()
+    if len(stderr) <= limit:
+        return stderr
+    head = "...[truncated]..."
+    return head + stderr[-(limit - len(head)) :]
+
+
+def _parse_error_class(stderr: str) -> str:
+    """Best-effort parse of the exception class name from a Python traceback."""
+    for line in reversed(stderr.strip().splitlines()):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        head = stripped.split(":", 1)[0]
+        if head.isidentifier() or "." in head:
+            return head
+        return "Error"
+    return "Error"
+
+
+def _run_candidate_command_args(
+    candidate: BenchmarkCandidate,
+    corpus_path: str | Path,
+    result_path: Path,
+    simulate_training_overlap_seconds: float,
+) -> list[str]:
+    """Build argv for this tool's isolated candidate runner."""
+    return [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "_run-candidate",
+        "--candidate",
+        candidate.model_dump_json(),
+        "--corpus",
+        str(corpus_path),
+        "--result-out",
+        str(result_path),
+        "--simulate-training-overlap-seconds",
+        str(simulate_training_overlap_seconds),
+    ]
 
 
 @click.group()
@@ -88,6 +149,40 @@ def _resolve_candidates(
         except ValueError as exc:
             raise click.UsageError(f"Invalid candidates file {candidates_file}: {exc}") from exc
     raise click.UsageError("One of --candidates or --candidates-file is required.")
+
+
+def run_benchmark_in_subprocess(
+    candidate: BenchmarkCandidate,
+    corpus_path: str | Path,
+    simulate_training_overlap_seconds: float = 0.0,
+) -> SubprocessRunResult:
+    """Run one candidate in a child process the OS reclaims on exit."""
+    with tempfile.TemporaryDirectory(prefix="nss-vllm-benchmark-") as result_dir:
+        result_path = Path(result_dir) / "result.json"
+        completed = subprocess.run(
+            _run_candidate_command_args(
+                candidate,
+                corpus_path,
+                result_path,
+                simulate_training_overlap_seconds,
+            ),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            stderr = _truncate_stderr(completed.stderr or completed.stdout)
+            return SubprocessRunResult(
+                error=stderr or f"subprocess exit {completed.returncode}",
+                error_class=_parse_error_class(completed.stderr or completed.stdout),
+            )
+        if not result_path.exists() or result_path.stat().st_size == 0:
+            return SubprocessRunResult(
+                error="subprocess exited 0 but produced no result file",
+                error_class="RuntimeError",
+            )
+        metrics = CandidateMetrics.model_validate_json(result_path.read_text(encoding="utf-8"))
+        return SubprocessRunResult(metrics=metrics)
 
 
 @cli.command("run")
@@ -128,11 +223,6 @@ def run_cmd(
     simulate_training_overlap_seconds: float,
 ) -> None:
     """Replay CORPUS_PATH against the chosen candidates and persist results."""
-    # Lazy import so ``list`` and ``compare`` work without spinning up vLLM.
-    from nemo_safe_synthesizer.generation.vllm_benchmark import (
-        run_benchmark_in_subprocess,
-    )
-
     corpus = BenchmarkCorpus.from_trace_jsonl(corpus_path)
     base = BenchmarkEngineConfig.model_validate(corpus.header.engine_parameters or {})
     candidates = _resolve_candidates(base, preset_name, candidates_file)
@@ -188,6 +278,46 @@ def run_cmd(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
     console.print(f"[green]wrote[/green] {output_path}  ({len(results)}/{len(candidates)} ok, {len(skipped)} skipped)")
+
+
+@cli.command("_run-candidate", hidden=True)
+@click.option("--candidate", required=True, help="JSON-serialised BenchmarkCandidate.")
+@click.option(
+    "--corpus",
+    "corpus_path",
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    required=True,
+    help="Path to the corpus JSONL.",
+)
+@click.option(
+    "--result-out",
+    "result_out",
+    type=click.Path(path_type=Path, dir_okay=False),
+    required=True,
+    help="Path to write the CandidateMetrics JSON.",
+)
+@click.option(
+    "--simulate-training-overlap-seconds",
+    type=float,
+    default=0.0,
+    show_default=True,
+    help="Seconds to sleep after kicking off engine init (simulates concurrent training).",
+)
+def run_candidate_cmd(
+    candidate: str,
+    corpus_path: Path,
+    result_out: Path,
+    simulate_training_overlap_seconds: float,
+) -> None:
+    """Run one benchmark candidate in an isolated child process."""
+    from nemo_safe_synthesizer.generation.vllm_benchmark import run_benchmark
+
+    metrics = run_benchmark(
+        candidate=BenchmarkCandidate.model_validate_json(candidate),
+        corpus=BenchmarkCorpus.from_trace_jsonl(corpus_path),
+        simulate_training_overlap_seconds=simulate_training_overlap_seconds,
+    )
+    result_out.write_text(metrics.model_dump_json(indent=2), encoding="utf-8")
 
 
 @cli.command("compare")
