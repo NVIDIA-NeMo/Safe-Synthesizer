@@ -19,6 +19,7 @@ In a Slurm analysis of `HuggingFaceTB/SmolLM3-3B` runs, the generation phase sho
 - 1.62x median generation speedup across 39 control/experiment comparisons (3 comparisons per dataset).
 - Faster generation in 34 out of 39 comparisons.
 - More than 5x generation speedup in 8 comparisons.
+- More consistent generation times.
 
 This note focuses on generation-phase speed. End-to-end runtime includes training and evaluation, which this implementation does not optimize.
 
