@@ -69,8 +69,9 @@ To publish this as an installable skill, package the
 
 - version metadata
 - a README with install and usage examples
-- a verification command that checks `SKILL.md`, `run.md`, `config.md`,
-  `diagnose.md`, and `artifacts.md`
+- a verification command that checks `SKILL.md`, `references/run.md`,
+  `references/config.md`, `references/diagnose.md`, and
+  `references/artifacts.md`
 - stable documentation links for users outside this repository
 
 An npm or `npx` installer would copy this directory into `.agents/skills/` for
