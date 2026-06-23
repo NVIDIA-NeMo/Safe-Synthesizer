@@ -596,6 +596,81 @@ All mise tasks check the entire project. Pre-commit scopes checks to staged file
 | uv lock drift | `mise run lock-check` | not checked | on `pyproject.toml` changes |
 | DCO signoff | branch protection | not checked | commit-msg hook |
 
+### Generated Signature Artifacts
+
+NVSkills publication can add generated files such as `skills/<skill-name>/BENCHMARK.md`,
+`skills/<skill-name>/skill-card.md`, and `skills/<skill-name>/skill.oms.sig`.
+The signing bot usually pushes these in a commit named `Attach NVSkills validation signatures`.
+
+`skill.oms.sig` contains signed bundle data that can trip the secrets detector as high-entropy strings.
+Do not edit the generated signature file to add inline allowlist comments; that can break the signed artifact.
+Refresh `.github/workflows/config/.secrets.baseline` so the generated signatures are recorded as baseline hashes.
+
+#### Troubleshooting NVSkills Validation
+
+Use this sequence when `/nvskills-ci` ran but the pull request is not green.
+
+1. Check PR checks and open the failing or pending target:
+
+   ```bash
+   gh pr checks <pr-number> --repo NVIDIA-NeMo/Safe-Synthesizer
+   ```
+
+   NVSkills CI targets can point to workflow runs in `NVIDIA/nvskills-ci`.
+
+2. Check whether the signing bot pushed generated artifacts:
+
+   ```bash
+   git fetch origin <branch-name>
+   git log --oneline --decorate --max-count=5 origin/<branch-name>
+   ```
+
+   If a bot commit named `Attach NVSkills validation signatures` appears, rebase or pull it before
+   making follow-up edits. Regenerated signature files can change the secrets baseline hashes.
+
+3. If NVSkills CI failed before creating artifacts, read the workflow log. Transient backend errors,
+   such as ACES or inference-service `5xx` responses, can pass after rerunning `/nvskills-ci`.
+
+4. If `secrets-detector / secrets-detector` failed, open the job log and record each reported path,
+   line, and secret type. `Base64 High Entropy String` findings on
+   `skills/<skill-name>/skill.oms.sig:1` are expected for generated signature bundles. Findings in
+   any other file need normal secret review.
+
+5. To understand scanner behavior, inspect the local workflow and the reusable workflow it calls:
+
+   ```bash
+   gh workflow view secrets-detector.yml --repo NVIDIA-NeMo/Safe-Synthesizer --yaml
+   gh workflow view _secrets-detector.yml --repo NVIDIA-NeMo/FW-CI-templates --yaml
+   ```
+
+   The current local workflow delegates to the reusable FW-CI template. At template version `v1.5.1`,
+   that workflow scans changed files against `.github/workflows/config/.secrets.baseline` and does
+   not expose a file-exclude input. Skipping `skill.oms.sig` without baseline hashes requires a local
+   workflow change or an FW-CI template change.
+
+#### Updating the Secrets Baseline
+
+After the generated files are present, run the same detector version used by CI and stage the updated baseline:
+
+```bash
+mise exec -- uv run --with detect-secrets==1.5.0 detect-secrets scan \
+  --exclude-files 'pyproject\.toml|\.github/workflows/config/\.secrets\.baseline' \
+  --disable-plugin KeywordDetector \
+  > .github/workflows/config/.secrets.baseline
+git add .github/workflows/config/.secrets.baseline
+```
+
+Stage the baseline before local hook verification. `detect-secrets-hook` fails if the baseline file
+has unstaged changes.
+
+Then verify the changed generated file against the staged baseline:
+
+```bash
+mise exec -- uv run --with detect-secrets==1.5.0 detect-secrets-hook \
+  --baseline .github/workflows/config/.secrets.baseline \
+  skills/<skill-name>/skill.oms.sig
+```
+
 ## Documentation
 
 This project uses [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) for its documentation site, hosted at <https://nvidia-nemo.github.io/Safe-Synthesizer/>.
