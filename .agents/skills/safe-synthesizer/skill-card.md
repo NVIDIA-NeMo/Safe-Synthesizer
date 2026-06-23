@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 ## Description: <br>
 Use NeMo Safe Synthesizer through task-specific routing for CLI runs, SDK usage, configuration, troubleshooting, artifacts, and evaluation outputs. <br>
 
@@ -33,7 +36,7 @@ Mitigation: The eval dataset includes negative routing cases for general React U
 ## Skill Output: <br>
 **Output Type(s):** [Shell commands, Python SDK snippets, Configuration instructions, Diagnostics, Artifact paths] <br>
 **Output Format:** [Markdown with inline bash, Python, and YAML snippets] <br>
-**Output Parameters:** [1D] <br>
+**Output Parameters:** [User prompt, local configuration paths, CLI options, SDK parameters, logs or artifact paths when provided] <br>
 **Other Properties Related to Output:** [Answers cite Safe Synthesizer docs and include one next action unless the user asks for a full walkthrough] <br>
 
 ## Evaluation Agents Used: <br>

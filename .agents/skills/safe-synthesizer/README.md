@@ -15,6 +15,9 @@ support project skills can discover this skill from:
 .agents/skills/safe-synthesizer/
 ```
 
+The `skills/safe-synthesizer` path is a repository symlink for NVSkills and
+catalog workflows that watch top-level `skills/` paths.
+
 Ask a Safe Synthesizer usage question, or explicitly invoke the skill in an
 agent that supports slash-style skill calls:
 
