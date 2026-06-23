@@ -636,24 +636,24 @@ Use this sequence when `/nvskills-ci` ran but the pull request is not green.
    `skills/<skill-name>/skill.oms.sig:1` are expected for generated signature bundles. Findings in
    any other file need normal secret review.
 
-5. To understand scanner behavior, inspect the local workflow and the reusable workflow it calls:
+5. To understand scanner behavior, inspect the local workflow:
 
    ```bash
    gh workflow view secrets-detector.yml --repo NVIDIA-NeMo/Safe-Synthesizer --yaml
-   gh workflow view _secrets-detector.yml --repo NVIDIA-NeMo/FW-CI-templates --yaml
    ```
 
-   The current local workflow delegates to the reusable FW-CI template. At template version `v1.5.1`,
-   that workflow scans changed files against `.github/workflows/config/.secrets.baseline` and does
-   not expose a file-exclude input. Skipping `skill.oms.sig` without baseline hashes requires a local
-   workflow change or an FW-CI template change.
+   The workflow scans changed files against `.github/workflows/config/.secrets.baseline`, but it must
+   exclude the baseline file itself from hook input. If the job reports `Hex High Entropy String` or
+   `Secret Keyword` findings inside `.github/workflows/config/.secrets.baseline`, the baseline file is
+   being scanned as ordinary input. Fix the workflow exclusion; do not add recursive baseline entries
+   for the baseline file.
 
 #### Updating the Secrets Baseline
 
 After the generated files are present, run the same detector version used by CI and stage the updated baseline:
 
 ```bash
-mise exec -- uv run --with detect-secrets==1.5.0 detect-secrets scan \
+mise exec -- uv run --no-project --with detect-secrets==1.5.0 detect-secrets scan \
   --exclude-files 'pyproject\.toml|\.github/workflows/config/\.secrets\.baseline' \
   --disable-plugin KeywordDetector \
   > .github/workflows/config/.secrets.baseline
@@ -666,9 +666,18 @@ has unstaged changes.
 Then verify the changed generated file against the staged baseline:
 
 ```bash
-mise exec -- uv run --with detect-secrets==1.5.0 detect-secrets-hook \
+mise exec -- uv run --no-project --with detect-secrets==1.5.0 detect-secrets-hook \
   --baseline .github/workflows/config/.secrets.baseline \
   skills/<skill-name>/skill.oms.sig
+```
+
+To reproduce the CI changed-file scan locally:
+
+```bash
+git diff --name-only --diff-filter=d --merge-base origin/main -z \
+  | grep -z -v -E '^\.github/workflows/config/\.secrets\.baseline$' \
+  | xargs -0 -r mise exec -- uv run --no-project --with detect-secrets==1.5.0 detect-secrets-hook \
+      --baseline .github/workflows/config/.secrets.baseline
 ```
 
 ## Documentation
