@@ -1,6 +1,3 @@
-<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 ## Description: <br>
 Use NeMo Safe Synthesizer through task-specific routing: running the CLI or SDK, configuring parameters, troubleshooting runtime failures, inspecting artifacts, and interpreting evaluation outputs. <br>
 
@@ -12,7 +9,7 @@ NVIDIA <br>
 ### License/Terms of Use: <br>
 Apache 2.0 <br>
 ## Use Case: <br>
-Developers and engineers using NeMo Safe Synthesizer to generate private synthetic tabular datasets with differential privacy support, configure pipeline parameters, troubleshoot runtime failures, and interpret evaluation outputs. <br>
+Developers and engineers using NeMo Safe Synthesizer to generate private, safe synthetic tabular datasets with differential privacy support for compliance and sensitive information protection. <br>
 
 ### Deployment Geography for Use: <br>
 Global <br>
@@ -22,9 +19,12 @@ Risk: Review before execution as proposals could introduce incorrect or misleadi
 Mitigation: Review and scan skill before deployment. <br>
 
 ## Reference(s): <br>
+- [Run Safe Synthesizer](references/run.md) <br>
+- [Configure Safe Synthesizer](references/config.md) <br>
+- [Diagnose Safe Synthesizer](references/diagnose.md) <br>
+- [Inspect Safe Synthesizer Artifacts](references/artifacts.md) <br>
 - [Getting Started](https://nvidia-nemo.github.io/Safe-Synthesizer/user-guide/getting-started/) <br>
 - [Safe Synthesizer 101 Tutorial](https://nvidia-nemo.github.io/Safe-Synthesizer/tutorials/safe-synthesizer-101/) <br>
-- [GitHub Repository](https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git) <br>
 
 
 ## Skill Output: <br>
@@ -40,7 +40,7 @@ Mitigation: Review and scan skill before deployment. <br>
 
 
 ## Evaluation Tasks: <br>
-Evaluated against 6 internal evaluation tasks (4 positive skill-activation cases, 2 negative cases) via NVSkills-Eval with the external profile. <br>
+Evaluated against 6 NVSkills-Eval tasks (4 positive activation, 2 negative activation) with 1 attempt per task and a 50% pass threshold. <br>
 
 ## Evaluation Metrics Used: <br>
 Reported benchmark dimensions: <br>
@@ -65,10 +65,10 @@ Underlying evaluation signals used in this run: <br>
 | Dimension | Num | `claude-code` | `codex` |
 |---|---:|---:|---:|
 | Security | 6 | 100% (+0%) | 100% (+0%) |
-| Correctness | 6 | 97% (+48%) | 88% (+26%) |
-| Discoverability | 6 | 95% (+53%) | 73% (+9%) |
-| Effectiveness | 6 | 87% (+42%) | 90% (+41%) |
-| Efficiency | 6 | 86% (+36%) | 71% (+9%) |
+| Correctness | 6 | 98% (+52%) | 96% (+20%) |
+| Discoverability | 6 | 96% (+54%) | 93% (+32%) |
+| Effectiveness | 6 | 89% (+45%) | 90% (+26%) |
+| Efficiency | 6 | 87% (+37%) | 89% (+29%) |
 
 ## Skill Version(s): <br>
 v0.1.3 (source: git tag) <br>

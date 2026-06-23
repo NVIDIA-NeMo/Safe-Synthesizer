@@ -1,6 +1,3 @@
-<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
-<!-- SPDX-License-Identifier: Apache-2.0 -->
-
 # Evaluation Report
 
 Evaluation of the `safe-synthesizer` skill before publication through NVSkills-Eval.
@@ -58,24 +55,20 @@ Task composition is derived from the evaluation dataset when possible. Entries w
 | Dimension | Num | `claude-code` | `codex` |
 |---|---:|---:|---:|
 | Security | 6 | 100% (+0%) | 100% (+0%) |
-| Correctness | 6 | 97% (+48%) | 88% (+26%) |
-| Discoverability | 6 | 95% (+53%) | 73% (+9%) |
-| Effectiveness | 6 | 87% (+42%) | 90% (+41%) |
-| Efficiency | 6 | 86% (+36%) | 71% (+9%) |
+| Correctness | 6 | 98% (+52%) | 96% (+20%) |
+| Discoverability | 6 | 96% (+54%) | 93% (+32%) |
+| Effectiveness | 6 | 89% (+45%) | 90% (+26%) |
+| Efficiency | 6 | 87% (+37%) | 89% (+29%) |
 
 Score values show skill-assisted performance. Values in parentheses show uplift versus the no-skill baseline when baseline data is available.
 
 ## Tier 1: Static Validation Summary
 
-Tier 1 validation passed with observations. NVSkills-Eval ran 1 checks and found 7 total findings.
+Tier 1 validation passed. NVSkills-Eval ran 1 checks and found 0 total findings.
 
-Top findings:
+Notable observations:
 
-- MEDIUM SCHEMA/body_recommended_section: Missing recommended section: '## Instructions' (`skills/safe-synthesizer/SKILL.md`)
-- MEDIUM SCHEMA/body_recommended_section: Missing recommended section: '## Examples' (`skills/safe-synthesizer/SKILL.md`)
-- MEDIUM SCHEMA/author_missing: Author not specified in metadata (`skills/safe-synthesizer/SKILL.md`)
-- LOW SCHEMA/unexpected_file: Unexpected 'config.md' in skill root (`skills/safe-synthesizer/config.md`)
-- LOW SCHEMA/unexpected_file: Unexpected 'run.md' in skill root (`skills/safe-synthesizer/run.md`)
+- SCHEMA: Found skill manifest: SKILL.md
 
 ## Tier 2: Deduplication Summary
 
