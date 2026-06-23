@@ -1,31 +1,28 @@
-<!-- SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved. -->
-<!-- SPDX-License-Identifier: Apache-2.0 -->
+# Evaluation Report
 
-# Evaluation Plan
+Evaluation of the `safe-synthesizer` skill before publication through NVSkills-Eval.
 
-Pre-publication evaluation plan for the `safe-synthesizer` skill.
-
-The source eval dataset is checked in at `evals/evals.json`. Final NVSkills-Eval execution, benchmark results, and signing are still pending.
+This benchmark summarizes 3-Tier Evaluation from NVSkills-Eval results for the skill. The goal is to document whether the skill is safe, discoverable, effective, and useful for agents before it is published for broader workflow use.
 
 ## Evaluation Summary
 
 - Skill: `safe-synthesizer`
-- Evaluation date: pending
-- NVSkills-Eval profile: pending
-- Environment: pending
+- Evaluation date: 2026-06-23
+- NVSkills-Eval profile: `external`
+- Environment: `astra-sandbox`
 - Dataset: 6 evaluation tasks
-- Attempts per task: pending
-- Pass threshold: pending
-- Overall verdict: pending
+- Attempts per task: 1
+- Pass threshold: 50%
+- Overall verdict: PASS
 
 ## Agents Used
 
-- `claude-code` (pending)
-- `codex` (pending)
+- `claude-code`
+- `codex`
 
 ## Metrics Used
 
-Planned benchmark dimensions:
+Reported benchmark dimensions:
 
 - Security: checks whether skill-assisted execution avoids unsafe behavior such as secret leakage, destructive commands, or unauthorized access.
 - Correctness: checks whether the agent follows the expected workflow and produces the correct final output.
@@ -33,41 +30,54 @@ Planned benchmark dimensions:
 - Effectiveness: checks whether the agent performs measurably better with the skill than without it.
 - Efficiency: checks whether the agent uses fewer tokens and avoids redundant work.
 
-Expected evaluation signals:
+Underlying evaluation signals used in this run:
 
-- `security`: checks for unsafe operations, secret leakage, and unauthorized access.
-- `skill_execution`: verifies that the agent loaded the expected skill and workflow.
-- `skill_efficiency`: checks routing quality, decoy avoidance, and redundant tool usage.
-- `accuracy`: grades final-answer correctness against the reference answer.
-- `goal_accuracy`: checks whether the overall user task completed successfully.
-- `behavior_check`: verifies expected behavior steps, including safety expectations.
-- `token_efficiency`: compares token usage with and without the skill.
+- `security` (Security): checks for unsafe operations, secret leakage, and unauthorized access.
+- `skill_execution` (Skill Execution): verifies that the agent loaded the expected skill and workflow.
+- `skill_efficiency` (Efficiency): checks routing quality, decoy avoidance, and redundant tool usage.
+- `accuracy` (Accuracy): grades final-answer correctness against the reference answer.
+- `goal_accuracy` (Goal Accuracy): checks whether the overall user task completed successfully.
+- `behavior_check` (Behavior Check): verifies expected behavior steps, including safety expectations.
+- `token_efficiency` (Token Efficiency): compares token usage with and without the skill.
 
 ## Test Tasks
 
-The dataset covers the four routed workflows in `SKILL.md`:
+The benchmark dataset contained 6 evaluation tasks:
 
-| ID | Route | Purpose |
-|---|---|---|
-| `safe-synthesizer-run-dp-cli` | `run.md` | Run the CLI with differential privacy overrides. |
-| `safe-synthesizer-config-num-records` | `config.md` | Set `generation.num_records` from the CLI and SDK. |
-| `safe-synthesizer-diagnose-generation-oom` | `diagnose.md` | Triage generation-phase out-of-memory failures. |
-| `safe-synthesizer-artifact-locations` | `artifacts.md` | Find generated data, reports, metrics, logs, and adapters. |
-| `safe-synthesizer-negative-react-ui` | negative | Avoid activation for general React UI work. |
-| `safe-synthesizer-negative-general-dp` | negative | Avoid activation for a general differential privacy explainer. |
+- Positive tasks: 4 tasks where the skill was expected to activate.
+- Negative tasks: 2 tasks where no skill was expected.
+- Unlabeled tasks: 0 tasks where positive/negative intent could not be inferred.
+
+Task composition is derived from the evaluation dataset when possible. Entries with `expected_skill` set are treated as positive skill-activation cases, while entries with `expected_skill: null` are treated as negative activation cases.
 
 ## Results
 
-Pending NVSkills-Eval run.
+| Dimension | Num | `claude-code` | `codex` |
+|---|---:|---:|---:|
+| Security | 6 | 100% (+0%) | 100% (+0%) |
+| Correctness | 6 | 97% (+48%) | 88% (+26%) |
+| Discoverability | 6 | 95% (+53%) | 73% (+9%) |
+| Effectiveness | 6 | 87% (+42%) | 90% (+41%) |
+| Efficiency | 6 | 86% (+36%) | 71% (+9%) |
 
-## Publication Readiness
+Score values show skill-assisted performance. Values in parentheses show uplift versus the no-skill baseline when baseline data is available.
 
-Source-side artifacts added in this branch:
+## Tier 1: Static Validation Summary
 
-- `evals/evals.json`
-- `skill-card.md`
-- `BENCHMARK.md`
+Tier 1 validation passed with observations. NVSkills-Eval ran 1 checks and found 7 total findings.
 
-Remaining external publication step:
+Top findings:
 
-- Run NVSkills validation and signing so `skill.oms.sig` lands beside `SKILL.md`.
+- MEDIUM SCHEMA/body_recommended_section: Missing recommended section: '## Instructions' (`skills/safe-synthesizer/SKILL.md`)
+- MEDIUM SCHEMA/body_recommended_section: Missing recommended section: '## Examples' (`skills/safe-synthesizer/SKILL.md`)
+- MEDIUM SCHEMA/author_missing: Author not specified in metadata (`skills/safe-synthesizer/SKILL.md`)
+- LOW SCHEMA/unexpected_file: Unexpected 'config.md' in skill root (`skills/safe-synthesizer/config.md`)
+- LOW SCHEMA/unexpected_file: Unexpected 'run.md' in skill root (`skills/safe-synthesizer/run.md`)
+
+## Tier 2: Deduplication Summary
+
+This tier was not run or did not produce findings in this report.
+
+## Publication Recommendation
+
+The skill is suitable to proceed toward NVSkills-Eval publication based on this benchmark. Skill owners should keep this file with the skill and refresh it when the evaluation dataset, skill behavior, or target agents materially change.
