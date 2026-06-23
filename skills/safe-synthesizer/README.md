@@ -12,11 +12,11 @@ No install step is required when working from this source checkout. Agents that
 support project skills can discover this skill from:
 
 ```text
-.agents/skills/safe-synthesizer/
+skills/safe-synthesizer/
 ```
 
-The `skills/safe-synthesizer` path is a repository symlink for NVSkills and
-catalog workflows that watch top-level `skills/` paths.
+The `.agents/skills/safe-synthesizer` path is a repository symlink for
+agents that discover project skills from `.agents/skills/`.
 
 Ask a Safe Synthesizer usage question, or explicitly invoke the skill in an
 agent that supports slash-style skill calls:
@@ -32,7 +32,7 @@ From the target project root:
 ```bash
 SAFE_SYNTHESIZER_REPO=/path/to/Safe-Synthesizer
 mkdir -p .agents/skills
-cp -R "$SAFE_SYNTHESIZER_REPO/.agents/skills/safe-synthesizer" .agents/skills/
+cp -R "$SAFE_SYNTHESIZER_REPO/skills/safe-synthesizer" .agents/skills/
 ```
 
 For a user-level install:
@@ -40,7 +40,7 @@ For a user-level install:
 ```bash
 SAFE_SYNTHESIZER_REPO=/path/to/Safe-Synthesizer
 mkdir -p "$HOME/.agents/skills"
-cp -R "$SAFE_SYNTHESIZER_REPO/.agents/skills/safe-synthesizer" "$HOME/.agents/skills/"
+cp -R "$SAFE_SYNTHESIZER_REPO/skills/safe-synthesizer" "$HOME/.agents/skills/"
 ```
 
 ## Install from GitHub
@@ -53,9 +53,9 @@ DEST_DIR="$HOME/.agents/skills"
 TMP_DIR="$(mktemp -d)"
 git clone --depth 1 --filter=blob:none --sparse \
   https://github.com/NVIDIA-NeMo/Safe-Synthesizer.git "$TMP_DIR"
-git -C "$TMP_DIR" sparse-checkout set .agents/skills/safe-synthesizer
+git -C "$TMP_DIR" sparse-checkout set skills/safe-synthesizer
 mkdir -p "$DEST_DIR"
-cp -R "$TMP_DIR/.agents/skills/safe-synthesizer" "$DEST_DIR/"
+cp -R "$TMP_DIR/skills/safe-synthesizer" "$DEST_DIR/"
 rm -rf "$TMP_DIR"
 ```
 
@@ -65,7 +65,7 @@ project root.
 ## Publishable Package Notes
 
 To publish this as an installable skill, package the
-`.agents/skills/safe-synthesizer/` directory with:
+`skills/safe-synthesizer/` directory with:
 
 - version metadata
 - a README with install and usage examples

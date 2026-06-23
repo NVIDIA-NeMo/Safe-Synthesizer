@@ -162,9 +162,10 @@ Commands:
 
 ### Optional Agent Skill
 
-This repository includes an Agent Skill at `.agents/skills/safe-synthesizer/`.
-When working from a source checkout, no separate install step is required for
-agents that discover project skills from `.agents/skills/`.
+This repository includes an Agent Skill at `skills/safe-synthesizer/`. The
+`.agents/skills/safe-synthesizer` path is a repository symlink for agents that
+discover project skills from `.agents/skills/`.
+When working from a source checkout, no separate install step is required.
 
 Use it by asking an agent a Safe Synthesizer usage question, or by explicitly
 invoking the skill in an agent that supports slash-style skill calls, for
@@ -175,7 +176,7 @@ The skill routes common requests to task notes for running the CLI or SDK,
 setting parameters, diagnosing failures, and finding artifacts. It points the
 agent back to this user guide and the developer guide instead of duplicating
 the full documentation. For copy-based installs into another project or a
-user-level skill directory, see `.agents/skills/safe-synthesizer/README.md`.
+user-level skill directory, see `skills/safe-synthesizer/README.md`.
 
 ---
 
