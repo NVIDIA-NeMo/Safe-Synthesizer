@@ -43,11 +43,22 @@ is created.
 
 
 def _is_prediction(value: object) -> TypeIs[Prediction]:
-    return isinstance(value, NERPrediction) or isinstance(value, dict)
+    return isinstance(value, NERPrediction) or (isinstance(value, dict) and all(isinstance(key, str) for key in value))
 
 
 def _is_prediction_list(value: object) -> TypeIs[PredictionList]:
     return isinstance(value, list) and all(_is_prediction(item) for item in value)
+
+
+def _extend_single_predictions(target: PredictionList, out_data: object) -> None:
+    """Append worker output for a single input record to ``target``."""
+    if _is_prediction_list(out_data):
+        target.extend(out_data)
+        return
+    if isinstance(out_data, list):
+        for row in out_data:
+            if _is_prediction_list(row):
+                target.extend(row)
 
 
 def _set_ner_predictor(pipeline_factory: Callable[[], pipeline.Pipeline]):
@@ -241,9 +252,7 @@ class NERParallel:
                             if _is_prediction_list(row):
                                 batch_preds.append(row)
                     else:
-                        for prediction in payload.out_data:
-                            if _is_prediction(prediction):
-                                single_preds.append(prediction)
+                        _extend_single_predictions(single_preds, payload.out_data)
 
             else:
                 # Add an empty spot for each record in the chunk that wasn't completed

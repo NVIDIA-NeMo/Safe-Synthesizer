@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from numbers import Real
-from typing import Any, Literal, TypeAlias, TypedDict, overload
+from typing import Any, Literal, TypeAlias, TypedDict, TypeGuard, overload
 
 from typing_extensions import TypeIs
 
@@ -46,12 +46,16 @@ NERInputRows: TypeAlias = list[str] | list[NERInputRecord]
 RawPredictionRows: TypeAlias = list[list[object]]
 
 
-def _is_string_rows(rows: object) -> TypeIs[list[str]]:
+def _is_string_rows(rows: object) -> TypeGuard[list[str]]:
     return isinstance(rows, list) and bool(rows) and all(isinstance(row, str) for row in rows)
 
 
-def _is_record_rows(rows: object) -> TypeIs[list[NERInputRecord]]:
-    return isinstance(rows, list) and bool(rows) and all(isinstance(row, dict) for row in rows)
+def _is_record_rows(rows: object) -> TypeGuard[list[NERInputRecord]]:
+    return (
+        isinstance(rows, list)
+        and bool(rows)
+        and all(isinstance(row, dict) and all(isinstance(key, str) for key in row) for row in rows)
+    )
 
 
 def _is_raw_prediction_rows(value: object) -> TypeIs[RawPredictionRows]:

@@ -8,6 +8,8 @@ import pytest
 from nemo_safe_synthesizer.data_processing.records.fragment import NERRawPredictionPayload
 from nemo_safe_synthesizer.data_processing.records.json_record import JSONRecord
 from nemo_safe_synthesizer.pii_replacer.ner.model import Model
+from nemo_safe_synthesizer.pii_replacer.ner.ner import NERPrediction
+from nemo_safe_synthesizer.pii_replacer.ner.ner_mp import _extend_single_predictions
 from nemo_safe_synthesizer.pii_replacer.ner.utils import input_to_json_records
 
 
@@ -115,3 +117,12 @@ def test_input_to_json_records_rejects_unsupported_list_items():
 
     with pytest.raises(TypeError, match="Input data not supported"):
         input_to_json_records(bad_input)
+
+
+def test_extend_single_predictions_accepts_row_oriented_worker_output():
+    prediction = NERPrediction("alice@example.com", 0, 17, "email", "regex", 0.99)
+    target: list[NERPrediction | dict[str, Any]] = []
+
+    _extend_single_predictions(target, [[prediction]])
+
+    assert target == [prediction]
