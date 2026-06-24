@@ -8,6 +8,7 @@
 #     "pydantic",
 #     "proxy.py>=2.4.10",
 #     "structlog",
+#     "typing-extensions>=4.15.0",
 # ]
 # ///
 # pyright: reportMissingImports=false
@@ -74,7 +75,7 @@ import subprocess
 import sys
 import threading
 import time
-from contextlib import nullcontext
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
 from enum import IntEnum
 from multiprocessing import Manager
@@ -90,6 +91,7 @@ from proxy.http.exception import HttpRequestRejected
 from proxy.http.parser import HttpParser
 from proxy.http.proxy import HttpProxyBasePlugin
 from pydantic import BaseModel, ConfigDict, Field
+from typing_extensions import override
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -170,7 +172,7 @@ class ProxyState:
 class RunningServer:
     """Background proxy.py server instance."""
 
-    server: Proxy
+    server: AbstractContextManager[object]
     host: str
     port: int
     state: ProxyState
@@ -201,6 +203,7 @@ class GuardProxyPlugin(HttpProxyBasePlugin):
         cls.state = state
         cls.allow_passthrough_hf = allow_passthrough_hf
 
+    @override
     def before_upstream_connection(self, request: HttpParser) -> HttpParser | None:
         """Record the destination and decide whether proxy.py may connect upstream."""
         proxy_request = _proxy_request_from_proxy_py(request)
