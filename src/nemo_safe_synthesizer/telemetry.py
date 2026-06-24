@@ -26,7 +26,7 @@ from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING, Any, ClassVar
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from .observability import get_logger
 
@@ -261,8 +261,6 @@ class NSSTrainingAndGenerationEvent(BaseModel):
         default="undefined",
         description="GPU device name (e.g. 'NVIDIA A100 80GB PCIe'). 'undefined' if not on GPU.",
     )
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 @dataclass

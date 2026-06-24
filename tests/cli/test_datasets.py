@@ -10,7 +10,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-import nemo_safe_synthesizer.cli.datasets as datasets_mod
 from nemo_safe_synthesizer.cli.datasets import DatasetInfo, DatasetRegistry
 
 
@@ -190,7 +189,7 @@ class TestDatasetInfo:
         def fake_read_csv(*_args, **_kwargs) -> list[dict[str, int]]:
             return [{"col1": 1, "col2": 2}]
 
-        monkeypatch.setattr(datasets_mod.pd, "read_csv", fake_read_csv)
+        monkeypatch.setattr(pd, "read_csv", fake_read_csv)
 
         info = DatasetInfo(name="test", url=str(csv_file))
 

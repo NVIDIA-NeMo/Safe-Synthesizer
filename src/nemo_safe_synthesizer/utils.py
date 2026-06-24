@@ -39,7 +39,7 @@ _HF_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
 
 
 def _is_statistics_list(stats: Statistics | list[Statistics]) -> TypeIs[list[Statistics]]:
-    return isinstance(stats, list)
+    return isinstance(stats, list) and all(isinstance(stat, Statistics) for stat in stats)
 
 
 def env_flag_is_true(name: str, *, default: bool = False) -> bool:

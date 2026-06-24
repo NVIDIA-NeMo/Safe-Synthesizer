@@ -38,10 +38,10 @@ def test_contract_tensor_rejects_non_tensor_result(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(linear_mod, "contract", fake_contract)
 
-    with pytest.raises(TypeError, match="expected opt_einsum.contract"):
+    with pytest.raises(TypeError, match=r"expected opt_einsum\.contract"):
         linear_mod._contract_tensor("n->n", torch.ones(1))
 
 
 def test_linear_parameter_rejects_plain_tensor():
-    with pytest.raises(TypeError, match="expected nn.Linear parameter"):
+    with pytest.raises(TypeError, match=r"expected nn\.Linear parameter"):
         linear_mod._linear_parameter(torch.ones(1))

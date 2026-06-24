@@ -47,12 +47,19 @@ def test_aia_tabular_unit_exercises_entropy_weighting(monkeypatch: pytest.Monkey
     assert list(col_accuracy_df["Column"]) == ["stable", "binary", "varied"]
 
 
-def test_aia_wide_table_uses_windowed_quasi_identifier_combinations():
+def test_aia_wide_table_uses_windowed_quasi_identifier_combinations(monkeypatch: pytest.MonkeyPatch):
     """Cover the wide-table fallback that avoids materializing all combinations."""
     columns = [f"col_{index}" for index in range(501)]
     values = np.vstack([np.arange(501), np.arange(501) + 1])
     training_df = pd.DataFrame(values, columns=columns)
     synthetic_df = training_df.copy()
+    synth_calls: list[tuple[str, ...]] = []
+
+    def fake_get_synth_nn(train_row, *_args, **_kwargs) -> pd.DataFrame:
+        synth_calls.append(tuple(train_row.columns))
+        return synthetic_df.head(2)
+
+    monkeypatch.setattr(AttributeInferenceProtection, "_get_synth_nn", staticmethod(fake_get_synth_nn))
 
     score, col_accuracy_df = AttributeInferenceProtection._aia(
         training_df=training_df,
@@ -63,6 +70,8 @@ def test_aia_wide_table_uses_windowed_quasi_identifier_combinations():
     assert score.score is not None
     assert col_accuracy_df is not None
     assert len(col_accuracy_df) == len(columns)
+    assert len(synth_calls) == 2
+    assert set(synth_calls) == {tuple(columns[:500]), tuple(columns[1:])}
 
 
 @pytest.mark.slow

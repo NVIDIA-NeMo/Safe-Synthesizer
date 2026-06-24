@@ -28,6 +28,7 @@ def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
 
 
 def _dynamic_callable(value: object) -> Any:
+    """Widen dynamic pandas reader callables for dispatch through ``Any``."""
     return value
 
 

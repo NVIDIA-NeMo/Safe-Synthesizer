@@ -371,7 +371,7 @@ class AttributeInferenceProtection(Component):
                 qi_combos = list(itertools.combinations(training_columns, quasi_identifier_count))
             else:
                 qi_combos = []
-                for i in range(len(training_columns) - quasi_identifier_count):
+                for i in range(len(training_columns) - quasi_identifier_count + 1):
                     combo = []
                     for j in range(quasi_identifier_count):
                         combo.append(training_columns[i + j])
@@ -430,13 +430,14 @@ class AttributeInferenceProtection(Component):
                     more_to_process = False
                     continue
 
-                # Randomly sample columns to be the `qi`
-                qi = qi_combos[qi_index]
-                qi_index += 1
                 # We stop processing if all qi combos have been processed.
                 if qi_index == len(qi_combos):
                     more_to_process = False
                     continue
+
+                # Randomly sample columns to be the `qi`
+                qi = qi_combos[qi_index]
+                qi_index += 1
 
                 # Predict columns are all but the `qi`
                 predict_columns = [column for column in training_columns if column not in qi]

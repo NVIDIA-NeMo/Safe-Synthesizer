@@ -58,6 +58,8 @@ def compute_linear_grad_sample(
     weight = _linear_parameter(layer.weight)
     if weight.requires_grad:
         ret[weight] = _contract_tensor("n...i,n...j->nij", backprops.float(), activation.float())
-    if layer.bias is not None and layer.bias.requires_grad:
-        ret[layer.bias] = _contract_tensor("n...k->nk", backprops.float())
+    if layer.bias is not None:
+        bias = _linear_parameter(layer.bias)
+        if bias.requires_grad:
+            ret[bias] = _contract_tensor("n...k->nk", backprops.float())
     return ret
