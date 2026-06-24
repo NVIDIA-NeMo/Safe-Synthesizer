@@ -29,6 +29,7 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widgets import DataTable, Footer, Header, RichLog, Static
+from typing_extensions import override
 
 # squeue format fields and matching column headers
 _SQUEUE_FIELDS = ["%i", "%j", "%T", "%P", "%M", "%l", "%D", "%C", "%R"]
@@ -176,6 +177,7 @@ class NSSTop(App[None]):
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
+    @override
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Vertical():

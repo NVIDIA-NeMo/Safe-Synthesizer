@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pydantic import Field
+from typing_extensions import override
 
 from ...artifacts.analyzers.field_features import (
     FieldType,
@@ -29,6 +30,7 @@ class SQSScore(CompositeScore):
     name: str = Field(default="Synthetic Quality Score")
 
     @staticmethod
+    @override
     def from_components(components: list[Component] | Component, name: str = "Synthetic Quality Score") -> SQSScore:
         """Compute the SQS from a list of quality sub-metric components."""
         if isinstance(components, Component):

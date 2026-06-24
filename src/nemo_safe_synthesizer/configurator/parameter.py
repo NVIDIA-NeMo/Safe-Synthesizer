@@ -13,10 +13,12 @@ from __future__ import annotations
 import operator
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, cast, get_args
+from types import NotImplementedType
+from typing import Any, Generic, TypeVar, get_args
 
 from pydantic import BaseModel, GetCoreSchemaHandler, model_serializer
 from pydantic_core import core_schema
+from typing_extensions import override
 
 DataT = TypeVar(
     "DataT", bound=(int | float | str | bytes | bool | None | Sequence[int | float | str | bytes | bool | BaseModel])
@@ -55,6 +57,7 @@ class Parameter(Generic[DataT]):
         else:
             return self
 
+    @override
     def __str__(self):
         return self.__repr__()
 
@@ -86,7 +89,7 @@ class Parameter(Generic[DataT]):
         non_instance_schema = core_schema.no_info_before_validator_function(cls, sequence_t_schema)
         return core_schema.union_schema([instance_schema, non_instance_schema])
 
-    def _comp_helper(self, other: "Parameter[DataT] | DataT", op: Callable[[Any, Any], bool]) -> bool | None:
+    def _comp_helper(self, other: object, op: Callable[[Any, Any], bool]) -> bool | NotImplementedType:
         """Apply a comparison operator ``op`` to ``self.value`` and the unwrapped value of ``other``."""
         match other:
             case Parameter(value=y) if isinstance(self.value, type(y)):
@@ -108,6 +111,7 @@ class Parameter(Generic[DataT]):
     def __lt__(self, other: "Parameter[DataT] | DataT") -> bool | None:
         return self._comp_helper(other, operator.__lt__)
 
+    @override
     def __eq__(self, other: object) -> bool:
-        result = self._comp_helper(cast("Parameter[DataT] | DataT", other), operator.__eq__)
-        return cast(bool, result)
+        result = self._comp_helper(other, operator.__eq__)
+        return False if result is NotImplemented else result

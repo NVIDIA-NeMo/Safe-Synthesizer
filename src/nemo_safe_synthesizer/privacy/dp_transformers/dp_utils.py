@@ -27,7 +27,6 @@ import safetensors.torch  # transformers v5 makes safetensors a hard dep
 import torch
 from accelerate.optimizer import AcceleratedOptimizer
 from datasets import Dataset
-from opacus.accountants import RDPAccountant
 from peft import PeftModel
 from torch import nn
 from torch.utils.data import DataLoader
@@ -45,6 +44,7 @@ from transformers import (
     utils,
 )
 from transformers.trainer import TRAINING_ARGS_NAME
+from typing_extensions import override
 
 from ...observability import get_logger
 from . import linear  # imported for side effects  # noqa
@@ -89,6 +89,7 @@ class DPCallback(TrainerCallback):
         self.noise_multiplier = noise_multiplier
         self.sampling_probability = sampling_probability
 
+    @override
     def on_substep_end(
         self,
         args: training_args.TrainingArguments,
@@ -126,6 +127,7 @@ class DPCallback(TrainerCallback):
 
         self._on_substep_end_was_called = True
 
+    @override
     def on_step_end(
         self,
         args: training_args.TrainingArguments,
@@ -166,12 +168,13 @@ class DPCallback(TrainerCallback):
         if not self.accountant.use_prv:
             # Use RDPAccountant, which uses `.step()` to increment number of
             # steps, required for accurate epsilon calculation.
-            acct = cast(RDPAccountant, self.accountant.accountant)
+            acct = self.accountant.rdp_accountant()
             acct.step(
                 noise_multiplier=self.noise_multiplier,
                 sample_rate=self.sampling_probability,
             )
 
+    @override
     def on_save(
         self,
         args: training_args.TrainingArguments,
@@ -194,6 +197,7 @@ class DPCallback(TrainerCallback):
         """
         return self._check_max_epsilon_exceeded(state, control)
 
+    @override
     def on_evaluate(
         self,
         args: training_args.TrainingArguments,
@@ -252,6 +256,7 @@ class DataCollatorForPrivateCausalLanguageModeling(DataCollatorForLanguageModeli
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer, mlm=False)
 
+    @override
     def __call__(
         self,
         features,
@@ -288,6 +293,7 @@ class DataCollatorForPrivateTokenClassification(DataCollatorForTokenClassificati
     def __init__(self, tokenizer: PreTrainedTokenizer):
         super().__init__(tokenizer=tokenizer)
 
+    @override
     def __call__(
         self,
         features,
@@ -503,6 +509,7 @@ class OpacusDPTrainer(Trainer):
                 )
             return _num_steps
 
+    @override
     def create_optimizer(self, model: nn.Module | None = None) -> torch.optim.Optimizer:
         """Create the base optimizer then wrap it with Opacus DPOptimizer."""
         _ = model  # Signature matches transformers v5; base method uses self.model.
@@ -516,10 +523,12 @@ class OpacusDPTrainer(Trainer):
             optimizer so learning rate scheduling and other param_group updates work.
             """
 
+            @override
             @property
             def param_groups(self) -> list:
                 return self.original_optimizer.param_groups
 
+            @override
             @param_groups.setter
             def param_groups(self, param_groups: list) -> None:
                 self.original_optimizer.param_groups = param_groups
@@ -542,6 +551,7 @@ class OpacusDPTrainer(Trainer):
 
         return self.optimizer
 
+    @override
     def training_step(
         self,
         model: nn.Module,
@@ -583,6 +593,7 @@ class OpacusDPTrainer(Trainer):
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
+    @override
     def _get_train_sampler(self, train_dataset: Dataset | None = None) -> torch.utils.data.Sampler | None:  # ty: ignore[invalid-method-override] -- HF Trainer stub imprecision
         """Return the entity-level (or record-level) sampler for training."""
         ds = train_dataset if train_dataset is not None else self.train_dataset
@@ -607,6 +618,7 @@ class OpacusDPTrainer(Trainer):
             batch_size=self.args.per_device_train_batch_size,
         )
 
+    @override
     def get_train_dataloader(self) -> DataLoader:
         """Returns a torch DataLoader that uses an entity-level sampler."""
         train_dataset = self.train_dataset
@@ -621,6 +633,7 @@ class OpacusDPTrainer(Trainer):
             pin_memory=self.args.dataloader_pin_memory,
         )
 
+    @override
     def _save(self, output_dir: str | None = None, state_dict: dict[str, Any] | None = None) -> None:
         """Save the PEFT adapter (unwrap GradSampleModule) and tokenizer.
 

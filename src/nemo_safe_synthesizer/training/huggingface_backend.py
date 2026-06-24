@@ -11,9 +11,8 @@ import math
 import time
 from collections.abc import Callable
 from contextlib import redirect_stdout
-from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -36,6 +35,7 @@ from transformers import (
 )
 from transformers.trainer_pt_utils import get_model_param_count
 from transformers.utils.quantization_config import QuantizationConfigMixin
+from typing_extensions import override
 
 from .. import utils
 from ..cli.artifact_structure import BoundDir
@@ -84,6 +84,11 @@ logger = get_logger(__name__)
 
 DEFAULT_ROPE_THETA = 10000.0
 
+# Training arguments fixed by Safe Synthesizer at runtime.
+#
+# Training duration is controlled by ``num_input_records_to_sample`` and the
+# assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
+# Trainer behavior stable across CLI and SDK entry points.
 FIXED_RUNTIME_TRAINING_ARGS = {
     # the training time is set by the number of training records
     "num_train_epochs": 1,
@@ -95,12 +100,27 @@ FIXED_RUNTIME_TRAINING_ARGS = {
     "bf16": True,
     "ddp_find_unused_parameters": False,
 }
-"""Training arguments fixed by Safe Synthesizer at runtime.
 
-Training duration is controlled by ``num_input_records_to_sample`` and the
-assembled ``data_fraction``, not by epochs. These values keep the HuggingFace
-Trainer behavior stable across CLI and SDK entry points.
-"""
+
+def _standard_trainer_factory(**kwargs: Any) -> Trainer:
+    return Trainer(**kwargs)
+
+
+def _opacus_trainer_factory(
+    *,
+    privacy_args: PrivacyArguments,
+    true_dataset_size: int,
+    data_fraction: float,
+) -> Callable[..., Trainer]:
+    def factory(**kwargs: Any) -> Trainer:
+        return OpacusDPTrainer(
+            privacy_args=privacy_args,
+            true_dataset_size=true_dataset_size,
+            data_fraction=data_fraction,
+            **kwargs,
+        )
+
+    return factory
 
 
 class HuggingFaceBackend(TrainingBackend):
@@ -119,7 +139,7 @@ class HuggingFaceBackend(TrainingBackend):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trainer_type: type[Trainer] | partial[OpacusDPTrainer] = Trainer
+        self.trainer_type: Callable[..., Trainer] = _standard_trainer_factory
         self.model_loader_type = AutoModelForCausalLM
         self.training_output_dir = Path(self.workdir.train.cache)
         self.model_ref = ModelRef.parse(self.params.training.pretrained_model)
@@ -306,6 +326,7 @@ class HuggingFaceBackend(TrainingBackend):
         logger.warning(msg)
 
     @traced_runtime("prepare_config")
+    @override
     def prepare_config(self, add_max_memory: bool = True, **kwargs: Any) -> None:
         """Set common model arguments for initializing a model.
 
@@ -371,6 +392,7 @@ class HuggingFaceBackend(TrainingBackend):
                 logger.info(f"using loftq with {scheme.effective_bits} bits")
                 self.quant_params["loftq_config"] = LoftQConfig(loftq_bits=scheme.effective_bits)
 
+    @override
     def maybe_quantize(self, **quant_params: dict) -> None:
         """Apply LoRA wrapping (and optional k-bit quantization) to the model."""
         self._prepare_quantize_base(**quant_params)
@@ -392,6 +414,7 @@ class HuggingFaceBackend(TrainingBackend):
             f"Using PEFT - {parameter_count:.2f} million parameters are trainable",
         )
 
+    @override
     def load_model(self, **model_args: Any) -> None:
         """Load an ``AutoModelForCausalLM`` instance with specified arguments.
 
@@ -494,8 +517,7 @@ class HuggingFaceBackend(TrainingBackend):
             per_sample_max_grad_norm=privacy.per_sample_max_grad_norm,
         )
 
-        self.trainer_type = partial(  # ty: ignore[invalid-assignment] -- partial is assignable at runtime
-            OpacusDPTrainer,
+        self.trainer_type = _opacus_trainer_factory(
             privacy_args=privacy_args,
             true_dataset_size=self.true_dataset_size,
             data_fraction=self.data_fraction,
@@ -537,8 +559,7 @@ class HuggingFaceBackend(TrainingBackend):
         Returns:
             The configured Trainer instance.
         """
-        factory = cast(Callable[..., Trainer], self.trainer_type)
-        trainer = factory(
+        trainer = self.trainer_type(
             model=self.model,
             processing_class=self.tokenizer,
             args=training_args,
@@ -601,6 +622,7 @@ class HuggingFaceBackend(TrainingBackend):
         )
 
     @traced_runtime("prepare_params")
+    @override
     def prepare_params(self, **training_args: Any) -> None:
         """Prepare training parameters and create the trainer.
 
@@ -700,6 +722,7 @@ class HuggingFaceBackend(TrainingBackend):
             }
             logger.user.info("", extra=extra)
 
+    @override
     def prepare_training_data(self) -> None:
         """Validate, preprocess, and tokenize the training dataset.
 
@@ -778,6 +801,7 @@ class HuggingFaceBackend(TrainingBackend):
             self.model_metadata.max_tokens_per_example = int(math.ceil(tokens_per_example.max))
 
     @utils.time_function
+    @override
     def train(self, **training_args: Any) -> None:
         """Run the full training pipeline and populate ``results``.
 
@@ -807,6 +831,7 @@ class HuggingFaceBackend(TrainingBackend):
             elapsed_time=training_time_sec,
         )
 
+    @override
     def save_model(self) -> None:
         """Save the fine-tuning adapter and related artifacts under ``self.workdir``.
 
@@ -837,6 +862,7 @@ class HuggingFaceBackend(TrainingBackend):
             indent=4,
         )
 
+    @override
     def teardown(self) -> None:
         """Release GPU memory, distributed resources, and trainer state. Idempotent -- safe to call multiple times."""
         if getattr(self, "_torn_down", False):
@@ -871,6 +897,7 @@ class HuggingFaceBackend(TrainingBackend):
         except Exception:
             logger.warning("destroy_process_group failed during teardown", exc_info=True)
 
+    @override
     def __str__(self):
         f = f"HuggingFaceBackend(pretrained_model={self.params.training.pretrained_model}, params={self.params})"
         return f

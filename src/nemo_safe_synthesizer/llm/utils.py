@@ -15,7 +15,9 @@ import json
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeAlias, cast
+
+from typing_extensions import TypeIs
 
 from ..observability import get_logger
 
@@ -27,6 +29,17 @@ if TYPE_CHECKING:
     from ..config.training import QuantizationScheme
 
 logger = get_logger(__name__)
+
+AutoMapValue: TypeAlias = str | list[object]
+WeightMap: TypeAlias = dict[str, str]
+
+
+def _is_weight_map(value: object) -> TypeIs[WeightMap]:
+    return (
+        isinstance(value, dict)
+        and bool(value)
+        and all(isinstance(key, str) and isinstance(shard_name, str) for key, shard_name in value.items())
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,25 +314,27 @@ class ModelRef:
         except (OSError, json.JSONDecodeError):
             return []
 
-        auto_map = data.get("auto_map")
-        if not isinstance(auto_map, dict):
-            return []
-
-        components: list[tuple[str, Path | None]] = []
-        for value in auto_map.values():
-            for class_ref in cls._auto_map_class_refs(value):
-                component = cls._remote_code_component(class_ref)
-                if component is not None:
-                    components.append(component)
-        return components
+        match data.get("auto_map"):
+            case dict() as auto_map:
+                components: list[tuple[str, Path | None]] = []
+                for value in auto_map.values():
+                    match value:
+                        case (str() | list()) as auto_map_value:
+                            for class_ref in cls._auto_map_class_refs(auto_map_value):
+                                component = cls._remote_code_component(class_ref)
+                                if component is not None:
+                                    components.append(component)
+                return components
+            case _:
+                return []
 
     @staticmethod
-    def _auto_map_class_refs(value: object) -> list[str]:
-        if isinstance(value, str):
-            return [value]
-        if isinstance(value, list):
-            return [item for item in value if isinstance(item, str)]
-        return []
+    def _auto_map_class_refs(value: AutoMapValue) -> list[str]:
+        match value:
+            case str() as class_ref:
+                return [class_ref]
+            case list() as class_refs:
+                return [item for item in class_refs if isinstance(item, str)]
 
     @staticmethod
     def _remote_code_component(class_ref: str) -> tuple[str, Path | None] | None:
@@ -352,14 +367,11 @@ class ModelRef:
         except (OSError, json.JSONDecodeError):
             return False
 
-        weight_map = data.get("weight_map")
-        if not isinstance(weight_map, dict) or not weight_map:
-            return False
-
-        shard_names = {name for name in weight_map.values() if isinstance(name, str)}
-        if not shard_names:
-            return False
-        return all((model_dir / name).is_file() for name in shard_names)
+        match data.get("weight_map"):
+            case weight_map if _is_weight_map(weight_map):
+                return all((model_dir / shard_name).is_file() for shard_name in set(weight_map.values()))
+            case _:
+                return False
 
     def partial_cached_snapshot(self) -> Path | None:
         """Return the local HF snapshot for this repo/revision, even if it is partial."""

@@ -21,6 +21,7 @@ from pandas.api.types import is_float_dtype
 from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.preprocessing import QuantileTransformer
+from typing_extensions import override
 
 from ...config.evaluate import QUASI_IDENTIFIER_COUNT
 from ...config.parameters import SafeSynthesizerParameters
@@ -68,6 +69,7 @@ class AttributeInferenceProtection(Component):
         return d
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> AttributeInferenceProtection:

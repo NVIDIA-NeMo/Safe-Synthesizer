@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 from rich.console import Console
 from transformers import PretrainedConfig, PreTrainedTokenizerBase
+from typing_extensions import override
 
 from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
@@ -59,10 +60,12 @@ def _issue_by_code(issues: list[PreflightIssue], code: str) -> PreflightIssue:
 class _PseudoColumnSensitiveTokenizer(PreTrainedTokenizerBase):
     """Tokenizer that makes pseudo-column leakage visible in budget tests."""
 
+    @override
     def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
         assert add_special_tokens is False
         return []
 
+    @override
     def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
         assert add_special_tokens is False
         return {"input_ids": [[0] * (100 if PSEUDO_GROUP_COLUMN in text else 1) for text in texts]}
@@ -1426,6 +1429,7 @@ class TestDependencyGating:
             name = "plugintest.base"
             label = "Base"
 
+            @override
             def check(self, ctx, collector):
                 collector.error("test_err", "forced error")
 
@@ -1434,6 +1438,7 @@ class TestDependencyGating:
             label = "Dependent"
             requires = ("plugintest.base",)
 
+            @override
             def check(self, ctx, collector):
                 return
 
@@ -1441,6 +1446,7 @@ class TestDependencyGating:
             name = "plugintest.indep"
             label = "Independent"
 
+            @override
             def check(self, ctx, collector):
                 return
 
@@ -1458,6 +1464,7 @@ class TestDependencyGating:
             name = "plugintest.warn_base"
             label = "Base"
 
+            @override
             def check(self, ctx, collector):
                 collector.warning("test_warn", "just a warning")
 
@@ -1466,6 +1473,7 @@ class TestDependencyGating:
             label = "Dependent"
             requires = ("plugintest.warn_base",)
 
+            @override
             def check(self, ctx, collector):
                 return
 
@@ -1482,6 +1490,7 @@ class TestDependencyGating:
             name = "plugintest.advisory_base"
             label = "Advisory base"
 
+            @override
             def check(self, ctx, collector):
                 collector.error("advisory_err", "advisory error")
 
@@ -1490,6 +1499,7 @@ class TestDependencyGating:
             label = "Dependent"
             requires = ("plugintest.advisory_base",)
 
+            @override
             def check(self, ctx, collector):
                 return
 

@@ -9,7 +9,7 @@ import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 import click
 
@@ -35,8 +35,11 @@ if TYPE_CHECKING:
     from ..sdk.library_builder import SafeSynthesizer
     from .artifact_structure import Workdir
 
+P = ParamSpec("P")
+R = TypeVar("R")
 
-def common_run_options(f: Callable[..., object]) -> Callable[..., object]:
+
+def common_run_options(f: Callable[P, R]) -> Callable[P, R]:
     """Decorator to add common options for run commands.
 
     Apply this above ``@pydantic_options`` in source order. Python applies

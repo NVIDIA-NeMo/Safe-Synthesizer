@@ -8,6 +8,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Protocol
 
+from typing_extensions import override
+
 from ..config import SafeSynthesizerParameters
 from ..config.generate import ValidationParameters
 from ..data_processing.record_utils import (
@@ -130,6 +132,7 @@ class Processor(ABC):
 class TabularDataProcessor(Processor):
     """Processor for standard (non-grouped, non-time-series) tabular data."""
 
+    @override
     def _process_text_generation(self, text: str) -> ParsedResponse:
         """Extract and validate records from a flat JSONL string.
 
@@ -189,6 +192,7 @@ class TimeSeriesDataProcessor(Processor):
         self.interval_seconds = interval_seconds
         self.time_format: str = time_format
 
+    @override
     def _process_text_generation(self, text: str) -> ParsedResponse:
         """Extract, validate, and check temporal ordering of time-series records.
 
@@ -244,6 +248,7 @@ class GroupedDataProcessor(Processor):
         self.bos_token = bos_token
         self.eos_token = eos_token
 
+    @override
     def _process_text_generation(self, text: str) -> ParsedResponse:
         """Process the output from the fine-tuned model.
 

@@ -8,6 +8,7 @@ from functools import cached_property
 import pandas as pd
 from plotly.graph_objects import Figure
 from pydantic import BaseModel, Field
+from typing_extensions import override
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.parameters import SafeSynthesizerParameters
@@ -121,6 +122,7 @@ class ColumnDistribution(Component):
         return d
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> ColumnDistribution:

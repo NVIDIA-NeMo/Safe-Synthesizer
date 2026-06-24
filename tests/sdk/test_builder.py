@@ -12,7 +12,7 @@ from nemo_safe_synthesizer.config.replace_pii import (
     DEFAULT_PII_TRANSFORM_CONFIG,
     PiiReplacerConfig,
 )
-from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _emit_nss_telemetry
+from nemo_safe_synthesizer.sdk.library_builder import SafeSynthesizer, _build_telemetry_event, _emit_nss_telemetry
 from nemo_safe_synthesizer.telemetry import DeploymentTypeEnum, TaskStatusEnum
 
 _SMALL_DF = pd.DataFrame({"a": [1, 2, 3]})
@@ -401,6 +401,16 @@ def _builder_for_telemetry() -> SafeSynthesizer:
 
 
 class TestTelemetryEmission:
+    def test_build_telemetry_event_buckets_dataframe_input(self, monkeypatch):
+        monkeypatch.setattr("nemo_safe_synthesizer.sdk.library_builder.get_device_name", lambda: "undefined")
+        builder = _builder_for_telemetry()
+        builder._data_source = pd.DataFrame({f"col_{idx}": range(250) for idx in range(6)})
+
+        event = _build_telemetry_event(builder, TaskStatusEnum.COMPLETED)
+
+        assert event.input_records_bucket == "201-1000"
+        assert event.input_columns_bucket == "6-10"
+
     def test_run_emits_completed_after_save_results(self, monkeypatch, tmp_path: Path):
         builder = SafeSynthesizer(config=SafeSynthesizerParameters(), save_path=tmp_path)
         emitted = []

@@ -8,6 +8,8 @@ from __future__ import annotations
 import abc
 from collections.abc import Callable
 
+from typing_extensions import override
+
 from .. import utils
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
@@ -56,6 +58,7 @@ class GeneratorBackend(metaclass=abc.ABCMeta):
     """Working directory containing model artifacts."""
 
     @classmethod
+    @override
     def __subclasshook__(cls, subclass):
         return (
             hasattr(subclass, "prepare_args")

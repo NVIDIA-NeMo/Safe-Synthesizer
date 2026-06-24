@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import pytest
+from typing_extensions import override
 
 from nemo_safe_synthesizer.preflight import (
     AdvisoryCheck,
@@ -25,6 +26,7 @@ class _NoopConfig(ConfigCheck):
     name = "plugintest.noop_cfg"
     label = "Noop config"
 
+    @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         return
 
@@ -33,6 +35,7 @@ class _NoopConfigB(ConfigCheck):
     name = "plugintest.noop_cfg_b"
     label = "Noop config B"
 
+    @override
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         return
 
@@ -41,6 +44,7 @@ class _NoopDataFrame(DataFrameCheck):
     name = "plugintest.noop_df"
     label = "Noop df"
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         return
 
@@ -49,6 +53,7 @@ class _NoopMetadata(MetadataCheck):
     name = "plugintest.noop_meta"
     label = "Noop meta"
 
+    @override
     def check(self, ctx: MetadataView, collector: IssueCollector) -> None:
         return
 
@@ -57,6 +62,7 @@ class _NoopAdvisory(AdvisoryCheck):
     name = "plugintest.noop_adv"
     label = "Noop advisory"
 
+    @override
     def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
         return
 
@@ -84,6 +90,7 @@ def test_build_registry_rejects_unknown_requires():
         label = "Needs missing"
         requires = ("plugintest.does_not_exist",)
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -97,6 +104,7 @@ def test_build_registry_rejects_out_of_order_requires():
         name = "plugintest.leader"
         label = "Leader"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -105,6 +113,7 @@ def test_build_registry_rejects_out_of_order_requires():
         label = "Needs leader"
         requires = ("plugintest.leader",)
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 

@@ -11,6 +11,7 @@ from typing import cast
 import pandas as pd
 import pytest
 from transformers import BatchEncoding, PreTrainedTokenizerBase
+from typing_extensions import override
 
 from nemo_safe_synthesizer.data_processing.budget import (
     compute_max_new_tokens,
@@ -26,11 +27,13 @@ class _RecordingTokenizer(PreTrainedTokenizerBase):
         self.texts: list[str] = []
         self.encoded_text = ""
 
+    @override
     def __call__(self, texts: list[str], *, add_special_tokens: bool) -> dict[str, list[list[int]]]:
         assert add_special_tokens is False
         self.texts = texts
         return {"input_ids": [[ord(char) for char in text] for text in texts]}
 
+    @override
     def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
         assert add_special_tokens is False
         self.encoded_text = text
@@ -79,10 +82,12 @@ class _BatchEncodingTokenizer(PreTrainedTokenizerBase):
     def __init__(self) -> None:
         self.encode_calls = 0
 
+    @override
     def __call__(self, texts: list[str], *, add_special_tokens: bool) -> BatchEncoding:
         assert add_special_tokens is False
         return BatchEncoding({"input_ids": [[ord(char) for char in text] for text in texts]})
 
+    @override
     def encode(self, text: str, *, add_special_tokens: bool) -> list[int]:
         assert add_special_tokens is False
         self.encode_calls += 1

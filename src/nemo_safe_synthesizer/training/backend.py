@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from transformers import (
     TrainerCallback,
     TrainingArguments,
 )
+from typing_extensions import override
 
 from ..cli.artifact_structure import Workdir
 from ..config import SafeSynthesizerParameters
@@ -117,8 +119,8 @@ class TrainingBackend(metaclass=abc.ABCMeta):
     load_params: dict
     """Raw parameters used when calling ``from_pretrained``."""
 
-    trainer_type: type[OpacusDPTrainer | Trainer]
-    """Trainer class to instantiate -- standard ``Trainer`` or ``OpacusDPTrainer`` for DP."""
+    trainer_type: Callable[..., Trainer]
+    """Trainer factory to instantiate standard or DP-aware HuggingFace trainers."""
 
     trainer: OpacusDPTrainer | Trainer
     """Instantiated trainer, created during ``prepare_params``."""
@@ -187,6 +189,7 @@ class TrainingBackend(metaclass=abc.ABCMeta):
         self.workdir = workdir
 
     @classmethod
+    @override
     def __subclasshook__(cls, subclass):
         if cls is not TrainingBackend:
             return NotImplemented

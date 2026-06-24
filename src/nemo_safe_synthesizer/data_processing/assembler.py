@@ -20,6 +20,7 @@ from datasets import Dataset, concatenate_datasets
 from datasets.exceptions import DatasetGenerationError
 from tqdm.auto import tqdm
 from transformers import PreTrainedTokenizer
+from typing_extensions import override
 
 from .. import utils
 from ..config.parameters import SafeSynthesizerParameters
@@ -564,15 +565,18 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
         super().__init__(*args, **kwargs)
 
     @property
+    @override
     def num_records_train(self) -> int:
         """Number of records in the training split."""
         return len(self.training_dataset)
 
     @property
+    @override
     def num_records_validation(self) -> int:
         """Number of records in the validation split."""
         return 0 if self.validation_dataset is None else len(self.validation_dataset)
 
+    @override
     def _preprocess_before_splitting(self, tokenized_records: Dataset) -> Dataset:
         """Tabular data examples do not require any preprocessing before splitting."""
         return tokenized_records
@@ -687,6 +691,7 @@ class TabularDataExampleAssembler(TrainingExampleAssembler):
         res = self._run_example_generation(self._fill_context_with_records_generator, processed_dataset)
         return res
 
+    @override
     def assemble_training_examples(self, data_fraction: float = 1.0) -> TrainingExamples:
         """Build examples with randomly shuffled records.
 
@@ -917,6 +922,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         )
         self.schema_prompt_ids = tokenizer(self.schema_prompt, add_special_tokens=False)["input_ids"]
 
+    @override
     def _preprocess_before_splitting(self, tokenized_records: Dataset) -> Dataset:
         """No preprocessing needed - sorting is done after split in _apply_grouped_train_test_split."""
         return tokenized_records
@@ -989,6 +995,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         # Convert lists to joined strings
         return {group: " " + "\n".join(samples) for group, samples in seen_groups.items()}
 
+    @override
     def _apply_train_test_split(self, dataset: Dataset) -> None:
         """Override split logic to preserve record order and split along group boundaries."""
         self._apply_grouped_train_test_split(dataset)
@@ -1036,6 +1043,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         validation_dataset.info.description += "is_val"
         self.validation_dataset = _maybe_add_row_indices(validation_dataset, self._ROW_INDEX_COLUMN)
 
+    @override
     def _prepare_dataset_for_training(
         self, dataset: Dataset | None, data_fraction: float, rng: np.random.Generator
     ) -> Dataset | None:
@@ -1079,6 +1087,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
 
         return self._run_example_generation(self._fill_context_with_records_generator, processed_dataset)
 
+    @override
     def assemble_training_examples(self, data_fraction: float = 1.0) -> TrainingExamples:
         """Build examples preserving sequential order within groups.
 
@@ -1152,6 +1161,7 @@ class SequentialExampleAssembler(TabularDataExampleAssembler):
         stats_target["tokens_per_example"].update(example.num_tokens)
         return example.to_dict()
 
+    @override
     def _fill_context_with_records_generator(self, dataset: Dataset) -> GeneratorType:
         """Generate ordered examples, flushing at group and dataset boundaries.
 
@@ -1342,11 +1352,13 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
             self.validation_dataset = None
 
     @property
+    @override
     def num_records_train(self) -> int:
         """Total number of individual records across all training groups."""
         return sum(self.training_dataset["num_records"])
 
     @property
+    @override
     def num_records_validation(self) -> int:
         """Total number of individual records across all validation groups."""
         return 0 if self.validation_dataset is None else sum(self.validation_dataset["num_records"])
@@ -1361,6 +1373,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
         """Number of groups in the validation split."""
         return 0 if self.validation_dataset is None else len(self.validation_dataset)
 
+    @override
     def _preprocess_before_splitting(self, tokenized_records: Dataset) -> Dataset:
         """Group and order the tokenized records before splitting the dataset."""
         if self.order_by is not None:
@@ -1538,6 +1551,7 @@ class GroupedDataExampleAssembler(TrainingExampleAssembler):
 
         return self._run_example_generation(self._fill_context_with_groups_generator, processed_dataset)
 
+    @override
     def assemble_training_examples(self, data_fraction: float = 1.0) -> TrainingExamples:
         """Build examples with grouped (and optionally ordered) records.
 

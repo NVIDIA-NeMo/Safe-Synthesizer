@@ -6,6 +6,7 @@ from __future__ import annotations
 from functools import cached_property
 
 from pydantic import Field
+from typing_extensions import override
 
 from ...config.parameters import SafeSynthesizerParameters
 from ...evaluation.components.component import Component
@@ -54,6 +55,7 @@ class DatasetStatistics(Component):
         return stats
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> DatasetStatistics:

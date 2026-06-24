@@ -15,6 +15,7 @@ from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics import accuracy_score, precision_score
 from sklearn.preprocessing import QuantileTransformer
+from typing_extensions import override
 
 from ...config.evaluate import DEFAULT_RECORD_COUNT
 from ...config.parameters import SafeSynthesizerParameters
@@ -68,6 +69,7 @@ class MembershipInferenceProtection(Component):
         return d
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> MembershipInferenceProtection:

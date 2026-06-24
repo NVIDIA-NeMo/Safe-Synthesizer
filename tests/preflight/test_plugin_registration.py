@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from typing_extensions import override
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.preflight import PreflightParameters
@@ -56,6 +57,7 @@ def test_register_preflight_check_appends_to_registry():
         name = "myplugin.registered"
         label = "Registered plugin"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("myplugin_fired", "hello")
 
@@ -74,6 +76,7 @@ def test_plugin_check_fires_via_run_preflight():
         name = "myplugin.fires"
         label = "Plugin fires"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("plugin_signal", "plugin ran")
 
@@ -101,6 +104,7 @@ def test_plugin_rejects_reserved_core_namespace():
         name = "gpu.rogue"
         label = "Rogue plugin"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -128,6 +132,7 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
         name = "myplugin.first"
         label = "First"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -135,6 +140,7 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
         name = "myplugin.first"
         label = "Also first"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -142,6 +148,7 @@ def test_register_preflight_check_rolls_back_on_duplicate_name():
         name = "myplugin.third"
         label = "Third"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -217,6 +224,7 @@ def test_build_registry_rejects_plugin_colliding_with_core():
         name = "myplugin.collides"
         label = "Collides"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -259,6 +267,7 @@ def test_disabled_dep_gates_dependents():
         name = "myplugin.prereq"
         label = "Prereq"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("prereq_ran", "should not fire when disabled")
 
@@ -267,6 +276,7 @@ def test_disabled_dep_gates_dependents():
         label = "Dependent"
         requires = ("myplugin.prereq",)
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("dependent_ran", "should not fire when prereq disabled")
 
@@ -316,6 +326,7 @@ def test_run_preflight_accepts_custom_registry():
         name = "myplugin.solo"
         label = "Solo"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("solo_ran", "solo")
 
@@ -346,6 +357,7 @@ def test_check_crash_is_reported_and_does_not_halt_registry():
         name = "myplugin.crasher"
         label = "Crasher"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             raise RuntimeError("boom")
 
@@ -353,6 +365,7 @@ def test_check_crash_is_reported_and_does_not_halt_registry():
         name = "myplugin.follower"
         label = "Follower"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             collector.warning("followed", "ran after crash")
 
@@ -388,6 +401,7 @@ def test_stage_markers_are_preserved_on_plugin_subclasses():
         name = "myplugin.stage_cfg"
         label = "Plugin cfg"
 
+        @override
         def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
             return
 
@@ -395,6 +409,7 @@ def test_stage_markers_are_preserved_on_plugin_subclasses():
         name = "myplugin.stage_df"
         label = "Plugin df"
 
+        @override
         def check(self, ctx: DataFrameView, collector: IssueCollector) -> None:
             return
 

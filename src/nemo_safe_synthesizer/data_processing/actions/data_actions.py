@@ -11,7 +11,6 @@ registered actions in order.
 
 from __future__ import annotations
 
-import json
 import operator
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -27,7 +26,6 @@ from typing import (
     Protocol,
     TypeVar,
     Union,
-    cast,
 )
 
 import pandas as pd
@@ -41,6 +39,7 @@ from pydantic import (
     ValidationInfo,
     model_validator,
 )
+from typing_extensions import override
 
 from ... import utils
 from ...observability import get_logger
@@ -230,7 +229,7 @@ class BaseAction(BaseModel, ABC):
     def get_state(self, state_obj_type: type[BaseModelT]) -> BaseModelT:
         """Retrieve and deserialize a previously persisted state object."""
         state_obj_json = self._ctx.state[self.hash()]
-        return state_obj_type.model_validate(json.loads(state_obj_json))
+        return state_obj_type.model_validate_json(state_obj_json)
 
 
 DEFAULT_ACTION_CTX = ActionCtx()
@@ -252,6 +251,7 @@ class GenerateAction(BaseAction, ABC):
 
     phase: ProcessPhase = ProcessPhase.GENERATE
 
+    @override
     def functions(self) -> Functions:
         """Route ``generate`` to the correct phase slot based on ``self.phase``."""
         fns = Functions()
@@ -265,6 +265,7 @@ class GenerateAction(BaseAction, ABC):
         return fns
 
     @abstractmethod
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         """Generate new data based on the existing data in the DataFrame."""
         ...
@@ -319,6 +320,7 @@ class GenExpression(GenerateAction):
 
         return self
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         df = self._ctx.transforms_util.execute_col_updates(self.col, df, self._expressions)
         if self.dtype is not None:
@@ -338,6 +340,7 @@ class GenRawExpression(GenerateAction):
     type_: Literal["gen_raw_expression"] = "gen_raw_expression"
     expressions: list[TransformsUpdate] = []
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         return self._ctx.transforms_util.execute_updates(df, self.expressions)
 
@@ -347,6 +350,7 @@ class GenDistribution(GenerateAction):
     col: str
     distribution: DistributionT
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         df[self.col] = self.distribution.sample(num_records=len(df))
         return df
@@ -361,6 +365,7 @@ class GenDataSource(GenerateAction):
         super().__init__(**data)
         self.data_source = self.data_source.with_ctx(self._ctx)
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         return self.data_source.generate_data(col=self.col, df=df)
 
@@ -382,15 +387,20 @@ class ReplaceDataSource(BaseAction):
         super().__init__(**data)
         self.data_source = self.data_source.with_ctx(self._ctx)
 
+    @override
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         if self.col in df.columns:
-            column_index = cast(int, df.columns.get_loc(self.col))
+            location = df.columns.get_loc(self.col)
+            if not isinstance(location, int):
+                raise ValueError(f"Column {self.col!r} must be unique to replace data source")
+            column_index = location
         else:
             column_index = None
         self.set_state(self.State(column_index=column_index))
 
         return df.drop(columns=[self.col], errors="ignore")
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         column_index = self.get_state(self.State).column_index
         df = self.data_source.generate_data(col=self.col, df=df)
@@ -412,6 +422,7 @@ class GenDatetimeDistribution(GenerateAction):
     col: str
     distribution: DatetimeDistributionT
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         df[self.col] = self.distribution.sample(num_records=len(df))
         return df
@@ -426,6 +437,7 @@ class GenUniqueId(GenerateAction):
         super().__init__(**data)
         self._action = GenDataSource(col=self.col, data_source=UniqueIdSource(id_type=self.id_type)).with_ctx(self._ctx)
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         return self._action.generate(df)
 
@@ -444,6 +456,7 @@ class GenFaker(GenerateAction):
 
         return self
 
+    @override
     def generate(self, df: pd.DataFrame) -> pd.DataFrame:
         fn = getattr(self._ctx.transforms_util.env._fake, self.faker_fn)
         df[self.col] = df.apply(lambda _: fn(), axis=1)
@@ -452,6 +465,7 @@ class GenFaker(GenerateAction):
 
 class ValidationAction(BaseAction, ABC):
     @abstractmethod
+    @override
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series: ...
 
 
@@ -459,6 +473,7 @@ class DropExpression(ValidationAction):
     type_: Literal["expression_drop"] = "expression_drop"
     conditions: list[str] = []
 
+    @override
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
         batch[MetadataColumns.INDEX] = range(len(batch))
         batch_copy = batch.copy()
@@ -473,6 +488,7 @@ class DropExpression(ValidationAction):
 class DropDuplicates(ValidationAction):
     type_: Literal["drop_duplicates"] = "drop_duplicates"
 
+    @override
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
         return ~batch.isin(df).all(axis=1)
 
@@ -483,6 +499,7 @@ class DateConstraint(BaseAction):
     colB: str
     operator: Literal["gt", "ge", "lt", "le"]
 
+    @override
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
         """
         Filter out all rows where the operator isn't true. The type of the
@@ -535,6 +552,7 @@ class DatetimeCol(ColAction):
 
         return modes.iloc[0]
 
+    @override
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         # Retrieve the datetime format, either from the user-config or by inferring it from the column
         dt_format = self.format
@@ -557,6 +575,7 @@ class DatetimeCol(ColAction):
 
         return df
 
+    @override
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
         # Retrieve datetime format, either from the instance or from the state
         dt_format = self.format or self.get_state(self.State).dt_format
@@ -572,6 +591,7 @@ class CategoricalCol(ColAction):
     type_: Literal["categorical"] = "categorical"
     values: list[str | int | float]
 
+    @override
     def _validate_batch(self, batch: pd.DataFrame, df: pd.DataFrame) -> pd.Series:
         return batch[self.name].isin(self.values)
 

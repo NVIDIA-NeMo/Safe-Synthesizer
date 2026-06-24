@@ -33,6 +33,7 @@ from pydantic import (
     Field,
     PrivateAttr,
 )
+from typing_extensions import override
 
 from .dates import parse_date
 
@@ -183,6 +184,7 @@ class UniqueIdSource(DataSource):
 
     id_type: Literal["uuid4"] = "uuid4"
 
+    @override
     def generate_data(self, df: pd.DataFrame, col: str = "newcol") -> pd.DataFrame:
         id_fn: Callable[[Any], Any] = {
             "uuid4": lambda _: str(uuid.uuid4()),
@@ -196,6 +198,7 @@ class ExpressionSource(DataSource):
 
     expression: str
 
+    @override
     def generate_data(self, df: pd.DataFrame, col: str = "newcol") -> pd.DataFrame:
         return self._ctx.transforms_util.execute_col_updates(col, df, [self.expression])
 

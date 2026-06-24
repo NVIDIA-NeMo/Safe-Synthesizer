@@ -13,6 +13,7 @@ from enum import Enum, auto
 from pathlib import Path
 
 import pandas as pd
+from typing_extensions import override
 from vllm.sampling_params import SamplingParams
 
 from .. import utils
@@ -237,6 +238,7 @@ class TimeseriesBackend(VllmBackend):
         self._group_prefills: dict[str, str] = initial_prefill_value
         self._groups: list[str] = list(self._group_prefills.keys())
 
+    @override
     def _get_prompt_token_count(self) -> int:
         """Return the longest active prompt length for ``SamplingParams``.
 
@@ -890,6 +892,7 @@ class TimeseriesBackend(VllmBackend):
 
         return final_records
 
+    @override
     def generate(
         self,
         data_actions_fn: utils.DataActionsFn | None = None,

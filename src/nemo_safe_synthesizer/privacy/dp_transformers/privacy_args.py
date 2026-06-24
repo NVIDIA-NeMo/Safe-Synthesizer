@@ -19,7 +19,7 @@ import signal
 import threading
 import warnings
 from dataclasses import dataclass, field
-from typing import Literal, cast
+from typing import Literal
 
 import numpy as np
 from opacus.accountants import RDPAccountant
@@ -145,11 +145,21 @@ class SafeSynthesizerAccountant:
             # HF Trainer runs an extra optimizer step for an incomplete
             # gradient-accumulation batch at the end of an epoch.
             steps = min(steps, self.max_compositions)
-            acct = cast(PRVAccountant, self.accountant)
-            return acct.compute_epsilon(steps)[2]
+            return self.prv_accountant().compute_epsilon(steps)[2]
         else:
-            acct = cast(RDPAccountant, self.accountant)
-            return acct.get_epsilon(self.delta)
+            return self.rdp_accountant().get_epsilon(self.delta)
+
+    def prv_accountant(self) -> PRVAccountant:
+        """Return the PRV accountant when this instance is in PRV mode."""
+        if not isinstance(self.accountant, PRVAccountant):
+            raise TypeError("SafeSynthesizerAccountant is not using a PRV accountant")
+        return self.accountant
+
+    def rdp_accountant(self) -> RDPAccountant:
+        """Return the RDP accountant when this instance is in RDP mode."""
+        if not isinstance(self.accountant, RDPAccountant):
+            raise TypeError("SafeSynthesizerAccountant is not using an RDP accountant")
+        return self.accountant
 
 
 @dataclass

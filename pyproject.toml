@@ -350,6 +350,7 @@ safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
 # Platform-specific imports (e.g. vLLM on macOS) use ty: ignore[unresolved-import]
 # that appear unused when the package is installed. Suppress the noise.
 unused-ignore-comment = "ignore"
+missing-override-decorator = "error"
 
 [tool.ty.environment]
 extra-paths = ["typings"]

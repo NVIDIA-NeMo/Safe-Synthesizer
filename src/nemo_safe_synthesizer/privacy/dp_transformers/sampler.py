@@ -21,6 +21,7 @@ from collections.abc import Iterator, Sequence, Sized
 import torch
 from opacus.utils.uniform_sampler import UniformWithReplacementSampler
 from torch.utils.data.sampler import BatchSampler, RandomSampler, Sampler
+from typing_extensions import override
 
 from ...observability import get_logger
 
@@ -50,6 +51,7 @@ class _EntitySampler(Sampler):
             raise TypeError("entity_sampler must implement __len__")
         return len(self.entity_sampler)
 
+    @override
     def __iter__(self) -> Iterator[list[int]]:
         """Iterate over batches of dataset indices, one sample per entity per batch.
 
@@ -133,6 +135,7 @@ class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
         self.empty_batches = 0
         super().__init__(*args, **kwargs)
 
+    @override
     def __len__(self) -> int:
         """Return the number of batches that will be yielded (non-empty only).
 
@@ -142,6 +145,7 @@ class UniformWithReplacementNonNullSampler(UniformWithReplacementSampler):
         """
         return self.steps - self.empty_batches
 
+    @override
     def __iter__(self) -> Iterator[list[int]]:
         """Iterate over batches, each drawn uniformly with replacement; skip empty batches.
 

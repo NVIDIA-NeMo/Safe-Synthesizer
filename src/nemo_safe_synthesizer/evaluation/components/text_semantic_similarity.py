@@ -20,6 +20,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+from typing_extensions import override
 
 from ...artifacts.analyzers.field_features import FieldType
 from ...config.evaluate import DEFAULT_RECORD_COUNT
@@ -95,6 +96,7 @@ class TextSemanticSimilarity(Component):
         return ctx
 
     @staticmethod
+    @override
     def from_evaluation_datasets(
         evaluation_datasets: EvaluationDatasets, config: SafeSynthesizerParameters | None = None
     ) -> TextSemanticSimilarity:

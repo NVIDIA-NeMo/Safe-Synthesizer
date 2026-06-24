@@ -15,7 +15,7 @@ import os
 import time
 from collections.abc import Callable, Generator, Iterable, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, ParamSpec, Protocol, TypeGuard, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -36,6 +36,9 @@ logger = get_logger(__name__)
 _TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 _HF_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def _is_statistics_list(stats: Statistics | list[Statistics]) -> TypeIs[list[Statistics]]:
@@ -158,11 +161,11 @@ def log_stats(
     )
 
 
-def log_training_example_stats(stats_dict: dict[str, Statistics], **kwargs) -> None:
+def log_training_example_stats(stats_dict: dict[str, Statistics]) -> None:
     """Log training example statistics from the given dictionary."""
     stats = list(stats_dict.values())
     headers = list([name.replace("_", " ").capitalize() for name in stats_dict.keys()])
-    log_stats(title="Training Example Statistics", stats=stats, headers=headers, **kwargs)
+    log_stats(title="Training Example Statistics", stats=stats, headers=headers)
 
 
 def round_number_if_float(number: int | float, precision: int = 3) -> int | float:
@@ -185,7 +188,7 @@ def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
     Raises:
         ValueError: If the file extension is not supported.
     """
-    if isinstance(df_or_path, pd.DataFrame):
+    if is_dataframe(df_or_path):
         return df_or_path
 
     path = str(df_or_path)
@@ -205,11 +208,11 @@ def smart_read_table(df_or_path: str | Path | pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def time_function(func: Callable[..., Any]) -> Callable[..., Any]:
+def time_function(func: Callable[P, R]) -> Callable[P, R]:
     """Decorator to log the time taken by a function to execute."""
 
     @functools.wraps(func)
-    def time_closure(*args: Any, **kwargs: Any) -> Any:
+    def time_closure(*args: P.args, **kwargs: P.kwargs) -> R:
         start = time.perf_counter()
         result = func(*args, **kwargs)
         time_elapsed = time.perf_counter() - start
@@ -272,12 +275,12 @@ def merge_dicts(base: Mapping[str, Any], new: Mapping[str, Any]) -> dict[str, An
     return result
 
 
-def is_iterable(x: object) -> bool:
+def is_iterable(x: object) -> TypeGuard[Iterable[object]]:
     """Check whether ``x`` has both ``__iter__`` and ``__getitem__``."""
     return hasattr(x, "__iter__") and hasattr(x, "__getitem__")
 
 
-def flatten(iter: Iterable) -> Generator:
+def flatten(iter: Iterable[object]) -> Generator[object]:
     """Flatten a possibly nested iterable.
 
     Strings are yielded as-is (not broken into characters). Dicts are
@@ -316,8 +319,13 @@ def all_equal_type(iter: Iterable[object], type_: type, flatten_iter: bool = Tru
     return True
 
 
+def is_dataframe(x: object) -> TypeIs[pd.DataFrame]:
+    """Return whether ``x`` is a pandas ``DataFrame``."""
+    return isinstance(x, pd.DataFrame)
+
+
 def write_json(
-    data: dict,
+    data: Mapping[str, object],
     path: str | os.PathLike[str],
     encoding: str | None = None,
     indent: int | None = None,
@@ -329,7 +337,7 @@ def write_json(
         json.dump(data, file, indent=indent)
 
 
-def load_json(path: str | Path, encoding: str | None = None) -> dict:
+def load_json(path: str | Path, encoding: str | None = None) -> dict[str, Any]:
     """Load JSON file and return the content as a dict."""
     with Path(path).open(encoding=encoding) as file:
         return json.load(file)

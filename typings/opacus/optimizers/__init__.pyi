@@ -4,6 +4,7 @@
 from typing import Any
 
 from torch.optim import Optimizer
+from typing_extensions import override
 
 class DPOptimizer(Optimizer):
     original_optimizer: Optimizer
@@ -16,7 +17,9 @@ class DPOptimizer(Optimizer):
         expected_batch_size: int,
         **kwargs: Any,
     ) -> None: ...
+    @override
     def step(self, closure: Any = None) -> Any: ...
+    @override
     def zero_grad(self, set_to_none: bool = True) -> None: ...
     @property
     def param_groups(self) -> list[dict[str, Any]]: ...

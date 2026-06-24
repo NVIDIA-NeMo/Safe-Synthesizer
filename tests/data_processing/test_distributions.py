@@ -3,10 +3,13 @@
 
 from datetime import datetime, timedelta
 
+from typing_extensions import override
+
 from nemo_safe_synthesizer.data_processing.actions.distributions import DatetimeDistribution
 
 
 class FixedDatetimeDistribution(DatetimeDistribution):
+    @override
     def sample_datetimes(self, num_records: int) -> list[datetime]:
         start = datetime(2024, 1, 1, 12, 20)
         return [start + timedelta(minutes=20 * offset) for offset in range(num_records)]

@@ -27,6 +27,8 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Generic, Self, TypeVar, overload
 
+from typing_extensions import override
+
 from ..observability import get_logger
 from ..utils import write_json
 
@@ -249,17 +251,21 @@ class BoundDir(PathLike[str]):
         """The resolved directory path."""
         return self._path
 
+    @override
     def __fspath__(self) -> str:
         """Support os.fspath() for use with open(), etc."""
         return str(self._path)
 
+    @override
     def __str__(self) -> str:
         """Return the path as a string."""
         return str(self._path)
 
+    @override
     def __repr__(self) -> str:
         return f"BoundDir({self._path!r})"
 
+    @override
     def __eq__(self, other: object) -> bool:
         """Support comparison with Path objects."""
         if isinstance(other, BoundDir):
@@ -268,6 +274,7 @@ class BoundDir(PathLike[str]):
             return self._path == other
         return NotImplemented
 
+    @override
     def __hash__(self) -> int:
         return hash(self._path)
 

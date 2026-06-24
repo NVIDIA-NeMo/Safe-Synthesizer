@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pydantic import Field
+from typing_extensions import override
 
 from ...observability import get_logger
 from ..data_model.evaluation_score import (
@@ -22,6 +23,7 @@ class DataPrivacyScore(CompositeScore):
     name: str = Field(default="Data Privacy Score")
 
     @staticmethod
+    @override
     def from_components(components: list[Component] | Component, name: str = "Data Privacy Score") -> DataPrivacyScore:
         """Compute the Data Privacy Score from privacy sub-metric components."""
         if isinstance(components, Component):

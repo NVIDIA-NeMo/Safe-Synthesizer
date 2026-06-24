@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any, Literal, ParamSpec, TypeVar, cast
 
 import colorama
 from structlog.types import BindableLogger, Processor
+from typing_extensions import override
 
 if TYPE_CHECKING:
     from .cli.artifact_structure import Workdir
@@ -301,6 +302,7 @@ def _render_table_data_for_console(logger: logging.Logger, method_name: str, eve
 class DiscardSensitiveMessages(logging.Filter):
     """Discards messages marked as sensitive via the `sensitive` flag."""
 
+    @override
     def filter(self, record: logging.LogRecord) -> bool:
         return not getattr(record, "sensitive", False)
 
@@ -312,6 +314,7 @@ class CategoryFilter(logging.Filter):
         super().__init__()
         self.include_categories = include_categories
 
+    @override
     def filter(self, record: logging.LogRecord) -> bool:
         if self.include_categories is None:
             return True
@@ -603,6 +606,7 @@ class _CategoryLogAdapter(logging.LoggerAdapter):
         super().__init__(logger, {})
         self.category = category
 
+    @override
     def process(self, msg: str, kwargs: MutableMapping[str, Any]) -> tuple[str, MutableMapping[str, Any]]:
         # Set category via contextvar to avoid it appearing in ExtraAdder output
         _current_log_category.set(self.category.value)
@@ -656,9 +660,11 @@ class CategoryLogger(logging.Logger):
         )
 
     @property
+    @override
     def name(self) -> str:
         return self._logger.name
 
+    @override
     def isEnabledFor(self, level: int) -> bool:
         return self._logger.isEnabledFor(level)
 

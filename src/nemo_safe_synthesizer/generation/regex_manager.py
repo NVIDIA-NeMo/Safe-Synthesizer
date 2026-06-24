@@ -42,7 +42,7 @@ JSON_STRING = rf'"{JSON_STRING_INNER}*"'
 
 # Helper method not exported by outlines_core and outlines doesn't have it anymore
 # past outlines==0.11.8
-def _get_num_items_pattern(min_items: int | None, max_items: int | None, **kwargs) -> str | None:
+def _get_num_items_pattern(min_items: int | None, max_items: int | None, **kwargs: object) -> str | None:
     """Return a regex quantifier ``{min,max}`` for array/object items."""
     min_items = int(min_items or 0)
     if max_items is None:
@@ -60,7 +60,7 @@ def _build_object_key_prefix(name: str, whitespace_pattern: str) -> str:
     return f'{whitespace_pattern}"{re.escape(key_inner)}"{whitespace_pattern}:{whitespace_pattern}'
 
 
-def _properties_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+def _properties_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs: object) -> str:
     """Build a regex matching a JSON object with known property names."""
     regex = ""
     regex += r"\{"
@@ -115,7 +115,7 @@ def _properties_regex(instance: dict[str, Any], whitespace_pattern: str, **kwarg
     return regex
 
 
-def _enum_regex(instance: dict[str, Any], **kwargs) -> str:
+def _enum_regex(instance: dict[str, Any], **kwargs: object) -> str:
     """Build a regex matching any value in the schema's ``enum`` array."""
     choices = []
     for choice in instance["enum"]:
@@ -141,7 +141,7 @@ def _enum_regex(instance: dict[str, Any], **kwargs) -> str:
     return f"({'|'.join(choices)})"
 
 
-def _string_type_regex(instance: dict[str, Any], **kwargs) -> str:
+def _string_type_regex(instance: dict[str, Any], **kwargs: object) -> str:
     if "maxLength" in instance or "minLength" in instance:
         max_items = instance.get("maxLength", "")
         min_items = instance.get("minLength", "")
@@ -177,7 +177,7 @@ def _string_type_regex(instance: dict[str, Any], **kwargs) -> str:
     return JSON_STRING
 
 
-def _type_array_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+def _type_array_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs: object) -> str:
     num_repeats = _get_num_items_pattern(instance.get("minItems"), instance.get("maxItems"))
     if num_repeats is None:
         return rf"\[{whitespace_pattern}\]"
@@ -202,7 +202,7 @@ def _type_array_regex(instance: dict[str, Any], whitespace_pattern: str, **kwarg
         return rf"\[{whitespace_pattern}({'|'.join(regexes)})(,{whitespace_pattern}({'|'.join(regexes)})){num_repeats}){allow_empty}{whitespace_pattern}\]"
 
 
-def _type_object_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+def _type_object_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs: object) -> str:
     # pattern for json object with values defined by instance["additionalProperties"]
     # enforces value type constraints recursively, "minProperties", and "maxProperties"
     # doesn't enforce "required", "dependencies", "propertyNames" "any/all/on Of"
@@ -223,7 +223,7 @@ def _type_object_regex(instance: dict[str, Any], whitespace_pattern: str, **kwar
     return r"\{" + whitespace_pattern + multiple_key_value_pattern + whitespace_pattern + r"\}"
 
 
-def _type_int_regex(instance: dict[str, Any], **kwargs) -> str:
+def _type_int_regex(instance: dict[str, Any], **kwargs: object) -> str:
     if "minimum" in instance and "maximum" in instance:
         min_int = int(instance["minimum"])
         max_int = int(instance["maximum"])
@@ -245,7 +245,7 @@ def _type_int_regex(instance: dict[str, Any], **kwargs) -> str:
     return regex
 
 
-def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs: object) -> str:
     """Dispatch to the appropriate regex builder based on the ``type`` keyword.
 
     The ``type`` keyword may be a string naming a single basic type or an
@@ -253,14 +253,6 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
     matches any of the listed types.
     """
     instance_type = instance["type"]
-    dispatch = {
-        "string": _string_type_regex,
-        "integer": _type_int_regex,
-        "array": _type_array_regex,
-        "object": _type_object_regex,
-    }
-
-    kwargs = {"instance": instance, "whitespace_pattern": whitespace_pattern}
     match instance_type:
         # match first on the list type as the other will attempt to hash it to index into
         # the dict
@@ -276,9 +268,14 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             # https://cswr.github.io/JsonSchema/spec/multiple_types/
             regexes = [_build_regex({"type": t}, whitespace_pattern) for t in instance_type if t != "object"]
             return rf"({'|'.join(regexes)})"
-        case x if x in dispatch:
-            return dispatch[x](**kwargs)  # ty: ignore[invalid-argument-type] -- kwargs values are correct per-key; ty can't narrow the union through dict unpacking
-
+        case "string":
+            return _string_type_regex(instance)
+        case "integer":
+            return _type_int_regex(instance)
+        case "array":
+            return _type_array_regex(instance, whitespace_pattern)
+        case "object":
+            return _type_object_regex(instance, whitespace_pattern)
         case "number":
             return NUMBER
         case "boolean":
@@ -289,7 +286,7 @@ def _type_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> 
             raise NotImplementedError(f"Unsupported type={instance_type}")
 
 
-def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs) -> str:
+def _build_regex(instance: dict[str, Any], whitespace_pattern: str, **kwargs: object) -> str:
     """Convert a JSON schema fragment into a regex string.
 
     Supports the subset of JSON Schema needed for TabFT schemas --
