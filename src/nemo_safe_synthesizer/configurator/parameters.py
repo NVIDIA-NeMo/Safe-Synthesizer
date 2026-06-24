@@ -251,7 +251,7 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             yaml.safe_dump(j, f)
 
     @classmethod
-    def from_params(cls, **kwargs) -> Self:
+    def from_params(cls, **kwargs: object) -> Self:
         """Construct a ``Parameters`` instance from keyword arguments.
 
         Args:

@@ -224,7 +224,7 @@ class SafeSynthesizerParameters(Parameters):
 
     @classmethod
     @override
-    def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
+    def from_params(cls, **kwargs: object) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
 
           Takes a flat dictionary of parameters, where keys correspond to
