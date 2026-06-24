@@ -149,6 +149,39 @@ def test_from_params_rejects_top_level_none_before_nested_override():
         SafeSynthesizerParameters.from_params(generation=None, **{"generation.num_records": 10})
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param({"generation": {"temperature": 0.7}, "generation.num_records": 10}, id="section-then-dotted"),
+        pytest.param({"generation.num_records": 10, "generation": {"temperature": 0.7}}, id="dotted-then-section"),
+        pytest.param({"generation": {"temperature": 0.7}, "num_records": 10}, id="section-then-bare-leaf"),
+        pytest.param({"num_records": 10, "generation": {"temperature": 0.7}}, id="bare-leaf-then-section"),
+    ],
+)
+def test_from_params_merges_section_and_leaf_overrides_order_independently(kwargs: dict[str, object]):
+    config = SafeSynthesizerParameters.from_params(**kwargs)
+
+    assert config.generation.num_records == 10
+    assert config.generation.temperature == 0.7
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        pytest.param({"privacy": None, "privacy.dp_enabled": True}, id="none-then-dotted"),
+        pytest.param({"privacy.dp_enabled": True, "privacy": None}, id="dotted-then-none"),
+    ],
+)
+def test_from_params_rejects_section_none_with_nested_override(kwargs: dict[str, object]):
+    with pytest.raises(ParameterError, match="Cannot assign nested parameter path 'privacy.dp_enabled'.*'privacy'"):
+        SafeSynthesizerParameters.from_params(**kwargs)
+
+
+def test_from_params_rejects_duplicate_specific_parameter_paths():
+    with pytest.raises(ParameterError, match="Duplicate parameter path 'generation.num_records'"):
+        SafeSynthesizerParameters.from_params(num_records=10, **{"generation.num_records": 20})
+
+
 def test_from_params_rejects_unknown_flat_parameter():
     with pytest.raises(ParameterError, match="Unknown parameter name 'not_a_parameter'"):
         SafeSynthesizerParameters.from_params(not_a_parameter=True)

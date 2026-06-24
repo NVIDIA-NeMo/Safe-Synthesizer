@@ -70,6 +70,15 @@ def _overlay_set_fields(saved: Parameters, runtime: Parameters) -> Parameters:
     return saved.model_validate(merge_dicts(saved.model_dump(), overrides))
 
 
+def _section_patch(value: object) -> _SectionPatch | None:
+    """Convert a section value to a mutable patch dict when nested fields can merge into it."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(exclude_unset=True)
+    if isinstance(value, Mapping):
+        return {str(key): item for key, item in value.items()}
+    return None
+
+
 def _assign_path(target: dict[str, object], path: tuple[str, ...], value: object) -> None:
     """Assign ``value`` into ``target`` at a dotted config path."""
     head, *tail = path
@@ -80,8 +89,7 @@ def _assign_path(target: dict[str, object], path: tuple[str, ...], value: object
     if head not in target:
         nested: dict[str, object] = {}
         target[head] = nested
-    elif isinstance(next_value := target[head], dict):
-        nested = {str(key): item for key, item in next_value.items()}
+    elif (nested := _section_patch(target[head])) is not None:
         target[head] = nested
     else:
         raise ParameterError(f"Cannot assign nested parameter path {'.'.join(path)!r}; {head!r} is already set.")
@@ -253,21 +261,27 @@ class SafeSynthesizerParameters(Parameters):
             for path, _ in section._iter_field_paths((section_name,)):
                 field_index.setdefault(path[-1], []).append(path)
 
-        patch: dict[str, object] = {}
+        path_assignments: dict[tuple[str, ...], object] = {}
         for name, value in kwargs.items():
             if "." in name:
-                _assign_path(patch, tuple(name.split(".")), value)
-                continue
-            if name in top_level_fields:
-                patch[name] = value
-                continue
-            matches = field_index.get(name, [])
-            if not matches:
-                raise ParameterError(f"Unknown parameter name {name!r}.")
-            if len(matches) > 1:
-                candidates = ", ".join(".".join(path) for path in matches)
-                raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
-            _assign_path(patch, matches[0], value)
+                path = tuple(name.split("."))
+            elif name in top_level_fields:
+                path = (name,)
+            else:
+                matches = field_index.get(name, [])
+                if not matches:
+                    raise ParameterError(f"Unknown parameter name {name!r}.")
+                if len(matches) > 1:
+                    candidates = ", ".join(".".join(path) for path in matches)
+                    raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
+                path = matches[0]
+            if path in path_assignments:
+                raise ParameterError(f"Duplicate parameter path {'.'.join(path)!r}.")
+            path_assignments[path] = value
+
+        patch: dict[str, object] = {}
+        for path, value in sorted(path_assignments.items(), key=lambda item: len(item[0])):
+            _assign_path(patch, path, value)
 
         return cls.model_validate(patch)
 
