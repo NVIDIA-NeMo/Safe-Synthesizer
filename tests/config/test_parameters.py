@@ -5,11 +5,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.config.training import QuantizationScheme
+from nemo_safe_synthesizer.configurator.parameters import Parameters
+from nemo_safe_synthesizer.errors import ParameterError
 
 
 def test_safe_synthesizer_parameters(monkeypatch):
@@ -131,6 +133,66 @@ def test_from_params_absent_enables_pii():
 
 def test_from_params_none_disables_pii():
     assert SafeSynthesizerParameters.from_params(replace_pii=None).replace_pii is None
+
+
+def test_from_params_accepts_explicit_dotted_path():
+    config = SafeSynthesizerParameters.from_params(**{"generation.validation.group_by_fix_unordered_records": True})
+
+    assert config.generation.validation.group_by_fix_unordered_records is True
+
+
+def test_from_params_rejects_unknown_flat_parameter():
+    with pytest.raises(ParameterError, match="Unknown parameter name 'not_a_parameter'"):
+        SafeSynthesizerParameters.from_params(not_a_parameter=True)
+
+
+def test_from_config_patch_validates_sparse_config():
+    config = SafeSynthesizerParameters.from_config_patch({"replace_pii": None})
+
+    assert config.replace_pii is None
+
+
+def test_with_config_patch_merges_sparse_patch_and_keeps_defaults_implicit():
+    config = SafeSynthesizerParameters.model_validate({"generation": {"num_records": 77}})
+
+    merged = config.with_config_patch({"generation": {"temperature": 0.7}, "training": {"batch_size": 4}})
+
+    assert merged.generation.num_records == 77
+    assert merged.generation.temperature == 0.7
+    assert merged.generation.use_structured_generation is False
+    assert merged.training.batch_size == 4
+    assert merged.model_dump(exclude_unset=True) == {
+        "generation": {"num_records": 77, "temperature": 0.7},
+        "training": {"batch_size": 4},
+    }
+
+
+class _LeftParameters(Parameters):
+    value: int = 1
+
+
+class _RightParameters(Parameters):
+    value: int = 2
+
+
+class _DuplicateLeafParameters(Parameters):
+    left: _LeftParameters = Field(default_factory=_LeftParameters)
+    right: _RightParameters = Field(default_factory=_RightParameters)
+
+
+def test_parameters_get_supports_explicit_dotted_paths():
+    params = _DuplicateLeafParameters()
+
+    assert params.get("left.value") == 1
+    assert params.get("right.value") == 2
+    assert params.get("missing.value", "fallback") == "fallback"
+
+
+def test_parameters_get_rejects_ambiguous_bare_leaf_names():
+    params = _DuplicateLeafParameters()
+
+    with pytest.raises(ParameterError, match="left.value.*right.value"):
+        params.get("value")
 
 
 def _resolve(obj: object, path: str) -> object:

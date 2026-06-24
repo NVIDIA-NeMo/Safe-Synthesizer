@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Mapping
-from typing import Any, Self
+from typing import Self, TypeAlias
 
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import override
 
 from ..configurator.parameters import Parameters
 from ..errors import ParameterError
@@ -24,13 +25,16 @@ from .time_series import TimeSeriesParameters
 from .training import TrainingHyperparams
 from .types import AUTO_STR
 
-__all__ = ["SafeSynthesizerParameters"]
+ConfigPatch: TypeAlias = Mapping[str, object]
+_SectionPatch: TypeAlias = dict[str, object]
+
+__all__ = ["ConfigPatch", "SafeSynthesizerParameters"]
 
 
 logger = get_logger(__name__)
 
 
-def _collect_set_fields(model: BaseModel) -> dict[str, Any]:
+def _collect_set_fields(model: BaseModel) -> _SectionPatch:
     """Recursively collect a model's explicitly-set fields as a nested dict.
 
     Unlike ``model_dump(exclude_unset=True)``, nested models are always
@@ -39,7 +43,7 @@ def _collect_set_fields(model: BaseModel) -> dict[str, Any]:
     ``cfg.generation.validation.foo = True``) are captured. A nested model is
     included only when it has at least one set field of its own.
     """
-    overrides: dict[str, Any] = {}
+    overrides: _SectionPatch = {}
     for name in type(model).model_fields:
         value = getattr(model, name)
         if isinstance(value, BaseModel):
@@ -66,21 +70,23 @@ def _overlay_set_fields(saved: Parameters, runtime: Parameters) -> Parameters:
     return saved.model_validate(merge_dicts(saved.model_dump(), overrides))
 
 
-def _section_values(kwargs: dict[str, Any], section: str) -> dict[str, Any]:
-    """Return values for a nested section merged with flat compatibility kwargs."""
-    section_value = kwargs.get(section)
-    match section_value:
-        case BaseModel() as model:
-            section_data = model.model_dump()
-        case Mapping() as mapping:
-            section_data = dict(mapping)
-        case None:
-            section_data = {}
-        case _:
-            section_data = {section: section_value}
+def _assign_path(target: dict[str, object], path: tuple[str, ...], value: object) -> None:
+    """Assign ``value`` into ``target`` at a dotted config path."""
+    head, *tail = path
+    if not tail:
+        target[head] = value
+        return
 
-    flat_values = {key: value for key, value in kwargs.items() if key != section}
-    return section_data | flat_values
+    next_value = target.get(head)
+    if next_value is None:
+        nested: dict[str, object] = {}
+        target[head] = nested
+    elif isinstance(next_value, dict):
+        nested = {str(key): item for key, item in next_value.items()}
+        target[head] = nested
+    else:
+        raise ParameterError(f"Cannot assign nested parameter path {'.'.join(path)!r}; {head!r} is already set.")
+    _assign_path(nested, tuple(tail), value)
 
 
 class SafeSynthesizerParameters(Parameters):
@@ -210,6 +216,7 @@ class SafeSynthesizerParameters(Parameters):
         return self
 
     @classmethod
+    @override
     def from_params(cls, **kwargs) -> "SafeSynthesizerParameters":
         """Convert singular, flat parameters to nested structure.
 
@@ -232,28 +239,53 @@ class SafeSynthesizerParameters(Parameters):
             >>> from nemo_safe_synthesizer.config import SafeSynthesizerParameters
             >>> SafeSynthesizerParameters.from_params(structured_generation={"enabled": True})
         """
-        thp = TrainingHyperparams.model_validate(_section_values(kwargs, "training"))
-        gp = GenerateParameters.model_validate(_section_values(kwargs, "generation"))
-        ep = EvaluationParameters.model_validate(_section_values(kwargs, "evaluation"))
-        pp = DifferentialPrivacyHyperparams.model_validate(_section_values(kwargs, "privacy"))
-        dp = DataParameters.model_validate(_section_values(kwargs, "data"))
-        tsp = TimeSeriesParameters.model_validate(_section_values(kwargs, "time_series"))
-
-        extra: dict[str, Any] = {
-            "training": thp,
-            "generation": gp,
-            "evaluation": ep,
-            "privacy": pp,
-            "data": dp,
-            "time_series": tsp,
+        section_defaults: dict[str, Parameters] = {
+            "training": TrainingHyperparams(),
+            "generation": GenerateParameters(),
+            "evaluation": EvaluationParameters(),
+            "privacy": DifferentialPrivacyHyperparams(),
+            "data": DataParameters(),
+            "time_series": TimeSeriesParameters(),
+            "preflight": PreflightParameters(),
         }
-        if "replace_pii" in kwargs:
-            extra["replace_pii"] = kwargs["replace_pii"]
-        if "preflight" in kwargs:
-            extra["preflight"] = kwargs["preflight"]
-        if "emit_telemetry" in kwargs:
-            extra["emit_telemetry"] = kwargs["emit_telemetry"]
-        return cls(**extra)
+        top_level_fields = set(cls.model_fields)
+        field_index: dict[str, list[tuple[str, ...]]] = {}
+        for section_name, section in section_defaults.items():
+            for path, _ in section._iter_field_paths((section_name,)):
+                field_index.setdefault(path[-1], []).append(path)
+
+        patch: dict[str, object] = {}
+        for name, value in kwargs.items():
+            if "." in name:
+                _assign_path(patch, tuple(name.split(".")), value)
+                continue
+            if name in top_level_fields:
+                patch[name] = value
+                continue
+            matches = field_index.get(name, [])
+            if not matches:
+                raise ParameterError(f"Unknown parameter name {name!r}.")
+            if len(matches) > 1:
+                candidates = ", ".join(".".join(path) for path in matches)
+                raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
+            _assign_path(patch, matches[0], value)
+
+        return cls.model_validate(patch)
+
+    @classmethod
+    def from_config_patch(cls, patch: ConfigPatch) -> Self:
+        """Validate a sparse top-level config patch as a full configuration."""
+        return cls.model_validate(patch)
+
+    def with_config_patch(self, patch: ConfigPatch) -> Self:
+        """Apply a sparse top-level config patch and revalidate the result.
+
+        Only fields explicitly set on ``self`` are carried into the merge before
+        applying ``patch``. This preserves file/CLI precedence while keeping
+        default values implicit for future ``exclude_unset`` dumps.
+        """
+        params = merge_dicts(self.model_dump(exclude_unset=True), patch)
+        return type(self).model_validate(params)
 
     def with_runtime_overrides(self, runtime: SafeSynthesizerParameters) -> "SafeSynthesizerParameters":
         """Apply resume-time generation/evaluation/telemetry overrides onto a copy of self.

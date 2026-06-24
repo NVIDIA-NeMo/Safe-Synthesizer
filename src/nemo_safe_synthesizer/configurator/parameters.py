@@ -31,6 +31,7 @@ from pydantic import (
 from ..config.base import (
     pydantic_model_config,
 )
+from ..errors import ParameterError
 from .parameter import (
     DataT,
 )
@@ -38,6 +39,7 @@ from .parameter import (
 __all__ = ["Parameters"]
 
 PathT = str | Path
+_MISSING = object()
 
 
 class Parameters(BaseModel, metaclass=ABCMeta):
@@ -109,6 +111,24 @@ class Parameters(BaseModel, metaclass=ABCMeta):
             for pg in param_groups:
                 yield from pg._iter_parameters(recursive=True)
 
+    def _iter_field_paths(self, prefix: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Any]]:
+        """Yield every field path and value in this parameter tree."""
+        for name in type(self).model_fields:
+            value = getattr(self, name)
+            path = (*prefix, name)
+            yield path, value
+            if isinstance(value, Parameters):
+                yield from value._iter_field_paths(path)
+
+    def _get_field_path(self, path: tuple[str, ...]) -> object:
+        """Resolve an explicit field path, returning ``_MISSING`` when absent."""
+        value: object = self
+        for part in path:
+            if not isinstance(value, Parameters) or part not in type(value).model_fields:
+                return _MISSING
+            value = getattr(value, part)
+        return value
+
     def __iter__(self) -> Iterator[Mapping[str, Any]]:  # ty: ignore[invalid-method-override] -- intentionally overrides pydantic BaseModel.__iter__ with parameter-group semantics
         """Iterate over all parameters, recursing into nested groups."""
         return self._iter_parameters(recursive=True)
@@ -116,7 +136,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     def get(self, name: str, default: Any = None) -> DataT | Any | None:
         """Look up a parameter or sub-group by name across the full tree.
 
-        Checks direct attributes first, then walks nested groups recursively.
+        Explicit dotted paths such as ``"generation.validation.foo"`` resolve
+        directly. Bare names are accepted only when they map to exactly one
+        field in the parameter tree.
 
         Args:
             name: Field name to search for.
@@ -125,12 +147,17 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         Returns:
             The parameter value or sub-group if found, otherwise ``default``.
         """
-        if (group := getattr(self, name, None)) is not None:
-            return group
-        for param in self._iter_parameters(recursive=True):
-            if name in param:
-                return param.get(name)
-        return default
+        if "." in name:
+            value = self._get_field_path(tuple(name.split(".")))
+            return default if value is _MISSING else value
+
+        matches = [(path, value) for path, value in self._iter_field_paths() if path[-1] == name]
+        if not matches:
+            return default
+        if len(matches) > 1:
+            candidates = ", ".join(".".join(path) for path, _ in matches)
+            raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
+        return matches[0][1]
 
     def has(self, name: str) -> bool:
         """Check whether ``name`` exists anywhere in the parameter tree.
@@ -144,12 +171,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         Returns:
             ``True`` if the parameter or sub-group exists.
         """
-        if getattr(self, name, None) is not None:
-            return True
-        for param in self._iter_parameters(recursive=True):
-            if name in param:
-                return True
-        return False
+        if "." in name:
+            return self._get_field_path(tuple(name.split("."))) is not _MISSING
+        return any(path[-1] == name for path, _ in self._iter_field_paths())
 
     @classmethod
     def from_yaml_str(cls, raw: str) -> Self:
