@@ -13,6 +13,7 @@ from nemo_safe_synthesizer.data_processing.actions.data_actions import (
     DateConstraint,
     data_actions_fn,
 )
+from nemo_safe_synthesizer.data_processing.record_utils import normalize_record_keys
 from nemo_safe_synthesizer.errors import GenerationError
 from nemo_safe_synthesizer.generation.batch import Batch
 from nemo_safe_synthesizer.generation.processors import ParsedRecord, ParsedResponse
@@ -260,11 +261,15 @@ def test_apply_data_actions(fixture_mock_processor, caplog):
     batch = Batch(fixture_mock_processor)
     batch._responses = [
         ParsedResponse(
-            records=[ParsedRecord(text=str(r), parsed=r) for r in data.iloc[:3].to_dict("records")],
+            records=[
+                ParsedRecord(text=str(r), parsed=normalize_record_keys(r)) for r in data.iloc[:3].to_dict("records")
+            ],
             prompt_number=1,
         ),
         ParsedResponse(
-            records=[ParsedRecord(text=str(r), parsed=r) for r in data.iloc[3:].to_dict("records")],
+            records=[
+                ParsedRecord(text=str(r), parsed=normalize_record_keys(r)) for r in data.iloc[3:].to_dict("records")
+            ],
             prompt_number=2,
         ),
     ]

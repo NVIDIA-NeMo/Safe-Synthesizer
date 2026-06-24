@@ -13,21 +13,27 @@ import calendar
 import json
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from csv import QUOTE_NONNUMERIC
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import StringIO
+from typing import Any
 
 import jsonschema
 import pandas as pd
 
 from ..observability import get_logger
+from .records.json_types import JsonSchema, JsonValue, is_json_object
 
 RECORD_REGEX_PATTERN = r"{.+?}(?:\n|$)"
 RECORD_REGEX_PATTEN_LOOKAHEAD = r"{.+?}(?=\n|$)"
 
 logger = get_logger()
+
+RecordDict = dict[str, Any]
+RecordMapping = Mapping[str, Any]
+RawRecordMapping = Mapping[Any, Any]
 
 
 @dataclass
@@ -50,7 +56,7 @@ class ParsedRecord:
     text: str
     """Original regex-matched JSON string (invariant under reclassification)."""
 
-    parsed: dict | None = None
+    parsed: RecordDict | None = None
     """Parsed dict when validation succeeded, ``None`` when invalid."""
 
     error: tuple[str, str] | None = None
@@ -102,7 +108,7 @@ class ParsedResponse:
     """Index of the prompt within the batch (set by the processor call)."""
 
     @property
-    def valid_records(self) -> list[dict]:
+    def valid_records(self) -> list[RecordDict]:
         """Parsed dicts for records that passed validation."""
         return [r.parsed for r in self.records if r.is_valid and r.parsed is not None]
 
@@ -117,7 +123,7 @@ class ParsedResponse:
         return [r.error for r in self.records if r.error is not None]
 
 
-def is_safe_for_float_conversion(value: str | int | float | None | list | dict) -> bool:
+def is_safe_for_float_conversion(value: JsonValue) -> bool:
     """Check if a value can be safely converted to float64 without overflow.
 
     Only ``int`` values can cause overflow; all other types are considered safe.
@@ -142,7 +148,7 @@ def is_safe_for_float_conversion(value: str | int | float | None | list | dict) 
     return True
 
 
-def check_record_for_large_numbers(record: dict) -> str | None:
+def check_record_for_large_numbers(record: RecordMapping) -> str | None:
     """Check if a record contains any numbers that would cause float64 overflow.
 
     Args:
@@ -161,7 +167,7 @@ def check_record_for_large_numbers(record: dict) -> str | None:
     return None
 
 
-def check_if_records_are_ordered(records: list[dict], order_by: str) -> bool:
+def check_if_records_are_ordered(records: Sequence[RecordMapping], order_by: str) -> bool:
     """Check if the records are in ascending order based on the given `order_by` column.
 
     Args:
@@ -174,6 +180,11 @@ def check_if_records_are_ordered(records: list[dict], order_by: str) -> bool:
     order_by_values = [rec[order_by] for rec in records]
     sorted_values = sorted([rec[order_by] for rec in records])
     return order_by_values == sorted_values
+
+
+def normalize_record_keys(record: RawRecordMapping) -> RecordDict:
+    """Return a record with string keys, matching JSON object semantics."""
+    return {str(key): value for key, value in record.items()}
 
 
 def extract_records_from_jsonl_string(jsonl_string: str) -> list[str]:
@@ -227,7 +238,7 @@ def timed_encode(
 
 def extract_and_validate_records(
     jsonl_string: str,
-    schema: dict,
+    schema: JsonSchema,
     encode: Callable[[str], list[int]] | None = None,
 ) -> ParsedResponse:
     """Extract and validate records from the given JSONL string.
@@ -280,7 +291,7 @@ def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
     """
     if time_format == "elapsed_seconds":
         # Value is already in seconds (int for now and float for future)
-        return int(float(value))  # ty: ignore[invalid-argument-type] -- third-party stub mismatch
+        return int(float(str(value)))
 
     # Parse using strptime format
     dt = datetime.strptime(str(value), time_format)
@@ -297,7 +308,7 @@ def _parse_timestamp_to_seconds(value: object, time_format: str) -> int:
     return dt.hour * 3600 + dt.minute * 60 + dt.second
 
 
-def _parse_and_validate_json(matched_json: str, schema: dict) -> tuple[dict | None, tuple[str, str] | None]:
+def _parse_and_validate_json(matched_json: str, schema: JsonSchema) -> tuple[RecordDict | None, tuple[str, str] | None]:
     """Parse JSON string and validate against schema.
 
     Args:
@@ -310,6 +321,9 @@ def _parse_and_validate_json(matched_json: str, schema: dict) -> tuple[dict | No
     """
     try:
         matched_dict = json.loads(matched_json)
+        if not is_json_object(matched_dict):
+            return None, ("Expected a JSON object", "Invalid JSON")
+
         jsonschema.validate(matched_dict, schema)
 
         error_msg = check_record_for_large_numbers(matched_dict)
@@ -321,11 +335,11 @@ def _parse_and_validate_json(matched_json: str, schema: dict) -> tuple[dict | No
     except json.JSONDecodeError as err:
         return None, (f"Invalid JSON: {err.msg}", "Invalid JSON")
     except jsonschema.exceptions.ValidationError as err:
-        return None, (err.message, err.validator)
+        return None, (err.message, str(err.validator))
 
 
 def _extract_timestamp_seconds(
-    record: dict, time_column: str, time_format: str
+    record: RecordMapping, time_column: str, time_format: str
 ) -> tuple[int | None, tuple[str, str] | None]:
     """Extract and parse timestamp from a record.
 
@@ -413,7 +427,7 @@ def _validate_time_interval(
 
 def extract_and_validate_timeseries_records(
     jsonl_string: str,
-    schema: dict,
+    schema: JsonSchema,
     time_column: str,
     interval_seconds: int | None,
     time_format: str,
@@ -541,7 +555,7 @@ def normalize_dataframe(dataframe: pd.DataFrame) -> pd.DataFrame:
         )
 
 
-def records_to_jsonl(records: pd.DataFrame | list[dict] | dict) -> str:
+def records_to_jsonl(records: pd.DataFrame | list[RawRecordMapping] | RawRecordMapping) -> str:
     """Convert list of records to a JSONL string.
 
     Args:
@@ -550,9 +564,10 @@ def records_to_jsonl(records: pd.DataFrame | list[dict] | dict) -> str:
     Returns:
         The JSONL string.
     """
-    if isinstance(records, pd.DataFrame):
-        return records.to_json(orient="records", lines=True, force_ascii=False)
-    elif isinstance(records, (list, dict)):
-        return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
-    else:
-        raise ValueError(f"Unsupported type: {type(records)}")
+    match records:
+        case pd.DataFrame() as dataframe:
+            return dataframe.to_json(orient="records", lines=True, force_ascii=False)
+        case list() | dict():
+            return pd.DataFrame(records).to_json(orient="records", lines=True, force_ascii=False)
+        case _:
+            raise ValueError(f"Unsupported type: {type(records)}")
