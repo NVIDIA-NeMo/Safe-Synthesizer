@@ -28,7 +28,12 @@ def _require_dataframe(value: object, *, url: str) -> pd.DataFrame:
 
 
 def _dynamic_callable(value: object) -> Any:
-    """Widen dynamic pandas reader callables for dispatch through ``Any``."""
+    """Widen a typed pandas reader callable to ``Any``.
+
+    ty raises ``invalid-argument-type`` when a union of overloaded pandas reader
+    callables is dispatched with ``**kwargs``. Erasing the callable type here
+    keeps the runtime behavior unchanged while avoiding that diagnostic.
+    """
     return value
 
 
