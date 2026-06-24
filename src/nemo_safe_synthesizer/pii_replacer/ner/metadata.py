@@ -3,20 +3,67 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from dataclasses import field as Field
 from enum import StrEnum
 from math import ceil
-from typing import Optional
+from typing import Any, Optional, TypedDict
 
 from ...data_processing.records.json_record import JSONRecord
-from .ner import NER, PipelineResult
+from .ner import NER, PipelineResult, Timings
 from .ner_mp import NERParallel
 
 
 class FieldAttribute(StrEnum):
     ID = "id"
     CATEGORICAL = "categorical"
+
+
+class EntityMetadataPayload(TypedDict):
+    label: str
+    count: int
+    f_ratio: float
+    approx_cardinality: int
+    sources: list[str]
+    field_label_f_ratio: float
+
+
+class TypeMetadataPayload(TypedDict):
+    type: str
+    count: int
+
+
+class FieldMetadataPayload(TypedDict):
+    field: str
+    count: int
+    approx_cardinality: int
+    missing: int
+    pct_missing: float
+    pct_total_unique: float
+    s_score: float
+    entities: list[EntityMetadataPayload]
+    types: list[TypeMetadataPayload]
+    field_labels: list[str]
+    field_attributes: list[FieldAttribute]
+
+
+class EntitySummaryPayload(TypedDict):
+    label: str
+    fields: list[str]
+    count: int
+    approx_distinct_count: int
+    sources: list[str]
+
+
+class FieldsMetadataPayload(TypedDict):
+    fields: list[FieldMetadataPayload]
+    entities: list[EntitySummaryPayload]
+
+
+class DatasetMetadataPayload(TypedDict):
+    project_record_count: int
+    total_field_count: int
+    data: FieldsMetadataPayload
 
 
 @dataclass(frozen=True)
@@ -43,6 +90,16 @@ class EntityMetadata:
     This field is used to determine if an entity should be applied
     as a field_label in transformation pipelines."""
 
+    def dict(self) -> EntityMetadataPayload:
+        return {
+            "label": self.label,
+            "count": self.count,
+            "f_ratio": self.f_ratio,
+            "approx_cardinality": self.approx_cardinality,
+            "sources": self.sources,
+            "field_label_f_ratio": self.field_label_f_ratio,
+        }
+
 
 @dataclass(frozen=True)
 class TypeMetadata:
@@ -54,6 +111,12 @@ class TypeMetadata:
 
     count: int
     """Number of times this type appeared in the values of a field."""
+
+    def dict(self) -> TypeMetadataPayload:
+        return {
+            "type": self.type,
+            "count": self.count,
+        }
 
 
 @dataclass(frozen=True)
@@ -101,8 +164,20 @@ class FieldMetadata:
     field_attributes: list[FieldAttribute] = Field(default_factory=list)
     """Attributes detected for this field."""
 
-    def dict(self):
-        return asdict(self)
+    def dict(self) -> FieldMetadataPayload:
+        return {
+            "field": self.field,
+            "count": self.count,
+            "approx_cardinality": self.approx_cardinality,
+            "missing": self.missing,
+            "pct_missing": self.pct_missing,
+            "pct_total_unique": self.pct_total_unique,
+            "s_score": self.s_score,
+            "entities": [entity.dict() for entity in self.entities],
+            "types": [type_metadata.dict() for type_metadata in self.types],
+            "field_labels": self.field_labels,
+            "field_attributes": self.field_attributes,
+        }
 
 
 @dataclass(frozen=True)
@@ -129,8 +204,14 @@ class EntitySummary:
     to the entity summary.
     """
 
-    def dict(self) -> dict:
-        return asdict(self)
+    def dict(self) -> EntitySummaryPayload:
+        return {
+            "label": self.label,
+            "fields": self.fields,
+            "count": self.count,
+            "approx_distinct_count": self.approx_distinct_count,
+            "sources": self.sources,
+        }
 
 
 @dataclass(frozen=True)
@@ -159,8 +240,15 @@ class DatasetMetadata:
     def add_entity(self, entity_summary: EntitySummary):
         self.data.entities.append(entity_summary)
 
-    def to_dict(self):
-        return asdict(self)
+    def to_dict(self) -> DatasetMetadataPayload:
+        return {
+            "project_record_count": self.project_record_count,
+            "total_field_count": self.total_field_count,
+            "data": {
+                "fields": [field_metadata.dict() for field_metadata in self.data.fields],
+                "entities": [entity_summary.dict() for entity_summary in self.data.entities],
+            },
+        }
 
 
 @dataclass(frozen=True)
@@ -174,6 +262,46 @@ class FieldLabelCondition:
         return f"At least {self.min_f_ratio * 100}% of all records were labeled with {label}"
 
 
+class _DatasetMetadataTracker:
+    def __init__(self, field_label_condition: FieldLabelCondition | None = None):
+        self.field_label_condition = field_label_condition or FieldLabelCondition()
+        self._field_names: list[str] = []
+        self._record_count = 0
+
+    def add_field_names(self, field_names: list[str]) -> None:
+        for field_name in field_names:
+            if field_name not in self._field_names:
+                self._field_names.append(field_name)
+
+    def update_fields(self, records: list[JSONRecord]) -> None:
+        self._record_count += len(records)
+
+    def update_entities(self, records: list[JSONRecord], record_labels: PipelineResult) -> None:
+        return None
+
+    def get_snapshot(self) -> DatasetMetadata:
+        fields = [
+            FieldMetadata(
+                field=field_name,
+                count=0,
+                approx_cardinality=0,
+                missing=self._record_count,
+                pct_missing=100.0 if self._record_count else 0.0,
+                pct_total_unique=0.0,
+                s_score=0.0,
+            )
+            for field_name in self._field_names
+        ]
+        return DatasetMetadata(
+            project_record_count=self._record_count,
+            total_field_count=len(self._field_names),
+            data=FieldsMetadata(fields=fields),
+        )
+
+    def get_entity_detail(self, entity_label: str) -> dict[str, Any]:
+        return {}
+
+
 class MetadataService:
     """
     Service that provides functionality to label records and also track model_metadata across whole dataset.
@@ -184,10 +312,10 @@ class MetadataService:
     def __init__(
         self,
         ner: NER | NERParallel,
-        field_label_condition: FieldLabelCondition = None,
+        field_label_condition: FieldLabelCondition | None = None,
     ):
         self.ner = ner
-        self.dataset_metadata_tracker = _DatasetMetadataTracker(field_label_condition=field_label_condition)  # noqa: F821
+        self.dataset_metadata_tracker = _DatasetMetadataTracker(field_label_condition=field_label_condition)
 
     def add_field_names(self, field_names: list[str]):
         """
@@ -209,20 +337,31 @@ class MetadataService:
         min_score: float = 0.0,
         timings_only: bool = False,
         include_labels: Optional[set[str]] = None,
-    ) -> PipelineResult:
+    ) -> PipelineResult | dict[str, Any]:
         # potential improvements here
         # - if a field is already classified as something on a field level -> do we skip doing NER on that field?
+
+        if timings_only:
+            timings = self.ner.predict(
+                records,
+                dict_result=True,
+                min_score=min_score,
+                timings_only=True,
+                include_labels=include_labels,
+            )
+            if not isinstance(timings, Timings):
+                raise RuntimeError("NER timings result was not returned")
+            return timings.to_dict()
 
         record_labels = self.ner.predict(
             records,
             dict_result=True,
             min_score=min_score,
-            timings_only=timings_only,
+            timings_only=False,
             include_labels=include_labels,
         )
-
-        if timings_only:
-            return record_labels.to_dict()
+        if isinstance(record_labels, Timings):
+            raise RuntimeError("NER predictions were not returned")
 
         # Update model_metadata based on records that were classified
         self.dataset_metadata_tracker.update_fields(records)

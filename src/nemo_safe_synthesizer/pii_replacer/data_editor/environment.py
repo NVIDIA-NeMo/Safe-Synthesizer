@@ -9,7 +9,7 @@ import re
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from functools import partial
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import dateutil.parser
 import jinja2
@@ -279,6 +279,7 @@ class Environment:
     _env: SandboxedEnvironment
     _fake: Faker
     entity_extractor: EntityExtractor
+    globals_config: dict[str, Any]
 
     def __init__(
         self,
@@ -291,13 +292,16 @@ class Environment:
             self.entity_extractor = entity_extractor
         else:
             self.entity_extractor = EntityExtractorNoop()
+        self.globals_config = globals_config or {}
         self._env = SandboxedEnvironment(loader=jinja2.BaseLoader())
         self._fake = Faker(locale=locales, seed=seed)
-        self._env.globals["fake"] = self._fake
-        self._env.globals["globals"] = globals_config
-        self._env.globals["random"] = random
-        self._env.globals["re"] = re
-        self._env.globals["timedelta"] = timedelta
+        # Jinja templates intentionally expose arbitrary helper objects in globals.
+        template_globals = cast("dict[str, Any]", self._env.globals)
+        template_globals["fake"] = self._fake
+        template_globals["globals"] = self.globals_config
+        template_globals["random"] = random
+        template_globals["re"] = re
+        template_globals["timedelta"] = timedelta
         self._env.filters["hash"] = partial(sha256, str(seed))
         self._env.filters["isna"] = pd.isna
         self._env.filters["fake"] = lambda faker_type: getattr(self._fake, faker_type)()
@@ -327,7 +331,7 @@ class Environment:
             )
         )
         self._env.filters["fake_entities"] = lambda text, entities=None, on_error=None, extended=False: (
-            entity_extractor.extract_and_replace_entities(
+            self.entity_extractor.extract_and_replace_entities(
                 partial(
                     fake_entities_fn,
                     str(seed),

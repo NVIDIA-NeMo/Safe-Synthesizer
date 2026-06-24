@@ -32,6 +32,25 @@ CHUNKSIZE = 1000000
 Rule = dict[str, Any]
 
 
+def _as_str_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, pd.Index):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def _locked_columns(env: Environment) -> set[str]:
+    return set(_as_str_list(env.globals_config.get("lock_columns")))
+
+
+def _as_positions(value: Any) -> list[int]:
+    values = value if isinstance(value, list) else [value]
+    return [position for position in values if isinstance(position, int)]
+
+
 class TransformFnAccounting:
     """Tracks which transform functions or filters are applied to each column for reporting.
 
@@ -50,22 +69,26 @@ class TransformFnAccounting:
         self.included_fns = set(included_fns)
         self.column_fns = defaultdict(set)
 
-    def update(self, column_names: str | Iterable[str], fns: str | set[str]) -> None:
+    def update(self, column_names: str | Iterable[str], fns: str | Iterable[str] | None) -> None:
         """Record that the given functions/filters were applied to the given columns.
 
         Args:
             column_names: Column name(s) to record; a single string or iterable of strings.
             fns: Name(s) of functions or filters applied; intersected with ``included_fns``.
         """
-        if isinstance(fns, str):
-            fns = set([fns])
-        fns &= self.included_fns
-        if not fns:
-            fns = {"jinja"}
+        if fns is None:
+            fn_set: set[str] = set()
+        elif isinstance(fns, str):
+            fn_set = {fns}
+        else:
+            fn_set = set(fns)
+        fn_set &= self.included_fns
+        if not fn_set:
+            fn_set = {"jinja"}
         if isinstance(column_names, str):
             column_names = [column_names]
         for column_name in column_names:
-            self.column_fns[column_name] |= fns
+            self.column_fns[column_name] |= fn_set
 
 
 @dataclass
@@ -163,7 +186,7 @@ class Step:
     """
 
     _env: Environment
-    _vars: dict[str, str | dict | list]
+    _vars: dict[str, Any]
 
     def do_make_template(self, template_str: str) -> Template:
         """Build a Jinja template from the string (may raise ``TemplateError``)."""
@@ -176,7 +199,6 @@ class Step:
         except TemplateError as e:
             raise Exception(
                 f"Error building jinja template '{template_str}': {e}",
-                error_id="param",
             )
 
     def template_to_fnames(self, template_str: str) -> set[str]:
@@ -196,7 +218,7 @@ class Step:
         **kwargs,
     ) -> str:
         """Render the full column as a single string from the template with ``column`` and ``vars``."""
-        self._env.maybe_seed(column)
+        self._env.maybe_seed(column.to_json())
         for k, v in kwargs.items():
             setattr(column, k, v)
         return template.render(column=column, vars=self._vars, **kwargs)
@@ -250,9 +272,10 @@ class Step:
         if progress is not None:
             progress.log_throttled()
 
-        this = row[column["name"]]
-        self._env.maybe_seed(this)
-        self._env.entity_extractor.current_column = column["name"]
+        column_name = str(column["name"])
+        this = row[column_name]
+        self._env.maybe_seed(str(this))
+        self._env.entity_extractor.current_column = column_name
         if foreach:
             foreach_str = foreach.render(
                 row=row,
@@ -263,8 +286,6 @@ class Step:
                 **kwargs,
             )
 
-            foreach_itr = None
-
             try:
                 foreach_itr = ast.literal_eval(foreach_str)
             except (ValueError, TypeError, SyntaxError):
@@ -273,29 +294,28 @@ class Step:
                 except (json.JSONDecodeError, TypeError):
                     foreach_itr = None
 
-            try:
-                iter(foreach_itr)
-            except TypeError:
+            if not isinstance(foreach_itr, Iterable):
                 return f"[Error] '{foreach_str}' is not iterable built-in python type or JSON blob."
+            foreach_items = list(foreach_itr)
 
         else:
-            foreach_itr = [None]
+            foreach_items = [None]
 
         try:
-            cell = this
-            for foreach_item in foreach_itr:
+            cell: Any = this
+            for foreach_item in foreach_items:
                 cell = template.render(
                     row=row,
                     index=row.name,
                     column=column,
                     this=cell,
-                    items=foreach_itr,
+                    items=foreach_items,
                     item=foreach_item,
                     vars=self._vars,
                     **kwargs,
                 )
                 if fnreport:
-                    fnreport.update(column["name"], fn_names)
+                    fnreport.update(column_name, fn_names)
             if progress is not None:
                 progress.status.row_n += 1
                 progress.log_throttled()
@@ -305,7 +325,7 @@ class Step:
         except Exception as e:
             if fallback_template:
                 if fnreport:
-                    fnreport.update(column["name"], fallback_fn_names)
+                    fnreport.update(column_name, fallback_fn_names)
                 cell = self._render_cell(
                     row,
                     fallback_template,
@@ -328,25 +348,26 @@ class Step:
     def _add_columns(self, df: pd.DataFrame, rules: list[Rule]) -> None:
         """Insert new columns into ``df`` per rules (``name`` and optional ``position``)."""
         for col in rules:
-            name = col["name"]
+            name = str(col["name"])
             position = col.get("position")
             if position is None:
                 position = len(df.columns)
-            df.insert(position, name, None)
+            if isinstance(position, int):
+                df.insert(position, name, None)
 
     def _rename_columns(self, df: pd.DataFrame, rules: list[Rule]) -> None:
         """Rename columns per rules (name → value); skip columns in ``lock_columns``."""
-        locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
+        locked = _locked_columns(self._env)
         column_names = {
-            col["name"]: col["value"]
+            str(col["name"]): str(col["value"])
             for col in rules
-            if "name" in col and col["name"] not in locked and col["value"] not in locked
+            if "name" in col and str(col["name"]) not in locked and str(col["value"]) not in locked
         }
         df.rename(columns=column_names, inplace=True)
 
     def _drop_rows(self, df: pd.DataFrame, rules: list[Rule]) -> None:
         """Drop rows for which each rule's condition template renders to ``True``."""
-        conditions = [self.make_template(rule["condition"]) for rule in rules]
+        conditions = [self.make_template(str(rule["condition"])) for rule in rules]
         for condition in conditions:
             row_filter = df.apply(lambda row: self._render_row(condition, row), axis=1)
             df.drop(index=df.index[row_filter == "True"], inplace=True)
@@ -367,34 +388,27 @@ class Step:
         position = rule.get("position")
         condition = rule.get("condition")
         rule_coltypes = rule.get("type")
+        condition_template: Template | None = None
         if column_name:
-            if isinstance(column_name, list):
-                columns = column_name
-            else:
-                columns = [column_name]
+            columns = _as_str_list(column_name)
         elif rule_entities:
-            if not isinstance(rule_entities, list):
-                rule_entities = [rule_entities]
-            columns = [col for col in df.columns if entities.get(col) in rule_entities]
+            entity_names = set(_as_str_list(rule_entities))
+            columns = [str(col) for col in df.columns if entities.get(str(col)) in entity_names]
         elif rule_coltypes:
-            if not isinstance(rule_coltypes, list):
-                rule_coltypes = [rule_coltypes]
-            columns = [col for col in df.columns if column_types.get(col) in rule_coltypes]
+            type_names = set(_as_str_list(rule_coltypes))
+            columns = [str(col) for col in df.columns if column_types.get(str(col)) in type_names]
         elif position is not None:
-            if isinstance(position, list):
-                position_list = position
-            else:
-                position_list = [position]
+            position_list = _as_positions(position)
             columns = [df.columns[pos] for pos in position_list]
-        elif condition:
-            columns = df.columns
-            condition = self.make_template(condition)
+            columns = [str(column) for column in columns]
+        elif isinstance(condition, str):
+            columns = [str(column) for column in df.columns]
+            condition_template = self.make_template(condition)
         else:
             raise Exception(
                 f"column drop rule must contain one of name, entity, position, or condition. {rule}",
-                error_id="param",
             )
-        return columns, condition
+        return columns, condition_template
 
     def _drop_columns(
         self,
@@ -405,11 +419,11 @@ class Step:
         fnreport: TransformFnAccounting | None = None,
     ) -> None:
         """Drop columns per rules (by name/entity/type/position/condition); respect ``lock_columns``; update ``fnreport``."""
-        locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
+        locked = _locked_columns(self._env)
         try:
             for rule in rules:
                 columns, condition_tmpl = self._parse_drop_columns_rule(rule, df, entities, column_types)
-                to_drop = []
+                to_drop: Iterable[str]
                 if condition_tmpl:
                     column_properties = {}
                     for position, column_name in enumerate(columns):
@@ -424,8 +438,9 @@ class Step:
                         lambda column: self._render_column(condition_tmpl, column, **column_properties[column.name]),
                         axis=0,
                     )
-                    colfilter[locked & set(columns)] = "False"
-                    to_drop = df.columns[colfilter == "True"]
+                    locked_columns = list(locked & set(columns))
+                    colfilter.loc[locked_columns] = "False"
+                    to_drop = [str(column) for column in df.columns[colfilter == "True"]]
                     df.drop(columns=to_drop, inplace=True)
                 else:
                     to_drop = list(set(columns) - locked)
@@ -435,7 +450,6 @@ class Step:
         except KeyError as keyerr:
             raise Exception(
                 f"Attempting to drop nonexistent column: {keyerr}",
-                error_id="param",
             )
 
     def update_ner_cache(self, texts: pd.Series, entities: set[str] | None = None) -> None:
@@ -454,34 +468,28 @@ class Step:
         rule_entities = rule.get("entity")
         condition = rule.get("condition")
         rule_coltypes = rule.get("type")
+        condition_template: Template | None = None
         if column_name:
-            if isinstance(column_name, list):
-                columns = column_name
-            else:
-                columns = [column_name]
+            columns = _as_str_list(column_name)
         elif rule_entities:
-            if not isinstance(rule_entities, list):
-                rule_entities = [rule_entities]
-            columns = [col for col in df.columns if entities.get(col) in rule_entities]
+            entity_names = set(_as_str_list(rule_entities))
+            columns = [str(col) for col in df.columns if entities.get(str(col)) in entity_names]
         elif rule_coltypes:
-            if not isinstance(rule_coltypes, list):
-                rule_coltypes = [rule_coltypes]
-            columns = [col for col in df.columns if column_types.get(col) in rule_coltypes]
-        elif condition:
-            columns = df.columns
-            condition = self.make_template(condition)
+            type_names = set(_as_str_list(rule_coltypes))
+            columns = [str(col) for col in df.columns if column_types.get(str(col)) in type_names]
+        elif isinstance(condition, str):
+            columns = [str(column) for column in df.columns]
+            condition_template = self.make_template(condition)
         else:
             raise Exception(
                 f"row update rule must contain one of name, entity, or condition. {rule}",
-                error_id="param",
             )
         for column in columns:
             if column not in df.columns:
                 raise Exception(
                     f"The column '{column}' was not found. If you are adding a column and wish to access it, be sure to place the column.add rule in a step prior to the step accessing the column.",
-                    error_id="param",
                 )
-        return columns, condition
+        return columns, condition_template
 
     def _update_rows(
         self,
@@ -490,7 +498,7 @@ class Step:
         entities: dict[str, str | None],
         column_types: dict[str, str | None],
         progress: ProgressLog,
-        fnreport: TransformFnAccounting,
+        fnreport: TransformFnAccounting | None = None,
     ) -> None:
         """Apply row-update rules to DataFrame cells; skip locked columns; update progress and fnreport.
 
@@ -511,25 +519,26 @@ class Step:
         Returns:
             None. The DataFrame is modified in place.
         """
-        locked = set(self._env._env.globals["globals"].get("lock_columns") or [])
+        locked = _locked_columns(self._env)
         progress.status.update_rule_n_total = len(rules)
         for rule_n, rule in enumerate(rules):
             progress.status.update_rule_n = rule_n
-            progress.status.update_rule_description = rule.get("description")
+            progress.status.update_rule_description = str(rule.get("description") or "")
             columns, condition = self._parse_update_rows_rule(rule, df, entities, column_types)
             columns = [col for col in columns if col not in locked]
 
-            foreach = rule.get("foreach")
-            if foreach:
-                foreach = self.make_template(foreach)
+            foreach_value = rule.get("foreach")
+            foreach = self.make_template(foreach_value) if isinstance(foreach_value, str) else None
 
-            fns = self.template_to_fnames(rule["value"])
-            value = self.make_template(rule["value"])
+            value_text = str(rule["value"])
+            fns = self.template_to_fnames(value_text)
+            value = self.make_template(value_text)
             fallback_value = rule.get("fallback_value")
-            fallback_fns = None
-            if fallback_value:
+            fallback_fns: set[str] | None = None
+            fallback_template: Template | None = None
+            if isinstance(fallback_value, str):
                 fallback_fns = self.template_to_fnames(fallback_value)
-                fallback_value = self.make_template(fallback_value)
+                fallback_template = self.make_template(fallback_value)
             progress.status.column_n_total = len(columns)
             for position, column_name in enumerate(columns):
                 column_properties = {
@@ -561,7 +570,7 @@ class Step:
                     args=(
                         value,
                         column_properties,
-                        fallback_value,
+                        fallback_template,
                         foreach,
                         progress,
                         fns,
@@ -578,7 +587,7 @@ class Step:
         df: pd.DataFrame,
         entities: dict[str, str | None],
         column_types: dict[str, str | None],
-        step_config: dict[str, dict],
+        step_config: dict[str, Any],
         env: Environment,
         progress: ProgressLog,
         fnreport: TransformFnAccounting | None,
@@ -647,7 +656,6 @@ def instantiate_vars(var_name: str, var_value: dict | list | str, step: Step, df
             # If it's valid jinja syntax but some other error occurred, assume user error.
             raise Exception(
                 f"Error building jinja template for var '{var_name}': '{var_value}': {e}",
-                error_id="param",
             )
 
         try:
@@ -693,14 +701,15 @@ class Editor:
             entity_extractor=entity_extractor,
         )
 
-    def __init__(self, config: dict[str, dict], entity_extractor: EntityExtractor | None) -> None:
+    def __init__(self, config: dict[str, Any], entity_extractor: EntityExtractor | None = None) -> None:
         self.config = config
         self._config_globals(entity_extractor)
 
     @classmethod
     def load_yaml(cls, yaml_str: str) -> Editor:
         """Build an ``Editor`` from a YAML string (e.g. ``yaml.safe_load(yaml_str)``)."""
-        return cls(yaml.safe_load(yaml_str))
+        config = yaml.safe_load(yaml_str)
+        return cls(config if isinstance(config, dict) else {})
 
     def _process_df(
         self,

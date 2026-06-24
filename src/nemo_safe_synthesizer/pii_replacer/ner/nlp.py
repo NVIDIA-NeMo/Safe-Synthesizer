@@ -10,6 +10,8 @@ from numbers import Number
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Optional
 
+from typing_extensions import override
+
 from ...data_processing.records.base import KVPair
 from ...data_processing.records.json_record import JSONRecord
 from ...data_processing.records.value_path import ValuePath
@@ -26,10 +28,25 @@ from .ner import NERPrediction
 from .predictor import Predictor
 from .utils import is_string_a_number
 
-spacy = None
-Doc = None
-Span = None
-srsly = None
+spacy: Any
+Doc: Any
+Span: Any
+srsly: Any
+try:
+    import spacy as _spacy  # ty: ignore[unresolved-import]
+    import srsly as _srsly  # ty: ignore[unresolved-import]
+    from spacy.tokens import Doc as _Doc  # ty: ignore[unresolved-import]
+    from spacy.tokens import Span as _Span  # ty: ignore[unresolved-import]
+except ImportError:
+    spacy = None
+    Doc = None
+    Span = None
+    srsly = None
+else:
+    spacy = _spacy
+    Doc = _Doc
+    Span = _Span
+    srsly = _srsly
 
 
 if TYPE_CHECKING:
@@ -75,7 +92,7 @@ ENTITY_MAX_CHARS = 30
 SPACY_DELIM = " is "
 
 
-def _is_valid_spacy_entity(ent: Span):
+def _is_valid_spacy_entity(ent: Any):
     """Removes entities predicted by Spacy ML models that are not contained
     in ENTITY_VALID_CHARACTERS, or that are greater than ENTITY_MAX_CHARS
     in length
@@ -210,45 +227,40 @@ def _get_spacy_ent_score(_, ent: Entity) -> float:
     elif ent == Entity.PERSON_NAME:
         return Score.LOW
     else:
-        return None
+        return 0.0
 
 
 class SpacyPredictor(Predictor):
     nlp: Any
-    timings: dict[str, Number]
+    timings: dict[str, float]
     default_name: str = "spacy"
 
     def __init__(
         self,
-        name: str = None,
-        model: str = None,
+        name: str | None = None,
+        model: Any | None = None,
         namespace: Optional[str] = None,
     ):
         if spacy is None:
             raise RuntimeError("spacy is not installed and must be for spacy predictors")
 
         self.timings = {}
-
-        if name is None and model is None:
-            # We load our default Spacy model
-            name = "spacy"
-            start_time = perf_counter()
-            model_bytes = get_cache_manager().resolve(spacy_manifest)["model_data"]  # noqa: F821
-            nlp = spacy.blank("en")
-            ner_pipe = nlp.create_pipe("ner")
-            nlp.add_pipe(ner_pipe)
-            nlp.from_bytes(model_bytes)
-            self.timings[self.default_name] = perf_counter() - start_time
-            self.nlp = nlp
-        else:
-            raise ValueError("Spacy predictor no longer works")
+        if model is None:
+            raise ValueError("Spacy predictor requires a model loaded with from_manifest()")
+        name = name or self.default_name
+        self.nlp = model
 
         super().__init__(name=name, namespace=namespace)
 
     @classmethod
     def from_manifest(cls, manifest: ModelManifest) -> "SpacyPredictor":
+        if spacy is None:
+            raise RuntimeError("spacy is not installed and must be for spacy predictors")
         start_time = perf_counter()
-        model_bytes = get_cache_manager().resolve(manifest)["model_data"]
+        model_data = get_cache_manager().resolve(manifest)
+        if model_data is None:
+            raise RuntimeError(f"Could not resolve manifest {manifest}")
+        model_bytes = model_data["model_data"]
         nlp = spacy.blank("en")
         ner_pipe = nlp.create_pipe("ner")
         nlp.add_pipe(ner_pipe)
@@ -263,6 +275,7 @@ class SpacyPredictor(Predictor):
         doc.set_extension(const.NER_SCORE, default=None, force=True)
         return self.nlp(doc.text)
 
+    @override
     def evaluate(self, in_data: JSONRecord) -> list[NERPrediction]:
         fields = _flatten_fields(in_data.kv_pairs)
 

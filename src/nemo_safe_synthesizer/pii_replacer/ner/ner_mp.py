@@ -13,12 +13,12 @@ from threading import BoundedSemaphore
 from typing import Any, Optional
 
 import joblib.externals.loky as loky
+from typing_extensions import TypeIs
 
-from ...data_processing.records.json_record import JSONRecord
 from ...observability import get_logger
 from . import pipeline
-from .ner import NER, PipelineResult, Timings
-from .utils import InData
+from .ner import NER, NERPrediction, PipelineResult, Prediction, PredictionList, Timings
+from .utils import InData, input_to_json_records
 
 logger = get_logger(__name__)
 
@@ -30,16 +30,24 @@ MAX_CHUNKS = 250
 class _ProcPayload:
     seq: int
     in_data: InData
-    out_data: dict | Timings | PipelineResult = None
+    out_data: Timings | PipelineResult | None = None
 
 
-_ner_predictor = None  # type: ner.NER
+_ner_predictor: NER | None = None
 """This global var should only ever be init'd to an
 NER instance by a process that is part of the process
 pool. By making it a global it becomes more stable to
 init at the module level at the time the process pool
 is created.
 """
+
+
+def _is_prediction(value: object) -> TypeIs[Prediction]:
+    return isinstance(value, NERPrediction) or isinstance(value, dict)
+
+
+def _is_prediction_list(value: object) -> TypeIs[PredictionList]:
+    return isinstance(value, list) and all(_is_prediction(item) for item in value)
 
 
 def _set_ner_predictor(pipeline_factory: Callable[[], pipeline.Pipeline]):
@@ -65,6 +73,8 @@ def _predict(payload: _ProcPayload, **kwargs) -> _ProcPayload:
     this is ever called
     """
     try:
+        if _ner_predictor is None:
+            raise RuntimeError("NER worker was not initialized")
         payload.out_data = _ner_predictor.predict(payload.in_data, **kwargs)
         return payload
     except Exception as e:
@@ -156,29 +166,29 @@ class NERParallel:
 
         list_input = isinstance(in_data, list)
         if list_input:
-            if len(in_data) > 0 and isinstance(in_data[0], JSONRecord):
-                # Send pure dicts to NER, as it's much faster to pickle/unpickle
-                # pure dicts that JSONRecords (and that's what multiprocessing is doing)
-                in_data = [record.original for record in in_data]
+            # Send pure dicts to NER, as it's much faster to pickle/unpickle
+            # pure dicts that JSONRecords (and that's what multiprocessing is doing)
+            records = [record.original for record in input_to_json_records(in_data)]
 
-            record_chunks = iter_record_chunks(iter(in_data), CHUNK_SIZE)
+            chunks: list[tuple[InData, int]] = [
+                (chunk, len(chunk)) for chunk in iter_record_chunks(iter(records), CHUNK_SIZE)
+            ]
         else:
             # We need to handle the case where a non-list is sent in
             # as our prediction object and we need to makesure the payload
             # we send to the worker is the raw input, not a list
-            record_chunks = [in_data]
+            chunks = [(in_data, 1)]
 
         result_data_tracker = _ResultData()
 
         total_chunks = 0
         submitted_chunks = []
-        for i, p in enumerate(record_chunks):
+        for i, (data, chunk_size) in enumerate(chunks):
             result_data_tracker.lock.acquire()
             logger.info(f"Submitting chunk number {i + 1} to NER workers.")
 
-            data = list(p) if list_input else p
             payload = _ProcPayload(seq=i, in_data=data)
-            submitted_chunks.append(_ChunkInfo(seq=i, chunk_size=len(data) if list_input else 1))
+            submitted_chunks.append(_ChunkInfo(seq=i, chunk_size=chunk_size))
 
             self.pool.submit(_predict, payload, **kwargs).add_done_callback(result_data_tracker.handle_results)
 
@@ -202,16 +212,15 @@ class NERParallel:
                 self._initialize_pool()  # in case it's reused
                 break
 
-        result_data_tracker.progress_callback.flush()
         result_data = result_data_tracker.results
 
         logger.info("NER prediction completed.")
 
         if timings_only:
-            result_timings = iter(result_data)
-            timings = next(result_timings).out_data
-            for other_timings in result_timings:
-                timings.join(other_timings.out_data)
+            result_timings = [result.out_data for result in result_data if isinstance(result.out_data, Timings)]
+            timings = result_timings[0] if result_timings else Timings()
+            for other_timings in result_timings[1:]:
+                timings.join(other_timings)
             timings.set_avg(num_cpu=self.num_proc)
             return timings
 
@@ -220,17 +229,29 @@ class NERParallel:
 
         # Restore the predictions to the order they would
         # have been if predicting on a single worker
-        preds = []
+        if list_input:
+            batch_preds: list[PredictionList] = []
+        else:
+            single_preds: PredictionList = []
         for seq in sorted(list(all_chunks.keys())):
             if (payload := completed_chunks.get(seq, None)) is not None:
-                preds.extend(payload.out_data)
+                if isinstance(payload.out_data, list):
+                    if list_input:
+                        for row in payload.out_data:
+                            if _is_prediction_list(row):
+                                batch_preds.append(row)
+                    else:
+                        for prediction in payload.out_data:
+                            if _is_prediction(prediction):
+                                single_preds.append(prediction)
 
             else:
                 # Add an empty spot for each record in the chunk that wasn't completed
                 logger.warning(f"NER for chunk number {seq + 1} did not complete.")
-                preds.extend([[]] * all_chunks[seq].chunk_size)
+                if list_input:
+                    batch_preds.extend([[]] * all_chunks[seq].chunk_size)
 
-        return preds
+        return batch_preds if list_input else single_preds
 
     def __exit__(self, exc_type, exc_value, traceback):
         logger.info("Shutting down NER worker pool.")

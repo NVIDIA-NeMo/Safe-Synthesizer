@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 
 from stdnum import luhn
+from typing_extensions import override
 
 from ..entity import Entity
 from ..predictor import ContextSpan
@@ -150,5 +151,6 @@ class CreditCardNumber(RegexPredictor):
         entity = Entity.CREDIT_CARD_NUMBER
         super().__init__(entity=entity, patterns=PATTERNS)
 
-    def validate_match(self, matched_text: str, _):
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
         return _is_luhn_checksum_valid(matched_text)

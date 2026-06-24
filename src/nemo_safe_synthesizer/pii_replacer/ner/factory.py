@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Optional
 
+from typing_extensions import override
+
 from ...data_processing.records.base import normalize_labels
 from ...observability import get_logger
 from .metadata import FieldLabelCondition
@@ -53,6 +55,7 @@ class LabelSetPredictorFilter(PredictorFilter):
     def __init__(self, included_labels: set[str]):
         self._included_labels = normalize_labels(included_labels)
 
+    @override
     def should_include(self, predictor: Predictor) -> bool:
         if isinstance(predictor, RegexPredictor):
             # For Regex predictor, we filter based on ``entity.tag`` (that's what is visible to the user)
@@ -101,7 +104,7 @@ class NERFactory(NERFactoryBase):
         parallel: bool = True,
         use_nlp: bool = False,
         regex_only: bool = False,
-        ner_max_runtime_seconds: int = None,
+        ner_max_runtime_seconds: int | None = None,
     ):
         if custom_predictors is None:
             custom_predictors = []
@@ -111,6 +114,7 @@ class NERFactory(NERFactoryBase):
         self._ner_pipeline_type = NERPipelineType.from_flags(use_nlp=use_nlp, regex_only=regex_only)
         self._ner_max_runtime_seconds = ner_max_runtime_seconds
 
+    @override
     def create(
         self,
         *,
@@ -186,6 +190,7 @@ class StaticNERFactory(NERFactoryBase):
     def __init__(self, ner: NER | NERParallel):
         self._ner = ner
 
+    @override
     def create(
         self,
         *,

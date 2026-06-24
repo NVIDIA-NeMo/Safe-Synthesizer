@@ -10,7 +10,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, overload
 
 from ...data_processing.records.json_record import JSONRecord
 from ...data_processing.records.value_path import (
@@ -55,15 +55,17 @@ class NERPrediction:
     """
 
     @property
-    def as_dict(self):
+    def as_dict(self) -> dict[str, Any]:
         return self.__dict__
 
     @classmethod
-    def from_dict(cls, source: dict):
+    def from_dict(cls, source: dict[str, Any]) -> NERPrediction:
         return cls(**source)
 
     @property
-    def json_path(self):
+    def json_path(self) -> str | None:
+        if self.value_path is None:
+            return None
         return value_path_to_json_path(self.value_path)
 
     def get_dedupe_key_by_label(self, record: JSONRecord) -> tuple:
@@ -95,8 +97,11 @@ class NERPrediction:
         )
 
 
-"""Represents the prediction results of a pipeline"""
-PipelineResult = list[list[NERPrediction | dict]]
+"""Represents the prediction results of a pipeline."""
+PredictionDict = dict[str, Any]
+Prediction = NERPrediction | PredictionDict
+PredictionList = list[Prediction]
+PipelineResult = PredictionList | list[PredictionList]
 
 
 PRECISION = 4
@@ -123,7 +128,7 @@ class Timings:
     predictors: dict = dataclasses_field(default_factory=lambda: defaultdict(PredictorTimings))
 
     def to_dict(self):
-        ret = {
+        ret: dict[str, Any] = {
             "records": self.records,
             "total_predictions": self.total_predictions,
             "total_time_ms": round(self.total_time * 1000, PRECISION),
@@ -156,22 +161,46 @@ class Timings:
 class NER:
     """Entity Recognition Pipeline"""
 
-    pipeline: Pipeline
+    pipeline: Pipeline | None
 
-    def __init__(self, predictor_cache_size=DEFAULT_CACHE_SIZE, pipeline: Pipeline = None):
+    def __init__(self, predictor_cache_size: int = DEFAULT_CACHE_SIZE, pipeline: Pipeline | None = None):
         self.predictor_cache_size = predictor_cache_size
         self.pipeline = pipeline
+
+    @overload
+    def predict(
+        self,
+        in_data: InData,
+        *,
+        pipeline: Pipeline | None = None,
+        dict_result: bool = False,
+        min_score: float = 0.0,
+        timings_only: Literal[True],
+        include_labels: Optional[set[str]] = None,
+    ) -> Timings: ...
+
+    @overload
+    def predict(
+        self,
+        in_data: InData,
+        *,
+        pipeline: Pipeline | None = None,
+        dict_result: bool = False,
+        min_score: float = 0.0,
+        timings_only: Literal[False] = False,
+        include_labels: Optional[set[str]] = None,
+    ) -> PipelineResult: ...
 
     def predict(
         self,
         in_data: InData,
         *,
-        pipeline: Pipeline = None,
+        pipeline: Pipeline | None = None,
         dict_result: bool = False,
         min_score: float = 0.0,
         timings_only: bool = False,
         include_labels: Optional[set[str]] = None,
-    ) -> PipelineResult:
+    ) -> PipelineResult | Timings:
         """
         Predict entities from a string, list or dictionary object.
 
@@ -198,23 +227,25 @@ class NER:
         # the instance configured pipeline
         if not pipeline:
             pipeline = self.pipeline
+        if pipeline is None:
+            raise NERError("Pipeline is empty")
 
         processed_in_data = input_to_json_records(in_data)  # type: List[JSONRecord]
 
         # create an empty array for each item
         # that we are predicting
-        slots = [[] for _ in processed_in_data]
+        slots: list[PredictionList] = [[] for _ in processed_in_data]
 
         # for each predictor we need to add all
         # predictions for each item to the right slot
-        result_set = []
+        result_set: list[list[NERPrediction]] = []
 
         timings = Timings(records=len(processed_in_data))
 
         input_record: JSONRecord
         for input_record in processed_in_data:
             timings.total_predictions += len(input_record.kv_pairs)
-            record_predictions = []
+            record_predictions: list[NERPrediction] = []
             for predictor in pipeline.iter_predictors():
                 start = time.perf_counter()
                 predictions = predictor.evaluate(input_record)
@@ -239,7 +270,7 @@ class NER:
             return timings
 
         for slot, preds in zip(slots, result_set):
-            results = preds
+            results: PredictionList = list(preds)
             if dict_result:
                 results = [p.as_dict for p in preds]
             slot.extend(results)

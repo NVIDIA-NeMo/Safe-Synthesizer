@@ -3,27 +3,35 @@
 
 from __future__ import annotations
 
-from ...data_processing.records.json_record import JSONRecord
+from collections.abc import Sequence
+from typing import TypeAlias
 
-# Valid input data includes a str, tuple or dict
-InData = str | list | dict | JSONRecord
+from ...data_processing.records.json_record import JsonObject, JSONRecord
+
+JsonRecordInput: TypeAlias = str | JsonObject | JSONRecord
+InData: TypeAlias = JsonRecordInput | Sequence[JsonRecordInput]
 
 
 def input_to_json_records(in_data: InData) -> list[JSONRecord]:
     """Try and convert python objects to a list of Fields"""
-    if isinstance(in_data, JSONRecord):
-        return [in_data]
-    if isinstance(in_data, (str, dict)):
-        return [JSONRecord(in_data)]
-    if isinstance(in_data, list):
-        out = []
-        for record in in_data:
-            if isinstance(record, JSONRecord):
-                out.append(record)
-            else:
-                out.append(JSONRecord(record))
-        return out
-    raise TypeError("Input data not supported.")
+    match in_data:
+        case JSONRecord() as record:
+            return [record]
+        case (str() | dict()) as record:
+            return [JSONRecord(record)]
+        case list() as records:
+            out: list[JSONRecord] = []
+            for record in records:
+                match record:
+                    case JSONRecord() as json_record:
+                        out.append(json_record)
+                    case (str() | dict()) as raw_record:
+                        out.append(JSONRecord(raw_record))
+                    case _:
+                        raise TypeError("Input data not supported.")
+            return out
+        case _:
+            raise TypeError("Input data not supported.")
 
 
 def is_string_a_number(value) -> bool:

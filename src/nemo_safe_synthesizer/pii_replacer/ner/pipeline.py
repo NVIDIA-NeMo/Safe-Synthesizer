@@ -7,6 +7,9 @@ from collections.abc import Iterator, Sequence
 from enum import Enum
 from numbers import Number
 from pathlib import Path
+from typing import Protocol
+
+from typing_extensions import override
 
 from ...observability import get_logger
 from . import person_name
@@ -24,6 +27,10 @@ CUSTOM_CONFIG = "config.yml"
 """User defined custom regex predictors and patterns"""
 
 
+class PredictorFactory(Protocol):
+    def __call__(self) -> Predictor: ...
+
+
 class PredictionSource(Enum):
     """This enum stores default source tags for NLP and other more
     complex predictors that have associated "models" that need
@@ -36,6 +43,7 @@ class PredictionSource(Enum):
     BIRTH_DATE = BirthDateTime
 
     @property
+    @override
     def name(self):
         return f"{Predictor.default_namespace}/{self.value.default_name}"  # pylint: disable=no-member
 
@@ -50,26 +58,26 @@ class Pipeline:
     predictors: list[Predictor]
     load_timings: dict[str, Number]
 
-    def __init__(self, predictors: list[Predictor] = None):
-        self.predictors = predictors or []
+    def __init__(self, predictors: Sequence[Predictor] | None = None):
+        self.predictors = list(predictors) if predictors else []
         self.load_timings = {}
 
-    def _next_udf_name(self):
+    def _next_udf_name(self) -> str:
         return f"user_defined_predictor_{len(self.predictors) + 1}"
 
-    def add_predictors(self, predictors: Predictor | list[Predictor]):
+    def add_predictors(self, predictors: Predictor | Sequence[Predictor]) -> Pipeline:
         if isinstance(predictors, Predictor):
             self.predictors.append(predictors)
-        if isinstance(predictors, list):
+        else:
             self.predictors.extend(predictors)
         return self
 
-    def add_pattern(self, pattern: Pattern, name: str = None):
+    def add_pattern(self, pattern: Pattern, name: str | None = None):
         name = name or self._next_udf_name()
         predictor = RegexPredictor.from_pattern(pattern, name=name)
         self.add_predictors(predictor)
 
-    def add_regex(self, regex: str, name: str = None, namespace: str = None):
+    def add_regex(self, regex: str, name: str | None = None, namespace: str | None = None):
         name = name or self._next_udf_name()
         predictor = RegexPredictor.from_regex(regex, name=name)
         self.add_predictors(predictor)
@@ -81,7 +89,7 @@ class Pipeline:
     def iter_predictors(self) -> Iterator[Predictor]:
         return iter(self.predictors)
 
-    def get_predictor(self, source: str) -> Predictor:
+    def get_predictor(self, source: str) -> Predictor | None:
         """Returns the first predictor by source name in the pipeline
 
         Args:
@@ -104,10 +112,10 @@ class Pipeline:
             logger.info("Custom Predictors: Not Found, skipping")
             return
         logger.info("Custom Predictors: loading from %s", file_path)
-        self.add_predictors(get_predictors_from_yaml(_path))
+        self.add_predictors(get_predictors_from_yaml(str(_path)))
 
     @classmethod
-    def from_class_refs(cls, predictors: Sequence[type[Predictor]]) -> Pipeline:
+    def from_class_refs(cls, predictors: Sequence[PredictorFactory]) -> Pipeline:
         klasses = [p() for p in predictors]
         return cls(klasses)
 
@@ -151,7 +159,7 @@ def create_default_ner(full: bool = False) -> NER:
     return NER(pipeline=pipe)
 
 
-def from_source_string_list(*, include: list[str] = None, exclude: list[str] = None) -> Pipeline:
+def from_source_string_list(*, include: list[str] | None = None, exclude: list[str] | None = None) -> Pipeline:
     if include and exclude:
         raise ValueError("cannot include and exclude")
 

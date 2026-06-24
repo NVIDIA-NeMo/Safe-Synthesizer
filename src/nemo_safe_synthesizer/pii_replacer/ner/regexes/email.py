@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import tldextract
+from typing_extensions import override
 
 from ..entity import Entity, Score
 from ..regex import Pattern, RegexPredictor
@@ -23,9 +24,10 @@ class Email(RegexPredictor):
             raw_score=Score.HIGH,
         )
 
-        self.tld_extract = tldextract.TLDExtract(suffix_list_urls=None)
+        self.tld_extract = tldextract.TLDExtract(suffix_list_urls=())
         super().__init__(entity=entity, patterns=[match])
 
-    def validate_match(self, in_text: str, _) -> bool:
-        result = self.tld_extract(in_text)
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
+        result = self.tld_extract(matched_text)
         return result.fqdn != ""

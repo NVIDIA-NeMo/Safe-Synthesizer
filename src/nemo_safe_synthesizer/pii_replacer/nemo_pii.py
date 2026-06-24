@@ -213,7 +213,8 @@ def _build_column_statistics(
                 detected_values[entity_name] = entity_report.values
         elif field.entity is not None:
             # Non-text column with detected entity
-            detected_counts[field.entity] = field.entity_count
+            if field.entity_count is not None:
+                detected_counts[field.entity] = field.entity_count
             detected_values[field.entity] = set(field.entity_values)
 
         # Get transform functions for this column

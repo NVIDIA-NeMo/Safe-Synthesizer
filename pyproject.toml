@@ -352,13 +352,13 @@ safe-synthesizer = "nemo_safe_synthesizer.cli.cli:cli"
 # that appear unused when the package is installed. Suppress the noise.
 unused-ignore-comment = "ignore"
 
+
 [tool.ty.environment]
 extra-paths = ["typings"]
 
 [tool.ty.src]
 # Below is a list of excluded directories from ty typechecks.
 exclude = [
-    ".uv_cache", # Cache Dir in CI
-    "./docs/**/*.ipynb",
-    "./src/nemo_safe_synthesizer/pii_replacer/",
+  "./uv-cache",
+  "./docs/**/*.ipynb",
 ]

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import re
 
+from typing_extensions import override
+
 from ..entity import Entity, Score
 from ..predictor import ContextSpan
 from ..regex import Pattern, RegexPredictor
@@ -41,11 +43,12 @@ class Github(RegexPredictor):
             patterns=[_match_1],
         )
 
-    def validate_match(self, matched_text, original_value):
-        if re.search(COMMIT_URL.format(matched_text), original_value):
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
+        if re.search(COMMIT_URL.format(matched_text), original_text):
             return False
-        if re.search(f"(?:id|h)={matched_text}", original_value):
+        if re.search(f"(?:id|h)={matched_text}", original_text):
             return False
-        if "commit" in original_value:
+        if "commit" in original_text:
             return False
         return True

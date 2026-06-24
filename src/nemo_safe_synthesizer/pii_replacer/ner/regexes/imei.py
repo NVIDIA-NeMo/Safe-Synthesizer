@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from stdnum import imei
+from typing_extensions import override
 
 from ..entity import Entity
 from ..predictor import ContextSpan
@@ -38,9 +39,10 @@ class IMEI(RegexPredictor):
             patterns=[unlikely_match, likely_match],
         )
 
-    def validate_match(self, in_text: str, _) -> bool:
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
         try:
-            check = imei.validate(in_text)
+            check = imei.validate(matched_text)
         except Exception:
             return False
         return True if check else False

@@ -6,6 +6,8 @@ from __future__ import annotations
 import base64
 import json
 
+from typing_extensions import override
+
 from ..entity import Entity, Score
 from ..regex import Pattern, RegexPredictor
 
@@ -24,7 +26,8 @@ class JWT(RegexPredictor):
         super().__init__(entity=entity, patterns=[_match_1])
 
     # https://github.com/Yelp/detect-secrets/blob/master/detect_secrets/plugins/jwt.py
-    def validate_match(self, matched_text: str, _):
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
         parts = matched_text.split(".")
         for idx, part in enumerate(parts):
             try:

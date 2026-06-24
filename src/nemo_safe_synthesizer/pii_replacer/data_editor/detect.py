@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from itertools import chain, islice
 from time import monotonic
 from timeit import default_timer as timer
-from typing import Optional
+from typing import Any, Optional
 
 import json_repair
 import pandas as pd
@@ -19,6 +19,7 @@ import torch
 from gliner import GLiNER
 from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
+from typing_extensions import override
 
 from ...observability import get_logger
 from ...utils import hf_offline_enabled
@@ -260,6 +261,9 @@ def classify_columns(
     if not formatted_prompt:
         return {}
 
+    if client is None:
+        raise RuntimeError("InferenceAPI classifier not initialized.")
+
     llm_start = timer()
     response = client.chat.completions.create(
         model=DefaultLLMConfig.config_id(),
@@ -271,6 +275,10 @@ def classify_columns(
         max_tokens=DefaultLLMConfig.MAX_OUTPUT_TOKENS,
     )
     entities_str = response.choices[0].message.content
+    if entities_str is None:
+        on_validation_error()
+        return {}
+
     llm_elapsed = timer() - llm_start
     logger.info(
         f"LLM column classification took {llm_elapsed} seconds.",
@@ -285,17 +293,18 @@ def classify_columns(
     return {col: ent if ent in entities else UNKNOWN_ENTITY for col, ent in col_entities.items()}
 
 
-def sample_columns(df: pd.DataFrame, num_samples: int, random_state: Optional[int] = None) -> dict[str, pd.Series]:
+def sample_columns(
+    df: pd.DataFrame, num_samples: int | None, random_state: Optional[int] = None
+) -> dict[str, list[str]]:
     """Sample up to ``num_samples`` unique values per non-empty column for classification prompts."""
     nonempty_columns = df.dropna(axis="columns", how="all").columns
-    col_samples = {}
+    col_samples: dict[str, list[str]] = {}
     for col in nonempty_columns:
         filtered = df[col][df[col].apply(lambda x: len(str(x)) < MAX_COL_STR_LEN)].dropna()
         if filtered.empty:
             continue
-        col_samples[col] = (
-            filtered.sample(frac=1, random_state=random_state).value_counts().index[:num_samples].astype(str)
-        )
+        samples = filtered.sample(frac=1, random_state=random_state).value_counts().index[:num_samples].astype(str)
+        col_samples[str(col)] = list(samples)
     return col_samples
 
 
@@ -353,6 +362,7 @@ class ColumnClassifier(ABC):
 class ColumnClassifierNoop(ColumnClassifier):
     """No-op classifier that assigns ``UNKNOWN_ENTITY`` to every column."""
 
+    @override
     def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]] = None) -> dict[str, Optional[str]]:
         return {col: UNKNOWN_ENTITY for col in df.columns}
 
@@ -386,10 +396,14 @@ class ColumnClassifierLLM(ColumnClassifier):
         self._llm = None
         self._num_samples = None
 
-    def detect_types(self, df: pd.DataFrame, entities: set[str]) -> dict[str, Optional[str]]:
+    @override
+    def detect_types(self, df: pd.DataFrame, entities: Optional[set[str]] = None) -> dict[str, Optional[str]]:
         """Sample column data and call the inference API to classify columns into entity types."""
         if self._llm is None:
             raise Exception("InferenceAPI classifier not initialized. Use get_classifier() method.")
+
+        if entities is None:
+            entities = DEFAULT_ENTITIES
 
         return classify_columns(
             df=df,
@@ -488,9 +502,11 @@ class EntityExtractor(ABC):
 class EntityExtractorNoop(EntityExtractor):
     """No-op extractor that returns no entities."""
 
+    @override
     def extract_entity_values(self, text: str, entities: Optional[set[str]]) -> list[dict[str, str]]:
         return []
 
+    @override
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]]) -> list[NERPrediction]:
         return []
 
@@ -514,41 +530,51 @@ class EntityExtractorRegexp(EntityExtractor):
 
     _entity_types: set[str]
 
-    def pipeline_from_entities(self, entities: set[str]) -> Callable[[], Pipeline]:
+    def pipeline_from_entities(self, entities: Optional[set[str]]) -> Callable[[], Pipeline]:
         """Build a pipeline factory for the given entity set (or ``_entity_types`` if empty)."""
         if not entities:
             entities = self._entity_types
         predictor_filter = LabelSetPredictorFilter(entities)
         factory = NERFactory(regex_only=True)
         ner = factory.create(predictor_filter=predictor_filter)
-        return ner.pipeline_factory
+        if isinstance(ner, ner_mp.NERParallel):
+            return ner.pipeline_factory
+        pipeline = ner.pipeline
+        if pipeline is None:
+            raise RuntimeError("NER pipeline is not configured")
+        return lambda: pipeline
 
-    def _detect_entities(self, text: str, entities: set[str]) -> list[dict]:
+    def _detect_entities(self, text: str, entities: Optional[set[str]]) -> list[NERPrediction]:
         # Ensure text is a string - Jinja templates may pass non-string types (e.g., float/NaN)
         text = str(text)
         pipeline_factory = self.pipeline_from_entities(entities)
         predictor = ner_mp.NERParallel(pipeline_factory=pipeline_factory, num_proc=2)
         results = predictor.predict({"text": text})
-        return results
+        if not isinstance(results, list):
+            return []
+        return [result for result in results if isinstance(result, NERPrediction)]
 
+    @override
     def extract_entity_values(self, text: str, entities: Optional[set[str]] = None) -> list[dict[str, str]]:
         # _detect_entities already converts text to string
         detected = self._detect_entities(text, entities)
         return [{"entity": e.label, "value": e.text} for e in detected]
 
+    @override
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]] = None) -> list[NERPrediction]:
         # _detect_entities already converts text to string
         return self._detect_entities(text, entities)
 
     @classmethod
+    @override
     def get_entity_extractor(
         cls,
-        clsfy_cfg: ClassifyConfig,
+        clsfy_config: ClassifyConfig,
     ) -> EntityExtractor:
         """Return a regex extractor with entity types from ``clsfy_cfg`` (or ``DEFAULT_ENTITIES``)."""
         entity_types = DEFAULT_ENTITIES
-        if clsfy_cfg.ner_entities:
-            entity_types = clsfy_cfg.ner_entities
+        if clsfy_config.ner_entities:
+            entity_types = clsfy_config.ner_entities
         self = cls()
         self._entity_types = entity_types
         return self
@@ -572,9 +598,10 @@ class EntityExtractorGliner(EntityExtractor):
     _entity_cache: dict[tuple, list]
 
     @classmethod
+    @override
     def get_entity_extractor(
         cls,
-        clsfy_cfg: ClassifyConfig,
+        clsfy_config: ClassifyConfig,
     ) -> EntityExtractorGliner:
         """Load GLiNER model and return extractor configured from ``clsfy_cfg``."""
         extractor = cls()
@@ -586,24 +613,24 @@ class EntityExtractorGliner(EntityExtractor):
         )
 
         extractor._model = GLiNER.from_pretrained(
-            clsfy_cfg.gliner_model,
+            clsfy_config.gliner_model,
             map_location=map_location,
             local_files_only=hf_offline_enabled(),
         )
         entity_types = DEFAULT_ENTITIES
-        if clsfy_cfg.ner_entities:
-            entity_types = clsfy_cfg.ner_entities
+        if clsfy_config.ner_entities:
+            entity_types = clsfy_config.ner_entities
         extractor._entity_types = entity_types
         extractor._ner_threshold = 0.3
-        if clsfy_cfg.ner_threshold is not None:
-            extractor._ner_threshold = clsfy_cfg.ner_threshold
-        extractor._batch_mode_enabled = clsfy_cfg.gliner_batch_mode_enabled
-        extractor._chunk_length = clsfy_cfg.gliner_batch_mode_chunk_length
+        if clsfy_config.ner_threshold is not None:
+            extractor._ner_threshold = clsfy_config.ner_threshold
+        extractor._batch_mode_enabled = clsfy_config.gliner_batch_mode_enabled
+        extractor._chunk_length = clsfy_config.gliner_batch_mode_chunk_length
         extractor._chunk_overlap = 128
         if extractor._chunk_length <= extractor._chunk_overlap:
             extractor._chunk_overlap = 0
         extractor._entity_cache = {}
-        extractor._batch_size = clsfy_cfg.gliner_batch_mode_batch_size
+        extractor._batch_size = clsfy_config.gliner_batch_mode_batch_size
         return extractor
 
     def _predict_entities(self, text: str, entity_labels: list[str]) -> list[dict]:
@@ -668,12 +695,13 @@ class EntityExtractorGliner(EntityExtractor):
         if entity_labels is None:
             entity_labels = self._entity_types
 
-        if entity_labels is None:
+        model = self._model
+        if entity_labels is None or model is None:
             return []
         gliner_entity_labels = sorted(entity_labels)
         entities_key = tuple(gliner_entity_labels)
         start = 0
-        entities = []
+        entities: list[dict[str, Any]] = []
         # Occasionally text interpreted as type other than string by jinja
         text = str(text)
         nchunks = 0
@@ -723,17 +751,20 @@ class EntityExtractorGliner(EntityExtractor):
 
         return entities
 
+    @override
     def extract_entity_values(self, text: str, entities: Optional[set[str]] = None) -> list[dict[str, str]]:
         detected = self._detect_entities_chunked(text, entities)
         return [{"entity": e["label"], "value": e["text"]} for e in detected]
 
+    @override
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]]) -> list[NERPrediction]:
         return [
             NERPrediction(e["text"], e["start"], e["end"], e["label"], "GLiNER", 9.0)
             for e in self._detect_entities_chunked(text, entities)
         ]
 
-    def batch_update_cache(self, texts: list[str], entity_labels: Optional[set[str]] = None):
+    @override
+    def batch_update_cache(self, texts: list[str], entities: Optional[set[str]] = None):
         if not self._batch_mode_enabled:
             return
 
@@ -750,11 +781,12 @@ class EntityExtractorGliner(EntityExtractor):
 
         last_log = monotonic()
         chunks = []
-        if entity_labels is None:
-            entity_labels = self._entity_types
-        if entity_labels is None:
+        if entities is None:
+            entities = self._entity_types
+        model = self._model
+        if entities is None or model is None:
             return
-        gliner_entity_labels = sorted(entity_labels)
+        gliner_entity_labels = sorted(entities)
         entities_key = tuple(gliner_entity_labels)
         for text in texts:
             text = str(text)
@@ -787,6 +819,7 @@ class EntityExtractorMulti(EntityExtractor):
 
     extractors: list[EntityExtractor]
 
+    @override
     def extract_entity_values(self, text: str, entities: Optional[set[str]] = None) -> list[dict[str, str]]:
         """Return combined entity/value dicts from all sub-extractors."""
         retval = []
@@ -794,6 +827,7 @@ class EntityExtractorMulti(EntityExtractor):
             retval += extractor.extract_entity_values(text, entities)
         return retval
 
+    @override
     def extract_ner_predictions(self, text: str, entities: Optional[set[str]] = None) -> list[NERPrediction]:
         """Return merged NER predictions from all sub-extractors."""
         predictions = []
@@ -802,13 +836,15 @@ class EntityExtractorMulti(EntityExtractor):
         return predictions
 
     @classmethod
-    def get_entity_extractor(cls, clsfy_cfg: ClassifyConfig) -> EntityExtractorMulti:
+    @override
+    def get_entity_extractor(cls, clsfy_config: ClassifyConfig) -> EntityExtractorMulti:
         """Return an empty composite; add extractors with ``add_entity_extractor``."""
         self = cls()
         self.extractors = []
         return self
 
-    def batch_update_cache(self, texts, entities: Optional[set[str]] = None):
+    @override
+    def batch_update_cache(self, texts: list[str], entities: Optional[set[str]] = None):
         for extractor in self.extractors:
             extractor.batch_update_cache(texts, entities)
 

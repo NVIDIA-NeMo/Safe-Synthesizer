@@ -6,10 +6,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pandas as pd
+from typing_extensions import override
 
 from ..ner.ner import NERPrediction
 from .detect import (
     UNKNOWN_ENTITY,
+    ClassifyConfig,
     ColumnClassifier,
     EntityExtractorGliner,
     IAPIClassifierConfig,
@@ -29,20 +31,22 @@ class EntityExtractorMock(EntityExtractorGliner):
     extract_ner_predictions_called: bool
 
     @classmethod
-    def get_entity_extractor(cls, *args, **kwargs) -> EntityExtractorMock | None:
+    @override
+    def get_entity_extractor(cls, clsfy_config: ClassifyConfig) -> EntityExtractorMock:
         self = cls()
         self.extract_ner_predictions_called = False
         self._chunk_length = 512
         self._chunk_overlap = 128
         self._entity_cache = {}
         self._batch_size = 1000
-        self._entity_types = ["test", "entity", "types"]
+        self._entity_types = {"test", "entity", "types"}
         self._model = MagicMock()
         self._ner_threshold = 0.9
         self._batch_mode_enabled = False
         return self
 
-    def _detect_entities_chunked(self, text: str, entities: set[str] | None = None) -> list[dict]:
+    @override
+    def _detect_entities_chunked(self, text: str, entity_labels: set[str] | None = None) -> list[dict]:
         """Return fixed entity dicts for the known test string (first_name, ssn, nofake).
 
         Input is assumed to match the string used in transform tests; indices are
@@ -54,6 +58,7 @@ class EntityExtractorMock(EntityExtractorGliner):
             {"label": "nofake", "text": "Unfake-able", "start": 45, "end": 56},
         ]
 
+    @override
     def extract_ner_predictions(self, text: str, entities: set[str] | None) -> list[NERPrediction]:
         """Return fixed NER predictions and set ``extract_ner_predictions_called`` to ``True``."""
         self.extract_ner_predictions_called = True
@@ -86,7 +91,8 @@ class ColumnClassifierMock(ColumnClassifier):
         classifier._num_samples = num_samples
         return classifier
 
-    def detect_types(self, df: pd.DataFrame, all_entities: set[str]) -> dict[str, str | None]:
+    @override
+    def detect_types(self, df: pd.DataFrame, entities: set[str] | None = None) -> dict[str, str | None]:
         """Return a hardcoded column-to-entity map for known test columns.
 
         Only columns present in the internal mapping and in ``all_entities``
@@ -100,7 +106,7 @@ class ColumnClassifierMock(ColumnClassifier):
         Returns:
             Map of column name to entity name (or ``UNKNOWN_ENTITY``).
         """
-        entities: dict[str, str] = {
+        column_entities: dict[str, str] = {
             "AddressLine1": "street_address",
             "AddressLine1a": "street_address",
             "AddressLine1b": "street_address",
@@ -119,6 +125,6 @@ class ColumnClassifierMock(ColumnClassifier):
         # columns = sample_columns(df, self._num_samples)
 
         # Always see something that isn't really there..
-        all_entities = all_entities | {"ghost_entity"}
-        entities = {col: entities[col] for col in entities if entities[col] in all_entities}
-        return {col: entities.get(col, UNKNOWN_ENTITY) for col in df.columns}
+        allowed_entities = (entities or set()) | {"ghost_entity"}
+        configured_entities = {col: value for col, value in column_entities.items() if value in allowed_entities}
+        return {col: configured_entities.get(col, UNKNOWN_ENTITY) for col in df.columns}

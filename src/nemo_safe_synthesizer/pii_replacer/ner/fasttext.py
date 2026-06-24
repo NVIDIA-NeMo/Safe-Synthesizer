@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import Any
 
 from .models import (
     ModelManifest,
@@ -15,9 +16,29 @@ from .models import (
 # TODO: Figure out import situation and resolve noqa: F821 exceptions through
 # ner/ directory.
 
-spacy = None
-dot = None
-np = None
+spacy: Any
+dot: Any
+np: Any
+Doc: Any
+Span: Any
+try:
+    import numpy as _np
+    import spacy as _spacy  # ty: ignore[unresolved-import]
+    from numpy import dot as _dot
+    from spacy.tokens import Doc as _Doc  # ty: ignore[unresolved-import]
+    from spacy.tokens import Span as _Span  # ty: ignore[unresolved-import]
+except ImportError:
+    spacy = None
+    dot = None
+    np = None
+    Doc = None
+    Span = None
+else:
+    spacy = _spacy
+    dot = _dot
+    np = _np
+    Doc = _Doc
+    Span = _Span
 
 
 manifest = ModelManifest(
@@ -128,6 +149,8 @@ class FTEntityMatcher:
     @classmethod
     def factory(cls, model: ModelManifest = manifest) -> FTEntityMatcher:
         model_objects = get_cache_manager().resolve(manifest)
+        if model_objects is None:
+            raise RuntimeError(f"Could not resolve manifest {manifest}")
         return cls(**model_objects)
 
     def __init__(self, *, pos_neg_terms: dict, ft_word_vecs: dict, ft_ngram_vecs: dict):
@@ -200,7 +223,7 @@ class FTEntityMatcher:
         Get FastText vector for a word.  If it's OOV, gather the
         vectors for it's ngrams and average them
         """
-        vec = [0] * 100
+        vec: Any = [0] * 100
         # If FT already knows about this word, go ahead and get it's vector
         if word in self.ft_word_vecs:
             vec = self.ft_word_vecs[word]
@@ -217,7 +240,7 @@ class FTEntityMatcher:
             # for this OOV word
             for nh in ngram_hashes:
                 vec += self.ft_ngram_vecs[nh]
-            vec = self.norm(vec / len(ngram_hashes))
+            vec = self.norm(np.array(vec) / len(ngram_hashes))
 
         return vec
 

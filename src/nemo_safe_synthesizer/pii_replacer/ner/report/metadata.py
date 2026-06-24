@@ -16,7 +16,7 @@ from .base import ReportBaseModel
 def convert_to_report(metadata: DatasetMetadata) -> DatasetMetadataReport:
     """Converts internal model_metadata object to the report."""
     fields_report = [_convert_field(field) for field in metadata.data.fields]
-    entity_summary_report = [EntitySummaryReport(**e.model_dump()) for e in metadata.data.entities]
+    entity_summary_report = [EntitySummaryReport(**e.dict()) for e in metadata.data.entities]
 
     return DatasetMetadataReport(
         record_count=metadata.project_record_count,
@@ -34,7 +34,7 @@ def _convert_field(field: FieldMetadata) -> FieldMetadataReport:
         approx_distinct_count=field.approx_cardinality,
         missing_count=field.missing,
         labels=field.field_labels,
-        attributes=field.field_attributes,
+        attributes=[attribute.value for attribute in field.field_attributes],
         entities=entities,
         types=[TypeReport(type=tm.type, count=tm.count) for tm in field.types],
     )

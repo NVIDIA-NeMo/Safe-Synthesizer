@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 
 import tldextract
+from typing_extensions import override
 
 from ..entity import Entity
 from ..predictor import ContextSpan
@@ -70,11 +71,12 @@ class DomainName(RegexPredictor):
 
     def __init__(self):
         entity = Entity.DOMAIN_NAME
-        self.tld_extract = tldextract.TLDExtract(suffix_list_urls=None)
+        self.tld_extract = tldextract.TLDExtract(suffix_list_urls=())
         super().__init__(name="domain_name", entity=entity, patterns=[MATCHER, ISOLATED_MATCHER])
 
-    def validate_match(self, in_text: str, _) -> bool:
-        result = self.tld_extract(in_text)
+    @override
+    def validate_match(self, matched_text: str, original_text: str) -> bool:
+        result = self.tld_extract(matched_text)
         return result.fqdn != ""
 
 
