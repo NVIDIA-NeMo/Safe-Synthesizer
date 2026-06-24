@@ -99,16 +99,16 @@ class Parameter(Generic[DataT]):
             case _:
                 return NotImplemented
 
-    def __ge__(self, other: "Parameter[DataT] | DataT") -> bool | None:
+    def __ge__(self, other: "Parameter[DataT] | DataT") -> bool | NotImplementedType:
         return self._comp_helper(other, operator.__ge__)
 
-    def __le__(self, other: "Parameter[DataT] | DataT") -> bool | None:
+    def __le__(self, other: "Parameter[DataT] | DataT") -> bool | NotImplementedType:
         return self._comp_helper(other, operator.__le__)
 
-    def __gt__(self, other: "Parameter[DataT] | DataT") -> bool | None:
+    def __gt__(self, other: "Parameter[DataT] | DataT") -> bool | NotImplementedType:
         return self._comp_helper(other, operator.__gt__)
 
-    def __lt__(self, other: "Parameter[DataT] | DataT") -> bool | None:
+    def __lt__(self, other: "Parameter[DataT] | DataT") -> bool | NotImplementedType:
         return self._comp_helper(other, operator.__lt__)
 
     @override

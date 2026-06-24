@@ -10,6 +10,7 @@ import pytest
 
 from nemo_safe_synthesizer.llm.utils import (
     ModelRef,
+    _is_weight_map,
     get_max_memory_map,
     get_max_vram,
     get_quantization_config,
@@ -80,6 +81,12 @@ def test_vram_helpers_return_fraction_and_hf_memory_map() -> None:
     ):
         assert get_max_vram(max_vram_fraction=0.8) == {0: 0.5}
         assert get_max_memory_map(max_vram_fraction=0.8) == {0: 8 * gib}
+
+
+def test_weight_map_type_guard_accepts_empty_weight_map() -> None:
+    assert _is_weight_map({}) is True
+    assert _is_weight_map({"layer.weight": "model-00001-of-00002.safetensors"}) is True
+    assert _is_weight_map({"layer.weight": 1}) is False
 
 
 def test_model_ref_trusts_snapshot_under_configured_cache_root(tmp_path: Path, hf_cached_snapshot_factory) -> None:

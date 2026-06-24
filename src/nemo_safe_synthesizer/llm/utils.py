@@ -35,10 +35,8 @@ WeightMap: TypeAlias = dict[str, str]
 
 
 def _is_weight_map(value: object) -> TypeIs[WeightMap]:
-    return (
-        isinstance(value, dict)
-        and bool(value)
-        and all(isinstance(key, str) and isinstance(shard_name, str) for key, shard_name in value.items())
+    return isinstance(value, dict) and all(
+        isinstance(key, str) and isinstance(shard_name, str) for key, shard_name in value.items()
     )
 
 
@@ -368,7 +366,7 @@ class ModelRef:
             return False
 
         match data.get("weight_map"):
-            case weight_map if _is_weight_map(weight_map):
+            case weight_map if _is_weight_map(weight_map) and weight_map:
                 return all((model_dir / shard_name).is_file() for shard_name in set(weight_map.values()))
             case _:
                 return False
