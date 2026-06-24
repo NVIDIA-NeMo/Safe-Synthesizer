@@ -170,6 +170,13 @@ ALL_TEST_CASES: list[AutoConfigTestCase] = [
 ]
 
 
+def test_auto_config_test_case_get_config_calls_factory():
+    config = SafeSynthesizerParameters()
+    test_case = AutoConfigTestCase(name="factory", config=lambda: config, expected=AUTO_NO_DP.expected)
+
+    assert test_case.get_config() is config
+
+
 @pytest.fixture
 def sample_data() -> pd.DataFrame:
     """Standard test DataFrame (100 rows)."""

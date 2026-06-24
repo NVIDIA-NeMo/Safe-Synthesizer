@@ -16,3 +16,12 @@ def test_datetime_distribution_applies_precision_and_format_without_mutating_sam
     distribution = FixedDatetimeDistribution(precision=timedelta(hours=1), format="%H:%M")
 
     assert distribution.sample(2) == ["12:00", "13:00"]
+
+
+def test_datetime_distribution_applies_precision_without_format():
+    distribution = FixedDatetimeDistribution(precision=timedelta(hours=1))
+
+    assert distribution.sample(2) == [
+        datetime(2024, 1, 1, 12),
+        datetime(2024, 1, 1, 13),
+    ]
