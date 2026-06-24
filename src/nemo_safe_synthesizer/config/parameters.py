@@ -77,11 +77,10 @@ def _assign_path(target: dict[str, object], path: tuple[str, ...], value: object
         target[head] = value
         return
 
-    next_value = target.get(head)
-    if next_value is None:
+    if head not in target:
         nested: dict[str, object] = {}
         target[head] = nested
-    elif isinstance(next_value, dict):
+    elif isinstance(next_value := target[head], dict):
         nested = {str(key): item for key, item in next_value.items()}
         target[head] = nested
     else:

@@ -167,7 +167,8 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         """Check whether ``name`` exists anywhere in the parameter tree.
 
         Unlike ``get()``, this does not conflate falsy values (``0``, ``""``,
-        ``False``, ``None``) with absence.
+        ``False``, ``None``) with absence. Bare names are accepted only when
+        they map to at most one field in the parameter tree.
 
         Args:
             name: Field name to search for.
@@ -177,7 +178,11 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         """
         if "." in name:
             return self._get_field_path(tuple(name.split("."))) is not _MISSING
-        return any(path[-1] == name for path, _ in self._iter_field_paths())
+        matches = [path for path, _ in self._iter_field_paths() if path[-1] == name]
+        if len(matches) > 1:
+            candidates = ", ".join(".".join(path) for path in matches)
+            raise ParameterError(f"Ambiguous parameter name {name!r}; use one of: {candidates}.")
+        return bool(matches)
 
     @classmethod
     def from_yaml_str(cls, raw: str) -> Self:

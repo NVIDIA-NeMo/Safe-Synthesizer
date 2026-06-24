@@ -142,6 +142,13 @@ def test_from_params_accepts_explicit_dotted_path():
     assert config.generation.validation.group_by_fix_unordered_records is True
 
 
+def test_from_params_rejects_top_level_none_before_nested_override():
+    with pytest.raises(
+        ParameterError, match="Cannot assign nested parameter path 'generation.num_records'.*'generation'"
+    ):
+        SafeSynthesizerParameters.from_params(generation=None, **{"generation.num_records": 10})
+
+
 def test_from_params_rejects_unknown_flat_parameter():
     with pytest.raises(ParameterError, match="Unknown parameter name 'not_a_parameter'"):
         SafeSynthesizerParameters.from_params(not_a_parameter=True)
@@ -194,6 +201,21 @@ def test_parameters_get_rejects_ambiguous_bare_leaf_names():
 
     with pytest.raises(ParameterError, match="left.value.*right.value"):
         params.get("value")
+
+
+def test_parameters_has_supports_explicit_dotted_paths():
+    params = _DuplicateLeafParameters()
+
+    assert params.has("left.value") is True
+    assert params.has("right.value") is True
+    assert params.has("missing.value") is False
+
+
+def test_parameters_has_rejects_ambiguous_bare_leaf_names():
+    params = _DuplicateLeafParameters()
+
+    with pytest.raises(ParameterError, match="left.value.*right.value"):
+        params.has("value")
 
 
 def test_parameters_get_does_not_warn_for_unrelated_deprecated_fields():
