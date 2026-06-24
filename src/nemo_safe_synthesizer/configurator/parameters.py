@@ -114,7 +114,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
     def _iter_field_paths(self, prefix: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Any]]:
         """Yield every field path and value in this parameter tree."""
         for name in type(self).model_fields:
-            value = getattr(self, name)
+            value = self.__dict__.get(name, _MISSING)
+            if value is _MISSING:
+                continue
             path = (*prefix, name)
             yield path, value
             if isinstance(value, Parameters):
@@ -126,7 +128,9 @@ class Parameters(BaseModel, metaclass=ABCMeta):
         for part in path:
             if not isinstance(value, Parameters) or part not in type(value).model_fields:
                 return _MISSING
-            value = getattr(value, part)
+            value = value.__dict__.get(part, _MISSING)
+            if value is _MISSING:
+                return _MISSING
         return value
 
     def __iter__(self) -> Iterator[Mapping[str, Any]]:  # ty: ignore[invalid-method-override] -- intentionally overrides pydantic BaseModel.__iter__ with parameter-group semantics

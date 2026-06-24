@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -193,6 +194,16 @@ def test_parameters_get_rejects_ambiguous_bare_leaf_names():
 
     with pytest.raises(ParameterError, match="left.value.*right.value"):
         params.get("value")
+
+
+def test_parameters_get_does_not_warn_for_unrelated_deprecated_fields():
+    params = SafeSynthesizerParameters()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        assert params.get("batch_size") == params.training.batch_size
+
+    assert not [warning for warning in caught if issubclass(warning.category, DeprecationWarning)]
 
 
 def _resolve(obj: object, path: str) -> object:
