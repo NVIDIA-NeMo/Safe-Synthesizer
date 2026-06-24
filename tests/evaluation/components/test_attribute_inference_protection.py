@@ -74,6 +74,37 @@ def test_aia_wide_table_uses_windowed_quasi_identifier_combinations(monkeypatch:
     assert set(synth_calls) == {tuple(columns[:500]), tuple(columns[1:])}
 
 
+def test_aia_preserves_non_string_column_labels(monkeypatch: pytest.MonkeyPatch):
+    """Cover DataFrames whose column labels are not strings."""
+    training_df = pd.DataFrame(
+        {
+            0: [1, 2, 3, 4],
+            1: [10, 20, 30, 40],
+            2: [100, 200, 300, 400],
+        }
+    )
+    synthetic_df = training_df.copy()
+    synth_calls: list[tuple[int, ...]] = []
+
+    def fake_get_synth_nn(train_row, *_args, **_kwargs) -> pd.DataFrame:
+        synth_calls.append(tuple(train_row.columns))
+        return synthetic_df.head(2)
+
+    monkeypatch.setattr(AttributeInferenceProtection, "_get_synth_nn", staticmethod(fake_get_synth_nn))
+
+    score, col_accuracy_df = AttributeInferenceProtection._aia(
+        training_df=training_df,
+        synthetic_df=synthetic_df,
+        quasi_identifier_count=1,
+    )
+
+    assert score.score is not None
+    assert col_accuracy_df is not None
+    assert set(col_accuracy_df["Column"]) == {0, 1, 2}
+    assert synth_calls
+    assert all(isinstance(column, int) for call in synth_calls for column in call)
+
+
 @pytest.mark.slow
 def test_attribute_inference_protection(fixture_training_df_5k, fixture_synthetic_df_5k, fixture_test_df):
     """Test AIA with tabular-only data (sklearn NearestNeighbors path)."""

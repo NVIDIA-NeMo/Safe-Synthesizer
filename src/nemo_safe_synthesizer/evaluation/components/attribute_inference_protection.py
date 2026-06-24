@@ -6,6 +6,7 @@ from __future__ import annotations
 import itertools
 import math
 import re
+from collections.abc import Hashable
 from datetime import datetime
 from decimal import Decimal
 from functools import cached_property
@@ -138,14 +139,15 @@ class AttributeInferenceProtection(Component):
         return -(vc * np.log(vc) / np.log(base)).sum()
 
     @staticmethod
-    def _is_really_categorical(column: str) -> bool:
+    def _is_really_categorical(column: Hashable) -> bool:
+        column_name = str(column)
         # Break the header up into parts
         for separator in ["_", " ", "-", "."]:
-            if separator in column:
-                col_parts = column.split(separator)
+            if separator in column_name:
+                col_parts = column_name.split(separator)
                 break
             else:
-                col_parts = [column]
+                col_parts = [column_name]
 
         # Go through the parts and divide up camel case
         col_final_parts = []
@@ -366,7 +368,7 @@ class AttributeInferenceProtection(Component):
 
             # Get all combinations of columns to be the quasi-identifiers
             # This gets explosive when column count > 500
-            training_columns = [str(column) for column in training_df.columns]
+            training_columns = list(training_df.columns)
             if len(training_df.columns) < 500:
                 qi_combos = list(itertools.combinations(training_columns, quasi_identifier_count))
             else:
