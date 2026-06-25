@@ -21,6 +21,20 @@ def test_with_generate_validates_typed_config_with_kwargs():
         ConfigBuilder().with_generate(config=GenerateParameters(num_records=10), patience=0)
 
 
+def test_with_generate_preserves_sparse_typed_config_fields():
+    builder = ConfigBuilder().with_generate(config=GenerateParameters(num_records=10))
+
+    assert builder._generation_config is not None
+    assert builder._generation_config.__pydantic_fields_set__ == {"num_records"}
+
+
+def test_with_generate_marks_typed_config_kwargs_as_explicit_fields():
+    builder = ConfigBuilder().with_generate(config=GenerateParameters(num_records=10), patience=7)
+
+    assert builder._generation_config is not None
+    assert builder._generation_config.__pydantic_fields_set__ == {"num_records", "patience"}
+
+
 def test_with_generate_rejects_wrong_typed_config_object():
     wrong_config = cast(Any, PiiReplacerConfig.get_default_config())
 

@@ -129,7 +129,7 @@ class ConfigBuilder(object):
             case BaseModel() as model:
                 if not isinstance(model, cls):
                     raise TypeError(f"Expected {cls.__name__}, got {type(model).__name__}")
-                raw_values = model.model_dump()
+                raw_values = model.model_dump(exclude_unset=True)
                 raw_values.update(kwargs)
                 return cls.model_validate(raw_values)
             case Mapping() as mapping:
