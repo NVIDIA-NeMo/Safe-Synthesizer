@@ -22,7 +22,10 @@ from .data_editor.detect import (
     DEFAULT_ENTITIES,
     UNKNOWN_ENTITY,
     ClassifyConfig,
+    ColumnClassifier,
+    ColumnClassifierHF,
     ColumnClassifierLLM,
+    DefaultLLMConfig,
     EntityExtractor,
     EntityExtractorGliner,
     EntityExtractorMulti,
@@ -132,8 +135,13 @@ def _get_classify_endpoint_url() -> str:
     return url
 
 
-def _column_classify_failure_remediation(exc: BaseException) -> str:
+def _column_classify_failure_remediation(exc: BaseException, config: PiiReplacerConfig | None = None) -> str:
     """Extra log text after column classifier init or classify failures."""
+    if config is not None and config.globals.classify.backend == "local_hf":
+        return (
+            " Check the local Hugging Face column classification model configuration and cache. "
+            f"({type(exc).__name__}: {exc})"
+        )
     if not has_inference_key():
         return (
             " Please set NSS_INFERENCE_KEY in the environment. Get an API key at https://build.nvidia.com/settings/api-keys. "
@@ -144,10 +152,18 @@ def _column_classify_failure_remediation(exc: BaseException) -> str:
     )
 
 
-def get_column_classifier() -> ColumnClassifierLLM:
-    """Return a column classifier backed by the NSS inference endpoint (``NSS_INFERENCE_ENDPOINT``, ``NSS_INFERENCE_KEY``)."""
+def get_column_classifier(config: PiiReplacerConfig | None = None) -> ColumnClassifier:
+    """Return the configured column classifier backend."""
+    pii_config = config or PiiReplacerConfig.get_default_config()
+    classify_config = pii_config.globals.classify
+    num_samples = classify_config.num_samples
+
+    if classify_config.backend == "local_hf":
+        model = classify_config.model or DefaultLLMConfig.LOCAL_HF_CONFIG_ID
+        return ColumnClassifierHF(model_name_or_path=model, num_samples=num_samples)
+
     classifier = ColumnClassifierLLM()
-    classifier._num_samples = 5
+    classifier._num_samples = num_samples
 
     endpoint = _get_classify_endpoint_url()
 
@@ -289,12 +305,12 @@ class NemoPII(object):
 
                 # Try to initialize the column classifier
                 try:
-                    column_classifier = get_column_classifier()
+                    column_classifier = get_column_classifier(self.pii_replacer_config)
                 except Exception as exc:
                     logging.error(
                         "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
-                        _column_classify_failure_remediation(exc),
-                        exc_info=has_inference_key(),
+                        _column_classify_failure_remediation(exc, self.pii_replacer_config),
+                        exc_info=has_inference_key() or self.pii_replacer_config.globals.classify.backend == "local_hf",
                     )
 
                 # Try to perform classification if we successfully got a classifier
@@ -313,9 +329,12 @@ class NemoPII(object):
                     except Exception as exc:
                         logging.error(
                             "Could not initialize column classifier, PII replacement will run in degraded mode. NER Falling back to default entities. No replacement done except for text columns. %s",
-                            _column_classify_failure_remediation(exc),
-                            exc_info=has_inference_key(),
+                            _column_classify_failure_remediation(exc, self.pii_replacer_config),
+                            exc_info=has_inference_key()
+                            or self.pii_replacer_config.globals.classify.backend == "local_hf",
                         )
+                    finally:
+                        column_classifier.close()
             else:
                 logging.info("Column classification is disabled (enable_classify=False), skipping classify call.")
         finally:

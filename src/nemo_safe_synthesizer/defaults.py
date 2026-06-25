@@ -73,6 +73,7 @@ DEFAULT_EXCLUDE_COLUMNS: tuple[str, ...] = (PSEUDO_GROUP_COLUMN,)
 
 # default LLM inference endpoint for PII column classification.
 DEFAULT_NSS_INFERENCE_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+DEFAULT_PII_CLASSIFY_LOCAL_MODEL = "HuggingFaceTB/SmolLM3-3B"
 
 # training +  parameters
 DEFAULT_BASE_SEQ_LENGTH = 2048

@@ -1,0 +1,133 @@
+{
+  "cases": [
+    {
+      "id": "pii_dataset_structured",
+      "source": "cleaned/pii_dataset.csv",
+      "rows": [
+        {
+          "name": "Aaliyah Popova",
+          "email": "aaliyah.popova4783@aol.edu",
+          "phone": "(95) 94215-7906",
+          "job": "jeweler",
+          "address": "97 Lincoln Street",
+          "text": "Contact Aaliyah Popova by phone at (95) 94215-7906 or by email at aaliyah.popova4783@aol.edu.",
+          "hobby": "Podcasting"
+        },
+        {
+          "name": "Daniel Martinez",
+          "email": "daniel.martinez@example.com",
+          "phone": "323-555-6724",
+          "job": "physician",
+          "address": "912 Cedar Avenue",
+          "text": "Daniel Martinez lives at 912 Cedar Avenue and can be reached at 323-555-6724.",
+          "hobby": "cycling"
+        }
+      ],
+      "expected_entities": {
+        "name": "name",
+        "email": "email",
+        "phone": "phone_number",
+        "job": "none",
+        "address": "address",
+        "text": "none",
+        "hobby": "none"
+      }
+    },
+    {
+      "id": "credit_card_transactions",
+      "source": "cleaned/user0_credit_card_transactions.csv",
+      "rows": [
+        {
+          "User": 0,
+          "Card": 0,
+          "Year": 2002,
+          "Month": 9,
+          "Day": 1,
+          "Time": "06:21",
+          "Amount": "$134.09",
+          "Use Chip": "Swipe Transaction",
+          "Merchant Name": "3527213246127876953",
+          "Merchant City": "La Verne",
+          "Merchant State": "CA",
+          "Zip": "91750.0",
+          "MCC": 5300,
+          "Is Fraud?": "No"
+        },
+        {
+          "User": 0,
+          "Card": 0,
+          "Year": 2002,
+          "Month": 9,
+          "Day": 1,
+          "Time": "06:42",
+          "Amount": "$38.48",
+          "Use Chip": "Swipe Transaction",
+          "Merchant Name": "-727612092139916043",
+          "Merchant City": "Monterey Park",
+          "Merchant State": "CA",
+          "Zip": "91754.0",
+          "MCC": 5411,
+          "Is Fraud?": "No"
+        }
+      ],
+      "expected_entities": {
+        "User": "none",
+        "Card": "credit_debit_card",
+        "Year": "none",
+        "Month": "none",
+        "Day": "none",
+        "Time": "none",
+        "Amount": "none",
+        "Use Chip": "none",
+        "Merchant Name": "none",
+        "Merchant City": "city",
+        "Merchant State": "state",
+        "Zip": "postcode",
+        "MCC": "none",
+        "Is Fraud?": "none"
+      }
+    },
+    {
+      "id": "adult_negative_control",
+      "source": "cleaned/adult.csv",
+      "rows": [
+        {
+          "age": 39,
+          "workclass": "State-gov",
+          "education": "Bachelors",
+          "marital.status": "Never-married",
+          "occupation": "Adm-clerical",
+          "relationship": "Not-in-family",
+          "race": "White",
+          "sex": "Male",
+          "native.country": "United-States",
+          "income": "<=50K"
+        },
+        {
+          "age": 50,
+          "workclass": "Self-emp-not-inc",
+          "education": "Bachelors",
+          "marital.status": "Married-civ-spouse",
+          "occupation": "Exec-managerial",
+          "relationship": "Husband",
+          "race": "White",
+          "sex": "Male",
+          "native.country": "United-States",
+          "income": "<=50K"
+        }
+      ],
+      "expected_entities": {
+        "age": "none",
+        "workclass": "none",
+        "education": "none",
+        "marital.status": "none",
+        "occupation": "none",
+        "relationship": "none",
+        "race": "none",
+        "sex": "none",
+        "native.country": "none",
+        "income": "none"
+      }
+    }
+  ]
+}

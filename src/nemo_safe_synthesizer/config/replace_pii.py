@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import os
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from faker.config import AVAILABLE_LOCALES
 from pydantic import Field, field_validator, model_validator
@@ -182,6 +182,16 @@ class ClassifyConfig(NSSBaseModel):
     entities: OptionalStrList = Field(default=None, description="List of entity types to classify.")
 
     num_samples: int | None = Field(description="Number of column values to sample for classification.", default=3)
+
+    backend: Literal["api", "local_hf"] = Field(
+        default="api",
+        description="Column classification backend. Use 'api' for an OpenAI-compatible endpoint or 'local_hf' for an in-process Hugging Face model.",
+    )
+
+    model: str | None = Field(
+        default=None,
+        description="Model name or local path for column classification. For the local_hf backend, defaults to HuggingFaceTB/SmolLM3-3B.",
+    )
 
     classify_model_provider: str | None = Field(
         default=None,

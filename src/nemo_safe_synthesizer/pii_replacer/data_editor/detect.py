@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from itertools import chain, islice
 from time import monotonic
 from timeit import default_timer as timer
-from typing import Optional
+from typing import Any, Optional
 
 import json_repair
 import pandas as pd
@@ -20,6 +20,8 @@ from gliner import GLiNER
 from openai import OpenAI
 from pydantic import ConfigDict, TypeAdapter, ValidationError
 
+from ...defaults import DEFAULT_PII_CLASSIFY_LOCAL_MODEL
+from ...llm.utils import ModelRef, cleanup_memory
 from ...observability import get_logger
 from ...utils import hf_offline_enabled
 from ..ner import ner_mp
@@ -49,6 +51,7 @@ class DefaultLLMConfig:
     SYSTEM_PROMPT = "You are a helpful AI that annotates columns in datasets with their respective types. "
     MAX_OUTPUT_TOKENS = 2048
     TEMPERATURE = 0.2
+    LOCAL_HF_CONFIG_ID = DEFAULT_PII_CLASSIFY_LOCAL_MODEL
 
     @classmethod
     def config_id(cls) -> str:
@@ -281,6 +284,15 @@ def classify_columns(
         },
     )
 
+    return _filter_entities(entities_str, entities, on_validation_error)
+
+
+def _filter_entities(
+    entities_str: str,
+    entities: set[str],
+    on_validation_error: Callable[[], None],
+) -> dict[str, Optional[str]]:
+    """Parse classifier output and map labels outside the valid entity set to ``none``."""
     col_entities = _try_extract_entities(entities_str, on_validation_error)
     return {col: ent if ent in entities else UNKNOWN_ENTITY for col, ent in col_entities.items()}
 
@@ -349,6 +361,9 @@ class ColumnClassifier(ABC):
         """
         ...
 
+    def close(self) -> None:
+        """Release backend resources after classification."""
+
 
 class ColumnClassifierNoop(ColumnClassifier):
     """No-op classifier that assigns ``UNKNOWN_ENTITY`` to every column."""
@@ -405,6 +420,128 @@ class ColumnClassifierLLM(ColumnClassifier):
             "There was an error performing classification: "
             "the classifier LLM failed to return valid JSON. "
             "Please reach out to support if the error recurs."
+        )
+
+
+class ColumnClassifierHF(ColumnClassifier):
+    """Classify column types with an in-process Hugging Face causal LM."""
+
+    _model_name_or_path: str
+    _num_samples: Optional[int]
+    _model: Any | None
+    _tokenizer: Any | None
+
+    def __init__(self, model_name_or_path: str, num_samples: Optional[int]):
+        self._model_name_or_path = model_name_or_path
+        self._num_samples = num_samples
+        self._model = None
+        self._tokenizer = None
+
+    def detect_types(self, df: pd.DataFrame, entities: set[str]) -> dict[str, Optional[str]]:
+        """Sample columns, run local text generation, and parse JSON entity labels."""
+        formatted_prompt = _format_prompt(df, entities, self._num_samples)
+        if not formatted_prompt:
+            return {}
+
+        self._load()
+        if self._model is None or self._tokenizer is None:
+            raise RuntimeError("Local Hugging Face classifier failed to initialize.")
+
+        messages = [
+            {"role": "system", "content": DefaultLLMConfig.SYSTEM_PROMPT},
+            {"role": "user", "content": formatted_prompt},
+        ]
+        tokenizer = self._tokenizer
+        model = self._model
+
+        if hasattr(tokenizer, "apply_chat_template"):
+            encoded = tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+        else:
+            prompt = f"{DefaultLLMConfig.SYSTEM_PROMPT}\n\n{formatted_prompt}"
+            encoded = tokenizer(prompt, return_tensors="pt")
+
+        try:
+            input_ids = encoded["input_ids"]
+            attention_mask = encoded.get("attention_mask", None)
+        except (KeyError, TypeError):
+            input_ids = encoded
+            attention_mask = None
+        input_ids = input_ids.to(model.device)
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        else:
+            attention_mask = attention_mask.to(model.device)
+
+        pad_token_id = tokenizer.pad_token_id
+        if pad_token_id is None:
+            pad_token_id = tokenizer.eos_token_id
+
+        llm_start = timer()
+        with torch.no_grad():
+            output_ids = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=DefaultLLMConfig.MAX_OUTPUT_TOKENS,
+                do_sample=False,
+                pad_token_id=pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+        generated_ids = output_ids[0, input_ids.shape[-1] :]
+        entities_str = tokenizer.decode(generated_ids, skip_special_tokens=True)
+        llm_elapsed = timer() - llm_start
+        logger.info(
+            f"Local HF column classification took {llm_elapsed} seconds.",
+            extra={
+                "ctx": {
+                    "llm_elapsed": llm_elapsed,
+                    "model": self._model_name_or_path,
+                },
+            },
+        )
+        return _filter_entities(entities_str, entities, self._on_validation_error)
+
+    def _load(self) -> None:
+        if self._model is not None and self._tokenizer is not None:
+            return
+
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        model_ref = ModelRef.parse(self._model_name_or_path)
+        load_kwargs = {
+            "trust_remote_code": model_ref.trust_remote_code,
+            "local_files_only": hf_offline_enabled(),
+        }
+        if torch.cuda.is_available():
+            load_kwargs["device_map"] = "auto"
+            load_kwargs["dtype"] = torch.bfloat16
+
+        logger.info("Loading local column classification model: %s", self._model_name_or_path)
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            model_ref.target(),
+            trust_remote_code=model_ref.trust_remote_code,
+            local_files_only=hf_offline_enabled(),
+        )
+        if getattr(self._tokenizer, "pad_token_id", None) is None:
+            self._tokenizer.pad_token = self._tokenizer.eos_token
+        self._model = AutoModelForCausalLM.from_pretrained(model_ref.target(), **load_kwargs)
+        if not torch.cuda.is_available():
+            self._model = self._model.to("cpu")
+        self._model.eval()
+
+    def close(self) -> None:
+        self._model = None
+        self._tokenizer = None
+        cleanup_memory()
+
+    def _on_validation_error(self) -> None:
+        raise RuntimeError(
+            "There was an error performing classification: "
+            "the local classifier LLM failed to return valid JSON. "
+            "Try the api backend or a different local classification model if the error recurs."
         )
 
 

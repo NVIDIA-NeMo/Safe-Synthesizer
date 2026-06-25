@@ -19,7 +19,7 @@ from nemo_safe_synthesizer.config.data import DataParameters
 from nemo_safe_synthesizer.config.parameters import SafeSynthesizerParameters
 from nemo_safe_synthesizer.config.time_series import TimeSeriesParameters
 from nemo_safe_synthesizer.config.training import TrainingHyperparams
-from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, PSEUDO_GROUP_COLUMN
+from nemo_safe_synthesizer.defaults import DEFAULT_MAX_SEQ_LENGTH, DEFAULT_PII_CLASSIFY_LOCAL_MODEL, PSEUDO_GROUP_COLUMN
 from nemo_safe_synthesizer.llm.metadata import ModelMetadata
 from nemo_safe_synthesizer.llm.utils import ModelRef
 from nemo_safe_synthesizer.preflight import (
@@ -478,6 +478,52 @@ class TestInferenceModelCheck:
             issues = InferenceModelCheck().run(make_ctx(config=default_config))
         codes = {i.code for i in issues}
         assert codes == {"inference_key_missing"}
+
+    def test_local_hf_backend_skips_api_env_warnings(self, default_config):
+        default_config.replace_pii.globals.classify.backend = "local_hf"
+        model_ref = MagicMock(
+            repo_id="HuggingFaceTB/SmolLM3-3B",
+            local_path=None,
+            cache_root=Path("/hf-cache"),
+        )
+        model_ref.partial_cached_snapshot.return_value = None
+
+        with (
+            patch("nemo_safe_synthesizer.preflight.checks.environment.ModelRef.parse", return_value=model_ref),
+            patch("nemo_safe_synthesizer.preflight.checks.environment.hf_offline_enabled", return_value=False),
+            patch.dict("os.environ", {}, clear=True),
+        ):
+            issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        codes = {i.code for i in issues}
+        assert "inference_key_missing" not in codes
+        assert "classify_hf_model_not_cached" in codes
+
+    def test_local_hf_backend_uses_default_smollm3_model(self, default_config):
+        default_config.replace_pii.globals.classify.backend = "local_hf"
+        model_ref = MagicMock(
+            repo_id="HuggingFaceTB/SmolLM3-3B",
+            local_path=None,
+            cache_root=Path("/hf-cache"),
+        )
+        model_ref.partial_cached_snapshot.return_value = None
+
+        with (
+            patch("nemo_safe_synthesizer.preflight.checks.environment.ModelRef.parse", return_value=model_ref) as parse,
+            patch("nemo_safe_synthesizer.preflight.checks.environment.hf_offline_enabled", return_value=False),
+            patch.dict("os.environ", {"HF_TOKEN": "hf_xxx"}, clear=True),
+        ):
+            InferenceModelCheck().run(make_ctx(config=default_config))
+
+        parse.assert_called_once_with(DEFAULT_PII_CLASSIFY_LOCAL_MODEL)
+
+    def test_local_hf_backend_missing_local_path_errors(self, default_config):
+        default_config.replace_pii.globals.classify.backend = "local_hf"
+        default_config.replace_pii.globals.classify.model = "/missing/local/model"
+
+        issues = InferenceModelCheck().run(make_ctx(config=default_config))
+
+        assert any(i.code == "classify_local_model_missing" and i.severity == "error" for i in issues)
 
 
 @pytest.mark.unit

@@ -10,13 +10,16 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
+from nemo_safe_synthesizer.config.replace_pii import PiiReplacerConfig
 from nemo_safe_synthesizer.defaults import DEFAULT_NSS_INFERENCE_ENDPOINT
+from nemo_safe_synthesizer.pii_replacer.data_editor.detect import ColumnClassifierHF, ColumnClassifierLLM
 from nemo_safe_synthesizer.pii_replacer.data_editor.edit import TransformFnAccounting
 from nemo_safe_synthesizer.pii_replacer.nemo_pii import (
     ColumnClassification,
     NemoPII,
     _build_column_statistics,
     _get_classify_endpoint_url,
+    get_column_classifier,
 )
 
 
@@ -32,6 +35,33 @@ class TestGetClassifyEndpointUrl:
     def test_unset_falls_back_to_default(self, monkeypatch):
         monkeypatch.delenv("NSS_INFERENCE_ENDPOINT", raising=False)
         assert _get_classify_endpoint_url() == DEFAULT_NSS_INFERENCE_ENDPOINT
+
+
+class TestGetColumnClassifier:
+    @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.OpenAI")
+    def test_api_backend_uses_configured_num_samples(self, mock_openai):
+        config = PiiReplacerConfig.get_default_config()
+        config.globals.classify.num_samples = 2
+
+        classifier = get_column_classifier(config)
+
+        assert isinstance(classifier, ColumnClassifierLLM)
+        assert classifier._num_samples == 2
+        mock_openai.assert_called_once()
+
+    @patch("nemo_safe_synthesizer.pii_replacer.nemo_pii.OpenAI")
+    def test_local_hf_backend_does_not_create_openai_client(self, mock_openai):
+        config = PiiReplacerConfig.get_default_config()
+        config.globals.classify.backend = "local_hf"
+        config.globals.classify.model = "local/smollm"
+        config.globals.classify.num_samples = 4
+
+        classifier = get_column_classifier(config)
+
+        assert isinstance(classifier, ColumnClassifierHF)
+        assert classifier._model_name_or_path == "local/smollm"
+        assert classifier._num_samples == 4
+        mock_openai.assert_not_called()
 
     @pytest.mark.parametrize("blank", ["", "   ", "\t"])
     def test_blank_falls_back_to_default(self, monkeypatch, blank):

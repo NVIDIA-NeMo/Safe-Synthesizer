@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from typing_extensions import override
 
+from ...defaults import DEFAULT_PII_CLASSIFY_LOCAL_MODEL
 from ...llm.utils import ModelRef
 from ...observability import get_logger
 from ...utils import hf_offline_enabled
@@ -466,13 +467,11 @@ def _is_valid_http_url(value: str | None) -> bool:
 class InferenceModelCheck(ConfigCheck):
     """Validate the inference configuration used for PII column classification.
 
-    When classification is enabled, the runtime calls an OpenAI-compatible
+    When API classification is enabled, the runtime calls an OpenAI-compatible
     inference endpoint configured by ``NSS_INFERENCE_KEY``,
-    ``NSS_INFERENCE_MODEL``, and ``NSS_INFERENCE_ENDPOINT`` (set directly or via
-    the matching CLI flags, which are propagated to the environment before
-    preflight runs). This check reads those env vars -- not ``config`` -- because
-    the inference settings live in ``CLISettings``/the environment rather than in
-    ``SafeSynthesizerParameters``.
+    ``NSS_INFERENCE_MODEL``, and ``NSS_INFERENCE_ENDPOINT``. When local Hugging
+    Face classification is enabled, the runtime loads
+    ``replace_pii.globals.classify.model`` or the local classifier default.
 
     The body uses a single-dispatch ``match`` over ``(model, key, endpoint)``,
     so at most one finding is emitted per run -- the highest-priority problem.
@@ -491,6 +490,12 @@ class InferenceModelCheck(ConfigCheck):
     def check(self, ctx: ConfigView, collector: IssueCollector) -> None:
         config = ctx.config
         if config.replace_pii is None or config.replace_pii.globals.classify.enable_classify is False:
+            return
+
+        classify_config = config.replace_pii.globals.classify
+        if classify_config.backend == "local_hf":
+            model_name = classify_config.model or DEFAULT_PII_CLASSIFY_LOCAL_MODEL
+            _check_column_classifier_hf_model(model_name, collector)
             return
 
         model = os.environ.get("NSS_INFERENCE_MODEL")
@@ -519,6 +524,92 @@ class InferenceModelCheck(ConfigCheck):
                     "NSS_INFERENCE_MODEL is set but empty. The blank value is ignored and the "
                     "default model id is used. Set a non-empty model id to override the default.",
                 )
+
+
+def _check_column_classifier_hf_model(model_name: str, collector: IssueCollector) -> None:
+    """Validate the Hugging Face model used by local PII column classification."""
+    if not model_name:
+        collector.error("classify_model_ref_empty", "`replace_pii.globals.classify.model` must not be empty.")
+        return
+
+    model_ref = ModelRef.parse(model_name)
+    if model_ref.local_path is not None and Path(model_name).resolve(strict=False) == model_ref.local_path.resolve(
+        strict=False
+    ):
+        _check_column_classifier_local_path(model_ref.local_path, collector, model_ref=model_ref)
+        return
+
+    if _is_missing_local_path(model_name):
+        collector.error(
+            "classify_local_model_missing",
+            f"`replace_pii.globals.classify.model` points to missing local path '{model_name}'.",
+        )
+        return
+
+    if model_ref.repo_id is None:
+        collector.error(
+            "classify_model_ref_invalid",
+            (
+                f"`replace_pii.globals.classify.model` value '{model_name}' is neither an existing local path "
+                "nor a valid Hugging Face model ID."
+            ),
+        )
+        return
+
+    snapshot_path = model_ref.local_path or model_ref.partial_cached_snapshot()
+    if snapshot_path is None:
+        message = (
+            f"Column classification Hugging Face model '{model_ref.repo_id}' is not present in the local cache "
+            f"at '{model_ref.cache_root}'."
+        )
+        if hf_offline_enabled():
+            collector.error(
+                "classify_hf_model_not_cached",
+                f"{message} Offline Hugging Face mode is enabled, so local column classification will fail.",
+            )
+            return
+        collector.warning(
+            "classify_hf_model_not_cached",
+            f"{message} Model loading will contact Hugging Face unless the model is pre-downloaded.",
+        )
+        HFModelAvailabilityCheck._report_missing_hf_token(collector)
+        return
+
+    missing = ModelRef.missing_required_components(snapshot_path)
+    if missing:
+        message = (
+            f"Cached column classification model '{model_ref.repo_id}' at '{snapshot_path}' is missing "
+            f"{', '.join(missing)}."
+        )
+        if hf_offline_enabled():
+            collector.error(
+                "classify_hf_model_cache_incomplete",
+                f"{message} Offline Hugging Face mode is enabled, so local column classification will fail.",
+            )
+            return
+        collector.warning(
+            "classify_hf_model_cache_incomplete",
+            f"{message} Model loading will contact Hugging Face unless the full model snapshot is pre-downloaded.",
+        )
+        HFModelAvailabilityCheck._report_missing_hf_token(collector)
+    HFModelAvailabilityCheck._report_missing_remote_code(model_ref, snapshot_path, collector)
+
+
+def _check_column_classifier_local_path(model_path: Path, collector: IssueCollector, *, model_ref: ModelRef) -> None:
+    if not model_path.is_dir():
+        collector.error(
+            "classify_local_model_not_directory",
+            f"`replace_pii.globals.classify.model` points to '{model_path}', but local models must be directories.",
+        )
+        return
+
+    missing = ModelRef.missing_required_components(model_path)
+    if missing:
+        collector.error(
+            "classify_local_model_incomplete",
+            f"Local column classification model directory '{model_path}' is missing {', '.join(missing)}.",
+        )
+    HFModelAvailabilityCheck._report_missing_remote_code(model_ref, model_path, collector)
 
 
 def _has_hf_token() -> bool:

@@ -1,10 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# ruff: noqa: E402
 import pytest
 
 # Skip all tests in this module if torch is not available
-pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
+torch = pytest.importorskip("torch", reason="torch is required for these tests (install with: uv sync --extra cpu)")
 
 from unittest.mock import MagicMock, patch
 
@@ -17,6 +18,7 @@ from nemo_safe_synthesizer.pii_replacer.data_editor.detect import (
     DEFAULT_ENTITIES,
     UNKNOWN_ENTITY,
     ClassifyConfig,
+    ColumnClassifierHF,
     ColumnClassifierLLM,
     DefaultLLMConfig,
     EntityExtractorGliner,
@@ -376,6 +378,54 @@ def test_detect_types_llm_bad_json():
     with pytest.raises(RuntimeError) as exc:
         llm_classifier.detect_types(df, DEFAULT_ENTITIES)
     assert "LLM failed" in exc.value.args[0]
+
+
+def test_detect_types_local_hf_uses_shared_prompt_and_parser():
+    classifier = ColumnClassifierHF(model_name_or_path="local/smollm", num_samples=1)
+    df = pd.DataFrame(
+        {
+            "email": ["alice@example.com", "bob@example.com"],
+            "height": [170, 180],
+        }
+    )
+
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+
+        def apply_chat_template(self, messages, *, add_generation_prompt, return_tensors):
+            assert add_generation_prompt is True
+            assert return_tensors == "pt"
+            assert messages[0]["content"] == DefaultLLMConfig.SYSTEM_PROMPT
+            assert "email:" in messages[1]["content"]
+            return {
+                "input_ids": torch.tensor([[10, 11]]),
+                "attention_mask": torch.tensor([[1, 1]]),
+            }
+
+        def decode(self, generated_ids, *, skip_special_tokens):
+            assert skip_special_tokens is True
+            return '{"email": "email", "height": "none"}'
+
+    class FakeModel:
+        device = torch.device("cpu")
+
+        def generate(self, *, input_ids, attention_mask, max_new_tokens, do_sample, pad_token_id, eos_token_id):
+            assert input_ids.tolist() == [[10, 11]]
+            assert attention_mask.tolist() == [[1, 1]]
+            assert max_new_tokens == DefaultLLMConfig.MAX_OUTPUT_TOKENS
+            assert do_sample is False
+            assert pad_token_id == 0
+            assert eos_token_id == 1
+            return torch.tensor([[10, 11, 12, 13]])
+
+    classifier._tokenizer = FakeTokenizer()
+    classifier._model = FakeModel()
+
+    assert classifier.detect_types(df, DEFAULT_ENTITIES) == {
+        "email": "email",
+        "height": "none",
+    }
 
 
 def test_redact_from_entities():
