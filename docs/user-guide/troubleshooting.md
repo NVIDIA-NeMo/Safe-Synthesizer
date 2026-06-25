@@ -379,7 +379,7 @@ Generation stopped prematurely because the average fraction of invalid records w
 ```
 
 : Too many invalid records across `generation.patience` consecutive batches.
-  Consider retraining with more records, adjusting `training.number_of_input_records_to_sample`, or setting `generation.structured_generation.enabled=true`.
+  Consider retraining with more records, adjusting `training.num_input_records_to_sample`, or setting `generation.structured_generation.enabled=true`.
 
 For context-length errors during data assembly (`"The number of tokens in an
 example exceeds the available context length"`), see
