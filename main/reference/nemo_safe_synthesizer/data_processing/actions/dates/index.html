@@ -11917,7 +11917,7 @@ and records the format and min date for later reversal.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]]</code>
+                  <code><span title="dict">dict</span>[<span title="collections.abc.Hashable">Hashable</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -11931,13 +11931,13 @@ and records the format and min date for later reversal.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>names to <code>{"format": ..., "min": ...}</code> dicts needed by</p>
+                <p>labels to <code>{"format": ..., "min": ...}</code> dicts needed by</p>
               </div>
             </td>
           </tr>
           <tr class="doc-section-item">
             <td>
-                  <code><span title="tuple">tuple</span>[<span title="dict">dict</span>[<span title="str">str</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]], <span title="pandas.DataFrame">DataFrame</span>]</code>
+                  <code><span title="tuple">tuple</span>[<span title="dict">dict</span>[<span title="collections.abc.Hashable">Hashable</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]], <span title="pandas.DataFrame">DataFrame</span>]</code>
             </td>
             <td>
               <div class="doc-md-description">
@@ -11992,7 +11992,7 @@ and records the format and min date for later reversal.</p>
 <span class="normal"><a href="#__codelineno-0-437">437</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-399"><a id="__codelineno-0-399" name="__codelineno-0-399"></a><span class="k">def</span><span class="w"> </span><span class="nf">fit_and_transform_dates</span><span class="p">(</span>
 </span><span id="__span-0-400"><a id="__codelineno-0-400" name="__codelineno-0-400"></a>    <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
 </span><span id="__span-0-401"><a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="n">inplace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-402"><a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
+</span><span id="__span-0-402"><a id="__codelineno-0-402" name="__codelineno-0-402"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="n">Hashable</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
 </span><span id="__span-0-403"><a id="__codelineno-0-403" name="__codelineno-0-403"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Detect date columns, convert them to elapsed seconds, and record the transformation.</span>
 </span><span id="__span-0-404"><a id="__codelineno-0-404" name="__codelineno-0-404"></a>
 </span><span id="__span-0-405"><a id="__codelineno-0-405" name="__codelineno-0-405"></a><span class="sd">    For each object-typed column, samples values to infer a date format. If</span>
@@ -12005,10 +12005,10 @@ and records the format and min date for later reversal.</p>
 </span><span id="__span-0-412"><a id="__codelineno-0-412" name="__codelineno-0-412"></a>
 </span><span id="__span-0-413"><a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="sd">    Returns:</span>
 </span><span id="__span-0-414"><a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">        A tuple of (date_min_dict, result_df). ``date_min_dict`` maps column</span>
-</span><span id="__span-0-415"><a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">        names to ``{&quot;format&quot;: ..., &quot;min&quot;: ...}`` dicts needed by</span>
+</span><span id="__span-0-415"><a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="sd">        labels to ``{&quot;format&quot;: ..., &quot;min&quot;: ...}`` dicts needed by</span>
 </span><span id="__span-0-416"><a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">        ``transform_dates`` for reversal.</span>
 </span><span id="__span-0-417"><a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-418"><a id="__codelineno-0-418" name="__codelineno-0-418"></a>    <span class="n">date_min_dict</span> <span class="o">=</span> <span class="p">{}</span>
+</span><span id="__span-0-418"><a id="__codelineno-0-418" name="__codelineno-0-418"></a>    <span class="n">date_min_dict</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Hashable</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 </span><span id="__span-0-419"><a id="__codelineno-0-419" name="__codelineno-0-419"></a>    <span class="n">object_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span><span class="p">,</span> <span class="n">col_type</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">dtypes</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">col_type</span> <span class="o">==</span> <span class="s2">&quot;object&quot;</span><span class="p">]</span>
 </span><span id="__span-0-420"><a id="__codelineno-0-420" name="__codelineno-0-420"></a>    <span class="n">result_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">inplace</span> <span class="k">else</span> <span class="n">df</span>
 </span><span id="__span-0-421"><a id="__codelineno-0-421" name="__codelineno-0-421"></a>    <span class="k">for</span> <span class="n">object_col</span> <span class="ow">in</span> <span class="n">object_cols</span><span class="p">:</span>
@@ -12064,11 +12064,11 @@ and records the format and min date for later reversal.</p>
                 <code>dates</code>
             </td>
             <td>
-                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]]</code>
+                  <code><span title="dict">dict</span>[<span title="collections.abc.Hashable">Hashable</span>, <span title="dict">dict</span>[<span title="str">str</span>, <span title="str">str</span>]]</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Mapping from column names to <code>{"format": ..., "min": ...}</code>
+                <p>Mapping from column labels to <code>{"format": ..., "min": ...}</code>
 dicts as returned by <code>fit_and_transform_dates</code>.</p>
               </div>
             </td>
@@ -12136,11 +12136,11 @@ dicts as returned by <code>fit_and_transform_dates</code>.</p>
 <span class="normal"><a href="#__codelineno-0-452">452</a></span>
 <span class="normal"><a href="#__codelineno-0-453">453</a></span>
 <span class="normal"><a href="#__codelineno-0-454">454</a></span>
-<span class="normal"><a href="#__codelineno-0-455">455</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-440"><a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="k">def</span><span class="w"> </span><span class="nf">transform_dates</span><span class="p">(</span><span class="n">dates</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span></pre></div></td><td class="code"><div><pre><span></span><code><span id="__span-0-440"><a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="k">def</span><span class="w"> </span><span class="nf">transform_dates</span><span class="p">(</span><span class="n">dates</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Hashable</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span> <span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 </span><span id="__span-0-441"><a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply a previously fitted date-to-seconds transformation to a DataFrame.</span>
 </span><span id="__span-0-442"><a id="__codelineno-0-442" name="__codelineno-0-442"></a>
 </span><span id="__span-0-443"><a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">    Args:</span>
-</span><span id="__span-0-444"><a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">        dates: Mapping from column names to ``{&quot;format&quot;: ..., &quot;min&quot;: ...}``</span>
+</span><span id="__span-0-444"><a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">        dates: Mapping from column labels to ``{&quot;format&quot;: ..., &quot;min&quot;: ...}``</span>
 </span><span id="__span-0-445"><a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">            dicts as returned by ``fit_and_transform_dates``.</span>
 </span><span id="__span-0-446"><a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">        df: DataFrame to transform.</span>
 </span><span id="__span-0-447"><a id="__codelineno-0-447" name="__codelineno-0-447"></a>
