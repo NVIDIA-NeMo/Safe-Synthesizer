@@ -602,9 +602,11 @@ NVSkills publication can add generated files such as `skills/<skill-name>/BENCHM
 `skills/<skill-name>/skill-card.md`, and `skills/<skill-name>/skill.oms.sig`.
 The signing bot usually pushes these in a commit named `Attach NVSkills validation signatures`.
 
-`skill.oms.sig` contains signed bundle data that can trip the secrets detector as high-entropy strings.
-Do not edit the generated signature file to add inline allowlist comments; that can break the signed artifact.
-Refresh `.github/workflows/config/.secrets.baseline` so the generated signatures are recorded as baseline hashes.
+`skill.oms.sig` is a signed Sigstore bundle. The bundle payload is not a source secret, but it can
+look like high-entropy credential material to scanners. Do not edit the generated signature file to
+add inline allowlist comments; that can break the signed artifact. Refresh
+`.github/workflows/config/.secrets.baseline` so the generated signatures are recorded as baseline
+hashes.
 
 #### Troubleshooting NVSkills Validation
 
@@ -636,16 +638,16 @@ Use this sequence when `/nvskills-ci` ran but the pull request is not green.
    `skills/<skill-name>/skill.oms.sig:1` are expected for generated signature bundles. Findings in
    any other file need normal secret review.
 
-5. To understand scanner behavior, inspect the local workflow:
+5. To understand scanner behavior, inspect the shared helper used by both CI and local checks:
 
    ```bash
-   gh workflow view secrets-detector.yml --repo NVIDIA-NeMo/Safe-Synthesizer --yaml
+   sed -n '1,160p' tools/secrets-detector-changed-files.sh
    ```
 
-   The workflow scans changed files against `.github/workflows/config/.secrets.baseline`, but it must
-   exclude the baseline file itself from hook input. If the job reports `Hex High Entropy String` or
+   The workflow scans changed files against `.github/workflows/config/.secrets.baseline`, but it
+   excludes the baseline file itself from hook input. If the job reports `Hex High Entropy String` or
    `Secret Keyword` findings inside `.github/workflows/config/.secrets.baseline`, the baseline file is
-   being scanned as ordinary input. Fix the workflow exclusion; do not add recursive baseline entries
+   being scanned as ordinary input. Fix the helper exclusion; do not add recursive baseline entries
    for the baseline file.
 
 #### Updating the Secrets Baseline
@@ -674,10 +676,8 @@ mise exec -- uv run --no-project --with detect-secrets==1.5.0 detect-secrets-hoo
 To reproduce the CI changed-file scan locally:
 
 ```bash
-git diff --name-only --diff-filter=d --merge-base origin/main -z \
-  | grep -z -v -E '^\.github/workflows/config/\.secrets\.baseline$' \
-  | xargs -0 -r mise exec -- uv run --no-project --with detect-secrets==1.5.0 detect-secrets-hook \
-      --baseline .github/workflows/config/.secrets.baseline
+mise exec -- uv run --no-project --with detect-secrets==1.5.0 \
+  bash tools/secrets-detector-changed-files.sh origin/main
 ```
 
 ## Documentation

@@ -54,7 +54,7 @@
     "expected_skill": "safe-synthesizer",
     "should_trigger": true,
     "expected_script": null,
-    "ground_truth": "The agent loads safe-synthesizer, routes to references/artifacts.md, and describes the default run path pattern under ./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/. It should name generate/synthetic_data.csv, generate/evaluation_report.html, generate/evaluation_metrics.json, logs/, and train/adapter/ where relevant, and cite docs/user-guide/running.md or docs/user-guide/environment.md.",
+    "ground_truth": "The agent loads safe-synthesizer, routes to references/artifacts.md, and describes the default run path pattern under ./safe-synthesizer-artifacts/<config>---<dataset>/<run_name>/, where the triple hyphen is the literal separator between config and dataset names. It should name generate/synthetic_data.csv, generate/evaluation_report.html, generate/evaluation_metrics.json, logs/, and train/adapter/ where relevant, and cite docs/user-guide/running.md or docs/user-guide/environment.md.",
     "expected_behavior": [
       "The agent read skills/safe-synthesizer/SKILL.md before answering",
       "The agent routed the request to references/artifacts.md",

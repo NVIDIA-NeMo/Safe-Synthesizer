@@ -12,6 +12,10 @@ metadata:
 
 Task router for agents helping a person use NeMo Safe Synthesizer. Read the task file that matches the user request, then read the docs it names before giving user-facing instructions.
 
+This package is exposed from the repository at `.agents/skills/safe-synthesizer`
+as a symlink to `skills/safe-synthesizer`; reference paths below are relative to
+this `SKILL.md`.
+
 ## Instructions
 
 - Run the pipeline, CLI, SDK, logging, or offline setup: read `references/run.md`.

@@ -55,7 +55,7 @@ Task composition is derived from the evaluation dataset when possible. Entries w
 
 ## Results
 
-| Dimension | Num | `claude-code` | `codex` |
+| Dimension | Tasks | `claude-code` | `codex` |
 |---|---:|---:|---:|
 | Security | 6 | 100% (+0%) | 100% (+0%) |
 | Correctness | 6 | 98% (+52%) | 96% (+20%) |
@@ -64,6 +64,8 @@ Task composition is derived from the evaluation dataset when possible. Entries w
 | Efficiency | 6 | 87% (+37%) | 89% (+29%) |
 
 Score values show skill-assisted performance. Values in parentheses show uplift versus the no-skill baseline when baseline data is available.
+Security is retained in the table even though uplift is 0% because both baseline
+and skill-assisted runs already scored 100%.
 
 ## Tier 1: Static Validation Summary
 
