@@ -10107,7 +10107,7 @@ df.head()</div>
     <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>  <span class="c1"># .with_replace_pii(enable=False) to disable PII replacement</span>
     <span class="o">.</span><span class="n">with_differential_privacy</span><span class="p">(</span><span class="n">dp_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="n">recommended_delta</span><span class="p">)</span>
     <span class="o">.</span><span class="n">with_train</span><span class="p">(</span><span class="n">batch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>  <span class="c1"># Override the default batch size of 1, which is designed for non-DP training</span>
-    <span class="o">.</span><span class="n">with_generate</span><span class="p">(</span><span class="n">use_structured_generation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># Improves the percentage of valid records when DP is enabled</span>
+    <span class="o">.</span><span class="n">with_generate</span><span class="p">(</span><span class="n">structured_generation</span><span class="o">=</span><span class="p">{</span><span class="s1">'enabled'</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>  <span class="c1"># Improves the percentage of valid records when DP is enabled</span>
 <span class="p">)</span>
 <span class="n">builder</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 <span class="n">results</span> <span class="o">=</span> <span class="n">builder</span><span class="o">.</span><span class="n">results</span>
@@ -10119,7 +10119,7 @@ builder = (
     .with_data_source(df)  # .with_replace_pii(enable=False) to disable PII replacement
     .with_differential_privacy(dp_enabled=True, delta=recommended_delta)
     .with_train(batch_size=16)  # Override the default batch size of 1, which is designed for non-DP training
-    .with_generate(use_structured_generation=True)  # Improves the percentage of valid records when DP is enabled
+    .with_generate(structured_generation={'enabled': True})  # Improves the percentage of valid records when DP is enabled
 )
 builder.run()
 results = builder.results</div>

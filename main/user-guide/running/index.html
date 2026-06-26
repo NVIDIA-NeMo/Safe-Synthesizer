@@ -11004,15 +11004,15 @@ records, the loop stops early.</p>
 </div>
 </div>
 <h3 id="structured-generation">Structured Generation<a class="headerlink" href="#structured-generation" title="Permanent link">&para;</a></h3>
-<p>Set <code>generation.use_structured_generation</code> to <code>true</code> to constrain the model's
-output so every record matches the dataset schema. This reduces the fraction of
-invalid records, typically at the cost of reducing the quality of the generated
-records. Use it when the pipeline struggles to produce valid records.</p>
+<p>Set <code>generation.structured_generation.enabled</code> to <code>true</code> to constrain the model's
+output toward the dataset schema. This usually reduces the fraction of invalid
+records, typically at the cost of reducing the quality of the generated records.
+Use it when the pipeline struggles to produce valid records.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="9:3"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><input id="__tabbed_9_3" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">CLI</label><label for="__tabbed_9_2">SDK</label><label for="__tabbed_9_3">Config reference</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">  </span>--generation__use_structured_generation<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">  </span>--generation__structured_generation__enabled<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="w">  </span>--data-source<span class="w"> </span>data.csv
 </span></code></pre></div>
 </div>
@@ -11022,20 +11022,24 @@ records. Use it when the pipeline struggles to produce valid records.</p>
 </span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="n">synthesizer</span> <span class="o">=</span> <span class="p">(</span>
 </span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a>    <span class="n">SafeSynthesizer</span><span class="p">()</span>
 </span><span id="__span-41-5"><a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a>    <span class="o">.</span><span class="n">with_data_source</span><span class="p">(</span><span class="s2">&quot;data.csv&quot;</span><span class="p">)</span>
-</span><span id="__span-41-6"><a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a>    <span class="o">.</span><span class="n">with_generate</span><span class="p">(</span><span class="n">use_structured_generation</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-41-6"><a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a>    <span class="o">.</span><span class="n">with_generate</span><span class="p">(</span><span class="n">structured_generation</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
 </span><span id="__span-41-7"><a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a><span class="p">)</span>
 </span></code></pre></div>
+<p>Pass <code>structured_generation</code> as a nested dict or
+<code>StructuredGenerationParameters</code> object. Do not use a bare <code>enabled=True</code>
+shortcut for structured generation.</p>
 </div>
 <div class="tabbed-block">
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nt">generation</span><span class="p">:</span>
-</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">use_structured_generation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span><span class="nt">structured_generation_schema_method</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;auto&quot;</span>
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">structured_generation</span><span class="p">:</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">    </span><span class="nt">schema_method</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;auto&quot;</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
 <ul>
-<li><code>"auto"</code>: picks <code>"structural_tag"</code> when <code>structured_generation_backend</code> is <code>"auto"</code> or <code>"xgrammar"</code>, otherwise <code>"regex"</code>.</li>
+<li><code>"auto"</code>: picks <code>"structural_tag"</code> when <code>structured_generation.backend</code> is <code>"auto"</code> or <code>"xgrammar"</code>, otherwise <code>"regex"</code>.</li>
 <li><code>"structural_tag"</code>: uses XGrammar Structural Tag to compose schema-constrained JSONL output.</li>
 <li><code>"regex"</code>: constructs a custom regex from the dataset schema. More comprehensive but slower.</li>
 <li><code>"json_schema"</code>: passes a JSON Schema to the backend. Faster, but may miss edge cases.</li>
@@ -11076,8 +11080,9 @@ fraction per batch.</p>
 <div class="admonition tip">
 <p class="admonition-title">Early stopping</p>
 <p>If the pipeline stops early due to patience, try enabling
-<code>use_structured_generation: true</code> to constrain outputs to the dataset
-schema, or lower <code>temperature</code> to reduce the chance of malformed records.</p>
+<code>generation.structured_generation.enabled: true</code> to constrain outputs to
+the dataset schema, or lower <code>temperature</code> to reduce the chance of malformed
+records.</p>
 </div>
 <p>See <a href="../configuration/#generation">Configuration Reference -- Generation</a> for the full parameter table.</p>
 <hr />

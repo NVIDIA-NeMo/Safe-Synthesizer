@@ -10381,7 +10381,7 @@ training or an overly tight output-token budget (see
 </span></code></pre></div></dt>
 <dd>
 <p>Too many invalid records across <code>generation.patience</code> consecutive batches.
-  Consider retraining with more records, adjusting <code>training.number_of_input_records_to_sample</code>, or setting <code>use_structured_generation=True</code>.</p>
+  Consider retraining with more records, adjusting <code>training.num_input_records_to_sample</code>, or setting <code>generation.structured_generation.enabled=true</code>.</p>
 </dd>
 </dl>
 <p>For context-length errors during data assembly (<code>"The number of tokens in an

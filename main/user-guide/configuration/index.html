@@ -1213,6 +1213,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#python-parameter-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python Parameter Construction
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9114,6 +9125,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#python-parameter-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python Parameter Construction
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9414,6 +9436,33 @@ omit the flag to use the default, or set it in YAML.</p>
 </div>
 <p>See <a href="../running/#using-yaml-config-files">Using YAML Config Files with the CLI and SDK</a>
 for more detail on combining config files with runtime overrides.</p>
+<h3 id="python-parameter-construction">Python Parameter Construction<a class="headerlink" href="#python-parameter-construction" title="Permanent link">&para;</a></h3>
+<p>The Python SDK accepts both fully nested config objects and compatibility
+shortcuts for fields on top-level parameter sections:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nemo_safe_synthesizer.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">SafeSynthesizerParameters</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">config</span> <span class="o">=</span> <span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_params</span><span class="p">(</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">num_records</span><span class="o">=</span><span class="mi">2000</span><span class="p">,</span>  <span class="c1"># generation.num_records</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">dp_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># privacy.dp_enabled</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">structured_generation</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>  <span class="c1"># generation.structured_generation.enabled</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>Flat keyword arguments are matched by field name against the top-level parameter
+sections. Use the nested shape for fields inside nested subobjects, especially
+when a generic field name could appear in multiple places:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Preferred: unambiguous nested form.</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_params</span><span class="p">(</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">structured_generation</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Also valid: fully nested generation section.</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_params</span><span class="p">(</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">generation</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;structured_generation&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}},</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="p">)</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Avoid: this configures evaluation.enabled, not structured generation.</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">SafeSynthesizerParameters</span><span class="o">.</span><span class="n">from_params</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span></code></pre></div>
 <hr />
 <h2 id="training">Training<a class="headerlink" href="#training" title="Permanent link">&para;</a></h2>
 <p>NeMo Safe Synthesizer fine-tunes a pretrained language model on your tabular data
@@ -9614,9 +9663,9 @@ following quantization schemes via transformers v5's
 </tbody>
 </table>
 <p>Select a scheme with <code>training.quantization_scheme</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">training</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">quantize_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">quantization_scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nvfp4</span><span class="w">   </span><span class="c1"># or bnb-4bit / bnb-8bit / fp8 / mxfp4</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">training</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">quantize_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">quantization_scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nvfp4</span><span class="w">   </span><span class="c1"># or bnb-4bit / bnb-8bit / fp8 / mxfp4</span>
 </span></code></pre></div>
 <p>If <code>quantization_scheme</code> is unset, Safe Synthesizer falls back to
 <code>quantization_bits</code> for backward compatibility (<code>4</code> → <code>bnb-4bit</code>,
@@ -9686,25 +9735,25 @@ for the full API reference.</p>
 <td>Leave at default</td>
 </tr>
 <tr>
-<td><code>generation.use_structured_generation</code></td>
+<td><code>generation.structured_generation.enabled</code></td>
 <td><code>false</code></td>
 <td>Enable structured output to constrain record format (typically at the cost of reducing the quality of generated records and increasing generation time; use when the pipeline struggles to produce valid records)</td>
 <td>Leave off unless the pipeline cannot produce valid records</td>
 </tr>
 <tr>
-<td><code>generation.structured_generation_backend</code></td>
+<td><code>generation.structured_generation.backend</code></td>
 <td><code>"auto"</code></td>
 <td>vLLM guided-decoding backend</td>
 <td>Leave at <code>"auto"</code></td>
 </tr>
 <tr>
-<td><code>generation.structured_generation_schema_method</code></td>
+<td><code>generation.structured_generation.schema_method</code></td>
 <td><code>"auto"</code></td>
 <td>Schema method (<code>"auto"</code>, <code>"structural_tag"</code>, <code>"json_schema"</code>, or <code>"regex"</code>)</td>
 <td>Leave at <code>"auto"</code>; it picks <code>"structural_tag"</code> on xgrammar-capable backends and <code>"regex"</code> otherwise</td>
 </tr>
 <tr>
-<td><code>generation.structured_generation_use_single_sequence</code></td>
+<td><code>generation.structured_generation.use_single_sequence</code></td>
 <td><code>false</code></td>
 <td>Match exactly one sequence when <code>max_sequences_per_example</code> is 1</td>
 <td>Leave at default</td>
@@ -10061,8 +10110,8 @@ for the full API reference.</p>
 <h2 id="validate-and-modify-configuration">Validate and Modify Configuration<a class="headerlink" href="#validate-and-modify-configuration" title="Permanent link">&para;</a></h2>
 <h3 id="config-validate"><code>config validate</code><a class="headerlink" href="#config-validate" title="Permanent link">&para;</a></h3>
 <p>Check your config for errors and display the merged parameters:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>validate<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001
 </span></code></pre></div>
 <p>Fields set to <code>"auto"</code> remain as <code>"auto"</code> in the output -- auto-resolution
 happens at runtime during <code>process_data()</code>, not at validation time. To see
@@ -10070,7 +10119,7 @@ resolved values, check <code>safe-synthesizer-config.json</code> in the run dire
 after a pipeline run.</p>
 <h3 id="config-modify"><code>config modify</code><a class="headerlink" href="#config-modify" title="Permanent link">&para;</a></h3>
 <p>Modify a configuration and optionally save the result:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>modify<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span>--output<span class="w"> </span>modified.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>modify<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span>--output<span class="w"> </span>modified.yaml
 </span></code></pre></div>
 <table>
 <thead>
@@ -10092,8 +10141,8 @@ after a pipeline run.</p>
 </table>
 <h3 id="config-create"><code>config create</code><a class="headerlink" href="#config-create" title="Permanent link">&para;</a></h3>
 <p>Create a new configuration from defaults:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--output<span class="w"> </span>config.yaml
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--training__pretrained_model<span class="w"> </span><span class="s2">&quot;HuggingFaceTB/SmolLM3-3B&quot;</span><span class="w"> </span>--output<span class="w"> </span>config.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--output<span class="w"> </span>config.yaml
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>safe-synthesizer<span class="w"> </span>config<span class="w"> </span>create<span class="w"> </span>--training__pretrained_model<span class="w"> </span><span class="s2">&quot;HuggingFaceTB/SmolLM3-3B&quot;</span><span class="w"> </span>--output<span class="w"> </span>config.yaml
 </span></code></pre></div>
 <table>
 <thead>
@@ -10111,10 +10160,10 @@ after a pipeline run.</p>
 </table>
 <h3 id="cli-override-syntax">CLI Override Syntax<a class="headerlink" href="#cli-override-syntax" title="Permanent link">&para;</a></h3>
 <p>Use double underscores to address nested fields:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--data__holdout<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">5000</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>safe-synthesizer<span class="w"> </span>run<span class="w"> </span>--config<span class="w"> </span>config.yaml<span class="w"> </span>--data-source<span class="w"> </span>data.csv<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--training__learning_rate<span class="w"> </span><span class="m">0</span>.001<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--data__holdout<span class="w"> </span><span class="m">0</span>.1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--generation__num_records<span class="w"> </span><span class="m">5000</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Override precedence</p>
