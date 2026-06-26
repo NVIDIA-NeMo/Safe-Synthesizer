@@ -182,5 +182,3 @@ def process_timeseries_data(
         )
 
     return training_df, config
-
-

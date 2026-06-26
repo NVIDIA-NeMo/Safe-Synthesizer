@@ -8,7 +8,7 @@ import pytest
 
 from nemo_safe_synthesizer.config import SafeSynthesizerParameters
 from nemo_safe_synthesizer.defaults import PSEUDO_GROUP_COLUMN
-from nemo_safe_synthesizer.errors import DataError, ParameterError
+from nemo_safe_synthesizer.errors import ParameterError
 from nemo_safe_synthesizer.training.timeseries_preprocessing import (
     _add_pseudo_group_if_needed,
     _create_elapsed_time_column,

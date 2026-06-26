@@ -34,17 +34,21 @@ class TimeSeriesValidationError:
 
     code: str
 
-    def __init__(self, code: str, message: str) -> None:
-        self.code = code
-        super().__init__(message)  # type: ignore[misc]
-
 
 class TimeSeriesDataValidationError(TimeSeriesValidationError, DataError):
     """Data-side time-series validation failure."""
 
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
+
 
 class TimeSeriesParameterValidationError(TimeSeriesValidationError, ParameterError):
     """Parameter-side time-series validation failure."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = code
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -164,7 +168,9 @@ def _detect_elapsed_seconds_format(data: pd.DataFrame, ts_config: TimeSeriesPara
 def _infer_and_convert_timestamp_format(df: pd.DataFrame, ts_config: TimeSeriesParameters) -> pd.DataFrame:
     """Infer or validate timestamp format and return a converted copy."""
     if len(df) == 0:
-        raise TimeSeriesDataValidationError("timestamp_parse_failed", "Cannot infer timestamp format from empty DataFrame")
+        raise TimeSeriesDataValidationError(
+            "timestamp_parse_failed", "Cannot infer timestamp format from empty DataFrame"
+        )
 
     timestamp_col = ts_config.timestamp_column
     if timestamp_col is None:
