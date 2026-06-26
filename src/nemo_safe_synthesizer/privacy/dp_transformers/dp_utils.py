@@ -74,12 +74,16 @@ _MIN_GHOST_CLIPPING_OPACUS_VERSION = Version("1.6.0")
 _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
 _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK = Lock()
 
-# Original Transformers loss callables saved at install time so the opt-in probe
-# can be reverted. The probe monkeypatches process-global state in
-# ``transformers.loss.loss_utils``; without teardown it would leak into every
-# model in the process for the rest of its lifetime.
-_CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN: Any | None = None
-_CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS: list[Any] = []
+
+class _CausalLmLossProbeState:
+    """Mutable state needed to restore the process-global Transformers loss patch."""
+
+    def __init__(self) -> None:
+        self.original_fn: Any | None = None
+        self.patched_mapping_keys: list[Any] = []
+
+
+_CAUSAL_LM_LOSS_MEMORY_PROBE_STATE = _CausalLmLossProbeState()
 
 
 def _gib_upper_bound_bucket(nbytes: int | float | None) -> float | None:
@@ -219,7 +223,6 @@ def _install_causal_lm_loss_memory_probe(
         loss = loss_utils.fixed_cross_entropy(logits, shift_labels, num_items_in_batch, ignore_index, **kwargs)
         return loss
 
-    global _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN, _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS
     global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
     with _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK:
         if _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
@@ -229,13 +232,14 @@ def _install_causal_lm_loss_memory_probe(
             )
 
         original = loss_utils.ForCausalLMLoss
-        _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = original
-        _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS = []
+        state = _CAUSAL_LM_LOSS_MEMORY_PROBE_STATE
+        state.original_fn = original
+        state.patched_mapping_keys = []
         setattr(loss_utils, "ForCausalLMLoss", probed_for_causal_lm_loss)
         for loss_name, loss_fn in loss_utils.LOSS_MAPPING.items():
             if loss_fn is original:
                 loss_utils.LOSS_MAPPING[loss_name] = probed_for_causal_lm_loss
-                _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.append(loss_name)
+                state.patched_mapping_keys.append(loss_name)
         _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = True
     logger.warning(
         "Installed causal-LM loss wrapper for memory diagnostics/experiments "
@@ -253,21 +257,22 @@ def _uninstall_causal_lm_loss_memory_probe(installed: bool = True) -> None:
     if not installed:
         return
 
-    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED, _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
+    global _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED
     from transformers.loss import loss_utils
 
     with _CAUSAL_LM_LOSS_MEMORY_PROBE_LOCK:
         if not _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED:
             return
 
-        original = _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN
+        state = _CAUSAL_LM_LOSS_MEMORY_PROBE_STATE
+        original = state.original_fn
         if original is not None:
             setattr(loss_utils, "ForCausalLMLoss", original)
-            for loss_name in _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS:
+            for loss_name in state.patched_mapping_keys:
                 loss_utils.LOSS_MAPPING[loss_name] = original
 
-        _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS.clear()
-        _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN = None
+        state.patched_mapping_keys.clear()
+        state.original_fn = None
         _CAUSAL_LM_LOSS_MEMORY_PROBE_INSTALLED = False
     logger.warning("Reverted causal-LM loss wrapper installed for memory diagnostics/experiments")
 
