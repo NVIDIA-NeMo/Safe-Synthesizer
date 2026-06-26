@@ -16,6 +16,7 @@ wrapper with ``no_sync`` support.
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -81,6 +82,16 @@ _CAUSAL_LM_LOSS_MEMORY_PROBE_ORIGINAL_FN: Any | None = None
 _CAUSAL_LM_LOSS_MEMORY_PROBE_PATCHED_MAPPING_KEYS: list[Any] = []
 
 
+def _gib_upper_bound_bucket(nbytes: int | float | None) -> float | None:
+    """Return a coarse power-of-two GiB upper bound for diagnostic memory values."""
+    if nbytes is None or nbytes <= 0:
+        return None
+    gib = nbytes / 1024**3
+    if gib <= 0.125:
+        return 0.125
+    return float(2 ** math.ceil(math.log2(gib)))
+
+
 def _log_cuda_loss_memory(stage: str, logits: torch.Tensor, *, enabled: bool) -> None:
     """Log CUDA memory around the causal-LM fp32 logits upcast (no-op when disabled)."""
     if not enabled:
@@ -94,14 +105,14 @@ def _log_cuda_loss_memory(stage: str, logits: torch.Tensor, *, enabled: bool) ->
     reserved_bytes = torch.cuda.memory_reserved(device)
     logger.warning(
         f"CausalLM loss memory probe {stage}: "
-        f"logits_shape={tuple(logits.shape)} "
+        f"logits_rank={logits.ndim} "
         f"logits_dtype={logits.dtype} "
-        f"logits_gib={logits.numel() * logits.element_size() / 1024**3:.2f} "
-        f"allocated_gib={allocated_bytes / 1024**3:.2f} "
-        f"reserved_gib={reserved_bytes / 1024**3:.2f} "
-        f"reserved_unallocated_gib={(reserved_bytes - allocated_bytes) / 1024**3:.2f} "
-        f"free_gib={free_bytes / 1024**3:.2f} "
-        f"total_gib={total_bytes / 1024**3:.2f}"
+        f"logits_gib_bucket_le={_gib_upper_bound_bucket(logits.numel() * logits.element_size())} "
+        f"allocated_gib_bucket_le={_gib_upper_bound_bucket(allocated_bytes)} "
+        f"reserved_gib_bucket_le={_gib_upper_bound_bucket(reserved_bytes)} "
+        f"reserved_unallocated_gib_bucket_le={_gib_upper_bound_bucket(reserved_bytes - allocated_bytes)} "
+        f"free_gib_bucket_le={_gib_upper_bound_bucket(free_bytes)} "
+        f"total_gib_bucket_le={_gib_upper_bound_bucket(total_bytes)}"
     )
 
 
@@ -153,14 +164,15 @@ def _install_causal_lm_loss_memory_probe(
     """Install the opt-in Transformers causal-LM loss probe from config flags.
 
     Args:
-        debug_loss_memory: Log CUDA memory around the fp32 logits upcast and
-            feed ``peak_recorder`` (when supplied) the fp32 logits size.
+        debug_loss_memory: Log coarse CUDA memory buckets around the fp32
+            logits upcast and feed ``peak_recorder`` (when supplied) the
+            internal fp32 logits size used later for bucketed observability.
         chunked_loss: Compute cross entropy in token chunks instead of a single
             full-logits fp32 upcast.
         chunk_tokens: Token chunk size used when ``chunked_loss`` is set.
         peak_recorder: Optional sink receiving the fp32 logits byte count on
-            each loss call when ``debug_loss_memory`` is set (used to summarize
-            the peak upcast spike for observability).
+            each loss call when ``debug_loss_memory`` is set. The exported
+            observability event reports only a coarse upper-bound bucket.
 
     Returns ``True`` when this call installed the process-global probe and the
     caller must later uninstall it. Returns ``False`` when neither probe feature
@@ -839,7 +851,7 @@ class OpacusDPTrainer(Trainer):
         return DPOptimizerGhostClipping
 
     def _record_peak_loss_logits(self, nbytes: int) -> None:
-        """Track the largest fp32 logits tensor seen by the loss (for observability)."""
+        """Track the largest fp32 logits tensor seen by the loss for bucketed observability."""
         if nbytes > self._peak_loss_logits_bytes:
             self._peak_loss_logits_bytes = nbytes
 
@@ -895,10 +907,9 @@ class OpacusDPTrainer(Trainer):
             per_device = getattr(self.args, "per_device_train_batch_size", None)
             grad_accum = getattr(self.args, "gradient_accumulation_steps", None)
             effective = per_device * grad_accum if per_device is not None and grad_accum is not None else None
-            peak_loss_logits_gb = self._peak_loss_logits_bytes / 1024**3 if self._peak_loss_logits_bytes > 0 else None
             event = TrainingObservability(
                 peak_vram_gb=peak_vram_gb,
-                peak_loss_logits_gb=peak_loss_logits_gb,
+                peak_loss_logits_gb_bucket_le=_gib_upper_bound_bucket(self._peak_loss_logits_bytes),
                 per_device_train_batch_size=per_device,
                 gradient_accumulation_steps=grad_accum,
                 effective_batch_size=effective,

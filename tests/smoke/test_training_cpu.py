@@ -13,10 +13,11 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import pytest
+import torch
 from datasets import Dataset
 from packaging.version import Version
 from peft import LoraConfig, TaskType, get_peft_model
-from transformers import DataCollatorForTokenClassification, Trainer, TrainingArguments
+from transformers import DataCollatorForTokenClassification, LlamaForCausalLM, Trainer, TrainingArguments
 
 from nemo_safe_synthesizer.data_processing.assembler import TrainingExampleAssembler
 from nemo_safe_synthesizer.defaults import DEFAULT_INSTRUCTION, PROMPT_TEMPLATE
@@ -45,7 +46,14 @@ def _cpu_training_args(tmp_path, **overrides):
     return TrainingArguments(**defaults)
 
 
-def _privacy_args() -> PrivacyArguments:
+def _privacy_args(*, noise_multiplier: float | None = None) -> PrivacyArguments:
+    if noise_multiplier is not None:
+        return PrivacyArguments(
+            noise_multiplier=noise_multiplier,
+            target_delta=1e-5,
+            per_sample_max_grad_norm=1.0,
+            use_prv=False,
+        )
     return PrivacyArguments(
         target_epsilon=100.0,
         target_delta=1e-5,
@@ -64,6 +72,8 @@ def _dp_trainer(
     train_dataset,
     tmp_path,
     grad_sample_mode: Literal["hooks", "ghost"] = "hooks",
+    privacy_args: PrivacyArguments | None = None,
+    secure_mode: bool = True,
     **training_arg_overrides,
 ) -> OpacusDPTrainer:
     return OpacusDPTrainer(
@@ -76,8 +86,9 @@ def _dp_trainer(
         ),
         train_dataset=train_dataset,
         data_collator=_private_data_collator(tokenizer),
-        privacy_args=_privacy_args(),
+        privacy_args=privacy_args or _privacy_args(),
         grad_sample_mode=grad_sample_mode,
+        secure_mode=secure_mode,
         true_dataset_size=8,
         data_fraction=1.0,
     )
@@ -92,6 +103,15 @@ def _tiny_lora_model(base_model):
         bias="none",
     )
     return get_peft_model(base_model, lora_config)
+
+
+def _trainable_parameter_state(model) -> dict[str, torch.Tensor]:
+    """Return detached trainable parameters with Opacus wrapper prefixes normalized."""
+    return {
+        name.removeprefix("_module."): parameter.detach().cpu().clone()
+        for name, parameter in model.named_parameters()
+        if parameter.requires_grad
+    }
 
 
 @dataclass
@@ -241,6 +261,66 @@ def test_dp_clipping_training_with_gradient_accumulation(
 
     assert trainer.dp_callback._on_substep_end_was_called
     assert len(trainer.state.log_history) > 0
+
+
+@pytest.mark.parametrize("gradient_accumulation_steps", [1, 2])
+def test_dp_ghost_clipping_matches_hooks_without_noise(
+    fixture_tiny_llama_config,
+    fixture_stub_tokenizer,
+    fixture_tiny_training_dataset_with_position_ids,
+    tmp_path,
+    monkeypatch,
+    gradient_accumulation_steps,
+):
+    """Ghost clipping should match hooks when noise is disabled, including accumulation."""
+    monkeypatch.setattr(dp_utils, "_get_opacus_version", lambda: Version("1.6.0"))
+
+    def make_model() -> torch.nn.Module:
+        torch.manual_seed(2026)
+        model = _tiny_lora_model(LlamaForCausalLM(fixture_tiny_llama_config))
+        model.enable_input_require_grads()
+        return model
+
+    hooks_model = make_model()
+    ghost_model = make_model()
+    initial_state = _trainable_parameter_state(hooks_model)
+    training_args = {
+        "gradient_accumulation_steps": gradient_accumulation_steps,
+        "seed": 1729,
+        "data_seed": 1729,
+    }
+    hooks_trainer = _dp_trainer(
+        model=hooks_model,
+        tokenizer=fixture_stub_tokenizer,
+        train_dataset=fixture_tiny_training_dataset_with_position_ids,
+        tmp_path=tmp_path / "hooks",
+        grad_sample_mode="hooks",
+        privacy_args=_privacy_args(noise_multiplier=0.0),
+        secure_mode=False,
+        **training_args,
+    )
+    ghost_trainer = _dp_trainer(
+        model=ghost_model,
+        tokenizer=fixture_stub_tokenizer,
+        train_dataset=fixture_tiny_training_dataset_with_position_ids,
+        tmp_path=tmp_path / "ghost",
+        grad_sample_mode="ghost",
+        privacy_args=_privacy_args(noise_multiplier=0.0),
+        secure_mode=False,
+        **training_args,
+    )
+
+    torch.manual_seed(99)
+    hooks_trainer.train()
+    torch.manual_seed(99)
+    ghost_trainer.train()
+
+    hooks_state = _trainable_parameter_state(hooks_trainer.model)
+    ghost_state = _trainable_parameter_state(ghost_trainer.model)
+    assert hooks_state.keys() == ghost_state.keys()
+    assert any(not torch.allclose(hooks_state[name], initial_state[name], rtol=0, atol=0) for name in hooks_state)
+    for name in hooks_state:
+        torch.testing.assert_close(ghost_state[name], hooks_state[name], rtol=1e-5, atol=1e-7)
 
 
 def test_loss_memory_probe_install_and_uninstall_round_trip():

@@ -222,8 +222,9 @@ class TrainingMemoryControls(Parameters):
         Field(
             title="debug_loss_memory",
             description=(
-                "Log CUDA memory around the causal-LM fp32 logits upcast for diagnostics. "
-                "Logging only -- does not change training behavior. Only applies to DP training."
+                "Log coarse CUDA memory buckets around the causal-LM fp32 logits upcast for diagnostics. "
+                "Logging only -- does not change training behavior. Only applies to DP training. "
+                "Treat these diagnostics as internal debugging output, not as a released DP artifact."
             ),
         ),
     ] = False

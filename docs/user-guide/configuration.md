@@ -148,7 +148,7 @@ for the full field list.
 | `training.memory.disable_dp_bf16` | `false` | Disable the Trainer's bf16 autocast during DP training so model outputs stay in their original dtype. Only applies when DP is enabled | Enable to mitigate the fp32 logits-upcast memory spike at a speed cost |
 | `training.memory.chunked_causal_lm_loss` | `false` | Compute causal-LM cross entropy in token chunks instead of upcasting all logits to fp32 at once. DP path only | Enable for large-vocab OOMs at the loss upcast; small speed cost |
 | `training.memory.chunked_causal_lm_loss_tokens` | `1024` | Token chunk size used when `chunked_causal_lm_loss` is enabled (must be >= 1) | Lower (e.g. 256--512) for more memory savings per chunk |
-| `training.memory.debug_loss_memory` | `false` | Log CUDA memory around the causal-LM fp32 logits upcast for diagnostics. Logging only -- does not change training behavior. DP path only | Enable when diagnosing where DP training OOMs |
+| `training.memory.debug_loss_memory` | `false` | Log coarse CUDA memory buckets around the causal-LM fp32 logits upcast for diagnostics. Logging only -- does not change training behavior. DP path only. Treat as internal debugging output, not a released DP artifact | Enable when diagnosing where DP training OOMs |
 | `training.num_input_records_to_sample` | `"auto"` | Records the model sees during training -- proxy for training time (`"auto"` or int) | First knob to increase if quality is low |
 | `training.lora_r` | `32` | LoRA rank; lower values produce fewer trainable parameters | 16--64 typical; 32 is a reasonable default |
 | `training.lora_alpha_over_r` | `1.0` | LoRA scaling ratio (alpha / rank) | Leave at 1.0 |

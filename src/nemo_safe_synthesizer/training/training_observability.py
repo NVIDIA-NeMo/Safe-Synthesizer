@@ -43,11 +43,12 @@ class TrainingObservability(BaseModel):
             "includes other processes."
         ),
     )
-    peak_loss_logits_gb: float | None = Field(
+    peak_loss_logits_gb_bucket_le: float | None = Field(
         default=None,
         description=(
-            "Peak fp32 causal-LM logits tensor size in GiB seen by the loss function -- the "
-            "upcast memory spike (or the spike chunked loss avoids). Populated only when "
+            "Coarse power-of-two GiB upper-bound bucket for the peak fp32 causal-LM logits "
+            "tensor size seen by the loss function. This avoids exporting exact padded "
+            "sequence-shape-derived memory. Populated only when "
             "training.memory.debug_loss_memory is enabled; ``None`` otherwise."
         ),
     )

@@ -89,6 +89,37 @@ def test_chunked_cross_entropy_matches_transformers_loss_with_masked_labels():
     assert torch.allclose(actual_scaled, expected_scaled)
 
 
+def test_gib_upper_bound_bucket_is_coarse():
+    assert dp_utils._gib_upper_bound_bucket(0) is None
+    assert dp_utils._gib_upper_bound_bucket(64 * 1024**2) == 0.125
+    assert dp_utils._gib_upper_bound_bucket(int(1.25 * 1024**3)) == 2.0
+
+
+def test_loss_memory_probe_log_omits_exact_logits_shape(monkeypatch):
+    logits = SimpleNamespace(
+        is_cuda=True,
+        device="cuda:0",
+        ndim=3,
+        dtype=torch.float16,
+        numel=lambda: 2048,
+        element_size=lambda: 2,
+    )
+    warnings: list[str] = []
+    monkeypatch.setattr(dp_utils.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(dp_utils.torch.cuda, "mem_get_info", lambda _device: (2 * 1024**3, 8 * 1024**3))
+    monkeypatch.setattr(dp_utils.torch.cuda, "memory_allocated", lambda _device: int(1.25 * 1024**3))
+    monkeypatch.setattr(dp_utils.torch.cuda, "memory_reserved", lambda _device: 4 * 1024**3)
+    monkeypatch.setattr(dp_utils.logger, "warning", lambda message, *_args, **_kwargs: warnings.append(message))
+
+    dp_utils._log_cuda_loss_memory("before_logits_float", logits, enabled=True)  # ty: ignore[invalid-argument-type] -- minimal tensor-like stub
+
+    assert len(warnings) == 1
+    assert "logits_shape" not in warnings[0]
+    assert "logits_rank=3" in warnings[0]
+    assert "logits_gib_bucket_le=0.125" in warnings[0]
+    assert "allocated_gib_bucket_le=2.0" in warnings[0]
+
+
 def test_loss_memory_probe_skips_ghost_mode_and_warns(monkeypatch):
     """Ghost clipping bypasses Transformers causal-LM loss, so probe-only controls warn."""
     trainer = object.__new__(OpacusDPTrainer)
@@ -103,7 +134,7 @@ def test_loss_memory_probe_skips_ghost_mode_and_warns(monkeypatch):
 
     warnings: list[str] = []
     monkeypatch.setattr(dp_utils, "_install_causal_lm_loss_memory_probe", fail_install)
-    monkeypatch.setattr(dp_utils.logger, "warning", lambda message: warnings.append(message))
+    monkeypatch.setattr(dp_utils.logger, "warning", lambda message, *_args, **_kwargs: warnings.append(message))
 
     assert trainer._install_loss_memory_probe() is False
     assert any("ignored for grad_sample_mode='ghost'" in message for message in warnings)
@@ -121,12 +152,12 @@ def test_training_observability_survives_logger_failure(monkeypatch):
         raise RuntimeError("log handler failed")
 
     monkeypatch.setattr(dp_utils.logger.runtime, "info", fail_log)
-    monkeypatch.setattr(dp_utils.logger, "warning", lambda _message: None)
+    monkeypatch.setattr(dp_utils.logger, "warning", lambda *_args, **_kwargs: None)
 
     trainer._emit_training_observability(peak_vram_gb=5.0)
 
     event = trainer.last_training_observability
     assert event is not None
     assert event.peak_vram_gb == 5.0
-    assert event.peak_loss_logits_gb == 4.0
+    assert event.peak_loss_logits_gb_bucket_le == 4.0
     assert event.effective_batch_size == 6

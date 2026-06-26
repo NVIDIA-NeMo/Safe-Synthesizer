@@ -172,8 +172,9 @@ stack traces. If you see `torch.cuda.OutOfMemoryError`:
    cross entropy in token chunks instead of upcasting all logits to fp32 at
    once, and/or `training.memory.disable_dp_bf16: true` to keep model outputs
    in their original dtype through the loss. Set
-   `training.memory.debug_loss_memory: true` to log CUDA memory around the
-   logits upcast while diagnosing
+   `training.memory.debug_loss_memory: true` to log coarse CUDA memory buckets
+   around the logits upcast while diagnosing. Keep those diagnostics internal;
+   do not release them as part of a claimed-DP artifact
 7. Lower `training.max_vram_fraction` (default `0.8`) to leave headroom for
    other GPU consumers on the same device
 

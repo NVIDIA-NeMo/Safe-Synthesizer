@@ -24,7 +24,7 @@ def test_all_fields_default_to_none():
     event = TrainingObservability()
     assert event.model_dump() == {
         "peak_vram_gb": None,
-        "peak_loss_logits_gb": None,
+        "peak_loss_logits_gb_bucket_le": None,
         "per_device_train_batch_size": None,
         "gradient_accumulation_steps": None,
         "effective_batch_size": None,
@@ -53,8 +53,8 @@ def test_to_wandb_payload_drops_none_and_prefixes():
         "training/effective_batch_size": 8,
         "training/grad_sample_mode": "ghost",
     }
-    # peak_loss_logits_gb was None and must be dropped, not emitted as None.
-    assert "training/peak_loss_logits_gb" not in payload
+    # peak_loss_logits_gb_bucket_le was None and must be dropped, not emitted as None.
+    assert "training/peak_loss_logits_gb_bucket_le" not in payload
 
 
 def test_to_wandb_payload_custom_prefix():
@@ -108,11 +108,29 @@ def test_emit_training_observability_assembles_event_from_trainer_state():
     event = stub.last_training_observability
     assert event is not None
     assert event.peak_vram_gb == 3.5
-    assert event.peak_loss_logits_gb == pytest.approx(1.0)
+    assert event.peak_loss_logits_gb_bucket_le == pytest.approx(1.0)
     assert event.per_device_train_batch_size == 2
     assert event.gradient_accumulation_steps == 4
     assert event.effective_batch_size == 8
     assert event.grad_sample_mode == "ghost"
+
+
+def test_emit_training_observability_buckets_peak_loss_logits():
+    from types import SimpleNamespace
+
+    from nemo_safe_synthesizer.privacy.dp_transformers import dp_utils
+
+    stub = SimpleNamespace(
+        args=SimpleNamespace(per_device_train_batch_size=2, gradient_accumulation_steps=4),
+        grad_sample_mode="hooks",
+        _peak_loss_logits_bytes=int(1.25 * 1024**3),
+        last_training_observability=None,
+    )
+    dp_utils.OpacusDPTrainer._emit_training_observability(stub, peak_vram_gb=None)  # ty: ignore[invalid-argument-type] -- duck-typed stub
+
+    event = stub.last_training_observability
+    assert event is not None
+    assert event.peak_loss_logits_gb_bucket_le == pytest.approx(2.0)
 
 
 def test_emit_training_observability_omits_peak_loss_logits_when_unrecorded():
@@ -130,5 +148,5 @@ def test_emit_training_observability_omits_peak_loss_logits_when_unrecorded():
 
     event = stub.last_training_observability
     assert event is not None
-    assert event.peak_loss_logits_gb is None
+    assert event.peak_loss_logits_gb_bucket_le is None
     assert event.peak_vram_gb is None
