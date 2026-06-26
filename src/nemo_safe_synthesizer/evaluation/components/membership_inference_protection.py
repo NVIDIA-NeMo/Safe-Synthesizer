@@ -248,8 +248,8 @@ class MembershipInferenceProtection(Component):
     ) -> tuple[
         float,
         list[str],
-        dict[str, list[int]],
-        dict[str, list[int]],
+        dict[float, int],
+        dict[float, int],
     ]:
         """Core membership inference attack implementation for a single run.
 
@@ -286,8 +286,8 @@ class MembershipInferenceProtection(Component):
             pd.concat([training_df_attack, test_df_norm]).reset_index(drop=True).sample(frac=1, random_state=run)
         )
 
-        attack_synth_dist_text = [[0] for i in range(len(attack_df))]
-        attack_synth_indices_text = [[0] for i in range(len(attack_df))]
+        attack_synth_dist_text: list[list[float]] = [[0.0] for i in range(len(attack_df))]
+        attack_synth_indices_text: list[list[int]] = [[0] for i in range(len(attack_df))]
 
         # Get the NN dist for text for the entire attack dataset
 
@@ -362,8 +362,8 @@ class MembershipInferenceProtection(Component):
         score = 0
         attack_summary = []
 
-        tp_cnts = {}
-        fp_cnts = {}
+        tp_cnts: dict[float, int] = {}
+        fp_cnts: dict[float, int] = {}
 
         # Using the above text and tabular distances we now compute an overall distance score for
         # every record in the attack dataset. We then conduct 36 individual mia attacks on this one big
@@ -519,8 +519,8 @@ class MembershipInferenceProtection(Component):
 
             scores = []
             attack_sum_values = []
-            tps_values = {}
-            fps_values = {}
+            tps_values: dict[float, int] = {}
+            fps_values: dict[float, int] = {}
             for i in [0.1, 0.2, 0.3, 0.4]:
                 tps_values[i] = 0
                 fps_values[i] = 0

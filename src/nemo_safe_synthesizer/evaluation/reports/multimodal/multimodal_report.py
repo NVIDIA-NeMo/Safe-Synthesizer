@@ -21,6 +21,7 @@ from ....evaluation.components.column_distribution import (
     ColumnDistribution,
     ColumnDistributionPlotRow,
 )
+from ....evaluation.components.component import Component
 from ....evaluation.components.correlation import (
     Correlation,
 )
@@ -150,7 +151,7 @@ class MultimodalReport(EvaluationReport):
             mandatory_columns=MultimodalReport._get_config_value("mandatory_columns", [], config),
         )
 
-        components = []
+        components: list[Component] = []
 
         attribute_inference_protection = AttributeInferenceProtection(
             score=EvaluationScore(grade=PrivacyGrade.UNAVAILABLE)

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import numpy as np
+import pandas as pd
 import pytest
 
 # Skip all tests in this module if sentence_transformers is not available
@@ -15,6 +17,34 @@ from nemo_safe_synthesizer.evaluation.components.membership_inference_protection
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 
 logger = logging.getLogger(__name__)
+
+
+def test_mia_tabular_unit_returns_threshold_counts():
+    """Cover the fast tabular MIA path without loading text embedding models."""
+    training_df = pd.DataFrame(
+        {
+            "x": np.arange(24, dtype=float),
+            "y": np.arange(24, dtype=float) * 2,
+        }
+    )
+    synthetic_df = training_df.head(6).reset_index(drop=True)
+    test_df = pd.DataFrame(
+        {
+            "x": np.arange(100, 112, dtype=float),
+            "y": np.arange(100, 112, dtype=float) * 2,
+        }
+    )
+
+    score, attack_sum_df, tps_values, fps_values = MembershipInferenceProtection.mia(
+        training_df=training_df,
+        synthetic_df=synthetic_df,
+        test_df=test_df,
+    )
+
+    assert score.score is not None
+    assert attack_sum_df is not None
+    assert set(tps_values) == {0.1, 0.2, 0.3, 0.4}
+    assert set(fps_values) == {0.1, 0.2, 0.3, 0.4}
 
 
 @pytest.mark.requires_gpu

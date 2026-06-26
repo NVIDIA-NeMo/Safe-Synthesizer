@@ -4,6 +4,8 @@
 # ruff: noqa: E402
 import logging
 
+import numpy as np
+import pandas as pd
 import pytest
 
 # Skip all tests in this module if sentence_transformers is not available
@@ -16,6 +18,91 @@ from nemo_safe_synthesizer.evaluation.components.attribute_inference_protection 
 from nemo_safe_synthesizer.evaluation.data_model.evaluation_datasets import EvaluationDatasets
 
 logger = logging.getLogger(__name__)
+
+
+def test_aia_tabular_unit_exercises_entropy_weighting(monkeypatch: pytest.MonkeyPatch):
+    """Cover the fast tabular AIA path without loading text embedding models."""
+    training_df = pd.DataFrame(
+        {
+            "stable": [1, 1, 1, 1],
+            "binary": [1, 1, 2, 2],
+            "varied": [1, 2, 3, 4],
+        }
+    )
+    synthetic_df = training_df.copy()
+
+    def fake_get_synth_nn(*_args, **_kwargs) -> pd.DataFrame:
+        return synthetic_df.head(2)
+
+    monkeypatch.setattr(AttributeInferenceProtection, "_get_synth_nn", staticmethod(fake_get_synth_nn))
+
+    score, col_accuracy_df = AttributeInferenceProtection._aia(
+        training_df=training_df,
+        synthetic_df=synthetic_df,
+        quasi_identifier_count=1,
+    )
+
+    assert score.score is not None
+    assert col_accuracy_df is not None
+    assert list(col_accuracy_df["Column"]) == ["stable", "binary", "varied"]
+
+
+def test_aia_wide_table_uses_windowed_quasi_identifier_combinations(monkeypatch: pytest.MonkeyPatch):
+    """Cover the wide-table fallback that avoids materializing all combinations."""
+    columns = [f"col_{index}" for index in range(501)]
+    values = np.vstack([np.arange(501), np.arange(501) + 1])
+    training_df = pd.DataFrame(values, columns=columns)
+    synthetic_df = training_df.copy()
+    synth_calls: list[tuple[str, ...]] = []
+
+    def fake_get_synth_nn(train_row, *_args, **_kwargs) -> pd.DataFrame:
+        synth_calls.append(tuple(train_row.columns))
+        return synthetic_df.head(2)
+
+    monkeypatch.setattr(AttributeInferenceProtection, "_get_synth_nn", staticmethod(fake_get_synth_nn))
+
+    score, col_accuracy_df = AttributeInferenceProtection._aia(
+        training_df=training_df,
+        synthetic_df=synthetic_df,
+        quasi_identifier_count=500,
+    )
+
+    assert score.score is not None
+    assert col_accuracy_df is not None
+    assert len(col_accuracy_df) == len(columns)
+    assert len(synth_calls) == 2
+    assert set(synth_calls) == {tuple(columns[:500]), tuple(columns[1:])}
+
+
+def test_aia_preserves_non_string_column_labels(monkeypatch: pytest.MonkeyPatch):
+    """Cover DataFrames whose column labels are not strings."""
+    training_df = pd.DataFrame(
+        {
+            0: [1, 2, 3, 4],
+            1: [10, 20, 30, 40],
+            2: [100, 200, 300, 400],
+        }
+    )
+    synthetic_df = training_df.copy()
+    synth_calls: list[tuple[int, ...]] = []
+
+    def fake_get_synth_nn(train_row, *_args, **_kwargs) -> pd.DataFrame:
+        synth_calls.append(tuple(train_row.columns))
+        return synthetic_df.head(2)
+
+    monkeypatch.setattr(AttributeInferenceProtection, "_get_synth_nn", staticmethod(fake_get_synth_nn))
+
+    score, col_accuracy_df = AttributeInferenceProtection._aia(
+        training_df=training_df,
+        synthetic_df=synthetic_df,
+        quasi_identifier_count=1,
+    )
+
+    assert score.score is not None
+    assert col_accuracy_df is not None
+    assert set(col_accuracy_df["Column"]) == {0, 1, 2}
+    assert synth_calls
+    assert all(isinstance(column, int) for call in synth_calls for column in call)
 
 
 @pytest.mark.slow

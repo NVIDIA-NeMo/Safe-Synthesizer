@@ -141,6 +141,18 @@ def process(data: pd.DataFrame, columns: Sequence[str] | None = None) -> Self:
 - `Protocol` for structural subtyping when you need duck-typing boundaries
 - Avoid `Any` -- prefer `object`, generics, or `Protocol`
 - `TYPE_CHECKING` guards for heavy imports (`pandas`, `torch`, `transformers`); not needed for stdlib or lightweight imports
+- `TypeIs[T]` from `typing_extensions` for side-effect-free predicates that fully validate a value as `T`. Use `bool` for ordinary predicates that do not establish a type, and reserve `TypeGuard` for cases `TypeIs` cannot express because the narrowed type is not compatible with the input type.
+
+```python
+from typing_extensions import TypeIs
+
+
+def is_json_object(value: object) -> TypeIs[dict[str, JsonValue]]:
+    return isinstance(value, dict) and all(
+        isinstance(key, str) and is_json_value(item)
+        for key, item in value.items()
+    )
+```
 
 Legacy modules (`pii_replacer/`) still use `Optional`/`List`/`Dict`. Only `pii_replacer/` is excluded from `ty` type-checking (see `[tool.ty.src] exclude` in `pyproject.toml`). The remaining legacy usages will be migrated when those modules come under the type checker.
 

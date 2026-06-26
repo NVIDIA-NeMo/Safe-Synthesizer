@@ -72,9 +72,9 @@ class AutoConfigTestCase:
 
     def get_config(self) -> SafeSynthesizerParameters:
         """Get the config, calling it if it's a factory function."""
-        if callable(self.config):
-            return self.config()  # ty: ignore[call-top-callable] -- dynamic callable
-        return self.config
+        if isinstance(self.config, SafeSynthesizerParameters):
+            return self.config
+        return self.config()
 
 
 AUTO_NO_DP = AutoConfigTestCase(
@@ -168,6 +168,13 @@ ALL_TEST_CASES: list[AutoConfigTestCase] = [
     EXPLICIT,
     AUTO_TIMESERIES,
 ]
+
+
+def test_auto_config_test_case_get_config_calls_factory():
+    config = SafeSynthesizerParameters()
+    test_case = AutoConfigTestCase(name="factory", config=lambda: config, expected=AUTO_NO_DP.expected)
+
+    assert test_case.get_config() is config
 
 
 @pytest.fixture

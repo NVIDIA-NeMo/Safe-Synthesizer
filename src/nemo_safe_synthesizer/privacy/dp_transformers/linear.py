@@ -22,6 +22,19 @@ from opacus.grad_sample.utils import register_grad_sampler
 from opt_einsum import contract
 
 
+def _contract_tensor(expression: str, *operands: torch.Tensor) -> torch.Tensor:
+    result = contract(expression, *operands)
+    if not isinstance(result, torch.Tensor):
+        raise TypeError("expected opt_einsum.contract to return a torch.Tensor for torch operands")
+    return result
+
+
+def _linear_parameter(parameter: torch.Tensor) -> nn.Parameter:
+    if not isinstance(parameter, nn.Parameter):
+        raise TypeError("expected nn.Linear parameter")
+    return parameter
+
+
 @register_grad_sampler(nn.Linear)
 def compute_linear_grad_sample(
     layer: nn.Linear, activations: list[torch.Tensor], backprops: torch.Tensor
@@ -41,10 +54,12 @@ def compute_linear_grad_sample(
         per-sample gradient tensor of shape ``(batch, ...)``.
     """
     activation = activations[0]
-    ret = {}
-    if layer.weight.requires_grad:
-        gs = contract("n...i,n...j->nij", backprops.float(), activation.float())
-        ret[layer.weight] = gs
-    if layer.bias is not None and layer.bias.requires_grad:
-        ret[layer.bias] = contract("n...k->nk", backprops.float())
+    ret: dict[nn.Parameter, torch.Tensor] = {}
+    weight = _linear_parameter(layer.weight)
+    if weight.requires_grad:
+        ret[weight] = _contract_tensor("n...i,n...j->nij", backprops.float(), activation.float())
+    if layer.bias is not None:
+        bias = _linear_parameter(layer.bias)
+        if bias.requires_grad:
+            ret[bias] = _contract_tensor("n...k->nk", backprops.float())
     return ret

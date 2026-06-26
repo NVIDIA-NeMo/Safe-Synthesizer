@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
+from typing_extensions import TypeIs
 
 from .data_processing.stats import Statistics
 from .observability import get_logger
@@ -35,6 +36,10 @@ logger = get_logger(__name__)
 _TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 _HF_OFFLINE_ENV_VARS = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+
+def _is_statistics_list(stats: Statistics | list[Statistics]) -> TypeIs[list[Statistics]]:
+    return isinstance(stats, list) and all(isinstance(stat, Statistics) for stat in stats)
 
 
 def env_flag_is_true(name: str, *, default: bool = False) -> bool:
@@ -125,11 +130,11 @@ def log_stats(
         title: Optional table title.
     """
     headers = headers or []
-    stats = stats if isinstance(stats, list) else [stats]
+    stats_list = stats if _is_statistics_list(stats) else [stats]
 
     # Build structured data - processor will render as table for console
     structured_stats = {}
-    for header, stat in zip(headers, stats):
+    for header, stat in zip(headers, stats_list):
         key = header.lower().replace(" ", "_")
         structured_stats[key] = {
             "min": round_number_if_float(stat.min),

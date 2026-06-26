@@ -13,7 +13,7 @@ from __future__ import annotations
 import itertools
 import re
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Hashable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from random import randint
@@ -399,7 +399,7 @@ def infer_from_series(date_series: Iterable[str]) -> Optional[str]:
 def fit_and_transform_dates(
     df: pd.DataFrame,
     inplace: bool = False,
-) -> tuple[dict[str, dict[str, str]], pd.DataFrame]:
+) -> tuple[dict[Hashable, dict[str, str]], pd.DataFrame]:
     """Detect date columns, convert them to elapsed seconds, and record the transformation.
 
     For each object-typed column, samples values to infer a date format. If
@@ -412,10 +412,10 @@ def fit_and_transform_dates(
 
     Returns:
         A tuple of (date_min_dict, result_df). ``date_min_dict`` maps column
-        names to ``{"format": ..., "min": ...}`` dicts needed by
+        labels to ``{"format": ..., "min": ...}`` dicts needed by
         ``transform_dates`` for reversal.
     """
-    date_min_dict = {}
+    date_min_dict: dict[Hashable, dict[str, str]] = {}
     object_cols = [col for col, col_type in df.dtypes.items() if col_type == "object"]
     result_df = df.copy() if not inplace else df
     for object_col in object_cols:
@@ -437,11 +437,11 @@ def fit_and_transform_dates(
     return date_min_dict, result_df
 
 
-def transform_dates(dates: dict[str, dict[str, str]], df: pd.DataFrame) -> pd.DataFrame:
+def transform_dates(dates: dict[Hashable, dict[str, str]], df: pd.DataFrame) -> pd.DataFrame:
     """Apply a previously fitted date-to-seconds transformation to a DataFrame.
 
     Args:
-        dates: Mapping from column names to ``{"format": ..., "min": ...}``
+        dates: Mapping from column labels to ``{"format": ..., "min": ...}``
             dicts as returned by ``fit_and_transform_dates``.
         df: DataFrame to transform.
 

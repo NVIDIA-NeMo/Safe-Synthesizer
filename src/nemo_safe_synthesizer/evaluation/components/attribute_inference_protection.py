@@ -6,6 +6,7 @@ from __future__ import annotations
 import itertools
 import math
 import re
+from collections.abc import Hashable
 from datetime import datetime
 from decimal import Decimal
 from functools import cached_property
@@ -138,14 +139,15 @@ class AttributeInferenceProtection(Component):
         return -(vc * np.log(vc) / np.log(base)).sum()
 
     @staticmethod
-    def _is_really_categorical(column: str) -> bool:
+    def _is_really_categorical(column: Hashable) -> bool:
+        column_name = str(column)
         # Break the header up into parts
         for separator in ["_", " ", "-", "."]:
-            if separator in column:
-                col_parts = column.split(separator)
+            if separator in column_name:
+                col_parts = column_name.split(separator)
                 break
             else:
-                col_parts = [column]
+                col_parts = [column_name]
 
         # Go through the parts and divide up camel case
         col_final_parts = []
@@ -366,16 +368,16 @@ class AttributeInferenceProtection(Component):
 
             # Get all combinations of columns to be the quasi-identifiers
             # This gets explosive when column count > 500
+            training_columns = list(training_df.columns)
             if len(training_df.columns) < 500:
-                qi_combos = list(itertools.combinations(training_df.columns, quasi_identifier_count))
+                qi_combos = list(itertools.combinations(training_columns, quasi_identifier_count))
             else:
-                columns = list(training_df.columns)
                 qi_combos = []
-                for i in range(len(columns) - quasi_identifier_count):
-                    combo = set()
+                for i in range(len(training_columns) - quasi_identifier_count + 1):
+                    combo = []
                     for j in range(quasi_identifier_count):
-                        combo.add(columns[i + j])
-                    qi_combos.append(combo)
+                        combo.append(training_columns[i + j])
+                    qi_combos.append(tuple(combo))
 
             np.random.seed(5)
             np.random.shuffle(qi_combos)
@@ -415,7 +417,6 @@ class AttributeInferenceProtection(Component):
 
             # As we process the attack dataset, we'll accumulate for each column the number of
             # correct and incorrect predictions
-            training_columns = [str(column) for column in training_df.columns]
             correct = {predict_column: 0 for predict_column in training_columns}
             incorrect = {predict_column: 0 for predict_column in training_columns}
 
@@ -431,13 +432,14 @@ class AttributeInferenceProtection(Component):
                     more_to_process = False
                     continue
 
-                # Randomly sample columns to be the `qi`
-                qi = qi_combos[qi_index]
-                qi_index += 1
                 # We stop processing if all qi combos have been processed.
                 if qi_index == len(qi_combos):
                     more_to_process = False
                     continue
+
+                # Randomly sample columns to be the `qi`
+                qi = qi_combos[qi_index]
+                qi_index += 1
 
                 # Predict columns are all but the `qi`
                 predict_columns = [column for column in training_columns if column not in qi]
@@ -578,7 +580,8 @@ class AttributeInferenceProtection(Component):
                 for i in range(len(entropy)):
                     entropy_wts.append(0)
             else:
-                arr = (entropy - min(entropy)) / (max(entropy) - min(entropy))
+                entropy_arr = np.asarray(entropy, dtype=float)
+                arr = (entropy_arr - min(entropy)) / (max(entropy) - min(entropy))
                 entropy_wts = arr / arr.sum()
 
             i = 0
